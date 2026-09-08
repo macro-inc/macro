@@ -57,14 +57,14 @@ export function TaskGroupHeader(props: {
   );
 
   return (
-    <div id={props.row.id} role="row">
+    <div id={props.row.id} role="row" class="pt-3 pb-1">
       <div role="gridcell" aria-colspan={7}>
         <Surface
           depth={3}
           hideBorder
           data-highlighted={props.focused || undefined}
           class={cn(
-            'group/header mx-1 my-0.5 h-auto w-[calc(100%-0.5rem)] rounded-lg border border-edge-muted text-ink-muted hover:bg-active',
+            'group/header mx-1 h-auto w-[calc(100%-0.5rem)] rounded-lg border border-edge-muted text-ink-muted hover:bg-active',
             statusTint(),
             props.focused && 'bg-active'
           )}

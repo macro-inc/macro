@@ -26,7 +26,7 @@ function SectionScrollArea(props: {
       <ScrollIndicators
         scrollRef={scrollRoot}
         appearance="gradient"
-        gradientColor="inset"
+        gradientColor="panel"
       />
     </div>
   );
@@ -61,7 +61,7 @@ function CollapsibleSectionHeader(props: {
   return (
     <div
       class={cn(
-        'flex w-full items-center rounded-xl text-xs font-semibold uppercase tracking-wide text-ink-extra-muted transition-colors hover:bg-hover hover:text-ink-muted',
+        'flex w-full items-center rounded-xl text-sm font-medium text-ink-subtle transition-colors hover:bg-hover hover:text-ink-muted',
         props.focused && 'bg-hover text-ink-muted',
         !props.focused && props.focusWithin && 'text-ink-muted',
         props.class

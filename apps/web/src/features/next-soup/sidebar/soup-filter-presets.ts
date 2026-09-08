@@ -394,6 +394,13 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           clientFilters: { and: ['document-or-file', 'owned-entity'] },
         };
       },
+      recent: () => ({
+        filters: defineQueryFilters({
+          exclude: { subType: getExcludedDocumentSubTypes('task') },
+        }),
+        clientFilters: { and: ['document-or-file'] },
+        sortMethod: 'viewed_at',
+      }),
       shared: (ctx) => {
         if (!ctx.userId) return undefined;
         return {

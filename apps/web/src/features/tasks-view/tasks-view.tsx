@@ -5,6 +5,7 @@ import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Surface } from '@ui';
 import { onMount, Suspense } from 'solid-js';
+import { TasksControls } from './components/TasksControls';
 import { TasksHeader } from './components/TasksHeader';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
@@ -38,22 +39,25 @@ function TasksViewRoot() {
         <SplitPanel.Body>
           <ViewShell.Root
             resizable
-            aside={{ preserveDuringResize: false }}
+            aside={{ width: 288, min: 224, max: 320 }}
             main={{ preferredWidth: 640 }}
           >
             <ViewShell.Aside>
               <TasksSidebar />
             </ViewShell.Aside>
             <ViewShell.Main>
-              <ViewShell.Header>
-                <TasksHeader />
-              </ViewShell.Header>
-              <ViewShell.Content>
+              <TasksHeader />
+              <TasksControls />
+              <div class="min-h-0 min-w-0 flex-1">
                 <Suspense fallback={<TasksListFallback />}>
                   <TaskList />
                 </Suspense>
-              </ViewShell.Content>
+              </div>
             </ViewShell.Main>
+            <div
+              aria-hidden="true"
+              class="pointer-events-none absolute inset-x-0 top-0 z-10 h-12 border-b border-edge-muted"
+            />
           </ViewShell.Root>
         </SplitPanel.Body>
       </SplitPanel.Root>

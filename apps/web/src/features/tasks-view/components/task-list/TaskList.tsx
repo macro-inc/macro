@@ -44,7 +44,7 @@ import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button, cn, Surface } from '@ui';
+import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -419,15 +419,14 @@ export function TaskList() {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      <Surface
-        depth={2}
+      <div
         ref={setGrid}
         role="grid"
         aria-label="Tasks"
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="@container/u-list flex min-h-0 min-w-0 flex-col rounded-2xl p-2 outline-none"
+        class="@container/u-list flex h-full min-h-0 min-w-0 flex-col outline-none"
       >
         <ListLayoutProvider ref={grid}>
           <ResponsiveTaskListHeader />
@@ -704,7 +703,7 @@ export function TaskList() {
             />
           </Show>
         </ListLayoutProvider>
-      </Surface>
+      </div>
     </MaybeSoupEntityActionDrawerManager>
   );
 }

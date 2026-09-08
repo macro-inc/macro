@@ -23,6 +23,7 @@ import {
   isTaskEntity,
 } from '@entity';
 import { createContextProvider } from '@solid-primitives/context';
+import { cn } from '@ui';
 import {
   createMemo,
   createRenderEffect,
@@ -56,6 +57,8 @@ export type PreviewPanelProps = {
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
   onFocusOut?: VoidFunction;
+  /** Styling for the preview header when embedded in a workspace layout. */
+  headerClass?: string;
   ref?: (el: HTMLElement) => void;
 };
 
@@ -209,7 +212,10 @@ function PreviewPanelContent(
     >
       <div
         ref={headerCollapseController.setRow}
-        class="relative flex min-h-10 w-full shrink-0 items-center justify-between bg-surface px-2"
+        class={cn(
+          'relative flex min-h-10 w-full shrink-0 items-center justify-between bg-surface px-2',
+          props.headerClass
+        )}
       >
         <PriorityCollapseOverflowSensor
           controller={headerCollapseController}

@@ -13,8 +13,17 @@ Rows are buttons named `<channel> <sender>:<snippet> <time>`.
 
 ## Email — `/app/component/mail`
 
-Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `Shared` /
-`All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
+With new app views enabled on desktop, Email has an inner sidebar. Its inbox
+dropdown (`Choose inbox: …`) selects All inboxes or one connected account.
+Mailbox navigation filters the main email list: Signal and Noise under Inbox;
+Drafts, Sent, and All mail under Mail; Calendar and Shared with me under Views.
+Account selection combines with mailbox filters and uses the existing filter
+persistence preference.
+Use Compose in the sidebar, and Search mail, Sort, and Filter above the list.
+The sidebar uses the same panel surface, neutral selected rows, and aligned
+header divider as Chat. Touch devices retain the original top tabs.
+
+Compose is also available via `Create` → `Email E`. On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
 
@@ -121,3 +130,33 @@ but unconnected app gets a tool result saying so, and the agent's reply renders 
 
 Toast regions are labeled `Notifications (alt+T)`; five empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).
+
+Email workspace refinements: the toolbar contains Sort and Filter. Tags appear as label-style rows in the inner sidebar, with their existing colors. Selecting a tag shows matching messages across All mail within the selected inbox; selecting it again clears the tag. Choosing a mailbox also clears the label filter. Read email rows are slightly dimmed.
+
+Email sidebar sections Mail, Views, and Tags start expanded and toggle via their section-heading buttons (`aria-expanded`). Collapsing a section does not change the selected mailbox or tag. Inbox stays expanded.
+
+The + button beside the Email sidebar Tags heading opens the shared Create tag dialog (name, color, and personal/team scope when available). It remains accessible when Tags is collapsed or empty. Saving refreshes the sidebar through the existing tags query.
+
+Favorites are scoped to each app view: Email threads, Chat channels/messages, Tasks task documents, Files non-task documents, Agents chats/sessions, and the corresponding types for other lists. Inbox does not show a Favorites section. Email places Favorites below Views; Chat above Channels in All only (hidden in Recent); Tasks beneath its navigation. Other list views use a favorites rail. Sections are collapsible and display at most five 36px rows before scrolling internally. Clicking opens the favorited entity; Chat channel favorites select the conversation in place.
+
+Calendar exposes its entity-filtered Favorites in the existing contextual side panel, also capped at five visible rows.
+
+Drive (`/app/component/documents`) uses a dedicated desktop workspace under the new-views flag. The sidebar contains New, My Files, Recent (last viewed), Shared with me, Favorites, and Folders. Folders are nested under a visual Drive root; expand a branch to reveal its children and select a folder to filter the main file list without leaving Drive. The root shows all files. The header has Search files, and the second bar has Documents (Markdown/Word), PDF, Video, Image, and Canvas multi-select type chips, plus Sort. New uses the existing create/import menu. Mobile retains the existing Files layout.
+
+Tasks (`/app/component/tasks`) uses the same aligned 48px sidebar/content headers and continuous divider as Email and Chat. The inner sidebar contains New task, My Tasks (assigned to the current user), All Tasks (all accessible tasks), Created by me, Favorites, and a collapsible Tags section with a long scrollable list of colored tag rows. Tag rows toggle the tag filter; selected rows are highlighted. Search tasks is at the top right. The second toolbar exposes Status, Assigned, Created by, and Priority as searchable checkbox dropdowns; selected labels/counts stay visible on each trigger. Each dropdown can clear its own facet; Clear filters clears all facets, including tags. Group and Sort stay at the right. Existing default status filters are shown explicitly on the Status chip. View switches restore that view's default filters/grouping. On narrow layouts the header navigation menu exposes the same task views and New task.
+
+Agents (`/app/component/agents`) has a dedicated desktop workspace under the new-views flag. It opens on a blank New Chat composer; no chat is created until a message is sent. Its inner sidebar has Search chats, New Chat, Routines, Agents, Connections, Skills, entity-scoped Favorites, and a scrollable Recent chats list with More chats pagination. Search filters the loaded chat titles. Clicking a recent chat opens its transcript and composer in the content pane while retaining the sidebar; New Chat returns to a fresh composer. A small pulsing accent indicator to the left of a chat title means the live stream is active; it clears on the stream's closed event and respects reduced motion. Routines lists existing scheduled actions with New routine, Agents and Connections embed the existing management screens, and Skills lists skill documents with New skill. Creating/opening routines and skill documents uses their existing app flows.
+
+Desktop Inbox uses the shared ViewShell layout: a resizable inner sidebar holds
+the 48px Inbox header, Signal / Noise / All, filters, and the item list. Selecting
+an item opens an embedded preview in the content pane, retaining the sidebar.
+The header divider is continuous across the resize gutter. Existing preview-pair
+URLs are consolidated into this workspace; mobile retains its original list flow.
+
+The redesigned inner sidebars (Chat, Email, Drive, Tasks, Agents, and generic
+list favorites rails) use `bg-sidebar`, whose semantic color sits midway between
+the outer rail and the content panel. Inbox's list pane uses the same sidebar token.
+
+Default inner sidebar widths are 288px for Email, Drive, and Tasks, and 320px for
+Chat and Agents. Generic favorites rails are 256px; Inbox's inner sidebar
+defaults to 384px. Resizable sidebars retain their existing drag limits.

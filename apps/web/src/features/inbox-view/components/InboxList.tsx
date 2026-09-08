@@ -82,7 +82,9 @@ type InboxListActivationMetadata = {
 };
 
 /** Compact Inbox-card list used by the Activity-layout Inbox workspace. */
-export function InboxList() {
+export function InboxList(props: {
+  onPreview?: (entity: WithNotification<EntityData>) => void;
+}) {
   const { state } = useInboxView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -123,6 +125,7 @@ export function InboxList() {
   const preview = useInboxPreview({
     controller: list,
     handle: panel.handle,
+    embedded: !!props.onPreview,
     onPreview: (entity) => {
       void openEntity(entity, {
         newSplit: false,
@@ -176,6 +179,15 @@ export function InboxList() {
       mergeHistory?: boolean;
     }
   ) {
+    if (props.onPreview && !options.newSplit && !options.replacePair) {
+      props.onPreview(entity);
+      markReminderSeenOnOpen(entity, notificationSource);
+      if (!isNonMemberChannelEntity(entity)) {
+        markChannelNotificationsSeenOnOpen(entity, notificationSource);
+      }
+      return;
+    }
+
     markReminderSeenOnOpen(entity, notificationSource);
     if (!isNonMemberChannelEntity(entity)) {
       markChannelNotificationsSeenOnOpen(entity, notificationSource);

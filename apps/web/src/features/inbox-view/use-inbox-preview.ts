@@ -17,6 +17,7 @@ export type UseInboxPreviewOptions = {
     SplitHandle,
     'canEngagePreview' | 'engagePreview' | 'isControllerSplit' | 'isViewerSplit'
   >;
+  embedded?: boolean;
   onPreview: (entity: WithNotification<EntityData>) => void;
 };
 
@@ -25,7 +26,7 @@ export function useInboxPreview(
 ): InboxPreviewController {
   const openPreviewDebounced = debounce(
     (entity: WithNotification<EntityData>) => {
-      if (!options.handle.isControllerSplit()) return;
+      if (!options.embedded && !options.handle.isControllerSplit()) return;
 
       const row = options.controller.focus.result()?.item;
       if (row?.kind !== 'entity' || row.entity.id !== entity.id) return;
@@ -38,7 +39,7 @@ export function useInboxPreview(
 
   let initialPreviewResolved = false;
   createEffect(() => {
-    if (initialPreviewResolved) return;
+    if (options.embedded || initialPreviewResolved) return;
     if (options.handle.isViewerSplit()) {
       initialPreviewResolved = true;
       return;
@@ -54,7 +55,7 @@ export function useInboxPreview(
 
   return {
     request: (entity) => {
-      if (!options.handle.isControllerSplit()) return;
+      if (!options.embedded && !options.handle.isControllerSplit()) return;
 
       openPreviewDebounced(entity);
     },

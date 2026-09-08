@@ -494,6 +494,8 @@ interface UnifiedFilterDropdownProps {
   hideTrigger?: boolean;
   /** Hide the default trigger's text label while retaining its tooltip. */
   hideLabel?: boolean;
+  /** Tags may be surfaced directly beside the menu. */
+  hideTags?: boolean;
 }
 
 const READ_FILTER_OPTIONS: { id: ReadFilter; label: string }[] = [
@@ -1111,7 +1113,9 @@ export const UnifiedFilterDropdown = (
               </For>
             </Show>
 
-            <Show when={!isDocumentsView() && showTagsFilter()}>
+            <Show
+              when={!props.hideTags && !isDocumentsView() && showTagsFilter()}
+            >
               <SearchableFilterSubmenu
                 label="Tags"
                 options={tagFilter.options}

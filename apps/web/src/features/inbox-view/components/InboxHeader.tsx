@@ -4,24 +4,18 @@ import { type ParentProps, Show } from 'solid-js';
 
 export function InboxHeader(props: ParentProps) {
   return (
-    <header class="shrink-0 px-4 pb-3 pt-2 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)] @max-[480px]/view-shell:px-2 @max-[720px]/view-shell:px-3">
+    <header class="shrink-0">
       <Show when={!isTouchDevice()}>
-        <div class="flex min-h-7 items-center">
+        <div class="flex h-12 min-w-0 items-center justify-between border-b border-edge-muted px-5">
+          <h1 class="m-0 min-w-0 truncate text-xl font-semibold tracking-tight text-ink">
+            Inbox
+          </h1>
           <SplitPanel.ControlGroup>
             <SplitPanel.CloseButton />
-            <SplitPanel.BackButton />
-            <SplitPanel.ForwardButton />
           </SplitPanel.ControlGroup>
         </div>
       </Show>
-      <Show when={!isTouchDevice()}>
-        <div class="mt-1 flex min-h-10 min-w-0 items-center">
-          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.035em] text-ink">
-            Inbox
-          </h1>
-        </div>
-      </Show>
-      <div class="mt-3 flex min-h-10 min-w-0 items-center touch:mt-0">
+      <div class="flex min-h-12 min-w-0 items-center border-b border-edge-muted px-3 py-2 mb-3 touch:border-b-0 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)]">
         {props.children}
       </div>
     </header>

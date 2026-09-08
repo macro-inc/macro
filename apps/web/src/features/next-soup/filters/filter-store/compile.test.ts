@@ -35,6 +35,23 @@ describe('defineQueryFilters', () => {
 });
 
 describe('compileToAst', () => {
+  it('combines sender and recipient refinements on the email target', () => {
+    const ast = compileToAst(
+      queryStateFrom({
+        include: {
+          emailSender: ['sender@example.com'],
+          emailRecipient: ['recipient@example.com'],
+        },
+      })
+    );
+    expect(ast.ef).toEqual({
+      '&': [
+        { l: { Sender: { Partial: 'sender@example.com' } } },
+        { l: { Recipient: { Partial: 'recipient@example.com' } } },
+      ],
+    });
+  });
+
   it('NIL-excludes calendar events from query states that predate the target', () => {
     const ast = compileToAst(
       queryStateFrom({ include: { threadId: ['thread-1'] } })

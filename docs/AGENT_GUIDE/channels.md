@@ -1,5 +1,21 @@
 # Channels and Messaging
 
+## Chat workspace
+
+`/app/component/channels` opens Chat with an inner sidebar on `bg-panel` and
+the conversation's standard surface colors. The full sidebar defaults to 288px
+and is resizable. Its header contains Chat and a `Search channels` action,
+which opens the command menu filtered to channels. There is no separate history
+toolbar in the full sidebar.
+
+`All` and `Recent` use the same horizontal pill tabs as Inbox. Favorites appears only in All, above Channels.
+All contains collapsible `Channels` and `Direct messages`
+sections with their own create actions. Selected conversation navigation rows
+use a rounded neutral fill; unread names are emphasized. Recent messages uses
+full-width rows with horizontal dividers. The slim sidebar retains icon tabs.
+Selection and section expansion persist; existing list and view-switching
+keyboard shortcuts remain available.
+
 ## Create a channel
 
 1. `Create` → `Channel G`. Dialog `Create a channel` opens with the `Name` textbox focused.

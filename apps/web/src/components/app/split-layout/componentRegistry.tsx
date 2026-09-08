@@ -1,8 +1,11 @@
 import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { AgentsView } from '@app/features/agents-view/agents-view';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
+import { DriveView } from '@app/features/drive-view/drive-view';
+import { EmailView } from '@app/features/email-view/email-view';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { InboxView } from '@app/features/inbox-view/inbox-view';
@@ -363,6 +366,7 @@ registerComponent(
   'agents',
   withAuth(() => {
     usePageViewTracking('agents');
+    const newAppViews = useNewAppViews();
     const user = useUserContext();
     const preset = getViewPreset('agents', undefined, {
       userId: user.userId(),
@@ -370,13 +374,20 @@ registerComponent(
     });
     const automationEntities = useAutomationEntities();
     return (
-      <SoupView
-        viewName="Agents"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-        additionalEntities={automationEntities}
-      />
+      <Show
+        when={newAppViews.enabled() && !isTouchDevice()}
+        fallback={
+          <SoupView
+            viewName="Agents"
+            initialFilters={preset?.filters}
+            initialClientFilters={preset?.clientFilters}
+            initialGroupBy={preset?.groupBy}
+            additionalEntities={automationEntities}
+          />
+        }
+      >
+        <AgentsView />
+      </Show>
     );
   })
 );
@@ -386,13 +397,21 @@ registerComponent(
   withAuth(() => {
     usePageViewTracking('mail');
     const preset = getViewPreset('mail');
+    const newAppViews = useNewAppViews();
     return (
-      <SoupView
-        viewName="Email"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
+      <Show
+        when={newAppViews.enabled() && !isTouchDevice()}
+        fallback={
+          <SoupView
+            viewName="Email"
+            initialFilters={preset?.filters}
+            initialClientFilters={preset?.clientFilters}
+            initialGroupBy={preset?.groupBy}
+          />
+        }
+      >
+        <EmailView />
+      </Show>
     );
   })
 );
@@ -402,6 +421,7 @@ registerComponent(
   withAuth((params: DocumentsComponentParams = {}) => {
     usePageViewTracking('documents');
     const user = useUserContext();
+    const newAppViews = useNewAppViews();
     const preset = getViewPreset('documents', undefined, {
       userId: user.userId(),
       isTeamAdmin: false,
@@ -415,12 +435,24 @@ registerComponent(
       params.initialClientFilters
     );
     return (
-      <SoupView
-        viewName="Files"
-        initialFilters={initialFilters}
-        initialClientFilters={initialClientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
+      <Show
+        when={newAppViews.enabled() && !isTouchDevice()}
+        fallback={
+          <SoupView
+            viewName="Files"
+            initialFilters={initialFilters}
+            initialClientFilters={initialClientFilters}
+            initialGroupBy={preset?.groupBy}
+          />
+        }
+      >
+        <DriveView
+          viewName="Files"
+          initialFilters={initialFilters}
+          initialClientFilters={initialClientFilters}
+          initialGroupBy={preset?.groupBy}
+        />
+      </Show>
     );
   })
 );

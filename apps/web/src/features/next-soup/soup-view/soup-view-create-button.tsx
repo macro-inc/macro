@@ -19,6 +19,7 @@ import {
 } from '@core/util/upload';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import PlusCircleIcon from '@phosphor/plus-circle.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import { Button, cn, Dropdown } from '@ui';
@@ -128,7 +129,8 @@ function CreateOptionIcon(props: { id: CreateOption['id'] }) {
   );
 }
 
-export const SoupViewCreateButton = () => {
+export const SoupViewCreateButton = (props: { sidebar?: boolean } = {}) => {
+  const sidebar = () => props.sidebar;
   const panel = useSplitPanelOrThrow();
   const handleFileUpload = useHandleFileUpload();
   const isCreatableEnabled = useCreatableEnabled();
@@ -190,10 +192,12 @@ export const SoupViewCreateButton = () => {
 
   const SingleOptionButton = (props: { hideLabel?: boolean }) => (
     <Button
-      variant="accent"
+      variant={sidebar() ? 'ghost' : 'accent'}
       class={cn(
         'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
-        props.hideLabel && 'pr-1'
+        props.hideLabel && 'pr-1',
+        sidebar() &&
+          'h-10 w-full justify-start gap-3 rounded-xl bg-ink/4 px-3 text-sm font-medium text-ink'
       )}
       size="sm"
       onClick={() => handleSelect(options()[0])}
@@ -208,17 +212,24 @@ export const SoupViewCreateButton = () => {
   const MultiOptionButton = (props: { hideLabel?: boolean }) => (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
-        variant="accent"
+        variant={sidebar() ? 'ghost' : 'accent'}
+        size={sidebar() ? 'md' : 'sm'}
         class={cn(
           'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
-          props.hideLabel && 'pr-1'
+          props.hideLabel && 'pr-1',
+          sidebar() &&
+            'h-10 w-full justify-start gap-3 rounded-xl bg-ink/4 px-3 text-sm font-medium text-ink'
         )}
       >
-        <PlusCircleIcon class="size-3.5" />
+        <Show when={sidebar()} fallback={<PlusCircleIcon class="size-3.5" />}>
+          <PlusIcon class="size-4 shrink-0" />
+        </Show>
         <Show when={!props.hideLabel}>
           <span>{createLabel()}</span>
         </Show>
-        <ChevronDownIcon class="size-2.5" />
+        <ChevronDownIcon
+          class={sidebar() ? 'ml-auto size-3.5 text-ink-muted' : 'size-2.5'}
+        />
       </Dropdown.Trigger>
       <Dropdown.Content>
         <Dropdown.Group>
@@ -243,16 +254,23 @@ export const SoupViewCreateButton = () => {
         <NewCallButton />
       </Show>
       <Show when={options().length > 0}>
-        <CollapsibleHeaderItem id="create-button" priority={2}>
-          {(isCollapsed) => (
-            <Show
-              when={options().length > 1}
-              fallback={<SingleOptionButton hideLabel={isCollapsed()} />}
-            >
-              <MultiOptionButton hideLabel={isCollapsed()} />
-            </Show>
-          )}
-        </CollapsibleHeaderItem>
+        <Show
+          when={sidebar()}
+          fallback={
+            <CollapsibleHeaderItem id="create-button" priority={2}>
+              {(isCollapsed) => (
+                <Show
+                  when={options().length > 1}
+                  fallback={<SingleOptionButton hideLabel={isCollapsed()} />}
+                >
+                  <MultiOptionButton hideLabel={isCollapsed()} />
+                </Show>
+              )}
+            </CollapsibleHeaderItem>
+          }
+        >
+          <MultiOptionButton />
+        </Show>
       </Show>
     </>
   );

@@ -6,8 +6,11 @@ import {
 } from '@app/components/list';
 import { useViewTabHotkeys } from '@app/components/view-shell';
 import { CommandState } from '@app/features/command';
+import { ViewFavorites } from '@app/features/favorites/view-favorites';
+import { favoriteSplitContent } from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
@@ -23,8 +26,9 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import { Key } from '@solid-primitives/keyed';
-import { cn, Tabs } from '@ui';
+import { Button, cn, Tabs } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -45,16 +49,6 @@ import {
 } from './ChannelRailItems';
 import { CollapsibleSection, CreateRailAction } from './ChannelsRailSection';
 
-const CHANNEL_TABS = [
-  {
-    value: 'browse',
-    label: 'Browse',
-  },
-  {
-    value: 'recents',
-    label: 'Recents',
-  },
-];
 const SLIM_CHANNEL_TABS = [
   {
     value: 'browse',
@@ -119,6 +113,7 @@ export function ChannelsRail(props: {
   channels: ChannelEntity[];
   mode: 'full' | 'slim';
 }) {
+  const favoritesLayout = useSplitLayout();
   const { state, setGroupOpen, setSelectedChannelId, setTab } =
     useChannelsView();
   const panel = useSplitPanelOrThrow();
@@ -360,36 +355,58 @@ export function ChannelsRail(props: {
   return (
     <aside
       aria-label="Chat navigation"
-      class="flex size-full min-h-0 flex-col bg-inset pb-5 pt-2"
+      class={cn(
+        'flex size-full min-h-0 flex-col border-r border-edge-muted bg-sidebar pb-4',
+        props.mode === 'slim' && 'pt-3'
+      )}
     >
       <Switch>
         <Match when={props.mode === 'full'}>
-          <div class="flex min-h-8 shrink-0 items-center px-4">
-            <SplitPanel.ControlGroup>
-              <SplitPanel.CloseButton />
-              <SplitPanel.BackButton />
-              <SplitPanel.ForwardButton />
-            </SplitPanel.ControlGroup>
-          </div>
-          <div class="flex shrink-0 items-center px-4 pt-3">
-            <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+          <div class="flex h-12 min-h-12 shrink-0 items-center gap-2 border-b border-edge-muted px-5">
+            <h1 class="min-w-0 flex-1 truncate text-xl font-semibold tracking-tight text-ink">
               Chat
             </h1>
+            <Button
+              variant="ghost"
+              size="icon-md"
+              class="rounded-lg text-ink-muted"
+              label="Search channels"
+              onClick={() => {
+                CommandState.clearQuery();
+                CommandState.setCategoryFilter('channels');
+                CommandState.open();
+              }}
+            >
+              <MagnifyingGlassIcon class="size-4.5" />
+            </Button>
+            <SplitPanel.CloseButton size="icon-sm" />
           </div>
 
-          <div class="shrink-0 px-4 pt-3">
+          <div class="flex min-h-12 shrink-0 items-center border-b border-edge-muted px-3 py-2">
             <Tabs
-              aria-label="Chat sidebar views"
-              fullWidth
-              list={CHANNEL_TABS}
+              aria-label="Chat views"
+              list={[
+                { value: 'browse', label: 'All' },
+                { value: 'recents', label: 'Recent' },
+              ]}
               value={state.tab}
               onChange={(value) => {
-                if (value !== 'browse' && value !== 'recents') return;
-
-                setTab(value);
+                if (value === 'browse' || value === 'recents') setTab(value);
               }}
             />
           </div>
+          <Show when={state.tab === 'browse'}>
+            <ViewFavorites
+              view="channels"
+              class="mx-3 mt-3"
+              onOpen={(favorite) => {
+                if (favorite.entityType === 'channel')
+                  setSelectedChannelId(favorite.entityId);
+                else
+                  favoritesLayout.openWithSplit(favoriteSplitContent(favorite));
+              }}
+            />
+          </Show>
 
           <div
             ref={(element) => {
@@ -405,7 +422,7 @@ export function ChannelsRail(props: {
           >
             <Switch>
               <Match when={state.tab === 'browse'}>
-                <div class="flex h-full min-h-0 flex-col gap-3 px-4">
+                <div class="flex h-full min-h-0 flex-col gap-5 px-3">
                   <CollapsibleSection.Root open={state.expandedGroups.channels}>
                     <CollapsibleSection.Header
                       focused={
@@ -511,7 +528,9 @@ export function ChannelsRail(props: {
                               '-rotate-90'
                           )}
                         />
-                        <span class="min-w-0 flex-1 truncate">DMs</span>
+                        <span class="min-w-0 flex-1 truncate">
+                          Direct messages
+                        </span>
                         <Show when={unreadDirectMessageCount() > 0}>
                           <span class="text-xxs tabular-nums">
                             {unreadDirectMessageCount()}

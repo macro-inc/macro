@@ -10,9 +10,7 @@ import { Button } from '@ui';
 /**
  * The rail's search button: the magnifier alone, its label in the tooltip.
  *
- * An `@ui` Button on the same geometry as the create CTA beside it — same size,
- * rounding and lift — so the pair reads as one row of actions and either can be
- * restyled through `variant` and `class` alone.
+ * A plain ghost button below the inset create launcher.
  *
  * Takes the active split to the search view and focuses its input — the same
  * behaviour as the old sidebar's magnifier (`SidebarHeaderSearchButton`), not
@@ -50,7 +48,7 @@ export const SearchRailButton = () => {
     <Button
       size="icon-md"
       variant="ghost"
-      // class="rounded-full shadow-md shadow-drop-shadow bg-surface-2"
+      class="rounded-lg"
       label="Search"
       tooltipPlacement="right"
       hotkey={TOKENS.sidebar.goTo.search}

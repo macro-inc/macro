@@ -29,6 +29,14 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 
 ## Sidebar (a11y names are load-bearing)
 
+The new outer sidebar (`data-ui="sidebar-rail"`) uses icon buttons with tooltips.
+Its active app has a rounded neutral tile and `aria-current="page"`, with no
+edge indicator. Use `data-sidebar-next-item` to locate an app by its route ID.
+Create has a softly accent-tinted launcher tile, with a plain Search button below it. More apps opens a dropdown
+below Customers/CRM; its app links open in a new tab. The footer contains only
+the profile menu, with no divider or duplicate AI/calendar shortcuts.
+The legacy sidebar below is shown when the new sidebar flag is disabled.
+
 - Top: buttons `Search` and `Create`.
 - Nav: `Go to Home`, `Go to Getting Started`, `Go to Inbox`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,

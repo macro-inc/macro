@@ -79,8 +79,8 @@ export function ChannelOption(props: ChannelOptionProps) {
       class={cn(
         'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent',
         props.channel.channelType === 'direct_message'
-          ? 'min-h-10 py-2'
-          : 'h-8',
+          ? 'min-h-9 py-1.5'
+          : 'h-9',
         props.selected && 'bg-active text-ink',
         !props.selected && props.focused && 'bg-hover text-ink',
         !props.selected &&
@@ -91,7 +91,12 @@ export function ChannelOption(props: ChannelOptionProps) {
       onClick={props.onActivate}
     >
       <ChannelAvatar channel={props.channel} />
-      <span class="min-w-0 flex-1 truncate text-sm font-medium">
+      <span
+        class={cn(
+          'min-w-0 flex-1 truncate text-sm',
+          props.unread ? 'font-semibold text-ink' : 'font-normal'
+        )}
+      >
         {props.channel.name}
       </span>
       <Show when={props.unread}>

@@ -20,7 +20,7 @@ import type { ChannelsViewStateOptions } from './types';
 
 const SIDEBAR_CHANNEL_LIMIT = 100;
 const NARROW_RAIL_WIDTH = 64;
-const DEFAULT_RAIL_WIDTH = 360;
+const DEFAULT_RAIL_WIDTH = 320;
 const MIN_RAIL_WIDTH = 224;
 const MAX_RAIL_WIDTH = 420;
 
@@ -86,7 +86,7 @@ function ChannelsViewRoot() {
       <StaticMarkdownContext>
         <SplitPanel.Root>
           <SplitPanel.Body>
-            <div ref={setWorkspace} class="size-full min-h-0 bg-panel">
+            <div ref={setWorkspace} class="relative size-full min-h-0 bg-panel">
               <ViewShell.Root
                 aside={railLayout()}
                 breakpoints={{ collapsed: 0 }}
@@ -117,6 +117,7 @@ function ChannelsViewRoot() {
                     {(channel) => (
                       <Suspense>
                         <PreviewPanel
+                          headerClass="h-12 min-h-12 border-b border-edge-muted"
                           selectedEntity={channel()}
                           orchestrator={orchestrator}
                           splitPanelContext={panel}
@@ -126,6 +127,14 @@ function ChannelsViewRoot() {
                   </Show>
                 </ViewShell.Main>
               </ViewShell.Root>
+              <Show when={railMode() === 'full'}>
+                {/* Continue the header divider across the resize gutter. */}
+                <div
+                  aria-hidden="true"
+                  data-chat-header-divider=""
+                  class="pointer-events-none absolute inset-x-0 top-0 z-10 h-12 border-b border-edge-muted"
+                />
+              </Show>
             </div>
           </SplitPanel.Body>
         </SplitPanel.Root>

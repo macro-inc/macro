@@ -105,6 +105,11 @@ const FIELD_CONFIG: Record<
     field: 'Sender',
     formatValue: (v) => ({ Partial: v }),
   },
+  emailRecipient: {
+    target: 'ef',
+    field: 'Recipient',
+    formatValue: (v) => ({ Partial: v }),
+  },
   emailShared: { target: 'ef', field: 'Shared' },
   emailCalendarOnly: { target: 'ef', field: 'CalendarOnly' },
   channelId: { target: 'chanf', field: 'ChannelId' },
