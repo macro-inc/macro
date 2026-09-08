@@ -15,6 +15,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "threadId: ID!",
         "emailLabels: [GraphqlSoupEmailLabel!]!",
         "emailLinks: [GraphqlEmailLink!]!",
+        "favorites: [GraphqlFavorite!]!",
         "emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread",
         "type GraphqlSoupEmailThread implements GraphqlSoupEntity {",
         "providerId: String",
