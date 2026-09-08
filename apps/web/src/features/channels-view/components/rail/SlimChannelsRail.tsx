@@ -11,13 +11,22 @@ import ChatsIcon from '@phosphor/chats-circle.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Dropdown, Tabs, Tooltip } from '@ui';
-import { type Component, createMemo, For, Match, Show, Switch } from 'solid-js';
+import { type Component, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { ChannelsGroup } from '../../types';
 import { channelInitials, isDirectMessage } from '../../utils';
 import { ChannelCallIndicator } from './ChannelRailItems';
-import { useChannelsRail } from './ChannelsRailContext';
+import {
+  domIdForRow,
+  rowKeyForChannel,
+  rowKeyForSection,
+  useChannelsRail,
+} from './ChannelsRailContext';
 import { CollapsibleSection, RailModeButton } from './ChannelsRailSection';
+import {
+  useChannelRailItemState,
+  useChannelRailSectionState,
+} from './hooks/useChannelRailState';
 
 function BrowseTabLabel() {
   return (
@@ -84,10 +93,7 @@ function SlimChannelAvatar(props: { channel: ChannelEntity }) {
 
 function SlimChannelItem(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
-  const item = createMemo(() => ({
-    ...rail.channel.state(props.channel.id),
-    ...rail.activity.itemState(props.channel.id),
-  }));
+  const item = useChannelRailItemState(() => props.channel.id);
 
   return (
     <Tooltip
@@ -114,7 +120,7 @@ function SlimChannelItem(props: { channel: ChannelEntity }) {
             'hover:bg-hover hover:text-ink'
         )}
         aria-current={item().selected ? 'page' : undefined}
-        onClick={() => rail.channel.activate(props.channel.id)}
+        onClick={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
       >
         <span class="relative">
           <SlimChannelAvatar channel={props.channel} />
@@ -208,11 +214,11 @@ function SlimGroupSection(props: { config: GroupConfig }) {
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
-  const section = createMemo(() => ({
-    ...rail.group.state(props.config.group),
-    ...rail.activity.sectionState(props.config.group),
-  }));
-  const registerScrollRef = rail.group.registerScrollRef(props.config.group);
+  const { state: section, clearVisibleActivity } = useChannelRailSectionState(
+    () => props.config.group
+  );
+  const registerScrollRef = (element: HTMLDivElement) =>
+    rail.registerScrollRef(props.config.group, element);
 
   return (
     <CollapsibleSection.Root
@@ -233,7 +239,7 @@ function SlimGroupSection(props: { config: GroupConfig }) {
           class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
           aria-expanded={section().open}
           aria-label={props.config.label}
-          onClick={() => rail.group.activate(props.config.group)}
+          onClick={() => rail.activateRow(rowKeyForSection(props.config.group))}
         >
           <span class="flex items-center justify-center [&_svg]:size-4">
             <Dynamic component={props.config.icon} />
@@ -252,9 +258,7 @@ function SlimGroupSection(props: { config: GroupConfig }) {
         class="flex min-h-0 w-full flex-col items-center gap-0.5"
         activityTargetId={section().targetId}
         activityTooltip
-        onActivityVisible={(targetId) =>
-          rail.activity.visible(props.config.group, targetId)
-        }
+        onActivityVisible={clearVisibleActivity}
       >
         <Show when={!forceEmptyState()}>
           <Key each={section().items} by={(channel) => channel.id}>
@@ -297,16 +301,20 @@ function SlimRecents() {
 
 export function SlimChannelsRail() {
   const rail = useChannelsRail();
+  const activeDescendant = () => {
+    const rowId = rail.list.focus.key();
+    return rowId === undefined ? undefined : domIdForRow(rail.railId, rowId);
+  };
 
   return (
     <>
       <SlimHeader />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
-          ref={rail.root.ref}
+          ref={rail.registerRootRef}
           role="tree"
           tabIndex={-1}
-          aria-activedescendant={rail.root.activeDescendant()}
+          aria-activedescendant={activeDescendant()}
           class={cn(
             'scrollbar-hidden min-h-0 flex-1 outline-none',
             rail.tab() === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'

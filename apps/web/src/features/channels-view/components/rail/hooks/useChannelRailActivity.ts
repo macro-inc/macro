@@ -6,6 +6,7 @@ import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ChannelsGroup } from '../../../types';
 import { channelGroup } from '../../../utils';
+import type { useChannelCalls } from './useChannelCalls';
 
 const CHANNEL_GROUPS: ChannelsGroup[] = ['channels', 'direct_messages'];
 
@@ -20,15 +21,9 @@ type ChannelActivityTarget = {
       };
 };
 
-type ChannelCallActivity = {
-  callId: string;
-  channelId: string;
-  status: 'active' | 'incoming';
-};
-
 export function useChannelRailActivity(
   channels: Accessor<ChannelEntity[]>,
-  calls: Accessor<ChannelCallActivity[]>
+  calls: ReturnType<typeof useChannelCalls>
 ) {
   const notificationSource = useGlobalNotificationSource();
   const [activityTargets, setActivityTargets] = createStore<
@@ -41,8 +36,9 @@ export function useChannelRailActivity(
     () => new Map(channels().map((channel) => [channel.id, channel]))
   );
 
-  const callStatuses = createMemo(
-    () => new Map(calls().map((call) => [call.callId, call.status]))
+  const callStatusesByCallId = createMemo(
+    () =>
+      new Map(calls.callActivity().map((call) => [call.callId, call.status]))
   );
 
   const notificationActivity = createMemo(() => {
@@ -148,13 +144,13 @@ export function useChannelRailActivity(
     latestMessageTimes = nextMessageTimes;
   });
 
-  let activeCallStatuses = new Map<string, ChannelCallActivity['status']>();
+  let activeCallStatuses = new Map<string, 'active' | 'incoming'>();
 
   createEffect(() => {
-    const nextActiveCallStatuses = callStatuses();
+    const nextActiveCallStatuses = callStatusesByCallId();
     const recordedGroups = new Set<ChannelsGroup>();
 
-    for (const call of calls()) {
+    for (const call of calls.callActivity()) {
       const channel = channelsById().get(call.channelId);
       if (!channel) continue;
 
@@ -198,7 +194,7 @@ export function useChannelRailActivity(
     if (!source) return;
     if (source.type !== 'call') return 'New activity';
 
-    return callStatuses().get(source.callId) === 'incoming'
+    return callStatusesByCallId().get(source.callId) === 'incoming'
       ? 'Incoming call'
       : 'Active call';
   };
@@ -218,7 +214,9 @@ export function useChannelRailActivity(
   };
 
   return {
+    callStatuses: calls.callStatuses,
     clearTarget,
+    incomingCallIds: calls.incomingCallIds,
     targetChannelId,
     targetLabel,
     unreadChannelIds: () => notificationActivity().unreadChannelIds,

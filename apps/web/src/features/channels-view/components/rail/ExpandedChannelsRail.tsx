@@ -8,7 +8,7 @@ import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Hotkey, Tabs } from '@ui';
-import { createMemo, For, Match, Show, Switch } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import type { ChannelsGroup } from '../../types';
 import { channelMentionsUser, isDirectMessage } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
@@ -18,12 +18,21 @@ import {
   ConversationCard,
   IncomingCallActions,
 } from './ChannelRailItems';
-import { useChannelsRail } from './ChannelsRailContext';
+import {
+  domIdForRow,
+  rowKeyForChannel,
+  rowKeyForSection,
+  useChannelsRail,
+} from './ChannelsRailContext';
 import {
   CollapsibleSection,
   CreateRailAction,
   RailModeButton,
 } from './ChannelsRailSection';
+import {
+  useChannelRailItemState,
+  useChannelRailSectionState,
+} from './hooks/useChannelRailState';
 
 const CHANNEL_TABS = [
   { value: 'browse', label: 'Browse' },
@@ -57,10 +66,7 @@ const GROUPS: GroupConfig[] = [
 
 function ChannelOption(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
-  const item = createMemo(() => ({
-    ...rail.channel.state(props.channel.id),
-    ...rail.activity.itemState(props.channel.id),
-  }));
+  const item = useChannelRailItemState(() => props.channel.id);
 
   return (
     <div
@@ -82,7 +88,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
           'hover:bg-hover hover:text-ink'
       )}
       aria-current={item().selected ? 'page' : undefined}
-      onClick={() => rail.channel.activate(props.channel.id)}
+      onClick={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
     >
       <ChannelAvatar channel={props.channel} />
       <span class="min-w-0 flex-1 truncate text-sm font-medium">
@@ -141,11 +147,11 @@ function ExpandedHeader() {
 
 function ExpandedGroupSection(props: { config: GroupConfig }) {
   const rail = useChannelsRail();
-  const section = createMemo(() => ({
-    ...rail.group.state(props.config.group),
-    ...rail.activity.sectionState(props.config.group),
-  }));
-  const registerScrollRef = rail.group.registerScrollRef(props.config.group);
+  const { state: section, clearVisibleActivity } = useChannelRailSectionState(
+    () => props.config.group
+  );
+  const registerScrollRef = (element: HTMLDivElement) =>
+    rail.registerScrollRef(props.config.group, element);
 
   return (
     <CollapsibleSection.Root
@@ -164,7 +170,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           tabIndex={-1}
           class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
           aria-expanded={section().open}
-          onClick={() => rail.group.activate(props.config.group)}
+          onClick={() => rail.activateRow(rowKeyForSection(props.config.group))}
         >
           <CaretDownIcon
             class={cn(
@@ -192,9 +198,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
         class="flex min-h-0 flex-col gap-0.5"
         activityTargetId={section().targetId}
         activityLabel={section().label}
-        onActivityVisible={(targetId) =>
-          rail.activity.visible(props.config.group, targetId)
-        }
+        onActivityVisible={clearVisibleActivity}
       >
         <Switch>
           <Match when={section().items.length > 0}>
@@ -218,13 +222,8 @@ function ExpandedBrowse() {
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
-  const sections = createMemo(() => ({
-    channels: rail.group.state('channels'),
-    directMessages: rail.group.state('direct_messages'),
-  }));
   const hasItems = () =>
-    sections().channels.items.length > 0 ||
-    sections().directMessages.items.length > 0;
+    rail.teamChannels().length > 0 || rail.directMessages().length > 0;
 
   return (
     <Switch>
@@ -245,10 +244,7 @@ function ExpandedBrowse() {
 function RecentConversationCard(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
   const currentUserId = useUserId();
-  const item = createMemo(() => ({
-    ...rail.channel.state(props.channel.id),
-    ...rail.activity.itemState(props.channel.id),
-  }));
+  const item = useChannelRailItemState(() => props.channel.id);
 
   return (
     <ConversationCard
@@ -261,7 +257,7 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
       incomingCallId={item().incomingCallId}
       selected={item().selected}
       focused={item().focused}
-      onActivate={() => rail.channel.activate(props.channel.id)}
+      onActivate={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
     />
   );
 }
@@ -292,16 +288,20 @@ function ExpandedRecents() {
 
 export function ExpandedChannelsRail() {
   const rail = useChannelsRail();
+  const activeDescendant = () => {
+    const rowId = rail.list.focus.key();
+    return rowId === undefined ? undefined : domIdForRow(rail.railId, rowId);
+  };
 
   return (
     <>
       <ExpandedHeader />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
-          ref={rail.root.ref}
+          ref={rail.registerRootRef}
           role="tree"
           tabIndex={-1}
-          aria-activedescendant={rail.root.activeDescendant()}
+          aria-activedescendant={activeDescendant()}
           class={cn(
             'scrollbar-hidden min-h-0 flex-1 outline-none',
             rail.tab() === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
