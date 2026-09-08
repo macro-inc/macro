@@ -188,6 +188,31 @@ impl GenAiContext {
         }
     }
 
+    /// Record that an agent run failed: `error_type` names the class of
+    /// failure, `finish_reason` how the run stopped (`error`, `cancelled`) and
+    /// `detail` the message, which is recorded bounded when content may be
+    /// captured and left out otherwise - a provider's error text can quote the
+    /// request.
+    pub(crate) fn record_agent_failure(
+        &self,
+        agent_span: &tracing::Span,
+        error_type: &str,
+        finish_reason: &'static str,
+        detail: &str,
+    ) {
+        if !self.0.enabled {
+            return;
+        }
+        agent_span.set_str_array(attr::RESPONSE_FINISH_REASONS, [finish_reason]);
+        let description = if self.0.policy.capture {
+            genai_telemetry::truncate_chars(detail, self.0.policy.limits.max_part_chars)
+                .into_owned()
+        } else {
+            format!("the agent run ended with {error_type}")
+        };
+        agent_span.set_error(error_type, description);
+    }
+
     /// Release the parked `chat` span, if any, so it closes now. Called when
     /// a run ends on a path that fires no turn hook - a provider error, a
     /// cancellation, exhausted invalid-tool retries, the consumer dropping the
@@ -226,6 +251,7 @@ impl GenAiContext {
         }
         agent_span.set_u64(attr::USAGE_INPUT_TOKENS, usage.input_tokens);
         agent_span.set_u64(attr::USAGE_OUTPUT_TOKENS, usage.output_tokens);
+        agent_span.set_str_array(attr::RESPONSE_FINISH_REASONS, [attr::finish_reason::STOP]);
         if !self.0.policy.capture {
             return;
         }

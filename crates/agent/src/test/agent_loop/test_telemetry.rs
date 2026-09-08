@@ -325,3 +325,105 @@ async fn a_run_without_a_conversation_id_has_no_session_attribute() {
         Some(vec!["stop".to_string()])
     );
 }
+
+/// A run the provider fails is a failed run on the agent span, not a quiet
+/// success.
+#[tokio::test]
+async fn a_provider_error_marks_the_agent_span_failed() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let model = MockCompletionModel::from_stream_turns([vec![
+        MockStreamEvent::text("partial"),
+        MockStreamEvent::error("upstream exploded"),
+    ]]);
+    let toolset = util::single_tool_set::<EchoTool, ()>();
+    let mut session = util::session(toolset, Arc::new(()), model).await;
+
+    let stream = session
+        .send_message(vec![rig_core::message::Message::user("hello")])
+        .await
+        .expect("the stream starts");
+    let collected = util::collect(stream).await;
+    assert!(
+        collected.error.is_some(),
+        "the failure reaches the consumer"
+    );
+    drop(session);
+
+    let spans = finished(&exporter, &provider);
+    let agent = spans_with_operation(&spans, attr::operation::INVOKE_AGENT)[0];
+    assert!(
+        matches!(agent.status, opentelemetry::trace::Status::Error { .. }),
+        "{agent:#?}"
+    );
+    assert_eq!(
+        string_attribute(agent, attr::ERROR_TYPE).as_deref(),
+        Some("streaming_error")
+    );
+    assert_eq!(
+        string_array_attribute(agent, attr::RESPONSE_FINISH_REASONS),
+        Some(vec!["error".to_string()])
+    );
+}
+
+/// A tool that never returns, so a run can be abandoned mid-flight.
+#[derive(Deserialize, JsonSchema)]
+#[schemars(title = "hang_tool", description = "Never finishes.")]
+struct HangTool {}
+
+impl ToolAnnotated for HangTool {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Hang");
+}
+
+#[async_trait]
+impl AsyncTool<()> for HangTool {
+    type Output = serde_json::Value;
+
+    async fn call(
+        &self,
+        _service_context: ServiceContext<()>,
+        _request_context: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        std::future::pending().await
+    }
+}
+
+/// A consumer that walks away from the stream cancels the run, and the agent
+/// span says so rather than closing as if the agent had answered.
+#[tokio::test]
+async fn dropping_the_stream_marks_the_agent_span_cancelled() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let model = MockCompletionModel::from_stream_turns([vec![
+        MockStreamEvent::tool_call("call-1", "hang_tool", json!({})),
+        MockStreamEvent::final_response_with_default_usage(),
+    ]]);
+    let toolset = util::single_tool_set::<HangTool, ()>();
+    let mut session = util::session(toolset, Arc::new(()), model).await;
+
+    let mut stream = session
+        .send_message(vec![rig_core::message::Message::user("hang")])
+        .await
+        .expect("the stream starts");
+    // The tool call is announced the moment the model emits it, while the
+    // tool itself hangs; walking away here abandons the run mid-tool.
+    let first = util::next_within(&mut stream, std::time::Duration::from_secs(5)).await;
+    assert!(first.is_some(), "the pending tool call is streamed");
+    drop(stream);
+    drop(session);
+    // The aborted driver's destructors run on the runtime's next turns.
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+
+    let spans = finished(&exporter, &provider);
+    let agent = spans_with_operation(&spans, attr::operation::INVOKE_AGENT)[0];
+    assert_eq!(
+        string_attribute(agent, attr::ERROR_TYPE).as_deref(),
+        Some("cancelled"),
+        "{}",
+        describe(&spans)
+    );
+    assert_eq!(
+        string_array_attribute(agent, attr::RESPONSE_FINISH_REASONS),
+        Some(vec!["cancelled".to_string()])
+    );
+}

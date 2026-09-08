@@ -480,18 +480,35 @@ where
     // finishes.
     // Whatever ends the driver - the stream running dry, a provider error, an
     // abort when the consumer drops the stream - the model call's parked
-    // `chat` span is released with it (see `GenAiContext::finish_run`).
-    struct FinishRun(GenAiContext);
+    // `chat` span is released with it (see `GenAiContext::finish_run`), and a
+    // run that never reached its final response or an error is recorded as
+    // cancelled: the consumer went away, and the run went with it.
+    struct FinishRun {
+        telemetry: GenAiContext,
+        agent_span: tracing::Span,
+        concluded: bool,
+    }
     impl Drop for FinishRun {
         fn drop(&mut self) {
-            self.0.finish_run();
+            if !self.concluded {
+                self.telemetry.record_agent_failure(
+                    &self.agent_span,
+                    "cancelled",
+                    genai_telemetry::attr::finish_reason::CANCELLED,
+                    "the run was cancelled before the agent answered",
+                );
+            }
+            self.telemetry.finish_run();
         }
     }
-    let driver_telemetry = telemetry.clone();
+    let mut finish_run = FinishRun {
+        telemetry: telemetry.clone(),
+        agent_span: agent_span.clone(),
+        concluded: false,
+    };
     let driver_span = agent_span.clone();
     let driver = tokio::spawn(
         async move {
-            let _finish_run = FinishRun(driver_telemetry);
             let mut thinking_buf = String::new();
 
             while let Some(item) = rig_stream.next().await {
@@ -509,6 +526,7 @@ where
                         match other {
                             Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
                                 let usage = final_resp.usage;
+                                finish_run.concluded = true;
                                 telemetry.record_agent_output(
                                     &agent_span,
                                     &final_resp.output,
@@ -527,6 +545,15 @@ where
                                     })));
                             }
                             Err(e) => {
+                                // A provider error, or the runtime giving up
+                                // (retries exhausted): the run failed.
+                                finish_run.concluded = true;
+                                telemetry.record_agent_failure(
+                                    &agent_span,
+                                    "streaming_error",
+                                    genai_telemetry::attr::finish_reason::ERROR,
+                                    &e.to_string(),
+                                );
                                 let _ = driver_tx.send(Err(AgentError::Streaming(e)));
                             }
                             _ => {}
@@ -539,6 +566,7 @@ where
             }
             // Dropping `rig_stream` (and with it the hook's sender) plus `driver_tx`
             // here closes the channel, ending the consumer stream below.
+            drop(finish_run);
         }
         // Entered into the agent span: the runtime opens its `chat` and
         // `execute_tool` spans from inside this task, and they belong under

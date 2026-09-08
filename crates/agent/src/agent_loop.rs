@@ -406,7 +406,21 @@ impl Session {
         } else {
             tracing::info_span!("agent.turn", agent.name = %self.telemetry.agent_name())
         };
-        self.send_message_in(messages).instrument(span).await
+        let telemetry = self.telemetry.clone();
+        let result = self
+            .send_message_in(messages)
+            .instrument(span.clone())
+            .await;
+        if let Err(error) = &result {
+            // The run never started; the span still says why.
+            telemetry.record_agent_failure(
+                &span,
+                "agent_error",
+                genai_telemetry::attr::finish_reason::ERROR,
+                &error.to_string(),
+            );
+        }
+        result
     }
 
     async fn send_message_in(
