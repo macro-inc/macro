@@ -203,6 +203,15 @@ describe('buildEmailSearchRequest', () => {
       shared: 'exclude',
     });
     expect(filtersFor('shared')).toEqual({ shared: 'only' });
+    expect(filtersFor('all')).toEqual({});
+  });
+
+  it('leaves Drafts and Sent search unscoped', () => {
+    const filtersFor = (tab: EmailTab) =>
+      requestFor({ tab }).filters.email_filters;
+
+    // Macro-composed drafts are unindexed and unlabeled; the client trims
+    // both tabs' results instead (see tabFilters).
     expect(filtersFor('drafts')).toEqual({});
     expect(filtersFor('sent')).toEqual({});
   });

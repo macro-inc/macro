@@ -18,7 +18,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  on,
   onCleanup,
   onMount,
   Show,
@@ -37,6 +36,7 @@ import type { SplitHandle, SplitState } from '../layoutManager';
 import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
+import { createSplitAutofocus } from '../utils/createSplitAutofocus';
 import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
@@ -115,16 +115,10 @@ export function SplitPanel(props: SplitPanelProps) {
     initialPredicates: { and: ['explicit-noise'] },
   });
 
-  createEffect(
-    on([panelRef], () => {
-      if (isTouchDevice()) return;
-      // Only the active split may claim focus on mount. A Preview Pair's Viewer
-      // is created with activate:false while its controller stays active, and
-      // must not steal the keyboard from it.
-      if (!props.active) return;
-      panelRef()?.focus();
-    })
-  );
+  createSplitAutofocus({
+    element: panelRef,
+    enabled: () => props.active && !isTouchDevice(),
+  });
 
   const [toolbarRef, setToolbarRef] = createSignal<HTMLDivElement | null>(null);
   const [headerRef, setHeaderRef] = createSignal<HTMLDivElement | null>(null);

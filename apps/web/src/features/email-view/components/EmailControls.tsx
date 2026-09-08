@@ -36,7 +36,7 @@ export type EmailControlsProps = {
 };
 
 export function EmailControls(props: EmailControlsProps) {
-  const { state, setFacets } = useEmailView();
+  const { state, setFacets, setPreviewOpen } = useEmailView();
 
   const activeFilterCount = createMemo(() =>
     Object.values(state.facets).reduce(
@@ -100,7 +100,11 @@ export function EmailControls(props: EmailControlsProps) {
           </span>
         </Show>
       </div>
-      <PreviewButton iconOnly class="rounded-lg" />
+      <PreviewButton
+        iconOnly
+        class="rounded-lg"
+        onOpenChange={setPreviewOpen}
+      />
     </div>
   );
 }

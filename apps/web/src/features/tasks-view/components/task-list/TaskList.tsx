@@ -98,7 +98,12 @@ type TasksListActivationMetadata = {
   newSplit?: boolean;
 };
 
-export function TaskList() {
+export type TaskListProps = {
+  /** The focusable list root, for callers that hand keyboard focus back. */
+  ref?: (element: HTMLDivElement) => void;
+};
+
+export function TaskList(props: TaskListProps) {
   const panel = useSplitPanelOrThrow();
   const { state, setState } = useTasksView();
   const userId = useUserId();
@@ -421,7 +426,10 @@ export function TaskList() {
     <MaybeSoupEntityActionDrawerManager>
       <Surface
         depth={2}
-        ref={setGrid}
+        ref={(element: HTMLDivElement) => {
+          setGrid(element);
+          props.ref?.(element);
+        }}
         role="grid"
         aria-label="Tasks"
         aria-multiselectable="true"

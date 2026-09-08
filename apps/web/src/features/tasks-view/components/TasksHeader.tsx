@@ -10,7 +10,12 @@ import { useTasksView } from '../tasks-view-context';
 import { TasksControls } from './TasksControls';
 import { TasksNavigation } from './TasksSidebar';
 
-export function TasksHeader() {
+export type TasksHeaderProps = {
+  /** Restores list focus when Escape clears the search field. */
+  onSearchEscape?: () => void;
+};
+
+export function TasksHeader(props: TasksHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const { state, setState } = useTasksView();
@@ -85,6 +90,7 @@ export function TasksHeader() {
           value={state.search}
           hotkey="cmd+f"
           onValueChange={(search) => setState('search', search)}
+          onEscape={props.onSearchEscape}
           placeholder="Search tasks"
           class="max-w-md flex-1"
         />

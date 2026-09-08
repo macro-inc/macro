@@ -26,6 +26,11 @@ export type EmailViewState = {
    */
   inboxIds: string[] | undefined;
   facets: FacetSelection;
+  /**
+   * The thread last opened from this view. Restored into the preview on the
+   * next visit, the way the Channels view reopens its selected channel.
+   */
+  openThreadId?: string;
 };
 
 export type EmailViewStateOptions = Partial<EmailViewState>;

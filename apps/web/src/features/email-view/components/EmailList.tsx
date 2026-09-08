@@ -19,6 +19,7 @@ import {
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import {
@@ -42,7 +43,6 @@ import {
   createMemo,
   createSignal,
   Match,
-  onMount,
   type Setter,
   Show,
   Suspense,
@@ -84,7 +84,7 @@ export type EmailListProps = {
 };
 
 export function EmailList(props: EmailListProps) {
-  const { state } = useEmailView();
+  const { state, setOpenThreadId, previewOpen } = useEmailView();
   const panel = useSplitPanelOrThrow();
 
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
@@ -100,6 +100,8 @@ export function EmailList(props: EmailListProps) {
       mergeHistory?: boolean;
     } = {}
   ) {
+    if (entity.type === 'email') setOpenThreadId(entity.id);
+
     const finishTouchHighlight = options.event
       ? persistSoupNavigationTouchHighlight(options.event)
       : undefined;
@@ -290,25 +292,6 @@ export function EmailList(props: EmailListProps) {
     enabled: panel.isPanelActive,
     selectedEntities,
     clearSelection: listInteractions.selection.clear,
-  });
-
-  // Take focus on mount, as the legacy list does: focus inside the panel is
-  // what activates the split and its hotkey scope, so the list, tab, and
-  // filter shortcuts work on a fresh load without a click first. Deferred so
-  // the hotkey focusin handler's scope write doesn't re-run this from inside
-  // its own tracking scope, and skipped while the user is typing elsewhere.
-  onMount(() => {
-    queueMicrotask(() => {
-      const active = document.activeElement;
-      if (
-        active instanceof HTMLElement &&
-        (active.isContentEditable || active.matches('input, textarea'))
-      ) {
-        return;
-      }
-
-      grid()?.focus();
-    });
   });
 
   function actionGroupsFor(row: EmailActionRow) {
