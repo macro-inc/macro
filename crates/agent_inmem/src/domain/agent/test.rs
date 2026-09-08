@@ -754,6 +754,10 @@ async fn ask_reports_a_decline_and_a_free_text_question_has_no_options() {
 struct AskingEngine;
 
 impl TurnEngine for AskingEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
     fn run_turn(
         &self,
         request: TurnRequest,
@@ -820,6 +824,10 @@ async fn a_turn_waiting_on_the_user_outlasts_the_idle_timeout() {
 struct ReviewingEngine;
 
 impl TurnEngine for ReviewingEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
     fn run_turn(
         &self,
         request: TurnRequest,
@@ -978,7 +986,7 @@ async fn a_user_tool_review_is_a_tool_scoped_form_elicitation_naming_the_tool() 
 /// The timeout still guards a turn that is silent with nothing asked.
 #[tokio::test(start_paused = true)]
 async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
-    let (notifications, response) =
+    let (notifications, _config_options, response) =
         with_agent(Arc::new(HangingEngine), async |connection, session| {
             connection
                 .send_request(text_prompt(&session, "hang"))
@@ -999,14 +1007,15 @@ async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
 #[tokio::test]
 async fn ask_without_form_support_explains_instead_of_asking() {
     let engine = Arc::new(ScriptedEngine::new(vec![]));
-    let (notifications, response) = with_agent(engine, async |connection, session| {
-        connection
-            .send_request(text_prompt(&session, "/ask anything?"))
-            .block_task()
-            .await
-            .expect("the ask should complete")
-    })
-    .await;
+    let (notifications, _config_options, response) =
+        with_agent(engine, async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "/ask anything?"))
+                .block_task()
+                .await
+                .expect("the ask should complete")
+        })
+        .await;
 
     assert_eq!(response.stop_reason, StopReason::EndTurn);
     assert!(
