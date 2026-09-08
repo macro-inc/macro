@@ -17,9 +17,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 #[derive(Clone)]
 pub struct JwtAccessToken(pub String);
 
-// Path-style well-known sits under `/mcp`, so the gateway prefix forwards it.
-// The host-root form (`/.well-known/.../mcp`) is not routed on the gateway.
-const RESOURCE_METADATA_PATH: &str = "/mcp/.well-known/oauth-protected-resource";
+fn resource_metadata_path() -> String {
+    format!(
+        "{}/.well-known/oauth-protected-resource",
+        super::GATEWAY_PATH_PREFIX
+    )
+}
 
 fn absolute_resource_metadata_url(request: &Request<Body>) -> String {
     let scheme = request
@@ -39,16 +42,17 @@ fn absolute_resource_metadata_url(request: &Request<Body>) -> String {
         })
         .unwrap_or("localhost");
 
+    let metadata_path = resource_metadata_path();
     let mut uri = Uri::builder()
         .scheme(scheme)
         .authority(authority)
-        .path_and_query(RESOURCE_METADATA_PATH)
+        .path_and_query(metadata_path.as_str())
         .build()
         .expect("valid resource metadata uri")
         .to_string();
 
     if !uri.starts_with("http://") && !uri.starts_with("https://") {
-        uri = format!("{scheme}://{authority}{RESOURCE_METADATA_PATH}");
+        uri = format!("{scheme}://{authority}{metadata_path}");
     }
 
     uri

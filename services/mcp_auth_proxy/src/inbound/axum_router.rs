@@ -24,10 +24,6 @@ use crate::domain::{
     },
 };
 
-/// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
-/// alongside `/` so the dedicated ALB keeps working during cutover.
-const GATEWAY_PATH_PREFIX: &str = "/mcp";
-
 /// Health check handler for ALB.
 async fn health() -> &'static str {
     "ok"
@@ -225,19 +221,11 @@ where
             routing::get(protected_resource_metadata),
         )
         .route(
-            "/mcp/.well-known/oauth-protected-resource",
-            routing::get(protected_resource_metadata),
-        )
-        .route(
             "/.well-known/oauth-authorization-server",
             routing::get(authorization_server_metadata),
         )
         .route(
             "/.well-known/oauth-authorization-server/mcp",
-            routing::get(authorization_server_metadata),
-        )
-        .route(
-            "/mcp/.well-known/oauth-authorization-server",
             routing::get(authorization_server_metadata),
         )
         .route("/authorize", routing::get(authorize))
@@ -260,7 +248,7 @@ where
 fn mount_at_root_and_prefix(inner: Router) -> Router {
     Router::new()
         .merge(inner.clone())
-        .nest(GATEWAY_PATH_PREFIX, inner)
+        .nest(super::GATEWAY_PATH_PREFIX, inner)
 }
 
 /// CORS layer for the MCP router.
