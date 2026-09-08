@@ -1,5 +1,8 @@
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { useUserId } from '@core/context/user';
 import { Key } from '@solid-primitives/keyed';
 import { Match, Switch } from 'solid-js';
+import { channelMentionsUser } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import { useChannelRail } from './Context';
 import { SlimChannelItem } from './Item';
@@ -7,9 +10,13 @@ import { ConversationCard } from './ConversationCard';
 
 export function ChannelsRailRecents() {
   const rail = useChannelRail();
+  const currentUserId = useUserId();
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
 
   const hasItems = () =>
-    !rail.forceEmptyState() && rail.recentConversations().length > 0;
+    !forceEmptyState() && rail.recentConversations().length > 0;
 
   return (
     <Switch>
@@ -24,7 +31,10 @@ export function ChannelsRailRecents() {
                 id={rail.item.domId(channel().id)}
                 channel={channel()}
                 senderId={channel().latestRootMessage?.senderId}
-                mentionedCurrentUser={rail.mentionsCurrentUser(channel())}
+                mentionedCurrentUser={channelMentionsUser(
+                  channel(),
+                  currentUserId()
+                )}
                 unread={rail.activity.isUnread(channel().id)}
                 callStatus={rail.activity.callStatus(channel().id)}
                 incomingCallId={rail.activity.incomingCallId(channel().id)}

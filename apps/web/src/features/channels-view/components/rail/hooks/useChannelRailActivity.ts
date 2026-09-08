@@ -5,10 +5,8 @@ import { notificationIsRead } from '@entity/utils/notification';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ChannelsGroup } from '../../../types';
+import { channelGroup } from '../../../utils';
 import { CHANNEL_GROUPS } from '../model';
-
-const channelGroup = (channel: ChannelEntity): ChannelsGroup =>
-  channel.channelType === 'direct_message' ? 'direct_messages' : 'channels';
 
 type ChannelActivityTarget = {
   channelId: string;

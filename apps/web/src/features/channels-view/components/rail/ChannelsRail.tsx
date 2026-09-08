@@ -5,12 +5,10 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import { useViewTabHotkeys } from '@app/components/view-shell';
-import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { useUserId } from '@core/context/user';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ChannelEntity } from '@entity';
 import { cn, Hotkey } from '@ui';
@@ -26,10 +24,9 @@ import {
 } from 'solid-js';
 import { useChannelsView } from '../../channels-view-context';
 import type { ChannelsGroup, ChannelsTab } from '../../types';
-import { type ChannelRailContext, ChannelRailProvider } from './Context';
 import { ChannelsRailBrowse } from './Browse';
+import { type ChannelRailContext, ChannelRailProvider } from './Context';
 import { ChannelsRailHeader } from './Header';
-import { ChannelsRailRecents } from './Recents';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
 import { useChannelRailRows } from './hooks/useChannelRailRows';
@@ -39,6 +36,7 @@ import {
   rowKeyForChannel,
   rowKeyForSection,
 } from './model';
+import { ChannelsRailRecents } from './Recents';
 
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
 
@@ -51,11 +49,6 @@ export function ChannelsRail(props: {
     useChannelsView();
 
   const panel = useSplitPanelOrThrow();
-  const currentUserId = useUserId();
-
-  const forceEmptyState = useDebugSetting(
-    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
-  );
 
   const listDomId = createUniqueId();
 
@@ -236,17 +229,6 @@ export function ChannelsRail(props: {
     sectionHotkeys.dispose();
   });
 
-  const mentionsCurrentUser = (channel: ChannelEntity) => {
-    const userId = currentUserId()?.toLocaleLowerCase();
-
-    return Boolean(
-      userId &&
-        channel.latestRootMessage?.mentions.some(
-          (mention) => mention.toLocaleLowerCase() === userId
-        )
-    );
-  };
-
   const activateRow = (rowId: string) => {
     list.activate.key(rowId, { reason: 'pointer' });
   };
@@ -281,7 +263,6 @@ export function ChannelsRail(props: {
     tab: () => state.tab,
     setTab,
     onModeChange: props.onModeChange,
-    forceEmptyState,
     items: itemsForGroup,
     recentConversations,
     activity: {
@@ -309,7 +290,6 @@ export function ChannelsRail(props: {
       activate: (group) => activateRow(rowKeyForSection(group)),
       registerScrollRef: registerSectionScrollRef,
     },
-    mentionsCurrentUser,
   };
 
   return (

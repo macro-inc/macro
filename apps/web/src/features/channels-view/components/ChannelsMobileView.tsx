@@ -22,6 +22,7 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../channels-view-context';
 import { filterChannelsForScope } from '../queries';
 import type { ChannelsQueryScope } from '../types';
+import { channelMentionsUser } from '../utils';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
 import { ConversationCard } from './rail/ConversationCard';
 import { useChannelCalls } from './rail/hooks/useChannelCalls';
@@ -97,17 +98,6 @@ export function ChannelsMobileView(props: {
 
     loadNextPage();
   }
-
-  const mentionsCurrentUser = (channel: ChannelEntity) => {
-    const userId = currentUserId()?.toLocaleLowerCase();
-
-    return Boolean(
-      userId &&
-        channel.latestRootMessage?.mentions.some(
-          (mention) => mention.toLocaleLowerCase() === userId
-        )
-    );
-  };
 
   const openChannel = (channel: ChannelEntity) => {
     setSelectedChannelId(channel.id);
@@ -189,7 +179,10 @@ export function ChannelsMobileView(props: {
                     channel={channel}
                     showLatestMessage={props.tab === 'recents'}
                     senderId={channel.latestRootMessage?.senderId}
-                    mentionedCurrentUser={mentionsCurrentUser(channel)}
+                    mentionedCurrentUser={channelMentionsUser(
+                      channel,
+                      currentUserId()
+                    )}
                     unread={channelActivity.unreadChannelIds().has(channel.id)}
                     callStatus={callStatuses().get(channel.id)}
                     incomingCallId={incomingCallIds().get(channel.id)}

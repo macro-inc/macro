@@ -1,4 +1,5 @@
 import { runCreateAction } from '@app/features/command/Launcher';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import ChannelIcon from '@icon/wide-channel.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -43,6 +44,9 @@ const GROUPS: GroupConfig[] = [
 
 function ChannelGroupSection(props: { config: GroupConfig }) {
   const rail = useChannelRail();
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
 
   const group = () => props.config.group;
 
@@ -137,7 +141,7 @@ function ChannelGroupSection(props: { config: GroupConfig }) {
         }
       >
         <Switch>
-          <Match when={!rail.forceEmptyState() && channels().length > 0}>
+          <Match when={!forceEmptyState() && channels().length > 0}>
             <Key each={channels()} by={(channel) => channel.id}>
               {(channel) => (
                 <Switch>
@@ -183,6 +187,9 @@ function ChannelGroupSection(props: { config: GroupConfig }) {
 
 export function ChannelsRailBrowse() {
   const rail = useChannelRail();
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
 
   const hasItems = () =>
     rail.items('channels').length > 0 ||
@@ -191,7 +198,7 @@ export function ChannelsRailBrowse() {
   return (
     <Switch>
       <Match
-        when={rail.mode() === 'full' && (rail.forceEmptyState() || !hasItems())}
+        when={rail.mode() === 'full' && (forceEmptyState() || !hasItems())}
       >
         <ChannelsEmptyState scope="channels" topAligned />
       </Match>

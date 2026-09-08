@@ -11,6 +11,7 @@ import {
 } from '@queries/soup/items';
 import type { Accessor } from 'solid-js';
 import type { ChannelsQueryScope } from './types';
+import { channelHasMessages, isDirectMessage } from './utils';
 
 const CHANNELS_QUERY_PARAMS = {
   limit: 100,
@@ -32,7 +33,7 @@ export const CHANNELS_QUERY_DEFINITIONS = {
         channelIsParticipant: [true],
       },
     }),
-    matches: (channel) => Boolean(channel.latestRootMessage),
+    matches: channelHasMessages,
   },
   channels: {
     params: CHANNELS_QUERY_PARAMS,
@@ -40,7 +41,7 @@ export const CHANNELS_QUERY_DEFINITIONS = {
       include: { channelIsParticipant: [true] },
       exclude: { channelType: ['direct_message'] },
     }),
-    matches: (channel) => channel.channelType !== 'direct_message',
+    matches: (channel) => !isDirectMessage(channel),
   },
   direct_messages: {
     params: CHANNELS_QUERY_PARAMS,
@@ -50,7 +51,7 @@ export const CHANNELS_QUERY_DEFINITIONS = {
         channelIsParticipant: [true],
       },
     }),
-    matches: (channel) => channel.channelType === 'direct_message',
+    matches: isDirectMessage,
   },
 } satisfies Record<ChannelsQueryScope, ChannelsQueryDefinition>;
 

@@ -10,7 +10,6 @@ export type ChannelRailContext = {
   tab: Accessor<ChannelsTab>;
   setTab: (tab: ChannelsTab) => void;
   onModeChange: (mode: 'full' | 'slim') => void;
-  forceEmptyState: Accessor<boolean>;
   items: (group: ChannelsGroup) => ChannelEntity[];
   recentConversations: Accessor<ChannelEntity[]>;
   activity: {
@@ -38,7 +37,6 @@ export type ChannelRailContext = {
       group: ChannelsGroup
     ) => (element: HTMLDivElement) => void;
   };
-  mentionsCurrentUser: (channel: ChannelEntity) => boolean;
 };
 
 type ChannelRailProviderProps = ContextProviderProps & {

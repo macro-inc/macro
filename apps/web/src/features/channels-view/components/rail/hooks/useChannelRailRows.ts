@@ -2,6 +2,7 @@ import { compareDateDesc } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
 import { type Accessor, createMemo } from 'solid-js';
 import type { ChannelsGroup, ChannelsTab } from '../../../types';
+import { channelHasMessages, isDirectMessage } from '../../../utils';
 import { type ChannelRailRow, conversationRow, sectionRow } from '../model';
 
 export function useChannelRailRows(options: {
@@ -10,21 +11,17 @@ export function useChannelRailRows(options: {
   isGroupExpanded: (group: ChannelsGroup) => boolean;
 }) {
   const teamChannels = createMemo(() =>
-    options
-      .channels()
-      .filter((channel) => channel.channelType !== 'direct_message')
+    options.channels().filter((channel) => !isDirectMessage(channel))
   );
 
   const directMessages = createMemo(() =>
-    options
-      .channels()
-      .filter((channel) => channel.channelType === 'direct_message')
+    options.channels().filter(isDirectMessage)
   );
 
   const recentConversations = createMemo(() =>
     options
       .channels()
-      .filter((channel) => channel.latestRootMessage)
+      .filter(channelHasMessages)
       .sort((a, b) =>
         compareDateDesc(
           a.latestRootMessage?.createdAt,

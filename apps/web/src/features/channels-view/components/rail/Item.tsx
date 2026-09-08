@@ -7,7 +7,7 @@ import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
 import { Button, cn, Tooltip } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
-import { channelInitials } from '../../utils';
+import { channelInitials, isDirectMessage } from '../../utils';
 
 export type ChannelCallStatus = 'active' | 'incoming';
 
@@ -101,7 +101,7 @@ export function ChannelAvatar(props: {
 
   return (
     <Switch>
-      <Match when={props.channel.channelType === 'direct_message'}>
+      <Match when={isDirectMessage(props.channel)}>
         <span
           class={cn(
             'relative flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-surface-2 [&_img]:size-full [&_svg]:shrink-0',
@@ -136,7 +136,7 @@ export function ChannelAvatar(props: {
 function SlimChannelAvatar(props: { channel: ChannelEntity }) {
   return (
     <Switch>
-      <Match when={props.channel.channelType === 'direct_message'}>
+      <Match when={isDirectMessage(props.channel)}>
         <span class="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-surface-2 [&_img]:size-full [&_svg]:size-4 [&_svg]:shrink-0">
           <Entity.Icon
             entity={props.channel}
@@ -162,9 +162,7 @@ export function ChannelOption(props: ChannelRailItemProps) {
       tabIndex={-1}
       class={cn(
         'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent touch:focus-visible:ring-0',
-        props.channel.channelType === 'direct_message'
-          ? 'min-h-10 py-2'
-          : 'h-8',
+        isDirectMessage(props.channel) ? 'min-h-10 py-2' : 'h-8',
         props.selected && !isTouchDevice() && 'bg-active text-ink',
         (!props.selected || isTouchDevice()) && 'text-ink-muted',
         !props.selected &&
