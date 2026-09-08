@@ -1,3 +1,4 @@
+import { openListPreview } from '@app/components/view-shell/list-preview-navigation';
 import { isListViewID } from '@app/constants/list-views';
 import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -672,6 +673,12 @@ export const openEntityInSplitFromUnifiedList = async (
       );
     }
     await navigateCalendarEntityToTarget(entity, blockOrchestrator);
+    return;
+  }
+
+  if (openListPreview(entity, options)) {
+    if (location)
+      await navigateToLocation(entity.id, location, blockOrchestrator);
     return;
   }
 

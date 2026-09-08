@@ -1,6 +1,7 @@
 import TrashIcon from '@phosphor/trash.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
+import { managementPrimary } from '../../settings/management-primitives';
 
 type BotDetailActionsProps = {
   canDelete: boolean;
@@ -39,6 +40,7 @@ export function BotDetailActions(props: BotDetailActionsProps) {
         <Button
           type="submit"
           variant="cta"
+          class={managementPrimary}
           size="sm"
           disabled={!props.dirty || props.pending}
         >

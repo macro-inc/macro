@@ -350,10 +350,7 @@ function Header(props: JSX.HTMLAttributes<HTMLElement>) {
   return (
     <header
       {...rest}
-      class={cn(
-        'shrink-0 px-4 pb-5 pt-4 @max-[760px]/view-shell:px-3 @max-[480px]/view-shell:px-2',
-        local.class
-      )}
+      class={cn('shrink-0 px-4 py-4', local.class)}
       data-view-shell-header=""
     >
       {local.children}
@@ -369,10 +366,7 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <Show when={ws.detail.placement() !== 'replace'}>
       <div
         {...rest}
-        class={cn(
-          'min-h-0 min-w-0 flex-1 px-4 pb-4 @max-[760px]/view-shell:px-3 @max-[480px]/view-shell:px-2',
-          local.class
-        )}
+        class={cn('min-h-0 min-w-0 flex-1 px-4 py-4', local.class)}
         data-view-shell-content=""
       >
         {local.children}

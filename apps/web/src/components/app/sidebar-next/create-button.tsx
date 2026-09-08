@@ -7,14 +7,14 @@ import { Button, type ButtonProps } from '@ui';
 const RailCreateTrigger = (props: ButtonProps) => (
   <Button
     {...props}
-    variant="ghost"
-    class="rounded-xl border-accent/15 bg-accent/5 text-accent"
+    variant="cta"
+    class="rounded-full"
     size="icon-md"
     label="Create"
     tooltipPlacement="right"
     hotkey={TOKENS.global.createCommand}
   >
-    <PlusIcon class="size-5 text-accent" />
+    <PlusIcon class="size-5" />
   </Button>
 );
 

@@ -1,4 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
+import { ListContentPreview } from '@app/components/view-shell/ListContentPreview';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { SoupActiveFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-active-filters-bar';
 import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-group';
@@ -9,6 +10,7 @@ import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
+import { RightContentPanel } from '@components/app/RightContentPanel';
 import { SplitPanel } from '@components/app/split-panel';
 import { onMount } from 'solid-js';
 import { EmailSidebar } from './EmailSidebar';
@@ -32,7 +34,7 @@ function EmailListHeader() {
     'Email';
   return (
     <>
-      <header class="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-edge-muted px-4">
+      <header class="flex h-12 shrink-0 items-center justify-between gap-3  px-4">
         <h2 class="min-w-0 truncate text-sm font-semibold text-ink">
           {title()}
         </h2>
@@ -43,16 +45,12 @@ function EmailListHeader() {
           />
         </div>
       </header>
-      <div class="relative flex shrink-0 flex-wrap items-center gap-2 px-4 py-2 [&_button]:h-8 [&_button]:gap-2 [&_button]:px-3 [&_button]:text-sm [&_button>svg]:size-3.5">
+      <div class="relative flex min-h-11 shrink-0 flex-wrap items-center gap-2 px-4 py-2 [&_button]:h-7 [&_button]:gap-1.5 [&_button]:px-2 [&_button]:text-xs [&_button>svg]:size-3.5">
         <SoupViewContextGroup />
         <UnifiedFilterDropdown hideTags />
         <div class="ml-auto shrink-0">
           <SoupViewContextSort />
         </div>
-        <div
-          aria-hidden="true"
-          class="pointer-events-none absolute -left-2 right-0 bottom-0 border-b border-edge-muted"
-        />
       </div>
       <SoupActiveFiltersBar
         filters={filters.consolidatedFiltersList()}
@@ -65,6 +63,16 @@ function EmailListHeader() {
 /** Email workspace: mailbox navigation filters the existing email list. */
 export function EmailView() {
   const preset = getViewPreset('mail');
+  const view = useSoupView();
+  const title = () =>
+    (view.tagFilter.activeIds().length === 1
+      ? view.tagFilter.optionsById().get(view.tagFilter.activeIds()[0])?.label
+      : undefined) ??
+    VIEW_TAB_LISTS.mail.find(
+      (tab) => tab.value === (view.activeTab() ?? 'important')
+    )?.label ??
+    'Email';
+
   return (
     <SplitPanel.Root>
       <SplitPanel.Body>
@@ -80,13 +88,27 @@ export function EmailView() {
             <EmailSidebar />
           </ViewShell.Aside>
           <ViewShell.Main>
-            <SoupView
-              viewName="Email"
-              initialFilters={preset?.filters}
-              initialClientFilters={preset?.clientFilters}
-              initialGroupBy={preset?.groupBy}
-              header={<EmailListHeader />}
-            />
+            <RightContentPanel>
+              <ListContentPreview
+                title={title()}
+                viewKey={JSON.stringify([
+                  view.activeTab(),
+                  view.tagFilter.activeIds(),
+                ])}
+              >
+                {() => (
+                  <>
+                    <SoupView
+                      viewName="Email"
+                      initialFilters={preset?.filters}
+                      initialClientFilters={preset?.clientFilters}
+                      initialGroupBy={preset?.groupBy}
+                      header={<EmailListHeader />}
+                    />
+                  </>
+                )}
+              </ListContentPreview>
+            </RightContentPanel>
           </ViewShell.Main>
           <div
             aria-hidden="true"

@@ -310,7 +310,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <Show when={!isTouchDevice() && !compact()}>
           <SideNav
             class={cn(
-              'w-[clamp(208px,20%,248px)] gap-3',
+              'w-[clamp(208px,20%,248px)] gap-3 bg-sidebar',
               narrow() ? 'pr-1' : 'pr-2'
             )}
           >

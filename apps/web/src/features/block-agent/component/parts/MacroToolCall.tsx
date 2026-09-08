@@ -1,25 +1,33 @@
-/**
- * A Macro tool the fold recognized by name — reached over Macro's MCP
- * server, or called natively by Macro's own agent.
- *
- * The fold has already named the tool and removed any MCP envelope, so
- * `detail.input` / `detail.output` are the tool's own JSON. When the chat
- * block has a component for that tool, it renders here with that JSON — the
- * same chip a chat shows for `ReadContent`, `ListEntities`, `CreateDocument`
- * and the rest. The chat renderer validates the JSON against the tool's
- * schema and shows nothing for a shape it does not know; then, or when a
- * chat component assumes chat context it does not have here, the card falls
- * back to a labelled row with the JSON.
- */
-
-import { RenderTool } from '@core/component/AI/component/tool/handler';
+/** Macro calls use the session's result surfaces, never nested legacy chat tools. */
+import { DashboardToolView } from '@app/features/dynamic-ui/DashboardToolView.lazy';
+import { ItemPreview } from '@core/component/ItemPreview';
+import Bell from '@phosphor/bell.svg';
+import Buildings from '@phosphor/buildings.svg';
+import Calendar from '@phosphor/calendar-blank.svg';
+import Envelope from '@phosphor/envelope.svg';
+import FileText from '@phosphor/file-text.svg';
+import Robot from '@phosphor/robot.svg';
+import Tag from '@phosphor/tag.svg';
+import Wrench from '@phosphor/wrench.svg';
+import { TagDot } from '@property/tags/TagDot';
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import {
   deserializeToolCall,
   deserializeToolResponse,
+  type NamedTool,
 } from '@service-cognition/generated/tools/tool';
-import { createMemo, ErrorBoundary, type JSX, Show } from 'solid-js';
+import {
+  createMemo,
+  ErrorBoundary,
+  For,
+  type JSX,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import { FoldedOutput, ToolCard } from '../../ui';
+import { resultRecord, resultSummary, ToolResult } from '../../ui/ToolResult';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
 type MacroDetail = Extract<ToolDetail, { kind: 'macro' }>;
@@ -29,80 +37,200 @@ export function MacroToolCall(props: {
   common: ToolCallCommon;
   context?: ToolCallContext;
 }): JSX.Element {
-  const finished = () =>
-    props.common.status === 'completed' || props.common.status === 'failed';
-  // The chat renderer renders nothing for a tool it has no component for or
-  // arguments that do not fit the tool's schema, and it shows a *completed*
-  // call whose response it cannot read as failed. A call it would drop or
-  // misreport keeps the generic card, so no row vanishes or lies.
-  const chatRenders = createMemo(() => {
-    if (props.detail.error != null) return false;
+  const response = createMemo(() => {
+    const parsed = deserializeToolResponse({
+      id: props.common.id,
+      name: props.common.label,
+      json: props.detail.output,
+    });
+    return parsed.isOk() ? parsed.value : undefined;
+  });
+  const dashboard = createMemo(() => {
+    if (props.common.label !== 'DisplayResults') return undefined;
     const call = deserializeToolCall({
       id: props.common.id,
       name: props.common.label,
       json: props.detail.input,
     });
-    if (call.isErr()) return false;
-    if (props.common.status !== 'completed') return true;
-    return deserializeToolResponse({
-      id: props.common.id,
-      name: props.common.label,
-      json: props.detail.output,
-    }).isOk();
+    return call.isOk()
+      ? (call.value as NamedTool<'DisplayResults', 'call'>).data.view
+      : undefined;
   });
-
-  return (
-    <Show when={chatRenders()} fallback={<GenericMacroToolCall {...props} />}>
-      <ErrorBoundary fallback={<GenericMacroToolCall {...props} />}>
-        <RenderTool
-          tool_id={props.common.id}
-          name={props.common.label}
-          json={props.detail.input}
-          response={
-            props.detail.output == null
-              ? undefined
-              : { json: props.detail.output, name: props.common.label }
-          }
-          chat_id={props.context?.sessionId ?? ''}
-          message_id={props.context?.messageId ?? ''}
-          part_index={props.context?.partIndex ?? 0}
-          isComplete={finished()}
-          renderContext={{
-            renderContext: { isStreaming: !finished(), grouped: false },
-          }}
+  const createdEntity = () => {
+    const tool = response();
+    if (tool?.name === 'CreateDocument')
+      return (
+        <ItemPreview
+          id={(tool as NamedTool<'CreateDocument', 'response'>).data.documentId}
+          type="document"
+          class="ring-0"
         />
-      </ErrorBoundary>
-    </Show>
-  );
-}
-
-/** The labelled row with the tool's own JSON, for a tool the chat has no component for. */
-function GenericMacroToolCall(props: {
-  detail: MacroDetail;
-  common: ToolCallCommon;
-}): JSX.Element {
-  const body = () => {
-    const sections: string[] = [];
-    if (props.detail.input != null) {
-      sections.push(JSON.stringify(props.detail.input, null, 2));
-    }
-    if (props.detail.error != null) {
-      sections.push(props.detail.error);
-    } else if (props.detail.output != null) {
-      sections.push(JSON.stringify(props.detail.output, null, 2));
-    }
-    return sections.join('\n\n');
+      );
+    if (tool?.name === 'CreateProject')
+      return (
+        <ItemPreview
+          id={(tool as NamedTool<'CreateProject', 'response'>).data.projectId}
+          type="project"
+          class="ring-0"
+        />
+      );
   };
-
+  const tags = () => {
+    const tool = response();
+    return tool?.name === 'ListTags'
+      ? (tool as NamedTool<'ListTags', 'response'>).data.tagSets
+      : undefined;
+  };
+  const icon = () => {
+    const name = props.common.label.toLowerCase();
+    if (/calendar|event|reminder/.test(name)) return Calendar;
+    if (/mail|inbox|thread/.test(name)) return Envelope;
+    if (/bot|agent/.test(name)) return Robot;
+    if (/tag|label/.test(name)) return Tag;
+    if (/compan/.test(name)) return Buildings;
+    if (/notification/.test(name)) return Bell;
+    if (/document|content|entit|project/.test(name)) return FileText;
+    return Wrench;
+  };
+  // Only schema-validated entities become navigation links.
+  const entityLink = (item: unknown) => {
+    const tool = response();
+    if (tool?.name !== 'ListEntities') return undefined;
+    const entity = (
+      tool as NamedTool<'ListEntities', 'response'>
+    ).data.items.find((entry) => entry.id === resultRecord(item)?.id);
+    if (!entity) return undefined;
+    return (
+      <Suspense
+        fallback={
+          <span class="text-xs text-ink-extra-muted">Loading item…</span>
+        }
+      >
+        <ItemPreview
+          id={entity.id}
+          type={match(entity.type)
+            .with('aiChat', () => 'chat' as const)
+            .with('calendarEvent', () => 'calendar_event' as const)
+            .with('channelThread', () => 'channel_thread' as const)
+            .with('foreignEntity', () => 'foreign' as const)
+            .otherwise((type) => type)}
+          class="ring-0"
+        />
+      </Suspense>
+    );
+  };
   return (
     <ToolCard
+      icon={<Dynamic component={icon()} class="size-4" />}
       title={props.common.label}
-      subtitle={props.detail.error ?? undefined}
+      subtitle={props.detail.error ?? resultSummary(props.detail.output)}
       status={props.common.status}
       muted={props.common.muted}
       trailing={props.common.trailing}
     >
-      <Show when={body()}>{(text) => <FoldedOutput text={text()} />}</Show>
+      <Show
+        when={props.detail.error}
+        fallback={
+          <Show
+            when={dashboard()}
+            fallback={
+              <Show
+                when={props.detail.output != null}
+                fallback={
+                  <p class="px-4 py-4 text-xs text-ink-extra-muted">
+                    {props.common.status === 'completed'
+                      ? 'No output returned'
+                      : 'Waiting for the result…'}
+                  </p>
+                }
+              >
+                <Show
+                  when={tags()}
+                  fallback={
+                    <ToolResult
+                      value={props.detail.output}
+                      icon={<Dynamic component={icon()} class="size-4" />}
+                      renderLink={entityLink}
+                    />
+                  }
+                >
+                  {(sets) => (
+                    <div class="max-h-80 overflow-y-auto px-4 py-3">
+                      <For each={sets()}>
+                        {(set) => (
+                          <section class="mb-4 last:mb-0">
+                            <h4 class="mb-2 text-xs text-ink-extra-muted first-letter:uppercase">
+                              {set.scope} · {set.tags.length}
+                            </h4>
+                            <div class="flex flex-wrap gap-2">
+                              <For each={set.tags}>
+                                {(tag) => (
+                                  <span class="inline-flex max-w-full items-center gap-2 rounded-lg border border-edge-muted bg-ink/3 px-2.5 py-1.5 text-xs text-ink">
+                                    <TagDot color={tag.color ?? undefined} />
+                                    <span class="truncate" title={tag.label}>
+                                      {tag.label}
+                                    </span>
+                                  </span>
+                                )}
+                              </For>
+                            </div>
+                          </section>
+                        )}
+                      </For>
+                    </div>
+                  )}
+                </Show>
+              </Show>
+            }
+          >
+            {(view) => (
+              <div class="p-4">
+                <ErrorBoundary
+                  fallback={<ToolResult value={props.detail.input} />}
+                >
+                  <Suspense
+                    fallback={
+                      <p class="text-xs text-ink-muted">Loading results…</p>
+                    }
+                  >
+                    <DashboardToolView view={view()} />
+                  </Suspense>
+                </ErrorBoundary>
+              </div>
+            )}
+          </Show>
+        }
+      >
+        {(error) => (
+          <p class="px-4 py-3 text-sm text-failure whitespace-pre-wrap wrap-break-word">
+            {error()}
+          </p>
+        )}
+      </Show>
+      <Suspense>
+        <Show when={createdEntity()}>
+          {(link) => (
+            <div class="border-t border-edge-muted px-4 py-3">{link()}</div>
+          )}
+        </Show>
+      </Suspense>
+      <details class="group/raw border-t border-edge-muted">
+        <summary class="list-none px-4 py-2.5 text-xs text-ink-extra-muted hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/50">
+          Request & response <span class="group-open/raw:hidden">↗</span>
+        </summary>
+        <div class="space-y-3 px-4 pb-4">
+          <FoldedOutput
+            label="Request"
+            text={JSON.stringify(props.detail.input, null, 2) ?? 'No input'}
+          />
+          <Show when={props.detail.output != null}>
+            <FoldedOutput
+              label="Response"
+              text={JSON.stringify(props.detail.output, null, 2)}
+            />
+          </Show>
+        </div>
+      </details>
     </ToolCard>
   );
 }

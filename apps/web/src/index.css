@@ -242,7 +242,7 @@ body.tauri-ios {
   --color-link-visited: var(--color-accent);
   --color-page: var(--color-surface-0);
   --color-panel: var(--theme-panel, var(--color-surface-1));
-  --color-sidebar: color-mix(in oklch, var(--color-page) 50%, var(--color-panel));
+  --color-sidebar: var(--color-panel);
   --color-dialog: var(--color-surface-2);
   --color-menu: var(--color-surface-2);
   --color-tooltip: var(--color-surface-2);

@@ -426,7 +426,7 @@ export function InboxList(props: {
       <div
         ref={listRoot}
         role="grid"
-        aria-label="Inbox"
+        aria-label="Notifications"
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
@@ -547,7 +547,7 @@ export function InboxList(props: {
                             >
                               <div role="gridcell">
                                 <InboxListEntity
-                                  class="mx-0 w-full border-b border-edge touch:border-b-0"
+                                  class="mx-0 w-full"
                                   cardClass="rounded-none px-4 py-3"
                                   entity={entityRow().entity}
                                   occurrenceKey={entityRow().id}

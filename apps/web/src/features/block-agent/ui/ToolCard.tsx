@@ -10,6 +10,7 @@
 
 import { Collapsible } from '@kobalte/core/collapsible';
 import CaretRight from '@phosphor/caret-right.svg';
+import Wrench from '@phosphor/wrench.svg';
 import {
   createMemo,
   For,
@@ -22,6 +23,8 @@ import { isToolActive, type ToolStatus } from './types';
 
 export interface ToolCardProps {
   title: JSX.Element | string;
+  /** Tool-specific icon in the activity row. */
+  icon?: JSX.Element;
   /** Mono, truncated detail next to the title (a path, a command, ...). */
   subtitle?: string;
   /** Small `key=value` chips after the subtitle. */
@@ -40,7 +43,7 @@ export interface ToolCardProps {
 }
 
 const ROW_CLASS =
-  'flex min-h-9 w-full items-center gap-2 px-3 py-2 text-left text-xs leading-5';
+  'flex min-h-10 w-full min-w-0 items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-left text-[13px] leading-5';
 
 export function ToolCard(props: ToolCardProps) {
   const active = () => isToolActive(props.status);
@@ -52,10 +55,25 @@ export function ToolCard(props: ToolCardProps) {
 
   const row = (expandable: boolean) => (
     <>
-      <span class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-        <span class="shrink-0 text-ink">
+      <span
+        aria-hidden="true"
+        class="flex size-6 shrink-0 items-center justify-center rounded-md text-ink-muted"
+        classList={{
+          'text-accent bg-accent/8': active(),
+          'text-failure': props.status === 'failed',
+        }}
+      >
+        {props.icon ?? <Wrench class="size-4" />}
+      </span>
+      <span class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+        <span class="min-w-0 shrink truncate text-ink-muted">
           {typeof props.title === 'string' ? (
-            <TextShimmer text={props.title} active={active()} />
+            <TextShimmer
+              text={props.title
+                .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                .replace(/_/g, ' ')}
+              active={active()}
+            />
           ) : (
             props.title
           )}
@@ -63,30 +81,37 @@ export function ToolCard(props: ToolCardProps) {
         <Show when={props.subtitle}>
           {(subtitle) => (
             <>
-              <span aria-hidden="true" class="shrink-0 text-ink-placeholder">
-                ·
+              <span
+                title={subtitle()}
+                class="min-w-0 truncate rounded-md border border-edge-muted bg-ink/4 px-2 py-0.5 text-xs text-ink-muted"
+              >
+                {subtitle()}
               </span>
-              <span class="min-w-0 truncate font-mono">{subtitle()}</span>
             </>
           )}
         </Show>
         <For each={Object.entries(props.args ?? {})}>
           {([key, value]) => (
-            <span class="shrink-0 rounded bg-hover px-1 font-mono text-ink-extra-muted">
+            <span class="shrink-0 rounded-md bg-ink/4 px-1.5 font-mono text-xs text-ink-extra-muted">
               {key}={value}
             </span>
           )}
         </For>
       </span>
-      <Show when={props.trailing || expandable}>
-        <span class="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+      <Show when={expandable}>
+        <CaretRight
+          aria-hidden="true"
+          class="size-3.5 shrink-0 text-ink-extra-muted transition-transform duration-150 group-data-expanded:rotate-90 motion-reduce:transition-none"
+        />
+      </Show>
+      <Show when={active()}>
+        <span class="shrink-0 text-[11px] text-ink-extra-muted">
+          {props.status === 'pending' ? 'Pending' : 'Running'}
+        </span>
+      </Show>
+      <Show when={props.trailing}>
+        <span class="ml-auto flex shrink-0 items-center gap-1.5 rounded-full bg-ink/5 px-2 py-0.5 whitespace-nowrap text-[11px]">
           {props.trailing}
-          <Show when={expandable}>
-            <CaretRight
-              aria-hidden="true"
-              class="size-3 shrink-0 text-ink-extra-muted transition-transform group-data-expanded:rotate-90 motion-reduce:transition-none"
-            />
-          </Show>
         </span>
       </Show>
     </>
@@ -94,8 +119,8 @@ export function ToolCard(props: ToolCardProps) {
 
   return (
     <div
-      class="overflow-hidden rounded-lg bg-surface text-ink-extra-muted"
-      classList={{ 'opacity-50': props.muted }}
+      class="min-w-0 text-ink-muted"
+      classList={{ 'text-ink-subtle': props.muted }}
     >
       <Show
         when={hasChildren()}
@@ -105,12 +130,17 @@ export function ToolCard(props: ToolCardProps) {
           open={props.open}
           defaultOpen={props.defaultOpen}
           onOpenChange={props.onOpenChange}
+          class="overflow-hidden rounded-xl border border-transparent data-expanded:border-edge-muted data-expanded:bg-ink/2"
         >
-          <Collapsible.Trigger class={`group hover:bg-hover ${ROW_CLASS}`}>
+          <Collapsible.Trigger
+            class={`group transition-colors hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${ROW_CLASS}`}
+          >
             {row(true)}
           </Collapsible.Trigger>
           <Collapsible.Content class="data-closed:hidden">
-            <div class="min-w-0 px-3 pb-2">{resolved()}</div>
+            <div class="min-w-0 overflow-hidden border-t border-edge-muted">
+              {resolved()}
+            </div>
           </Collapsible.Content>
         </Collapsible>
       </Show>

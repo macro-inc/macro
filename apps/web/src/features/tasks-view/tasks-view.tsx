@@ -1,4 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
+import { ListContentPreview } from '@app/components/view-shell/ListContentPreview';
+import { RightContentPanel } from '@components/app/RightContentPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ListEntityMetadataQueryProvider } from '@entity';
@@ -9,7 +11,7 @@ import { TasksControls } from './components/TasksControls';
 import { TasksHeader } from './components/TasksHeader';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
-import { TasksViewProvider } from './tasks-view-context';
+import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import type { TasksViewStateOptions } from './types';
 
 export type TasksViewProps = {
@@ -30,6 +32,13 @@ function TasksListFallback() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
+  const { state } = useTasksView();
+  const title = () =>
+    state.tab === 'my-tasks'
+      ? 'My Tasks'
+      : state.tab === 'team-tasks'
+        ? 'All Tasks'
+        : 'Created by me';
 
   onMount(() => panel.handle.setDisplayName('Tasks'));
 
@@ -46,13 +55,24 @@ function TasksViewRoot() {
               <TasksSidebar />
             </ViewShell.Aside>
             <ViewShell.Main>
-              <TasksHeader />
-              <TasksControls />
-              <div class="min-h-0 min-w-0 flex-1">
-                <Suspense fallback={<TasksListFallback />}>
-                  <TaskList />
-                </Suspense>
-              </div>
+              <RightContentPanel>
+                <ListContentPreview
+                  title={title()}
+                  viewKey={JSON.stringify([state.tab, state.facets])}
+                >
+                  {() => (
+                    <>
+                      <TasksHeader />
+                      <TasksControls />
+                      <div class="min-h-0 min-w-0 flex-1">
+                        <Suspense fallback={<TasksListFallback />}>
+                          <TaskList />
+                        </Suspense>
+                      </div>
+                    </>
+                  )}
+                </ListContentPreview>
+              </RightContentPanel>
             </ViewShell.Main>
             <div
               aria-hidden="true"

@@ -12,7 +12,10 @@ import type {
   BlockComponentProps,
   BlockName,
 } from '@core/block';
-import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
+import {
+  fileTypeToResolvedBlockName,
+  resolveBlockAlias,
+} from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
@@ -43,22 +46,30 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from './split-layout/context';
+import type { SplitContent } from './split-layout/layoutManager';
 
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
-    (props: { previewEntity: EntityData; onFocusOut?: VoidFunction }) => ({
+    (props: {
+      previewEntity: EntityData | undefined;
+      onFocusOut?: VoidFunction;
+    }) => ({
       previewEntity: () => props.previewEntity,
       onFocusOut: () => props.onFocusOut?.(),
     })
   );
 
 export type PreviewPanelProps = {
-  selectedEntity: EntityData | undefined;
+  selectedEntity?: EntityData;
+  content?: Exclude<SplitContent, { type: 'component' }>;
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
   onFocusOut?: VoidFunction;
   /** Styling for the preview header when embedded in a workspace layout. */
   headerClass?: string;
+  /** Hide block header chrome while retaining its portal targets. */
+  hideHeader?: boolean;
+  headerPrefix?: import('solid-js').JSX.Element;
   ref?: (el: HTMLElement) => void;
 };
 
@@ -69,9 +80,7 @@ type PreviewBlockTarget = {
   params?: BlockComponentProps[BlockName];
 };
 
-function PreviewPanelContent(
-  props: PreviewPanelProps & { selectedEntity: EntityData }
-) {
+function PreviewPanelContent(props: PreviewPanelProps) {
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
@@ -80,7 +89,17 @@ function PreviewPanelContent(
     useHotkeyDOMScope('preview-panel');
 
   const blockInstance = createMemo(() => {
-    const entity = props.selectedEntity;
+    if (props.content) {
+      return props.orchestrator.createBlockInstance(
+        resolveBlockAlias(props.content.type),
+        props.content.id,
+        {
+          aliasContext: props.content.aliasContext,
+          params: props.content.params,
+        }
+      );
+    }
+    const entity = props.selectedEntity!;
 
     const target = match(entity)
       .returnType<PreviewBlockTarget>()
@@ -176,6 +195,7 @@ function PreviewPanelContent(
       () => props.selectedEntity,
       (entity) => {
         setInteractedWith(false);
+        if (!entity) return;
         void navigateChannelEntityToTarget(entity, props.orchestrator);
         void navigateCalendarEntityToTarget(entity, props.orchestrator);
       }
@@ -212,11 +232,13 @@ function PreviewPanelContent(
     >
       <div
         ref={headerCollapseController.setRow}
+        style={props.hideHeader ? { display: 'none' } : undefined}
         class={cn(
           'relative flex min-h-10 w-full shrink-0 items-center justify-between bg-surface px-2',
           props.headerClass
         )}
       >
+        {props.headerPrefix}
         <PriorityCollapseOverflowSensor
           controller={headerCollapseController}
           truncateAsLastResort
@@ -281,10 +303,8 @@ function PreviewPanelContent(
 export function PreviewPanel(props: PreviewPanelProps) {
   return (
     <div class="flex size-full min-h-0">
-      <Show when={props.selectedEntity}>
-        {(selectedEntity) => (
-          <PreviewPanelContent {...props} selectedEntity={selectedEntity()} />
-        )}
+      <Show when={props.selectedEntity || props.content}>
+        {(_target) => <PreviewPanelContent {...props} />}
       </Show>
     </div>
   );

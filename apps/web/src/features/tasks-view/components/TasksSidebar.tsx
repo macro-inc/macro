@@ -26,6 +26,7 @@ export function TasksNavigation(props: { onNavigate?: () => void }) {
       <For each={TABS}>
         {(item) => (
           <ViewSidebar.Item
+            title={item.label}
             active={state.tab === item.id}
             class="h-9 shrink-0 gap-3 rounded-xl px-3 text-sm font-normal"
             onClick={() => {
@@ -61,7 +62,7 @@ export function TasksSidebar() {
       <ViewSidebar.Header>
         <ViewSidebar.Title>Tasks</ViewSidebar.Title>
       </ViewSidebar.Header>
-      <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-4">
+      <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
         <Button
           variant="ghost"
           class="mb-6 h-10 shrink-0 justify-start gap-3 rounded-xl border-edge-muted bg-ink/4 px-3 text-ink"

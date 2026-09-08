@@ -1,8 +1,10 @@
-/** Free-form text a tool call reported - a search hit, a fetched page, a raw fallback. */
-export function FoldedOutput(props: { text: string }) {
+import { OutputSurface } from './OutputSurface';
+
+/** Raw output stays available without dominating the conversation. */
+export function FoldedOutput(props: { text: string; label?: string }) {
   return (
-    <pre class="overflow-x-auto rounded bg-surface p-2 font-mono text-xs whitespace-pre-wrap text-ink-muted wrap-break-word">
+    <OutputSurface label={props.label ?? 'Output'} text={props.text}>
       {props.text}
-    </pre>
+    </OutputSurface>
   );
 }

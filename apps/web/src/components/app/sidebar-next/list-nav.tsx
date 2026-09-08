@@ -107,7 +107,12 @@ export const ListNav = (props: ListNavProps) => {
         data-sidebar-next-item={props.item.id}
         onMouseDown={navigate}
       >
-        <NavGlyph icon={props.item.icon} class="size-5" />
+        <NavGlyph
+          icon={props.item.icon}
+          iconActive={props.item.iconActive}
+          filled={isActive()}
+          class="size-5"
+        />
       </Button>
     </SidebarOpenInSplitMenu>
   );

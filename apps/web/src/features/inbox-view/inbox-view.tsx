@@ -1,6 +1,7 @@
 import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import { RightContentPanel } from '@components/app/RightContentPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -44,7 +45,7 @@ function InboxViewRoot() {
   });
 
   onMount(() => {
-    panel.handle.setDisplayName('Inbox');
+    panel.handle.setDisplayName('Notifications');
     if (!isTouchDevice() && panel.handle.isControllerSplit()) {
       panel.handle.disengagePreview();
     }
@@ -60,13 +61,25 @@ function InboxViewRoot() {
               fallback={
                 <ViewShell.Root aside={false} main={{ min: 224 }}>
                   <ViewShell.Main>
-                    <InboxHeader>
-                      <InboxTabs />
-                    </InboxHeader>
-                    <Suspense fallback={<InboxFallback />}>
-                      <InboxList />
-                    </Suspense>
+                    <RightContentPanel
+                      contentKey={
+                        selectedEntity()
+                          ? `${selectedEntity()!.type}:${selectedEntity()!.id}`
+                          : `list:${state.tab}`
+                      }
+                    >
+                      <InboxHeader>
+                        <InboxTabs />
+                      </InboxHeader>
+                      <Suspense fallback={<InboxFallback />}>
+                        <InboxList />
+                      </Suspense>
+                    </RightContentPanel>
                   </ViewShell.Main>
+                  <div
+                    aria-hidden="true"
+                    class="pointer-events-none absolute inset-x-0 top-0 z-10 h-12 border-b border-edge-muted"
+                  />
                 </ViewShell.Root>
               }
             >
@@ -89,39 +102,47 @@ function InboxViewRoot() {
                     </ViewSidebar.Root>
                   </ViewShell.Aside>
                   <ViewShell.Main class="overflow-hidden">
-                    <Show
-                      when={selectedEntity()}
-                      fallback={
-                        <div class="flex size-full min-h-0 flex-col">
-                          <div class="h-12 shrink-0 border-b border-edge-muted" />
-                          <div class="min-h-0 flex-1">
-                            <EmptyStatePanel
-                              graphic={EmptyStatePreviewIcon}
-                              title="No content selected"
-                              description="Select an item from the inbox to preview it here"
-                              centered
-                            />
-                          </div>
-                        </div>
+                    <RightContentPanel
+                      contentKey={
+                        selectedEntity()
+                          ? `${selectedEntity()!.type}:${selectedEntity()!.id}`
+                          : `list:${state.tab}`
                       }
                     >
-                      {(entity) => (
-                        <Suspense>
-                          <PreviewPanel
-                            selectedEntity={entity()}
-                            orchestrator={orchestrator}
-                            splitPanelContext={panel}
-                            headerClass="h-12 min-h-12 border-b border-edge-muted"
-                          />
-                        </Suspense>
-                      )}
-                    </Show>
+                      <Show
+                        when={selectedEntity()}
+                        fallback={
+                          <div class="flex size-full min-h-0 flex-col">
+                            <div class="h-12 shrink-0 " />
+                            <div class="min-h-0 flex-1">
+                              <EmptyStatePanel
+                                graphic={EmptyStatePreviewIcon}
+                                title="No content selected"
+                                description="Select an item from the inbox to preview it here"
+                                centered
+                              />
+                            </div>
+                          </div>
+                        }
+                      >
+                        {(entity) => (
+                          <Suspense>
+                            <PreviewPanel
+                              selectedEntity={entity()}
+                              orchestrator={orchestrator}
+                              splitPanelContext={panel}
+                              headerClass="h-12 min-h-12 "
+                            />
+                          </Suspense>
+                        )}
+                      </Show>
+                    </RightContentPanel>
                   </ViewShell.Main>
+                  <div
+                    aria-hidden="true"
+                    class="pointer-events-none absolute inset-x-0 top-0 z-10 h-12 border-b border-edge-muted"
+                  />
                 </ViewShell.Root>
-                <div
-                  aria-hidden="true"
-                  class="pointer-events-none absolute inset-x-0 top-0 z-10 h-12 border-b border-edge-muted"
-                />
               </div>
             </Show>
           </SplitPanel.Body>

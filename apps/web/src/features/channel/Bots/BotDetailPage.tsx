@@ -189,126 +189,127 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
 
   return (
     <>
-      <div class="size-full overflow-y-auto bg-surface text-ink">
-        {/* Mobile chrome insets live inside the scroll content so the page is
+      <Show when={!tokenOpen() && !deleteOpen()}>
+        <div class="size-full overflow-y-auto bg-surface text-ink">
+          {/* Mobile chrome insets live inside the scroll content so the page is
             full-frame, matching SettingsPage (this detail view only renders
             inside the settings panel). */}
-        <main class="mx-auto w-full max-w-[560px] px-8 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            class="-ml-2 mb-7"
-            disabled={pending()}
-            onClick={leave}
-          >
-            <CaretLeftIcon />
-            Back to bots
-          </Button>
-          <Show
-            when={initialized() && botQuery.data}
-            fallback={
-              <div class="flex min-h-96 items-center justify-center">
-                <LoadingSpinner class="size-16 p-4" />
-              </div>
-            }
-          >
-            {(bot) => (
-              <form
-                class="flex flex-col gap-5"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void save();
-                }}
-              >
-                <header class="flex items-center gap-3">
-                  <BotAvatar
-                    bot={{
-                      name: form.name || bot().name,
-                      avatar_url: form.avatarUrl || undefined,
-                    }}
-                    size="lg"
-                  />
-                  <div class="min-w-0">
-                    <h1 class="truncate text-lg font-semibold tracking-[-0.01em]">
-                      {form.name || bot().name}
-                    </h1>
-                    <p class="mt-0.5 truncate text-sm text-ink-muted">
-                      @{form.handle || bot().handle}
-                    </p>
-                  </div>
-                </header>
-
-                <BotFormSection
-                  class="mt-3"
-                  title="Profile"
-                  description="Update how this bot appears in channels and mentions."
+          <main class="mx-auto w-full max-w-4xl px-10 pt-10 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="-ml-2 mb-7"
+              disabled={pending()}
+              onClick={leave}
+            >
+              <CaretLeftIcon />
+              Back to bots
+            </Button>
+            <Show
+              when={initialized() && botQuery.data}
+              fallback={
+                <div class="flex min-h-96 items-center justify-center">
+                  <LoadingSpinner class="size-16 p-4" />
+                </div>
+              }
+            >
+              {(bot) => (
+                <form
+                  class="flex flex-col gap-8"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void save();
+                  }}
                 >
-                  <BotProfileFields
-                    value={form}
-                    errors={errors()}
-                    uploadingAvatar={avatarUpload.uploading()}
-                    onUploadAvatar={avatarUpload.open}
-                    onNameChange={(value) => {
-                      setForm('name', value);
-                      setErrors((current) => ({
-                        ...current,
-                        name: undefined,
-                      }));
-                    }}
-                    onHandleChange={(value) => {
-                      setForm('handle', slugBotHandle(value));
-                      setErrors((current) => ({
-                        ...current,
-                        handle: undefined,
-                      }));
-                    }}
-                    onDescriptionChange={(value) =>
-                      setForm('description', value)
-                    }
-                  />
-                </BotFormSection>
+                  <header class="flex items-center gap-3">
+                    <BotAvatar
+                      bot={{
+                        name: form.name || bot().name,
+                        avatar_url: form.avatarUrl || undefined,
+                      }}
+                      size="lg"
+                    />
+                    <div class="min-w-0">
+                      <h1 class="truncate text-2xl font-medium tracking-tight">
+                        {form.name || bot().name}
+                      </h1>
+                      <p class="mt-0.5 truncate text-sm text-ink-muted">
+                        @{form.handle || bot().handle}
+                      </p>
+                    </div>
+                  </header>
 
-                <BotAgentSection
-                  checked={form.hasAgent}
-                  disabled={saving()}
-                  onChange={(checked) => setForm('hasAgent', checked)}
-                />
+                  <BotFormSection
+                    class="mt-3"
+                    title="Profile"
+                    description="Update how this bot appears in channels and mentions."
+                  >
+                    <BotProfileFields
+                      value={form}
+                      errors={errors()}
+                      uploadingAvatar={avatarUpload.uploading()}
+                      onUploadAvatar={avatarUpload.open}
+                      onNameChange={(value) => {
+                        setForm('name', value);
+                        setErrors((current) => ({
+                          ...current,
+                          name: undefined,
+                        }));
+                      }}
+                      onHandleChange={(value) => {
+                        setForm('handle', slugBotHandle(value));
+                        setErrors((current) => ({
+                          ...current,
+                          handle: undefined,
+                        }));
+                      }}
+                      onDescriptionChange={(value) =>
+                        setForm('description', value)
+                      }
+                    />
+                  </BotFormSection>
 
-                <BotFormSection
-                  title="Channels"
-                  description="Choose every channel this bot can post to."
-                >
-                  <ChannelMultiSelect
-                    channelIds={channelIds()}
-                    assignedChannels={assignedChannels()}
-                    onChange={setChannelIds}
+                  <BotAgentSection
+                    checked={form.hasAgent}
                     disabled={saving()}
+                    onChange={(checked) => setForm('hasAgent', checked)}
                   />
-                  <p class="mt-2 text-xs text-ink-muted">
-                    Each assigned channel has a separate webhook URL.
-                  </p>
-                </BotFormSection>
 
-                <BotWebhooksSection
-                  channels={assignedChannels()}
-                  onNewToken={() => setTokenOpen(true)}
-                />
+                  <BotFormSection
+                    title="Channels"
+                    description="Choose every channel this bot can post to."
+                  >
+                    <ChannelMultiSelect
+                      channelIds={channelIds()}
+                      assignedChannels={assignedChannels()}
+                      onChange={setChannelIds}
+                      disabled={saving()}
+                    />
+                    <p class="mt-2 text-xs text-ink-muted">
+                      Each assigned channel has a separate webhook URL.
+                    </p>
+                  </BotFormSection>
 
-                <BotDetailActions
-                  canDelete={canDelete()}
-                  dirty={isDirty()}
-                  pending={pending()}
-                  saving={saving()}
-                  onBack={leave}
-                  onDelete={() => setDeleteOpen(true)}
-                />
-              </form>
-            )}
-          </Show>
-        </main>
-      </div>
+                  <BotWebhooksSection
+                    channels={assignedChannels()}
+                    onNewToken={() => setTokenOpen(true)}
+                  />
 
+                  <BotDetailActions
+                    canDelete={canDelete()}
+                    dirty={isDirty()}
+                    pending={pending()}
+                    saving={saving()}
+                    onBack={leave}
+                    onDelete={() => setDeleteOpen(true)}
+                  />
+                </form>
+              )}
+            </Show>
+          </main>
+        </div>
+      </Show>
       <CreateBotTokenDialog
         open={tokenOpen()}
         onOpenChange={setTokenOpen}

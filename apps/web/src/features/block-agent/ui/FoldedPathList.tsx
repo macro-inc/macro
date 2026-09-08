@@ -1,18 +1,22 @@
-import { Tool } from '@core/component/AI/component/tool/Tool';
 import FileText from '@phosphor/file-text.svg';
 import { For } from 'solid-js';
 
-/** The full path list behind a truncated inline summary. */
 export function FoldedPathList(props: { paths: string[] }) {
   return (
-    <Tool.List>
+    <div class="max-h-64 overflow-auto">
       <For each={props.paths}>
         {(path) => (
-          <Tool.ListItem icon={<FileText class="size-4" />}>
-            <span class="truncate font-mono text-xs">{path}</span>
-          </Tool.ListItem>
+          <div class="flex min-h-10 items-center gap-3 border-b border-edge-muted px-4 py-2 last:border-0">
+            <FileText class="size-4 shrink-0 text-ink-extra-muted" />
+            <span
+              class="truncate font-mono text-xs text-ink-muted"
+              title={path}
+            >
+              {path}
+            </span>
+          </div>
         )}
       </For>
-    </Tool.List>
+    </div>
   );
 }

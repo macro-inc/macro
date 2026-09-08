@@ -1,4 +1,3 @@
-import { SuspenseDebug } from '@app/lib/suspense-debug';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
@@ -26,6 +25,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { RightContentPanel } from '../../RightContentPanel';
 import { splitBackInterceptor } from '../back-interceptor';
 import {
   type SplitBottomPanelRegistration,
@@ -249,7 +249,7 @@ export function SplitPanel(props: SplitPanelProps) {
         close: props.handle.close,
       }}
     >
-      <Suspense fallback={<SuspenseDebug label="SplitPanel-1" />}>
+      <Suspense>
         <SoupViewContextProvider soup={nextSoup}>
           <BlockOpenTrackingDelayContext.Provider
             value={
@@ -406,7 +406,9 @@ export function SplitPanel(props: SplitPanelProps) {
                             bottomPanel() ? 'h-1/2' : 'h-full'
                           )}
                         >
-                          <MountedContent />
+                          <RightContentPanel>
+                            <MountedContent />
+                          </RightContentPanel>
                         </div>
                         <Show when={bottomPanel()}>
                           {(panel) => (

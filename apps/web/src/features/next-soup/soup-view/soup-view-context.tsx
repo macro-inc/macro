@@ -1,4 +1,3 @@
-import { SuspenseDebug } from '@app/lib/suspense-debug';
 import {
   entityMatchesTagFilter,
   isListViewID,
@@ -1014,7 +1013,7 @@ export const SoupViewContextProvider: FlowComponent<
     }
   );
 
-  // Reading `.data` on a cold TanStack query suspends the nearest <Suspense fallback={<SuspenseDebug label="soup-view-context-1" />}>.
+  // Reading `.data` on a cold TanStack query suspends the nearest <Suspense>.
   // Read loading first so REST fallback leaves the view shell rendered.
   const itemsQueryData = () =>
     itemsQuery.isLoading ? undefined : itemsQuery.data;
@@ -1617,7 +1616,7 @@ export const SoupViewContextProvider: FlowComponent<
   return (
     <SoupViewContext.Provider value={context}>
       {props.children}
-      <Suspense fallback={<SuspenseDebug label="soup-view-context-2" />}>
+      <Suspense>
         <SyncWithSoup soup={soup} rows={builtRows()} />
       </Suspense>
     </SoupViewContext.Provider>

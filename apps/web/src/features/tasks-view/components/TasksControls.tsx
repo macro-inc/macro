@@ -215,7 +215,7 @@ export function TasksControls(props: { tagsOnly?: boolean }) {
       }
     >
       <div
-        class="relative flex shrink-0 flex-wrap items-center gap-2 px-4 py-2"
+        class="relative flex min-h-11 shrink-0 flex-wrap items-center gap-2 px-4 py-2"
         aria-label="Task filters"
       >
         <div
@@ -256,7 +256,7 @@ export function TasksControls(props: { tagsOnly?: boolean }) {
             <Button
               variant="ghost"
               size="sm"
-              class="h-8 px-2 text-xs text-ink-muted"
+              class="h-7 px-2 text-xs text-ink-muted"
               onClick={() => setFacets({})}
             >
               Clear filters
@@ -268,7 +268,7 @@ export function TasksControls(props: { tagsOnly?: boolean }) {
             <Dropdown.Trigger
               variant="ghost"
               size="sm"
-              class="h-8 gap-2 rounded-lg bg-ink/4 px-3 text-sm"
+              class="h-7 gap-1.5 rounded-lg bg-ink/4 px-2 text-xs"
               aria-label="Group tasks"
             >
               <GroupIcon class="size-3.5" /> Group
@@ -298,7 +298,7 @@ export function TasksControls(props: { tagsOnly?: boolean }) {
               <Dropdown.Trigger
                 variant="ghost"
                 size="sm"
-                class="h-8 gap-2 rounded-lg bg-ink/4 px-3 text-sm"
+                class="h-7 gap-1.5 rounded-lg bg-ink/4 px-2 text-xs"
                 aria-label="Sort tasks"
               >
                 <SortIcon class="size-3.5" /> Sort
@@ -325,10 +325,6 @@ export function TasksControls(props: { tagsOnly?: boolean }) {
             </Dropdown>
           </div>
         </div>
-        <div
-          aria-hidden="true"
-          class="pointer-events-none absolute -left-2 right-0 bottom-0 border-b border-edge-muted"
-        />
       </div>
     </Show>
   );
@@ -358,7 +354,7 @@ function TaskFacetDropdown(props: {
         size="sm"
         aria-label={`Filter by ${props.group.label.toLowerCase()}`}
         class={cn(
-          'h-8 gap-2 rounded-lg bg-ink/4 px-3 text-sm',
+          'h-7 gap-1.5 rounded-lg bg-ink/4 px-2 text-xs',
           props.selected.length > 0 && 'bg-active text-ink',
           props.sidebar && 'h-10 w-full justify-start rounded-xl'
         )}

@@ -76,11 +76,21 @@ export const ScrollIndicators = (props: {
     };
     observeScrollContent();
 
+    const mutationObserver = new MutationObserver(() => {
+      observeScrollContent();
+      updateIndicators();
+    });
+    mutationObserver.observe(ref, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
     updateIndicators();
 
     onCleanup(() => {
       ref.removeEventListener('scroll', updateIndicators);
       resizeObserver.disconnect();
+      mutationObserver.disconnect();
     });
   });
 

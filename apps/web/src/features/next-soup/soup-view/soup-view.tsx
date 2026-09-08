@@ -1,4 +1,5 @@
-import { SuspenseDebug } from '@app/lib/suspense-debug';
+import { ListContentPreview } from '@app/components/view-shell/ListContentPreview';
+import { shouldInitializeList } from '@app/components/view-shell/list-preview-navigation';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
@@ -299,6 +300,24 @@ interface SoupViewProps {
 }
 
 export const SoupView = (props: SoupViewProps) => {
+  const panel = useSplitPanelOrThrow();
+  const view = useSoupView();
+  const contentId = panel.handle.content().id;
+  // Dedicated workspaces own their preview boundary beside their sidebar.
+  if (props.header || contentId === 'inbox' || contentId === 'channels') {
+    return <SoupViewContent {...props} />;
+  }
+  return (
+    <ListContentPreview
+      title={props.viewName}
+      viewKey={JSON.stringify([view.activeTab(), view.tagFilter.activeIds()])}
+    >
+      {() => <SoupViewContent {...props} />}
+    </ListContentPreview>
+  );
+};
+
+const SoupViewContent = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -381,7 +400,7 @@ export const SoupView = (props: SoupViewProps) => {
   // client filters, local search state, and additionalEntities)
   //
   // We use `createRenderEffect` to initialize before the elements mount
-  let init = false;
+  let init = !shouldInitializeList(panel.handle);
   createRenderEffect(() => {
     if (init) return;
     init = true;
@@ -779,12 +798,12 @@ export const SoupView = (props: SoupViewProps) => {
         >
           <aside
             aria-label="View favorites"
-            class="w-64 shrink-0 border-r border-edge-muted bg-sidebar px-3 py-4"
+            class="w-64 shrink-0 border-r border-edge-muted bg-sidebar px-4 py-4"
           >
             <ViewFavorites view={activeListView() ?? ''} />
           </aside>
         </Show>
-        <Suspense fallback={<SuspenseDebug label="soup-view-1" />}>
+        <Suspense>
           <Show
             when={!isBoardMode()}
             fallback={
@@ -797,7 +816,7 @@ export const SoupView = (props: SoupViewProps) => {
           </Show>
         </Suspense>
       </div>
-      <Suspense fallback={<SuspenseDebug label="soup-view-2" />}>
+      <Suspense>
         {/* The board and Preview Controller hide the AI bar: it floats over
             content that is already constrained in both layouts. */}
         <Show

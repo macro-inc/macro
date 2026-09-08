@@ -1,4 +1,3 @@
-import { SuspenseDebug } from '@app/lib/suspense-debug';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import {
   isSidebarVisible,
@@ -134,7 +133,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
                 {(id, index) => (
                   <Show when={splitManager.getSplit(id)}>
                     {(handle) => (
-                      <Suspense fallback={<SuspenseDebug label="SplitLayout-1" />}>
+                      <Suspense>
                         <Resize.Panel
                           id={id}
                           minSize={splitMinWidthForContent(handle().content(), {

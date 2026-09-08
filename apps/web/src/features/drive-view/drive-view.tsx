@@ -1,4 +1,10 @@
 import { ViewShell, ViewSidebar } from '@app/components/view-shell';
+import { ListContentPreview } from '@app/components/view-shell/ListContentPreview';
+import {
+  createSidebarSearch,
+  SidebarSearchField,
+  SidebarSearchToggle,
+} from '@app/components/view-shell/sidebar-search';
 import { ViewFavorites } from '@app/features/favorites/view-favorites';
 import {
   buildDocumentTypeQuery,
@@ -12,11 +18,13 @@ import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/features/next-soup/soup-view/soup-view-create-button';
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
+import { RightContentPanel } from '@components/app/RightContentPanel';
 import { SplitPanel } from '@components/app/split-panel';
 import ClockIcon from '@phosphor/clock.svg';
 import FilePdfIcon from '@phosphor/file-pdf.svg';
 import FileTextIcon from '@phosphor/file-text.svg';
 import FilesIcon from '@phosphor/files.svg';
+import FolderIcon from '@phosphor/folder.svg';
 import ImageIcon from '@phosphor/image.svg';
 import CanvasIcon from '@phosphor/squares-four.svg';
 import UsersIcon from '@phosphor/users.svg';
@@ -48,10 +56,21 @@ const TYPES = [
 /** Drive keeps file navigation and filters beside the existing Soup list. */
 export function DriveView(props: ComponentProps<typeof SoupView>) {
   const view = useSoupView();
+  const sidebarSearch = createSidebarSearch();
   const { applyTabPreset } = useApplyPreset();
   const refinements = useFilterRefinements();
   const projects = useProjectsQuery();
   const folders = () => (projects.isSuccess ? projects.data : []);
+  const matchingFolders = () =>
+    folders()
+      .filter(
+        (folder) =>
+          !folder.deletedAt &&
+          folder.name
+            .toLocaleLowerCase()
+            .includes(sidebarSearch.query().trim().toLocaleLowerCase())
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
   const tree = createMemo(() => buildFolderTree(folders()));
   const folderId = () => view.queryFilters.state.include.projectId?.[0];
   const title = () =>
@@ -86,7 +105,7 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
     });
   const header = () => (
     <>
-      <header class="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-edge-muted px-4">
+      <header class="flex h-12 shrink-0 items-center justify-between gap-3  px-4">
         <h2 class="min-w-0 truncate text-sm font-semibold text-ink">
           {title()}
         </h2>
@@ -98,7 +117,7 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
         </div>
       </header>
       <div
-        class="relative flex shrink-0 flex-wrap items-center gap-2 px-4 py-2"
+        class="relative flex min-h-11 shrink-0 flex-wrap items-center gap-2 px-4 py-2"
         aria-label="File type filters"
       >
         <For each={TYPES}>
@@ -107,7 +126,7 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
               variant="outline"
               size="sm"
               class={cn(
-                'h-8 gap-2 rounded-lg border-edge-muted bg-ink/3 px-3 text-sm',
+                'h-7 gap-1.5 rounded-lg border-edge-muted bg-ink/3 px-2 text-xs',
                 type.ids.every(view.soup.predicates.isActive) &&
                   'bg-active text-ink'
               )}
@@ -119,13 +138,9 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
             </Button>
           )}
         </For>
-        <div class="ml-auto shrink-0 [&_button]:h-8 [&_button]:gap-2 [&_button]:px-3 [&_button]:text-sm [&_button>svg]:size-3.5">
+        <div class="ml-auto shrink-0 [&_button]:h-7 [&_button]:gap-1.5 [&_button]:px-2 [&_button]:text-xs [&_button>svg]:size-3.5">
           <SoupViewContextSort />
         </div>
-        <div
-          aria-hidden="true"
-          class="pointer-events-none absolute -left-2 right-0 bottom-0 border-b border-edge-muted"
-        />
       </div>
       <SoupActiveFiltersBar
         filters={refinements.consolidatedFiltersList()}
@@ -148,7 +163,58 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
               <ViewSidebar.Header>
                 <ViewSidebar.Title>Drive</ViewSidebar.Title>
               </ViewSidebar.Header>
-              <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-3 py-4">
+              <Show when={sidebarSearch.isOpen()}>
+                <SidebarSearchField
+                  search={sidebarSearch}
+                  label="Search folders"
+                />
+                <div
+                  class="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+                  aria-label="Folder search results"
+                >
+                  <For each={matchingFolders()}>
+                    {(folder) => (
+                      <Button
+                        variant="ghost"
+                        class={cn(
+                          'h-9 w-full justify-start gap-3 rounded-xl px-3 font-normal',
+                          folderId() === folder.id && 'bg-active text-ink'
+                        )}
+                        aria-current={
+                          folderId() === folder.id ? 'page' : undefined
+                        }
+                        onClick={() => navigate('all', folder.id)}
+                      >
+                        <FolderIcon class="size-4 shrink-0 text-ink-muted" />
+                        <span class="truncate">{folder.name}</span>
+                      </Button>
+                    )}
+                  </For>
+                  <Show when={projects.isPending}>
+                    <p class="px-3 py-2 text-sm text-ink-muted">
+                      Loading folders…
+                    </p>
+                  </Show>
+                  <Show
+                    when={projects.isSuccess && matchingFolders().length === 0}
+                  >
+                    <p class="px-3 py-2 text-sm text-ink-muted">
+                      No matching folders
+                    </p>
+                  </Show>
+                  <Show when={projects.isError}>
+                    <Button variant="ghost" onClick={() => projects.refetch()}>
+                      Retry loading folders
+                    </Button>
+                  </Show>
+                </div>
+              </Show>
+              <div
+                class={cn(
+                  'min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 py-4',
+                  sidebarSearch.isOpen() ? 'hidden' : 'flex'
+                )}
+              >
                 <div class="w-full [&>div]:w-full">
                   <SoupViewCreateButton sidebar />
                 </div>
@@ -169,6 +235,7 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
                             ? 'page'
                             : undefined
                         }
+                        title={tab.label}
                         onClick={() => navigate(tab.id)}
                       >
                         <Dynamic
@@ -182,9 +249,14 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
                 </nav>
                 <ViewFavorites view="documents" />
                 <section aria-label="Folders" class="min-h-0 shrink-0">
-                  <h2 class="mb-1 flex h-7 items-center px-3 text-xs font-medium text-ink-subtle">
-                    Folders
-                  </h2>
+                  <div class="mb-1 flex h-7 items-center justify-between pl-3 pr-1">
+                    <h2 class="text-xs font-medium text-ink-subtle">Folders</h2>
+                    <SidebarSearchToggle
+                      search={sidebarSearch}
+                      label="Search folders"
+                      size="icon-sm"
+                    />
+                  </div>
                   <DriveFolderTree
                     nodes={tree()}
                     selected={folderId()}
@@ -210,7 +282,18 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
             </ViewSidebar.Root>
           </ViewShell.Aside>
           <ViewShell.Main>
-            <SoupView {...props} viewName="Drive" header={header()} />
+            <RightContentPanel>
+              <ListContentPreview
+                title={title()}
+                viewKey={JSON.stringify([view.activeTab(), folderId()])}
+              >
+                {() => (
+                  <>
+                    <SoupView {...props} viewName="Drive" header={header()} />
+                  </>
+                )}
+              </ListContentPreview>
+            </RightContentPanel>
           </ViewShell.Main>
           <div
             aria-hidden="true"

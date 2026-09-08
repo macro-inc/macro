@@ -24,7 +24,7 @@ function Header(props: JSX.HTMLAttributes<HTMLElement>) {
     <header
       {...rest}
       class={cn(
-        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-edge-muted px-5',
+        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-2 px-4',
         local.class
       )}
       data-view-sidebar-header=""
@@ -40,7 +40,7 @@ function Title(props: JSX.HTMLAttributes<HTMLHeadingElement>) {
     <h1
       {...rest}
       class={cn(
-        'min-w-0 flex-1 truncate text-xl font-semibold tracking-tight text-ink',
+        'min-w-0 flex-1 truncate text-sm font-semibold text-ink',
         local.class
       )}
     >

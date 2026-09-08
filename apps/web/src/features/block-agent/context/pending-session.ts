@@ -16,6 +16,7 @@
  * they already handle while the GET is in flight.
  */
 
+import { rememberAgentSession } from '@queries/agent-session/recent-sessions';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { type Accessor, createSignal } from 'solid-js';
 
@@ -30,6 +31,9 @@ export type PendingSession = {
   sessionId: Accessor<string | undefined>;
   /** The create failed — this block has nothing to become. */
   failed: Accessor<boolean>;
+  initialPrompt?: string;
+  promptFailed: Accessor<boolean>;
+  retryPrompt: () => Promise<void>;
 };
 
 const pending = new Map<string, PendingSession>();
@@ -43,11 +47,30 @@ export function isPlaceholderSessionId(id: string): boolean {
  * Start creating a managed session and return the placeholder to open a block
  * against right now. The POST runs unattended; nothing awaits it.
  */
-export function startPendingSession(): string {
+export function startPendingSession(initialPrompt?: string): string {
   const placeholder = `${PLACEHOLDER_PREFIX}${crypto.randomUUID()}`;
   const [sessionId, setSessionId] = createSignal<string>();
   const [failed, setFailed] = createSignal(false);
-  pending.set(placeholder, { sessionId, failed });
+  const [promptFailed, setPromptFailed] = createSignal(false);
+  let sending = false;
+  const retryPrompt = async () => {
+    const id = sessionId();
+    if (!id || !initialPrompt || sending) return;
+    sending = true;
+    setPromptFailed(false);
+    const result = await agentHarnessServiceClient
+      .control(id, { type: 'prompt', prompt: initialPrompt })
+      .catch(() => undefined);
+    sending = false;
+    setPromptFailed(!result || result.isErr());
+  };
+  pending.set(placeholder, {
+    sessionId,
+    failed,
+    initialPrompt,
+    promptFailed,
+    retryPrompt,
+  });
 
   void agentHarnessServiceClient
     .create({})
@@ -56,7 +79,9 @@ export function startPendingSession(): string {
         setFailed(true);
         return;
       }
+      rememberAgentSession(result.value.session.ownerId, result.value.session);
       setSessionId(result.value.session.id);
+      void retryPrompt();
     })
     .catch(() => setFailed(true));
 

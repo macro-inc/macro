@@ -12,7 +12,6 @@ import PlusIcon from '@phosphor/plus.svg';
 import RobotIcon from '@phosphor/robot.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
-import XIcon from '@phosphor/x.svg';
 import {
   type AgentWithHarnessId,
   type CreateAgentParams,
@@ -30,18 +29,21 @@ import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
-import { Avatar, Button, Dialog, Panel } from '@ui';
+import { Avatar, Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
-import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
-  ChoiceRow,
-  SettingsCard,
-  SettingsPage,
-  SettingsSection,
-} from './primitives';
+  ManagementEditor,
+  ManagementSearch,
+  managementPrimary,
+  ManagementCard as SettingsCard,
+  ManagementPage as SettingsPage,
+  ManagementSection as SettingsSection,
+} from './management-primitives';
+import { PipedreamAppPicker } from './PipedreamAppPicker';
+import { ChoiceRow } from './primitives';
 
 type AgentShare = 'Private' | 'Team';
 type ChannelMode = 'all' | 'selected';
@@ -99,6 +101,9 @@ const MACRO_AGENT: AgentSummary = {
 
 /** Settings page for viewing and creating persistent agents. */
 export function Agents() {
+  const [search, setSearch] = createSignal('');
+  const matchesSearch = (agent: AgentSummary) =>
+    `${agent.name} ${agent.tag}`.toLowerCase().includes(search().toLowerCase());
   const [creating, setCreating] = createSignal(false);
   const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
   const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
@@ -111,7 +116,9 @@ export function Agents() {
   const currentTeamQuery = useCurrentTeamQuery();
   const isTeamOwner = useIsTeamOwner();
   const cursorStatus = useCursorApiKeyStatusQuery();
-  const cursorConnected = () => cursorStatus.data?.registered ?? false;
+  const cursorConnected = () =>
+    (cursorStatus.isPending ? undefined : cursorStatus.data)?.registered ??
+    false;
   const cursorModels = useCursorModelsQuery(cursorConnected);
   const harnessesQuery = useHarnessesQuery();
   const connectedHarnesses = (): readonly ConnectedHarness[] => [
@@ -121,7 +128,10 @@ export function Agents() {
           {
             id: 'cursor',
             name: 'Cursor',
-            models: (cursorModels.data?.models ?? []).map((model) => ({
+            models: (
+              (cursorModels.isPending ? undefined : cursorModels.data)
+                ?.models ?? []
+            ).map((model) => ({
               id: model.id,
               name: model.displayName,
               group: model.group,
@@ -130,19 +140,24 @@ export function Agents() {
           },
         ]
       : []),
-    ...(harnessesQuery.data ?? []).map((harness) => ({
-      id: harness.id,
-      name:
-        harness.owner.type === 'team' ? `${harness.name} · Team` : harness.name,
-      models: [],
-      kind: 'macrod' as const,
-      connected: harness.connected,
-    })),
+    ...((harnessesQuery.isPending ? undefined : harnessesQuery.data) ?? []).map(
+      (harness) => ({
+        id: harness.id,
+        name:
+          harness.owner.type === 'team'
+            ? `${harness.name} · Team`
+            : harness.name,
+        models: [],
+        kind: 'macrod' as const,
+        connected: harness.connected,
+      })
+    ),
   ];
   const channelOptions = createMemo(() =>
     botAssignableChannelOptions(channelsContext.channels())
   );
-  const currentTeamId = () => currentTeamQuery.data?.team.id;
+  const currentTeamId = () =>
+    (currentTeamQuery.isPending ? undefined : currentTeamQuery.data)?.team.id;
   const canShareWithTeam = () => currentTeamId() !== undefined;
   const isAgentCreator = (agent: AgentWithHarnessId) =>
     agent.bot.created_by === currentUserId();
@@ -151,8 +166,8 @@ export function Agents() {
   const canDeleteAgent = (agent: AgentWithHarnessId) =>
     canDeleteBot(agent.bot, currentUserId(), currentTeamId(), isTeamOwner());
   const agents = createMemo(() =>
-    (agentsQuery.data ?? []).map((agent) =>
-      summarizeAgent(agent, connectedHarnesses(), channelOptions())
+    ((agentsQuery.isPending ? undefined : agentsQuery.data) ?? []).map(
+      (agent) => summarizeAgent(agent, connectedHarnesses(), channelOptions())
     )
   );
   const teamAgents = createMemo(() => [
@@ -212,55 +227,35 @@ export function Agents() {
 
   return (
     <>
-      <SettingsPage
-        title="Agents"
-        description="Create agents with their own identity, instructions, and runtime."
-        actions={
-          <Button variant="cta" size="sm" onClick={() => setCreating(true)}>
-            <PlusIcon />
-            Create agent
-          </Button>
-        }
-      >
-        <SettingsSection
-          title="Team agents"
-          description="Agents shared with your team, including Macro."
-        >
-          <SettingsCard>
-            <For each={teamAgents()}>
-              {(agent) => (
-                <AgentRow
-                  agent={agent}
-                  onEdit={
-                    agent.editable && agent.persistedAgent
-                      ? () => setEditingAgent(agent.persistedAgent)
-                      : undefined
-                  }
-                  onDelete={
-                    agent.persistedAgent && canDeleteAgent(agent.persistedAgent)
-                      ? () => setDeletingAgent(agent.persistedAgent)
-                      : undefined
-                  }
-                />
-              )}
-            </For>
-          </SettingsCard>
-        </SettingsSection>
-
-        <SettingsSection
-          title="Private agents"
-          description="Agents owned by you rather than your team."
-        >
-          <SettingsCard>
-            <Show
-              when={privateAgents().length > 0}
-              fallback={
-                <p class="px-6 py-4 text-sm text-ink-muted">
-                  No private agents yet.
-                </p>
-              }
+      <Show when={!creating() && !editingAgent() && !deletingAgent()}>
+        <SettingsPage
+          title="Agents"
+          description="Create agents with their own identity, instructions, and runtime."
+          actions={
+            <Button
+              variant="cta"
+              class={managementPrimary}
+              size="sm"
+              onClick={() => setCreating(true)}
             >
-              <For each={privateAgents()}>
+              <PlusIcon />
+              Create agent
+            </Button>
+          }
+        >
+          <SettingsSection
+            actions={
+              <ManagementSearch
+                label="Search agents"
+                value={search()}
+                onInput={setSearch}
+              />
+            }
+            title="Team agents"
+            description="Agents shared with your team, including Macro."
+          >
+            <SettingsCard>
+              <For each={teamAgents().filter(matchesSearch)}>
                 {(agent) => (
                   <AgentRow
                     agent={agent}
@@ -278,18 +273,55 @@ export function Agents() {
                   />
                 )}
               </For>
-            </Show>
-            <Show when={agentsQuery.isError}>
-              <p class="px-6 py-4 text-xs text-negative">
-                Could not load your agents. Try refreshing this page.
-              </p>
-            </Show>
-          </SettingsCard>
-        </SettingsSection>
-      </SettingsPage>
+            </SettingsCard>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Private agents"
+            description="Agents owned by you rather than your team."
+          >
+            <SettingsCard>
+              <Show
+                when={privateAgents().filter(matchesSearch).length > 0}
+                fallback={
+                  <p class="px-6 py-4 text-sm text-ink-muted">
+                    {search()
+                      ? 'No private agents match your search.'
+                      : 'No private agents yet.'}
+                  </p>
+                }
+              >
+                <For each={privateAgents().filter(matchesSearch)}>
+                  {(agent) => (
+                    <AgentRow
+                      agent={agent}
+                      onEdit={
+                        agent.editable && agent.persistedAgent
+                          ? () => setEditingAgent(agent.persistedAgent)
+                          : undefined
+                      }
+                      onDelete={
+                        agent.persistedAgent &&
+                        canDeleteAgent(agent.persistedAgent)
+                          ? () => setDeletingAgent(agent.persistedAgent)
+                          : undefined
+                      }
+                    />
+                  )}
+                </For>
+              </Show>
+              <Show when={agentsQuery.isError}>
+                <p class="px-6 py-4 text-xs text-negative">
+                  Could not load your agents. Try refreshing this page.
+                </p>
+              </Show>
+            </SettingsCard>
+          </SettingsSection>
+        </SettingsPage>
+      </Show>
 
       <Show when={creating()}>
-        <AgentDialog
+        <AgentEditor
           connectedHarnesses={connectedHarnesses()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
@@ -301,7 +333,7 @@ export function Agents() {
       </Show>
       <Show when={editingAgent()} keyed>
         {(agent) => (
-          <AgentDialog
+          <AgentEditor
             agent={agent}
             connectedHarnesses={connectedHarnesses()}
             currentTeamId={currentTeamId()}
@@ -315,7 +347,7 @@ export function Agents() {
       </Show>
       <Show when={deletingAgent()} keyed>
         {(agent) => (
-          <AgentDeleteDialog
+          <AgentDeletePage
             agentName={agent.bot.name}
             pending={deleteAgentMutation.isPending}
             onClose={() => setDeletingAgent(undefined)}
@@ -452,33 +484,25 @@ function AgentAvatar(props: { agent: AgentSummary }) {
   );
 }
 
-function AgentDeleteDialog(props: {
+function AgentDeletePage(props: {
   agentName: string;
   pending: boolean;
   onClose: () => void;
   onConfirm: () => void;
 }) {
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => !open && !props.pending && props.onClose()}
-      position="center"
-      visibleScrim
-      class="w-[min(480px,calc(100vw-16px))]"
+    <ManagementEditor
+      parent="Agents"
+      title={`Delete ${props.agentName}?`}
+      onBack={props.onClose}
+      pending={props.pending}
     >
-      <Panel depth={2} class="rounded-xl text-ink">
-        <Panel.Header class="px-5 py-3">
-          <Dialog.Title class="text-sm font-semibold">
-            Delete {props.agentName}?
-          </Dialog.Title>
-        </Panel.Header>
-        <Panel.Body class="p-5">
-          <Dialog.Description class="text-sm leading-5 text-ink-muted">
-            This removes the agent from every channel and permanently deletes
-            its configuration. This action cannot be undone.
-          </Dialog.Description>
-        </Panel.Body>
-        <Panel.Footer class="justify-end gap-2 px-5 py-3">
+      <SettingsCard class="p-6">
+        <p class="text-sm leading-5 text-ink-muted">
+          This removes the agent from every channel and permanently deletes its
+          configuration. This action cannot be undone.
+        </p>
+        <div class="mt-6 flex justify-end gap-2">
           <Button
             type="button"
             variant="ghost"
@@ -498,13 +522,13 @@ function AgentDeleteDialog(props: {
             <TrashIcon />
             {props.pending ? 'Deleting…' : 'Delete agent'}
           </Button>
-        </Panel.Footer>
-      </Panel>
-    </Dialog>
+        </div>
+      </SettingsCard>
+    </ManagementEditor>
   );
 }
 
-function AgentDialog(props: {
+function AgentEditor(props: {
   agent?: AgentWithHarnessId;
   connectedHarnesses: readonly ConnectedHarness[];
   currentTeamId?: string;
@@ -647,366 +671,344 @@ function AgentDialog(props: {
   };
 
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => !open && close()}
-      position="center"
-      visibleScrim
-      class="w-[min(720px,calc(100vw-16px))]"
+    <ManagementEditor
+      parent="Agents"
+      title={props.agent ? 'Edit agent' : 'Create agent'}
+      onBack={close}
+      pending={props.pending}
       contentRef={(element) => {
         dialogContentRef = element;
       }}
     >
-      <Panel depth={2} class="max-h-[88vh] rounded-xl text-ink">
-        <Panel.Header class="justify-between px-3">
-          <Dialog.Title as="span" class="m-0 p-0 text-sm font-medium">
-            {props.agent ? 'Edit agent' : 'Create agent'}
-          </Dialog.Title>
-          <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <XIcon />
-          </Dialog.CloseButton>
-        </Panel.Header>
-
-        <Panel.Body class="overflow-y-auto p-5">
-          <form
-            id="agent-form"
-            class="flex flex-col gap-6"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submit();
-            }}
-          >
-            <AgentFormSection
-              title="Profile"
-              description="How this agent appears in channels and mentions."
+      <form
+        id="agent-form"
+        class="flex flex-col gap-8"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <AgentFormSection
+          title="Profile"
+          description="How this agent appears in channels and mentions."
+        >
+          <div class="flex items-center gap-3 border-b border-edge-muted pb-4">
+            <button
+              type="button"
+              aria-label="Upload avatar"
+              class="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              onClick={() => avatarInputRef?.click()}
             >
-              <div class="flex items-center gap-3 border-b border-edge-muted pb-4">
-                <button
-                  type="button"
-                  aria-label="Upload avatar"
-                  class="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  onClick={() => avatarInputRef?.click()}
-                >
-                  <AgentAvatar
-                    agent={{
-                      id: 'draft',
-                      name: name() || 'Agent',
-                      tag: tag(),
-                      avatarUrl: avatarUrl(),
-                      instructions: '',
-                      harness: '',
-                      defaultModel: '',
-                      channelSummary: '',
-                      share: share(),
-                    }}
-                  />
-                </button>
-                <div class="min-w-0 flex-1">
-                  <div class="text-sm font-medium text-ink">Avatar</div>
-                  <div class="mt-0.5 text-xs text-ink-muted">
-                    Optional · square images work best
-                  </div>
-                </div>
+              <AgentAvatar
+                agent={{
+                  id: 'draft',
+                  name: name() || 'Agent',
+                  tag: tag(),
+                  avatarUrl: avatarUrl(),
+                  instructions: '',
+                  harness: '',
+                  defaultModel: '',
+                  channelSummary: '',
+                  share: share(),
+                }}
+              />
+            </button>
+            <div class="min-w-0 flex-1">
+              <div class="text-sm font-medium text-ink">Avatar</div>
+              <div class="mt-0.5 text-xs text-ink-muted">
+                Optional · square images work best
+              </div>
+            </div>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              class="hidden"
+              onChange={(event) =>
+                handleAvatarInput(event.currentTarget.files?.[0])
+              }
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => avatarInputRef?.click()}
+            >
+              <UploadIcon />
+              Upload
+            </Button>
+          </div>
+
+          <div class="mt-4 grid grid-cols-2 gap-3 mobile:grid-cols-1">
+            <label class="flex flex-col gap-1.5">
+              <span class="text-xs font-medium text-ink">Name</span>
+              <input
+                autofocus
+                class="settings-input w-full"
+                placeholder="Bug fixer"
+                value={name()}
+                onInput={(event) => handleNameInput(event.currentTarget.value)}
+              />
+            </label>
+            <label for="agent-tag" class="flex flex-col gap-1.5">
+              <span class="text-xs font-medium text-ink">@tag</span>
+              <div class="flex items-center rounded-lg border border-edge-muted px-2 focus-within:border-accent">
+                <span class="text-sm text-ink-extra-muted">@</span>
                 <input
-                  ref={avatarInputRef}
-                  type="file"
-                  accept="image/*"
-                  class="hidden"
-                  onChange={(event) =>
-                    handleAvatarInput(event.currentTarget.files?.[0])
-                  }
+                  id="agent-tag"
+                  aria-label="@tag"
+                  class="min-w-0 flex-1 bg-transparent px-1.5 py-2 text-sm text-ink outline-none"
+                  placeholder="bug-fixer"
+                  value={tag()}
+                  onInput={(event) => {
+                    setTagEdited(true);
+                    setTag(slugAgentTag(event.currentTarget.value));
+                  }}
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => avatarInputRef?.click()}
-                >
-                  <UploadIcon />
-                  Upload
-                </Button>
               </div>
+            </label>
+          </div>
+        </AgentFormSection>
 
-              <div class="mt-4 grid grid-cols-2 gap-3 mobile:grid-cols-1">
-                <label class="flex flex-col gap-1.5">
-                  <span class="text-xs font-medium text-ink">Name</span>
-                  <input
-                    autofocus
-                    class="settings-input w-full"
-                    placeholder="Bug fixer"
-                    value={name()}
-                    onInput={(event) =>
-                      handleNameInput(event.currentTarget.value)
-                    }
-                  />
-                </label>
-                <label for="agent-tag" class="flex flex-col gap-1.5">
-                  <span class="text-xs font-medium text-ink">@tag</span>
-                  <div class="flex items-center rounded-lg border border-edge-muted px-2 focus-within:border-accent">
-                    <span class="text-sm text-ink-extra-muted">@</span>
-                    <input
-                      id="agent-tag"
-                      aria-label="@tag"
-                      class="min-w-0 flex-1 bg-transparent px-1.5 py-2 text-sm text-ink outline-none"
-                      placeholder="bug-fixer"
-                      value={tag()}
-                      onInput={(event) => {
-                        setTagEdited(true);
-                        setTag(slugAgentTag(event.currentTarget.value));
-                      }}
-                    />
-                  </div>
-                </label>
-              </div>
-            </AgentFormSection>
+        <AgentFormSection
+          title="Behavior"
+          description="Instructions the agent receives at the start of every conversation."
+        >
+          <label class="flex flex-col gap-1.5">
+            <span class="text-xs font-medium text-ink">System prompt</span>
+            <textarea
+              rows={5}
+              class="settings-input h-auto min-h-48 w-full resize-y px-4 py-3 text-sm leading-7"
+              placeholder="You are a bug-fixing agent. Reproduce issues, identify root causes, and make focused, tested fixes…"
+              value={instructions()}
+              onInput={(event) => setSystemPrompt(event.currentTarget.value)}
+            />
+          </label>
+        </AgentFormSection>
 
-            <AgentFormSection
-              title="Behavior"
-              description="Instructions the agent receives at the start of every conversation."
-            >
-              <label class="flex flex-col gap-1.5">
-                <span class="text-xs font-medium text-ink">System prompt</span>
-                <textarea
-                  rows={5}
-                  class="settings-input h-auto min-h-30 w-full resize-y px-3 py-2.5 font-mono text-xs leading-5"
-                  placeholder="You are a bug-fixing agent. Reproduce issues, identify root causes, and make focused, tested fixes…"
-                  value={instructions()}
-                  onInput={(event) =>
-                    setSystemPrompt(event.currentTarget.value)
-                  }
-                />
-              </label>
-            </AgentFormSection>
-
-            <AgentFormSection
-              title="Runtime"
-              description="Harnesses and models are limited to those currently connected."
-            >
-              <div class="grid grid-cols-2 gap-3 mobile:grid-cols-1">
-                <label class="flex flex-col gap-1.5">
-                  <span class="text-xs font-medium text-ink">Harness</span>
-                  <select
-                    class="settings-input w-full"
-                    value={harnessId()}
-                    onChange={(event) =>
-                      handleHarnessChange(event.currentTarget.value)
-                    }
-                  >
-                    <For each={props.connectedHarnesses}>
-                      {(harness) => (
-                        <option value={harness.id}>{harness.name}</option>
-                      )}
-                    </For>
-                  </select>
-                </label>
-                <label class="flex flex-col gap-1.5">
-                  <span class="text-xs font-medium text-ink">
-                    Default model
-                  </span>
+        <AgentFormSection
+          title="Runtime"
+          description="Harnesses and models are limited to those currently connected."
+        >
+          <div class="grid grid-cols-2 gap-3 mobile:grid-cols-1">
+            <label class="flex flex-col gap-1.5">
+              <span class="text-xs font-medium text-ink">Harness</span>
+              <select
+                class="settings-input w-full"
+                value={harnessId()}
+                onChange={(event) =>
+                  handleHarnessChange(event.currentTarget.value)
+                }
+              >
+                <For each={props.connectedHarnesses}>
+                  {(harness) => (
+                    <option value={harness.id}>{harness.name}</option>
+                  )}
+                </For>
+              </select>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="text-xs font-medium text-ink">Default model</span>
+              <Show
+                when={selectedHarness()?.kind === 'macrod'}
+                fallback={
                   <Show
-                    when={selectedHarness()?.kind === 'macrod'}
+                    when={selectedHarnessUsesCatalog()}
                     fallback={
-                      <Show
-                        when={selectedHarnessUsesCatalog()}
-                        fallback={
-                          <select
-                            class="settings-input w-full"
-                            value={selectedDefaultModelId()}
-                            onChange={(event) =>
-                              setDefaultModelId(event.currentTarget.value)
-                            }
-                          >
-                            <For each={selectedHarness()?.models ?? []}>
-                              {(model) => (
-                                <option
-                                  value={model.id}
-                                  selected={
-                                    model.id === selectedDefaultModelId()
-                                  }
-                                >
-                                  {model.name}
-                                </option>
-                              )}
-                            </For>
-                          </select>
+                      <select
+                        class="settings-input w-full"
+                        value={selectedDefaultModelId()}
+                        onChange={(event) =>
+                          setDefaultModelId(event.currentTarget.value)
                         }
                       >
-                        <ModelCatalogPicker
-                          value={selectedDefaultModelId()}
-                          options={(selectedHarness()?.models ?? []).map(
-                            (model) => ({
-                              id: model.id,
-                              label: model.name,
-                              group: model.group,
-                            })
+                        <For each={selectedHarness()?.models ?? []}>
+                          {(model) => (
+                            <option
+                              value={model.id}
+                              selected={model.id === selectedDefaultModelId()}
+                            >
+                              {model.name}
+                            </option>
                           )}
-                          onSelect={setDefaultModelId}
-                          ariaLabel="Default model"
-                          triggerClass="w-full justify-between"
-                          contentClass="overflow-hidden"
-                        />
-                      </Show>
+                        </For>
+                      </select>
                     }
                   >
-                    <input
-                      class="settings-input w-full"
-                      placeholder="default"
-                      value={defaultModelId()}
-                      onInput={(event) =>
-                        setDefaultModelId(event.currentTarget.value)
-                      }
+                    <ModelCatalogPicker
+                      value={selectedDefaultModelId()}
+                      options={(selectedHarness()?.models ?? []).map(
+                        (model) => ({
+                          id: model.id,
+                          label: model.name,
+                          group: model.group,
+                        })
+                      )}
+                      onSelect={setDefaultModelId}
+                      ariaLabel="Default model"
+                      triggerClass="w-full justify-between"
+                      contentClass="overflow-hidden"
                     />
                   </Show>
-                </label>
-              </div>
-            </AgentFormSection>
-
-            <Show when={pipedreamMcp()}>
-              <AgentFormSection
-                title="Connections"
-                description="Which connected apps (MCP tools) this agent can use."
+                }
               >
-                <fieldset class="flex flex-col gap-2">
-                  <legend class="sr-only">Connections</legend>
-                  <ChoiceRow
-                    name="agent-mcp-mode"
-                    value="owner_connections"
-                    checked={mcp().scope === 'owner_connections'}
-                    title="Use my connected apps"
-                    description="The agent uses whatever apps the person running it has connected."
-                    onChange={() => setMcpScope('owner_connections')}
-                  />
-                  <ChoiceRow
-                    name="agent-mcp-mode"
-                    value="selected"
-                    checked={mcp().scope === 'selected'}
-                    title="Specific apps"
-                    description="Pick apps from the catalog. Each person connects their own account."
-                    onChange={() => setMcpScope('selected')}
-                  />
-                </fieldset>
+                <input
+                  class="settings-input w-full"
+                  placeholder="default"
+                  value={defaultModelId()}
+                  onInput={(event) =>
+                    setDefaultModelId(event.currentTarget.value)
+                  }
+                />
+              </Show>
+            </label>
+          </div>
+        </AgentFormSection>
 
-                <Show when={mcp().scope === 'selected'}>
-                  <div class="mt-3 border-t border-edge-muted pt-3">
-                    <PipedreamAppPicker
-                      selected={selectedMcpServers()}
-                      onChange={setSelectedMcpServers}
-                      connectedSlugs={connections.slugs}
-                      connectionsReady={connections.ready}
-                      connectContainer={() => dialogContentRef}
-                    />
-                  </div>
-                </Show>
+        <Show when={pipedreamMcp()}>
+          <AgentFormSection
+            title="Connections"
+            description="Which connected apps (MCP tools) this agent can use."
+          >
+            <fieldset class="flex flex-col gap-2">
+              <legend class="sr-only">Connections</legend>
+              <ChoiceRow
+                name="agent-mcp-mode"
+                value="owner_connections"
+                checked={mcp().scope === 'owner_connections'}
+                title="Use my connected apps"
+                description="The agent uses whatever apps the person running it has connected."
+                onChange={() => setMcpScope('owner_connections')}
+              />
+              <ChoiceRow
+                name="agent-mcp-mode"
+                value="selected"
+                checked={mcp().scope === 'selected'}
+                title="Specific apps"
+                description="Pick apps from the catalog. Each person connects their own account."
+                onChange={() => setMcpScope('selected')}
+              />
+            </fieldset>
 
-                <Show when={share() === 'Team'}>
-                  <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
-                    Connections are personal. Teammates who use this agent
-                    connect these apps under Settings → Connections; the
-                    indicators here show only your own.
-                  </p>
-                </Show>
-              </AgentFormSection>
+            <Show when={mcp().scope === 'selected'}>
+              <div class="mt-3 border-t border-edge-muted pt-3">
+                <PipedreamAppPicker
+                  selected={selectedMcpServers()}
+                  onChange={setSelectedMcpServers}
+                  connectedSlugs={connections.slugs}
+                  connectionsReady={connections.ready}
+                  connectContainer={() => dialogContentRef}
+                />
+              </div>
             </Show>
 
-            <AgentFormSection
-              title="Channels"
-              description="Choose whether this agent is global or channel-specific."
-            >
-              <fieldset class="flex flex-col gap-2">
-                <legend class="sr-only">Channels</legend>
-                <ChoiceRow
-                  name="agent-channel-mode"
-                  value="all"
-                  checked={channelMode() === 'all'}
-                  title="All channels"
-                  description="The agent can be mentioned in every channel, like @macro."
-                  onChange={() => setChannelMode('all')}
-                />
-                <ChoiceRow
-                  name="agent-channel-mode"
-                  value="selected"
-                  checked={channelMode() === 'selected'}
-                  title="Specific channels"
-                  description="Only members of selected channels can use this agent."
-                  onChange={() => setChannelMode('selected')}
-                />
-              </fieldset>
+            <Show when={share() === 'Team'}>
+              <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
+                Connections are personal. Teammates who use this agent connect
+                these apps under Settings → Connections; the indicators here
+                show only your own.
+              </p>
+            </Show>
+          </AgentFormSection>
+        </Show>
 
-              <Show when={channelMode() === 'selected'}>
-                <div class="mt-3 border-t border-edge-muted pt-3">
-                  <ChannelMultiSelect
-                    channelIds={selectedChannelIds()}
-                    onChange={setSelectedChannelIds}
-                  />
-                </div>
-              </Show>
-            </AgentFormSection>
+        <AgentFormSection
+          title="Channels"
+          description="Choose whether this agent is global or channel-specific."
+        >
+          <fieldset class="flex flex-col gap-2">
+            <legend class="sr-only">Channels</legend>
+            <ChoiceRow
+              name="agent-channel-mode"
+              value="all"
+              checked={channelMode() === 'all'}
+              title="All channels"
+              description="The agent can be mentioned in every channel, like @macro."
+              onChange={() => setChannelMode('all')}
+            />
+            <ChoiceRow
+              name="agent-channel-mode"
+              value="selected"
+              checked={channelMode() === 'selected'}
+              title="Specific channels"
+              description="Only members of selected channels can use this agent."
+              onChange={() => setChannelMode('selected')}
+            />
+          </fieldset>
 
-            <AgentFormSection
-              title="Share"
-              description="Choose who owns and can configure this agent."
-            >
-              <fieldset class="grid grid-cols-2 gap-2 mobile:grid-cols-1">
-                <legend class="sr-only">Share</legend>
-                <ChoiceRow
-                  name="agent-share"
-                  value="private"
-                  checked={share() === 'Private'}
-                  title="Private"
-                  description={
-                    props.canMakePrivate
-                      ? 'Only you can use and manage this agent.'
-                      : 'Only the agent creator can make it private.'
-                  }
-                  disabled={!props.canMakePrivate}
-                  onChange={() => setShare('Private')}
-                />
-                <ChoiceRow
-                  name="agent-share"
-                  value="team"
-                  checked={share() === 'Team'}
-                  title="Team"
-                  description={
-                    props.canShareWithTeam
-                      ? 'Your team can use this agent in shared channels.'
-                      : 'Create or join a team before sharing agents.'
-                  }
-                  disabled={!props.canShareWithTeam}
-                  onChange={() => setShare('Team')}
-                />
-              </fieldset>
-              <Show when={!props.canShareWithTeam}>
-                <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
-                  Team agents need a team owner. Create or join a team in Team
-                  settings to enable this option.
-                </p>
-              </Show>
-            </AgentFormSection>
-          </form>
-        </Panel.Body>
+          <Show when={channelMode() === 'selected'}>
+            <div class="mt-3 border-t border-edge-muted pt-3">
+              <ChannelMultiSelect
+                channelIds={selectedChannelIds()}
+                onChange={setSelectedChannelIds}
+              />
+            </div>
+          </Show>
+        </AgentFormSection>
 
-        <Panel.Footer class="justify-end gap-2 px-3 py-2">
-          <Button type="button" variant="ghost" size="sm" onClick={close}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="agent-form"
-            variant="cta"
-            size="sm"
-            disabled={!canCreate()}
-          >
-            {props.pending
-              ? props.agent
-                ? 'Saving…'
-                : 'Creating…'
-              : props.agent
-                ? 'Save changes'
-                : 'Create agent'}
-          </Button>
-        </Panel.Footer>
-      </Panel>
-    </Dialog>
+        <AgentFormSection
+          title="Share"
+          description="Choose who owns and can configure this agent."
+        >
+          <fieldset class="grid grid-cols-2 gap-2 mobile:grid-cols-1">
+            <legend class="sr-only">Share</legend>
+            <ChoiceRow
+              name="agent-share"
+              value="private"
+              checked={share() === 'Private'}
+              title="Private"
+              description={
+                props.canMakePrivate
+                  ? 'Only you can use and manage this agent.'
+                  : 'Only the agent creator can make it private.'
+              }
+              disabled={!props.canMakePrivate}
+              onChange={() => setShare('Private')}
+            />
+            <ChoiceRow
+              name="agent-share"
+              value="team"
+              checked={share() === 'Team'}
+              title="Team"
+              description={
+                props.canShareWithTeam
+                  ? 'Your team can use this agent in shared channels.'
+                  : 'Create or join a team before sharing agents.'
+              }
+              disabled={!props.canShareWithTeam}
+              onChange={() => setShare('Team')}
+            />
+          </fieldset>
+          <Show when={!props.canShareWithTeam}>
+            <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
+              Team agents need a team owner. Create or join a team in Team
+              settings to enable this option.
+            </p>
+          </Show>
+        </AgentFormSection>
+      </form>
+      <div class="mt-8 flex justify-end gap-2 border-t border-edge-muted pt-5 pb-10">
+        <Button type="button" variant="ghost" size="sm" onClick={close}>
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form="agent-form"
+          variant="cta"
+          class={managementPrimary}
+          size="sm"
+          disabled={!canCreate()}
+        >
+          {props.pending
+            ? props.agent
+              ? 'Saving…'
+              : 'Creating…'
+            : props.agent
+              ? 'Save changes'
+              : 'Create agent'}
+        </Button>
+      </div>
+    </ManagementEditor>
   );
 }
 
@@ -1021,7 +1023,7 @@ function AgentFormSection(props: {
         <h2 class="text-sm font-semibold text-ink">{props.title}</h2>
         <p class="mt-0.5 text-xs text-ink-muted">{props.description}</p>
       </div>
-      <div class="rounded-xl border border-ink/[0.06] bg-surface-2 p-4">
+      <div class="rounded-2xl border border-edge-muted bg-ink/2 p-5">
         {props.children}
       </div>
     </section>

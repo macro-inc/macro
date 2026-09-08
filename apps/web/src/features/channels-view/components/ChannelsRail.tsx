@@ -5,6 +5,11 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
+import {
+  createSidebarSearch,
+  SidebarSearchField,
+  SidebarSearchToggle,
+} from '@app/components/view-shell/sidebar-search';
 import { CommandState } from '@app/features/command';
 import { ViewFavorites } from '@app/features/favorites/view-favorites';
 import { favoriteSplitContent } from '@app/util/favorites';
@@ -26,9 +31,8 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import { Key } from '@solid-primitives/keyed';
-import { Button, cn, Tabs } from '@ui';
+import { cn, Tabs } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -118,6 +122,13 @@ export function ChannelsRail(props: {
     useChannelsView();
   const panel = useSplitPanelOrThrow();
   const currentUserId = useUserId();
+  const sidebarSearch = createSidebarSearch();
+  const searchResults = () =>
+    props.channels.filter((channel) =>
+      channel.name
+        .toLocaleLowerCase()
+        .includes(sidebarSearch.query().trim().toLocaleLowerCase())
+    );
   const notificationSource = useGlobalNotificationSource();
   const listDomId = createUniqueId();
   const sectionScrollRoots: Partial<Record<ChannelsGroup, HTMLDivElement>> = {};
@@ -172,6 +183,8 @@ export function ChannelsRail(props: {
       )
   );
   const visibleRows = createMemo<ChannelRailRow[]>(() => {
+    if (sidebarSearch.isOpen())
+      return searchResults().map((channel) => conversationRow(channel));
     if (state.tab === 'recents') {
       return recentConversations().map((channel) => conversationRow(channel));
     }
@@ -230,7 +243,7 @@ export function ChannelsRail(props: {
       const scrollRoot =
         row.kind === 'conversation' && row.group
           ? sectionScrollRoots[row.group]
-          : state.tab === 'recents'
+          : sidebarSearch.isOpen() || state.tab === 'recents'
             ? listRoot
             : undefined;
       if (!element || !scrollRoot) return;
@@ -295,7 +308,10 @@ export function ChannelsRail(props: {
 
   withSplitPanelOwner(listOwnedSlotName('section-hotkeys'), () => {
     const group = createHotkeyGroup();
-    const enabled = () => panel.isPanelActive() && state.tab === 'browse';
+    const enabled = () =>
+      panel.isPanelActive() &&
+      !sidebarSearch.isOpen() &&
+      state.tab === 'browse';
 
     registerHotkey({
       hotkey: ']',
@@ -361,48 +377,48 @@ export function ChannelsRail(props: {
         <Match when={props.mode === 'full'}>
           <ViewSidebar.Header>
             <ViewSidebar.Title>Chat</ViewSidebar.Title>
-            <Button
-              variant="ghost"
-              size="icon-md"
-              class="rounded-lg text-ink-muted"
-              label="Search channels"
-              onClick={() => {
-                CommandState.clearQuery();
-                CommandState.setCategoryFilter('channels');
-                CommandState.open();
-              }}
-            >
-              <MagnifyingGlassIcon class="size-4.5" />
-            </Button>
+            <SidebarSearchToggle
+              search={sidebarSearch}
+              label="Search channels and direct messages"
+            />
             <SplitPanel.CloseButton size="icon-sm" />
           </ViewSidebar.Header>
 
-          <div class="flex min-h-12 shrink-0 items-center border-b border-edge-muted px-3 py-2">
-            <Tabs
-              aria-label="Chat views"
-              list={[
-                { value: 'browse', label: 'All' },
-                { value: 'recents', label: 'Recent' },
-              ]}
-              value={state.tab}
-              onChange={(value) => {
-                if (value === 'browse' || value === 'recents') setTab(value);
-              }}
-            />
-          </div>
-          <Show when={state.tab === 'browse'}>
-            <ViewFavorites
-              view="channels"
-              class="mx-3 mt-3"
-              onOpen={(favorite) => {
-                if (favorite.entityType === 'channel')
-                  setSelectedChannelId(favorite.entityId);
-                else
-                  favoritesLayout.openWithSplit(favoriteSplitContent(favorite));
-              }}
+          <Show when={!sidebarSearch.isOpen()}>
+            <div class="flex min-h-12 shrink-0 items-center px-4 py-2">
+              <Tabs
+                aria-label="Chat views"
+                list={[
+                  { value: 'browse', label: 'All' },
+                  { value: 'recents', label: 'Recent' },
+                ]}
+                value={state.tab}
+                onChange={(value) => {
+                  if (value === 'browse' || value === 'recents') setTab(value);
+                }}
+              />
+            </div>
+            <Show when={state.tab === 'browse'}>
+              <ViewFavorites
+                view="channels"
+                class="mx-4 mt-4"
+                onOpen={(favorite) => {
+                  if (favorite.entityType === 'channel')
+                    setSelectedChannelId(favorite.entityId);
+                  else
+                    favoritesLayout.openWithSplit(
+                      favoriteSplitContent(favorite)
+                    );
+                }}
+              />
+            </Show>
+          </Show>
+          <Show when={sidebarSearch.isOpen()}>
+            <SidebarSearchField
+              search={sidebarSearch}
+              label="Search channels and direct messages"
             />
           </Show>
-
           <div
             ref={(element) => {
               listRoot = element;
@@ -412,14 +428,41 @@ export function ChannelsRail(props: {
             aria-activedescendant={activeDescendant()}
             class={cn(
               'scrollbar-hidden min-h-0 flex-1 outline-none',
-              state.tab === 'browse'
-                ? 'overflow-hidden pt-6'
-                : 'overflow-y-auto pt-3'
+              !sidebarSearch.isOpen() && state.tab === 'browse'
+                ? 'overflow-hidden pt-4'
+                : sidebarSearch.isOpen()
+                  ? 'overflow-y-auto'
+                  : 'overflow-y-auto pt-4'
             )}
           >
             <Switch>
+              <Match when={sidebarSearch.isOpen()}>
+                <div class="px-4">
+                  <Key each={searchResults()} by="id">
+                    {(channel) => (
+                      <ChannelOption
+                        id={domIdForRow(rowKeyForChannel(channel().id))}
+                        channel={channel()}
+                        unread={unreadChannelIds().has(channel().id)}
+                        selected={state.selectedChannelId === channel().id}
+                        focused={
+                          list.focus.key() === rowKeyForChannel(channel().id)
+                        }
+                        onActivate={() =>
+                          activateRow(rowKeyForChannel(channel().id))
+                        }
+                      />
+                    )}
+                  </Key>
+                  <Show when={searchResults().length === 0}>
+                    <p class="px-4 py-4 text-sm text-ink-muted">
+                      No matching conversations
+                    </p>
+                  </Show>
+                </div>
+              </Match>
               <Match when={state.tab === 'browse'}>
-                <div class="flex h-full min-h-0 flex-col gap-6 px-3">
+                <div class="flex h-full min-h-0 flex-col gap-6 px-4">
                   <CollapsibleSection.Root open={state.expandedGroups.channels}>
                     <CollapsibleSection.Header
                       focused={
@@ -705,9 +748,7 @@ export function ChannelsRail(props: {
                         </Show>
                       </button>
                     </CollapsibleSection.Header>
-                    <div class="w-full px-2">
-                      <div class="border-t border-edge-muted" />
-                    </div>
+                    <div class="w-full px-2"></div>
                     <CollapsibleSection.Content
                       open={state.expandedGroups.channels}
                       contentRef={setSectionScrollRoot('channels')}
@@ -780,9 +821,7 @@ export function ChannelsRail(props: {
                         </Show>
                       </button>
                     </CollapsibleSection.Header>
-                    <div class="w-full px-2">
-                      <div class="border-t border-edge-muted" />
-                    </div>
+                    <div class="w-full px-2"></div>
                     <CollapsibleSection.Content
                       open={state.expandedGroups.direct_messages}
                       contentRef={setSectionScrollRoot('direct_messages')}

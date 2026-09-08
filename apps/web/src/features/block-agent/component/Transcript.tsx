@@ -202,7 +202,7 @@ export function Transcript() {
               }}
             >
               {(message) => (
-                <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
+                <div class="mx-auto w-full max-w-4xl min-w-0 px-6 pt-3 pb-7">
                   <Message message={message} />
                 </div>
               )}

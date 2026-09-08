@@ -1,3 +1,4 @@
+import ToolIcon from '@phosphor/magnifying-glass.svg';
 /** A search: scope in the row, reported hits in the body. */
 
 import type { ToolDetail } from '@service-agent-fold/generated/types';
@@ -11,6 +12,7 @@ export function SearchToolCall(props: {
 }) {
   return (
     <ToolCard
+      icon={<ToolIcon class="size-4" />}
       title={props.common.label}
       subtitle={pathsSubtitle(props.detail.paths)}
       status={props.common.status}
@@ -18,7 +20,11 @@ export function SearchToolCall(props: {
       trailing={props.common.trailing}
     >
       <Show when={props.detail.output}>
-        {(output) => <FoldedOutput text={output()} />}
+        {(output) => (
+          <div class="p-3">
+            <FoldedOutput label="Search results" text={output()} />
+          </div>
+        )}
       </Show>
     </ToolCard>
   );

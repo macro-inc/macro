@@ -74,7 +74,7 @@ describe('HarnessPairingDialog', () => {
   it('looks up a typed code and shows the pairing request', () => {
     render(() => <HarnessPairingDialog onClose={() => {}} />);
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     const codeInput = within(dialog).getByLabelText('Pairing code');
     fireEvent.input(codeInput, { target: { value: 'kx7m-4qhd' } });
     expect(codeInput).toHaveProperty('value', 'KX7M-4QHD');
@@ -99,7 +99,7 @@ describe('HarnessPairingDialog', () => {
       <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Home desktop' },
     });
@@ -120,7 +120,7 @@ describe('HarnessPairingDialog', () => {
       <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     fireEvent.click(within(dialog).getByLabelText('Team'));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
 
@@ -140,7 +140,7 @@ describe('HarnessPairingDialog', () => {
       <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     expect(within(dialog).getByLabelText('Team')).toHaveProperty(
       'disabled',
       true
@@ -159,7 +159,7 @@ describe('HarnessPairingDialog', () => {
       <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     expect(
       within(dialog).getByText(
         'This pairing code is invalid, expired, or already claimed.'
@@ -178,7 +178,7 @@ describe('HarnessPairingDialog', () => {
       <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={onClose} />
     ));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
 
     await waitFor(() => {

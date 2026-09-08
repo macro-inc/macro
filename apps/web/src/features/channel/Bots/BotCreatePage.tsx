@@ -16,6 +16,7 @@ import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button, ToggleSwitch } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { managementPrimary } from '../../settings/management-primitives';
 import { BotAgentSection } from './BotAgentSection';
 import { BotCreationResult } from './BotCreationResult';
 import { BotFormSection } from './BotFormSection';
@@ -176,7 +177,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
       {/* Mobile chrome insets live inside the scroll content so the page is
           full-frame, matching SettingsPage (this create view only renders
           inside the settings panel). */}
-      <main class="mx-auto w-full max-w-[560px] px-8 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
+      <main class="mx-auto w-full max-w-4xl px-10 pt-10 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
         <Button
           type="button"
           variant="ghost"
@@ -194,9 +195,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
               <RobotIcon class="size-5" />
             </div>
             <div class="min-w-0">
-              <h1 class="text-lg font-semibold tracking-[-0.01em]">
-                Create a bot
-              </h1>
+              <h1 class="text-2xl font-medium tracking-tight">Create a bot</h1>
               <p class="mt-0.5 text-sm text-ink-muted">
                 Give an integration a profile and a secure channel webhook.
               </p>
@@ -206,7 +205,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
 
         <Show when={stage() === 'form'}>
           <form
-            class="mt-8 flex flex-col gap-5"
+            class="mt-8 flex flex-col gap-8"
             onSubmit={(event) => {
               event.preventDefault();
               submit();
@@ -303,7 +302,12 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
                 <Button type="button" variant="ghost" size="sm" onClick={leave}>
                   Cancel
                 </Button>
-                <Button type="submit" variant="cta" size="sm">
+                <Button
+                  type="submit"
+                  variant="cta"
+                  class={managementPrimary}
+                  size="sm"
+                >
                   Create bot
                 </Button>
               </div>

@@ -31,19 +31,11 @@ const MAILBOX_GROUPS = [
     items: [
       { id: 'important', label: 'Signal', icon: TrayIcon },
       { id: 'noise', label: 'Noise', icon: StackIcon },
-    ],
-  },
-  {
-    label: 'Mail',
-    items: [
+
       { id: 'drafts', label: 'Drafts', icon: FileIcon },
       { id: 'sent', label: 'Sent', icon: PaperPlaneIcon },
       { id: 'all', label: 'All mail', icon: EnvelopeIcon },
-    ],
-  },
-  {
-    label: 'Views',
-    items: [
+
       { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
       { id: 'shared', label: 'Shared with me', icon: UsersIcon },
     ],
@@ -73,7 +65,7 @@ export function EmailInboxSelector() {
         as={Button}
         variant="ghost"
         size="md"
-        class="h-11 w-full justify-start gap-3 rounded-xl border-edge-muted bg-ink/3 px-3"
+        class="h-10 w-full justify-start gap-3 rounded-xl border-edge-muted bg-ink/3 px-3"
         aria-label={`Choose inbox: ${label()}`}
       >
         <TrayIcon class="size-4 shrink-0 text-ink-muted" />
@@ -195,7 +187,7 @@ export function EmailSidebar() {
       <ViewSidebar.Header>
         <ViewSidebar.Title>Email</ViewSidebar.Title>
       </ViewSidebar.Header>
-      <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-4">
+      <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
         <EmailInboxSelector />
         <Button
           variant="ghost"
@@ -209,10 +201,7 @@ export function EmailSidebar() {
           <For each={MAILBOX_GROUPS}>
             {(group) => (
               <>
-                <EmailSidebarSection
-                  label={group.label}
-                  collapsible={group.label !== 'Inbox'}
-                >
+                <EmailSidebarSection label={group.label} collapsible>
                   <div class="flex flex-col gap-0.5">
                     <For each={group.items}>
                       {(item) => (
@@ -225,6 +214,7 @@ export function EmailSidebar() {
                           aria-current={
                             mailboxActive(item.id) ? 'page' : undefined
                           }
+                          title={item.label}
                           onClick={() => applyTabPreset('mail', item.id)}
                         >
                           <Dynamic
@@ -237,9 +227,7 @@ export function EmailSidebar() {
                     </For>
                   </div>
                 </EmailSidebarSection>
-                <Show when={group.label === 'Views'}>
-                  <ViewFavorites view="mail" />
-                </Show>
+                <ViewFavorites view="mail" />
               </>
             )}
           </For>

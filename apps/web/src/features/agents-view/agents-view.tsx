@@ -1,9 +1,18 @@
 import {
-  SearchBar,
   useViewControlHotkeys,
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
+import {
+  createSidebarSearch,
+  SidebarSearchField,
+  SidebarSearchToggle,
+} from '@app/components/view-shell/sidebar-search';
+import {
+  pendingSession,
+  startPendingSession,
+} from '@app/features/block-agent/context/pending-session';
+import { AgentInput } from '@app/features/block-agent/ui';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { ViewFavorites } from '@app/features/favorites/view-favorites';
 import { HomeChatInput } from '@app/features/home/home';
@@ -13,16 +22,18 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { Agents } from '@app/features/settings/Agents';
 import { ConnectedAccounts } from '@app/features/settings/ConnectedAccounts';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { favoriteSplitContent } from '@app/util/favorites';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import { RightContentPanel } from '@components/app/RightContentPanel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type ChatEntity, ListEntityMetadataQueryProvider } from '@entity';
 import ChatIcon from '@phosphor/chat-circle.svg';
@@ -32,14 +43,21 @@ import PlusIcon from '@phosphor/plus.svg';
 import RobotIcon from '@phosphor/robot.svg';
 import SkillIcon from '@phosphor/sparkle.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
+import {
+  isRecentAgentSessionWorking,
+  useRecentAgentSessions,
+} from '@queries/agent-session/recent-sessions';
 import { useSoupAstItemsQuery, useSoupItemsQuery } from '@queries/soup/items';
 import {
   getStreamState,
   subscribeToStreamState,
 } from '@service-connection/stream-events';
+import { useSearchParams } from '@solidjs/router';
 import { Button, cn } from '@ui';
 import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { AgentSessionPane } from './agent-session-pane';
+import { ManagementPreview } from './management-preview';
 
 type Page = 'new' | 'routines' | 'agents' | 'connections' | 'skills';
 const PAGES = [
@@ -95,9 +113,31 @@ function AgentsWorkspace() {
   const orchestrator = useGlobalBlockOrchestrator();
   const layout = useSplitLayout();
   const userId = useUserId();
-  const [page, setPage] = createSignal<Page>('new');
+  const agentsFlag = useFeatureFlag(enableChatV3Agents);
+  const sessions = useRecentAgentSessions();
+  const [selectedSession, setSelectedSession] = createSignal<string>();
+  const sessionId = () => {
+    const id = selectedSession();
+    return id ? (pendingSession(id)?.sessionId() ?? id) : undefined;
+  };
+  const [localPage, setLocalPage] = createSignal<Page>('new');
+  const [viewParams, setViewParams] = useSearchParams();
+  const page = (): Page =>
+    viewParams.agentView === 'routines' || viewParams.agentView === 'agents'
+      ? viewParams.agentView
+      : localPage();
+  const setPage = (next: Page) => {
+    const management = next === 'routines' || next === 'agents';
+    setLocalPage(management ? 'new' : next);
+    setViewParams({
+      agentView: management ? next : undefined,
+      agentItem: undefined,
+      agentSection: undefined,
+    });
+  };
   const [selected, setSelected] = createSignal<ChatEntity>();
-  const [search, setSearch] = createSignal('');
+  const sidebarSearch = createSidebarSearch();
+  const search = sidebarSearch.query;
   const [draftKey, setDraftKey] = createSignal(0);
   const query = useSoupItemsQuery(() => ({
     params: { sort_method: 'updated_at', limit: 100 },
@@ -109,27 +149,54 @@ function AgentsWorkspace() {
       .filter((chat) =>
         chat.name.toLowerCase().includes(search().toLowerCase())
       ) ?? [];
-  let searchInput: HTMLInputElement | undefined;
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
     search: {
       description: 'Search agent chats',
       run: () => {
-        searchInput?.focus();
+        sidebarSearch.open();
         return true;
       },
     },
   });
   const navigate = (next: Page) => {
     setSelected(undefined);
+    setSelectedSession(undefined);
     setPage(next);
     if (next === 'new') setDraftKey((key) => key + 1);
   };
   const openChat = (chat: ChatEntity) => {
+    setSelectedSession(undefined);
     setPage('new');
     setSelected(chat);
   };
+  const openSession = (id: string) => {
+    setSelected(undefined);
+    setPage('new');
+    setSelectedSession(id);
+  };
+  const conversations = () =>
+    [
+      ...chats().map((chat) => ({
+        kind: 'chat' as const,
+        chat,
+        id: chat.id,
+        name: chat.name,
+        date: String(chat.updatedAt ?? chat.createdAt ?? ''),
+      })),
+      ...(agentsFlag().enabled ? sessions() : []).map((session) => ({
+        kind: 'session' as const,
+        session,
+        id: session.id,
+        name: session.name,
+        date: session.modifiedAt,
+      })),
+    ]
+      .filter((item) =>
+        item.name.toLowerCase().includes(search().toLowerCase())
+      )
+      .sort((a, b) => b.date.localeCompare(a.date));
   const title = () =>
     PAGES.find((item) => item.id === page())?.label ?? 'New Chat';
   return (
@@ -146,68 +213,114 @@ function AgentsWorkspace() {
             <ViewSidebar.Root aria-label="Agents navigation">
               <ViewSidebar.Header>
                 <ViewSidebar.Title>Agents</ViewSidebar.Title>
-              </ViewSidebar.Header>
-              <div class="shrink-0 px-3 pt-4 pb-2">
-                <SearchBar
+                <SidebarSearchToggle
+                  search={sidebarSearch}
                   label="Search agent chats"
-                  placeholder="Search chats"
-                  ref={(el) => (searchInput = el)}
-                  value={search()}
-                  onValueChange={setSearch}
-                  class="h-9 rounded-lg border border-edge-muted bg-transparent"
                 />
-              </div>
-              <nav
-                aria-label="Agent views"
-                class="flex shrink-0 flex-col gap-0.5 px-3"
-              >
-                <For each={PAGES}>
-                  {(item) => (
-                    <Button
-                      variant="ghost"
-                      class={cn(
-                        'h-9 justify-start gap-3 rounded-xl px-3 font-normal',
-                        page() === item.id &&
+              </ViewSidebar.Header>
+              <Show when={!sidebarSearch.isOpen()}>
+                <nav
+                  aria-label="Agent views"
+                  class="flex shrink-0 flex-col gap-0.5 px-4 pt-4"
+                >
+                  <For each={PAGES}>
+                    {(item) => (
+                      <Button
+                        variant="ghost"
+                        class={cn(
+                          'h-9 justify-start gap-3 rounded-xl px-3 font-normal',
+                          page() === item.id &&
+                            !selected() &&
+                            !selectedSession() &&
+                            'bg-active text-ink'
+                        )}
+                        aria-pressed={
+                          page() === item.id &&
                           !selected() &&
-                          'bg-active text-ink'
-                      )}
-                      aria-pressed={page() === item.id && !selected()}
-                      onClick={() => navigate(item.id)}
-                    >
-                      <Dynamic
-                        component={item.icon}
-                        class="size-4 text-ink-muted"
-                      />
-                      {item.label}
-                    </Button>
-                  )}
-                </For>
-              </nav>
-              <div class="mt-6 shrink-0 px-3">
-                <ViewFavorites
-                  view="agents"
-                  onOpen={(favorite) => {
-                    const chat = chats().find(
-                      (chat) => chat.id === favorite.entityId
-                    );
-                    if (chat) openChat(chat);
-                    else layout.openWithSplit(favoriteSplitContent(favorite));
-                  }}
-                />
-              </div>
-              <div class="mt-6 flex min-h-0 flex-1 flex-col px-3 pb-3">
-                <h2 class="mb-1 flex h-7 shrink-0 items-center px-3 text-xs font-medium text-ink-subtle">
-                  Recent chats
-                </h2>
-                <div class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-                  <For each={chats()}>
-                    {(chat) => (
-                      <ChatRow
-                        chat={chat}
-                        selected={selected()?.id === chat.id}
-                        onOpen={() => openChat(chat)}
-                      />
+                          !selectedSession()
+                        }
+                        title={item.label}
+                        onClick={() => navigate(item.id)}
+                      >
+                        <Dynamic
+                          component={item.icon}
+                          class="size-4 text-ink-muted"
+                        />
+                        {item.label}
+                      </Button>
                     )}
+                  </For>
+                </nav>
+                <div class="mt-6 shrink-0 px-4">
+                  <ViewFavorites
+                    view="agents"
+                    onOpen={(favorite) => {
+                      const chat = chats().find(
+                        (chat) => chat.id === favorite.entityId
+                      );
+                      if (chat) openChat(chat);
+                      else layout.openWithSplit(favoriteSplitContent(favorite));
+                    }}
+                  />
+                </div>
+              </Show>
+              <Show when={sidebarSearch.isOpen()}>
+                <SidebarSearchField
+                  search={sidebarSearch}
+                  label="Search agent chats"
+                />
+              </Show>
+              <div
+                class={cn(
+                  'flex min-h-0 flex-1 flex-col px-4 pb-4',
+                  !sidebarSearch.isOpen() && 'mt-6'
+                )}
+              >
+                <Show when={!sidebarSearch.isOpen()}>
+                  <h2 class="mb-1 flex h-7 shrink-0 items-center px-3 text-xs font-medium text-ink-subtle">
+                    Recent chats
+                  </h2>
+                </Show>
+                <div class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+                  <For each={conversations()}>
+                    {(item) =>
+                      item.kind === 'chat' ? (
+                        <ChatRow
+                          chat={item.chat}
+                          selected={selected()?.id === item.id}
+                          onOpen={() => openChat(item.chat)}
+                        />
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          class={cn(
+                            'h-9 w-full shrink-0 justify-start gap-3 rounded-xl px-3 font-normal',
+                            sessionId() === item.id && 'bg-active text-ink'
+                          )}
+                          aria-pressed={sessionId() === item.id}
+                          title={item.name || 'Agent session'}
+                          onClick={() => openSession(item.id)}
+                        >
+                          <Show
+                            when={isRecentAgentSessionWorking(item.id)}
+                            fallback={
+                              <RobotIcon class="size-4 shrink-0 text-ink-extra-muted" />
+                            }
+                          >
+                            <span
+                              role="status"
+                              aria-label="Agent working"
+                              class="flex size-4 shrink-0 items-center justify-center rounded-full bg-accent/10"
+                            >
+                              <span class="size-1.5 rounded-full bg-accent motion-safe:animate-pulse" />
+                            </span>
+                          </Show>
+                          <span class="min-w-0 truncate text-sm">
+                            {item.name || 'Agent session'}
+                          </span>
+                        </Button>
+                      )
+                    }
                   </For>
                   <Show when={query.isPending}>
                     <p class="px-3 py-2 text-xs text-ink-muted">
@@ -222,7 +335,7 @@ function AgentsWorkspace() {
                       Retry loading chats
                     </Button>
                   </Show>
-                  <Show when={query.isSuccess && chats().length === 0}>
+                  <Show when={query.isSuccess && conversations().length === 0}>
                     <p class="px-3 py-2 text-xs text-ink-muted">
                       {search() ? 'No matching chats' : 'No chats yet'}
                     </p>
@@ -242,74 +355,117 @@ function AgentsWorkspace() {
             </ViewSidebar.Root>
           </ViewShell.Aside>
           <ViewShell.Main>
-            <Show
-              when={selected()}
-              keyed
-              fallback={
-                <>
-                  <header class="flex h-12 shrink-0 items-center border-b border-edge-muted px-4">
-                    <h2 class="text-sm font-semibold">{title()}</h2>
-                  </header>
-                  <div class="min-h-0 flex-1">
-                    <Suspense
-                      fallback={
-                        <div class="p-6 text-sm text-ink-muted">Loading…</div>
-                      }
-                    >
-                      <Switch>
-                        <Match when={page() === 'new'}>
-                          <div class="flex size-full items-center justify-center px-6 pb-16">
-                            <div class="w-full max-w-2xl">
-                              <Show when={{ key: draftKey() }} keyed>
-                                <ChatInputProvider>
-                                  <HomeChatInput
-                                    onChatCreated={(chat) =>
-                                      openChat({
-                                        ...chat,
-                                        type: 'chat',
-                                        ownerId: userId() ?? '',
-                                      })
-                                    }
-                                  />
-                                </ChatInputProvider>
-                              </Show>
-                            </div>
-                          </div>
-                        </Match>
-                        <Match when={page() === 'agents'}>
-                          <Agents />
-                        </Match>
-                        <Match when={page() === 'connections'}>
-                          <ConnectedAccounts />
-                        </Match>
-                        <Match
-                          when={page() === 'routines' || page() === 'skills'}
-                        >
-                          <Show when={page()} keyed>
-                            {(current) => (
-                              <AgentResourceList
-                                page={current as 'routines' | 'skills'}
-                              />
-                            )}
-                          </Show>
-                        </Match>
-                      </Switch>
-                    </Suspense>
-                  </div>
-                </>
+            <RightContentPanel
+              contentKey={
+                sessionId()
+                  ? `agent:${sessionId()}`
+                  : selected()
+                    ? `chat:${selected()!.id}`
+                    : `page:${page()}:${viewParams.agentItem ?? ''}`
               }
             >
-              {(chat) => (
-                <Suspense>
-                  <PreviewPanel
-                    selectedEntity={chat}
-                    orchestrator={orchestrator}
-                    splitPanelContext={panel}
-                    headerClass="h-12 min-h-12 border-b border-edge-muted"
-                  />
-                </Suspense>
-              )}
-            </Show>
+              <Show
+                when={selectedSession()}
+                keyed
+                fallback={
+                  <Show
+                    when={selected()}
+                    keyed
+                    fallback={
+                      <>
+                        <Show
+                          when={page() !== 'routines' && page() !== 'agents'}
+                        >
+                          <header class="flex h-12 shrink-0 items-center  px-4">
+                            <h2 class="text-sm font-semibold">{title()}</h2>
+                          </header>
+                        </Show>
+                        <div class="min-h-0 flex-1">
+                          <Suspense
+                            fallback={
+                              <div class="p-6 text-sm text-ink-muted">
+                                Loading…
+                              </div>
+                            }
+                          >
+                            <Switch>
+                              <Match when={page() === 'new'}>
+                                <div class="flex size-full items-center justify-center px-4 py-4">
+                                  <div class="w-full max-w-2xl">
+                                    <Show when={{ key: draftKey() }} keyed>
+                                      <Show
+                                        when={agentsFlag().enabled}
+                                        fallback={
+                                          <ChatInputProvider>
+                                            <HomeChatInput
+                                              onChatCreated={(chat) =>
+                                                openChat({
+                                                  ...chat,
+                                                  type: 'chat',
+                                                  ownerId: userId() ?? '',
+                                                })
+                                              }
+                                            />
+                                          </ChatInputProvider>
+                                        }
+                                      >
+                                        <AgentInput
+                                          placeholder="Message the agent, @mention anything"
+                                          onSend={(prompt) =>
+                                            openSession(
+                                              startPendingSession(prompt)
+                                            )
+                                          }
+                                        />
+                                      </Show>
+                                    </Show>
+                                  </div>
+                                </div>
+                              </Match>
+                              <Match when={page() === 'agents'}>
+                                <ManagementPreview kind="agents" />
+                              </Match>
+                              <Match when={page() === 'connections'}>
+                                <ConnectedAccounts />
+                              </Match>
+                              <Match when={page() === 'routines'}>
+                                <ManagementPreview kind="routines" />
+                              </Match>
+                              <Match when={page() === 'skills'}>
+                                <Show when={page()} keyed>
+                                  {(current) => (
+                                    <AgentResourceList
+                                      page={current as 'routines' | 'skills'}
+                                    />
+                                  )}
+                                </Show>
+                              </Match>
+                            </Switch>
+                          </Suspense>
+                        </div>
+                      </>
+                    }
+                  >
+                    {(chat) => (
+                      <Suspense>
+                        <PreviewPanel
+                          selectedEntity={chat}
+                          orchestrator={orchestrator}
+                          splitPanelContext={panel}
+                          headerClass="h-12 min-h-12 "
+                        />
+                      </Suspense>
+                    )}
+                  </Show>
+                }
+              >
+                {(id) => (
+                  <Suspense>
+                    <AgentSessionPane id={id} />
+                  </Suspense>
+                )}
+              </Show>
+            </RightContentPanel>
           </ViewShell.Main>
           <div
             aria-hidden="true"
@@ -341,7 +497,7 @@ function AgentResourceList(props: { page: 'routines' | 'skills' }) {
         : (skillsQuery.data?.entities ?? []);
   return (
     <div class="flex h-full min-h-0 flex-col">
-      <div class="flex h-12 shrink-0 items-center border-b border-edge-muted px-4">
+      <div class="flex h-12 shrink-0 items-center  px-4">
         <Button
           variant="ghost"
           size="sm"

@@ -1,3 +1,4 @@
+import ToolIcon from '@phosphor/terminal.svg';
 /** A shell command: `$ cmd` in the row, ANSI-colored output in the body. */
 
 import type { ToolDetail } from '@service-agent-fold/generated/types';
@@ -11,6 +12,7 @@ export function TerminalToolCall(props: {
 }) {
   return (
     <ToolCard
+      icon={<ToolIcon class="size-4" />}
       title={props.common.label}
       subtitle={props.detail.command ?? undefined}
       status={props.common.status}
@@ -19,7 +21,12 @@ export function TerminalToolCall(props: {
     >
       <Show when={props.detail.output}>
         {(output) => (
-          <FoldedTerminal output={output()} exitCode={props.detail.exitCode} />
+          <div class="p-3">
+            <FoldedTerminal
+              output={output()}
+              exitCode={props.detail.exitCode}
+            />
+          </div>
         )}
       </Show>
     </ToolCard>

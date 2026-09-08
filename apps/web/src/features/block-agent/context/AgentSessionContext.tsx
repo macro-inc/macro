@@ -10,6 +10,11 @@
  */
 
 import { isCursorBotId } from '@core/constant/cursorAgent';
+import { useUserId } from '@core/context/user';
+import {
+  rememberAgentSession,
+  setRecentAgentSessionWorking,
+} from '@queries/agent-session/recent-sessions';
 import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
 import type {
   FoldedMessage,
@@ -23,6 +28,7 @@ import {
   type Accessor,
   createContext,
   createEffect,
+  onCleanup,
   type ParentProps,
   Suspense,
   useContext,
@@ -124,6 +130,13 @@ export function AgentSessionProvider(
   });
 
   const feed = createAgentSessionFeed(sessionId);
+  const viewerId = useUserId();
+  // Persist the recent-session index when a session is opened or renamed.
+  createEffect(() => {
+    const viewer = viewerId();
+    const session = feed.session();
+    if (viewer && session) rememberAgentSession(viewer, session);
+  });
   const status = createSessionStatusController({
     sessionId,
     seed: () => feed.session()?.status,
@@ -132,6 +145,12 @@ export function AgentSessionProvider(
   // status stream knows when the runtime disconnected without closing it.
   // Combining them here is what keeps "working" a single truth.
   const working = () => feed.working() && !isDisconnected(status.status());
+  createEffect(() => {
+    const id = sessionId();
+    if (!id) return;
+    setRecentAgentSessionWorking(id, working());
+    onCleanup(() => setRecentAgentSessionWorking(id, false));
+  });
   const queue = createQueueController({
     sessionId,
     messages: feed.messages,

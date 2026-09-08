@@ -40,7 +40,7 @@ export function TasksHeader() {
         ? 'All Tasks'
         : 'Created by me';
   return (
-    <header class="flex h-12 shrink-0 items-center gap-3 border-b border-edge-muted px-4">
+    <header class="flex h-12 shrink-0 items-center gap-3  px-4">
       <div class="hidden @max-[720px]/view-shell:block">
         <Dropdown
           open={navigationOpen()}

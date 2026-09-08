@@ -7,6 +7,7 @@ import {
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import { RightContentPanel } from '@components/app/RightContentPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -98,41 +99,53 @@ function ChannelsViewRoot() {
                   <ChannelsRail channels={channels()} mode={railMode()} />
                 </ViewShell.Aside>
                 <ViewShell.Main class="overflow-hidden">
-                  <Show
-                    when={selectedChannel()}
-                    fallback={
-                      <div class="flex size-full items-center justify-center px-6 text-center">
-                        <div class="flex max-w-sm flex-col gap-2">
-                          <h2 class="text-base font-semibold text-ink">
-                            Select a conversation
-                          </h2>
-                          <p class="text-sm leading-5 text-ink-muted">
-                            Choose a channel or person from the sidebar to open
-                            the conversation here.
-                          </p>
-                        </div>
-                      </div>
+                  <RightContentPanel
+                    contentKey={
+                      state.selectedChannelId
+                        ? `channel:${state.selectedChannelId}`
+                        : undefined
                     }
                   >
-                    {(channel) => (
-                      <Suspense>
-                        <PreviewPanel
-                          headerClass="h-12 min-h-12 border-b border-edge-muted"
-                          selectedEntity={channel()}
-                          orchestrator={orchestrator}
-                          splitPanelContext={panel}
-                        />
-                      </Suspense>
-                    )}
-                  </Show>
+                    <Show
+                      when={selectedChannel()}
+                      fallback={
+                        <div class="flex size-full items-center justify-center px-4 text-center">
+                          <div class="flex max-w-sm flex-col gap-2">
+                            <h2 class="text-base font-semibold text-ink">
+                              Select a conversation
+                            </h2>
+                            <p class="text-sm leading-5 text-ink-muted">
+                              Choose a channel or person from the sidebar to
+                              open the conversation here.
+                            </p>
+                          </div>
+                        </div>
+                      }
+                    >
+                      {(channel) => (
+                        <Suspense>
+                          <PreviewPanel
+                            headerClass="h-12 min-h-12 "
+                            selectedEntity={channel()}
+                            orchestrator={orchestrator}
+                            splitPanelContext={panel}
+                          />
+                        </Suspense>
+                      )}
+                    </Show>
+                  </RightContentPanel>
                 </ViewShell.Main>
+                <div
+                  aria-hidden="true"
+                  class="pointer-events-none absolute inset-x-0 top-0 z-10 h-12 border-b border-edge-muted"
+                />
               </ViewShell.Root>
               <Show when={railMode() === 'full'}>
                 {/* Continue the header divider across the resize gutter. */}
                 <div
                   aria-hidden="true"
                   data-chat-header-divider=""
-                  class="pointer-events-none absolute inset-x-0 top-0 z-10 h-12 border-b border-edge-muted"
+                  class="pointer-events-none absolute inset-x-0 top-0 z-10 h-12 "
                 />
               </Show>
             </div>
