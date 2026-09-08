@@ -1,0 +1,46 @@
+[package]
+edition = "2024"
+name = "databases"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# Axum HTTP router: the SQL-first API surface (exec, snapshot, schema ops).
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:utoipa",
+  "ports",
+]
+# Driven adapters share the port contracts.
+outbound = ["ports"]
+ports = ["dep:entity_access", "dep:tracing"]
+# Postgres persistence for databases/tables/columns/rows/links.
+postgres = ["dep:sqlx", "outbound"]
+# The embedded SQLite executor (analysis, sandboxed execution, changesets).
+sqlite = ["dep:rusqlite", "outbound"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+model-error-response = { path = "../model-error-response", optional = true }
+models_properties = { path = "../models_properties" }
+rootcause = { workspace = true }
+rusqlite = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

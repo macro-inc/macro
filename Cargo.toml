@@ -27,6 +27,7 @@ members = [
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
+  "crates/databases",
   "crates/embedding",
   "crates/email_api_client",
   "crates/entity_mutation",
@@ -255,6 +256,21 @@ reqwest = { version = "0.13", default-features = false, features = [
 ] }
 rmcp = "1.6.0"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
+# Embedded SQLite for the databases query engine: per-query in-memory
+# materializations, never persistent storage. `session` records changesets for
+# write-through, `column_metadata` gives result provenance, `limits`/`functions`
+# support sandboxing and HAS desugar.
+# Pinned to 0.32 so its libsqlite3-sys (0.30.x) unifies with sqlx-sqlite's —
+# cargo allows only one package linking the native `sqlite3`.
+rusqlite = { version = "0.32", features = [
+  "bundled",
+  "column_decltype",
+  "functions",
+  "hooks",
+  "limits",
+  "serialize",
+  "session",
+] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
 rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
