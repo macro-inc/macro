@@ -1,8 +1,9 @@
 //! Team deal stages: the role-gated write path over the team's stage definition.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use entity_access::domain::models::MemberTeamRole;
+use system_properties::StageOption;
 use uuid::Uuid;
 
 use crate::domain::{
@@ -180,51 +181,63 @@ where
         }
     }
 
-    async fn prune_closed_stage_ids(
+    /// Drop closed and legacy entries that point at stages no longer in `live`.
+    async fn prune_stage_settings(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         settings: &CrmTeamSettings,
         live: &[Uuid],
     ) -> Result<(), CrmError> {
-        let Some(closed) = &settings.closed_stage_ids else {
-            return Ok(());
-        };
-        if closed.iter().all(|id| live.contains(id)) {
-            return Ok(());
-        }
-        let kept: Vec<Uuid> = closed
+        let closed = settings.closed_stage_ids.as_ref().map(|closed| {
+            closed
+                .iter()
+                .copied()
+                .filter(|id| live.contains(id))
+                .collect()
+        });
+        let legacy = settings
+            .legacy_stage_ids
             .iter()
-            .copied()
-            .filter(|id| live.contains(id))
+            .filter(|(_, team_id)| live.contains(team_id))
+            .map(|(system_id, team_id)| (*system_id, *team_id))
             .collect();
-        self.write_closed_stage_ids(access, Some(kept)).await
+        self.write_stage_settings(access, settings, closed, legacy)
+            .await
     }
 
-    async fn clear_closed_stage_ids(
+    /// Patch `closed_stage_ids` and `legacy_stage_ids`, skipping fields that already match.
+    async fn write_stage_settings(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         settings: &CrmTeamSettings,
-    ) -> Result<(), CrmError> {
-        if settings.closed_stage_ids.is_none() {
-            return Ok(());
-        }
-        self.write_closed_stage_ids(access, None).await
-    }
-
-    async fn write_closed_stage_ids(
-        &self,
-        access: &CrmTeamReceipt<MemberTeamRole>,
         closed: Option<Vec<Uuid>>,
+        legacy: BTreeMap<Uuid, Uuid>,
     ) -> Result<(), CrmError> {
         let patch = CrmTeamSettingsPatch {
-            closed_stage_ids: Some(closed),
+            closed_stage_ids: (settings.closed_stage_ids != closed).then_some(closed),
+            legacy_stage_ids: (settings.legacy_stage_ids != legacy).then_some(legacy),
             ..Default::default()
         };
+        if patch.closed_stage_ids.is_none() && patch.legacy_stage_ids.is_none() {
+            return Ok(());
+        }
         self.team_settings
             .patch_team_settings(&access.team_id(), &patch)
             .await?;
         Ok(())
     }
+}
+
+/// System stage id to team stage id for seeded stages named like a default.
+fn legacy_stage_ids_for(set: &TeamStageSet) -> BTreeMap<Uuid, Uuid> {
+    set.stages
+        .iter()
+        .filter_map(|stage| {
+            StageOption::try_from(stage.label.to_lowercase().as_str())
+                .ok()
+                .map(|option| (option.uuid(), stage.id))
+        })
+        .collect()
 }
 
 fn validate_stage_inputs(stages: Vec<StageInput>) -> Result<Vec<StageInput>, CrmError> {
@@ -300,7 +313,8 @@ where
                 .stage_definitions
                 .create_team_stage_set(access, &labels)
                 .await?;
-            self.clear_closed_stage_ids(access, &settings).await?;
+            self.write_stage_settings(access, &settings, None, legacy_stage_ids_for(&set))
+                .await?;
             return Ok(set);
         };
 
@@ -360,8 +374,7 @@ where
                 .await?
         };
         let live: Vec<Uuid> = set.stages.iter().map(|stage| stage.id).collect();
-        self.prune_closed_stage_ids(access, &settings, &live)
-            .await?;
+        self.prune_stage_settings(access, &settings, &live).await?;
         Ok(set)
     }
 
@@ -373,7 +386,8 @@ where
                 .delete_team_stage_set(access, current.definition_id)
                 .await?;
         }
-        self.clear_closed_stage_ids(access, &settings).await
+        self.write_stage_settings(access, &settings, None, BTreeMap::new())
+            .await
     }
 }
 

@@ -56,6 +56,8 @@ export type TeamCrmConfig = {
    * closed/won/lost states are treated as closed.
    */
   closedStageIds?: string[];
+  /** System stage option id to team stage option id for seeded stages. */
+  legacyStageIds?: Record<string, string>;
   teamViews?: TeamCrmSavedView[];
   /** Team view applied by default when a member opens the Customers view. */
   defaultTeamViewId?: string;
@@ -107,6 +109,7 @@ export function useTeamCrmConfig() {
         deleteRecords: data.delete_records_role,
       },
       closedStageIds: data.closed_stage_ids ?? undefined,
+      legacyStageIds: data.legacy_stage_ids ?? undefined,
       teamViews: (data.team_views as TeamCrmSavedView[]) ?? [],
       defaultTeamViewId: data.default_team_view_id ?? undefined,
     };

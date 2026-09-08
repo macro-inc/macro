@@ -4985,6 +4985,11 @@ export const getCrmTeamSettingsResponse = zod
       .describe(
         'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
+    legacy_stage_ids: zod
+      .record(zod.string(), zod.uuid())
+      .describe(
+        'System stage option id to team stage option id for seeded stages.'
+      ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])
       .describe(
@@ -5084,6 +5089,11 @@ export const putCrmTeamSettingsResponse = zod
       .enum(['admin', 'owner'])
       .describe(
         'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
+      ),
+    legacy_stage_ids: zod
+      .record(zod.string(), zod.uuid())
+      .describe(
+        'System stage option id to team stage option id for seeded stages.'
       ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])

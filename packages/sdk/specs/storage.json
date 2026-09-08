@@ -18122,6 +18122,7 @@
           "edit_stages_role",
           "move_closed_deals_role",
           "delete_records_role",
+          "legacy_stage_ids",
           "team_views"
         ],
         "properties": {
@@ -18144,6 +18145,18 @@
           "edit_stages_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
             "description": "Who can change the deal stage set in CRM settings."
+          },
+          "legacy_stage_ids": {
+            "type": "object",
+            "description": "System stage option id to team stage option id for seeded stages.",
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           "move_closed_deals_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",

@@ -32,6 +32,7 @@ import type { PropertyDefinitionResponse } from '@service-properties/generated/s
 import type { PropertyDefinitionWithOptions } from '@service-properties/generated/schemas/propertyDefinitionWithOptions';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import { type Accessor, createMemo } from 'solid-js';
+import { useTeamCrmConfig } from './team-crm-config';
 
 // Canonical home is `@property/constants` (property pickers filter on it);
 // re-exported here for the CRM-side callers.
@@ -64,8 +65,9 @@ export type DealStages = {
   /**
    * The company's stage within the active set. When the team has custom
    * stages, legacy values stored on the system Stage property are mapped
-   * onto the custom set by label so boards/lists don't blank out after
-   * customizing; moving a card writes the value to the team definition.
+   * onto the custom set (recorded map first, then label) so boards/lists
+   * don't blank out after customizing; moving a card writes the value to
+   * the team definition.
    */
   resolveStage: (entity: CompanyLike) => string | undefined;
   /** Label for an option id in the active set (legacy system ids included). */
@@ -214,6 +216,7 @@ export function useDealStages(): DealStages {
     scope: 'team',
     includeOptions: true,
   }));
+  const teamCrmConfig = useTeamCrmConfig();
 
   const teamStageDefinition = createMemo(() =>
     findTeamStageDefinition(teamDefinitionsQuery.data)
@@ -268,12 +271,13 @@ export function useDealStages(): DealStages {
     if (direct && stageIds().has(direct)) return direct;
     if (stageDefinitionId() === SYSTEM_PROPERTY_IDS.STAGE) return direct;
 
-    // Legacy value on the system Stage property → map by label onto the
-    // custom set (the customize flow seeds the same labels).
+    // Legacy system value: use the recorded map, then match by label.
     const legacy = getCompanyStageOptionId(
       entity as Parameters<typeof getCompanyStageOptionId>[0]
     );
     if (!legacy) return undefined;
+    const mapped = teamCrmConfig.config().legacyStageIds?.[legacy];
+    if (mapped && stageIds().has(mapped)) return mapped;
     const legacyLabel = getPropertyOptionLabel(legacy)?.toLowerCase();
     if (!legacyLabel) return undefined;
     return stages().find((stage) => stage.label.toLowerCase() === legacyLabel)

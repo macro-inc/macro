@@ -451,6 +451,7 @@ export * from './crmStagesResponse';
 export * from './crmTeamSettingsResponse';
 export * from './crmTeamSettingsResponseClosedStageIds';
 export * from './crmTeamSettingsResponseDefaultTeamViewId';
+export * from './crmTeamSettingsResponseLegacyStageIds';
 export * from './crmThread';
 export * from './crmThreadDeletedAt';
 export * from './customSpeakerAssignment';

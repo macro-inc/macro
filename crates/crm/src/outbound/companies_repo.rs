@@ -2291,6 +2291,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                    move_closed_deals_role AS "move_closed_deals_role: CrmPermissionRole",
                    delete_records_role AS "delete_records_role: CrmPermissionRole",
                    closed_stage_ids,
+                   legacy_stage_ids,
                    team_views,
                    default_team_view_id
             FROM team_crm_settings
@@ -2302,16 +2303,18 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        Ok(row
-            .map(|r| CrmTeamSettings {
+        row.map(|r| {
+            Ok(CrmTeamSettings {
                 edit_stages_role: r.edit_stages_role,
                 move_closed_deals_role: r.move_closed_deals_role,
                 delete_records_role: r.delete_records_role,
                 closed_stage_ids: r.closed_stage_ids,
+                legacy_stage_ids: legacy_stage_ids_from_json(r.legacy_stage_ids)?,
                 team_views: r.team_views,
                 default_team_view_id: r.default_team_view_id,
             })
-            .unwrap_or_default())
+        })
+        .unwrap_or_else(|| Ok(CrmTeamSettings::default()))
     }
 
     #[tracing::instrument(skip(self, patch), err)]
@@ -2330,12 +2333,18 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let closed_value: Option<Vec<Uuid>> = patch.closed_stage_ids.clone().flatten();
         let default_provided = patch.default_team_view_id.is_some();
         let default_value: Option<String> = patch.default_team_view_id.clone().flatten();
+        let legacy_value: Option<serde_json::Value> = patch
+            .legacy_stage_ids
+            .as_ref()
+            .map(serde_json::to_value)
+            .transpose()
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         let row = sqlx::query!(
             r#"
             INSERT INTO team_crm_settings (
                 team_id, edit_stages_role, move_closed_deals_role, delete_records_role,
-                closed_stage_ids, team_views, default_team_view_id
+                closed_stage_ids, team_views, default_team_view_id, legacy_stage_ids
             )
             VALUES (
                 $1,
@@ -2344,7 +2353,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 COALESCE($4::text::team_role, 'admin'),
                 CASE WHEN $5 THEN $6::uuid[] END,
                 COALESCE($7, '[]'::jsonb),
-                CASE WHEN $8 THEN $9 END
+                CASE WHEN $8 THEN $9 END,
+                COALESCE($10, '{}'::jsonb)
             )
             ON CONFLICT (team_id) DO UPDATE SET
                 edit_stages_role       = COALESCE($2::text::team_role, team_crm_settings.edit_stages_role),
@@ -2353,6 +2363,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 closed_stage_ids       = CASE WHEN $5 THEN $6::uuid[] ELSE team_crm_settings.closed_stage_ids END,
                 team_views             = COALESCE($7, team_crm_settings.team_views),
                 default_team_view_id   = CASE WHEN $8 THEN $9 ELSE team_crm_settings.default_team_view_id END,
+                legacy_stage_ids       = COALESCE($10, team_crm_settings.legacy_stage_ids),
                 updated_at             = now()
             RETURNING
                 edit_stages_role AS "edit_stages_role!: CrmPermissionRole",
@@ -2360,7 +2371,8 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 delete_records_role AS "delete_records_role!: CrmPermissionRole",
                 closed_stage_ids,
                 team_views AS "team_views!",
-                default_team_view_id
+                default_team_view_id,
+                legacy_stage_ids AS "legacy_stage_ids!"
             "#,
             team_id,
             edit_stages as Option<&str>,
@@ -2371,6 +2383,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             patch.team_views.as_ref(),
             default_provided,
             default_value.as_deref(),
+            legacy_value,
         )
         .fetch_one(&self.pool)
         .await
@@ -2381,10 +2394,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             move_closed_deals_role: row.move_closed_deals_role,
             delete_records_role: row.delete_records_role,
             closed_stage_ids: row.closed_stage_ids,
+            legacy_stage_ids: legacy_stage_ids_from_json(row.legacy_stage_ids)?,
             team_views: row.team_views,
             default_team_view_id: row.default_team_view_id,
         })
     }
+}
+
+fn legacy_stage_ids_from_json(
+    value: serde_json::Value,
+) -> Result<std::collections::BTreeMap<Uuid, Uuid>, CrmError> {
+    serde_json::from_value(value).map_err(|e| CrmError::StorageLayerError(e.into()))
 }
 
 /// Maps a CRM entity type to the team-scoped not-found error used when the

@@ -3934,6 +3934,12 @@ export type CrmTeamSettingsResponse = {
      */
     edit_stages_role: CrmPermissionRole;
     /**
+     * System stage option id to team stage option id for seeded stages.
+     */
+    legacy_stage_ids: {
+        [key: string]: string;
+    };
+    /**
      * Who can move deals out of a closed stage.
      */
     move_closed_deals_role: CrmPermissionRole;
