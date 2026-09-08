@@ -582,10 +582,29 @@ function previewBatcher(client: Client, includeProperties: boolean) {
 
 /** Joins a shared live preview batch; rich document edges load in the first request. */
 export function createGraphqlItemPreviewQuery(
-  item: Accessor<ItemEntity>,
+  getItem: Accessor<ItemEntity>,
   enabled: Accessor<boolean>,
   includeProperties = true
 ): GraphqlItemPreviewQuery {
+  // Hover popup props derive from another live preview. Snapshot only the
+  // entity identity so cache/fetch updates cannot release and reacquire the
+  // same batch, clear its data, or feed another update back upstream.
+  const item = createMemo<ItemEntity, undefined>(
+    () => {
+      const current = getItem();
+      return current.type === 'channel'
+        ? { id: current.id, type: current.type, messageId: current.messageId }
+        : { id: current.id, type: current.type };
+    },
+    undefined,
+    {
+      equals: (previous, next) =>
+        previous.id === next.id &&
+        normalizedItemType(previous) === normalizedItemType(next) &&
+        (previous.type === 'channel' ? previous.messageId : undefined) ===
+          (next.type === 'channel' ? next.messageId : undefined),
+    }
+  );
   const [group, setGroup] = createSignal<PreviewBatch>();
   let ready: Promise<PreviewBatch | undefined> = Promise.resolve(undefined);
   const isEnabled = () => enabled() && isGraphqlPreviewItem(item());

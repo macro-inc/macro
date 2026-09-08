@@ -1,11 +1,14 @@
+import type { UrqlQueryOptions } from '@app/lib/urql-solid';
 import type { CacheHost, ReadRecordsByKeysArgs } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type {
   ItemPreviewDetailsFieldsFragment,
   ItemPreviewFieldsFragment,
   ItemPreviewQuery,
+  ItemPreviewQueryVariables,
+  ItemPreviewsQuery,
 } from '@service-storage/graphql/generated/graphql';
-import { createRoot } from 'solid-js';
+import { type Accessor, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,6 +36,33 @@ import {
   setGraphqlPreviewName,
   setGraphqlPreviewOnCreate,
 } from '../graphql';
+import type { ItemEntity } from '../types';
+
+type PreviewQueryOptions = UrqlQueryOptions<
+  ItemPreviewQuery | ItemPreviewsQuery,
+  ItemPreviewQueryVariables
+>;
+
+function trackPreviewBatches() {
+  const options: PreviewQueryOptions[] = [];
+  createUrqlQueryMock.mockImplementation(
+    (getOptions: Accessor<PreviewQueryOptions>) => {
+      options.push(getOptions());
+      return {
+        data: undefined,
+        error: null,
+        isError: false,
+        isFetched: false,
+        isFetching: false,
+        isLoading: false,
+        isEnabled: true,
+        stale: false,
+        refetch: vi.fn(async () => undefined),
+      };
+    }
+  );
+  return options;
+}
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -291,6 +321,96 @@ describe('GraphQL item previews', () => {
     expect(readRecordsByKeys.mock.calls[0]?.[0].document).not.toContain(
       'properties'
     );
+  });
+
+  it('only rejoins a batch when entity identity or enabled state changes', async () => {
+    const options = trackPreviewBatches();
+    const { setItem, setEnabled, query, dispose } = createRoot((dispose) => {
+      const [item, setItem] = createSignal<ItemEntity>({ id: 'doc-1' });
+      const [enabled, setEnabled] = createSignal(true);
+      const query = createGraphqlItemPreviewQuery(item, enabled);
+      return { setItem, setEnabled, query, dispose };
+    });
+    try {
+      expect(options).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(30);
+      expect(options).toHaveLength(1);
+
+      setItem({ id: 'doc-1' });
+      setItem({ id: 'doc-1', type: 'document' });
+      await vi.advanceTimersByTimeAsync(30);
+      expect(options).toHaveLength(1);
+
+      setItem({ id: 'doc-2', type: 'document' });
+      await vi.advanceTimersByTimeAsync(30);
+      expect(options).toHaveLength(2);
+      expect(
+        options.at(-1)?.variables?.input.initial?.filters?.documentFilter
+      ).toEqual({ literal: { id: 'doc-2' } });
+
+      setItem({ id: 'doc-2', type: 'chat' });
+      await vi.advanceTimersByTimeAsync(30);
+      expect(options).toHaveLength(3);
+      expect(
+        options.at(-1)?.variables?.input.initial?.filters?.chatFilter
+      ).toEqual({ literal: { chatId: 'doc-2' } });
+
+      setEnabled(false);
+      expect(query.isEnabled()).toBe(false);
+      await vi.advanceTimersByTimeAsync(30);
+      expect(options).toHaveLength(3);
+      setEnabled(true);
+      expect(query.isEnabled()).toBe(true);
+      await vi.advanceTimersByTimeAsync(30);
+      expect(options).toHaveLength(4);
+      expect(options.at(-1)?.requestPolicy).toBe('cache-and-network');
+    } finally {
+      dispose();
+    }
+  });
+
+  it('snapshots reactive props and preserves channel-message REST exceptions', async () => {
+    const options = trackPreviewBatches();
+    const { setItem, query, dispose } = createRoot((dispose) => {
+      const [item, setItem] = createStore({
+        id: 'channel-1',
+        type: 'channel' as const,
+        messageId: undefined as string | undefined,
+      });
+      const query = createGraphqlItemPreviewQuery(
+        () => item,
+        () => true
+      );
+      return { setItem, query, dispose };
+    });
+    try {
+      await vi.advanceTimersByTimeAsync(30);
+      expect(options).toHaveLength(1);
+      expect(query.isEnabled()).toBe(true);
+
+      setItem('id', 'channel-2');
+      await vi.advanceTimersByTimeAsync(30);
+      expect(options).toHaveLength(2);
+      expect(
+        options.at(-1)?.variables?.input.initial?.filters?.channelFilter
+      ).toEqual({ literal: { channelId: 'channel-2' } });
+
+      setItem('messageId', 'message-1');
+      expect(query.isEnabled()).toBe(false);
+      await vi.advanceTimersByTimeAsync(30);
+      expect(options).toHaveLength(2);
+      setItem('messageId', 'message-2');
+      await vi.advanceTimersByTimeAsync(30);
+      expect(options).toHaveLength(2);
+      expect(query.isEnabled()).toBe(false);
+
+      setItem('messageId', undefined);
+      expect(query.isEnabled()).toBe(true);
+      await vi.advanceTimersByTimeAsync(30);
+      expect(options).toHaveLength(3);
+    } finally {
+      dispose();
+    }
   });
 
   it('holds creation grace before the asynchronous cache seed is readable', async () => {
