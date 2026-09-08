@@ -33,11 +33,7 @@ import { match, P } from 'ts-pattern';
 import { useAgentSession } from '../../context/AgentSessionContext';
 import { createElicitationReviewSink } from '../../state/elicitation-review-sink';
 import { ToolCard } from '../../ui';
-import {
-  LiveForm,
-  LiveQuestion,
-  type RespondToElicitation,
-} from './LiveElicitation';
+import { LiveQuestionCard, type RespondToElicitation } from './LiveElicitation';
 import { UserToolCall } from './UserToolCall';
 
 type ElicitationPartData = Extract<MessagePart, { kind: 'elicitation' }>;
@@ -107,7 +103,7 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
             .with(
               { kind: P.union('form', 'url', 'unrecognized') },
               (request) => (
-                <LiveQuestion
+                <LiveQuestionCard
                   request={request}
                   locked={locked()}
                   onRespond={elicitation.respond}
@@ -154,8 +150,8 @@ function LiveUserTool(props: {
   return (
     <Switch
       fallback={
-        <LiveForm
-          schema={props.request.schema}
+        <LiveQuestionCard
+          request={{ kind: 'form', schema: props.request.schema }}
           locked={props.locked}
           onRespond={props.onRespond}
         />
