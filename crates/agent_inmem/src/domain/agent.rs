@@ -21,11 +21,11 @@ use agent_client_protocol::schema::v1::{
     ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
     InitializeResponse, IntegerPropertySchema, Meta, NewSessionRequest, NewSessionResponse,
     NumberPropertySchema, OtherElicitationPropertySchema, PromptRequest, PromptResponse,
-    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption, SessionId,
-    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, StopReason, StringFormat, StringPropertySchema,
-    ToolCall as AcpToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields,
-    ToolKind,
+    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
+    SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason, StringFormat,
+    StringPropertySchema, ToolCall as AcpToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate,
+    ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,

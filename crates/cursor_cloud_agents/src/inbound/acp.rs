@@ -35,11 +35,11 @@ use crate::domain::service::CursorSessionService;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AuthenticateRequest, AuthenticateResponse, CancelNotification,
-    CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk, Error as AcpError, HttpHeader,
-    Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
-    McpCapabilities, McpServer as AcpMcpServer, Meta, NewSessionRequest, NewSessionResponse,
-    PromptCapabilities, PromptRequest, PromptResponse, SessionConfigOption, SessionId,
-    SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
+    CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk, Error as AcpError,
+    HttpHeader, Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest,
+    LoadSessionResponse, McpCapabilities, McpServer as AcpMcpServer, Meta, NewSessionRequest,
+    NewSessionResponse, PromptCapabilities, PromptRequest, PromptResponse, SessionConfigOption,
+    SessionId, SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
     SetSessionConfigOptionResponse, TextContent,
 };
 use agent_client_protocol::{

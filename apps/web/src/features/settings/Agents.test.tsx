@@ -3,8 +3,8 @@
  */
 
 import { Model } from '@core/component/AI/constant/model';
-import { useCursorModelsQuery } from '@queries/auth/cursor-api-key';
-import type { CursorModelsResponse } from '@service-auth/generated/schemas';
+import { useAgentModelsQueries } from '@queries/agents/models';
+import type { LoadAgentModelsResponse } from '@service-agent-harness/generated/schemas';
 import {
   fireEvent,
   render,
@@ -99,7 +99,7 @@ vi.mock('@queries/agents/models', async (importOriginal) => {
     await importOriginal<typeof import('@queries/agents/models')>();
   return {
     ...actual,
-    useAgentModelsQueries: (
+    useAgentModelsQueries: vi.fn((
       targets: () => { harness: string; harnessId?: string }[]
     ) =>
       targets().map(
@@ -110,7 +110,7 @@ vi.mock('@queries/agents/models', async (importOriginal) => {
             isSuccess: false,
             refetch: vi.fn(),
           }
-      ),
+      )),
   };
 });
 
@@ -280,20 +280,25 @@ describe('Agents', () => {
     'keeps settings visible while Cursor models load and after %s',
     async (outcome) => {
       cursorMocks.status.data.registered = true;
-      let resolveModels!: (models: CursorModelsResponse) => void;
+      let resolveModels!: (models: LoadAgentModelsResponse) => void;
       let rejectModels!: (error: Error) => void;
-      const response = new Promise<CursorModelsResponse>((resolve, reject) => {
+      const response = new Promise<LoadAgentModelsResponse>((resolve, reject) => {
         resolveModels = resolve;
         rejectModels = reject;
       });
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
-      vi.mocked(useCursorModelsQuery).mockImplementationOnce(() =>
-        useQuery(() => ({
-          queryKey: ['pending-cursor-models'],
-          queryFn: () => response,
-        }))
+      vi.mocked(useAgentModelsQueries).mockImplementationOnce((targets) =>
+        targets().map((target) =>
+          useQuery(() => ({
+            queryKey: ['pending-models', target.harness],
+            queryFn: () =>
+              target.harness === 'cursor'
+                ? response
+                : Promise.resolve(successfulModels([]).data),
+          }))
+        )
       );
       const view = render(() => (
         <QueryClientProvider client={client}>
@@ -319,22 +324,18 @@ describe('Agents', () => {
       if (outcome === 'error') {
         rejectModels(new Error('Cursor is unavailable'));
         await waitFor(() =>
-          expect(screen.getByText(/Could not load Cursor models/)).toBeTruthy()
+          expect(screen.getByText(/Could not load models for Cursor/)).toBeTruthy()
         );
         expect(screen.queryByText('Settings suspended')).toBeNull();
-        expect(
-          (
-            screen.getByRole('combobox', {
-              name: 'Default model',
-            }) as HTMLSelectElement
-          ).disabled
-        ).toBe(true);
+        expect(screen.getByRole('button', { name: 'Retry models for Cursor' })).toBeTruthy();
       } else {
         resolveModels({
+          status: 'available',
+          currentModel: 'loaded-model',
           models: [
             {
               id: 'loaded-model',
-              displayName: 'Loaded Model',
+              name: 'Loaded Model',
               group: 'Cursor',
             },
           ],

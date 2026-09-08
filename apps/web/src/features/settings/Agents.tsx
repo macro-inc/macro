@@ -108,7 +108,7 @@ export function Agents() {
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const harnessesQuery = useHarnessesQuery();
   const connectedHarnesses = (): readonly ConnectedHarness[] => {
-    const harnesses = harnessesQuery.data ?? [];
+    const harnesses = harnessesQuery.isSuccess ? harnessesQuery.data : [];
     return buildAgentModelTargets(cursorConnected(), harnesses).map(
       (target) => {
         if (target.harness === 'in-memory') return IN_MEMORY_HARNESS;
@@ -950,14 +950,6 @@ function AgentDialog(props: {
                         </Show>
                       </Show>
                     )}
-                  </Show>
-                  <Show when={selectedHarness()?.modelsLoading}>
-                    <span class="text-xs text-ink-muted">Loading models…</span>
-                  </Show>
-                  <Show when={selectedHarness()?.modelsError}>
-                    <span class="text-xs text-negative">
-                      Could not load Cursor models. Try refreshing this page.
-                    </span>
                   </Show>
                 </label>
               </div>
