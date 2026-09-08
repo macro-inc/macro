@@ -295,6 +295,7 @@ export function useDealStages(): DealStages {
     stageProperty,
     resolveStage,
     stageLabel,
-    isLoading: () => teamDefinitionsQuery.isLoading,
+    isLoading: () =>
+      teamDefinitionsQuery.isLoading || teamCrmConfig.isLoading(),
   };
 }

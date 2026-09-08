@@ -653,3 +653,23 @@ async fn reset_clears_legacy_ids() {
         .unwrap();
     assert!(settings.legacy().is_empty());
 }
+
+#[tokio::test]
+async fn a_set_without_a_map_gets_one_on_the_next_edit() {
+    let store = MemoryStore::customized(&["Lead", "Client"]);
+    let [lead, client] = store.stage_ids()[..] else {
+        panic!("expected two seeded stages");
+    };
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin);
+    CrmStageServiceImpl::new(settings.clone(), store)
+        .replace_stages(
+            &receipt_with_role(TeamRole::Admin),
+            vec![keep(lead, "Lead"), keep(client, "Client")],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        settings.legacy(),
+        BTreeMap::from([(StageOption::LEAD_UUID, lead)])
+    );
+}

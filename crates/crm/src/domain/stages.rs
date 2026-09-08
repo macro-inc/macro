@@ -181,13 +181,16 @@ where
         }
     }
 
-    /// Drop closed and legacy entries that point at stages no longer in `live`.
+    /// Drop closed and legacy entries that point at stages no longer in `set`.
+    /// A set with no map yet (customized before the map existed, or a failed
+    /// settings write) gets one from the labels still matching a default.
     async fn prune_stage_settings(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         settings: &CrmTeamSettings,
-        live: &[Uuid],
+        set: &TeamStageSet,
     ) -> Result<(), CrmError> {
+        let live: Vec<Uuid> = set.stages.iter().map(|stage| stage.id).collect();
         let closed = settings.closed_stage_ids.as_ref().map(|closed| {
             closed
                 .iter()
@@ -195,12 +198,16 @@ where
                 .filter(|id| live.contains(id))
                 .collect()
         });
-        let legacy = settings
-            .legacy_stage_ids
-            .iter()
-            .filter(|(_, team_id)| live.contains(team_id))
-            .map(|(system_id, team_id)| (*system_id, *team_id))
-            .collect();
+        let legacy = if settings.legacy_stage_ids.is_empty() {
+            legacy_stage_ids_for(set)
+        } else {
+            settings
+                .legacy_stage_ids
+                .iter()
+                .filter(|(_, team_id)| live.contains(team_id))
+                .map(|(system_id, team_id)| (*system_id, *team_id))
+                .collect()
+        };
         self.write_stage_settings(access, settings, closed, legacy)
             .await
     }
@@ -373,8 +380,7 @@ where
                 .replace_stages(access, current.definition_id, plan)
                 .await?
         };
-        let live: Vec<Uuid> = set.stages.iter().map(|stage| stage.id).collect();
-        self.prune_stage_settings(access, &settings, &live).await?;
+        self.prune_stage_settings(access, &settings, &set).await?;
         Ok(set)
     }
 
