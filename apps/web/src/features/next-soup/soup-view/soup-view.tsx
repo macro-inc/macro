@@ -1,3 +1,4 @@
+import { SuspenseDebug } from '@app/lib/suspense-debug';
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
@@ -783,7 +784,7 @@ export const SoupView = (props: SoupViewProps) => {
             <ViewFavorites view={activeListView() ?? ''} />
           </aside>
         </Show>
-        <Suspense>
+        <Suspense fallback={<SuspenseDebug label="soup-view-1" />}>
           <Show
             when={!isBoardMode()}
             fallback={
@@ -796,7 +797,7 @@ export const SoupView = (props: SoupViewProps) => {
           </Show>
         </Suspense>
       </div>
-      <Suspense>
+      <Suspense fallback={<SuspenseDebug label="soup-view-2" />}>
         {/* The board and Preview Controller hide the AI bar: it floats over
             content that is already constrained in both layouts. */}
         <Show

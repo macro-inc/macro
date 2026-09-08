@@ -1,3 +1,4 @@
+import { SuspenseDebug } from '@app/lib/suspense-debug';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
@@ -248,7 +249,7 @@ export function SplitPanel(props: SplitPanelProps) {
         close: props.handle.close,
       }}
     >
-      <Suspense>
+      <Suspense fallback={<SuspenseDebug label="SplitPanel-1" />}>
         <SoupViewContextProvider soup={nextSoup}>
           <BlockOpenTrackingDelayContext.Provider
             value={
