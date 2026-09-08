@@ -1,4 +1,5 @@
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
+import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
@@ -422,9 +423,16 @@ export function runCreateAction(
     case 'agent': {
       const { openWithSplit } = useSplitLayout();
       setCreateMenuOpen(false, false);
-      // No focus to arm here: the block focuses its own composer while the
-      // create is in flight, which stays correct when a second session opens
-      // beside a first.
+      // On mobile the agent input doesn't autofocus on mount, so arm focus
+      // within this gesture (iOS only raises the keyboard for a synchronous
+      // focus). The block mounts asynchronously, so this waits for the input.
+      if (isMobile()) {
+        triggerFocusInput(() =>
+          document
+            .getElementById(AGENT_INPUT_TEXT_AREA_ID)
+            ?.querySelector<HTMLElement>('[contenteditable="true"]')
+        );
+      }
       openWithSplit(
         { type: 'agent', id: startPendingSession() },
         { referredFrom: 'launcher', preferNewSplit: shouldInsert }
@@ -495,7 +503,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     icon: Robot,
     description: 'Create agent session',
     launcherHint: 'Dedicated Agent Session',
-    focusesOwnDestination: true,
     keywords: ['new', 'make', 'add', 'agent', 'code', 'coder', 'session'],
     blockName: 'agent',
     hotkeyToken: TOKENS.create.agent,
@@ -771,8 +778,6 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
 type LauncherInnerProps = {
   onClose: (shouldReturnFocus?: boolean) => void;
-  /** An entry ran, as opposed to the menu being dismissed. */
-  onItemRun?: (item: CreatableBlock) => void;
   blocks?: CreatableBlock[];
 };
 
@@ -824,7 +829,6 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     if (!item) return false;
 
     trackLauncherItemUsage(item);
-    props.onItemRun?.(item);
     item.keyDownHandler();
     props.onClose(shouldReturnFocus);
 
@@ -1113,23 +1117,11 @@ type LauncherProps = {
 };
 
 export const Launcher = (props: LauncherProps) => {
-  // Set for the one close that follows a hand-off entry, and read as the
-  // dialog unmounts. A dismissal never sets it, so Escape and overlay clicks
-  // keep the restore that returns the keyboard to the pane behind the menu.
-  let handingOffFocus = false;
-
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal"></Dialog.Overlay>
-        <Dialog.Content
-          class="[--color-surface:var(--color-dialog)]"
-          onCloseAutoFocus={(event) => {
-            if (!handingOffFocus) return;
-            handingOffFocus = false;
-            event.preventDefault();
-          }}
-        >
+        <Dialog.Content class="[--color-surface:var(--color-dialog)]">
           <div
             class={cn(
               'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal w-screen flex justify-center px-2',
@@ -1142,9 +1134,6 @@ export const Launcher = (props: LauncherProps) => {
             }}
           >
             <LauncherInner
-              onItemRun={(item) => {
-                handingOffFocus = item.focusesOwnDestination ?? false;
-              }}
               onClose={(shouldReturnFocus) =>
                 props.onOpenChange(false, shouldReturnFocus)
               }

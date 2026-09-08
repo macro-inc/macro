@@ -50,7 +50,8 @@ transcript at `/app/agent/<uuid>` whose replies also stream back into the thread
 
 An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
-`Create` → `Agent`) leaves that composer focused. Type `@` to insert the same mention chips
+`Create` → `Agent`) leaves that composer focused — on mobile that is the same
+Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `@` to insert the same mention chips
 used in chat and channels; they serialize as `<m-document-mention>` tags in the prompt
 the agent sees. Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread).
