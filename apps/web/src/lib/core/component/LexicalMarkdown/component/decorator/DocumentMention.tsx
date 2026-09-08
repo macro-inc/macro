@@ -14,8 +14,8 @@ import {
 } from '@core/component/DocumentPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { HoverCard } from '@core/component/HoverCard';
-import { useItemPreviewData } from '@core/component/ItemPreview';
 import { InlineTaskProperties } from '@core/component/InlineTaskProperties';
+import { useItemPreviewData } from '@core/component/ItemPreview';
 import {
   itemToBlockName,
   resolveBlockAlias,
@@ -343,7 +343,10 @@ function InlinePreview(props: {
                     </span>
                     <Show when={props.blockName === 'task'}>
                       <Suspense>
-                        <InlineTaskProperties taskId={accessibleItem().id} previewProperties={documentProperties()} />
+                        <InlineTaskProperties
+                          taskId={accessibleItem().id}
+                          previewProperties={documentProperties()}
+                        />
                       </Suspense>
                     </Show>
                   </span>
@@ -378,7 +381,14 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
   // Only skill mentions need to distinguish built-ins from stored documents.
   // Ordinary mentions must not wait for a once-per-session skills request.
   return (
-    <Show when={props.blockName === 'skill'} fallback={<Suspense><DocumentMentionInner {...props} /></Suspense>}>
+    <Show
+      when={props.blockName === 'skill'}
+      fallback={
+        <Suspense>
+          <DocumentMentionInner {...props} />
+        </Suspense>
+      }
+    >
       <SkillDocumentMention {...props} />
     </Show>
   );

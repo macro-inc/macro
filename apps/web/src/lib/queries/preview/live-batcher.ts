@@ -46,7 +46,9 @@ export function createLivePreviewBatcher<Item, Batch>(options: {
       let entry = entries.get(key);
       if (!entry) {
         let resolve!: Entry<Item, Batch>['resolve'];
-        const ready = new Promise<Batch | undefined>((done) => { resolve = done; });
+        const ready = new Promise<Batch | undefined>((done) => {
+          resolve = done;
+        });
         entry = { item, listeners: new Set(), ready, resolve };
         entries.set(key, entry);
         pending.set(key, entry);
@@ -73,7 +75,10 @@ export function createLivePreviewBatcher<Item, Batch>(options: {
             timer = undefined;
           }
           const group = current.group;
-          if (group && group.entries.every((entry) => entry.listeners.size === 0)) {
+          if (
+            group &&
+            group.entries.every((entry) => entry.listeners.size === 0)
+          ) {
             group.dispose();
           }
         },

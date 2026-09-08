@@ -14,7 +14,9 @@ type OrExpr<T> = T | { or: { left: OrExpr<T>; right: OrExpr<T> } };
 function or<T>(items: T[]): OrExpr<T> | undefined {
   if (items.length < 2) return items[0];
   const middle = Math.floor(items.length / 2);
-  return { or: { left: or(items.slice(0, middle))!, right: or(items.slice(middle))! } };
+  return {
+    or: { left: or(items.slice(0, middle))!, right: or(items.slice(middle))! },
+  };
 }
 
 /** Exact multi-entity lookup, with every non-target entity branch excluded. */
@@ -22,22 +24,54 @@ export function buildGraphqlEntitiesSoupInput(
   entities: ReadonlyArray<{ entityType: EntityType; entityId: string }>
 ): SoupInput | undefined {
   const ids = (...types: EntityType[]) =>
-    [...new Set(entities.filter((e) => types.includes(e.entityType)).map((e) => e.entityId))].sort();
+    [
+      ...new Set(
+        entities
+          .filter((e) => types.includes(e.entityType))
+          .map((e) => e.entityId)
+      ),
+    ].sort();
   const input = buildGraphqlEntitySoupInput('DOCUMENT', NIL_ENTITY_ID);
   if (!input || !('initial' in input) || !input.initial) return undefined;
   const base = input.initial.filters!;
   const filters: GraphqlEntityFilterAst = {
     ...base,
-    documentFilter: or(ids('DOCUMENT', 'TASK').map((id) => ({ literal: { id } }))) ?? base.documentFilter,
-    projectFilter: or(ids('PROJECT').map((projectIdSelf) => ({ literal: { projectIdSelf } }))) ?? base.projectFilter,
-    chatFilter: or(ids('CHAT').map((chatId) => ({ literal: { chatId } }))) ?? base.chatFilter,
-    emailFilter: { tree: or(ids('THREAD').map((threadId) => ({ literal: { threadId } }))) ?? base.emailFilter!.tree },
-    channelFilter: or(ids('CHANNEL').map((channelId) => ({ literal: { channelId } }))) ?? base.channelFilter,
-    callFilter: or(ids('CALL_RECORD').map((callId) => ({ literal: { callId } }))) ?? base.callFilter,
-    crmCompanyFilter: or(ids('COMPANY').map((id) => ({ literal: { id } }))) ?? base.crmCompanyFilter,
-    calendarEventFilter: or(ids('CALENDAR_EVENT').map((id) => ({ literal: { id } }))) ?? base.calendarEventFilter,
+    documentFilter:
+      or(ids('DOCUMENT', 'TASK').map((id) => ({ literal: { id } }))) ??
+      base.documentFilter,
+    projectFilter:
+      or(
+        ids('PROJECT').map((projectIdSelf) => ({ literal: { projectIdSelf } }))
+      ) ?? base.projectFilter,
+    chatFilter:
+      or(ids('CHAT').map((chatId) => ({ literal: { chatId } }))) ??
+      base.chatFilter,
+    emailFilter: {
+      tree:
+        or(ids('THREAD').map((threadId) => ({ literal: { threadId } }))) ??
+        base.emailFilter!.tree,
+    },
+    channelFilter:
+      or(ids('CHANNEL').map((channelId) => ({ literal: { channelId } }))) ??
+      base.channelFilter,
+    callFilter:
+      or(ids('CALL_RECORD').map((callId) => ({ literal: { callId } }))) ??
+      base.callFilter,
+    crmCompanyFilter:
+      or(ids('COMPANY').map((id) => ({ literal: { id } }))) ??
+      base.crmCompanyFilter,
+    calendarEventFilter:
+      or(ids('CALENDAR_EVENT').map((id) => ({ literal: { id } }))) ??
+      base.calendarEventFilter,
   };
-  const count = new Set(entities.filter((e) => e.entityType !== 'USER').map((e) => `${e.entityType === 'TASK' ? 'DOCUMENT' : e.entityType}:${e.entityId}`)).size;
+  const count = new Set(
+    entities
+      .filter((e) => e.entityType !== 'USER')
+      .map(
+        (e) =>
+          `${e.entityType === 'TASK' ? 'DOCUMENT' : e.entityType}:${e.entityId}`
+      )
+  ).size;
   if (!count) return undefined;
   return { initial: { ...input.initial, limit: count, filters } };
 }

@@ -33,8 +33,8 @@ import {
   type AccessiblePreviewItem,
   type ItemEntity,
   isAccessiblePreviewItem,
-  type PreviewItem,
   type PreviewDocumentProperties,
+  type PreviewItem,
 } from './types';
 
 // DEBUG VARS
@@ -119,7 +119,11 @@ function useItemPreviewQuery(
 ) {
   const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const graphqlRequested = () => graphqlSoupFlag().enabled;
-  const graphqlQuery = createGraphqlItemPreviewQuery(item, graphqlRequested, includeProperties);
+  const graphqlQuery = createGraphqlItemPreviewQuery(
+    item,
+    graphqlRequested,
+    includeProperties
+  );
   const usesGraphql = () =>
     graphqlRequested() &&
     isGraphqlPreviewItem(item()) &&
@@ -197,10 +201,16 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
   // cached title arrives before properties. Pending edges must never mount a
   // fallback child query, or the waterfall returns on a warm cache.
   const documentProperties = (): PreviewDocumentProperties | undefined => {
-    if (!previewQuery.usesGraphql() || (item().type ?? DEFAULT_ITEM_TYPE) !== 'document') return undefined;
+    if (
+      !previewQuery.usesGraphql() ||
+      (item().type ?? DEFAULT_ITEM_TYPE) !== 'document'
+    )
+      return undefined;
     const current = preview();
-    const metadata = isAccessiblePreviewItem(current) && current.type === 'document'
-      ? current.documentMetadata : undefined;
+    const metadata =
+      isAccessiblePreviewItem(current) && current.type === 'document'
+        ? current.documentMetadata
+        : undefined;
     return {
       properties: metadata?.properties,
       canEdit: metadata?.canEdit ?? false,

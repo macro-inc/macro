@@ -12,8 +12,8 @@ import {
 } from '@property/context/PropertiesContext';
 import { useEntityProperties } from '@property/hooks';
 import type { Property, PropertyApiValues } from '@property/types';
-import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import type { PreviewDocumentProperties } from '@queries/preview/types';
+import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentAccessLevelQuery } from '@queries/storage/document-metadata';
 import { type Accessor, createMemo, For, Show } from 'solid-js';
 
@@ -26,11 +26,16 @@ const TASK_PREVIEW_PROPERTIES = [
 type TaskPreviewProps = { taskId: string; taskName?: string };
 
 /** Status, priority, and assignee editors; GraphQL previews own their data. */
-export function TaskPropertiesPreview(props: TaskPreviewProps & {
-  previewProperties?: PreviewDocumentProperties;
-}) {
+export function TaskPropertiesPreview(
+  props: TaskPreviewProps & {
+    previewProperties?: PreviewDocumentProperties;
+  }
+) {
   return (
-    <Show when={props.previewProperties} fallback={<RestTaskPropertiesPreview {...props} />}>
+    <Show
+      when={props.previewProperties}
+      fallback={<RestTaskPropertiesPreview {...props} />}
+    >
       {(metadata) => (
         <TaskPropertiesPreviewContent
           taskId={props.taskId}
@@ -46,32 +51,41 @@ export function TaskPropertiesPreview(props: TaskPreviewProps & {
 }
 
 function RestTaskPropertiesPreview(props: TaskPreviewProps) {
-  const { properties, isLoading, refetch } = useEntityProperties(props.taskId, 'TASK', false);
+  const { properties, isLoading, refetch } = useEntityProperties(
+    props.taskId,
+    'TASK',
+    false
+  );
   const accessQuery = useDocumentAccessLevelQuery(() => props.taskId);
   return (
     <TaskPropertiesPreviewContent
       {...props}
-      properties={() => isLoading() ? [] : properties()}
+      properties={() => (isLoading() ? [] : properties())}
       isLoading={isLoading()}
-      canEdit={accessQuery.isSuccess && hasPermissions(getPermissions(accessQuery.data), Permissions.CAN_EDIT)}
+      canEdit={
+        accessQuery.isSuccess &&
+        hasPermissions(getPermissions(accessQuery.data), Permissions.CAN_EDIT)
+      }
       refetch={refetch}
     />
   );
 }
 
-function TaskPropertiesPreviewContent(props: TaskPreviewProps & {
-  properties: Accessor<Property[]>;
-  isLoading: boolean;
-  canEdit: boolean;
-  refetch: () => void;
-}) {
+function TaskPropertiesPreviewContent(
+  props: TaskPreviewProps & {
+    properties: Accessor<Property[]>;
+    isLoading: boolean;
+    canEdit: boolean;
+    refetch: () => void;
+  }
+) {
   const saveMutation = useBulkSaveEntityPropertiesMutation();
 
   const previewProperties = createMemo(() =>
     TASK_PREVIEW_PROPERTIES.flatMap((id) => {
-      const property = props.properties().find(
-        (candidate) => candidate.propertyDefinitionId === id
-      );
+      const property = props
+        .properties()
+        .find((candidate) => candidate.propertyDefinitionId === id);
       return property ? [property] : [];
     })
   );

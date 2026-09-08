@@ -11,7 +11,11 @@ function setup(maxSize = 50) {
     disposers.push(dispose);
     return { value: items, dispose };
   });
-  return { start, disposers, batcher: createLivePreviewBatcher({ start, maxSize }) };
+  return {
+    start,
+    disposers,
+    batcher: createLivePreviewBatcher({ start, maxSize }),
+  };
 }
 
 describe('live preview batching', () => {
@@ -39,10 +43,19 @@ describe('live preview batching', () => {
 
   it('caps batches and does not restart older batches for late mounts', () => {
     const { batcher, start } = setup(2);
-    const subscriptions = ['a', 'b', 'c', 'd', 'e'].map((id) => batcher.acquire(id, id, vi.fn()));
-    expect(start.mock.calls.map(([ids]) => ids)).toEqual([['a', 'b'], ['c', 'd']]);
+    const subscriptions = ['a', 'b', 'c', 'd', 'e'].map((id) =>
+      batcher.acquire(id, id, vi.fn())
+    );
+    expect(start.mock.calls.map(([ids]) => ids)).toEqual([
+      ['a', 'b'],
+      ['c', 'd'],
+    ]);
     vi.advanceTimersByTime(30);
-    expect(start.mock.calls.map(([ids]) => ids)).toEqual([['a', 'b'], ['c', 'd'], ['e']]);
+    expect(start.mock.calls.map(([ids]) => ids)).toEqual([
+      ['a', 'b'],
+      ['c', 'd'],
+      ['e'],
+    ]);
     const again = vi.fn();
     const duplicate = batcher.acquire('a', 'a', again);
     expect(again).toHaveBeenCalledWith(['a', 'b']);
