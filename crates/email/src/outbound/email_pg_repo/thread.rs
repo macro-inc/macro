@@ -1,5 +1,8 @@
 use crate::domain::models::{EmailThreadMetadata, MessageRow, ThreadRow};
 use chrono::Utc;
+use entity_access_db_utils::{
+    EntityType, project_inheritance::synchronize_entity, team_share::acquire_guard,
+};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -630,13 +633,16 @@ pub(super) async fn update_thread_read_status(
     Ok(())
 }
 
-/// Update the project assignment for a thread. Returns `false` if the thread was not found.
+/// Atomically update the thread's project assignment and inherited grants.
+/// Returns `false` if the thread was not found; direct sharing is unchanged.
 #[tracing::instrument(err, skip(pool))]
 pub(super) async fn update_thread_project(
     pool: &PgPool,
     thread_id: Uuid,
     project_id: Option<&str>,
 ) -> Result<bool, sqlx::Error> {
+    let mut transaction = pool.begin().await?;
+    acquire_guard(&mut transaction).await?;
     let result = sqlx::query!(
         r#"
         UPDATE email_threads
@@ -646,10 +652,15 @@ pub(super) async fn update_thread_project(
         thread_id,
         project_id,
     )
-    .execute(pool)
+    .execute(transaction.as_mut())
     .await?;
 
-    Ok(result.rows_affected() > 0)
+    let updated = result.rows_affected() > 0;
+    if updated {
+        synchronize_entity(&mut transaction, &thread_id, EntityType::EmailThread).await?;
+    }
+    transaction.commit().await?;
+    Ok(updated)
 }
 
 /// Get the current project_id for a thread.

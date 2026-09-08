@@ -31,7 +31,6 @@ use entity_access::domain::models::{
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use frecency::domain::ports::FrecencyQueryService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
-use model_entity::EntityType;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -363,8 +362,7 @@ where
             return Err(EmailErr::ThreadNotFound);
         }
 
-        // Sync denormalized entity_access rows for the containing project.
-        // Best-effort: the project assignment itself already succeeded.
+        // Best-effort side effects after assignment and inheritance commit together.
         if old_project_id.as_deref() != project_id {
             for affected_project_id in changed_project_ids(old_project_id.as_deref(), project_id) {
                 let _ = self
@@ -379,28 +377,6 @@ where
                             "unable to update project modified date"
                         );
                     });
-            }
-
-            if let Some(old) = old_project_id
-                .as_deref()
-                .and_then(|p| Uuid::parse_str(p).ok())
-            {
-                let _ = self
-                    .entity_access_management_service
-                    .remove_entity_from_project(&thread_id, EntityType::EmailThread, &old)
-                    .await
-                    .inspect_err(
-                        |e| tracing::error!(error=?e, project_id=%old, "unable to remove thread project access"),
-                    );
-            }
-            if let Some(new) = project_id.and_then(|p| Uuid::parse_str(p).ok()) {
-                let _ = self
-                    .entity_access_management_service
-                    .add_entity_to_project(&thread_id, EntityType::EmailThread, &new)
-                    .await
-                    .inspect_err(
-                        |e| tracing::error!(error=?e, project_id=%new, "unable to add thread project access"),
-                    );
             }
 
             // Best-effort: emit only when the acting user and the thread's
