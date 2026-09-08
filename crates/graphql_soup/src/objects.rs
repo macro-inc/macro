@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::collections::HashSet;
 
 use async_graphql::{
     Context, ID, InputValueError, InputValueResult, Interface, Json, Object, ObjectType,
@@ -2238,12 +2238,10 @@ pub enum SoupPatch<E: SoupEntityEdges> {
 }
 
 impl<E: SoupEntityEdges> SoupPatch<E> {
-    /// Construct an update patch that hydrates the current Soup item for the viewer.
-    pub fn updated(user_id: MacroUserIdStr<'static>, entity: Entity<'static>) -> Self {
+    /// Construct an update only after its viewer-scoped item has been hydrated.
+    pub fn updated(item: SoupProjectionHydration) -> Self {
         Self::Updated(SoupUpdated {
-            entity,
-            user_id,
-            phantom: PhantomData,
+            item: GraphqlSoupEntity::new_with_projection(item),
         })
     }
 
@@ -2262,38 +2260,84 @@ impl<E: SoupEntityEdges> SoupPatch<E> {
         )))
     }
 
-    /// Construct a GraphQL patch for one recipient-targeted realtime patch.
-    pub fn new(
+    /// Coalesce by entity identity, keeping each entity's last operation and
+    /// preserving the order of those last occurrences. Hydrate surviving updates
+    /// concurrently so the DataLoader can batch them before any patch is emitted.
+    /// Missing viewer-scoped items are logged and omitted; loader errors fail
+    /// the batch. Only explicit delete patches can declare records deleted.
+    /// A loader is unnecessary for empty or delete-only batches.
+    pub async fn hydrate_batch(
         user_id: MacroUserIdStr<'static>,
-        patch: Patch<model_entity::Entity<'static>>,
-    ) -> async_graphql::Result<Self> {
-        match patch {
-            Patch::Updated(entity) => Ok(Self::updated(user_id, entity)),
-            Patch::Deleted(entity) => Self::deleted(entity),
+        patches: Vec<Patch<Entity<'static>>>,
+        loader: Option<&SoupItemDataLoader>,
+    ) -> async_graphql::Result<Vec<Self>> {
+        let mut seen = HashSet::with_capacity(patches.len());
+        let mut patches = patches
+            .into_iter()
+            .rev()
+            .filter(|patch| seen.insert(patch.value().clone()))
+            .collect::<Vec<_>>();
+        patches.reverse();
+
+        let hydrated = futures::future::try_join_all(
+            patches
+                .into_iter()
+                .map(|patch| Self::hydrate(user_id.clone(), patch, loader)),
+        )
+        .await?;
+        Ok(hydrated.into_iter().flatten().collect())
+    }
+
+    /// Resolve one transport patch through the existing viewer-scoped Soup service.
+    async fn hydrate(
+        user_id: MacroUserIdStr<'static>,
+        patch: Patch<Entity<'static>>,
+        loader: Option<&SoupItemDataLoader>,
+    ) -> async_graphql::Result<Option<Self>> {
+        let Patch::Updated(entity) = patch else {
+            return Self::deleted(patch.value().clone()).map(Some);
+        };
+        let loader = loader.ok_or_else(|| {
+            async_graphql::Error::new("SoupItemDataLoader is required to hydrate Soup updates")
+        })?;
+        let item = loader
+            .load_one((user_id.clone(), entity.clone()))
+            .await
+            .inspect_err(|error| {
+                tracing::error!(
+                    error = ?error,
+                    user_id = %user_id,
+                    entity_type = %entity.entity_type,
+                    entity_id = %entity.entity_id,
+                    "failed to hydrate Soup update"
+                );
+            })?;
+        match item {
+            Some(item) => Ok(Some(Self::updated(item))),
+            None => {
+                tracing::warn!(
+                    user_id = %user_id,
+                    entity_type = %entity.entity_type,
+                    entity_id = %entity.entity_id,
+                    "Soup update hydration returned no visible item; omitting update"
+                );
+                Ok(None)
+            }
         }
     }
 }
 
-/// Created or updated Soup entity whose current data is hydrated when selected.
+/// Created or updated Soup entity with its current viewer-scoped data already hydrated.
 pub struct SoupUpdated<E: SoupEntityEdges> {
-    /// Canonical entity to hydrate.
-    entity: Entity<'static>,
-    /// User whose visibility scope must be used to hydrate the item.
-    user_id: MacroUserIdStr<'static>,
-    /// Associates the update with its composed Soup edge object.
-    phantom: PhantomData<E>,
+    /// Canonical hydrated entity, never a nullable lookup result.
+    item: GraphqlSoupEntity<E>,
 }
 
 /// GraphQL representation of a created or updated Soup entity.
 #[Object]
 impl<E: SoupEntityEdges> SoupUpdated<E> {
-    /// Hydrate the current Soup entity.
-    async fn item(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<GraphqlSoupEntity<E>>> {
-        let loader = ctx.data::<SoupItemDataLoader>()?;
-        let key = (self.user_id.clone(), self.entity.clone());
-        Ok(loader
-            .load_one(key)
-            .await?
-            .map(GraphqlSoupEntity::new_with_projection))
+    /// The hydrated entity for this update.
+    async fn item(&self) -> &GraphqlSoupEntity<E> {
+        &self.item
     }
 }

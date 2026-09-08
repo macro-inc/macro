@@ -10,12 +10,13 @@ use entity_mutation::{
 };
 use graphql_common::GraphqlEntityType;
 use graphql_permission::GraphqlEntityAccessLevel;
-use graphql_soup::{SoupEntityEdges, SoupPatch};
+use graphql_soup::{SoupEntityEdges, SoupItemDataLoader, SoupPatch};
 use model_entity::Entity;
 use models_permissions::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
 };
+use soup_realtime::domain::models::Patch;
 
 #[cfg(test)]
 mod test;
@@ -358,15 +359,15 @@ impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
     /// Ordered normalized-cache effects produced by the mutation.
     async fn effects(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<SoupPatch<E>>> {
         let user_id = mutation_actor(ctx)?.user_id;
-        self.effects
+        let patches = self
+            .effects
             .iter()
             .map(|effect| match effect {
-                EntityMutationEffect::Updated(entity) => {
-                    Ok(SoupPatch::updated(user_id.clone(), entity.clone()))
-                }
-                EntityMutationEffect::Deleted(entity) => SoupPatch::deleted(entity.clone()),
+                EntityMutationEffect::Updated(entity) => Patch::Updated(entity.clone()),
+                EntityMutationEffect::Deleted(entity) => Patch::Deleted(entity.clone()),
             })
-            .collect()
+            .collect();
+        SoupPatch::hydrate_batch(user_id, patches, ctx.data_opt::<SoupItemDataLoader>()).await
     }
 }
 

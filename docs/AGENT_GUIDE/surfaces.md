@@ -15,6 +15,11 @@ Changing filters or resetting the cache discards prior reconciliation evidence. 
 lists, unsupported filters/sorts, and native/non-cache transports keep their existing
 network behavior.
 
+Realtime Soup batches coalesce repeated entity IDs (including entity type), keeping
+that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.
+If viewer-scoped hydration finds no item, the backend logs and omits that update;
+it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
+
 ## Inbox — `/app/component/inbox`
 
 Unified triage list (emails, channel messages, task assignments, doc mentions, agent

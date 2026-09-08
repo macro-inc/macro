@@ -42,6 +42,8 @@ use uuid::Uuid;
 
 use super::*;
 
+mod soup_patches;
+
 const VALID_USER_ID: &str = "macro|user@example.com";
 const INTERNAL_USER_ID: &str = "macro|internal@example.com";
 const VALID_INTERNAL_KEY: &str = "valid-internal-key";
@@ -1090,6 +1092,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     };
     let soup_service = CountingSoupService::default();
     let document_id = Uuid::from_u128(42);
+    let deleted_document_id = Uuid::from_u128(43);
     soup_service.set_raw_response(vec![soup_document(document_id)]);
     let loader = graphql_soup::soup_item_loader(soup_service.clone(), Arc::new(NoOpEmailService));
     let schema: SoupSchema<
@@ -1132,7 +1135,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         .expect("subscription remains open");
     sender
         .send(Patch::Deleted(
-            ModelEntityType::Document.with_entity_string(document_id.to_string()),
+            ModelEntityType::Document.with_entity_string(deleted_document_id.to_string()),
         ))
         .await
         .expect("subscription remains open");
@@ -1156,7 +1159,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     assert!(updates[0]["item"]["cacheProjection"].is_string());
     assert_eq!(updates[1]["__typename"], "GraphqlCacheDeletion");
     assert_eq!(updates[1]["graphqlTypeName"], "GraphqlSoupDocument");
-    assert_eq!(updates[1]["entityId"], document_id.to_string());
+    assert_eq!(updates[1]["entityId"], deleted_document_id.to_string());
     assert_eq!(
         subscribed_user
             .lock()

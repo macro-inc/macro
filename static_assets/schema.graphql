@@ -5735,9 +5735,9 @@ GraphQL representation of a created or updated Soup entity.
 """
 type SoupUpdated {
 	"""
-	Hydrate the current Soup entity.
+	The hydrated entity for this update.
 	"""
-	item: GraphqlSoupEntity
+	item: GraphqlSoupEntity!
 }
 
 """

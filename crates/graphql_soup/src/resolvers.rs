@@ -46,16 +46,17 @@ where
 {
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let mut receiver = service.subscribe(macro_user_id.clone());
+    let loader = ctx.data_opt::<SoupItemDataLoader>().cloned();
     const BUFFER_SIZE: usize = 10;
     let mut buf = Vec::with_capacity(BUFFER_SIZE);
 
     Ok(async_stream::stream! {
         while let x @ 1.. = receiver.recv_many(&mut buf, BUFFER_SIZE).await {
-            let patches = buf
-                .drain(..x)
-                .map(|patch| SoupPatch::new(macro_user_id.clone(), patch))
-                .collect();
-            yield patches;
+            let patches = buf.drain(..x).collect();
+            match SoupPatch::hydrate_batch(macro_user_id.clone(), patches, loader.as_ref()).await {
+                Ok(patches) if patches.is_empty() => continue,
+                result => yield result,
+            }
         }
     })
 }
