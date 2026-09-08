@@ -1829,6 +1829,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
             instructions: None,
             owner: sender(),
             prompt: None,
+            profile: None,
         })
         .await
         .expect("the managed session should open");
@@ -2062,6 +2063,7 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
             instructions: None,
             owner: sender(),
             prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
+            profile: None,
         })
         .await;
 
@@ -2086,6 +2088,7 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         instructions: None,
         owner: sender(),
         prompt: None,
+        profile: None,
     });
     let drive = async {
         loop {
