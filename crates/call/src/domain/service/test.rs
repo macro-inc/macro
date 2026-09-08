@@ -8,7 +8,7 @@ use connection::domain::models::{ConnectionError, InvalidationEvent};
 use connection::domain::ports::ConnectionService;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, EntityType};
 use entity_access::domain::ports::NoOpEntityAccessService;
-use entity_mutation::DeleteEntityPermanently;
+use entity_mutation::{DeleteEntityPermanently, UpdateEntitySharePolicy};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -1272,7 +1272,9 @@ type BaseMutationCallService = CallServiceImpl<
 fn build_mutation_service(
     repo: MockCallRepository,
     event_broker: RecordingEventBroker,
-) -> impl CallService + DeleteEntityPermanently<Receipt = EditAccessLevel> {
+) -> impl CallService
++ DeleteEntityPermanently<Receipt = EditAccessLevel>
++ UpdateEntitySharePolicy<Receipt = EditAccessLevel> {
     let service: BaseMutationCallService = CallServiceImpl::new(
         repo,
         MockRtcClient::new(),
@@ -1393,6 +1395,190 @@ async fn get_active_calls_wraps_repo_error_as_internal() {
     assert!(matches!(err, CallError::Internal(_)));
 }
 
+fn team_share_facts() -> models_permissions::share_permission::team_share::TeamShareFacts {
+    models_permissions::share_permission::team_share::TeamShareFacts {
+        entity: EntityType::Call.with_entity_string(MUTATED_EVENT_CALL_ID.to_string()),
+        owner: user("creator@example.com"),
+        owner_team_id: Some(Uuid::from_u128(42)),
+        current: None,
+        revision: 0,
+    }
+}
+
+#[tokio::test]
+async fn team_share_rejects_non_owner_and_identityless_edits_before_any_writes() {
+    // The authenticated receipt carries effective Owner access. That must not
+    // substitute for persisted ownership (including inherited Owner grants).
+    for receipt in [
+        authenticated_mutation_receipt(),
+        internal_mutation_receipt(),
+    ] {
+        for enabled in [true, false] {
+            let mut repo = MockCallRepository::new();
+            repo.expect_get_team_share_facts()
+                .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
+            let events = RecordingEventBroker::default();
+            let service = build_mutation_service(repo, events.clone());
+            let error = service
+                .edit_call_record(
+                    receipt.clone(),
+                    EditCallRecordRequest {
+                        share_permission: None,
+                        share_with_team: Some(enabled),
+                        custom_name: Some("Must not write".into()),
+                    },
+                )
+                .await
+                .unwrap_err();
+            assert!(matches!(error, CallError::Forbidden(_)));
+            assert!(events.events().is_empty());
+        }
+    }
+}
+
+#[tokio::test]
+async fn team_share_rejects_contradictions_and_missing_team_before_any_writes() {
+    use models_permissions::share_permission::{
+        UpdateSharePermissionRequestV2, access_level::AccessLevel,
+    };
+    for (team, explicit, legacy) in [
+        (Some(Uuid::from_u128(42)), Some(AccessLevel::Edit), false),
+        (Some(Uuid::from_u128(42)), None, true),
+        (None, Some(AccessLevel::View), true),
+        (Some(Uuid::from_u128(42)), Some(AccessLevel::Owner), true),
+    ] {
+        let mut repo = MockCallRepository::new();
+        repo.expect_get_team_share_facts().returning(move |_| {
+            let mut facts = team_share_facts();
+            facts.owner_team_id = team;
+            Box::pin(async move { Ok(facts) })
+        });
+        let events = RecordingEventBroker::default();
+        let service = build_mutation_service(repo, events.clone());
+        let receipt = EntityAccessReceipt::dangerously_assert_authenticated_user(
+            user("creator@example.com"),
+            &MUTATED_EVENT_CALL_ID.to_string(),
+            EntityType::Call,
+        );
+        let error = service
+            .edit_call_record(
+                receipt,
+                EditCallRecordRequest {
+                    share_permission: Some(UpdateSharePermissionRequestV2 {
+                        team_share_access_level: Some(explicit),
+                        link_share: Some(Some(
+                            models_permissions::share_permission::LinkShare::Public,
+                        )),
+                        link_share_access_level: None,
+                        channel_share_permissions: None,
+                    }),
+                    share_with_team: Some(legacy),
+                    custom_name: Some("Must not write".into()),
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, CallError::InvalidRequest(_)));
+        assert!(events.events().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn owner_team_edits_normalize_legacy_and_explicit_levels_and_publish_committed_flag() {
+    use models_permissions::share_permission::{
+        UpdateSharePermissionRequestV2,
+        access_level::AccessLevel,
+        team_share::{TeamShareGrant, TeamShareLevel},
+    };
+    for (current, explicit, legacy, expected, has_team) in [
+        (None, None, Some(true), Some(TeamShareLevel::View), true),
+        (
+            Some(TeamShareLevel::Edit),
+            None,
+            Some(true),
+            Some(TeamShareLevel::Edit),
+            true,
+        ),
+        (
+            None,
+            Some(Some(AccessLevel::Comment)),
+            Some(true),
+            Some(TeamShareLevel::Comment),
+            true,
+        ),
+        (Some(TeamShareLevel::Edit), Some(None), None, None, false),
+        (None, Some(None), Some(false), None, false),
+    ] {
+        for is_active in [true, false] {
+            let mut repo = MockCallRepository::new();
+            repo.expect_get_team_share_facts()
+                .times(1)
+                .returning(move |_| {
+                    let mut facts = team_share_facts();
+                    facts.current = current.map(|level| TeamShareGrant {
+                        team_id: Uuid::from_u128(42),
+                        level,
+                    });
+                    facts.owner_team_id = has_team.then_some(Uuid::from_u128(42));
+                    Box::pin(async move { Ok(facts) })
+                });
+            repo.expect_get_call_record_by_call_id()
+                .times(1)
+                .returning(move |_| {
+                    let mut record = call_record_for_mutation();
+                    record.is_active = is_active;
+                    Box::pin(async move { Ok(Some(record)) })
+                });
+            repo.expect_patch_call_record()
+                .times(1)
+                .returning(move |_, request, command| {
+                    assert_eq!(request.share_with_team, None);
+                    assert_eq!(
+                        request
+                            .share_permission
+                            .as_ref()
+                            .unwrap()
+                            .team_share_access_level,
+                        None
+                    );
+                    let command = command.unwrap();
+                    assert_eq!(command.target().map(|grant| grant.level), expected);
+                    assert_eq!(command.next_revision(), 1);
+                    Box::pin(async move { Ok(Some(expected.is_some())) })
+                });
+            let events = RecordingEventBroker::default();
+            let service = build_mutation_service(repo, events.clone());
+            let receipt = EntityAccessReceipt::dangerously_assert_authenticated_user(
+                user("creator@example.com"),
+                &MUTATED_EVENT_CALL_ID.to_string(),
+                EntityType::Call,
+            );
+            service
+                .edit_call_record(
+                    receipt,
+                    EditCallRecordRequest {
+                        share_permission: Some(UpdateSharePermissionRequestV2 {
+                            team_share_access_level: explicit,
+                            link_share: None,
+                            link_share_access_level: None,
+                            channel_share_permissions: None,
+                        }),
+                        share_with_team: legacy,
+                        custom_name: None,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_updated_event(
+                &events,
+                Some("macro|creator@example.com"),
+                None,
+                Some(expected.is_some()),
+            );
+        }
+    }
+}
+
 fn mock_edit_repo(
     record: Option<CallRecord>,
     expected_custom_name: Option<&'static str>,
@@ -1409,12 +1595,13 @@ fn mock_edit_repo(
         });
     repo.expect_patch_call_record()
         .times(1)
-        .return_once(move |call_id, request| {
+        .return_once(move |call_id, request, command| {
+            assert!(command.is_none());
             assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
             assert_eq!(request.custom_name.as_deref(), expected_custom_name);
             assert_eq!(request.share_with_team, expected_share_with_team);
             assert_eq!(request.share_permission.is_some(), expect_share_permission);
-            Box::pin(async move { patch_result })
+            Box::pin(async move { patch_result.map(|()| None).map_err(CallError::Internal) })
         });
     repo
 }
@@ -1519,7 +1706,7 @@ async fn edit_call_record_publishes_updated_event_without_an_internal_actor() {
     let repo = mock_edit_repo(
         Some(call_record_for_mutation()),
         Some("Internal rename"),
-        Some(false),
+        None,
         false,
         Ok(()),
     );
@@ -1531,14 +1718,14 @@ async fn edit_call_record_publishes_updated_event_without_an_internal_actor() {
             internal_mutation_receipt(),
             EditCallRecordRequest {
                 share_permission: None,
-                share_with_team: Some(false),
+                share_with_team: None,
                 custom_name: Some("Internal rename".to_string()),
             },
         )
         .await
         .expect("internal edit succeeds");
 
-    assert_updated_event(&event_broker, None, Some("Internal rename"), Some(false));
+    assert_updated_event(&event_broker, None, Some("Internal rename"), None);
 }
 
 #[tokio::test]
@@ -1591,13 +1778,85 @@ async fn failed_edit_call_record_does_not_publish_updated_event() {
 }
 
 #[tokio::test]
+async fn graphql_team_sharing_still_rejects_active_calls() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .returning(|_| {
+            let mut record = call_record_for_mutation();
+            record.is_active = true;
+            Box::pin(async move { Ok(Some(record)) })
+        });
+    repo.expect_resolve_channel_name()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(None) }));
+    let events = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, events.clone());
+    let error = service
+        .update_share_policy(
+            EntityType::Call.with_entity_string(MUTATED_EVENT_CALL_ID.to_string()),
+            authenticated_mutation_receipt(),
+            models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+                team_share_access_level: Some(None),
+                link_share: None,
+                link_share_access_level: None,
+                channel_share_permissions: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        entity_mutation::EntityMutationErrorCode::Conflict(_)
+    ));
+    assert!(events.events().is_empty());
+}
+
+#[tokio::test]
+async fn non_owner_toggle_emits_neither_record_nor_participant_success() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_team_share_facts()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
+    // No patch or participant lookup is expected after failed authorization.
+    let events = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, events.clone());
+    assert!(matches!(
+        service
+            .toggle_share_with_team(authenticated_mutation_receipt())
+            .await,
+        Err(CallError::Forbidden(_))
+    ));
+    assert!(events.events().is_empty());
+}
+
+fn mock_toggle_facts(repo: &mut MockCallRepository) {
+    repo.expect_get_team_share_facts().times(1).returning(|_| {
+        let mut facts = team_share_facts();
+        facts.owner = user("editor@example.com");
+        Box::pin(async move { Ok(facts) })
+    });
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .returning(|_| {
+            let mut record = call_record_for_mutation();
+            record.is_active = true;
+            // A stale legacy flag must not override the unshared canonical state.
+            record.share_with_team = true;
+            Box::pin(async move { Ok(Some(record)) })
+        });
+}
+
+#[tokio::test]
 async fn toggle_share_with_team_publishes_updated_event() {
     let mut repo = MockCallRepository::new();
-    repo.expect_toggle_share_with_team()
+    mock_toggle_facts(&mut repo);
+    repo.expect_patch_call_record()
         .times(1)
-        .returning(|call_id| {
+        .returning(|call_id, _, command| {
             assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
-            Box::pin(async { Ok((true, MUTATED_EVENT_CHANNEL_ID)) })
+            assert!(command.unwrap().target().is_some());
+            Box::pin(async { Ok(Some(true)) })
         });
     repo.expect_get_participants()
         .times(1)
@@ -1617,9 +1876,10 @@ async fn toggle_share_with_team_publishes_updated_event() {
 #[tokio::test]
 async fn failed_toggle_share_with_team_does_not_publish_updated_event() {
     let mut repo = MockCallRepository::new();
-    repo.expect_toggle_share_with_team()
+    mock_toggle_facts(&mut repo);
+    repo.expect_patch_call_record()
         .times(1)
-        .returning(|_| Box::pin(async { Err(anyhow::anyhow!("toggle failed")) }));
+        .returning(|_, _, _| Box::pin(async { Err(CallError::Conflict("stale toggle".into())) }));
     let event_broker = RecordingEventBroker::default();
     let service = build_mutation_service(repo, event_broker.clone());
 

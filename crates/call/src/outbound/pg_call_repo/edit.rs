@@ -1,6 +1,6 @@
 //! SQL operations for editing call-record share permissions.
 
-use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};
+use entity_access_db_utils::AccessLevel;
 use model_entity::EntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
@@ -51,33 +51,12 @@ pub(super) async fn update_share_permission(
     Ok(())
 }
 
-/// Grant or revoke the call creator's team's View access on the call.
-///
-/// The team is resolved from the call's `created_by` in either the active
-/// `calls` table or the archived `call_records` table — not from the acting
-/// user. If the creator has no team, this is a no-op. Also keeps the
-/// `calls.share_with_team` and `call_records.share_with_team` flags in sync so
-/// reads and future archiving reflect the latest choice.
-pub(super) async fn set_share_with_team(
+/// Synchronize compatibility flags with the canonical state in the same transaction.
+pub(super) async fn sync_team_share_flags(
     transaction: &mut Transaction<'_, Postgres>,
     call_id: &Uuid,
     share: bool,
 ) -> Result<(), sqlx::Error> {
-    let created_by: String = sqlx::query_scalar!(
-        r#"
-        SELECT created_by as "created_by!"
-        FROM (
-            SELECT created_by FROM calls WHERE id = $1
-            UNION ALL
-            SELECT created_by FROM call_records WHERE id = $1
-        ) t
-        LIMIT 1
-        "#,
-        call_id,
-    )
-    .fetch_one(transaction.as_mut())
-    .await?;
-
     sqlx::query!(
         r#"UPDATE calls SET share_with_team = $2 WHERE id = $1"#,
         call_id,
@@ -93,56 +72,6 @@ pub(super) async fn set_share_with_team(
     )
     .execute(transaction.as_mut())
     .await?;
-
-    let team_id: Option<Uuid> = sqlx::query_scalar!(
-        r#"
-        SELECT team_id
-        FROM team_user
-        WHERE user_id = $1
-        LIMIT 1
-        "#,
-        &created_by,
-    )
-    .fetch_optional(transaction.as_mut())
-    .await?;
-
-    let Some(team_id) = team_id else {
-        return Ok(());
-    };
-
-    if share {
-        sqlx::query!(
-            r#"
-            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT DO NOTHING
-            "#,
-            call_id,
-            EntityType::Call.as_ref(),
-            &team_id.to_string(),
-            EntityAccessSourceType::Team as _,
-            AccessLevel::View as _,
-        )
-        .execute(transaction.as_mut())
-        .await?;
-    } else {
-        sqlx::query!(
-            r#"
-            DELETE FROM entity_access
-            WHERE entity_id = $1
-              AND entity_type = $2
-              AND source_id = $3
-              AND source_type = $4
-              AND granted_from_project_id IS NULL
-            "#,
-            call_id,
-            EntityType::Call.as_ref(),
-            &team_id.to_string(),
-            EntityAccessSourceType::Team as _,
-        )
-        .execute(transaction.as_mut())
-        .await?;
-    }
 
     Ok(())
 }

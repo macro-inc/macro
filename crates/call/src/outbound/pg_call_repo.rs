@@ -18,16 +18,31 @@ use item_filters::{
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts,
+};
+use rootcause::compat::boxed_error::IntoBoxedError;
+use share_permission_db_utils::team_share::{self, TeamShareError};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallParticipant, CallRecord,
-    CallRecordParticipant, CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment,
-    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRequest,
-    EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
+    ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
+    CallRecord, CallRecordParticipant, CallRecordPreview, CallRecordPreviewData,
+    CallRecordTranscriptSegment, CustomSpeakerAssignment, DeletedCallRecordStorageKeys,
+    EditCallRecordRequest, EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
+
+fn team_share_error(error: rootcause::Report<TeamShareError>) -> CallError {
+    match error.current_context() {
+        TeamShareError::NotFound => CallError::NotFound(error.to_string()),
+        TeamShareError::ChangedFacts | TeamShareError::UntrackedGrant => {
+            CallError::Conflict(error.to_string())
+        }
+        _ => CallError::Internal(anyhow::Error::from_boxed(error.into_boxed_error())),
+    }
+}
 
 /// Name of the partial unique index enforcing one active call per user.
 const ACTIVE_CALL_UNIQUE_INDEX: &str = "call_participants_one_active_per_user";
@@ -736,19 +751,14 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn toggle_share_with_team(&self, call_id: &Uuid) -> Result<(bool, Uuid), Self::Err> {
-        let row = sqlx::query!(
-            r#"
-            UPDATE calls
-               SET share_with_team = NOT share_with_team
-             WHERE id = $1
-            RETURNING share_with_team, channel_id
-            "#,
-            call_id,
-        )
-        .fetch_one(&self.pool)
-        .await?;
-        Ok((row.share_with_team, row.channel_id))
+    async fn get_team_share_facts(&self, call_id: &Uuid) -> Result<TeamShareFacts, CallError> {
+        let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;
+        let entity = model_entity::EntityType::Call.with_entity_string(call_id.to_string());
+        let facts = team_share::load_facts(&mut tx, &entity)
+            .await
+            .map_err(team_share_error)?;
+        tx.commit().await.map_err(anyhow::Error::from)?;
+        Ok(facts)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1820,15 +1830,46 @@ impl CallRepository for PgCallRepo {
         &self,
         call_record_id: &Uuid,
         request: &EditCallRecordRequest,
-    ) -> Result<(), Self::Err> {
-        let mut tx = self.pool.begin().await?;
+        command: Option<&AuthorizedTeamShareCommand>,
+    ) -> Result<Option<bool>, CallError> {
+        if request.share_with_team.is_some()
+            || request
+                .share_permission
+                .as_ref()
+                .is_some_and(|permission| permission.team_share_access_level.is_some())
+        {
+            return Err(CallError::InvalidRequest(
+                "team sharing requires a normalized command".into(),
+            ));
+        }
+        let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;
+        team_share::acquire_guard(&mut tx)
+            .await
+            .map_err(anyhow::Error::from)?;
+        let share_with_team = if let Some(command) = command {
+            let entity =
+                model_entity::EntityType::Call.with_entity_string(call_record_id.to_string());
+            if command.expected().entity != entity {
+                return Err(CallError::Conflict(
+                    "team-share command targets another entity".into(),
+                ));
+            }
+            team_share::apply(&mut tx, command)
+                .await
+                .map_err(team_share_error)?;
+            let enabled = command.target().is_some();
+            edit::sync_team_share_flags(&mut tx, call_record_id, enabled)
+                .await
+                .map_err(anyhow::Error::from)?;
+            Some(enabled)
+        } else {
+            None
+        };
 
         if let Some(share_permission) = request.share_permission.as_ref() {
-            edit::update_share_permission(&mut tx, call_record_id, share_permission).await?;
-        }
-
-        if let Some(share_with_team) = request.share_with_team {
-            edit::set_share_with_team(&mut tx, call_record_id, share_with_team).await?;
+            edit::update_share_permission(&mut tx, call_record_id, share_permission)
+                .await
+                .map_err(anyhow::Error::from)?;
         }
 
         if let Some(custom_name) = request.custom_name.as_deref() {
@@ -1837,11 +1878,13 @@ impl CallRepository for PgCallRepo {
             } else {
                 Some(custom_name)
             };
-            edit::set_custom_name(&mut tx, call_record_id, custom_name).await?;
+            edit::set_custom_name(&mut tx, call_record_id, custom_name)
+                .await
+                .map_err(anyhow::Error::from)?;
         }
 
-        tx.commit().await?;
-        Ok(())
+        tx.commit().await.map_err(anyhow::Error::from)?;
+        Ok(share_with_team)
     }
 
     #[tracing::instrument(skip(self, assignments), fields(num_assignments = assignments.len()), err)]

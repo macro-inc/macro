@@ -317,9 +317,10 @@ pub struct EditCallRecordRequest {
     /// Updated share permissions.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
-    /// If `Some(true)`, grant the creator's team View access on the call.
-    /// If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
-    /// The team is resolved from the call's `created_by`, not the acting user.
+    /// Owner-only compatibility setting. Initial `true` enables View; repeated
+    /// `true` preserves the explicit level. `false` clears the managed grant,
+    /// even after team departure. `None` preserves sharing. Contradictory
+    /// legacy and explicit levels are rejected before any edits.
     pub share_with_team: Option<bool>,
     /// Updated user-supplied display name for the call. `None` is a no-op;
     /// `Some("")` clears `call_records.custom_name`; any other `Some(s)`
@@ -587,10 +588,28 @@ pub enum CallError {
     /// Authentication or signature validation failed.
     #[error("authentication failed")]
     Auth,
+    /// The actor is not authorized to change the persisted owner's team sharing.
+    #[error("{0}")]
+    Forbidden(String),
+    /// Authoritative ownership or sharing state changed before the edit committed.
+    #[error("{0}")]
+    Conflict(String),
     /// The request body violates an API contract (e.g. exceeds a size cap).
     #[error("{0}")]
     InvalidRequest(String),
     /// An internal error occurred.
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
+}
+
+impl From<models_permissions::share_permission::team_share::TeamSharePolicyError> for CallError {
+    fn from(error: models_permissions::share_permission::team_share::TeamSharePolicyError) -> Self {
+        use models_permissions::share_permission::team_share::TeamSharePolicyError;
+        match error {
+            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                Self::Forbidden(error.to_string())
+            }
+            _ => Self::InvalidRequest(error.to_string()),
+        }
+    }
 }

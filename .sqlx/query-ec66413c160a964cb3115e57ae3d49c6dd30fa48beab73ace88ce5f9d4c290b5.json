@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT access_level::text AS \"level!\" FROM entity_access WHERE entity_id = $1 AND source_type = 'team' AND granted_from_project_id IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "level!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ec66413c160a964cb3115e57ae3d49c6dd30fa48beab73ace88ce5f9d4c290b5"
+}

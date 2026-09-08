@@ -7,6 +7,9 @@ use std::future::Future;
 
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts,
+};
 use uuid::Uuid;
 
 use item_filters::ast::{LiteralTree, call::CallLiteral};
@@ -133,12 +136,11 @@ pub trait CallRepository: Send + Sync + 'static {
         egress_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Flip the `share_with_team` flag on an active call. Returns the new
-    /// value along with the call's `channel_id`.
-    fn toggle_share_with_team(
+    /// Load persisted ownership, membership, and canonical sharing for domain authorization.
+    fn get_team_share_facts(
         &self,
         call_id: &Uuid,
-    ) -> impl Future<Output = Result<(bool, Uuid), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<TeamShareFacts, CallError>> + Send;
 
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
@@ -272,12 +274,19 @@ pub trait CallRepository: Send + Sync + 'static {
         call_record_id: &Uuid,
     ) -> impl Future<Output = Result<Option<DeletedCallRecordStorageKeys>, Self::Err>> + Send;
 
-    /// Patches a call record.
-    fn patch_call_record(
+    /// Atomically patch metadata and sharing, rechecking the authorized command.
+    /// Raw team inputs must be removed from `request` after domain normalization.
+    /// Returns the committed sharing flag when a team command was supplied.
+    #[expect(
+        clippy::needless_lifetimes,
+        reason = "mockall requires a named lifetime for optional references"
+    )]
+    fn patch_call_record<'a>(
         &self,
         call_record_id: &Uuid,
         request: &EditCallRecordRequest,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+        team_share: Option<&'a AuthorizedTeamShareCommand>,
+    ) -> impl Future<Output = Result<Option<bool>, CallError>> + Send;
 
     /// Apply a batch of per-diarized-speaker `custom_speaker` overrides to
     /// the archived `call_record_transcripts` rows for `call_record_id`.
@@ -626,11 +635,10 @@ pub trait CallService: Send + Sync + 'static {
         request: EditCallTranscriptRequest,
     ) -> impl Future<Output = Result<(), CallError>> + Send;
 
-    /// Toggle the `share_with_team` flag on the active call identified by the
-    /// receipt. Authorization is carried in the receipt produced by
-    /// `CallAccessLevelExtractor`; the entity on the receipt must be
-    /// `EntityType::Call` and its `entity_id` must be the call's UUID.
-    /// Returns the new value.
+    /// Toggle canonical team sharing on the active call identified by the receipt.
+    /// The receipt actor must match the persisted owner. Initial enable uses View;
+    /// clear removes the managed grant even without current team membership.
+    /// Returns the committed compatibility flag.
     fn toggle_share_with_team(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,

@@ -443,8 +443,8 @@ pub async fn delete_call_record_handler<
 
 /// Handler for `PATCH /call/record/{call_id}`.
 ///
-/// Edits a call record — currently supports updating the record's share
-/// permissions. Access is validated via channel membership
+/// Edits call metadata and sharing. Supplied team-sharing operations additionally
+/// require the persisted owner; enabling without an owner team is invalid.
 #[utoipa::path(
     patch,
     operation_id = "edit_call_record",
@@ -455,8 +455,11 @@ pub async fn delete_call_record_handler<
     request_body = EditCallRecordRequest,
     responses(
         (status = 204, description = "Call record updated"),
+        (status = 400, body = ErrorResponse, description = "Invalid sharing input or owner has no team"),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse, description = "Team sharing requires the actual owner"),
         (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse, description = "Sharing state changed or an untracked grant conflicts"),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -517,8 +520,8 @@ pub async fn edit_call_transcript_handler<
 
 /// Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
 ///
-/// Toggles the `share_with_team` flag on the active call. Returns the new
-/// value as the JSON body.
+/// Toggles explicit team sharing on an active call as its persisted owner.
+/// Initial enable uses View. Returns the committed compatibility flag.
 #[utoipa::path(
     post,
     operation_id = "toggle_share_with_team",
@@ -528,8 +531,11 @@ pub async fn edit_call_transcript_handler<
     ),
     responses(
         (status = 200, body = bool, content_type = "application/json", description = "New value of share_with_team after toggle"),
+        (status = 400, body = ErrorResponse, description = "Owner has no team"),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse, description = "Team sharing requires the actual owner"),
         (status = 404, body = ErrorResponse),
+        (status = 409, body = ErrorResponse, description = "Sharing state changed or an untracked grant conflicts"),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -742,7 +748,8 @@ impl IntoResponse for CallError {
         let status_code = match &self {
             CallError::NotFound(_) => StatusCode::NOT_FOUND,
             CallError::NotInCall => StatusCode::BAD_REQUEST,
-            CallError::AlreadyInCall(_) => StatusCode::CONFLICT,
+            CallError::AlreadyInCall(_) | CallError::Conflict(_) => StatusCode::CONFLICT,
+            CallError::Forbidden(_) => StatusCode::FORBIDDEN,
             CallError::Auth => StatusCode::UNAUTHORIZED,
             CallError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             CallError::Internal(_) => {

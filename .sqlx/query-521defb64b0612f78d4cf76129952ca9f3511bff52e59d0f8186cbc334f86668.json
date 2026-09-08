@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, share_permission_id, share_with_team)\n         SELECT id, channel_id, room_name, created_by, created_at, NOW(), 0, share_permission_id, false FROM calls WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "521defb64b0612f78d4cf76129952ca9f3511bff52e59d0f8186cbc334f86668"
+}

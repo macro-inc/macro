@@ -12,6 +12,9 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_permissions::share_permission::team_share::{
+    TeamShareLevel, TeamShareRequest, authorize_team_share,
+};
 use notification::domain::models::apple::VoipPushPayload;
 use notification::domain::models::apple::{
     APNSPushNotification, Alert, AlertDictionary, Aps, PushNotificationData,
@@ -1383,7 +1386,26 @@ impl<
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
         let actor_user_id = event_actor_user_id(receipt.auth());
         let custom_name = request.custom_name.clone();
-        let share_with_team = request.share_with_team;
+        let mut request = request;
+        let team_request = TeamShareRequest {
+            access_level: request
+                .share_permission
+                .as_mut()
+                .and_then(|permission| permission.team_share_access_level.take()),
+            legacy_enabled: request.share_with_team.take(),
+        };
+        let team_share =
+            if team_request.access_level.is_some() || team_request.legacy_enabled.is_some() {
+                let facts = self.repo.get_team_share_facts(&call_id).await?;
+                authorize_team_share(
+                    receipt.acting_user_id(),
+                    &facts,
+                    team_request,
+                    TeamShareLevel::View,
+                )?
+            } else {
+                None
+            };
         let channel_id = self
             .repo
             .get_call_record_by_call_id(&call_id)
@@ -1391,10 +1413,10 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             .map(|record| record.channel_id);
 
-        self.repo
-            .patch_call_record(&call_id, &request)
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?;
+        let share_with_team = self
+            .repo
+            .patch_call_record(&call_id, &request, team_share.as_ref())
+            .await?;
 
         if let Some(channel_id) = channel_id {
             self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
@@ -1449,11 +1471,39 @@ impl<
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
         let actor_user_id = event_actor_user_id(receipt.auth());
 
-        let (new_value, channel_id) = self
+        let facts = self.repo.get_team_share_facts(&call_id).await?;
+        let command = authorize_team_share(
+            receipt.acting_user_id(),
+            &facts,
+            TeamShareRequest {
+                access_level: None,
+                legacy_enabled: Some(facts.current.is_none()),
+            },
+            TeamShareLevel::View,
+        )?;
+        let record = self
             .repo
-            .toggle_share_with_team(&call_id)
+            .get_call_record_by_call_id(&call_id)
             .await
-            .map_err(|e| CallError::Internal(e.into()))?;
+            .map_err(|e| CallError::Internal(e.into()))?
+            .filter(|record| record.is_active)
+            .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
+        let channel_id = record.channel_id;
+        let new_value = self
+            .repo
+            .patch_call_record(
+                &call_id,
+                &EditCallRecordRequest {
+                    share_permission: None,
+                    share_with_team: None,
+                    custom_name: None,
+                },
+                command.as_ref(),
+            )
+            .await?
+            .ok_or_else(|| {
+                CallError::Internal(anyhow::anyhow!("missing committed team-share result"))
+            })?;
 
         self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
             call_id,
