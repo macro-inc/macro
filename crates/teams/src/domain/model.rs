@@ -7,6 +7,24 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 use models_permissions::share_permission::LinkShare;
 use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
 
+/// Canonical owner consent cleared by a membership removal, for conditional compensation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClearedTeamShare {
+    /// Authoritative root, owner, managed team, level, and revision before cleanup.
+    pub previous: models_permissions::share_permission::team_share::TeamShareFacts,
+    /// Revision written by cleanup; any later supplied operation invalidates restoration.
+    pub cleared_revision: i64,
+}
+
+/// Membership and canonical sharing removed in one repository transaction.
+#[derive(Debug, Clone)]
+pub struct RemovedTeamMember<'a> {
+    /// Removed membership, including its original role.
+    pub member: TeamMember<'a>,
+    /// Owner shares cleared in the same transaction (never another owner's shares).
+    pub cleared_shares: Vec<ClearedTeamShare>,
+}
+
 /// Team plans
 #[derive(
     Eq,

@@ -1,10 +1,11 @@
 //! Implementation for TeamRepository using MacroDB.
 use crate::domain::{
     model::{
-        AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
-        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
+        AcceptedTeamInvite, ClearedTeamShare, CreateTeamError, InviteUsersToTeamError,
+        PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError, RemovedTeamMember, Team,
+        TeamError, TeamInvite, TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers,
+        TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain,
+        normalize_team_slug,
     },
     team_repo::{TeamMembersService, TeamRepository},
 };
@@ -14,7 +15,9 @@ use macro_user_id::{
     lowercased::Lowercase,
     user_id::MacroUserIdStr,
 };
-use models_permissions::share_permission::LinkShare;
+use model_entity::{Entity, EntityType};
+use models_permissions::share_permission::{LinkShare, team_share::TeamShareMaintenance};
+use share_permission_db_utils::team_share::{self, acquire_guard};
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
 
@@ -42,6 +45,96 @@ impl TeamRepositoryImpl {
     }
 }
 
+/// Clear canonical roots by actual owner or stored managed team, not surviving membership.
+/// Includes soft-deleted roots and archived calls; the caller owns the transaction.
+async fn clear_owner_shares(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    owner: Option<&str>,
+    managed_team: Option<uuid::Uuid>,
+) -> Result<Vec<ClearedTeamShare>, sqlx::Error> {
+    acquire_guard(transaction).await?;
+    let roots = sqlx::query!(
+        r#"WITH roots AS (
+            SELECT d.id, 'document' AS kind, d.owner, dp."sharePermissionId" AS permission_id
+            FROM "Document" d JOIN "DocumentPermission" dp ON dp."documentId" = d.id
+            UNION ALL
+            SELECT p.id, 'project', p."userId", pp."sharePermissionId"
+            FROM "Project" p JOIN "ProjectPermission" pp ON pp."projectId" = p.id
+            UNION ALL
+            SELECT c.id, 'chat', c."userId", cp."sharePermissionId"
+            FROM "Chat" c JOIN "ChatPermission" cp ON cp."chatId" = c.id
+            UNION ALL
+            SELECT t.id::text, 'email_thread', l.macro_id, tp."sharePermissionId"
+            FROM email_threads t JOIN email_links l ON l.id = t.link_id
+            JOIN "EmailThreadPermission" tp ON tp."threadId" = t.id::text
+            UNION ALL
+            SELECT id::text, 'call', created_by, share_permission_id FROM calls
+            UNION ALL
+            SELECT id::text, 'call', created_by, share_permission_id FROM call_records
+            WHERE NOT EXISTS (SELECT 1 FROM calls WHERE calls.id = call_records.id)
+        )
+        SELECT r.id AS "id!", r.kind AS "kind!"
+        FROM roots r JOIN "SharePermission" sp ON sp.id = r.permission_id
+        WHERE sp.team_share_team_id IS NOT NULL
+          AND ($1::text IS NULL OR r.owner = $1)
+          AND ($2::uuid IS NULL OR sp.team_share_team_id = $2)
+        ORDER BY r.kind, r.id"#,
+        owner,
+        managed_team,
+    )
+    .fetch_all(transaction.as_mut())
+    .await?;
+    let mut cleared = Vec::with_capacity(roots.len());
+    for root in roots {
+        let entity = EntityType::from_str(&root.kind)
+            .map_err(type_err)?
+            .with_entity_string(root.id);
+        let previous = team_share::load_facts(transaction, &entity)
+            .await
+            .map_err(type_err)?;
+        team_share::maintain(
+            transaction,
+            &TeamShareMaintenance::Clear {
+                expected: previous.clone(),
+            },
+        )
+        .await
+        .map_err(type_err)?;
+        set_call_share_flag(transaction, &entity, false).await?;
+        cleared.push(ClearedTeamShare {
+            cleared_revision: previous.revision + 1,
+            previous,
+        });
+    }
+    Ok(cleared)
+}
+
+async fn set_call_share_flag(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    entity: &Entity<'_>,
+    enabled: bool,
+) -> Result<(), sqlx::Error> {
+    if entity.entity_type != EntityType::Call {
+        return Ok(());
+    }
+    let id = uuid::Uuid::parse_str(&entity.entity_id).map_err(type_err)?;
+    sqlx::query!(
+        "UPDATE calls SET share_with_team = $2 WHERE id = $1",
+        id,
+        enabled
+    )
+    .execute(transaction.as_mut())
+    .await?;
+    sqlx::query!(
+        "UPDATE call_records SET share_with_team = $2 WHERE id = $1",
+        id,
+        enabled
+    )
+    .execute(transaction.as_mut())
+    .await?;
+    Ok(())
+}
+
 impl TeamRepositoryImpl {
     /// Bumps the teams seat count by the quantity number (positive or negative)
     #[tracing::instrument(skip(transaction), err)]
@@ -65,27 +158,6 @@ impl TeamRepositoryImpl {
         Ok(())
     }
 
-    /// Gets the owner of a team
-    #[tracing::instrument(skip(self), err)]
-    async fn get_team_owner(
-        &self,
-        team_id: &uuid::Uuid,
-    ) -> Result<MacroUserIdStr<'_>, anyhow::Error> {
-        let owner_id = sqlx::query!(
-            r#"
-            SELECT owner_id
-            FROM team
-            WHERE id = $1
-        "#,
-            team_id,
-        )
-        .map(|row| row.owner_id)
-        .fetch_one(&self.pool)
-        .await?;
-
-        Ok(MacroUserIdStr::parse_from_str(owner_id.as_str()).map(|id| id.into_owned())?)
-    }
-
     #[tracing::instrument(skip(self), err)]
     async fn create_team_inner(
         &self,
@@ -95,6 +167,7 @@ impl TeamRepositoryImpl {
         subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
+        acquire_guard(&mut transaction).await?;
 
         let id = macro_uuid::generate_uuid_v7();
 
@@ -541,14 +614,15 @@ impl TeamRepository for TeamRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<TeamMember<'static>, RemoveUserFromTeamError> {
-        let owner_id = self.get_team_owner(team_id).await?;
-
-        if user_id.as_ref().eq(owner_id.as_ref()) {
+    ) -> Result<RemovedTeamMember<'static>, RemoveUserFromTeamError> {
+        let mut transaction = self.pool.begin().await?;
+        acquire_guard(&mut transaction).await?;
+        let owner_id = sqlx::query_scalar!("SELECT owner_id FROM team WHERE id = $1", team_id)
+            .fetch_one(transaction.as_mut())
+            .await?;
+        if user_id.as_ref() == owner_id {
             return Err(RemoveUserFromTeamError::CannotRemoveOwner);
         }
-
-        let mut transaction = self.pool.begin().await?;
 
         let row = sqlx::query(
             r#"
@@ -572,11 +646,16 @@ impl TeamRepository for TeamRepositoryImpl {
             role: row.try_get("team_role")?,
         };
 
+        let cleared_shares =
+            clear_owner_shares(&mut transaction, Some(user_id.as_ref()), None).await?;
         TeamRepositoryImpl::bump_seat_count(&mut transaction, team_id, -1).await?;
 
         transaction.commit().await?;
 
-        Ok(removed_member)
+        Ok(RemovedTeamMember {
+            member: removed_member,
+            cleared_shares,
+        })
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -689,6 +768,7 @@ impl TeamRepository for TeamRepositoryImpl {
     #[tracing::instrument(skip(self), err)]
     async fn delete_team(&self, team_id: &uuid::Uuid) -> Result<(), TeamError> {
         let mut transaction = self.pool.begin().await?;
+        clear_owner_shares(&mut transaction, None, Some(*team_id)).await?;
 
         sqlx::query!(
             r#"
@@ -767,6 +847,7 @@ impl TeamRepository for TeamRepositoryImpl {
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<AcceptedTeamInvite<'static>, TeamError> {
         let mut transaction = self.pool.begin().await?;
+        acquire_guard(&mut transaction).await?;
 
         let user_email = user_id.email_part().lowercase();
 
@@ -859,6 +940,7 @@ impl TeamRepository for TeamRepositoryImpl {
         accepted_invite: &AcceptedTeamInvite<'_>,
     ) -> Result<(), TeamError> {
         let mut transaction = self.pool.begin().await?;
+        acquire_guard(&mut transaction).await?;
 
         let deleted = sqlx::query(
             r#"
@@ -872,6 +954,12 @@ impl TeamRepository for TeamRepositoryImpl {
         .await?;
 
         if deleted.rows_affected() > 0 {
+            clear_owner_shares(
+                &mut transaction,
+                Some(accepted_invite.member.user_id.as_ref()),
+                None,
+            )
+            .await?;
             TeamRepositoryImpl::bump_seat_count(
                 &mut transaction,
                 &accepted_invite.member.team_id,
@@ -907,9 +995,11 @@ impl TeamRepository for TeamRepositoryImpl {
     #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn rollback_remove_user_from_team(
         &self,
-        removed_member: &TeamMember<'_>,
+        removed: &RemovedTeamMember<'_>,
     ) -> Result<(), TeamError> {
         let mut transaction = self.pool.begin().await?;
+        acquire_guard(&mut transaction).await?;
+        let removed_member = &removed.member;
 
         let inserted = sqlx::query(
             r#"
@@ -927,6 +1017,24 @@ impl TeamRepository for TeamRepositoryImpl {
         if inserted.rows_affected() > 0 {
             TeamRepositoryImpl::bump_seat_count(&mut transaction, &removed_member.team_id, 1)
                 .await?;
+        }
+        for share in &removed.cleared_shares {
+            // The snapshot must belong to this removal, even if the port is called twice.
+            if share.previous.owner != removed_member.user_id
+                || share.previous.current.map(|grant| grant.team_id) != Some(removed_member.team_id)
+            {
+                continue;
+            }
+            if team_share::restore_cleared(
+                &mut transaction,
+                &share.previous,
+                share.cleared_revision,
+            )
+            .await
+            .map_err(type_err)?
+            {
+                set_call_share_flag(&mut transaction, &share.previous.entity, true).await?;
+            }
         }
 
         transaction.commit().await?;
@@ -1501,6 +1609,7 @@ impl TeamRepository for TeamRepositoryImpl {
         user_id: &MacroUserIdStr<'_>,
     ) -> Result<Option<TeamMember<'static>>, TeamError> {
         let mut transaction = self.pool.begin().await?;
+        acquire_guard(&mut transaction).await?;
 
         let inserted = sqlx::query!(
             r#"

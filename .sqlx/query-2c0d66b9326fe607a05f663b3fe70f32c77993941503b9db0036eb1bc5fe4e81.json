@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Document\" SET \"deletedAt\" = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2c0d66b9326fe607a05f663b3fe70f32c77993941503b9db0036eb1bc5fe4e81"
+}

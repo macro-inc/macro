@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE team_invite SET email = 'user2@user.com' WHERE id = '22222222-2222-2222-2222-222222222222'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2181f4da824038623bda4e2d319cbd39261c1f94c1363cda53f17222c8046300"
+}

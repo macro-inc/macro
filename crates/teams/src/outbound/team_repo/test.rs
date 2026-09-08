@@ -1,9 +1,414 @@
+use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{Pool, Postgres, Row};
 
-///! Tests for the team_repo implementation for teams
-use super::*;
+use model_entity::{Entity, EntityType};
+use models_permissions::share_permission::{
+    access_level::AccessLevel,
+    team_share::{TeamShareRequest, authorize_team_share},
+};
+use share_permission_db_utils::team_share;
+
+const SHARE_TEAM: uuid::Uuid = uuid::Uuid::from_u128(0x11111111111111111111111111111111);
+const SHARE_OWNER: &str = "macro|user2@user.com";
+
+async fn seed_owner_shares(pool: &PgPool) -> anyhow::Result<Vec<Entity<'static>>> {
+    sqlx::raw_sql(
+        r#"
+        INSERT INTO "Project" (id, name, "userId") VALUES
+            ('20000000-0000-0000-0000-000000000001', 'Root', 'macro|user2@user.com');
+        INSERT INTO "Document" (id, name, owner, "projectId") VALUES
+            ('20000000-0000-0000-0000-000000000002', 'Document', 'macro|user2@user.com', '20000000-0000-0000-0000-000000000001');
+        INSERT INTO "Chat" (id, name, "userId") VALUES
+            ('20000000-0000-0000-0000-000000000003', 'Chat', 'macro|user2@user.com');
+        INSERT INTO "SharePermission" (id) VALUES ('project'), ('document'), ('chat'), ('active-call'), ('archived-call');
+        INSERT INTO "ProjectPermission" ("projectId", "sharePermissionId") VALUES ('20000000-0000-0000-0000-000000000001', 'project');
+        INSERT INTO "DocumentPermission" ("documentId", "sharePermissionId") VALUES ('20000000-0000-0000-0000-000000000002', 'document');
+        INSERT INTO "ChatPermission" ("chatId", "sharePermissionId") VALUES ('20000000-0000-0000-0000-000000000003', 'chat');
+        INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider) VALUES
+            ('30000000-0000-0000-0000-000000000001', 'macro|user2@user.com', 'fusionauth', 'alias@example.com', 'GMAIL');
+        INSERT INTO email_threads (id, link_id) VALUES
+            ('20000000-0000-0000-0000-000000000004', '30000000-0000-0000-0000-000000000001');
+        INSERT INTO comms_channels (id, name, channel_type, owner_id) VALUES
+            ('40000000-0000-0000-0000-000000000001', 'Calls', 'private', 'macro|user2@user.com');
+        INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id, share_with_team) VALUES
+            ('20000000-0000-0000-0000-000000000005', '40000000-0000-0000-0000-000000000001', 'active', 'macro|user2@user.com', 'active-call', true);
+        INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, duration_ms, share_permission_id, share_with_team) VALUES
+            ('20000000-0000-0000-0000-000000000006', '40000000-0000-0000-0000-000000000001', 'archived', 'macro|user2@user.com', now(), 0, 'archived-call', true);
+        "#,
+    ).execute(pool).await?;
+    let kinds = [
+        EntityType::Project,
+        EntityType::Document,
+        EntityType::Chat,
+        EntityType::EmailThread,
+        EntityType::Call,
+        EntityType::Call,
+    ];
+    let mut roots = Vec::new();
+    for (index, kind) in kinds.into_iter().enumerate() {
+        let root = kind.with_entity_string(format!("20000000-0000-0000-0000-{:012}", index + 1));
+        set_owner_share(pool, &root, Some(AccessLevel::Comment)).await?;
+        roots.push(root);
+    }
+    Ok(roots)
+}
+
+async fn set_owner_share(
+    pool: &PgPool,
+    root: &Entity<'_>,
+    level: Option<AccessLevel>,
+) -> anyhow::Result<()> {
+    let mut tx = pool.begin().await?;
+    let facts = team_share::load_facts(&mut tx, root)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+    let Some(command) = authorize_team_share(
+        Some(&facts.owner),
+        &facts,
+        TeamShareRequest {
+            access_level: Some(level),
+            legacy_enabled: None,
+        },
+        models_permissions::share_permission::team_share::TeamShareLevel::View,
+    )?
+    else {
+        panic!("supplied operation must apply")
+    };
+    team_share::apply(&mut tx, &command)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn assert_owner_shares(pool: &PgPool, count: i64) -> anyhow::Result<()> {
+    let actual = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM "SharePermission" WHERE team_share_team_id = $1"#,
+        SHARE_TEAM,
+    )
+    .fetch_one(pool)
+    .await?;
+    assert_eq!(actual, count);
+    let flags = sqlx::query_scalar!(r#"SELECT (SELECT count(*) FROM calls WHERE share_with_team) + (SELECT count(*) FROM call_records WHERE share_with_team) AS "count!""#)
+        .fetch_one(pool).await?;
+    assert_eq!(flags, if count == 0 { 0 } else { 2 });
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn owner_removal_clears_and_compensates_all_roots(pool: PgPool) -> anyhow::Result<()> {
+    seed_owner_shares(&pool).await?;
+    let repo = TeamRepositoryImpl::new(pool.clone());
+    let removed = repo
+        .remove_user_from_team(&SHARE_TEAM, &MacroUserIdStr::parse_from_str(SHARE_OWNER)?)
+        .await?;
+    assert_eq!(removed.cleared_shares.len(), 6);
+    assert_owner_shares(&pool, 0).await?;
+    let grants: i64 = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM entity_access WHERE source_type = 'team'"#
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(grants, 0);
+    repo.rollback_remove_user_from_team(&removed).await?;
+    assert_owner_shares(&pool, 6).await?;
+    repo.rollback_remove_user_from_team(&removed).await?;
+    assert_owner_shares(&pool, 6).await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn deletion_clears_shares_without_surviving_membership(pool: PgPool) -> anyhow::Result<()> {
+    seed_owner_shares(&pool).await?;
+    sqlx::query!("DELETE FROM team_user WHERE user_id = $1", SHARE_OWNER)
+        .execute(&pool)
+        .await?;
+    sqlx::query!("UPDATE \"Document\" SET \"deletedAt\" = now()")
+        .execute(&pool)
+        .await?;
+    TeamRepositoryImpl::new(pool.clone())
+        .delete_team(&SHARE_TEAM)
+        .await?;
+    assert_owner_shares(&pool, 0).await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn compensation_respects_intervening_clear_transfer_and_deletion(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let roots = seed_owner_shares(&pool).await?;
+    let repo = TeamRepositoryImpl::new(pool.clone());
+    let removed = repo
+        .remove_user_from_team(&SHARE_TEAM, &MacroUserIdStr::parse_from_str(SHARE_OWNER)?)
+        .await?;
+    set_owner_share(&pool, &roots[0], None).await?;
+    sqlx::query!("UPDATE \"Document\" SET owner = 'macro|user@user.com'")
+        .execute(&pool)
+        .await?;
+    sqlx::query!("UPDATE \"Chat\" SET \"deletedAt\" = now()")
+        .execute(&pool)
+        .await?;
+    repo.rollback_remove_user_from_team(&removed).await?;
+    assert_owner_shares(&pool, 3).await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn failed_removal_rolls_back_membership_and_sharing(pool: PgPool) -> anyhow::Result<()> {
+    seed_owner_shares(&pool).await?;
+    sqlx::raw_sql("CREATE FUNCTION reject_seat_change() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'seat failure'; END $$; CREATE TRIGGER reject_seat_change BEFORE UPDATE ON team FOR EACH ROW EXECUTE FUNCTION reject_seat_change();").execute(&pool).await?;
+    let repo = TeamRepositoryImpl::new(pool.clone());
+    let owner = MacroUserIdStr::parse_from_str(SHARE_OWNER)?;
+    assert!(
+        repo.remove_user_from_team(&SHARE_TEAM, &owner)
+            .await
+            .is_err()
+    );
+    assert_owner_shares(&pool, 6).await?;
+    assert!(repo.get_team_member(&SHARE_TEAM, &owner).await.is_ok());
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn viewer_departure_and_new_membership_do_not_reshare(pool: PgPool) -> anyhow::Result<()> {
+    seed_owner_shares(&pool).await?;
+    let repo = TeamRepositoryImpl::new(pool.clone());
+    let viewer = MacroUserIdStr::parse_from_str("macro|user3@user.com")?;
+    repo.add_user_to_team(&SHARE_TEAM, &viewer).await?;
+    let removed = repo.remove_user_from_team(&SHARE_TEAM, &viewer).await?;
+    assert!(removed.cleared_shares.is_empty());
+    assert_owner_shares(&pool, 6).await?;
+
+    let owner = MacroUserIdStr::parse_from_str(SHARE_OWNER)?;
+    let removed = repo.remove_user_from_team(&SHARE_TEAM, &owner).await?;
+    let other_team = uuid::Uuid::from_u128(0x22222222222222222222222222222222);
+    repo.add_user_to_team(&other_team, &owner).await?;
+    assert_owner_shares(&pool, 0).await?;
+    repo.rollback_remove_user_from_team(&removed).await?;
+    assert_owner_shares(&pool, 0).await?;
+    assert_eq!(
+        repo.get_team_member(&other_team, &owner).await?.team_id,
+        other_team
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn compensation_rebuilds_current_tree_and_preserves_changed_level(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let roots = seed_owner_shares(&pool).await?;
+    let repo = TeamRepositoryImpl::new(pool.clone());
+    let owner = MacroUserIdStr::parse_from_str(SHARE_OWNER)?;
+    let removed = repo.remove_user_from_team(&SHARE_TEAM, &owner).await?;
+    // A later join is membership-only. Explicit edits after that join supersede snapshots.
+    repo.add_user_to_team(&SHARE_TEAM, &owner).await?;
+    set_owner_share(&pool, &roots[1], Some(AccessLevel::View)).await?;
+    let mut tx = pool.begin().await?;
+    team_share::acquire_guard(&mut tx).await?;
+    sqlx::query!("UPDATE \"Document\" SET \"projectId\" = NULL")
+        .execute(tx.as_mut())
+        .await?;
+    sqlx::query!(
+        "UPDATE \"Chat\" SET \"projectId\" = $1",
+        roots[0].entity_id.as_ref()
+    )
+    .execute(tx.as_mut())
+    .await?;
+    tx.commit().await?;
+    repo.rollback_remove_user_from_team(&removed).await?;
+    let grants: Vec<(String, AccessLevel)> = sqlx::query!(r#"SELECT entity_id::text AS "entity_id!", access_level AS "access_level: AccessLevel" FROM entity_access WHERE source_type = 'team' AND granted_from_project_id IS NOT NULL"#)
+        .map(|row| (row.entity_id, row.access_level)).fetch_all(&pool).await?;
+    assert_eq!(
+        grants,
+        vec![(roots[2].entity_id.to_string(), AccessLevel::Comment)]
+    );
+    let mut tx = pool.begin().await?;
+    let facts = team_share::load_facts(&mut tx, &roots[1])
+        .await
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+    assert_eq!(
+        facts.current.unwrap().level,
+        models_permissions::share_permission::team_share::TeamShareLevel::View
+    );
+    assert_eq!(facts.revision, 3);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn soft_deleted_roots_are_cleared_but_not_restored(pool: PgPool) -> anyhow::Result<()> {
+    seed_owner_shares(&pool).await?;
+    sqlx::query!("UPDATE \"Document\" SET \"deletedAt\" = now()")
+        .execute(&pool)
+        .await?;
+    sqlx::query!("UPDATE \"Project\" SET \"deletedAt\" = now()")
+        .execute(&pool)
+        .await?;
+    sqlx::query!("UPDATE \"Chat\" SET \"deletedAt\" = now()")
+        .execute(&pool)
+        .await?;
+    let repo = TeamRepositoryImpl::new(pool.clone());
+    let removed = repo
+        .remove_user_from_team(&SHARE_TEAM, &MacroUserIdStr::parse_from_str(SHARE_OWNER)?)
+        .await?;
+    assert_owner_shares(&pool, 0).await?;
+    assert_eq!(removed.cleared_shares.len(), 6);
+    repo.rollback_remove_user_from_team(&removed).await?;
+    assert_owner_shares(&pool, 3).await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn rollback_join_clears_shares_created_after_join(pool: PgPool) -> anyhow::Result<()> {
+    let repo = TeamRepositoryImpl::new(pool.clone());
+    let owner = MacroUserIdStr::parse_from_str(SHARE_OWNER)?;
+    repo.remove_user_from_team(&SHARE_TEAM, &owner).await?;
+    sqlx::query!("UPDATE team_invite SET email = 'user2@user.com' WHERE id = '22222222-2222-2222-2222-222222222222'")
+        .execute(&pool).await?;
+    let accepted = repo
+        .accept_team_invite(
+            &uuid::Uuid::from_u128(0x22222222222222222222222222222222),
+            &owner,
+        )
+        .await?;
+    seed_owner_shares(&pool).await?;
+    repo.rollback_accept_team_invite(&accepted).await?;
+    assert_owner_shares(&pool, 0).await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn concurrent_clear_holds_guard_until_compensation_can_observe_revision(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let roots = seed_owner_shares(&pool).await?;
+    let repo = TeamRepositoryImpl::new(pool.clone());
+    let removed = repo
+        .remove_user_from_team(&SHARE_TEAM, &MacroUserIdStr::parse_from_str(SHARE_OWNER)?)
+        .await?;
+    let mut clear_tx = pool.begin().await?;
+    let facts = team_share::load_facts(&mut clear_tx, &roots[0])
+        .await
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+    let command = authorize_team_share(
+        Some(&facts.owner),
+        &facts,
+        TeamShareRequest {
+            access_level: Some(None),
+            legacy_enabled: None,
+        },
+        models_permissions::share_permission::team_share::TeamShareLevel::View,
+    )?
+    .unwrap();
+    team_share::apply(&mut clear_tx, &command)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+    let (started, waiting) = tokio::sync::oneshot::channel();
+    let compensation = tokio::spawn(async move {
+        started.send(()).unwrap();
+        repo.rollback_remove_user_from_team(&removed).await
+    });
+    waiting.await?;
+    // The owner's transaction holds the guard before compensation starts. Its commit
+    // must be visible to the fresh eligibility read, never overwritten by the snapshot.
+    clear_tx.commit().await?;
+    compensation.await??;
+    assert_owner_shares(&pool, 5).await?;
+    let revision: i64 = sqlx::query_scalar!(
+        "SELECT team_share_revision FROM \"SharePermission\" WHERE id = 'project'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(revision, 3);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn failed_share_restoration_rolls_back_membership(pool: PgPool) -> anyhow::Result<()> {
+    seed_owner_shares(&pool).await?;
+    let repo = TeamRepositoryImpl::new(pool.clone());
+    let owner = MacroUserIdStr::parse_from_str(SHARE_OWNER)?;
+    let removed = repo.remove_user_from_team(&SHARE_TEAM, &owner).await?;
+    sqlx::raw_sql("CREATE FUNCTION reject_restored_grant() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'grant failure'; END $$; CREATE TRIGGER reject_restored_grant BEFORE INSERT ON entity_access FOR EACH ROW EXECUTE FUNCTION reject_restored_grant();")
+        .execute(&pool).await?;
+    assert!(repo.rollback_remove_user_from_team(&removed).await.is_err());
+    assert!(repo.get_team_member(&SHARE_TEAM, &owner).await.is_err());
+    assert_eq!(repo.get_team_seat_count(&SHARE_TEAM).await?, 2);
+    assert_owner_shares(&pool, 0).await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn compensation_skips_hard_deleted_roots_and_untracked_grants(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let roots = seed_owner_shares(&pool).await?;
+    let repo = TeamRepositoryImpl::new(pool.clone());
+    let owner = MacroUserIdStr::parse_from_str(SHARE_OWNER)?;
+    let removed = repo.remove_user_from_team(&SHARE_TEAM, &owner).await?;
+    sqlx::query!("DELETE FROM \"Chat\"").execute(&pool).await?;
+    let mut tx = pool.begin().await?;
+    team_share::acquire_guard(&mut tx).await?;
+    entity_access_db_utils::team_share::upsert_direct(
+        tx.as_mut(),
+        &uuid::Uuid::parse_str(&roots[1].entity_id)?,
+        EntityType::Document,
+        SHARE_TEAM,
+        AccessLevel::View,
+    )
+    .await?;
+    tx.commit().await?;
+    repo.rollback_remove_user_from_team(&removed).await?;
+    assert_owner_shares(&pool, 4).await?;
+    let mut tx = pool.begin().await?;
+    assert_eq!(
+        entity_access_db_utils::team_share::direct_level(
+            tx.as_mut(),
+            &uuid::Uuid::parse_str(&roots[1].entity_id)?,
+            EntityType::Document,
+            SHARE_TEAM
+        )
+        .await?,
+        Some(AccessLevel::View)
+    );
+    Ok(())
+}
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -1128,7 +1533,7 @@ async fn test_rollback_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Re
         .await?;
 
     let removed_member = team_repo.remove_user_from_team(&team_id, &user_id).await?;
-    assert_eq!(removed_member.role, TeamRole::Admin);
+    assert_eq!(removed_member.member.role, TeamRole::Admin);
 
     team_repo
         .rollback_remove_user_from_team(&removed_member)

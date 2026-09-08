@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT team_share_revision FROM \"SharePermission\" WHERE id = 'project'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_share_revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bdde68f8411e7b1a1535e149f9e9f5c8620533bc1f8fce669bbcc440b6782820"
+}

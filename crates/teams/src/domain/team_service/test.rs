@@ -26,6 +26,9 @@ use entity_access::domain::models::{
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use models_pagination::{CreatedAt, Query};
+use models_permissions::share_permission::team_share::{
+    TeamShareFacts, TeamShareGrant, TeamShareLevel,
+};
 use notification::domain::{
     models::{Notification, NotificationResult, request::SendNotificationRequest},
     service::{NotificationIngress, SendNotificationError},
@@ -58,13 +61,30 @@ use super::*;
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        AcceptedTeamInvite, CustomerError, PatchTeamRequest, PatchTeamUserRole,
-        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
-        ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
+        AcceptedTeamInvite, ClearedTeamShare, CustomerError, PatchTeamRequest, PatchTeamUserRole,
+        RemoveTeamInviteError, RemoveUserFromTeamError, RemovedTeamMember, Team, TeamError,
+        TeamInvite, TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamPlan, TeamRole,
+        TeamWithMembers, ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
     },
     team_repo::TeamRepository,
 };
+
+fn mock_cleared_share(member: &TeamMember<'_>) -> ClearedTeamShare {
+    ClearedTeamShare {
+        previous: TeamShareFacts {
+            entity: model_entity::EntityType::Project
+                .with_entity_str("20000000-0000-0000-0000-000000000001"),
+            owner: member.user_id.clone().into_owned(),
+            owner_team_id: Some(member.team_id),
+            current: Some(TeamShareGrant {
+                team_id: member.team_id,
+                level: TeamShareLevel::Comment,
+            }),
+            revision: 7,
+        },
+        cleared_revision: 8,
+    }
+}
 
 // -- Mock TeamRepository --
 
@@ -401,10 +421,17 @@ impl TeamRepository for MockTeamRepository {
         &self,
         _: &uuid::Uuid,
         _: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<TeamMember<'static>, RemoveUserFromTeamError>> + Send {
+    ) -> impl Future<Output = Result<RemovedTeamMember<'static>, RemoveUserFromTeamError>> + Send
+    {
         *self.remove_user_calls.lock().unwrap() += 1;
         let removed_member = self.removed_member.clone();
-        async move { removed_member.ok_or(RemoveUserFromTeamError::UserNotInTeam) }
+        async move {
+            let member = removed_member.ok_or(RemoveUserFromTeamError::UserNotInTeam)?;
+            Ok(RemovedTeamMember {
+                cleared_shares: vec![mock_cleared_share(&member)],
+                member,
+            })
+        }
     }
 
     fn get_team_invite_by_id(
@@ -523,8 +550,13 @@ impl TeamRepository for MockTeamRepository {
 
     fn rollback_remove_user_from_team(
         &self,
-        _: &TeamMember<'_>,
+        removed: &RemovedTeamMember<'_>,
     ) -> impl Future<Output = Result<(), TeamError>> + Send {
+        // Every downstream compensation branch must forward the full canonical snapshot.
+        assert_eq!(
+            removed.cleared_shares,
+            vec![mock_cleared_share(&removed.member)]
+        );
         *self.rollback_remove_calls.lock().unwrap() += 1;
         let fail = self.fail_rollback_remove;
         async move {
@@ -4527,6 +4559,41 @@ async fn team_analytics_join_team_does_not_emit_when_join_is_rolled_back() {
 
     assert!(matches!(err, JoinTeamError::TeamError(_)));
     assert!(events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn removal_subscription_lookup_failure_compensates_canonical_snapshot() {
+    let team_id = uuid::Uuid::from_u128(1);
+    let owner_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let member_id = MacroUserIdStr::parse_from_str("macro|member@example.com").unwrap();
+    let mut repo = MockTeamRepository::new(Vec::new(), "Team", Arc::new(Mutex::new(Vec::new())));
+    repo.removed_member = Some(TeamMember {
+        team_id,
+        user_id: member_id.clone().into_owned(),
+        role: TeamRole::Member,
+    });
+    repo.fail_team_subscription_id_lookup = true;
+    let rollbacks = repo.rollback_remove_calls.clone();
+    let service = TeamServiceImpl::new(
+        repo,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+    assert!(
+        service
+            .remove_user_from_team(
+                test_team_receipt::<AdminTeamRole>(team_id, &owner_id),
+                &member_id
+            )
+            .await
+            .is_err()
+    );
+    // The repository mock also asserts the original canonical snapshot and cleared revision.
+    assert_eq!(*rollbacks.lock().unwrap(), 1);
 }
 
 #[tokio::test]

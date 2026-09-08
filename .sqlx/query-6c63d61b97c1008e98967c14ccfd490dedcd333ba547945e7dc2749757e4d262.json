@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Document\" SET owner = 'macro|user@user.com'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6c63d61b97c1008e98967c14ccfd490dedcd333ba547945e7dc2749757e4d262"
+}

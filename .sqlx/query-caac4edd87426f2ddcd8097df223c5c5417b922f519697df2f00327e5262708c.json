@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT count(*) FROM calls WHERE share_with_team) + (SELECT count(*) FROM call_records WHERE share_with_team) AS \"count!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "caac4edd87426f2ddcd8097df223c5c5417b922f519697df2f00327e5262708c"
+}

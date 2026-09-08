@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH roots AS (\n            SELECT d.id, 'document' AS kind, d.owner, dp.\"sharePermissionId\" AS permission_id\n            FROM \"Document\" d JOIN \"DocumentPermission\" dp ON dp.\"documentId\" = d.id\n            UNION ALL\n            SELECT p.id, 'project', p.\"userId\", pp.\"sharePermissionId\"\n            FROM \"Project\" p JOIN \"ProjectPermission\" pp ON pp.\"projectId\" = p.id\n            UNION ALL\n            SELECT c.id, 'chat', c.\"userId\", cp.\"sharePermissionId\"\n            FROM \"Chat\" c JOIN \"ChatPermission\" cp ON cp.\"chatId\" = c.id\n            UNION ALL\n            SELECT t.id::text, 'email_thread', l.macro_id, tp.\"sharePermissionId\"\n            FROM email_threads t JOIN email_links l ON l.id = t.link_id\n            JOIN \"EmailThreadPermission\" tp ON tp.\"threadId\" = t.id::text\n            UNION ALL\n            SELECT id::text, 'call', created_by, share_permission_id FROM calls\n            UNION ALL\n            SELECT id::text, 'call', created_by, share_permission_id FROM call_records\n            WHERE NOT EXISTS (SELECT 1 FROM calls WHERE calls.id = call_records.id)\n        )\n        SELECT r.id AS \"id!\", r.kind AS \"kind!\"\n        FROM roots r JOIN \"SharePermission\" sp ON sp.id = r.permission_id\n        WHERE sp.team_share_team_id IS NOT NULL\n          AND ($1::text IS NULL OR r.owner = $1)\n          AND ($2::uuid IS NULL OR sp.team_share_team_id = $2)\n        ORDER BY r.kind, r.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "457f16853b8c24738534b60ddf2e2b277e6dcb754e2c809290dff2f60b5bc74a"
+}

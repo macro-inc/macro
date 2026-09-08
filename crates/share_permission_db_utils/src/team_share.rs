@@ -269,6 +269,66 @@ pub async fn maintain(
     }
 }
 
+/// Conditionally restore lifecycle-cleared consent after membership compensation.
+/// This is not a user-authorized edit: the historical owner/team and the exact cleared
+/// revision must still match. Deleted roots and intervening explicit operations are
+/// ineligible. Project contributions are rebuilt from the current tree by `write_state`.
+/// Returns false for an ineligible snapshot, without changing any state.
+pub async fn restore_cleared(
+    transaction: &mut Transaction<'_, Postgres>,
+    previous: &TeamShareFacts,
+    cleared_revision: i64,
+) -> TeamShareResult<bool> {
+    acquire_guard(transaction)
+        .await
+        .context(TeamShareError::Infrastructure)?;
+    let Some(grant) = previous.current else {
+        return Ok(false);
+    };
+    if previous.revision.checked_add(1) != Some(cleared_revision) {
+        return Ok(false);
+    }
+    let state = match load_state(transaction.as_mut(), &previous.entity).await {
+        Ok(state) => state,
+        Err(error) if *error.current_context() == TeamShareError::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    if state.facts.owner != previous.owner
+        || state.facts.owner_team_id != Some(grant.team_id)
+        || state.facts.current.is_some()
+        || state.facts.revision != cleared_revision
+    {
+        return Ok(false);
+    }
+    let deleted = sqlx::query_scalar!(
+        r#"SELECT EXISTS (
+            SELECT 1 FROM "Document" WHERE $2 = 'document' AND id = $1 AND "deletedAt" IS NOT NULL
+            UNION ALL
+            SELECT 1 FROM "Project" WHERE $2 = 'project' AND id = $1 AND "deletedAt" IS NOT NULL
+            UNION ALL
+            SELECT 1 FROM "Chat" WHERE $2 = 'chat' AND id = $1 AND "deletedAt" IS NOT NULL
+        ) AS "deleted!""#,
+        previous.entity.entity_id.as_ref(),
+        previous.entity.entity_type.as_ref(),
+    )
+    .fetch_one(transaction.as_mut())
+    .await
+    .context(TeamShareError::Infrastructure)?;
+    if deleted {
+        return Ok(false);
+    }
+    match reject_untracked(transaction.as_mut(), &state.facts, Some(grant)).await {
+        Ok(()) => {}
+        Err(error) if *error.current_context() == TeamShareError::UntrackedGrant => {
+            return Ok(false);
+        }
+        Err(error) => return Err(error),
+    }
+    let revision = next_revision(&state.facts)?;
+    write_state(transaction, state, Some(grant), revision).await?;
+    Ok(true)
+}
+
 /// Initialize a newly inserted entity in the caller's guarded creation transaction.
 /// Never use this for existing entities or copies with inherited source consent.
 /// Unshared creation does not advance revision; explicit task/call consent does.

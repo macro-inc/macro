@@ -10,9 +10,9 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
     PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
-    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
-    TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
-    ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
+    RemovedTeamMember, RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError,
+    Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole,
+    TeamWithMembers, ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
 };
 
 /// The TeamRepository defines a set of actions to perform on teams data
@@ -88,12 +88,13 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         invite_ids: &[uuid::Uuid],
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
-    /// Removes user from a team.
+    /// Removes membership, decrements seats, and clears the departing owner's canonical
+    /// shares atomically. Returns the membership and sharing snapshots for compensation.
     fn remove_user_from_team(
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<TeamMember<'static>, RemoveUserFromTeamError>> + Send;
+    ) -> impl Future<Output = Result<RemovedTeamMember<'static>, RemoveUserFromTeamError>> + Send;
 
     ///Gets a team invite by id
     fn get_team_invite_by_id(
@@ -122,7 +123,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         paying: bool,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
-    /// Deletes a team
+    /// Clears canonical shares attributed to this team before deleting it, atomically.
     fn delete_team(
         &self,
         team_id: &uuid::Uuid,
@@ -150,10 +151,11 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         accepted_invite: &AcceptedTeamInvite<'_>,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
-    /// Rolls back a previously removed team member.
+    /// Restores membership and still-eligible canonical owner shares atomically.
+    /// Intervening sharing operations, ownership changes, and deletion prevent resharing.
     fn rollback_remove_user_from_team(
         &self,
-        removed_member: &TeamMember<'_>,
+        removed_member: &RemovedTeamMember<'_>,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
     /// Checks if a user is a member (not owner) of any team

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Project\" SET \"deletedAt\" = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d21d0d560ae986c5a2412de579e8d2721fe67fd3a1c4181ecf5b22adaf7f2a0d"
+}

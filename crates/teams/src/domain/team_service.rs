@@ -987,16 +987,16 @@ where
 
         self.track_team_analytics_event(TeamAnalyticsEvent::TeamLeft {
             team_id,
-            member_id: removed_member.user_id.clone().into_owned(),
+            member_id: removed_member.member.user_id.clone().into_owned(),
             removed_by_id: removed_by_id.clone(),
-            role: removed_member.role,
+            role: removed_member.member.role,
         })
         .await;
         self.publish_team_event(&TeamMacroEvent::member_removed(TeamMemberRemovedMetadata {
             team_id,
-            member_id: removed_member.user_id.into_owned(),
+            member_id: removed_member.member.user_id.into_owned(),
             removed_by: removed_by_id,
-            role: removed_member.role,
+            role: removed_member.member.role,
         }));
 
         Ok(())
