@@ -789,7 +789,12 @@ impl PredicateIndexStorage for InMemoryStorage {
             baseline,
             baseline.iter().map(|entry| membership(&entry.record_key)),
             evaluate_reference(query, &documents),
-            !self.optimistic_projections.is_empty(),
+            self.optimistic_projections.iter().any(|(key, shadow)| {
+                query.includes_scope(shadow.state.profile(), shadow.state.partition())
+                    || self.projections.get(key).is_some_and(|authority| {
+                        query.includes_scope(authority.profile(), authority.partition())
+                    })
+            }),
         ))
     }
 

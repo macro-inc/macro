@@ -680,6 +680,56 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   );
 
+  it('batches large overlays and rejects mixed-revision materialization', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => REVISION_2,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    const keys = Array.from(
+      { length: 501 },
+      (_, i) => `GraphqlSoupDocument:${i}`
+    );
+    entityFilterMock.mockResolvedValue({
+      kind: 'reconciled',
+      revision: REVISION_2,
+      keys,
+      retainedKeys: [],
+      optimistic: false,
+    });
+    let reads = 0;
+    readRecordsByKeysMock.mockImplementation(
+      async (_host, _selection, chunk: string[]) => ({
+        revision: reads++ === 0 ? REVISION_1 : REVISION_2,
+        records: chunk.map((recordKey) => ({
+          recordKey,
+          record: { id: recordKey, name: recordKey },
+        })),
+      })
+    );
+    let dispose!: () => void;
+    let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+    createRoot((stop) => {
+      dispose = stop;
+      query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: true })
+      );
+    });
+    try {
+      await vi.waitFor(() => expect(query.data()?.entities).toHaveLength(501));
+      expect(entityFilterMock).toHaveBeenCalledTimes(2);
+      expect(
+        readRecordsByKeysMock.mock.calls.map((call) => call[2].length)
+      ).toEqual([500, 1, 500, 1]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('retains identical page projections across cache re-executions', () => {
     const firstPage = {
       items: [{ id: 'task-1', type: 'document', name: 'Task' }],

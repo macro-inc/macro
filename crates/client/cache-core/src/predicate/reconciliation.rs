@@ -26,7 +26,7 @@ pub struct PredicateReconciliation {
     pub keys: Vec<RecordKey>,
     /// Baseline survivors whose current membership could not be evaluated.
     pub retained_keys: Vec<RecordKey>,
-    /// Whether any output decision involved an optimistic shadow.
+    /// Whether a query-relevant optimistic shadow was observed.
     pub optimistic: bool,
 }
 
@@ -53,10 +53,11 @@ pub fn predicate_membership(
         if matches!(shadow.state, OptimisticProjectionState::Deleted { .. }) {
             return PredicateMembership::NonMatch;
         }
-        if query
-            .dependent_attributes(shadow.state.partition())
-            .iter()
-            .any(|attribute| shadow.uncertainty.affects(attribute))
+        if query.includes_scope(shadow.state.profile(), shadow.state.partition())
+            && query
+                .dependent_attributes(shadow.state.partition())
+                .iter()
+                .any(|attribute| shadow.uncertainty.affects(attribute))
         {
             return PredicateMembership::Unknown;
         }
@@ -125,9 +126,11 @@ pub fn reconcile_predicate_baseline(
         match membership {
             PredicateMembership::Match(value) => {
                 hits.insert(entry.record_key.clone(), value);
+                retained.remove(&entry.record_key);
             }
             PredicateMembership::NonMatch => {
                 hits.remove(&entry.record_key);
+                retained.remove(&entry.record_key);
             }
             PredicateMembership::Unknown => {
                 hits.insert(entry.record_key.clone(), entry.sort_value);
