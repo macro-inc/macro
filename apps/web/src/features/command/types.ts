@@ -28,6 +28,15 @@ export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
    * shown in one and hidden in the other. Absent means always available.
    */
   enabled?: () => boolean;
+  /**
+   * The destination this entry opens focuses itself, so the menu must not let
+   * its dialog hand focus back to whatever opened it on the way out.
+   *
+   * Only needed where the destination can win that race: a block that mounts
+   * from a cached chunk takes focus before the dialog has finished unmounting,
+   * and the restore then pulls the caret back out of it.
+   */
+  focusesOwnDestination?: boolean;
 };
 
 export type CategoryFilter =

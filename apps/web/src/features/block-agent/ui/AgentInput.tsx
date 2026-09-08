@@ -191,7 +191,7 @@ export function AgentInput(props: AgentInputProps) {
               placeholder={
                 props.placeholder ?? 'Message the agent, @mention anything'
               }
-              autofocus={props.autofocus}
+              autofocus={!isMobile() && !isTouchDevice() && props.autofocus}
             />
           </div>
 

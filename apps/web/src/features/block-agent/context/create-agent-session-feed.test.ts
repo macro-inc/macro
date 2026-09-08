@@ -11,7 +11,13 @@ import type {
   FoldedStreamEvent,
 } from '@service-agent-fold/generated/types';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
-import { createComputed, createMemo, createRoot, mapArray } from 'solid-js';
+import {
+  createComputed,
+  createMemo,
+  createRoot,
+  createSignal,
+  mapArray,
+} from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const worker = vi.hoisted(() => ({
@@ -479,5 +485,48 @@ describe('createAgentSessionFeed live updates', () => {
       text: 'partial then more',
     });
     expect(feed.working()).toBe(false);
+  });
+
+  it('does not suspend session() while the first fetch runs after a pending open', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    worker.getSession = async () => {
+      await gate;
+      return {
+        isErr: () => false,
+        value: {
+          id: 'session',
+          name: 'Agent Session',
+          modifiedAt: '2026-08-24T12:00:00Z',
+          harness: 'claude-code',
+        },
+      };
+    };
+
+    const { createAgentSessionFeed } = await import(
+      './create-agent-session-feed'
+    );
+
+    let dispose!: () => void;
+    let setSessionId!: (id: string | undefined) => void;
+    const feed = createRoot((cleanup) => {
+      dispose = cleanup;
+      const [sessionId, setId] = createSignal<string | undefined>(undefined);
+      setSessionId = setId;
+      return createAgentSessionFeed(sessionId);
+    });
+
+    expect(feed.session()).toBeUndefined();
+    setSessionId('session');
+    // The fetch is in flight. Reading session() must not throw a promise
+    // (the unguarded `resource.latest` path suspends until first resolve).
+    expect(feed.session()).toBeUndefined();
+    release();
+    await flush();
+    await flush();
+    expect(feed.session()?.id).toBe('session');
+    dispose();
   });
 });
