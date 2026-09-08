@@ -99,18 +99,18 @@ vi.mock('@queries/agents/models', async (importOriginal) => {
     await importOriginal<typeof import('@queries/agents/models')>();
   return {
     ...actual,
-    useAgentModelsQueries: vi.fn((
-      targets: () => { harness: string; harnessId?: string }[]
-    ) =>
-      targets().map(
-        (target) =>
-          modelMocks.queries[modelTargetKey(target)] ?? {
-            isPending: true,
-            isError: false,
-            isSuccess: false,
-            refetch: vi.fn(),
-          }
-      )),
+    useAgentModelsQueries: vi.fn(
+      (targets: () => { harness: string; harnessId?: string }[]) =>
+        targets().map(
+          (target) =>
+            modelMocks.queries[modelTargetKey(target)] ?? {
+              isPending: true,
+              isError: false,
+              isSuccess: false,
+              refetch: vi.fn(),
+            }
+        )
+    ),
   };
 });
 
@@ -282,10 +282,12 @@ describe('Agents', () => {
       cursorMocks.status.data.registered = true;
       let resolveModels!: (models: LoadAgentModelsResponse) => void;
       let rejectModels!: (error: Error) => void;
-      const response = new Promise<LoadAgentModelsResponse>((resolve, reject) => {
-        resolveModels = resolve;
-        rejectModels = reject;
-      });
+      const response = new Promise<LoadAgentModelsResponse>(
+        (resolve, reject) => {
+          resolveModels = resolve;
+          rejectModels = reject;
+        }
+      );
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
@@ -324,10 +326,14 @@ describe('Agents', () => {
       if (outcome === 'error') {
         rejectModels(new Error('Cursor is unavailable'));
         await waitFor(() =>
-          expect(screen.getByText(/Could not load models for Cursor/)).toBeTruthy()
+          expect(
+            screen.getByText(/Could not load models for Cursor/)
+          ).toBeTruthy()
         );
         expect(screen.queryByText('Settings suspended')).toBeNull();
-        expect(screen.getByRole('button', { name: 'Retry models for Cursor' })).toBeTruthy();
+        expect(
+          screen.getByRole('button', { name: 'Retry models for Cursor' })
+        ).toBeTruthy();
       } else {
         resolveModels({
           status: 'available',

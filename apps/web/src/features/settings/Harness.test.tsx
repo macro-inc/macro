@@ -189,10 +189,12 @@ describe('Harness', () => {
       mocks.status.data.registered = true;
       let resolveModels!: (models: LoadAgentModelsResponse) => void;
       let rejectModels!: (error: Error) => void;
-      const response = new Promise<LoadAgentModelsResponse>((resolve, reject) => {
-        resolveModels = resolve;
-        rejectModels = reject;
-      });
+      const response = new Promise<LoadAgentModelsResponse>(
+        (resolve, reject) => {
+          resolveModels = resolve;
+          rejectModels = reject;
+        }
+      );
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
