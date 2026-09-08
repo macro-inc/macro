@@ -195,7 +195,7 @@ async fn set_entity_favorite_preserves_the_toggle_and_delegates_to_favorites() {
         .execute(
             r#"
             mutation {
-              setEntityFavorite(
+              setFavorite(
                 entity: { type: DOCUMENT, id: "document-1" }
                 favorite: true
               ) {
@@ -222,7 +222,7 @@ async fn set_entity_favorite_preserves_the_toggle_and_delegates_to_favorites() {
     assert_eq!(
         response.data,
         value!({
-            "setEntityFavorite": {
+            "setFavorite": {
                 "result": {
                     "__typename": "GraphqlMutationSuccess",
                     "effects": [{ "__typename": "SoupUpdated" }],
@@ -249,6 +249,35 @@ async fn set_entity_favorite_preserves_the_toggle_and_delegates_to_favorites() {
             entity_type: EntityType::Document,
             entity_id: "document-1".to_string(),
             favorite: true,
+        })
+    );
+}
+
+#[tokio::test]
+async fn set_entity_favorite_retains_the_legacy_result_shape() {
+    let service = Arc::new(CapturingService::default());
+    let response = schema(service)
+        .execute(
+            r#"
+            mutation {
+              setEntityFavorite(
+                entity: { type: DOCUMENT, id: "document-1" }
+                favorite: false
+              ) {
+                __typename
+              }
+            }
+            "#,
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data,
+        value!({
+            "setEntityFavorite": {
+                "__typename": "GraphqlMutationSuccess",
+            }
         })
     );
 }

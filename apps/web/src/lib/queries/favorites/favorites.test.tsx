@@ -128,7 +128,7 @@ describe('favorites transport', () => {
     });
     mocks.graphqlSetMutateAsync.mockResolvedValue({
       data: {
-        setEntityFavorite: {
+        setFavorite: {
           __typename: 'SetFavoritePayload',
           result: { __typename: 'GraphqlMutationSuccess' },
           favorite: null,

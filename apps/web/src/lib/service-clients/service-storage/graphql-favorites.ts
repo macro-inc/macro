@@ -138,7 +138,7 @@ export function executeGraphqlSetFavoriteMutation(
     .field('user')
     .field('favorites');
   const optimisticData: SetFavoriteMutation = {
-    setEntityFavorite: {
+    setFavorite: {
       __typename: 'SetFavoritePayload',
       result: { __typename: 'GraphqlMutationSuccess' },
       favorite: favorite ? optimisticFavorite : null,

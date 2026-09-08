@@ -21,7 +21,7 @@ query Favorites {
 }
 
 mutation SetFavorite($entity: EntityRefInput!, $favorite: Boolean!) {
-  setEntityFavorite(entity: $entity, favorite: $favorite) {
+  setFavorite(entity: $entity, favorite: $favorite) {
     __typename
     result {
       __typename

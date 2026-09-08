@@ -96,9 +96,13 @@ type CompleteMutationRoot {
 	"""
 	duplicateEntities(inputs: [DuplicateEntityInput!]!): EntityMutationPayload!
 	"""
-	Add or remove an entity from the actor's favorites.
+	Add or remove an entity and return the generic entity mutation result.
 	"""
-	setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): SetFavoritePayload!
+	setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!
+	"""
+	Add or remove an entity and return the persisted favorite record.
+	"""
+	setFavorite(entity: EntityRefInput!, favorite: Boolean!): SetFavoritePayload!
 	"""
 	Persist the authenticated user's complete favorites order and return the authoritative list.
 	"""

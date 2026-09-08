@@ -67,7 +67,7 @@ describe('GraphQL favorites queries', () => {
     executeMutation = vi.fn(() => ({
       toPromise: async () => ({
         data: {
-          setEntityFavorite: {
+          setFavorite: {
             __typename: 'SetFavoritePayload' as const,
             result: { __typename: 'GraphqlMutationSuccess' as const },
             favorite: graphqlFavorite('document-1', 1),
@@ -130,7 +130,7 @@ describe('GraphQL favorites queries', () => {
       {
         normalizedCacheOptimistic: expect.objectContaining({
           optimisticResponse: {
-            setEntityFavorite: expect.objectContaining({
+            setFavorite: expect.objectContaining({
               __typename: 'SetFavoritePayload',
               result: { __typename: 'GraphqlMutationSuccess' },
               favorite: expect.objectContaining({
@@ -168,7 +168,7 @@ describe('GraphQL favorites queries', () => {
     executeMutation.mockReturnValue({
       toPromise: async () => ({
         data: {
-          setEntityFavorite: {
+          setFavorite: {
             __typename: 'SetFavoritePayload' as const,
             result: { __typename: 'GraphqlMutationSuccess' as const },
             favorite: graphqlFavorite('document-3', 2),

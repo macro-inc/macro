@@ -113,14 +113,14 @@ function mutationError(
   result: OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables>
 ): OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables> {
   if (result.error) return result;
-  const payload = result.data?.setEntityFavorite;
+  const payload = result.data?.setFavorite;
   const mutationResult = payload?.result;
   const message =
     mutationResult?.__typename === 'GraphqlMutationError'
       ? mutationResult.message
       : mutationResult
         ? undefined
-        : 'setEntityFavorite mutation returned no data';
+        : 'setFavorite mutation returned no data';
   if (!message) return result;
   return {
     ...result,

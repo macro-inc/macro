@@ -80,7 +80,7 @@ describe('favorites GraphQL mutations', () => {
       mutationMock.mockReturnValue({
         toPromise: async () => ({
           data: {
-            setEntityFavorite: {
+            setFavorite: {
               __typename: 'SetFavoritePayload',
               result: { __typename: 'GraphqlMutationSuccess' },
               favorite: null,
@@ -110,7 +110,7 @@ describe('favorites GraphQL mutations', () => {
           normalizedCacheOptimistic: {
             uuid: setFavoriteOptimisticMutationUuid(input),
             optimisticResponse: {
-              setEntityFavorite: {
+              setFavorite: {
                 __typename: 'SetFavoritePayload',
                 result: { __typename: 'GraphqlMutationSuccess' },
                 favorite: favorite
