@@ -15,6 +15,7 @@ import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import {
   ChannelAvatar,
   ChannelCallIndicator,
+  ChannelRailItemContextMenu,
   ConversationCard,
   IncomingCallActions,
 } from './ChannelRailItems';
@@ -69,45 +70,47 @@ function ChannelOption(props: { channel: ChannelEntity }) {
   const item = useChannelRailItemState(() => props.channel.id);
 
   return (
-    <div
-      id={item().domId}
-      role="treeitem"
-      tabIndex={-1}
-      class={cn(
-        'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent touch:focus-visible:ring-0',
-        isDirectMessage(props.channel) ? 'min-h-10 py-2' : 'h-8',
-        item().selected && !isTouchDevice() && 'bg-active text-ink',
-        (!item().selected || isTouchDevice()) && 'text-ink-muted',
-        !item().selected &&
-          !isTouchDevice() &&
-          item().focused &&
-          'bg-hover text-ink',
-        !item().selected &&
-          !isTouchDevice() &&
-          !item().focused &&
-          'hover:bg-hover hover:text-ink'
-      )}
-      aria-current={item().selected ? 'page' : undefined}
-      onClick={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
-    >
-      <ChannelAvatar channel={props.channel} />
-      <span class="min-w-0 flex-1 truncate text-sm font-medium">
-        {props.channel.name}
-      </span>
-      <ChannelCallIndicator
-        status={item().incomingCallId ? undefined : item().callStatus}
-      />
-      <IncomingCallActions
-        callId={item().incomingCallId}
-        channelId={props.channel.id}
-      />
-      <Show when={item().unread}>
-        <span
-          aria-label="Unread"
-          class="size-2 shrink-0 rounded-full bg-accent"
+    <ChannelRailItemContextMenu channel={props.channel} class="block w-full">
+      <div
+        id={item().domId}
+        role="treeitem"
+        tabIndex={-1}
+        class={cn(
+          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent touch:focus-visible:ring-0',
+          isDirectMessage(props.channel) ? 'min-h-10 py-2' : 'h-8',
+          item().selected && !isTouchDevice() && 'bg-active text-ink',
+          (!item().selected || isTouchDevice()) && 'text-ink-muted',
+          !item().selected &&
+            !isTouchDevice() &&
+            item().focused &&
+            'bg-hover text-ink',
+          !item().selected &&
+            !isTouchDevice() &&
+            !item().focused &&
+            'hover:bg-hover hover:text-ink'
+        )}
+        aria-current={item().selected ? 'page' : undefined}
+        onClick={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
+      >
+        <ChannelAvatar channel={props.channel} />
+        <span class="min-w-0 flex-1 truncate text-sm font-medium">
+          {props.channel.name}
+        </span>
+        <ChannelCallIndicator
+          status={item().incomingCallId ? undefined : item().callStatus}
         />
-      </Show>
-    </div>
+        <IncomingCallActions
+          callId={item().incomingCallId}
+          channelId={props.channel.id}
+        />
+        <Show when={item().unread}>
+          <span
+            aria-label="Unread"
+            class="size-2 shrink-0 rounded-full bg-accent"
+          />
+        </Show>
+      </div>
+    </ChannelRailItemContextMenu>
   );
 }
 
@@ -247,18 +250,23 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
   const item = useChannelRailItemState(() => props.channel.id);
 
   return (
-    <ConversationCard
-      id={item().domId}
-      channel={props.channel}
-      senderId={props.channel.latestRootMessage?.senderId}
-      mentionedCurrentUser={channelMentionsUser(props.channel, currentUserId())}
-      unread={item().unread}
-      callStatus={item().callStatus}
-      incomingCallId={item().incomingCallId}
-      selected={item().selected}
-      focused={item().focused}
-      onActivate={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
-    />
+    <ChannelRailItemContextMenu channel={props.channel} class="block w-full">
+      <ConversationCard
+        id={item().domId}
+        channel={props.channel}
+        senderId={props.channel.latestRootMessage?.senderId}
+        mentionedCurrentUser={channelMentionsUser(
+          props.channel,
+          currentUserId()
+        )}
+        unread={item().unread}
+        callStatus={item().callStatus}
+        incomingCallId={item().incomingCallId}
+        selected={item().selected}
+        focused={item().focused}
+        onActivate={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
+      />
+    </ChannelRailItemContextMenu>
   );
 }
 
