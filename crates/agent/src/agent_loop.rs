@@ -15,6 +15,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
 
 const DEFAULT_MAX_TURNS: usize = 16;
 const DEFAULT_MAX_TOKENS: u64 = 16_000;
@@ -37,6 +38,9 @@ pub struct AgentLoop {
     conversation_id: Option<String>,
     /// The agent name spans carry; defaults to the usage context's feature.
     agent_name: Option<String>,
+    /// Whether this loop enriches the runtime's GenAI spans (see
+    /// [`Self::with_genai_telemetry`]).
+    genai_telemetry: bool,
 }
 
 impl AgentLoop {
@@ -56,6 +60,7 @@ impl AgentLoop {
             user_tool_finisher: None,
             conversation_id: None,
             agent_name: None,
+            genai_telemetry: true,
         }
     }
 
@@ -107,6 +112,22 @@ impl AgentLoop {
     /// the usage context's feature (`chat`, `automation`, …).
     pub fn with_agent_name<S: Into<String>>(mut self, agent_name: S) -> Self {
         self.agent_name = Some(agent_name.into());
+        self
+    }
+
+    /// Whether this loop records GenAI telemetry on the runtime's spans: the
+    /// `invoke_agent` span with the run's input, output and usage, and the
+    /// content, tool definitions and conversation id on each `chat` span. On
+    /// by default.
+    ///
+    /// Off for a loop whose turns are already traced from outside - Macro's
+    /// in-process agent session runtime, whose ACP frames the session actor
+    /// projects onto GenAI spans for every harness alike. With it off the run
+    /// is still wrapped in a span (so the runtime adopts it rather than
+    /// opening an `invoke_agent` of its own), but that span carries no GenAI
+    /// fields and nothing is recorded onto the runtime's spans.
+    pub fn with_genai_telemetry(mut self, enabled: bool) -> Self {
+        self.genai_telemetry = enabled;
         self
     }
 
@@ -278,6 +299,7 @@ impl AgentLoop {
                 .clone()
                 .unwrap_or_else(|| usage_ctx.feature.to_string()),
             ContentPolicy::from_env(),
+            self.genai_telemetry,
         );
         let agent = build(
             handle,
@@ -361,23 +383,33 @@ impl Session {
     /// The returned stream yields [`StreamPart`] items compatible with the
     /// existing DCS consumer code.
     ///
-    /// This span is the run's GenAI `invoke_agent` span: rig adopts the
-    /// current span instead of opening its own, so the semconv fields are
-    /// declared here and the run's usage and output are recorded onto it by
-    /// the stream driver (see `crate::telemetry`). It stays open until the
-    /// returned stream ends.
-    #[tracing::instrument(
-        name = "invoke_agent",
-        skip_all,
-        fields(
-            gen_ai.operation.name = "invoke_agent",
-            gen_ai.agent.name = %self.telemetry.agent_name(),
-            gen_ai.conversation.id = self.telemetry.conversation_id(),
-            gen_ai.provider.name = self.telemetry.provider_name(),
-            gen_ai.request.model = self.telemetry.model_name(),
-        )
-    )]
+    /// The run is wrapped in a span the runtime adopts instead of opening an
+    /// `invoke_agent` of its own. With GenAI telemetry on (the default) that
+    /// span *is* the run's `invoke_agent` span: the semconv fields are declared
+    /// on it and the run's usage and output are recorded onto it by the stream
+    /// driver (see `crate::telemetry`). With it off the span is a plain
+    /// `agent.turn`, traced from outside instead. Either way it stays open
+    /// until the returned stream ends.
     pub async fn send_message(
+        &mut self,
+        messages: Vec<Message>,
+    ) -> Result<ChatCompletionStream<'_>, AgentError> {
+        let span = if self.telemetry.enabled() {
+            tracing::info_span!(
+                "invoke_agent",
+                gen_ai.operation.name = "invoke_agent",
+                gen_ai.agent.name = %self.telemetry.agent_name(),
+                gen_ai.conversation.id = self.telemetry.conversation_id(),
+                gen_ai.provider.name = self.telemetry.provider_name(),
+                gen_ai.request.model = self.telemetry.model_name(),
+            )
+        } else {
+            tracing::info_span!("agent.turn", agent.name = %self.telemetry.agent_name())
+        };
+        self.send_message_in(messages).instrument(span).await
+    }
+
+    async fn send_message_in(
         &mut self,
         messages: Vec<Message>,
     ) -> Result<ChatCompletionStream<'_>, AgentError> {

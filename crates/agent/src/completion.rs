@@ -116,7 +116,12 @@ pub async fn complete_with_history<M: ToString>(
 /// GenAI telemetry for a one-shot completion: named after the feature making
 /// it, reporting the routed model, with no conversation (a one-shot has none).
 fn telemetry_for(ctx: &UsageContext, routed: &RoutedModel<'_>) -> GenAiContext {
-    let telemetry = GenAiContext::new(None, ctx.feature.to_string(), ContentPolicy::from_env());
+    let telemetry = GenAiContext::new(
+        None,
+        ctx.feature.to_string(),
+        ContentPolicy::from_env(),
+        true,
+    );
     telemetry.set_model(routed.provider(), routed.model_name());
     telemetry
 }

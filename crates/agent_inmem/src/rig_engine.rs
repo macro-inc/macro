@@ -155,7 +155,13 @@ async fn drive_turn(
         },
     };
 
-    let mut agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
+    // GenAI telemetry stays off here: this runtime's turns and tool calls
+    // reach the session actor as ACP frames, and the actor projects those onto
+    // `invoke_agent` / `execute_tool` spans for every harness alike. Enriching
+    // rig's spans too would report each turn twice.
+    let mut agent_loop = AgentLoop::new(base_context.recorder.clone())
+        .with_model(&model)
+        .with_genai_telemetry(false);
     if let Some(reviewer) = reviewer {
         agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(
             Arc::clone(&toolset),

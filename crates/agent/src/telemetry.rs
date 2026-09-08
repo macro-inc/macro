@@ -55,6 +55,9 @@ struct Inner {
     /// Label for the agent, e.g. the AI feature driving it.
     agent_name: String,
     policy: ContentPolicy,
+    /// Whether anything is recorded at all. Off, every `record_*` is a no-op
+    /// and the model call's span is never parked.
+    enabled: bool,
     /// The routed `(provider, model)`, set once routing has decided.
     model: OnceLock<(String, String)>,
     /// The `chat` span of the model call in flight: parked by
@@ -68,14 +71,22 @@ impl GenAiContext {
         conversation_id: Option<String>,
         agent_name: String,
         policy: ContentPolicy,
+        enabled: bool,
     ) -> Self {
         Self(Arc::new(Inner {
             conversation_id,
             agent_name,
             policy,
+            enabled,
             model: OnceLock::new(),
             chat_span: Mutex::new(None),
         }))
+    }
+
+    /// Whether this context records anything (see
+    /// [`crate::AgentLoop::with_genai_telemetry`]).
+    pub(crate) fn enabled(&self) -> bool {
+        self.0.enabled
     }
 
     pub(crate) fn conversation_id(&self) -> Option<&str> {
@@ -103,6 +114,9 @@ impl GenAiContext {
     /// `chat` span when called from [`TracedModel`]) and park that span for
     /// [`Self::record_response`].
     fn record_request(&self, request: &CompletionRequest) {
+        if !self.0.enabled {
+            return;
+        }
         let span = tracing::Span::current();
         let policy = &self.0.policy;
 
@@ -176,7 +190,7 @@ impl GenAiContext {
 
     /// Record the prompt of an agent run as the agent span's input.
     pub(crate) fn record_agent_input(&self, agent_span: &tracing::Span, prompt: &Message) {
-        if !self.0.policy.capture {
+        if !self.0.enabled || !self.0.policy.capture {
             return;
         }
         let bounded = bound_messages(message_json(prompt), &self.0.policy.limits);
@@ -195,6 +209,9 @@ impl GenAiContext {
         output: &str,
         usage: &Usage,
     ) {
+        if !self.0.enabled {
+            return;
+        }
         agent_span.set_u64(attr::USAGE_INPUT_TOKENS, usage.input_tokens);
         agent_span.set_u64(attr::USAGE_OUTPUT_TOKENS, usage.output_tokens);
         if !self.0.policy.capture {

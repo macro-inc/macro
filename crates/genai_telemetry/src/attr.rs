@@ -66,6 +66,18 @@ pub const MACRO_INPUT_MESSAGES_OMITTED: &str = "macro.genai.input_messages_omitt
 /// Macro-specific: `true` when any content attribute on the span was cut to fit
 /// the size budget (see [`crate::Limits`]).
 pub const MACRO_CONTENT_TRUNCATED: &str = "macro.genai.content_truncated";
+/// Macro-specific: tokens in the agent's context window after a turn, as the
+/// harness reported it (ACP `usage_update.used`).
+pub const MACRO_CONTEXT_USED_TOKENS: &str = "macro.genai.context.used_tokens";
+/// Macro-specific: the agent's context window size in tokens (ACP
+/// `usage_update.size`).
+pub const MACRO_CONTEXT_SIZE_TOKENS: &str = "macro.genai.context.size_tokens";
+/// Macro-specific: the coarse ACP tool kind (`execute`, `edit`, `read`, …).
+pub const MACRO_TOOL_KIND: &str = "macro.genai.tool.kind";
+/// Macro-specific: the human-readable title the harness gave a tool call.
+pub const MACRO_TOOL_TITLE: &str = "macro.genai.tool.title";
+/// Macro-specific: the MCP server a tool was reached through, when it was.
+pub const MACRO_MCP_SERVER: &str = "macro.genai.mcp.server";
 
 /// Well-known [`OPERATION_NAME`] values.
 pub mod operation {
@@ -89,6 +101,14 @@ pub mod finish_reason {
     pub const STOP: &str = "stop";
     /// The model stopped to call one or more tools.
     pub const TOOL_CALL: &str = "tool_call";
+    /// The model hit a token or request limit.
+    pub const LENGTH: &str = "length";
+    /// The model refused to continue.
+    pub const CONTENT_FILTER: &str = "content_filter";
+    /// The run failed before the model finished.
+    pub const ERROR: &str = "error";
+    /// The run was cancelled by the caller.
+    pub const CANCELLED: &str = "cancelled";
 }
 
 /// Span names used for the semconv spans this workspace opens or adopts. The

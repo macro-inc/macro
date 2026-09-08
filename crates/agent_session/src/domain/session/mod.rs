@@ -5,6 +5,7 @@ pub(crate) mod actors;
 // choice: logic in `session`, vocabulary in `types`.
 #[allow(clippy::module_inception)]
 mod session;
+pub(crate) mod telemetry;
 mod types;
 
 #[cfg(test)]

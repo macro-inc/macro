@@ -55,7 +55,8 @@ use super::model::{
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionNameGenerator,
     AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
-    NoOpAgentSessionNameGenerator, NoOpTurnObserver, SessionOwnership, SessionTurnObserver,
+    NoOpAgentSessionNameGenerator, NoOpToolCatalog, NoOpTurnObserver, SessionOwnership,
+    SessionToolCatalog, SessionTurnObserver,
 };
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 use super::session::{CloseReason, Input};
@@ -254,6 +255,9 @@ pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGen
     /// Told when a session's turn ends or its actor stops - the harness's
     /// prompt-queue gate. Erased so wiring it is not another type parameter.
     turn_observer: Arc<dyn SessionTurnObserver>,
+    /// Lists a session's MCP tools for its telemetry. Erased like the
+    /// observer, for the same reason.
+    tool_catalog: Arc<dyn SessionToolCatalog>,
     active: Arc<ActiveSessions>,
     /// This service's identity in the session-management lease. Minted at
     /// construction: a restarted process is a new replica, and its claims
@@ -278,6 +282,7 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             realtime,
             name_generator: NoOpAgentSessionNameGenerator,
             turn_observer: Arc::new(NoOpTurnObserver),
+            tool_catalog: Arc::new(NoOpToolCatalog),
             active: Arc::new(DashMap::new()),
             replica: ReplicaId::mint(),
             tasks: TaskTracker::new(),
@@ -300,6 +305,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             realtime: self.realtime,
             name_generator,
             turn_observer: self.turn_observer,
+            tool_catalog: self.tool_catalog,
             active: self.active,
             replica: self.replica,
             tasks: self.tasks,
@@ -313,6 +319,14 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
     #[must_use]
     pub fn with_turn_observer(mut self, turn_observer: Arc<dyn SessionTurnObserver>) -> Self {
         self.turn_observer = turn_observer;
+        self
+    }
+
+    /// Replace the no-op tool catalog with one that lists a session's MCP
+    /// tools, so its turns' spans carry the tools the agent could choose from.
+    #[must_use]
+    pub fn with_tool_catalog(mut self, tool_catalog: Arc<dyn SessionToolCatalog>) -> Self {
+        self.tool_catalog = tool_catalog;
         self
     }
 
@@ -427,6 +441,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             command_rx,
             attachment.handshake,
             Arc::clone(&self.turn_observer),
+            Arc::clone(&self.tool_catalog),
         );
         self.tasks.spawn(
             run_session(
