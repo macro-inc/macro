@@ -50,7 +50,8 @@ import { TeamStep } from './TeamStep';
 /**
  * The full-screen onboarding flow new users land in after signup (desktop
  * `/onboarding`, also rendered in place on /login). Forward-only with
- * per-step skips; the server orchestrates imports (reads of an active
+ * per-step skips (except the team step, which must be completed); the
+ * server orchestrates imports (reads of an active
  * onboarding start due gather runs with auto-import). Finishing the last
  * step marks onboarding complete.
  */
@@ -189,9 +190,8 @@ function buildSteps(
       title: 'Macro is meant for teams',
       subtitle:
         'Macro is built to be used with others. Invite your team to share docs, channels, and context from day one.',
-      render: (controls) => (
-        <TeamStep onContinue={controls.next} onSkip={controls.skip} />
-      ),
+      // Mandatory — the only step without a skip. Users leave it on a team.
+      render: (controls) => <TeamStep onContinue={controls.next} />,
     },
     {
       // Pure theater while gathers land; auto-advances into the summary via

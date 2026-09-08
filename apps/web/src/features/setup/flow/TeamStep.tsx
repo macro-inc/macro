@@ -24,12 +24,7 @@ import {
   Index,
   Show,
 } from 'solid-js';
-import {
-  ContinueButton,
-  deriveTeamName,
-  FormInput,
-  SkipButton,
-} from './shared';
+import { ContinueButton, deriveTeamName, FormInput } from './shared';
 import {
   prefillableTeammates,
   removeInviteSlot,
@@ -37,18 +32,20 @@ import {
 } from './teamInvites';
 
 /** Set up your team: already a member → confirmation, pending invites →
- * join, otherwise create (with a domain-derived name and same-domain
- * teammates pre-added to the invite list). */
-export function TeamStep(props: {
-  onContinue: () => void;
-  onSkip: () => void;
-}) {
+ * join (or create your own instead), otherwise create (with a domain-derived
+ * name and same-domain teammates pre-added to the invite list).
+ *
+ * Mandatory: there is no skip. The step only advances once the user is on a
+ * team — auto-joined, invite accepted, or created here. */
+export function TeamStep(props: { onContinue: () => void }) {
   const analytics = useAnalytics();
   const teamsQuery = useUserTeamsQuery();
   const invitesQuery = useUserInvitesQuery();
 
   const team = createMemo(() => teamsQuery.data?.[0]);
   const invites = createMemo(() => invitesQuery.data?.invites ?? []);
+  // A user with pending invites who would rather start their own team.
+  const [createInstead, setCreateInstead] = createSignal(false);
 
   // One-shot on the FIRST resolved teams payload, so a create/join later
   // in this step doesn't also read as auto-joined.
@@ -69,10 +66,15 @@ export function TeamStep(props: {
       }
     >
       <Show
-        when={invites().length === 0}
-        fallback={<InvitesPanel invites={invites()} onSkip={props.onSkip} />}
+        when={invites().length === 0 || createInstead()}
+        fallback={
+          <InvitesPanel
+            invites={invites()}
+            onCreateInstead={() => setCreateInstead(true)}
+          />
+        }
       >
-        <CreateTeamForm onContinue={props.onContinue} onSkip={props.onSkip} />
+        <CreateTeamForm onContinue={props.onContinue} />
       </Show>
     </Show>
   );
@@ -101,10 +103,11 @@ function OnTeamPanel(props: { name?: string; onContinue: () => void }) {
   );
 }
 
-/** Pending team invites — join one and move on. */
+/** Pending team invites — join one and move on, or create your own team
+ * instead. Not skippable: one of the two has to happen. */
 function InvitesPanel(props: {
   invites: TeamInviteDetails[];
-  onSkip: () => void;
+  onCreateInstead: () => void;
 }) {
   const analytics = useAnalytics();
   const joinTeam = useJoinTeamMutation({
@@ -133,7 +136,15 @@ function InvitesPanel(props: {
           </div>
         )}
       </For>
-      <SkipButton onClick={props.onSkip} />
+      <Button
+        variant="ghost"
+        size="sm"
+        class="self-center text-ink-muted"
+        disabled={joinTeam.isPending}
+        onClick={props.onCreateInstead}
+      >
+        Create a new team instead
+      </Button>
     </div>
   );
 }
@@ -142,7 +153,7 @@ function InvitesPanel(props: {
  * (remove to opt them out) when the user has a custom domain; the plain form
  * otherwise. Waits for contacts and the domain suggestion so the form mounts
  * once, fully formed — nothing rewrites the user's rows afterwards. */
-function CreateTeamForm(props: { onContinue: () => void; onSkip: () => void }) {
+function CreateTeamForm(props: { onContinue: () => void }) {
   const email = useEmail();
   const contacts = useContacts();
   const contactsQuery = useContactsQuery();
@@ -167,7 +178,6 @@ function CreateTeamForm(props: { onContinue: () => void; onSkip: () => void }) {
           ownEmail: email(),
         })}
         onContinue={props.onContinue}
-        onSkip={props.onSkip}
       />
     </Show>
   );
@@ -179,7 +189,6 @@ function TeamForm(props: {
   domain: string | undefined;
   prefilledTeammates: string[];
   onContinue: () => void;
-  onSkip: () => void;
 }) {
   const analytics = useAnalytics();
   const email = useEmail();
@@ -321,7 +330,6 @@ function TeamForm(props: {
         disabled={name().trim().length === 0 || createTeam.isPending}
         onClick={() => void create()}
       />
-      <SkipButton onClick={props.onSkip} />
     </div>
   );
 }
