@@ -51,9 +51,15 @@ where
             let receipt = self.authorizer.authorize_favorite(&actor, &entity).await?;
             Some(self.favorites.add_favorite(&receipt).await?)
         } else {
-            self.favorites
+            // Setting an absolute state must tolerate replay after a lost response.
+            match self
+                .favorites
                 .remove_favorite_by_entity(&actor.user_id, &entity)
-                .await?;
+                .await
+            {
+                Ok(()) | Err(FavoritesError::NotFound) => {}
+                Err(error) => return Err(error),
+            }
             None
         };
 
@@ -88,12 +94,12 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::EmailThread
         | EntityType::Call
         | EntityType::ForeignEntity
-        | EntityType::CrmCompany => Ok(()),
+        | EntityType::CrmCompany
+        | EntityType::CrmContact => Ok(()),
         EntityType::User
         | EntityType::Team
         | EntityType::ChannelMessage
         | EntityType::StaticFile
-        | EntityType::CrmContact
         | EntityType::CalendarEvent
         | EntityType::Reminder
         | EntityType::Skill

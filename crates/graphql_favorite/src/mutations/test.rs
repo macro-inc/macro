@@ -98,6 +98,7 @@ struct ReorderCall {
 struct CapturingService {
     set_call: Mutex<Option<SetCall>>,
     reorder_call: Mutex<Option<ReorderCall>>,
+    set_error: Mutex<Option<FavoritesError>>,
 }
 
 impl FavoritesMutationService for CapturingService {
@@ -114,6 +115,14 @@ impl FavoritesMutationService for CapturingService {
             entity_id: entity.entity_id.to_string(),
             favorite,
         });
+        if let Some(error) = self
+            .set_error
+            .lock()
+            .expect("set error lock poisoned")
+            .take()
+        {
+            return Err(error);
+        }
         let persisted_favorite = favorite.then(|| Favorite {
             entity_type: entity.entity_type,
             entity_id: entity.entity_id.to_string(),
@@ -279,6 +288,57 @@ async fn set_entity_favorite_retains_the_legacy_result_shape() {
                 "__typename": "GraphqlMutationSuccess",
             }
         })
+    );
+}
+
+#[tokio::test]
+async fn set_favorite_failures_are_transport_errors_for_durable_replay() {
+    for error in [
+        FavoritesError::Unauthorized,
+        FavoritesError::NotFound,
+        FavoritesError::BadRequest("collection is full".to_string()),
+        FavoritesError::UnsupportedEntityType(EntityType::User),
+    ] {
+        let service = Arc::new(CapturingService {
+            set_error: Mutex::new(Some(error)),
+            ..Default::default()
+        });
+        let response = schema(service)
+            .execute(
+                r#"mutation {
+                    setFavorite(entity: { type: DOCUMENT, id: "document-1" }, favorite: true) {
+                        result { __typename }
+                        favorite { id }
+                    }
+                }"#,
+            )
+            .await;
+
+        assert_eq!(response.errors.len(), 1, "{response:?}");
+        assert_eq!(response.data, value!(null));
+    }
+}
+
+#[tokio::test]
+async fn set_entity_favorite_retains_the_legacy_error_union() {
+    let service = Arc::new(CapturingService {
+        set_error: Mutex::new(Some(FavoritesError::Unauthorized)),
+        ..Default::default()
+    });
+    let response = schema(service)
+        .execute(
+            r#"mutation {
+                setEntityFavorite(entity: { type: DOCUMENT, id: "document-1" }, favorite: true) {
+                    __typename
+                }
+            }"#,
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data,
+        value!({ "setEntityFavorite": { "__typename": "GraphqlMutationError" } })
     );
 }
 
