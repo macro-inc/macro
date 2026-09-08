@@ -89,7 +89,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                 request = request.query(&[("pageToken", token)]);
             }
             let page: GoogleCalendarListResponse =
-                send_google(GoogleRequestKind::Read, request).await?;
+                send_google(GoogleRequestKind::AccountRead, request).await?;
             result.extend(page.items);
             page_token = page.next_page_token;
             if page_token.is_none() {
@@ -335,7 +335,15 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
 /// stays permanent so it does not retry forever.
 #[derive(Clone, Copy)]
 enum GoogleRequestKind {
+    /// A read scoped to one calendar. Retrying is safe because the backfill
+    /// loop isolates a calendar that keeps failing, so a deterministic 4xx is
+    /// bounded to a badge rather than the whole account.
     Read,
+    /// A read at account scope (the calendar list). Nothing isolates it, so a
+    /// deterministic unknown 4xx retried here would hold the account at
+    /// `pending` indefinitely; it stays terminal like a mutation. The
+    /// undocumented 412 is still classified retryable regardless of kind.
+    AccountRead,
     Mutation,
 }
 
@@ -397,7 +405,9 @@ fn provider_response_error(
     } else {
         match request_kind {
             GoogleRequestKind::Read => GoogleProviderErrorKind::Transient,
-            GoogleRequestKind::Mutation => GoogleProviderErrorKind::Permanent,
+            GoogleRequestKind::AccountRead | GoogleRequestKind::Mutation => {
+                GoogleProviderErrorKind::Permanent
+            }
         }
     };
     let message = provider_error_message(payload.as_ref(), status, &reasons);

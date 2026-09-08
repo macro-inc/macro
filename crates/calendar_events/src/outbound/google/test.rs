@@ -410,6 +410,26 @@ fn unknown_client_errors_are_retryable_on_reads_but_permanent_on_mutations() {
     assert_eq!(mutation.kind(), GoogleProviderErrorKind::Permanent);
 }
 
+/// The calendar list has no per-calendar isolation to bound a deterministic
+/// failure, so an unknown 4xx there stays terminal like a mutation, while the
+/// undocumented 412 is still retried at account scope.
+#[test]
+fn unknown_client_errors_on_the_account_read_stay_permanent() {
+    let forbidden = provider_response_error(
+        GoogleRequestKind::AccountRead,
+        StatusCode::FORBIDDEN,
+        r#"{"error":{"message":"Forbidden","errors":[{"reason":"forbidden"}]}}"#,
+    );
+    assert_eq!(forbidden.kind(), GoogleProviderErrorKind::Permanent);
+
+    let precondition = provider_response_error(
+        GoogleRequestKind::AccountRead,
+        StatusCode::PRECONDITION_FAILED,
+        r#"{"error":{"message":"Precondition check failed."}}"#,
+    );
+    assert_eq!(precondition.kind(), GoogleProviderErrorKind::Transient);
+}
+
 #[test]
 fn provider_error_keeps_google_reason_strings() {
     let error = provider_response_error(
