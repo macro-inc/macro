@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   harnessDisplayName,
   isManagedHarness,
+  modelPickerTabAction,
   modelPillLabel,
   overrideModelOptions,
   type PersonaOption,
@@ -156,5 +157,30 @@ describe('modelPillLabel', () => {
 
   it('shows a neutral label when nothing is known', () => {
     expect(modelPillLabel('', CODER, MODELS)).toBe('Default model');
+  });
+});
+
+describe('modelPickerTabAction', () => {
+  const tab = { key: 'Tab', shiftKey: false };
+  const shiftTab = { key: 'Tab', shiftKey: true };
+  const modelRow = { getAttribute: () => null };
+  const moreModels = {
+    getAttribute: (name: string) => (name === 'aria-haspopup' ? 'menu' : null),
+  };
+
+  it('ignores keys other than Tab and Shift+Tab', () => {
+    expect(
+      modelPickerTabAction({ key: 'Enter', shiftKey: false }, modelRow)
+    ).toBeUndefined();
+    expect(modelPickerTabAction(shiftTab, modelRow)).toBeUndefined();
+  });
+
+  it('commits a highlighted model row', () => {
+    expect(modelPickerTabAction(tab, modelRow)).toBe('commit');
+  });
+
+  it('moves to submit when nothing is highlighted or More models is', () => {
+    expect(modelPickerTabAction(tab, null)).toBe('submit');
+    expect(modelPickerTabAction(tab, moreModels)).toBe('submit');
   });
 });

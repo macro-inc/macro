@@ -31,7 +31,9 @@ menu whose first row is `Agent default · <model>`, followed by at most five
 featured models; longer catalogs put the rest under a `More models` submenu.
 Changing agent resets the override. Tab order is prompt → selected agent card → Model →
 **Create Session**; the close `X` is skipped. The menu opens on Enter/Space
-and selects with arrow keys + Enter. Escape in the prompt first blurs to the
+and selects with arrow keys + Enter. Tab from the open model menu, or from the
+model pill after a choice, confirms the highlighted model (if any) and moves
+to **Create Session**. Escape in the prompt first blurs to the
 dialog, a second Escape closes it. Press **Create Session** or
 `Cmd/Ctrl+Enter`; the composer closes and the new `/app/agent/<uuid>` session
 opens while its runtime starts.

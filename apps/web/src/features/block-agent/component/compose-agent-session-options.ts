@@ -129,6 +129,22 @@ export function personaDefaultLabel(
   return `Agent default · ${name}`;
 }
 
+/**
+ * Tab (without Shift) from the model picker should land on Create Session.
+ * A highlighted model row is committed first; a "More models" submenu
+ * trigger is not a model choice, so Tab just leaves the menu.
+ */
+export function modelPickerTabAction(
+  event: { key: string; shiftKey: boolean },
+  highlighted: { getAttribute(name: string): string | null } | null | undefined
+): 'commit' | 'submit' | undefined {
+  if (event.key !== 'Tab' || event.shiftKey) return undefined;
+  if (highlighted && highlighted.getAttribute('aria-haspopup') !== 'menu') {
+    return 'commit';
+  }
+  return 'submit';
+}
+
 /** Short label for the closed model pill. */
 export function modelPillLabel(
   override: string,

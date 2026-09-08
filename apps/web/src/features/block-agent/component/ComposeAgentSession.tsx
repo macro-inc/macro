@@ -30,6 +30,7 @@ import {
   isManagedHarness,
   type ModelOption,
   type ModelShortlist,
+  modelPickerTabAction,
   modelPillLabel,
   type PersonaOption,
   personaDefaultLabel,
@@ -240,10 +241,18 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
               selectedPersona()?.harness === 'cursor' && cursorModels.isPending
             }
             onSelect={setModelOverride}
+            onTabForward={() =>
+              containerRef()
+                ?.querySelector<HTMLButtonElement>(
+                  '[data-agent-session-submit]'
+                )
+                ?.focus()
+            }
           />
         </div>
 
         <Button
+          data-agent-session-submit
           type="button"
           variant="accent"
           depth={3}
@@ -381,17 +390,76 @@ function ModelPicker(props: {
   value: string;
   loading: boolean;
   onSelect: (id: string) => void;
+  /** Tab after a model choice should land on Create Session, not the next menu row. */
+  onTabForward: () => void;
 }) {
+  const [open, setOpen] = createSignal(false);
+  let pendingSubmitFocus = false;
+  let contentEl: HTMLElement | undefined;
+  let subContentEl: HTMLElement | undefined;
+
+  const highlightedRow = () => {
+    if (!open()) return null;
+    return (
+      subContentEl?.querySelector<HTMLElement>('[data-highlighted]') ??
+      contentEl?.querySelector<HTMLElement>('[data-highlighted]') ??
+      null
+    );
+  };
+
+  const focusSubmit = () => {
+    pendingSubmitFocus = false;
+    props.onTabForward();
+  };
+
+  const handleTab = (event: KeyboardEvent) => {
+    const action = modelPickerTabAction(event, highlightedRow());
+    if (!action) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (action === 'commit') {
+      pendingSubmitFocus = true;
+      highlightedRow()?.click();
+      queueMicrotask(() => {
+        if (pendingSubmitFocus) focusSubmit();
+      });
+      return;
+    }
+    if (open()) {
+      pendingSubmitFocus = true;
+      setOpen(false);
+      return;
+    }
+    focusSubmit();
+  };
+
+  const attachTabListener = (el: HTMLElement) => {
+    el.removeEventListener('keydown', handleTab, true);
+    el.addEventListener('keydown', handleTab, true);
+  };
+
   const label = () =>
     modelPillLabel(props.value, props.persona, props.available);
   return (
-    <Dropdown placement="top-start">
+    <Dropdown
+      placement="top-start"
+      open={open()}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next && pendingSubmitFocus) {
+          queueMicrotask(() => {
+            if (pendingSubmitFocus) focusSubmit();
+          });
+        }
+      }}
+    >
       <Dropdown.Trigger
         variant="outline"
         size="sm"
         class={PILL_CLASS}
         aria-label="Model override"
         tooltip={props.value ? 'Model override' : 'Model (agent default)'}
+        onKeyDown={handleTab}
       >
         <CpuIcon class="size-3.5 shrink-0" />
         <span class={cn('min-w-0 truncate', props.value && 'text-ink')}>
@@ -399,7 +467,18 @@ function ModelPicker(props: {
         </span>
         <CaretDownIcon class="size-3 shrink-0 text-current/70" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-72 max-w-[min(24rem,calc(100vw-1rem))]">
+      <Dropdown.Content
+        class="w-72 max-w-[min(24rem,calc(100vw-1rem))]"
+        ref={(el: HTMLElement) => {
+          contentEl = el;
+          attachTabListener(el);
+        }}
+        onCloseAutoFocus={(event) => {
+          if (!pendingSubmitFocus) return;
+          event.preventDefault();
+          focusSubmit();
+        }}
+      >
         <Dropdown.Group class={MENU_LIST_CLASS}>
           <Dropdown.GroupLabel>Model</Dropdown.GroupLabel>
           <ModelRow
@@ -425,7 +504,13 @@ function ModelPicker(props: {
                   <CaretRightIcon class="size-3" />
                 </span>
               </Dropdown.SubTrigger>
-              <Dropdown.SubContent class="w-72 max-w-[min(24rem,calc(100vw-1rem))]">
+              <Dropdown.SubContent
+                class="w-72 max-w-[min(24rem,calc(100vw-1rem))]"
+                ref={(el: HTMLElement) => {
+                  subContentEl = el;
+                  attachTabListener(el);
+                }}
+              >
                 <Dropdown.Group class={MENU_LIST_CLASS}>
                   <For each={props.shortlist.more}>
                     {(model) => (
