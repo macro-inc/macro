@@ -7,9 +7,10 @@ mod test;
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
-    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, ClaimOutcome,
-    CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaAddress, ReplicaId,
-    SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
+    AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
+    ExternalSession, ManagerFence, Message, ReplicaAddress, ReplicaId, SandboxSize, SessionBot,
+    SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -120,6 +121,32 @@ fn cursor_run_checkpoint(message: &Message) -> Option<String> {
         .get("macroCursorRunCheckpoint")?
         .as_str()
         .map(str::to_owned)
+}
+
+/// Record that `user_id` accessed the session in their history.
+///
+/// The `itemType` is the [`EntityType::AgentSession`] wire name, which is
+/// also what `POST /history/agent_session/{id}` writes when the session is
+/// opened later, so both paths land on the same row.
+async fn upsert_user_history(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    user_id: &str,
+    session_id: &Uuid,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"
+        INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")
+        VALUES ($1, $2, $3, NOW(), NOW())
+        ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
+        SET "updatedAt" = NOW()
+        "#,
+        user_id,
+        session_id.to_string(),
+        EntityType::AgentSession.as_ref(),
+    )
+    .execute(tx.as_mut())
+    .await?;
+    Ok(())
 }
 
 struct AgentSessionRow {
@@ -315,6 +342,14 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             .context("failed to grant the originating channel access to the agent session")?;
         }
 
+        // Creating a session counts as viewing it, as it does for chats: the
+        // row is what Soup's `viewed_at` and the frecency ranking read, so
+        // without it a brand-new session would rank below everything the
+        // owner has ever opened.
+        upsert_user_history(&mut transaction, owner_id.as_ref(), &id.as_uuid())
+            .await
+            .context("failed to record the agent session in the owner's history")?;
+
         transaction
             .commit()
             .await
@@ -349,6 +384,79 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .context("agent session not found")?;
 
         Ok(row.try_into()?)
+    }
+
+    async fn preview(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        ids: &[AgentSessionId],
+    ) -> Result<Vec<AgentSessionPreview>> {
+        let uuids: Vec<Uuid> = ids.iter().map(AgentSessionId::as_uuid).collect();
+        // The viewer's grant sources - themselves, the channels they are still
+        // in, their teams - are the same three the Soup leg and the access
+        // extractor resolve, so a preview agrees with what a read would do.
+        let rows = sqlx::query!(
+            r#"
+            WITH viewer_source_ids AS (
+                SELECT cp.channel_id::text AS source_id
+                FROM comms_channel_participants cp
+                WHERE cp.user_id = $2 AND cp.left_at IS NULL
+                UNION ALL
+                SELECT t.team_id::text FROM team_user t WHERE t.user_id = $2
+                UNION ALL
+                SELECT $2
+            )
+            SELECT
+                s.id,
+                s.name,
+                s.owner_id,
+                s.bot_id,
+                s.status,
+                s.status_event_name,
+                s.created_at,
+                s.modified_at,
+                EXISTS (
+                    SELECT 1 FROM entity_access ea
+                    WHERE ea.entity_id = s.id
+                      AND ea.entity_type = 'agent_session'
+                      AND ea.source_id IN (SELECT source_id FROM viewer_source_ids)
+                ) AS "has_access!"
+            FROM agent_session s
+            WHERE s.id = ANY($1)
+            "#,
+            &uuids,
+            viewer.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to preview agent sessions")?;
+
+        let mut found = std::collections::HashSet::with_capacity(rows.len());
+        let mut previews = Vec::with_capacity(ids.len());
+        for row in rows {
+            let id = AgentSessionId::new_from_uuid(row.id);
+            found.insert(id);
+            if !row.has_access {
+                previews.push(AgentSessionPreview::NoAccess(id));
+                continue;
+            }
+            previews.push(AgentSessionPreview::Access(AgentSessionPreviewData {
+                id,
+                name: row.name,
+                owner_id: MacroUserIdStr::try_from(row.owner_id)
+                    .context("agent session has an unparseable owner")?,
+                bot_id: BotId::new_from_uuid(row.bot_id),
+                status: parse_status(&row.status, row.status_event_name)?,
+                created_at: row.created_at,
+                modified_at: row.modified_at,
+            }));
+        }
+        previews.extend(
+            ids.iter()
+                .filter(|id| !found.contains(id))
+                .map(|id| AgentSessionPreview::DoesNotExist(*id)),
+        );
+        Ok(previews)
     }
 
     async fn find_by_egress_token_hash(
@@ -647,6 +755,17 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         delete_entity_access_rows(&mut transaction, &id.as_uuid(), EntityType::AgentSession)
             .await
             .context("failed to delete agent session entity access rows")?;
+
+        // Same story for history: `"UserHistory"."itemId"` is polymorphic
+        // text, so the session's rows in every viewer's history go here.
+        sqlx::query!(
+            r#"DELETE FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = $2"#,
+            id.as_uuid().to_string(),
+            EntityType::AgentSession.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await
+        .context("failed to delete agent session history rows")?;
 
         // A session old enough to have owned a dedicated channel leaves it
         // behind: it holds the history that channel renders, and is not this

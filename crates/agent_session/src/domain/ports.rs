@@ -257,6 +257,20 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// Resolve each of `ids` to what `viewer` may see of it, for chips.
+    ///
+    /// One [`AgentSessionPreview`] per id in `ids`, in no particular order.
+    /// Access is the session's own `entity_access` grants resolved against
+    /// the viewer - as themselves, through the channels they are still in,
+    /// and through their teams - the same predicate the read routes' access
+    /// extractor applies, so a preview says `Access` exactly when
+    /// `GET /agent-sessions/{id}` would answer.
+    fn preview(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        ids: &[AgentSessionId],
+    ) -> impl Future<Output = Result<Vec<AgentSessionPreview>>> + Send;
+
     /// The session a sandbox's egress token stands for, if any still does.
     ///
     /// `egress_token_hash` is the SHA-256 hex of the token as presented, never

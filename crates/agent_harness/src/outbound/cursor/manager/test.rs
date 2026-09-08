@@ -9,8 +9,8 @@ use agent_runtime_protocol::domain::schema::v0::{
 };
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
-    AgentSession, ChannelSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME,
-    SandboxSize, SessionBot, SessionStatus,
+    AgentSession, AgentSessionPreview, ChannelSession, CreateAgentSessionParams,
+    DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot, SessionStatus,
 };
 use bot_id::BotId;
 use cursor_api_key::cipher::CursorApiKey;
@@ -62,6 +62,14 @@ impl AgentSessionRepo for StubSessions {
         _egress_token_hash: &str,
     ) -> SessionResult<Option<AgentSession>> {
         unimplemented!("the manager never looks sessions up by egress token")
+    }
+
+    async fn preview(
+        &self,
+        _viewer: &MacroUserIdStr<'static>,
+        _ids: &[AgentSessionId],
+    ) -> SessionResult<Vec<AgentSessionPreview>> {
+        unimplemented!("the manager never previews sessions")
     }
 
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
