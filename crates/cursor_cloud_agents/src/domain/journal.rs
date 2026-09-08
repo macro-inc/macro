@@ -70,6 +70,12 @@ pub struct JournalEntry {
 /// Session-scoped durable storage. Implementations must reject stale owners
 /// and compare `expected` to the current high-water mark atomically with append.
 /// Reads and writes are never exposed as a public provider-history endpoint.
+///
+/// Streamed SSE content may be held back and written in batches: [`append`]
+/// returning `Ok` means the input is either durable or buffered, and
+/// [`flush_deadline`](Self::flush_deadline) tells the ingest loop when the
+/// buffer must next be forced out with [`flush`](Self::flush). Control
+/// inputs (prompts, polls, terminals) flush through before `append` returns.
 pub trait CursorJournal: Send + Sync + std::fmt::Debug {
     /// A stable ordered snapshot under the caller's session turn gate.
     fn read<'a>(
@@ -84,6 +90,18 @@ pub trait CursorJournal: Send + Sync + std::fmt::Debug {
         run: Option<&'a CursorRunId>,
         input: &'a JournalInput,
     ) -> BoxFuture<'a, Result<JournalEntry, rootcause::Report>>;
+
+    /// Durably write any inputs still held back. A journal that buffers
+    /// nothing has nothing to do.
+    fn flush(&self) -> BoxFuture<'_, Result<(), rootcause::Report>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    /// When buffered inputs must be flushed by - `None` while nothing is
+    /// buffered, so an idle ingest loop never wakes for the journal.
+    fn flush_deadline(&self) -> Option<tokio::time::Instant> {
+        None
+    }
 }
 
 #[derive(Debug, Default)]

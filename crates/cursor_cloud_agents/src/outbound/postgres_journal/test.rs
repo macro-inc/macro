@@ -143,3 +143,98 @@ async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
     .await
     .unwrap();
 }
+
+#[sqlx::test(migrations = false)]
+async fn streamed_sse_is_buffered_until_flush_or_terminal(pool: PgPool) {
+    sqlx::raw_sql(
+        "CREATE TABLE agent_session(id uuid PRIMARY KEY, manager_replica_id uuid, manager_fence bigint NOT NULL);
+         CREATE TABLE agent_session_log(id uuid PRIMARY KEY, agent_session_id uuid NOT NULL REFERENCES agent_session(id));
+         CREATE TABLE external_agent_session(agent_session_id uuid PRIMARY KEY REFERENCES agent_session(id));",
+    ).execute(&pool).await.unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20260906060601_cursor_session_replay.up.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
+    let replica = ReplicaId::from_uuid(Uuid::from_u128(2));
+    sqlx::query!(
+        "INSERT INTO agent_session (id, manager_replica_id, manager_fence) VALUES ($1, $2, 1)",
+        session.as_uuid(),
+        replica.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let journal = PgCursorJournal::new(pool.clone(), session, replica);
+    journal.activate(session, replica, ManagerFence(1)).unwrap();
+    let id = SessionId::new("acp");
+    let run = CursorRunId::new("run-1");
+    journal
+        .append(&id, 0, None, &JournalInput::HistoryComplete)
+        .await
+        .unwrap();
+    journal
+        .append(
+            &id,
+            1,
+            Some(&run),
+            &JournalInput::Sse(crate::testing::raw_record(
+                crate::domain::event::CursorEvent::Assistant { text: "hel".into() },
+            )),
+        )
+        .await
+        .unwrap();
+    journal
+        .append(
+            &id,
+            2,
+            Some(&run),
+            &JournalInput::Sse(crate::testing::raw_record(
+                crate::domain::event::CursorEvent::Assistant { text: "lo".into() },
+            )),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        journal.read(&id).await.unwrap().len(),
+        1,
+        "streamed SSE waits for the batch"
+    );
+    assert!(
+        journal.flush_deadline().is_some(),
+        "a buffering journal names its deadline so ingest can wake for it"
+    );
+    journal.flush().await.unwrap();
+    assert_eq!(journal.read(&id).await.unwrap().len(), 3);
+    assert!(journal.flush_deadline().is_none());
+
+    journal
+        .append(
+            &id,
+            3,
+            Some(&run),
+            &JournalInput::Sse(crate::testing::raw_record(
+                crate::domain::event::CursorEvent::Assistant { text: "!".into() },
+            )),
+        )
+        .await
+        .unwrap();
+    journal
+        .append(
+            &id,
+            4,
+            Some(&run),
+            &JournalInput::Sse(crate::testing::raw_record(
+                crate::domain::event::CursorEvent::Done,
+            )),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        journal.read(&id).await.unwrap().len(),
+        5,
+        "a terminal SSE frame flushes the buffer through with itself"
+    );
+}

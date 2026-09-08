@@ -1,10 +1,43 @@
 //! PostgreSQL native journal, fenced by the existing session management claim.
+use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput};
 use crate::domain::model::CursorRunId;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::model::{AgentSessionId, ManagerFence, ReplicaId};
+use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use sqlx::PgPool;
+use std::sync::Mutex;
+
+/// How long a streamed SSE record may sit buffered before it must be
+/// durably flushed. A crash loses at most this much of the *tail* of a run's
+/// streamed output — flushes are in sequence order, so a lost suffix never
+/// punches a hole in the middle of the journal.
+const JOURNAL_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+/// How many inputs may accumulate before a flush happens regardless of age.
+const MAX_BUFFERED_JOURNAL_INPUTS: usize = 32;
+
+/// One input the writer has accepted but not yet inserted.
+#[derive(Debug, Clone)]
+struct PendingJournalWrite {
+    sequence: i64,
+    run_id: Option<String>,
+    input: serde_json::Value,
+    inserted_at: DateTime<Utc>,
+}
+
+/// Streamed SSE content is the volume and can wait for the batch. Everything
+/// else — prompts, polls, terminals, transport errors — must be durable
+/// before ingest continues, because the rest of the system reacts to it.
+fn journal_input_flushes(input: &JournalInput) -> bool {
+    match input {
+        JournalInput::Sse(record) => matches!(
+            record.decode(),
+            CursorEvent::Result { .. } | CursorEvent::Error { .. } | CursorEvent::Done
+        ),
+        _ => true,
+    }
+}
 
 /// Bound to exactly one authorized host session and its current management
 /// claim. A takeover updates the same locked row and invalidates this writer.
@@ -14,6 +47,8 @@ pub struct PgCursorJournal {
     session: AgentSessionId,
     replica: ReplicaId,
     fence: std::sync::OnceLock<ManagerFence>,
+    buffer: Mutex<Vec<PendingJournalWrite>>,
+    flush_due: Mutex<Option<tokio::time::Instant>>,
 }
 impl PgCursorJournal {
     /// Construct an inactive journal. The attachment must activate it with
@@ -24,6 +59,8 @@ impl PgCursorJournal {
             session,
             replica,
             fence: std::sync::OnceLock::new(),
+            buffer: Mutex::new(Vec::new()),
+            flush_due: Mutex::new(None),
         }
     }
     /// Bind once to the exact generation acquired for this attachment.
@@ -65,6 +102,44 @@ impl PgCursorJournal {
         }
         Ok(())
     }
+
+    async fn persist_batch(&self, batch: &[PendingJournalWrite]) -> Result<(), rootcause::Report> {
+        if batch.is_empty() {
+            return Ok(());
+        }
+        let mut tx = self.pool.begin().await.map_err(|e| rootcause::report!(e))?;
+        self.lock_owner(&mut tx).await?;
+        let high = sqlx::query_scalar!("SELECT COALESCE(MAX(sequence), 0) AS \"high!\" FROM cursor_journal_input WHERE agent_session_id = $1", self.session.as_uuid())
+            .fetch_one(&mut *tx).await.map_err(|e| rootcause::report!(e))?;
+        if high != batch[0].sequence - 1 {
+            return Err(rootcause::report!(
+                "Cursor journal sequence changed; reload required"
+            ));
+        }
+        let sequences: Vec<i64> = batch.iter().map(|pending| pending.sequence).collect();
+        let run_ids: Vec<Option<String>> =
+            batch.iter().map(|pending| pending.run_id.clone()).collect();
+        let inputs: Vec<serde_json::Value> =
+            batch.iter().map(|pending| pending.input.clone()).collect();
+        let inserted_ats: Vec<DateTime<Utc>> =
+            batch.iter().map(|pending| pending.inserted_at).collect();
+        sqlx::query!(
+            r#"
+            INSERT INTO cursor_journal_input(agent_session_id, sequence, run_id, input, inserted_at)
+            SELECT $1, * FROM UNNEST($2::bigint[], $3::text[], $4::jsonb[], $5::timestamptz[])
+            "#,
+            self.session.as_uuid(),
+            &sequences,
+            &run_ids as &[Option<String>],
+            &inputs,
+            &inserted_ats,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| rootcause::report!(e))?;
+        tx.commit().await.map_err(|e| rootcause::report!(e))?;
+        Ok(())
+    }
 }
 impl CursorJournal for PgCursorJournal {
     fn read<'a>(
@@ -99,27 +174,71 @@ impl CursorJournal for PgCursorJournal {
         input: &'a JournalInput,
     ) -> BoxFuture<'a, Result<JournalEntry, rootcause::Report>> {
         Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(|e| rootcause::report!(e))?;
-            self.lock_owner(&mut tx).await?;
-            let high = sqlx::query_scalar!("SELECT COALESCE(MAX(sequence), 0) AS \"high!\" FROM cursor_journal_input WHERE agent_session_id = $1", self.session.as_uuid())
-                .fetch_one(&mut *tx).await.map_err(|e| rootcause::report!(e))?;
-            if high != expected {
-                return Err(rootcause::report!(
-                    "Cursor journal sequence changed; reload required"
-                ));
-            }
             let payload = serde_json::to_value(input).map_err(|e| rootcause::report!(e))?;
             let sequence = expected + 1;
-            let run_id = run.map(CursorRunId::as_str);
-            sqlx::query!("INSERT INTO cursor_journal_input(agent_session_id, sequence, run_id, input) VALUES ($1, $2, $3, $4)", self.session.as_uuid(), sequence, run_id, payload)
-                .execute(&mut *tx).await.map_err(|e| rootcause::report!(e))?;
-            tx.commit().await.map_err(|e| rootcause::report!(e))?;
+            let pending = PendingJournalWrite {
+                sequence,
+                run_id: run.map(|run| run.as_str().to_owned()),
+                input: payload,
+                inserted_at: Utc::now(),
+            };
+            let flush_now = {
+                let mut buffer = self
+                    .buffer
+                    .lock()
+                    .map_err(|_| rootcause::report!("Cursor journal buffer poisoned"))?;
+                if let Some(last) = buffer.last()
+                    && last.sequence != expected
+                {
+                    return Err(rootcause::report!(
+                        "Cursor journal sequence changed; reload required"
+                    ));
+                }
+                buffer.push(pending);
+                if buffer.len() == 1 {
+                    *self.flush_due.lock().map_err(|_| {
+                        rootcause::report!("Cursor journal flush deadline poisoned")
+                    })? = Some(tokio::time::Instant::now() + JOURNAL_FLUSH_INTERVAL);
+                }
+                journal_input_flushes(input) || buffer.len() >= MAX_BUFFERED_JOURNAL_INPUTS
+            };
+            if flush_now {
+                self.flush().await?;
+            }
             Ok(JournalEntry {
                 sequence,
                 run: run.cloned(),
                 input: input.clone(),
             })
         })
+    }
+
+    fn flush(&self) -> BoxFuture<'_, Result<(), rootcause::Report>> {
+        Box::pin(async move {
+            let batch = {
+                let mut buffer = self
+                    .buffer
+                    .lock()
+                    .map_err(|_| rootcause::report!("Cursor journal buffer poisoned"))?;
+                std::mem::take(&mut *buffer)
+            };
+            *self
+                .flush_due
+                .lock()
+                .map_err(|_| rootcause::report!("Cursor journal flush deadline poisoned"))? = None;
+            if batch.is_empty() {
+                return Ok(());
+            }
+            // Taken before the write: retrying a batch whose commit may have
+            // landed would duplicate sequences, so a failed flush loses its
+            // inputs the same way a failed per-row write used to. Inputs that
+            // arrive while this write is in flight stay in the buffer.
+            self.persist_batch(&batch).await
+        })
+    }
+
+    fn flush_deadline(&self) -> Option<tokio::time::Instant> {
+        self.flush_due.lock().ok().and_then(|due| *due)
     }
 }
 

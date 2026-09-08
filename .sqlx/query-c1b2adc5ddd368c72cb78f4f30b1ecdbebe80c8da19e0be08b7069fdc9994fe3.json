@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO cursor_journal_input(agent_session_id, sequence, run_id, input, inserted_at)\n            SELECT $1, * FROM UNNEST($2::bigint[], $3::text[], $4::jsonb[], $5::timestamptz[])\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8Array",
+        "TextArray",
+        "JsonbArray",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c1b2adc5ddd368c72cb78f4f30b1ecdbebe80c8da19e0be08b7069fdc9994fe3"
+}

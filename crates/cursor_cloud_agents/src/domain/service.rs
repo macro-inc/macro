@@ -64,6 +64,9 @@ const POLL_ATTEMPTS: usize = 450;
 /// Consecutive poll failures tolerated before the turn takes the error.
 const POLL_ERROR_TOLERANCE: usize = 5;
 
+/// How long a journal flush may sit on Postgres before the turn is torn down.
+const JOURNAL_WRITE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// A stream this quiet gets its run's record checked. Observed live: the
 /// final text arrives and the stream then hangs open, its terminal `result`
 /// minutes behind — and the client shows a turn still "writing" long after
@@ -945,7 +948,19 @@ where
         if let Some(stream) = stream {
             pin_mut!(stream);
             loop {
-                let record = match tokio::time::timeout(STREAM_QUIET_TIMEOUT, stream.next()).await {
+                let flush_deadline = self.journal.flush_deadline();
+                let record = tokio::select! {
+                    biased;
+                    () = async {
+                        match flush_deadline {
+                            Some(deadline) => tokio::time::sleep_until(deadline).await,
+                            None => std::future::pending().await,
+                        }
+                    } => {
+                        self.flush_journal(session).await?;
+                        continue;
+                    }
+                    timed = tokio::time::timeout(STREAM_QUIET_TIMEOUT, stream.next()) => match timed {
                     Ok(Some(Ok(record))) => record,
                     Ok(Some(Err(error))) => {
                         self.capture(
@@ -974,6 +989,7 @@ where
                             break;
                         }
                         continue;
+                    }
                     }
                 };
                 let content = record.is_content();
@@ -1027,6 +1043,10 @@ where
                 }
             }
         }
+        // Land any streamed SSE still sitting in the journal buffer before
+        // we poll or return: a quiet/end-of-stream without a terminal frame
+        // would otherwise leave a durable hole behind in-memory capture.
+        self.flush_journal(session).await?;
         if matched < captured.len() && strict {
             return Err(rootcause::report!(
                 "Cursor no longer exposes the captured stream prefix for {run}"
@@ -1335,6 +1355,29 @@ where
             session.state.lock().expect("session state poisoned").fresh = false;
         }
         Ok(())
+    }
+
+    /// Durably write any journal inputs still held back. A failed or stalled
+    /// flush is a failed append: viewers may have already seen the frames, and
+    /// retrying would duplicate sequences.
+    async fn flush_journal(&self, session: &Session) -> Result<(), SessionError> {
+        match tokio::time::timeout(JOURNAL_WRITE_TIMEOUT, self.journal.flush()).await {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(error)) => {
+                let mut state = session.state.lock().expect("session state poisoned");
+                state.capture_failed = true;
+                state.ready_for_sync = false;
+                Err(SessionError::Journal(error))
+            }
+            Err(_) => {
+                let mut state = session.state.lock().expect("session state poisoned");
+                state.capture_failed = true;
+                state.ready_for_sync = false;
+                Err(SessionError::Journal(rootcause::report!(
+                    "cursor journal flush timed out"
+                )))
+            }
+        }
     }
 
     /// The only route from provider input to translation and notifications.
