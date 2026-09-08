@@ -1,3 +1,6 @@
+use entity_access_db_utils::project_inheritance::get_all_source_entities_for_projects;
+use entity_access_db_utils::team_share::acquire_guard;
+use entity_access_db_utils::{get_nested_project_entities, walk_up_project_tree};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -8,6 +11,13 @@ use super::PgRepository;
 use crate::domain::models::EntityAccessSourceType;
 use crate::domain::ports::EntityAccessManagementRepository;
 
+async fn persist_document(pool: &Pool<Postgres>, document: Uuid, project: Uuid) {
+    let mut tx = pool.begin().await.unwrap();
+    acquire_guard(&mut tx).await.unwrap();
+    sqlx::query!(r#"INSERT INTO "Document" (id, name, owner, "projectId") VALUES ($1, 'New', 'macro|user_a@test.com', $2)"#, document.to_string(), project.to_string()).execute(tx.as_mut()).await.unwrap();
+    tx.commit().await.unwrap();
+}
+
 const ROOT_PROJECT_ID: Uuid = Uuid::from_u128(0x11111111_1111_1111_1111_111111111111);
 const CHILD_PROJECT_ID: Uuid = Uuid::from_u128(0x22222222_2222_2222_2222_222222222222);
 const GRANDCHILD_PROJECT_ID: Uuid = Uuid::from_u128(0x33333333_3333_3333_3333_333333333333);
@@ -17,11 +27,9 @@ const GRANDCHILD_PROJECT_ID: Uuid = Uuid::from_u128(0x33333333_3333_3333_3333_33
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn walk_up_from_grandchild_returns_all_ancestors(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
-    let result = repo
-        .walk_up_project_tree(&mut tx, &GRANDCHILD_PROJECT_ID)
+    let result = walk_up_project_tree(&mut tx, &GRANDCHILD_PROJECT_ID)
         .await
         .unwrap();
 
@@ -36,11 +44,9 @@ async fn walk_up_from_grandchild_returns_all_ancestors(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn walk_up_from_root_returns_only_self(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
-    let result = repo
-        .walk_up_project_tree(&mut tx, &ROOT_PROJECT_ID)
+    let result = walk_up_project_tree(&mut tx, &ROOT_PROJECT_ID)
         .await
         .unwrap();
 
@@ -53,14 +59,10 @@ async fn walk_up_from_root_returns_only_self(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn walk_up_nonexistent_project_returns_empty(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
     let nonexistent = Uuid::new_v4();
 
-    let result = repo
-        .walk_up_project_tree(&mut tx, &nonexistent)
-        .await
-        .unwrap();
+    let result = walk_up_project_tree(&mut tx, &nonexistent).await.unwrap();
 
     assert!(result.is_empty());
 }
@@ -70,13 +72,12 @@ async fn walk_up_nonexistent_project_returns_empty(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn source_entities_returns_direct_shares_across_projects(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[ROOT_PROJECT_ID, CHILD_PROJECT_ID])
-        .await
-        .unwrap();
+    let result =
+        get_all_source_entities_for_projects(&mut tx, &[ROOT_PROJECT_ID, CHILD_PROJECT_ID])
+            .await
+            .unwrap();
 
     // 3 direct shares: user/edit on root, team/view on root, channel/comment on child
     assert_eq!(result.len(), 3);
@@ -114,12 +115,10 @@ async fn source_entities_returns_direct_shares_across_projects(pool: Pool<Postgr
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn source_entities_excludes_inherited_access(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
     // Child project has one direct share (channel/comment) and one inherited (user/view with granted_from_project_id)
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[CHILD_PROJECT_ID])
+    let result = get_all_source_entities_for_projects(&mut tx, &[CHILD_PROJECT_ID])
         .await
         .unwrap();
 
@@ -136,12 +135,10 @@ async fn source_entities_excludes_inherited_access(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn source_entities_excludes_non_project_entity_type(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
     // Root project has 2 direct project shares + 1 document row (should be excluded)
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[ROOT_PROJECT_ID])
+    let result = get_all_source_entities_for_projects(&mut tx, &[ROOT_PROJECT_ID])
         .await
         .unwrap();
 
@@ -159,11 +156,9 @@ async fn source_entities_excludes_non_project_entity_type(pool: Pool<Postgres>) 
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn source_entities_empty_for_project_without_access(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[GRANDCHILD_PROJECT_ID])
+    let result = get_all_source_entities_for_projects(&mut tx, &[GRANDCHILD_PROJECT_ID])
         .await
         .unwrap();
 
@@ -175,12 +170,10 @@ async fn source_entities_empty_for_project_without_access(pool: Pool<Postgres>) 
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn source_entities_empty_for_nonexistent_project(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
     let nonexistent = Uuid::new_v4();
 
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[nonexistent])
+    let result = get_all_source_entities_for_projects(&mut tx, &[nonexistent])
         .await
         .unwrap();
 
@@ -220,7 +213,6 @@ async fn source_entities_empty_for_nonexistent_project(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
 )]
 async fn source_entities_for_full_tree_walk_returns_only_direct_shares(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
     let project_a = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
@@ -228,8 +220,7 @@ async fn source_entities_for_full_tree_walk_returns_only_direct_shares(pool: Poo
     let project_c = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
 
     // Simulates walk_up_project_tree from PROJECT_C → [A, B, C]
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[project_a, project_b, project_c])
+    let result = get_all_source_entities_for_projects(&mut tx, &[project_a, project_b, project_c])
         .await
         .unwrap();
 
@@ -298,7 +289,12 @@ async fn add_entity_to_project_inserts_access_for_all_ancestor_shares(pool: Pool
     let document_id = Uuid::new_v4();
     let project_c = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
 
+    persist_document(&pool, document_id, project_c).await;
     repo.add_entity_to_project(&document_id, EntityType::Document, &project_c)
+        .await
+        .unwrap();
+    // A delayed remove notification must preserve grants from the persisted parent.
+    repo.remove_entity_from_project(&document_id, EntityType::Document, &project_c)
         .await
         .unwrap();
 
@@ -400,6 +396,7 @@ async fn remove_entity_from_project_deletes_inherited_access(pool: Pool<Postgres
     let document_id = Uuid::new_v4();
     let project_c = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
 
+    persist_document(&pool, document_id, project_c).await;
     // Add entity to project — creates 6 inherited access rows
     repo.add_entity_to_project(&document_id, EntityType::Document, &project_c)
         .await
@@ -415,6 +412,20 @@ async fn remove_entity_from_project_deletes_inherited_access(pool: Pool<Postgres
     .unwrap();
     assert_eq!(before_count, Some(6));
 
+    let mut tx = pool.begin().await.unwrap();
+    acquire_guard(&mut tx).await.unwrap();
+    sqlx::query!(
+        r#"UPDATE "Document" SET "projectId" = NULL WHERE id = $1"#,
+        document_id.to_string()
+    )
+    .execute(tx.as_mut())
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    // A delayed add cannot recreate grants after the entity has left the project.
+    repo.add_entity_to_project(&document_id, EntityType::Document, &project_c)
+        .await
+        .unwrap();
     // Remove entity from project
     repo.remove_entity_from_project(&document_id, EntityType::Document, &project_c)
         .await
@@ -446,12 +457,10 @@ async fn remove_entity_from_project_deletes_inherited_access(pool: Pool<Postgres
     fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
 )]
 async fn nested_entities_from_root_returns_full_tree(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
     let project_a = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
 
-    let result = repo
-        .get_nested_project_entities(&mut tx, &project_a)
+    let result = get_nested_project_entities(&mut tx, &project_a)
         .await
         .unwrap();
 
@@ -484,12 +493,10 @@ async fn nested_entities_from_root_returns_full_tree(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
 )]
 async fn nested_entities_from_mid_returns_subtree_only(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
     let project_b = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap();
 
-    let result = repo
-        .get_nested_project_entities(&mut tx, &project_b)
+    let result = get_nested_project_entities(&mut tx, &project_b)
         .await
         .unwrap();
 
@@ -518,12 +525,10 @@ async fn nested_entities_from_mid_returns_subtree_only(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
 )]
 async fn nested_entities_from_leaf_returns_self_and_children(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
     let project_c = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
 
-    let result = repo
-        .get_nested_project_entities(&mut tx, &project_c)
+    let result = get_nested_project_entities(&mut tx, &project_c)
         .await
         .unwrap();
 
@@ -544,12 +549,10 @@ async fn nested_entities_from_leaf_returns_self_and_children(pool: Pool<Postgres
     fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
 )]
 async fn nested_entities_nonexistent_project_returns_empty(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
     let nonexistent = Uuid::new_v4();
 
-    let result = repo
-        .get_nested_project_entities(&mut tx, &nonexistent)
+    let result = get_nested_project_entities(&mut tx, &nonexistent)
         .await
         .unwrap();
 
@@ -592,7 +595,22 @@ async fn move_project_from_a_to_d_updates_inherited_access(pool: Pool<Postgres>)
     let doc_in_b = Uuid::parse_str("d1111111-1111-1111-1111-111111111111").unwrap();
     let doc_in_c = Uuid::parse_str("d2222222-2222-2222-2222-222222222222").unwrap();
 
+    let mut tx = pool.begin().await.unwrap();
+    acquire_guard(&mut tx).await.unwrap();
+    sqlx::query!(
+        r#"UPDATE "Project" SET "parentId" = $2 WHERE id = $1"#,
+        project_b.to_string(),
+        project_d.to_string()
+    )
+    .execute(tx.as_mut())
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
     repo.move_project(&project_b, Some(&project_a), Some(&project_d))
+        .await
+        .unwrap();
+    // A delayed notification cannot restore grants from the former ancestor.
+    repo.move_project(&project_b, Some(&project_d), Some(&project_a))
         .await
         .unwrap();
 

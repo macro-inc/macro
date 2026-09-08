@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Chat\" SET \"projectId\" = '20000000-0000-0000-0000-000000000007'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2626c1f359feb09c92d1dc1a2aefea1ecd412dda5811cac30cf0ed3c50a8daac"
+}

@@ -3,6 +3,228 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_permissions::share_permission::team_share::{TeamShareRequest, authorize_team_share};
 use sqlx::PgPool;
 
+async fn nested_projects(tx: &mut Transaction<'_, Postgres>) -> rootcause::Result<()> {
+    acquire_guard(tx).await?;
+    sqlx::query!(r#"INSERT INTO "Project" (id, name, "userId", "parentId") VALUES ('20000000-0000-0000-0000-000000000007', 'Child', 'macro|owner@example.com', '20000000-0000-0000-0000-000000000001')"#).execute(tx.as_mut()).await?;
+    sqlx::query!(r#"INSERT INTO "SharePermission" (id) VALUES ('child')"#)
+        .execute(tx.as_mut())
+        .await?;
+    sqlx::query!(r#"INSERT INTO "ProjectPermission" ("projectId", "sharePermissionId") VALUES ('20000000-0000-0000-0000-000000000007', 'child')"#).execute(tx.as_mut()).await?;
+    sqlx::query!(r#"UPDATE "Document" SET "projectId" = '20000000-0000-0000-0000-000000000007'"#)
+        .execute(tx.as_mut())
+        .await?;
+    sqlx::query!(r#"UPDATE "Chat" SET "projectId" = '20000000-0000-0000-0000-000000000007'"#)
+        .execute(tx.as_mut())
+        .await?;
+    sqlx::query!("UPDATE email_threads SET project_id = '20000000-0000-0000-0000-000000000007'")
+        .execute(tx.as_mut())
+        .await?;
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn canonical_project_shares_preserve_independent_contributions(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    let mut tx = pool.begin().await?;
+    nested_projects(&mut tx).await?;
+    for (kind, index, level) in [
+        (EntityType::Project, 7, AccessLevel::Comment),
+        (EntityType::Document, 2, AccessLevel::Edit),
+    ] {
+        let facts = load_facts(&mut tx, &entity(kind, index)).await?;
+        apply(&mut tx, &command(&facts, Some(level))).await?;
+    }
+    let root = entity(EntityType::Project, 1);
+    for level in [
+        Some(AccessLevel::Edit),
+        Some(AccessLevel::View),
+        Some(AccessLevel::View),
+        None,
+        None,
+    ] {
+        let facts = load_facts(&mut tx, &root).await?;
+        apply(&mut tx, &command(&facts, level)).await?;
+        let rows = sqlx::query!("SELECT access_level AS \"level: AccessLevel\", entity_type FROM entity_access WHERE granted_from_project_id = $1", root.entity_id.as_ref()).fetch_all(tx.as_mut()).await?;
+        assert_eq!(rows.len(), if level.is_some() { 4 } else { 0 });
+        assert!(
+            rows.iter()
+                .all(|r| Some(r.level) == level && r.entity_type != "call")
+        );
+        assert_eq!(sqlx::query_scalar!("SELECT count(*) FROM entity_access WHERE granted_from_project_id = '20000000-0000-0000-0000-000000000007' AND access_level = 'comment'").fetch_one(tx.as_mut()).await?, Some(3));
+        assert_eq!(
+            load_facts(&mut tx, &entity(EntityType::Document, 2))
+                .await?
+                .current
+                .unwrap()
+                .level,
+            TeamShareLevel::Edit
+        );
+    }
+    tx.commit().await?;
+    let mut tx = pool.begin().await?;
+    assert_eq!(load_facts(&mut tx, &root).await?.current, None);
+    assert_eq!(load_facts(&mut tx, &root).await?.revision, 5);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn inherited_write_failure_rolls_back_canonical_root(pool: PgPool) -> rootcause::Result<()> {
+    let mut tx = pool.begin().await?;
+    nested_projects(&mut tx).await?;
+    tx.commit().await?;
+    sqlx::raw_sql("CREATE FUNCTION reject_inherited() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.granted_from_project_id IS NOT NULL THEN RAISE EXCEPTION 'injected inherited failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_inherited BEFORE INSERT ON entity_access FOR EACH ROW EXECUTE FUNCTION reject_inherited();").execute(&pool).await?;
+    let mut tx = pool.begin().await?;
+    let root = entity(EntityType::Project, 1);
+    let facts = load_facts(&mut tx, &root).await?;
+    assert!(
+        apply(&mut tx, &command(&facts, Some(AccessLevel::View)))
+            .await
+            .is_err()
+    );
+    tx.rollback().await?;
+    let mut tx = pool.begin().await?;
+    assert_eq!(load_facts(&mut tx, &root).await?, facts);
+    assert_eq!(
+        sqlx::query_scalar!("SELECT count(*) FROM entity_access")
+            .fetch_one(tx.as_mut())
+            .await?,
+        Some(0)
+    );
+    Ok(())
+}
+
+async fn move_child_out(tx: &mut Transaction<'_, Postgres>) -> rootcause::Result<()> {
+    acquire_guard(tx).await?;
+    let child = entity(EntityType::Project, 7);
+    sqlx::query!(
+        r#"UPDATE "Project" SET "parentId" = NULL WHERE id = $1"#,
+        child.entity_id.as_ref()
+    )
+    .execute(tx.as_mut())
+    .await?;
+    entity_access_db_utils::project_inheritance::synchronize_entity(
+        tx,
+        &Uuid::parse_str(&child.entity_id)?,
+        EntityType::Project,
+    )
+    .await?;
+    Ok(())
+}
+
+async fn share_versus_move(pool: PgPool, share_first: bool, revoke: bool) -> rootcause::Result<()> {
+    let root = entity(EntityType::Project, 1);
+    let mut setup = pool.begin().await?;
+    nested_projects(&mut setup).await?;
+    if revoke {
+        let facts = load_facts(&mut setup, &root).await?;
+        apply(&mut setup, &command(&facts, Some(AccessLevel::Edit))).await?;
+    }
+    let facts = load_facts(&mut setup, &root).await?;
+    let mutation = command(
+        &facts,
+        if revoke {
+            None
+        } else {
+            Some(AccessLevel::View)
+        },
+    );
+    setup.commit().await?;
+
+    let mut first = pool.begin().await?;
+    acquire_guard(&mut first).await?;
+    if share_first {
+        apply(&mut first, &mutation).await?;
+    } else {
+        move_child_out(&mut first).await?;
+    }
+    let other_pool = pool.clone();
+    let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(2));
+    let other_barrier = barrier.clone();
+    let contender = tokio::spawn(async move {
+        let mut second = other_pool.begin().await?;
+        other_barrier.wait().await;
+        if share_first {
+            move_child_out(&mut second).await?;
+        } else {
+            apply(&mut second, &mutation).await?;
+        }
+        second.commit().await?;
+        Ok::<_, rootcause::Report>(())
+    });
+    barrier.wait().await;
+    // Observe the actual lock wait, rather than relying on task scheduling or sleeps.
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let waiting = sqlx::query_scalar!("SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database()))").fetch_one(first.as_mut()).await?;
+            if waiting == Some(true) { break; }
+            tokio::task::yield_now().await;
+        }
+        Ok::<_, sqlx::Error>(())
+    }).await??;
+    assert!(!contender.is_finished());
+    first.commit().await?;
+    contender.await??;
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM entity_access WHERE granted_from_project_id = $1",
+            root.entity_id.as_ref()
+        )
+        .fetch_one(&pool)
+        .await?,
+        Some(0)
+    );
+    let mut tx = pool.begin().await?;
+    let final_state = load_facts(&mut tx, &root).await?;
+    assert_eq!(
+        final_state.current.map(|g| g.level),
+        if revoke {
+            None
+        } else {
+            Some(TeamShareLevel::View)
+        }
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn share_then_parent_change(pool: PgPool) -> rootcause::Result<()> {
+    share_versus_move(pool, true, false).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn parent_change_then_share(pool: PgPool) -> rootcause::Result<()> {
+    share_versus_move(pool, false, false).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn revoke_then_parent_change(pool: PgPool) -> rootcause::Result<()> {
+    share_versus_move(pool, true, true).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn parent_change_then_revoke(pool: PgPool) -> rootcause::Result<()> {
+    share_versus_move(pool, false, true).await
+}
+
 fn entity(kind: EntityType, index: u8) -> Entity<'static> {
     kind.with_entity_string(format!("20000000-0000-0000-0000-{index:012}"))
 }

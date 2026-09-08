@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM entity_access ea\n        WHERE granted_from_project_id = $1 AND source_type = 'team' AND source_id = $2\n          AND entity_type IN ('project', 'document', 'chat', 'email_thread')\n          AND ($3 OR NOT EXISTS (\n            SELECT 1 FROM UNNEST($4::uuid[], $5::text[]) AS current(entity_id, entity_type)\n            WHERE current.entity_id = ea.entity_id AND current.entity_type = ea.entity_type\n          ))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Bool",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0d4f77d12f1057afbb255ca68fbfe149c82573020c24e222a6efcde511ac5b15"
+}

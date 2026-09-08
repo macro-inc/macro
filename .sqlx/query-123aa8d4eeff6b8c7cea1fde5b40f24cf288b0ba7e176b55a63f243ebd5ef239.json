@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Document\" SET \"projectId\" = '20000000-0000-0000-0000-000000000007'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "123aa8d4eeff6b8c7cea1fde5b40f24cf288b0ba7e176b55a63f243ebd5ef239"
+}

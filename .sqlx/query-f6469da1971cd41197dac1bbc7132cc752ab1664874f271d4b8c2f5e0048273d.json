@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"ProjectPermission\" (\"projectId\", \"sharePermissionId\") VALUES ('20000000-0000-0000-0000-000000000007', 'child')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "f6469da1971cd41197dac1bbc7132cc752ab1664874f271d4b8c2f5e0048273d"
+}

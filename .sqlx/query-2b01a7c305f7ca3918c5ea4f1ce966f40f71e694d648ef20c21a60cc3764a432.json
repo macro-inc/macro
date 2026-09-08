@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Project\" (id, name, \"userId\", \"parentId\") VALUES ('20000000-0000-0000-0000-000000000007', 'Child', 'macro|owner@example.com', '20000000-0000-0000-0000-000000000001')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "2b01a7c305f7ca3918c5ea4f1ce966f40f71e694d648ef20c21a60cc3764a432"
+}

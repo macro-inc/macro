@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_threads SET project_id = '20000000-0000-0000-0000-000000000007'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "ceb3dfe21175d8129a247ab29492b7792e870d508cd273937ec8b69ae8bd181d"
+}

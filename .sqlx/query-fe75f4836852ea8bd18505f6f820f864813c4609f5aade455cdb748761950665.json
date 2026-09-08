@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM entity_access inherited\n            WHERE inherited.entity_id = $1 AND inherited.entity_type = $2\n              AND inherited.granted_from_project_id IS NOT NULL\n              AND NOT EXISTS (\n                SELECT 1 FROM entity_access direct\n                WHERE direct.entity_id = ANY($3) AND direct.entity_type = 'project'\n                  AND direct.granted_from_project_id IS NULL\n                  AND direct.entity_id::text = inherited.granted_from_project_id\n                  AND direct.source_id = inherited.source_id\n                  AND direct.source_type = inherited.source_type\n              )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe75f4836852ea8bd18505f6f820f864813c4609f5aade455cdb748761950665"
+}

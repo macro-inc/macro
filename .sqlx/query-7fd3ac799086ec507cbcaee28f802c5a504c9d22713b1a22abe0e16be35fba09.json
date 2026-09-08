@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"SharePermission\" (id) VALUES ('child')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "7fd3ac799086ec507cbcaee28f802c5a504c9d22713b1a22abe0e16be35fba09"
+}

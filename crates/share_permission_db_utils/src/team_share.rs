@@ -6,6 +6,7 @@
 //! error the caller must roll back the whole transaction, including metadata changes.
 //! Ordinary reads may use a short transaction and [`load_facts`] before domain policy.
 
+use entity_access_db_utils::project_inheritance::synchronize_project_team_share;
 pub use entity_access_db_utils::team_share::acquire_guard;
 use entity_access_db_utils::team_share::{
     delete_direct, direct_level, ensure_owner_direct, upsert_direct,
@@ -358,6 +359,11 @@ async fn write_state(
         )
         .await
         .context(TeamShareError::Infrastructure)?;
+        if entity.entity_type == EntityType::Project {
+            synchronize_project_team_share(transaction, &uuid, previous.team_id, None)
+                .await
+                .context(TeamShareError::Infrastructure)?;
+        }
     }
     if let Some(target) = target {
         upsert_direct(
@@ -369,6 +375,16 @@ async fn write_state(
         )
         .await
         .context(TeamShareError::Infrastructure)?;
+        if entity.entity_type == EntityType::Project {
+            synchronize_project_team_share(
+                transaction,
+                &uuid,
+                target.team_id,
+                Some(target.level.into()),
+            )
+            .await
+            .context(TeamShareError::Infrastructure)?;
+        }
     }
     Ok(())
 }

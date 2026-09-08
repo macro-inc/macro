@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM entity_access WHERE granted_from_project_id = $1 AND source_id = $2 AND access_level = 'edit'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bc14c04ed09d89602f0ce6892ce8ea20e3e040302d2e9b05446577721454f277"
+}

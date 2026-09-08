@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT \"parentId\" AS parent_id FROM \"Project\" WHERE $2 = 'project' AND id = $1\n            UNION ALL SELECT \"projectId\" FROM \"Document\" WHERE $2 = 'document' AND id = $1\n            UNION ALL SELECT \"projectId\" FROM \"Chat\" WHERE $2 = 'chat' AND id = $1\n            UNION ALL SELECT project_id FROM email_threads WHERE $2 = 'email_thread' AND id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "parent_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "74ca662ad9b132699cce364a0984fa8516588425c0f74c0f3cd41839c71a1338"
+}

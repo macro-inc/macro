@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM entity_access WHERE granted_from_project_id = '20000000-0000-0000-0000-000000000007' AND access_level = 'comment'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3ce850a9c42106ccdd9ce1062323e37e41cc6bec93ff9b0d2f524d15e3654564"
+}
