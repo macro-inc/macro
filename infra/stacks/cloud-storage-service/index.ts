@@ -324,17 +324,12 @@ const cloudStorageService = new CloudStorageService(
         value: stack,
       },
     ],
-    isPrivate: false,
     tags,
   }
 );
 
 export const cloudStorageServiceRoleArn = cloudStorageService.role.arn;
 export const cloudStorageServiceSgId = cloudStorageService.serviceSg.id;
-export const cloudStorageServiceAlbSgId = cloudStorageService.serviceAlbSg.id;
-// Consumers call the service through the shared gateway, not the legacy
-// per-service hostname. `cloudStorageService.domain` still names the dedicated
-// ALB and stays in place until that listener is retired.
 export const cloudStorageServiceUrl = DOCUMENT_STORAGE_GATEWAY_URL;
 
 const convertServiceStack = new pulumi.StackReference('convert-service-stack', {
