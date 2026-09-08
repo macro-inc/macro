@@ -4606,7 +4606,7 @@ export type DocumentSyncContentUpdatedMetadata = {
  */
 export type DocumentTeamShareResponse = {
     /**
-     * Whether the document is currently shared with the owner's team.
+     * Whether explicit team sharing is enabled; inherited team access does not count.
      */
     sharedWithTeam: boolean;
     /**
@@ -4731,9 +4731,10 @@ export type EditCallRecordRequest = {
     customName?: string | null;
     sharePermission?: null | UpdateSharePermissionRequestV2;
     /**
-     * If `Some(true)`, grant the creator's team View access on the call.
-     * If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
-     * The team is resolved from the call's `created_by`, not the acting user.
+     * Owner-only compatibility setting. Initial `true` enables View; repeated
+     * `true` preserves the explicit level. `false` clears the managed grant,
+     * even after team departure. `None` preserves sharing. Contradictory
+     * legacy and explicit levels are rejected before any edits.
      */
     shareWithTeam?: boolean | null;
 };
@@ -7375,6 +7376,7 @@ export type SharePermissionV2 = {
      * The owner of the item
      */
     owner: string;
+    teamShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -8927,6 +8929,7 @@ export type UpdateSharePermissionRequestV2 = {
     channelSharePermissions?: Array<UpdateChannelSharePermission> | null;
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
+    teamShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -9839,8 +9842,20 @@ export type EditCallRecordData = {
 };
 
 export type EditCallRecordErrors = {
+    /**
+     * Invalid sharing input or owner has no team
+     */
+    400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * Team sharing requires the actual owner
+     */
+    403: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * Sharing state changed or an untracked grant conflicts
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -9868,8 +9883,20 @@ export type ToggleShareWithTeamData = {
 };
 
 export type ToggleShareWithTeamErrors = {
+    /**
+     * Owner has no team
+     */
+    400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * Team sharing requires the actual owner
+     */
+    403: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * Sharing state changed or an untracked grant conflicts
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -12585,9 +12612,19 @@ export type SetDocumentTeamShareData = {
 };
 
 export type SetDocumentTeamShareErrors = {
+    /**
+     * Owner has no team
+     */
     400: ErrorResponse;
+    /**
+     * Acting identity is absent or is not the actual owner
+     */
     401: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * Sharing facts changed or an untracked grant conflicts
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -14130,7 +14167,11 @@ export type EditThreadV2Data = {
 };
 
 export type EditThreadV2Errors = {
+    400: GenericErrorResponse;
     401: GenericErrorResponse;
+    403: GenericErrorResponse;
+    404: GenericErrorResponse;
+    409: GenericErrorResponse;
     500: GenericErrorResponse;
 };
 

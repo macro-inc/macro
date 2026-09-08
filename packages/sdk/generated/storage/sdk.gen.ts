@@ -296,8 +296,8 @@ export class Sdk extends HeyApiClient {
     /**
      * Handler for `PATCH /call/record/{call_id}`.
      *
-     * Edits a call record — currently supports updating the record's share
-     * permissions. Access is validated via channel membership
+     * Edits call metadata and sharing. Supplied team-sharing operations additionally
+     * require the persisted owner; enabling without an owner team is invalid.
      */
     public editCallRecord<ThrowOnError extends boolean = false>(options: Options<EditCallRecordData, ThrowOnError>): RequestResult<EditCallRecordResponses, EditCallRecordErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<EditCallRecordResponses, EditCallRecordErrors, ThrowOnError>({
@@ -313,8 +313,8 @@ export class Sdk extends HeyApiClient {
     /**
      * Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
      *
-     * Toggles the `share_with_team` flag on the active call. Returns the new
-     * value as the JSON body.
+     * Toggles explicit team sharing on an active call as its persisted owner.
+     * Initial enable uses View. Returns the committed compatibility flag.
      */
     public toggleShareWithTeam<ThrowOnError extends boolean = false>(options: Options<ToggleShareWithTeamData, ThrowOnError>): RequestResult<ToggleShareWithTeamResponses, ToggleShareWithTeamErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ToggleShareWithTeamResponses, ToggleShareWithTeamErrors, ThrowOnError>({ url: '/call/record/{call_id}/share-with-team/toggle', ...options });
@@ -1398,9 +1398,10 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Sets the team-share state of a document. Sharing grants the document
-     * owner's team Edit access; unsharing removes the team's access. Requires
-     * Edit access on the document.
+     * Sets explicit team sharing. Requires a verified acting identity matching
+     * the persisted document owner, not merely effective Edit or Owner access.
+     * Initial enable defaults to Edit; repeated enable preserves the chosen level.
+     * Clear removes only the managed direct grant, not inherited team access.
      */
     public setDocumentTeamShare<ThrowOnError extends boolean = false>(options: Options<SetDocumentTeamShareData, ThrowOnError>): RequestResult<SetDocumentTeamShareResponses, SetDocumentTeamShareErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SetDocumentTeamShareResponses, SetDocumentTeamShareErrors, ThrowOnError>({

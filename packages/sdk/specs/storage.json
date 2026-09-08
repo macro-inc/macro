@@ -1314,7 +1314,7 @@
       "patch": {
         "tags": ["call::inbound::axum_router"],
         "summary": "Handler for `PATCH /call/record/{call_id}`.",
-        "description": "Edits a call record — currently supports updating the record's share\npermissions. Access is validated via channel membership",
+        "description": "Edits call metadata and sharing. Supplied team-sharing operations additionally\nrequire the persisted owner; enabling without an owner team is invalid.",
         "operationId": "edit_call_record",
         "parameters": [
           {
@@ -1342,6 +1342,16 @@
           "204": {
             "description": "Call record updated"
           },
+          "400": {
+            "description": "Invalid sharing input or owner has no team",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
             "description": "",
             "content": {
@@ -1352,8 +1362,28 @@
               }
             }
           },
+          "403": {
+            "description": "Team sharing requires the actual owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sharing state changed or an untracked grant conflicts",
             "content": {
               "application/json": {
                 "schema": {
@@ -1379,7 +1409,7 @@
       "post": {
         "tags": ["call::inbound::axum_router"],
         "summary": "Handler for `POST /call/record/{call_id}/share-with-team/toggle`.",
-        "description": "Toggles the `share_with_team` flag on the active call. Returns the new\nvalue as the JSON body.",
+        "description": "Toggles explicit team sharing on an active call as its persisted owner.\nInitial enable uses View. Returns the committed compatibility flag.",
         "operationId": "toggle_share_with_team",
         "parameters": [
           {
@@ -1404,6 +1434,16 @@
               }
             }
           },
+          "400": {
+            "description": "Owner has no team",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
             "description": "",
             "content": {
@@ -1414,8 +1454,28 @@
               }
             }
           },
+          "403": {
+            "description": "Team sharing requires the actual owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sharing state changed or an untracked grant conflicts",
             "content": {
               "application/json": {
                 "schema": {
@@ -8232,7 +8292,7 @@
       },
       "put": {
         "tags": ["document"],
-        "summary": "Sets the team-share state of a document. Sharing grants the document\nowner's team Edit access; unsharing removes the team's access. Requires\nEdit access on the document.",
+        "summary": "Sets explicit team sharing. Requires a verified acting identity matching\nthe persisted document owner, not merely effective Edit or Owner access.\nInitial enable defaults to Edit; repeated enable preserves the chosen level.\nClear removes only the managed direct grant, not inherited team access.",
         "operationId": "set_document_team_share",
         "parameters": [
           {
@@ -8267,7 +8327,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "Owner has no team",
             "content": {
               "application/json": {
                 "schema": {
@@ -8277,7 +8337,7 @@
             }
           },
           "401": {
-            "description": "",
+            "description": "Acting identity is absent or is not the actual owner",
             "content": {
               "application/json": {
                 "schema": {
@@ -8288,6 +8348,16 @@
           },
           "404": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sharing facts changed or an untracked grant conflicts",
             "content": {
               "application/json": {
                 "schema": {
@@ -11736,7 +11806,47 @@
               }
             }
           },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -19247,7 +19357,7 @@
         "properties": {
           "sharedWithTeam": {
             "type": "boolean",
-            "description": "Whether the document is currently shared with the owner's team."
+            "description": "Whether explicit team sharing is enabled; inherited team access does not count."
           },
           "teamId": {
             "type": ["string", "null"],
@@ -19507,7 +19617,7 @@
           },
           "shareWithTeam": {
             "type": ["boolean", "null"],
-            "description": "If `Some(true)`, grant the creator's team View access on the call.\nIf `Some(false)`, revoke the creator's team's access. `None` is a no-op.\nThe team is resolved from the call's `created_by`, not the acting user."
+            "description": "Owner-only compatibility setting. Initial `true` enables View; repeated\n`true` preserves the explicit level. `false` clears the managed grant,\neven after team departure. `None` preserves sharing. Contradictory\nlegacy and explicit levels are rejected before any edits."
           }
         }
       },
@@ -24419,6 +24529,17 @@
           "owner": {
             "type": "string",
             "description": "The owner of the item"
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The explicit access level granted to the owner's team, or `null` when disabled."
+              }
+            ]
           }
         }
       },
@@ -26695,6 +26816,17 @@
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The link access level. Omit to leave unchanged or pass `null` to reset it to the default\nlevel when a link share exists."
+              }
+            ]
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The explicit team access level. Omit to leave unchanged or pass `null` to disable team\nsharing. Only the actual owner may change this setting; `owner` is not an allowed level."
               }
             ]
           }
