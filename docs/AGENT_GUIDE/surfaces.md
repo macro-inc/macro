@@ -1,5 +1,20 @@
 # Other Surfaces
 
+## Live updates in flat Soup lists
+
+With browser GraphQL caching enabled, locally supported flat lists reconcile their
+loaded server pages with matching cached entities. Complete matching updates can
+appear without a list refetch; confirmed non-matches and explicit deletions disappear.
+Rows whose current predicate facts are unknown retain their previous server membership
+and sort evidence until hydration or a network refresh resolves them. Unrelated
+notification-only cache records do not block other rows' updates.
+
+This is a best-effort display, not proof that every matching entity is cached. Loading
+more still follows the original server cursors and preserves already loaded pages.
+Changing filters or resetting the cache discards prior reconciliation evidence. Grouped
+lists, unsupported filters/sorts, and native/non-cache transports keep their existing
+network behavior.
+
 ## Inbox — `/app/component/inbox`
 
 Unified triage list (emails, channel messages, task assignments, doc mentions, agent

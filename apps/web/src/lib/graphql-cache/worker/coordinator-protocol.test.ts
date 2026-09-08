@@ -24,6 +24,32 @@ const enginePort = {
 } as unknown as MessagePort;
 
 describe('coordinator runtime protocol', () => {
+  it('validates bounded reconciliation evidence without changing exact requests', () => {
+    const request = {
+      filters: {},
+      sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC',
+      limit: 20,
+    };
+    const valid = (baseline?: unknown) =>
+      isCacheRequest({
+        id: 1,
+        kind: 'entity-filter',
+        request: { ...request, baseline },
+      });
+    const entry = {
+      key: 'GraphqlSoupDocument:one',
+      sortTimestamp: '2026-01-01T00:00:00.123456Z',
+    };
+    expect(valid()).toBe(true);
+    expect(valid([])).toBe(true);
+    expect(valid([entry])).toBe(true);
+    expect(valid(Array(5001).fill(entry))).toBe(false);
+    expect(valid([{ ...entry, key: 'not-a-normalized-key' }])).toBe(false);
+    expect(valid([{ ...entry, sortTimestamp: 123 }])).toBe(false);
+    expect(valid([{ ...entry, unexpected: true }])).toBe(false);
+  });
+
   it('validates cache RPCs and rejects unknown fields or kinds', () => {
     expect(isCacheRequest({ id: 0, kind: 'clear' })).toBe(true);
     expect(isCacheRequest({ id: 1, kind: 'current-revision' })).toBe(true);
