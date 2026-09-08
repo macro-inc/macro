@@ -81,13 +81,16 @@ Apply any new migrations before testing.
 ### Include test-only queries in preparation
 
 The root `prepare_db` wrapper takes **no flags**. If SQLx needs metadata for
-queries compiled only in tests, call the workspace helper from the root:
+queries compiled only in tests, call the workspace helper from the root. First
+set `DATABASE_URL` to your intended local database URL, replacing the placeholders
+below with your local connection details:
 
 ```bash
-nix develop --command just sqlx::prepare_db 'postgres://user:password@localhost:5432/macrodb' --tests
+export DATABASE_URL='postgres://<user>:<password>@<host>:<port>/<database>'
+nix develop --command just sqlx::prepare_db "$DATABASE_URL" --tests
 ```
 
-This uses the default local database URL. The helper in
+The helper in
 [sqlx.just](../tooling/just/sqlx.just) forwards `--tests` to Cargo while keeping
 workspace scope and the root `.sqlx` directory. Do not run preparation from an
 individual crate or try `just prepare_db --tests`.
