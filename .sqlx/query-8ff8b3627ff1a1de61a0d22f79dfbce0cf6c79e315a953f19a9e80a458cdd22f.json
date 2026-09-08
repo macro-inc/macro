@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH roots AS (\n                SELECT 'document' AS kind, id FROM \"Document\"\n                UNION SELECT 'project', id FROM \"Project\"\n                UNION SELECT 'chat', id FROM \"Chat\"\n                UNION SELECT 'email_thread', id::text FROM email_threads\n                UNION SELECT 'call', id::text FROM calls\n                UNION SELECT 'call', id::text FROM call_records\n                UNION SELECT entity_type, entity_id::text FROM entity_access\n                    WHERE source_type = 'team' AND granted_from_project_id IS NULL\n                      AND entity_type IN ('document', 'project', 'chat', 'email_thread', 'call')\n            ) SELECT kind AS \"kind!\", id AS \"id!\" FROM roots\n            WHERE (kind || '/' || id) COLLATE \"C\" > $1 COLLATE \"C\"\n            ORDER BY (kind || '/' || id) COLLATE \"C\" LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "8ff8b3627ff1a1de61a0d22f79dfbce0cf6c79e315a953f19a9e80a458cdd22f"
+}

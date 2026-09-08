@@ -10,6 +10,10 @@ name = "document_storage_service"
 path = "src/main.rs"
 
 [[bin]]
+name = "reconcile_team_sharing"
+path = "src/bin/reconcile_team_sharing.rs"
+
+[[bin]]
 name = "document_storage_service_openapi"
 path = "src/openapi.rs"
 

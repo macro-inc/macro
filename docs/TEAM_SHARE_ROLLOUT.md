@@ -150,10 +150,14 @@ operation may attribute a reviewed historical grant; normal writes must not do s
 
 1. Apply the additive migration. Leave legacy grants untouched and existing
    canonical state NULL/NULL/0; this is not a backfill.
-2. Complete and coordinate deployment of canonical writers, readers, owner
-   checks, inheritance, and lifecycle handling. Retire the old document/call/task
-   writers and upgrade or disable the seed writers listed above. Drain old
-   processes/jobs: concurrent old writers do not honor the guard.
+2. Before the writer cutover, temporarily suspend conflicting share, membership/
+   team-deletion, ownership/email-link, call archive, and project-topology mutations
+   wherever all participants cannot be upgraded together. Drain in-flight work.
+   Complete and coordinate deployment of canonical writers, readers, owner checks,
+   inheritance, and lifecycle handling. Retire the old document/call/task writers
+   and upgrade or disable the seed writers listed above. Drain old processes/jobs:
+   concurrent old writers do not honor the guard. Keep seed/scenario and external
+   grant writers disabled until audited.
 3. Before reconciliation, audit all direct-team sources again, including external
    scripts. Do not reserve exclusive canonical ownership while any independent
    writer remains active. Do not deploy intermediate feature commits as a mixed
@@ -167,7 +171,120 @@ operation may attribute a reviewed historical grant; normal writes must not do s
    Production reconciliation is an explicit operator action; this migration
    performs no remote data maintenance.
 
-Detailed reconciliation commands and operational validation belong in the
-reconciliation implementation's update to this document. The generated down
-migration removes only these columns/constraints, not grants; do not use it after
-canonical writers are enabled, because it discards revocation attribution.
+6. Retain dry-run, apply, and verification reports with the deployment record. Resolve
+   or explicitly disposition every review finding. Resume suspended mutations only
+   after the verification gates below pass. Monitor guard wait time, transaction
+   failures, permission conflicts, and access regressions after resumption.
+
+The generated down migration removes only these columns/constraints, not grants;
+do not use it after canonical writers are enabled, because it discards revocation
+attribution. If rollout fails, stop reconciliation and conflicting mutations, retain
+canonical state, and roll forward with upgraded writers. Do not redeploy legacy
+writers or reset revisions as a rollback strategy.
+
+## Reconciliation command
+
+`reconcile_team_sharing` is an operator-only CLI; it does not start the application,
+contact remote services, publish events, or run automatically at deployment. It
+loads the existing `DATABASE_URL` through `macro_env_var`. Select the database
+explicitly in the operator's environment; do not put credentials in command history
+or reports. Builders must use **disposable local fixtures only**, never remote data.
+
+From the repository root (inside the pinned Nix shell):
+
+```bash
+cargo run -p document_storage_service --bin reconcile_team_sharing -- --help
+# No --apply: inspect at most 100 roots, with no persisted writes.
+cargo run -p document_storage_service --bin reconcile_team_sharing
+# Resume after the exact resume_after value printed by the preceding batch.
+cargo run -p document_storage_service --bin reconcile_team_sharing -- \
+  --batch-size 100 --after 'document/20000000-0000-0000-0000-000000000002'
+```
+
+The cursor is an exclusive, byte-ordered `type/UUID` key, not an offset. Each
+invocation processes one batch (1–1000 roots), with short per-root transactions.
+Continue until `end_of_scan=true`. Retain each complete report before recording its
+`resume_after` checkpoint. On failure or lost output, replay from the last retained
+checkpoint: committed repairs are idempotent. A full batch may require one final
+empty invocation. A resumed scan is not a stable database snapshot; restart from
+an empty cursor for final verification and to discover concurrent inserts behind
+the cursor. Do not reuse an apply checkpoint for a new verification pass.
+
+### Evidence and classification
+
+The scan covers documents (including tasks/snippets), projects, chats, calls, and
+email threads, plus orphan direct-team grants for these kinds. It does not use
+`linkShare = TEAM` or inherited grants as evidence. Missing entities/permissions
+are reported, not lazily created. Classification and writes are separate; apply
+reloads all evidence under the shared READ COMMITTED guard and skips changed facts.
+
+| Finding | Operator action / automatic behavior |
+| --- | --- |
+| `UnknownDirectGrant` | Preserved. A same-team grant alone does not prove managed provenance. Projects/chats/threads are never historically adopted by this tool. |
+| `ManagedDocumentCandidate` | Requires `--reviewed-document UUID`, a single direct grant for the sole extant current owner team, valid owner/permission facts, and NULL canonical state at revision zero. Adopt the **actual** View/Comment/Edit level. |
+| `ManagedCallCandidate` | Same grant/state requirements; all extant active/archived flags must be true and creator/permission evidence consistent. Adopt the actual level, not a View override. |
+| `LegacyCallMissingGrant` | Only revision-zero NULL calls with consistently true flags, consistent ownership/permission rows, exactly one extant current owner team, and **no direct team grants** qualify. Repair at View under the approved automatic-call policy, then canonically adopt in the same transaction. |
+| `OwnerGrant`, `StaleTeamGrant` | Preserved for review, never downgraded, adopted, or deleted. Stale includes deleted teams and grants not matching current membership. Multiple grants block historical adoption/automatic call repair. |
+| `CallFlagDisagreement` | Review only: mismatched active/archive flags, false flags with grants/consent, or true flags after a newer clear. This tool does not rewrite compatibility flags. |
+| `ProtectedRevision` | A nonzero NULL state is a newer clear, not an uninitialized row. Never resurrect it, even if an operator supplies a reviewed document ID. |
+| `CanonicalGrantMismatch` | Restore the exact existing canonical grant only with unchanged facts, unambiguous current membership, and no conflicting Owner-level grant/call flags. Preserve the canonical level/team/revision. Project grant repair also synchronizes its attributed descendants. |
+| `CanonicalVerified` | The managed team and exact direct level match. Extra unknown/stale grants and flag disagreements are still reported separately; this finding alone is not rollout approval. |
+| `StaleCanonicalTeam`, `AmbiguousOwnerTeam`, `MissingOrInvalidFacts` | Operator review; do not infer new consent or delete unexplained rows. Missing/ambiguous membership and soft-deleted roots cannot gain new grants. |
+
+Document review is deliberately explicit because historical runtime and seed writers
+share the same row shape: the database has no reliable per-writer provenance marker.
+Before supplying an ID, establish historical document/task managed-writer provenance
+from audited deployment/seed history or retained audit evidence. Current membership,
+link sharing, access level alone, or a document's task subtype are insufficient.
+Record the reviewed ID list and evidence in the change ticket. If evidence cannot
+be established, leave the grant unknown and seek owner/operator resolution. Do not
+bulk mark every same-team grant as reviewed.
+
+Dry-run the exact reviewed list, then explicitly apply it after approval:
+
+```bash
+cargo run -p document_storage_service --bin reconcile_team_sharing -- \
+  --reviewed-document 20000000-0000-0000-0000-000000000002
+cargo run -p document_storage_service --bin reconcile_team_sharing -- \
+  --apply --reviewed-document 20000000-0000-0000-0000-000000000002
+```
+
+Repeat reviewed IDs as needed and retain the same list while paging. Review findings
+are not fatal process errors: inspect `findings` and `action` on every root.
+`applied=true` means the transaction committed and verified both the canonical setting
+and its exact managed direct grant. `changed_since_review=true` means no repair was
+committed for that root; rescan it rather than skipping it permanently. Each apply
+reclassifies current evidence; a previous dry-run is not a durable authorization.
+Adoption advances revision zero to one. Canonical grant-only repair preserves the
+revision because it restores unchanged consent rather than supplying a user edit.
+No grant repair overwrites a newer canonical update: all writers must hold the guard.
+
+## Verification and completion gates
+
+1. On a disposable local database, save a data dump, run without `--apply`, and
+   compare the data afterward. There must be no persisted row changes, including
+   permission associations, compatibility flags, grants, and revisions.
+2. Apply the reviewed fixture batch twice. The second pass must report `repairs=0`.
+   Check the actual levels, not just the count. Reconciliation tests cover these
+   invariants and inherited/link-team exclusion.
+3. After operational apply, rescan **all batches from the beginning**, without
+   `--apply`. Every canonical root must have its expected exact grant; every adopted
+   managed grant must have the matching setting. Require no remaining repair actions
+   and disposition all unknown/stale/Owner/flag/invalid-state findings. A zero repair
+   count alone does not prove all findings were resolved.
+4. Separately audit orphan `SharePermission` rows and permission associations, which
+   may have no authoritative root to scan; do not manufacture entities to adopt them.
+   Validate project descendant attribution/inheritance, fresh REST/GraphQL reads,
+   access enforcement, lifecycle revocation, and revision-safe compensation. The CLI
+   verifies direct root grants, not an exhaustive project topology/access audit.
+5. Refresh/reload affected clients and invalidate relevant application caches through
+   approved operational procedures before resumption; the CLI intentionally emits no
+   application events. Resume only coordinated canonical writers, then monitor.
+
+Developer checks (leave `SQLX_OFFLINE` unset for tests):
+
+```bash
+cargo test -p document_storage_service team_share_reconciliation
+cargo run -p document_storage_service --bin reconcile_team_sharing -- --help
+nix develop --command just prepare_db
+```
