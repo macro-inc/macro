@@ -287,7 +287,7 @@ export function ConversationCard(props: ConversationCardProps) {
       role="treeitem"
       tabIndex={-1}
       class={cn(
-        'relative w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent touch:focus-visible:ring-0',
+        'relative w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors',
         props.selected && !isTouchDevice() && 'bg-active',
         !props.selected && !isTouchDevice() && props.focused && 'bg-hover',
         (!props.selected || isTouchDevice()) && 'bg-transparent',

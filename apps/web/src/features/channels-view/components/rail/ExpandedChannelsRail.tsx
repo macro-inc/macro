@@ -77,7 +77,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         role="treeitem"
         tabIndex={-1}
         class={cn(
-          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent touch:focus-visible:ring-0',
+          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors',
           isDirectMessage(props.channel) ? 'min-h-10 py-2' : 'h-8',
           item().selected && !isTouchDevice() && 'bg-active text-ink',
           (!item().selected || isTouchDevice()) && 'text-ink-muted',
@@ -173,7 +173,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           type="button"
           role="treeitem"
           tabIndex={-1}
-          class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none"
           aria-expanded={section().open}
           onClick={() => rail.activateRow(rowKeyForSection(props.config.group))}
         >

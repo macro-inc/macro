@@ -111,7 +111,7 @@ function SlimChannelItem(props: { channel: ChannelEntity }) {
           role="treeitem"
           tabIndex={-1}
           class={cn(
-            'flex size-10 items-center justify-center rounded-full text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent touch:focus-visible:ring-0',
+            'flex size-10 items-center justify-center rounded-full text-left outline-none transition-colors',
             item().selected && !isTouchDevice() && 'bg-active text-ink',
             (!item().selected || isTouchDevice()) && 'text-ink-muted',
             !item().selected &&
@@ -253,7 +253,7 @@ function SlimGroupSection(props: { config: GroupConfig }) {
           type="button"
           role="treeitem"
           tabIndex={-1}
-          class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none"
           aria-expanded={section().open}
           aria-label={props.config.label}
           onClick={() => rail.activateRow(rowKeyForSection(props.config.group))}
