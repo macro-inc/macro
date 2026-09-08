@@ -1,6 +1,6 @@
 //! OpenAPI document for the agent harness service's session routes.
 
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionQueueResponse,
@@ -40,6 +40,7 @@ use utoipa::OpenApi;
         EditQueuedActionRequest,
         AgentAction,
         AgentActionId,
+        PromptAttachment,
         AgentSessionResponse,
         RenameAgentSessionRequest,
         SessionStatusDto,

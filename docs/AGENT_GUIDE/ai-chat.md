@@ -78,6 +78,16 @@ used in chat and channels; they serialize as `<m-document-mention>` tags in the 
 the agent sees. Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread).
 
+Files can be attached to a prompt three ways: drop them anywhere on the composer (a
+"Drop files here to send them to the agent" overlay appears), paste them from the
+clipboard, or use the paperclip **`Attach files`** button. Every file uploads to the
+static file service and shows as a chip above the text (media thumbnails, document
+pills with a remove `×`); **Send** is disabled while an upload is pending. The agent
+receives each file as an ACP `resource_link` (a URL it can fetch) after the prompt text,
+and the sent prompt renders its files in the transcript (image thumbnails, video
+previews, file chips that open the file). A prompt may be files only. Queued prompts
+list their attached file names under the text; editing a queued prompt keeps them.
+
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text

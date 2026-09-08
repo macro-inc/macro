@@ -99,6 +99,24 @@ describe('sending', () => {
     dispose();
   });
 
+  it('posts attachments alongside the text, and omits the field without any', async () => {
+    const { controller, dispose } = setup();
+    const attachment = {
+      uri: 'https://static.example/file/1',
+      name: 'screenshot.png',
+      mimeType: 'image/png',
+    };
+    controller.send('look', [attachment]);
+    controller.send('plain');
+    await flush();
+
+    expect(control.calls.map((c) => c.action)).toEqual([
+      { type: 'prompt', prompt: 'look', attachments: [attachment] },
+      { type: 'prompt', prompt: 'plain' },
+    ]);
+    dispose();
+  });
+
   it('posts immediately even while a turn is running — the service queues', async () => {
     const { controller, dispose } = setup({ working: true });
     controller.send('one');

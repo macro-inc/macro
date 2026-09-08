@@ -177,6 +177,28 @@ export type MessagePart =
       /**  The prose. */
       text: string;
     }
+  /**
+   *  A file the user attached to their prompt, by where it can be fetched.
+   *
+   *  Read off the prompt's `resource_link` blocks - the only shape this
+   *  side sends files in, since bytes never ride the log. Rendering decides
+   *  from `mime_type` whether that is a thumbnail or a chip.
+   */
+  | {
+      kind: 'attachment';
+      /**  Where the file can be fetched - a static file service URL. */
+      uri: string;
+      /**  Display name, typically the original file name. */
+      name: string;
+      /**  The file's media type, when the sender knew it. */
+      mimeType: string | null;
+      /**
+       *  Size in bytes, when the sender knew it. A double on the wire:
+       *  specta refuses 64-bit integers, and no file this renders is
+       *  anywhere near the precision limit.
+       */
+      size: number | null;
+    }
   /**  The agent's reasoning, which a reader may want to hide by default. */
   | {
       kind: 'thought';

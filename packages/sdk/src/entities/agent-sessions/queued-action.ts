@@ -1,4 +1,7 @@
-import type { QueuedActionDto } from '../../../generated/agent-harness/types.gen';
+import type {
+  PromptAttachment,
+  QueuedActionDto,
+} from '../../../generated/agent-harness/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 
@@ -45,6 +48,11 @@ export class QueuedAction {
   /** The prompt's raw text, present for prompts only. What an edit replaces. */
   get prompt(): string | undefined {
     return this.dto.prompt ?? undefined;
+  }
+
+  /** Files the prompt refers to; empty for a compact. Kept through an edit. */
+  get attachments(): PromptAttachment[] {
+    return this.dto.attachments ?? [];
   }
 
   /** The user who queued it, absent when a bot acted on nobody's behalf. */

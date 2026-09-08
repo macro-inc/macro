@@ -79,8 +79,8 @@ fn a_logged_turn_replays_as_the_history_the_live_agent_recorded() {
     else {
         panic!("two full turns should replay, got {history:#?}");
     };
-    assert_eq!(first, "find the roadmap");
-    assert_eq!(second, "thanks");
+    assert_eq!(first.text, "find the roadmap");
+    assert_eq!(second.text, "thanks");
     assert_eq!(
         second_parts.as_slice(),
         [AssistantMessagePart::Text {
@@ -128,7 +128,7 @@ fn a_compact_prompt_drops_everything_recorded_before_it() {
     let [HistoryEntry::User(prompt), HistoryEntry::Assistant(parts)] = history.as_slice() else {
         panic!("only the post-compact turn should replay, got {history:#?}");
     };
-    assert_eq!(prompt, "after");
+    assert_eq!(prompt.text, "after");
     assert_eq!(
         parts.as_slice(),
         [AssistantMessagePart::Text {

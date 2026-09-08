@@ -13,6 +13,7 @@ import { For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
 import { ActionLine, Thought } from '../ui';
+import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
@@ -31,6 +32,7 @@ function AgentMessagePart(props: {
     .with({ kind: 'text' }, (part) => (
       <TextPart text={part.text} inFlight={props.inFlight} />
     ))
+    .with({ kind: 'attachment' }, (part) => <AttachmentPart part={part} />)
     .with({ kind: 'thought' }, (part) => (
       <Thought text={part.text} active={props.inFlight} />
     ))

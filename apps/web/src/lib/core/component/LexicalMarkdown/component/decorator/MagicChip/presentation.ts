@@ -119,59 +119,70 @@ function toolActivity(
 }
 
 function partActivity(part: MessagePart): MagicChipActivity {
-  return match(part)
-    .with({ kind: 'text' }, () => ({ label: 'Writing response', busy: false }))
-    .with({ kind: 'thought' }, ({ text }) => ({
-      label: 'Thinking',
-      detail: text.trim() || undefined,
-      busy: true,
-    }))
-    .with({ kind: 'tool_use' }, toolActivity)
-    .with({ kind: 'permission', outcome: { kind: 'cancelled' } }, () => ({
-      label: 'Permission cancelled',
-      busy: false,
-    }))
-    .with({ kind: 'permission', outcome: { kind: 'selected' } }, () => ({
-      label: 'Resuming work',
-      busy: true,
-    }))
-    .with({ kind: 'permission', outcome: { kind: 'pending' } }, () => ({
-      label: 'Permission needed',
-      busy: false,
-    }))
-    .with({ kind: 'permission', outcome: { kind: 'errored' } }, () => ({
-      label: 'Permission failed',
-      busy: false,
-    }))
-    .with({ kind: 'permission', outcome: { kind: 'unrecognized' } }, () => ({
-      label: 'Permission unavailable',
-      busy: false,
-    }))
-    .with({ kind: 'control', control: { kind: 'set_model' } }, (part) => ({
-      label: 'Model changed',
-      detail: part.control.model,
-      busy: false,
-    }))
-    .with({ kind: 'control', control: { kind: 'compact' } }, () => ({
-      label: 'Context compacted',
-      busy: false,
-    }))
-    .with({ kind: 'control', control: { kind: 'stop' } }, () => ({
-      label: 'Stop requested',
-      busy: false,
-    }))
-    .with({ kind: 'plan' }, ({ entries }) => {
-      const completed = entries.filter(
-        (entry) => entry.status === 'completed'
-      ).length;
-      const current = entries.find((entry) => entry.status === 'in_progress');
-      return {
-        label: `Todos ${completed}/${entries.length}`,
-        detail: current?.content,
-        busy: completed < entries.length,
-      };
-    })
-    .exhaustive();
+  return (
+    match(part)
+      .with({ kind: 'text' }, () => ({
+        label: 'Writing response',
+        busy: false,
+      }))
+      // A user's part, never an agent's; here only so the match stays total.
+      .with({ kind: 'attachment' }, ({ name }) => ({
+        label: 'File attached',
+        detail: name,
+        busy: false,
+      }))
+      .with({ kind: 'thought' }, ({ text }) => ({
+        label: 'Thinking',
+        detail: text.trim() || undefined,
+        busy: true,
+      }))
+      .with({ kind: 'tool_use' }, toolActivity)
+      .with({ kind: 'permission', outcome: { kind: 'cancelled' } }, () => ({
+        label: 'Permission cancelled',
+        busy: false,
+      }))
+      .with({ kind: 'permission', outcome: { kind: 'selected' } }, () => ({
+        label: 'Resuming work',
+        busy: true,
+      }))
+      .with({ kind: 'permission', outcome: { kind: 'pending' } }, () => ({
+        label: 'Permission needed',
+        busy: false,
+      }))
+      .with({ kind: 'permission', outcome: { kind: 'errored' } }, () => ({
+        label: 'Permission failed',
+        busy: false,
+      }))
+      .with({ kind: 'permission', outcome: { kind: 'unrecognized' } }, () => ({
+        label: 'Permission unavailable',
+        busy: false,
+      }))
+      .with({ kind: 'control', control: { kind: 'set_model' } }, (part) => ({
+        label: 'Model changed',
+        detail: part.control.model,
+        busy: false,
+      }))
+      .with({ kind: 'control', control: { kind: 'compact' } }, () => ({
+        label: 'Context compacted',
+        busy: false,
+      }))
+      .with({ kind: 'control', control: { kind: 'stop' } }, () => ({
+        label: 'Stop requested',
+        busy: false,
+      }))
+      .with({ kind: 'plan' }, ({ entries }) => {
+        const completed = entries.filter(
+          (entry) => entry.status === 'completed'
+        ).length;
+        const current = entries.find((entry) => entry.status === 'in_progress');
+        return {
+          label: `Todos ${completed}/${entries.length}`,
+          detail: current?.content,
+          busy: completed < entries.length,
+        };
+      })
+      .exhaustive()
+  );
 }
 
 /** How the turn ended, when it has — every ending but a clean answer. */
