@@ -329,7 +329,7 @@ const ExpandHint: Component<{ expanded: boolean }> = (props) => (
  * right. Anyone but the owner sees it read-only.
  */
 const AskingBody: Component<ChipAsking> = (props) => (
-  <div class="flex h-22 min-w-0 flex-col" data-magic-chip-asking>
+  <div class="flex h-41 min-w-0 flex-col" data-magic-chip-asking>
     <div class="relative min-h-0 flex-1">
       <div class="absolute inset-0 flex flex-col gap-2 overflow-y-auto px-3 pt-2 pb-3">
         <span class="text-sm leading-5 text-ink wrap-break-word">
@@ -469,7 +469,7 @@ export const MagicChipView: Component<{
           tabIndex={0}
           aria-expanded={markdown() ? expanded() : undefined}
           class="group/answer min-w-0 px-3 py-1 text-left hover:bg-hover"
-          classList={{ 'h-22': !expanded(), hidden: Boolean(chipAsking()) }}
+          classList={{ 'h-41': !expanded(), hidden: Boolean(chipAsking()) }}
           data-magic-chip-answer
           onClick={onAnswerClick}
           onKeyDown={(event) => {

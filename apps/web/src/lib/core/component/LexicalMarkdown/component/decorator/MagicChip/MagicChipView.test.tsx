@@ -90,7 +90,7 @@ describe('MagicChipView', () => {
     const card = container.querySelector('[data-magic-chip-preview]');
     expect(card?.className).toContain('rounded-lg');
 
-    expect(answerArea(container)?.className).toContain('h-22');
+    expect(answerArea(container)?.className).toContain('h-41');
     expect(container.querySelector('[data-testid="chip-markdown"]')).toBeNull();
     expect(container.querySelector('[data-magic-chip-pending]')).toBeTruthy();
 
@@ -138,7 +138,7 @@ describe('MagicChipView', () => {
       />
     ));
 
-    expect(answerArea(container)?.className).toContain('h-22');
+    expect(answerArea(container)?.className).toContain('h-41');
     expect(container.querySelector('[data-magic-chip-pending]')).toBeNull();
 
     const clip = container.querySelector('[data-magic-chip-clip]');
@@ -168,13 +168,13 @@ describe('MagicChipView', () => {
     const clip = () => container.querySelector('[data-magic-chip-clip]');
     const fade = () => container.querySelector('[data-magic-chip-fade]');
     expect(area.getAttribute('aria-expanded')).toBe('false');
-    expect(area.className).toContain('h-22');
+    expect(area.className).toContain('h-41');
     expect(fade()).toBeTruthy();
     expect(area.textContent).toContain('Show more');
 
     fireEvent.click(area);
     expect(area.getAttribute('aria-expanded')).toBe('true');
-    expect(area.className).not.toContain('h-22');
+    expect(area.className).not.toContain('h-41');
     expect(clip()?.className).not.toContain('overflow-hidden');
     expect(fade()).toBeNull();
     expect(area.textContent).toContain('Show less');
@@ -182,7 +182,7 @@ describe('MagicChipView', () => {
 
     fireEvent.keyDown(area, { key: 'Enter' });
     expect(area.getAttribute('aria-expanded')).toBe('false');
-    expect(area.className).toContain('h-22');
+    expect(area.className).toContain('h-41');
     expect(clip()?.className).toContain('overflow-hidden');
     expect(fade()).toBeTruthy();
     expect(area.textContent).toContain('Show more');
@@ -213,7 +213,7 @@ describe('MagicChipView', () => {
       />
     ));
 
-    expect(answerArea(container)?.className).toContain('h-22');
+    expect(answerArea(container)?.className).toContain('h-41');
     expect(headerLabel(container)?.textContent).toContain('Done');
     expect(headerLabel(container)?.textContent).not.toContain('Open session');
     fireEvent.click(headerLabel(container)!);
@@ -293,7 +293,7 @@ describe('MagicChipView reviewing a tool draft', () => {
     // The question takes the area; the passage waits underneath.
     expect(answerArea(view.container)?.className).toContain('hidden');
     const body = askingBody(view.container);
-    expect(body?.className).toContain('h-22');
+    expect(body?.className).toContain('h-41');
     expect(body?.textContent).toContain('Create calendar event?');
     expect(body?.contains(view.getByTestId('event-draft'))).toBe(true);
     expect(view.getByTestId('event-draft').textContent).toBe('Q3 sync');
@@ -452,7 +452,7 @@ describe('MagicChipView asking a form', () => {
       />
     ));
     const body = askingBody(view.container);
-    expect(body?.className).toContain('h-22');
+    expect(body?.className).toContain('h-41');
     expect(body?.contains(view.getByRole('radio', { name: 'Red' }))).toBe(true);
     expect(body?.textContent).toContain("What's the best colour?");
     // The fields stretch to the area and scroll inside it.

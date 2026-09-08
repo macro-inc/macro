@@ -51,7 +51,7 @@ or its arrow (`Open in session`) opens the agent session. The area under the hea
 holds the agent's latest passage: a pulsing star while the agent is busy before it
 writes, the passage as it streams, and the final passage once the turn ends - the last
 text the agent wrote, not the whole turn, and a finished turn with nothing said leaves
-the area empty. The passage is clipped to four lines with a fade and a `Show more`
+the area empty. The passage is clipped to about seven lines with a fade and a `Show more`
 cue: click it to expand in place (`Show less` collapses it). Before an answer exists,
 clicking the area also opens the session.
 When the agent stops to ask a question the chip keeps its height and the question takes
