@@ -114,6 +114,27 @@ describe('favorites reorder mutation', () => {
     expect(invalidateQueries).not.toHaveBeenCalled();
   });
 
+  it('keeps the network policy and transport selected at hook creation', async () => {
+    reorderFavoritesMock.mockResolvedValue({
+      kind: 'queued',
+      transactionId: 'transaction-1',
+    });
+    const mutation = renderHook(() => useReorderFavoritesMutation());
+
+    expect(graphqlSoupEnabledMock).toHaveBeenCalledOnce();
+    graphqlSoupEnabledMock.mockReturnValue(false);
+    onlineManager.setOnline(false);
+
+    const favorites = [
+      { entityType: 'document' as const, entityId: 'document-2' },
+      { entityType: 'document' as const, entityId: 'document-1' },
+    ];
+    await mutation.mutateAsync({ favorites });
+
+    expect(mutation.isPaused).toBe(false);
+    expect(reorderFavoritesMock).toHaveBeenCalledWith({ favorites }, true);
+  });
+
   it('revalidates the optimistic order after an immediate commit', async () => {
     testQueryClient.setQueryData<FavoritesList>(favoriteKeys.list.queryKey, {
       favorites: [favorite('document-1', 0), favorite('document-2', 1)],

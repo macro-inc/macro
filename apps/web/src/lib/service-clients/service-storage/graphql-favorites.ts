@@ -101,9 +101,10 @@ export async function executeGraphqlReorderFavorites(
 
 /** Reorder favorites through the configured REST or GraphQL transport. */
 export async function reorderFavorites(
-  args: ReorderFavoritesRequest
+  args: ReorderFavoritesRequest,
+  graphqlSoupEnabled = isFeatureEnabled(enableGraphqlSoup)
 ): Promise<ReorderFavoritesResult> {
-  if (!isFeatureEnabled(enableGraphqlSoup)) {
+  if (!graphqlSoupEnabled) {
     await throwOnErr(() =>
       storageServiceClient.favorites.reorderFavorites(args)
     );

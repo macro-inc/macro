@@ -220,17 +220,21 @@ type ReorderFavoritesCallbacks = MutationCallbacks<
 export function useReorderFavoritesMutation(
   callbacks?: ReorderFavoritesCallbacks
 ) {
+  const graphqlSoupEnabled = isFeatureEnabled(enableGraphqlSoup);
   return useMutation(() => ({
     // The GraphQL cache must see the mutation while offline so it can durably
     // queue the optimistic transaction instead of TanStack pausing it in RAM.
-    networkMode: isFeatureEnabled(enableGraphqlSoup) ? 'always' : 'online',
+    networkMode: graphqlSoupEnabled ? 'always' : 'online',
     mutationFn: async (
       args: ReorderFavoritesArgs
     ): Promise<ReorderFavoritesResult> => {
       // Entities the user has not favorited (e.g. an optimistic row whose add
       // is still in flight) are ignored by the backend.
       if (args.favorites.length === 0) return { kind: 'committed' };
-      return await reorderFavorites({ favorites: args.favorites });
+      return await reorderFavorites(
+        { favorites: args.favorites },
+        graphqlSoupEnabled
+      );
     },
     ...withCallbacks<
       ReorderFavoritesResult,
