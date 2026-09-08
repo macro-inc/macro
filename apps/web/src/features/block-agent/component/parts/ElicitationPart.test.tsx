@@ -64,9 +64,8 @@ vi.mock('../../ui', () => ({
           data-testid="pick-red"
           onClick={() =>
             props.onChange(first.name, {
-              kind: 'select',
-              values: ['Red'],
-              custom: undefined,
+              kind: 'single_select',
+              selection: { kind: 'option', value: 'Red' },
             })
           }
         />
@@ -75,9 +74,8 @@ vi.mock('../../ui', () => ({
           data-testid="type-other"
           onClick={() =>
             props.onChange(first.name, {
-              kind: 'select',
-              values: [],
-              custom: 'blue',
+              kind: 'single_select',
+              selection: { kind: 'custom', text: 'blue' },
             })
           }
         />

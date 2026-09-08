@@ -353,9 +353,11 @@ are shapes, not values](#answers-are-shapes-not-values)):
   content type, `to_acp_response` becomes total, and the OpenAPI stops saying
   `additionalProperties: {}`.
 - Web: `describeContent` and `optionTitle` deleted - the part renders the
-  fold's answers. `FieldValue` collapses from six kinds to four (one per
-  schema-type group), every decision is an `.exhaustive()` `match`, and
-  `pattern` / `format` / `looksSuspicious` are gone.
+  fold's answers. `FieldValue` distinguishes single-choice and multi-choice
+  drafts. A single choice explicitly represents no selection, an offered
+  option, or custom text; `customField` controls whether Other is available.
+  The radio needs no synthetic `__custom` value. Decisions use exhaustive
+  matches, and `pattern` / `format` / `looksSuspicious` are gone.
 
 Still to do: request scope, more than one outstanding question per session
 (Claude Code's parallel subagents), the MCP server reviewing user tools for

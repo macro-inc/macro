@@ -100,16 +100,48 @@ describe('initialValues', () => {
       port: { kind: 'text', text: '3000' },
       ratio: { kind: 'text', text: '' },
       logging: { kind: 'boolean', checked: true },
-      colours: { kind: 'select', values: ['r'], custom: undefined },
+      colours: { kind: 'multi_select', values: ['r'], custom: undefined },
       weird: { kind: 'unsupported' },
     });
     expect(initialValues(colour)).toEqual({
-      question_0: { kind: 'select', values: [], custom: undefined },
+      question_0: { kind: 'single_select', selection: { kind: 'none' } },
     });
   });
 });
 
 describe('validate', () => {
+  it('keeps an unselected question and an empty custom answer unanswered', () => {
+    for (const selection of [
+      { kind: 'none' as const },
+      { kind: 'custom' as const, text: '' },
+      { kind: 'custom' as const, text: '   ' },
+    ]) {
+      const values = {
+        question_0: { kind: 'single_select' as const, selection },
+      };
+      expect(validate(colour, values)).toEqual({ question_0: 'Required' });
+      expect(toContent(colour, values)).toEqual({});
+      expect(validate({ ...colour, required: [] }, values)).toEqual({});
+    }
+  });
+
+  it('refuses custom text when the question only allows offered options', () => {
+    const plain = structuredClone(colour);
+    const field = plain.properties[0]!.schema;
+    if (field.type !== 'string') throw new Error('expected a single choice');
+    field.customField = null;
+    const values = {
+      question_0: {
+        kind: 'single_select' as const,
+        selection: { kind: 'custom' as const, text: 'teal' },
+      },
+    };
+    expect(validate(plain, values)).toEqual({
+      question_0: 'Choose one of the offered choices',
+    });
+    expect(toContent(plain, values)).toEqual({});
+  });
+
   it('passes a defaulted form', () => {
     expect(validate(config, initialValues(config))).toEqual({});
   });
@@ -146,13 +178,13 @@ describe('validate', () => {
     expect(validate(config, values).ratio).toBe('At most 1');
     values.ratio = { kind: 'text', text: '' };
     values.colours = {
-      kind: 'select',
+      kind: 'multi_select',
       values: ['r', 'g', 'b'],
       custom: undefined,
     };
     expect(validate(config, values).colours).toBe('Choose at most 2');
     // Empty is "not answered": fine for an optional field, required otherwise.
-    values.colours = { kind: 'select', values: [], custom: undefined };
+    values.colours = { kind: 'multi_select', values: [], custom: undefined };
     expect(validate(config, values).colours).toBeUndefined();
     expect(validate({ ...config, required: ['colours'] }, values).colours).toBe(
       'Required'
@@ -162,19 +194,25 @@ describe('validate', () => {
   it('a select with a custom escape counts its custom text as an answer', () => {
     expect(
       validate(colour, {
-        question_0: { kind: 'select', values: [], custom: undefined },
+        question_0: { kind: 'single_select', selection: { kind: 'none' } },
       })
     ).toEqual({ question_0: 'Required' });
     // Typing an answer instead of picking one satisfies the question, and -
     // for a multi-select - counts towards `minItems`.
     expect(
       validate(colour, {
-        question_0: { kind: 'select', values: [], custom: 'blue' },
+        question_0: {
+          kind: 'single_select',
+          selection: { kind: 'custom', text: 'blue' },
+        },
       })
     ).toEqual({});
     expect(
       validate(colour, {
-        question_0: { kind: 'select', values: ['Red'], custom: undefined },
+        question_0: {
+          kind: 'single_select',
+          selection: { kind: 'option', value: 'Red' },
+        },
       })
     ).toEqual({});
     const oneColour: ElicitationSchema = {
@@ -196,7 +234,7 @@ describe('validate', () => {
     };
     expect(
       validate(oneColour, {
-        colours: { kind: 'select', values: [], custom: 'teal' },
+        colours: { kind: 'multi_select', values: [], custom: 'teal' },
       })
     ).toEqual({});
   });
@@ -204,7 +242,10 @@ describe('validate', () => {
   it('refuses a value no option offered', () => {
     expect(
       validate(colour, {
-        question_0: { kind: 'select', values: ['Mauve'], custom: undefined },
+        question_0: {
+          kind: 'single_select',
+          selection: { kind: 'option', value: 'Mauve' },
+        },
       })
     ).toEqual({ question_0: 'Not one of the offered choices' });
   });
@@ -214,12 +255,18 @@ describe('toContent', () => {
   it('sends the choice under the property or the custom text under its key', () => {
     expect(
       toContent(colour, {
-        question_0: { kind: 'select', values: ['Red'], custom: undefined },
+        question_0: {
+          kind: 'single_select',
+          selection: { kind: 'option', value: 'Red' },
+        },
       })
     ).toEqual({ question_0: 'Red' });
     expect(
       toContent(colour, {
-        question_0: { kind: 'select', values: [], custom: 'blue' },
+        question_0: {
+          kind: 'single_select',
+          selection: { kind: 'custom', text: 'blue' },
+        },
       })
     ).toEqual({ question_0_custom: 'blue' });
   });

@@ -8,12 +8,10 @@
  * are functions over present values so the component stays a thin shell.
  *
  * Draft values are deliberately *not* the answer's shape: a number is held as
- * the text being typed, and a select holds both what was picked and what was
- * typed instead, so a half-finished field is representable. There are four
- * value kinds to the schema's six types, one per group, so every decision
- * here matches on the schema and reads the value without re-narrowing - and
- * every match is `.exhaustive()`, so a property type the fold learns later is
- * a build error here rather than a silent fall-through.
+ * the text being typed, and a single choice is either unselected, an offered
+ * option, or custom text. Picking Other with an empty text box is distinct
+ * from not selecting anything. Every match is `.exhaustive()`, so a new
+ * variant must be handled explicitly.
  *
  * What this does not validate: `pattern` and `format`. Both are the agent's
  * to enforce and it does, on every answer, before acting. Re-implementing
@@ -29,28 +27,31 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { match, P } from 'ts-pattern';
 
+/** A single-choice draft cannot hold an option and custom text together. */
+export type SingleSelection =
+  | { kind: 'none' }
+  | { kind: 'option'; value: string }
+  | { kind: 'custom'; text: string };
+
 /** One field's draft value, keyed by property name. */
 export type FieldValue =
   /** Free text, and the raw text of a number while it is being typed. */
   | { kind: 'text'; text: string }
-  /**
-   * One or many choices. `custom` is `undefined` until the free-text escape
-   * is picked, then the text typed into it - so "picked Other but typed
-   * nothing yet" is a state of its own, not a blank.
-   */
-  | { kind: 'select'; values: string[]; custom: string | undefined }
+  | { kind: 'single_select'; selection: SingleSelection }
+  /** Multiple choices, or the free-text escape when the schema allows one. */
+  | { kind: 'multi_select'; values: string[]; custom: string | undefined }
   | { kind: 'boolean'; checked: boolean }
   /** A property type this client cannot render. */
   | { kind: 'unsupported' };
 
 export type FormValues = Record<string, FieldValue>;
 
-/** A select, single or multi, and its options. */
-type SelectSchema = Extract<
+/** A multi-select and its options. */
+type MultiSelectSchema = Extract<
   ElicitationPropertySchema,
-  { type: 'string' | 'multi_select' }
+  { type: 'multi_select' }
 >;
-type SelectValue = Extract<FieldValue, { kind: 'select' }>;
+type MultiSelectValue = Extract<FieldValue, { kind: 'multi_select' }>;
 
 /** Draft values pre-filled from the schema's defaults. */
 export function initialValues(schema: ElicitationSchema): FormValues {
@@ -66,9 +67,11 @@ function initialValue(field: ElicitationPropertySchema): FieldValue {
     .with(
       { type: 'string', options: P.when((options) => options.length > 0) },
       (select): FieldValue => ({
-        kind: 'select',
-        values: select.default == null ? [] : [select.default],
-        custom: undefined,
+        kind: 'single_select',
+        selection:
+          select.default == null
+            ? { kind: 'none' }
+            : { kind: 'option', value: select.default },
       })
     )
     .with(
@@ -96,7 +99,7 @@ function initialValue(field: ElicitationPropertySchema): FieldValue {
     .with(
       { type: 'multi_select' },
       (multi): FieldValue => ({
-        kind: 'select',
+        kind: 'multi_select',
         values: [...multi.default],
         custom: undefined,
       })
@@ -110,7 +113,7 @@ function initialValue(field: ElicitationPropertySchema): FieldValue {
  * when one was typed. Custom text is an answer, which is what `minItems` and
  * `maxItems` are counting.
  */
-function selected(value: SelectValue): number {
+function selected(value: MultiSelectValue): number {
   return value.values.length + (value.custom?.trim() ? 1 : 0);
 }
 
@@ -118,7 +121,14 @@ function isBlank(value: FieldValue | undefined): boolean {
   if (!value) return true;
   return match(value)
     .with({ kind: 'text' }, (text) => text.text.trim().length === 0)
-    .with({ kind: 'select' }, (select) => selected(select) === 0)
+    .with({ kind: 'single_select' }, ({ selection }) =>
+      match(selection)
+        .with({ kind: 'none' }, () => true)
+        .with({ kind: 'option' }, () => false)
+        .with({ kind: 'custom' }, ({ text }) => text.trim().length === 0)
+        .exhaustive()
+    )
+    .with({ kind: 'multi_select' }, (select) => selected(select) === 0)
     .with({ kind: 'boolean' }, () => false)
     .with({ kind: 'unsupported' }, () => true)
     .exhaustive();
@@ -161,8 +171,18 @@ function validateField(
 
   return match(field)
     .with({ type: 'string' }, (text) =>
-      value.kind === 'select'
-        ? membership(text, value)
+      value.kind === 'single_select'
+        ? match(value.selection)
+            .with({ kind: 'none' }, () => undefined)
+            .with({ kind: 'option' }, ({ value }) =>
+              text.options.some((option) => option.value === value)
+                ? undefined
+                : 'Not one of the offered choices'
+            )
+            .with({ kind: 'custom' }, () =>
+              text.customField ? undefined : 'Choose one of the offered choices'
+            )
+            .exhaustive()
         : value.kind === 'text'
           ? length(text, value.text)
           : undefined
@@ -173,7 +193,7 @@ function validateField(
         : undefined
     )
     .with({ type: 'multi_select' }, (multi) =>
-      value.kind === 'select' ? count(multi, value) : undefined
+      value.kind === 'multi_select' ? count(multi, value) : undefined
     )
     .with({ type: 'boolean' }, () => undefined)
     .exhaustive();
@@ -211,7 +231,7 @@ function bounds(
 
 function count(
   field: Extract<ElicitationPropertySchema, { type: 'multi_select' }>,
-  value: SelectValue
+  value: MultiSelectValue
 ): string | undefined {
   const chosen = selected(value);
   if (field.minItems != null && chosen < field.minItems) {
@@ -225,8 +245,8 @@ function count(
 
 /** A select's values must be offered, and its custom text must be allowed. */
 function membership(
-  field: SelectSchema,
-  value: SelectValue
+  field: MultiSelectSchema,
+  value: MultiSelectValue
 ): string | undefined {
   if (value.custom?.trim() && !field.customField) {
     return 'Choose one of the offered choices';
@@ -263,17 +283,27 @@ export function toContent(
       .with({ kind: 'boolean' }, (flag) => {
         content[property.name] = flag.checked;
       })
-      .with({ kind: 'select' }, (select) => {
+      .with({ kind: 'single_select' }, ({ selection }) => {
+        match(selection)
+          .with({ kind: 'none' }, () => {})
+          .with({ kind: 'option' }, ({ value }) => {
+            content[property.name] = value;
+          })
+          .with({ kind: 'custom' }, ({ text }) => {
+            if (field.type === 'string' && field.customField) {
+              content[field.customField] = text.trim();
+            }
+          })
+          .exhaustive();
+      })
+      .with({ kind: 'multi_select' }, (select) => {
         const custom = select.custom?.trim();
         const customField =
-          field.type === 'string' || field.type === 'multi_select'
-            ? field.customField
-            : null;
+          field.type === 'multi_select' ? field.customField : null;
         if (custom && customField) {
           content[customField] = custom;
         } else if (select.values.length > 0) {
-          content[property.name] =
-            field.type === 'multi_select' ? select.values : select.values[0];
+          content[property.name] = select.values;
         }
       })
       .with({ kind: 'unsupported' }, () => {})

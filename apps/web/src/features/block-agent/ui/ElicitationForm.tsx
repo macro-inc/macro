@@ -10,7 +10,11 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { Checkbox } from '@ui';
 import { For, Show } from 'solid-js';
-import type { FieldValue, FormValues } from '../state/elicitation-form';
+import type {
+  FieldValue,
+  FormValues,
+  SingleSelection,
+} from '../state/elicitation-form';
 
 export interface ElicitationFormProps {
   schema: ElicitationSchema;
@@ -70,6 +74,12 @@ export function ElicitationForm(props: ElicitationFormProps) {
       <For each={props.schema.properties}>
         {(property) => {
           const value = () => props.values[property.name];
+          const selection = (): SingleSelection => {
+            const current = value();
+            return current?.kind === 'single_select'
+              ? current.selection
+              : { kind: 'none' };
+          };
           const field = property.schema;
           const set = (next: FieldValue) => props.onChange(property.name, next);
           return (
@@ -83,10 +93,10 @@ export function ElicitationForm(props: ElicitationFormProps) {
                   <For each={field.options}>
                     {(option) => {
                       const checked = () => {
-                        const current = value();
+                        const current = selection();
                         return (
-                          current?.kind === 'select' &&
-                          current.values.includes(option.value)
+                          current.kind === 'option' &&
+                          current.value === option.value
                         );
                       };
                       return (
@@ -100,9 +110,11 @@ export function ElicitationForm(props: ElicitationFormProps) {
                             disabled={props.disabled}
                             onChange={() =>
                               set({
-                                kind: 'select',
-                                values: [option.value],
-                                custom: undefined,
+                                kind: 'single_select',
+                                selection: {
+                                  kind: 'option',
+                                  value: option.value,
+                                },
                               })
                             }
                           />
@@ -126,17 +138,13 @@ export function ElicitationForm(props: ElicitationFormProps) {
                         type="radio"
                         class="mt-1 accent-accent"
                         name={`elicitation-${property.name}`}
-                        value="__custom"
-                        checked={(() => {
-                          const current = value();
-                          return (
-                            current?.kind === 'select' &&
-                            current.custom !== undefined
-                          );
-                        })()}
+                        checked={selection().kind === 'custom'}
                         disabled={props.disabled}
                         onChange={() =>
-                          set({ kind: 'select', values: [], custom: '' })
+                          set({
+                            kind: 'single_select',
+                            selection: { kind: 'custom', text: '' },
+                          })
                         }
                       />
                       <span class="flex min-w-0 flex-1 flex-col gap-1">
@@ -147,16 +155,18 @@ export function ElicitationForm(props: ElicitationFormProps) {
                           placeholder="Type your own answer"
                           disabled={props.disabled}
                           value={(() => {
-                            const current = value();
-                            return current?.kind === 'select'
-                              ? (current.custom ?? '')
+                            const current = selection();
+                            return current.kind === 'custom'
+                              ? current.text
                               : '';
                           })()}
                           onInput={(event) =>
                             set({
-                              kind: 'select',
-                              values: [],
-                              custom: event.currentTarget.value,
+                              kind: 'single_select',
+                              selection: {
+                                kind: 'custom',
+                                text: event.currentTarget.value,
+                              },
                             })
                           }
                         />
@@ -211,7 +221,9 @@ export function ElicitationForm(props: ElicitationFormProps) {
                     {(option) => {
                       const selected = () => {
                         const current = value();
-                        return current?.kind === 'select' ? current.values : [];
+                        return current?.kind === 'multi_select'
+                          ? current.values
+                          : [];
                       };
                       return (
                         <Checkbox
@@ -219,7 +231,7 @@ export function ElicitationForm(props: ElicitationFormProps) {
                           disabled={props.disabled}
                           onChange={(checked) =>
                             set({
-                              kind: 'select',
+                              kind: 'multi_select',
                               values: checked
                                 ? [...selected(), option.value]
                                 : selected().filter(
@@ -252,13 +264,13 @@ export function ElicitationForm(props: ElicitationFormProps) {
                       disabled={props.disabled}
                       value={(() => {
                         const current = value();
-                        return current?.kind === 'select'
+                        return current?.kind === 'multi_select'
                           ? (current.custom ?? '')
                           : '';
                       })()}
                       onInput={(event) =>
                         set({
-                          kind: 'select',
+                          kind: 'multi_select',
                           values: [],
                           custom: event.currentTarget.value,
                         })
