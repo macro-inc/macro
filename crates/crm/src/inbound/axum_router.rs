@@ -64,23 +64,25 @@ use crate::domain::{model::CrmError, service::CrmService, stages::CrmStageServic
 
 /// Router state for the CRM endpoints, including service-backed authorization
 /// for direct user credentials and internal service access.
-pub struct CrmRouterState<C, Eas, Auth> {
+pub struct CrmRouterState<C, St, Eas, Auth> {
     /// CRM service.
     pub service: Arc<C>,
+    /// Team deal stage service.
+    pub stage_service: Arc<St>,
     /// Entity access service used by the team-scoped extractors.
     pub entity_access_service: Arc<Eas>,
     /// State used to authorize direct users and internal service callers.
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<C, Eas, Auth> FromRef<CrmRouterState<C, Eas, Auth>> for Arc<Eas> {
-    fn from_ref(state: &CrmRouterState<C, Eas, Auth>) -> Self {
+impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for Arc<Eas> {
+    fn from_ref(state: &CrmRouterState<C, St, Eas, Auth>) -> Self {
         state.entity_access_service.clone()
     }
 }
 
-impl<C, Eas, Auth> FromRef<CrmRouterState<C, Eas, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &CrmRouterState<C, Eas, Auth>) -> Self {
+impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &CrmRouterState<C, St, Eas, Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
@@ -100,48 +102,17 @@ impl<C> Clone for CrmServiceRef<C> {
     }
 }
 
-impl<C, Eas, Auth> FromRef<CrmRouterState<C, Eas, Auth>> for CrmServiceRef<C> {
-    fn from_ref(state: &CrmRouterState<C, Eas, Auth>) -> Self {
+impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for CrmServiceRef<C> {
+    fn from_ref(state: &CrmRouterState<C, St, Eas, Auth>) -> Self {
         CrmServiceRef(state.service.clone())
     }
 }
 
-// Manual Clone so C, Eas, and Auth don't need Clone.
-impl<C, Eas, Auth> Clone for CrmRouterState<C, Eas, Auth> {
+// Manual Clone so C, St, Eas, and Auth don't need Clone.
+impl<C, St, Eas, Auth> Clone for CrmRouterState<C, St, Eas, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
-            entity_access_service: self.entity_access_service.clone(),
-            authorization_state: self.authorization_state.clone(),
-        }
-    }
-}
-
-/// Router state for the deal stage endpoints.
-pub struct CrmStageRouterState<St, Eas, Auth> {
-    /// Team deal stage service.
-    pub stage_service: Arc<St>,
-    /// Entity access service used by the team extractor.
-    pub entity_access_service: Arc<Eas>,
-    /// State used to authorize direct users and internal service callers.
-    pub authorization_state: MacroAuthorizationState<Auth>,
-}
-
-impl<St, Eas, Auth> FromRef<CrmStageRouterState<St, Eas, Auth>> for Arc<Eas> {
-    fn from_ref(state: &CrmStageRouterState<St, Eas, Auth>) -> Self {
-        state.entity_access_service.clone()
-    }
-}
-
-impl<St, Eas, Auth> FromRef<CrmStageRouterState<St, Eas, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &CrmStageRouterState<St, Eas, Auth>) -> Self {
-        state.authorization_state.clone()
-    }
-}
-
-impl<St, Eas, Auth> Clone for CrmStageRouterState<St, Eas, Auth> {
-    fn clone(&self) -> Self {
-        Self {
             stage_service: self.stage_service.clone(),
             entity_access_service: self.entity_access_service.clone(),
             authorization_state: self.authorization_state.clone(),
@@ -150,81 +121,77 @@ impl<St, Eas, Auth> Clone for CrmStageRouterState<St, Eas, Auth> {
 }
 
 /// Build the CRM router with all endpoints.
-pub fn crm_router<C, St, Eas, Auth, S>(
-    state: CrmRouterState<C, Eas, Auth>,
-    stage_state: CrmStageRouterState<St, Eas, Auth>,
-) -> Router<S>
+pub fn crm_router<C, St, Eas, Auth, S>(state: CrmRouterState<C, St, Eas, Auth>) -> Router<S>
 where
     C: CrmService,
     St: CrmStageService,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
-    S: Clone + Send + Sync + 'static,
+    S: Send + Sync + 'static,
 {
-    let stage_router = Router::new()
-        .route(
-            "/stages",
-            put(stages::replace_handler::<St, Eas, Auth>)
-                .delete(stages::reset_handler::<St, Eas, Auth>),
-        )
-        .with_state(stage_state);
-
     Router::new()
-        .route("/companies", post(create_company::handler::<C, Eas, Auth>))
+        .route(
+            "/companies",
+            post(create_company::handler::<C, St, Eas, Auth>),
+        )
         .route(
             "/companies/{company_id}/email-sync",
-            put(set_email_sync::handler::<C, Eas, Auth>),
+            put(set_email_sync::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}/hidden",
-            put(set_company_hidden::handler::<C, Eas, Auth>),
+            put(set_company_hidden::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}/name",
-            put(set_company_name::handler::<C, Eas, Auth>),
+            put(set_company_name::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}",
-            get(get_company::handler::<C, Eas, Auth>),
+            get(get_company::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}/contacts",
-            get(list_company_contacts::handler::<C, Eas, Auth>)
-                .post(create_contact::handler::<C, Eas, Auth>),
+            get(list_company_contacts::handler::<C, St, Eas, Auth>)
+                .post(create_contact::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts/by-email",
-            get(get_contact_by_email::handler::<C, Eas, Auth>),
+            get(get_contact_by_email::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}",
-            get(get_contact::handler::<C, Eas, Auth>),
+            get(get_contact::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}/hidden",
-            put(set_contact_hidden::handler::<C, Eas, Auth>),
+            put(set_contact_hidden::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}/name",
-            put(set_contact_name::handler::<C, Eas, Auth>),
+            put(set_contact_name::handler::<C, St, Eas, Auth>),
         )
         .route(
             "/comments/{entity_type}/{entity_id}",
-            get(comments::list_handler::<C, Eas, Auth>)
-                .post(comments::create_handler::<C, Eas, Auth>),
+            get(comments::list_handler::<C, St, Eas, Auth>)
+                .post(comments::create_handler::<C, St, Eas, Auth>),
         )
         .route(
             "/comment/{comment_id}",
-            patch(comments::edit_handler::<C, Eas, Auth>)
-                .delete(comments::delete_handler::<C, Eas, Auth>),
+            patch(comments::edit_handler::<C, St, Eas, Auth>)
+                .delete(comments::delete_handler::<C, St, Eas, Auth>),
         )
         .route(
             "/settings",
-            get(team_settings::get_handler::<C, Eas, Auth>)
-                .put(team_settings::update_handler::<C, Eas, Auth>),
+            get(team_settings::get_handler::<C, St, Eas, Auth>)
+                .put(team_settings::update_handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/stages",
+            put(stages::replace_handler::<C, St, Eas, Auth>)
+                .delete(stages::reset_handler::<C, St, Eas, Auth>),
         )
         .with_state(state)
-        .merge(stage_router)
 }
 
 impl IntoResponse for CrmError {

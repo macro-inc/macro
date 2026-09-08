@@ -148,19 +148,13 @@ pub(crate) type DssEmailService = EmailServiceImpl<
 >;
 
 /// CRM router state.
-pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
-    DssCrmService,
-    EntityAccessService,
-    AuthorizationService,
->;
-
 pub(crate) type DssCrmStageService = crm::domain::stages::CrmStageServiceImpl<
     crm::outbound::companies_repo::CompaniesRepositoryImpl,
     crm::outbound::stage_definitions::PropertiesStageDefinitionStore<PropertiesService>,
 >;
 
-/// CRM deal stage router state.
-pub(crate) type DssCrmStageState = crm::inbound::axum_router::CrmStageRouterState<
+pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
+    DssCrmService,
     DssCrmStageService,
     EntityAccessService,
     AuthorizationService,
@@ -583,7 +577,6 @@ pub(crate) struct ApiContext {
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
-    pub crm_stage_state: DssCrmStageState,
 }
 
 env_var! {

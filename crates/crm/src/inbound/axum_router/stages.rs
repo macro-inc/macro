@@ -15,7 +15,7 @@ use crate::domain::{
     stages::{CrmStageService, StageInput, TeamStageSet},
 };
 
-use super::CrmStageRouterState;
+use super::CrmRouterState;
 
 /// One stage in a `PUT /crm/stages` body.
 #[derive(Debug, Deserialize, ToSchema)]
@@ -84,12 +84,13 @@ impl From<TeamStageSet> for CrmStagesResponse {
 )]
 #[tracing::instrument(skip_all, err)]
 pub async fn replace_handler<
+    C,
     St: CrmStageService,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<CrmStageRouterState<St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Json(req): Json<ReplaceCrmStagesRequest>,
 ) -> Result<Json<CrmStagesResponse>, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;
@@ -119,12 +120,13 @@ pub async fn replace_handler<
 )]
 #[tracing::instrument(skip_all, err)]
 pub async fn reset_handler<
+    C,
     St: CrmStageService,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<CrmStageRouterState<St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
 ) -> Result<StatusCode, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;
     state.stage_service.reset_stages(&receipt).await?;
