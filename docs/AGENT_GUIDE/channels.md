@@ -54,17 +54,17 @@ text the agent wrote, not the whole turn, and a finished turn with nothing said 
 the area empty. The passage is clipped to four lines with a fade and a `Show more`
 cue: click it to expand in place (`Show less` collapses it). Before an answer exists,
 clicking the area also opens the session.
-When the agent stops to ask a question the chip keeps its height. A form or URL question
-puts its prompt and fields in a pane - beside the passage on the chip's right when the
-agent said something first, or as the whole card when it did not - scrolling inside the
-chip when long: a form's choices (rows with an accent box, an `Other` row when the agent
-allows a free-text answer), text and number inputs, a yes/no; a URL request's host and
-address. Its decisions sit in the header before the arrow: `Submit` (or `Open` for a URL)
-and `Decline`. A Macro user tool the agent drafted (`SendEmail`, `CreateCalendarEvent`)
-is kept simple: the header offers only its go-ahead (`Send email`, `Create event`) and the
-arrow into the session, where the draft can be read, edited, or cancelled. Only the
-session's owner gets the decisions; other viewers see a form's fields disabled and the
-header reads who is being waited on.
+When the agent stops to ask a question the chip keeps its height and the question takes
+the area under the header in the passage's place: the prompt, then what is asked - a
+form's fields (choice rows with an accent box, an `Other` row when the agent allows a
+free-text answer, text and number inputs, a yes/no), a URL request's host and address, or
+a Macro user tool's draft (`SendEmail`, `CreateCalendarEvent`) summarized read-only -
+scrolling inside the chip when long. The decisions sit at the bottom right of that area:
+`Submit` (or `Open` for a URL) and `Decline` for a question; only the go-ahead (`Send
+email`, `Create event`) for a tool draft, whose editing and cancelling belong to the
+session behind the header's arrow. Only the session's owner gets the decisions; other
+viewers see the question read-only and the header names who is being waited on. Once
+answered, the area shows the agent's passage again.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention. With GraphQL enabled, document mentions and preview cards load
 in bounded batches, including task status/priority/assignees and the viewer's edit

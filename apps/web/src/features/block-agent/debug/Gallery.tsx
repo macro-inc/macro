@@ -460,12 +460,10 @@ function MagicChipStateDemo(props: { presentation: MagicChipPresentation }) {
 /** The chip asking, one per request kind; answers land in the console. */
 function MagicChipAskingDemo(props: {
   request: PendingElicitation['request'];
-  /** The agent asked without saying anything first. */
-  quiet?: boolean;
 }) {
   const presentation: MagicChipPresentation = {
     kind: 'asking',
-    markdown: props.quiet ? '' : 'Happy to. One quick question before I go on.',
+    markdown: 'Happy to. One quick question before I go on.',
     asking: {
       question: {
         requestId: 0,
@@ -555,13 +553,9 @@ export default function AgentUiGallery() {
             />
           </Item>
 
-          <Item label="MagicChip asking (form, quiet form, url, tool draft)">
+          <Item label="MagicChip asking (form, url, tool draft)">
             <MagicChipAskingDemo
               request={{ kind: 'form', schema: FIXTURE_ELICITATION }}
-            />
-            <MagicChipAskingDemo
-              request={{ kind: 'form', schema: FIXTURE_ELICITATION }}
-              quiet
             />
             <MagicChipAskingDemo
               request={{

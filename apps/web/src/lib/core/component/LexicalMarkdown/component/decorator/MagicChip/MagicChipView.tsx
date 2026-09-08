@@ -5,6 +5,10 @@ import {
   QuestionFields,
   type RespondToElicitation,
 } from '@app/features/block-agent/component/parts/LiveElicitation';
+import {
+  EmailDraft,
+  EventDraft,
+} from '@app/features/block-agent/component/parts/UserToolCall';
 import { DRAFT_FIELD } from '@app/features/block-agent/state/elicitation-review-sink';
 import {
   StaticMarkdown,
@@ -16,12 +20,15 @@ import ArrowUpRight from '@phosphor/arrow-up-right.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
+import type {
+  CreateCalendarEvent,
+  SendEmail,
+} from '@service-cognition/generated/tools/types';
 import { Button, Layer } from '@ui';
 import {
   type Component,
   createMemo,
   createSignal,
-  type JSX,
   Match,
   Show,
   Switch,
@@ -54,7 +61,7 @@ export type MagicChipAnswer = {
 };
 
 /** A Macro user tool the agent drafted, awaiting the user's go-ahead. */
-type ReviewedTool = { name: string; draft: unknown };
+type ReviewedTool = { name: string; data: unknown; draft: unknown };
 
 /**
  * The chip's side of a question: the shared live state for a form, URL, or
@@ -75,7 +82,11 @@ function createChipQuestion(asking: MagicChipQuestion): ChipQuestion {
   return call.isOk()
     ? {
         kind: 'user_tool',
-        tool: { name: call.value.name, draft: request.draft },
+        tool: {
+          name: call.value.name,
+          data: call.value.data,
+          draft: request.draft,
+        },
       }
     : createLiveQuestion({ kind: 'form', schema: request.schema });
 }
@@ -128,8 +139,8 @@ const ActivityText: Component<{ activity: MagicChipActivity }> = (props) => (
 );
 
 /**
- * The decisions for a live question, as buttons for the header: Submit or
- * Open with Decline for a question; a Macro user tool's single go-ahead
+ * The decisions for a live question, at the bottom right of the body: Submit
+ * or Open with Decline for a question; a Macro user tool's single go-ahead
  * (Create event, Send email), the rest of the review being the session's.
  * The chip sends a tool draft as the agent wrote it.
  */
@@ -175,15 +186,13 @@ const AskingActions: Component<ChipAsking> = (props) => {
 /**
  * The chip's top row: who is answering (`@bot · model`), what the turn is
  * doing, and the way into the session. The whole label opens the session,
- * as does the arrow; while a question is live its decisions sit before the
- * arrow.
+ * as does the arrow.
  */
 const ChipHeader: Component<{
   header?: MagicChipHeader;
   status: MagicChipActivity;
   /** The reply preview, while the answer area has nothing to offer. */
   preview?: string;
-  decisions?: JSX.Element;
   onOpen?: () => void;
 }> = (props) => (
   <div
@@ -224,7 +233,6 @@ const ChipHeader: Component<{
       </Show>
       <ActivityText activity={props.status} />
     </button>
-    {props.decisions}
     <Button
       variant="ghost"
       size="icon-xs"
@@ -315,34 +323,55 @@ const ExpandHint: Component<{ expanded: boolean }> = (props) => (
 );
 
 /**
- * A form or URL question's prompt and fields, scrolling inside the chip's
- * height. The pane contributes no height of its own, so a long form never
- * grows the card. Beside an answer it takes the right side; when the agent
- * wrote nothing it is the whole card. Its decisions are in the header.
+ * The question in the answer area's place: the prompt and what is asked - a
+ * form's fields, a URL and its host, a tool draft summarized read-only -
+ * scrolling inside the chip's height, with the decisions at the bottom
+ * right. Anyone but the owner sees it read-only.
  */
-const AskingPane: Component<
-  ChipAsking & { question: LiveQuestion; beside: boolean }
-> = (props) => (
-  <div
-    class="relative"
-    classList={{
-      'w-[45%] min-w-40 max-w-72 shrink-0 border-l border-edge-muted':
-        props.beside,
-      'min-w-0 flex-1': !props.beside,
-    }}
-    data-magic-chip-pane
-  >
-    <div class="absolute inset-0 flex flex-col gap-2 overflow-y-auto px-3 py-2">
-      <span class="text-sm leading-5 text-ink wrap-break-word">
-        {props.asking.question.message}
-      </span>
-      <QuestionFields question={props.question} locked={props.locked} />
+const AskingBody: Component<ChipAsking> = (props) => (
+  <div class="flex h-22 min-w-0 flex-col" data-magic-chip-asking>
+    <div class="relative min-h-0 flex-1">
+      <div class="absolute inset-0 flex flex-col gap-2 overflow-y-auto px-3 pt-2 pb-3">
+        <span class="text-sm leading-5 text-ink wrap-break-word">
+          {props.asking.question.message}
+        </span>
+        <Switch>
+          <Match when={reviewedTool(props.question)}>
+            {(tool) => (
+              <Switch>
+                <Match when={tool().name === 'CreateCalendarEvent'}>
+                  <EventDraft event={tool().data as CreateCalendarEvent} />
+                </Match>
+                <Match when={tool().name === 'SendEmail'}>
+                  <EmailDraft
+                    email={tool().data as SendEmail}
+                    inFlight={false}
+                  />
+                </Match>
+              </Switch>
+            )}
+          </Match>
+          <Match when={liveQuestion(props.question)}>
+            {(question) => (
+              <QuestionFields question={question()} locked={props.locked} />
+            )}
+          </Match>
+        </Switch>
+      </div>
+      {/* The area clips; the fade says there is more below. */}
+      <div
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-linear-to-t from-surface to-transparent"
+      />
     </div>
-    {/* The pane clips; the fade says there is more below. */}
-    <div
-      aria-hidden="true"
-      class="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-linear-to-t from-surface to-transparent"
-    />
+    <Show when={props.asking.canAnswer}>
+      <div
+        class="flex shrink-0 items-center justify-end gap-2 px-3 pb-2"
+        data-magic-chip-decisions
+      >
+        <AskingActions {...props} />
+      </div>
+    </Show>
   </div>
 );
 
@@ -352,9 +381,8 @@ const AskingPane: Component<
  * an area that holds the agent's latest passage - a pulsing star while the
  * agent is busy before it writes, the passage as it streams, and the final
  * passage once the turn ends. Clicking the passage expands it in place. A
- * question the agent stops to ask puts its fields in a pane beside the
- * passage (or in its place, when nothing was said) and its decisions in the
- * header.
+ * question the agent stops to ask takes the area instead, its decisions at
+ * the bottom right, until it is answered.
  */
 export const MagicChipView: Component<{
   agentSessionId: string;
@@ -399,22 +427,13 @@ export const MagicChipView: Component<{
         locked ? false : ((await props.answer?.respond(answer)) ?? false),
     };
   };
-  // A form or URL has fields to show; a tool review is its one button.
-  const pane = () => {
-    const current = chipAsking();
-    const live = current && liveQuestion(current.question);
-    return current && live ? { ...current, question: live } : undefined;
-  };
-  // The agent's side is shown while it has said something, or while there is
-  // no question to give the room to.
-  const showAnswer = () => Boolean(markdown()) || !pane();
   // While the answer area has no prose, a reply to the message previews the
   // header's line instead.
   const preview = () => {
-    if (markdown()) return undefined;
+    const live = asking();
+    if (markdown() && !live) return undefined;
     const current = status();
     const line = `${current.label}${current.detail ? ` ${current.detail}` : ''}`;
-    const live = asking();
     return live ? `${line} · ${live.question.message}` : line;
   };
 
@@ -441,45 +460,36 @@ export const MagicChipView: Component<{
           header={props.header}
           status={status()}
           preview={preview()}
-          decisions={
-            <Show when={chipAsking()}>
-              {(current) => (
-                <Show when={current().asking.canAnswer}>
-                  <AskingActions {...current()} />
-                </Show>
-              )}
-            </Show>
-          }
           onOpen={props.onOpen}
         />
-        <div class="flex min-h-22">
-          <div
-            role="button"
-            tabIndex={0}
-            aria-expanded={markdown() ? expanded() : undefined}
-            class="group/answer min-w-0 flex-1 px-3 py-1 text-left hover:bg-hover"
-            classList={{ 'h-22': !expanded(), hidden: !showAnswer() }}
-            data-magic-chip-answer
-            onClick={onAnswerClick}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter' && event.key !== ' ') return;
-              event.preventDefault();
-              onAnswerClick();
-            }}
+        {/* The passage stays mounted under a question so its expanded state
+            survives the question being answered. */}
+        <div
+          role="button"
+          tabIndex={0}
+          aria-expanded={markdown() ? expanded() : undefined}
+          class="group/answer min-w-0 px-3 py-1 text-left hover:bg-hover"
+          classList={{ 'h-22': !expanded(), hidden: Boolean(chipAsking()) }}
+          data-magic-chip-answer
+          onClick={onAnswerClick}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            onAnswerClick();
+          }}
+        >
+          <Show
+            when={markdown()}
+            fallback={<AnswerPending busy={status().busy} />}
           >
-            <Show
-              when={markdown()}
-              fallback={<AnswerPending busy={status().busy} />}
-            >
-              {(answer) => (
-                <AnswerBody markdown={answer()} expanded={expanded()} />
-              )}
-            </Show>
-          </div>
-          <Show when={pane()}>
-            {(current) => <AskingPane {...current()} beside={showAnswer()} />}
+            {(answer) => (
+              <AnswerBody markdown={answer()} expanded={expanded()} />
+            )}
           </Show>
         </div>
+        <Show when={chipAsking()}>
+          {(current) => <AskingBody {...current()} />}
+        </Show>
       </div>
     </Layer>
   );

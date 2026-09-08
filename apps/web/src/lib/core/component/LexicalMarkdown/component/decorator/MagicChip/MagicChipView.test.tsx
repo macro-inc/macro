@@ -46,10 +46,24 @@ function headerLabel(container: HTMLElement) {
   return header(container)?.querySelector('button');
 }
 
-/** The pane a form or URL question's fields live in, beside the answer. */
-function pane(container: HTMLElement) {
-  return container.querySelector('[data-magic-chip-pane]');
+/** The question, in the answer area's place while one is live. */
+function askingBody(container: HTMLElement) {
+  return container.querySelector('[data-magic-chip-asking]');
 }
+
+/** The decisions at the bottom right of the question. */
+function decisions(container: HTMLElement) {
+  return container.querySelector('[data-magic-chip-decisions]');
+}
+
+vi.mock('@app/features/block-agent/component/parts/UserToolCall', () => ({
+  EventDraft: (props: { event: { title: string } }) => (
+    <div data-testid="event-draft">{props.event.title}</div>
+  ),
+  EmailDraft: (props: { email: { subject: string } }) => (
+    <div data-testid="email-draft">{props.email.subject}</div>
+  ),
+}));
 
 const respond = vi.fn<(answer: ElicitationAnswer) => Promise<boolean>>();
 const onOpen = vi.fn();
@@ -267,7 +281,7 @@ function asking(canAnswer: boolean, markdown = ''): MagicChipPresentation {
 }
 
 describe('MagicChipView reviewing a tool draft', () => {
-  it('offers only the go-ahead, in the header, and leaves the rest to the session', () => {
+  it('shows the draft in the area with only the go-ahead, bottom right', () => {
     const view = render(() => (
       <MagicChipView
         agentSessionId="session"
@@ -276,20 +290,26 @@ describe('MagicChipView reviewing a tool draft', () => {
         onOpen={onOpen}
       />
     ));
-    expect(view.getByTestId('chip-markdown').textContent).toBe(
-      'Setting that up.'
-    );
-    expect(answerArea(view.container)?.className).toContain('h-22');
-    expect(pane(view.container)).toBeNull();
+    // The question takes the area; the passage waits underneath.
+    expect(answerArea(view.container)?.className).toContain('hidden');
+    const body = askingBody(view.container);
+    expect(body?.className).toContain('h-22');
+    expect(body?.textContent).toContain('Create calendar event?');
+    expect(body?.contains(view.getByTestId('event-draft'))).toBe(true);
+    expect(view.getByTestId('event-draft').textContent).toBe('Q3 sync');
 
-    const top = header(view.container);
-    expect(top?.textContent).toContain('Waiting for you');
-    expect(top?.contains(view.getByText('Create event'))).toBe(true);
+    expect(
+      decisions(view.container)?.contains(view.getByText('Create event'))
+    ).toBe(true);
     expect(view.queryByText('Cancel')).toBeNull();
     expect(view.queryByText('Edit in session')).toBeNull();
+    expect(header(view.container)?.textContent).toContain('Waiting for you');
+    expect(
+      header(view.container)?.contains(view.getByText('Create event'))
+    ).toBe(false);
     expect(
       headerLabel(view.container)?.getAttribute('data-message-reply-preview')
-    ).toBeNull();
+    ).toBe('Waiting for you · Create calendar event?');
 
     fireEvent.click(view.getByText('Create event'));
     expect(respond).toHaveBeenCalledWith({
@@ -300,26 +320,7 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(onOpen).toHaveBeenCalledOnce();
   });
 
-  it('shows nothing in the answer area while the agent has said nothing', () => {
-    const view = render(() => (
-      <MagicChipView
-        agentSessionId="session"
-        presentation={asking(true)}
-        answer={{ answering: false, respond }}
-      />
-    ));
-    expect(answerArea(view.container)?.className).toContain('h-22');
-    expect(answerArea(view.container)?.className).not.toContain('hidden');
-    expect(
-      view.container.querySelector('[data-magic-chip-pending]')
-    ).toBeNull();
-    expect(view.queryByTestId('chip-markdown')).toBeNull();
-    expect(
-      headerLabel(view.container)?.getAttribute('data-message-reply-preview')
-    ).toBe('Waiting for you · Create calendar event?');
-  });
-
-  it('a viewer who is not the owner sees who is being waited on and can only open the session', () => {
+  it('a viewer who is not the owner sees the draft read-only and who is being waited on', () => {
     const view = render(() => (
       <MagicChipView
         agentSessionId="session"
@@ -331,6 +332,8 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(header(view.container)?.textContent).toContain(
       'Waiting for Alice Owner'
     );
+    expect(view.getByTestId('event-draft')).toBeTruthy();
+    expect(decisions(view.container)).toBeNull();
     expect(view.queryByText('Create event')).toBeNull();
     fireEvent.click(view.getByLabelText('Open in session'));
     expect(onOpen).toHaveBeenCalled();
@@ -349,7 +352,7 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(respond).not.toHaveBeenCalled();
   });
 
-  it('keeps the expanded answer while a review appears and the agent continues', () => {
+  it('keeps the expanded answer while a review takes the area and gives it back', () => {
     const [presentation, setPresentation] = createSignal<MagicChipPresentation>(
       {
         kind: 'answering',
@@ -372,13 +375,15 @@ describe('MagicChipView reviewing a tool draft', () => {
     setPresentation(asking(true, 'Setting that up.'));
     expect(view.getByText('Create event')).toBeTruthy();
     expect(answerArea(view.container)).toBe(area);
-    expect(area.getAttribute('aria-expanded')).toBe('true');
+    expect(area.className).toContain('hidden');
 
     setPresentation({ kind: 'settled', markdown: 'Created the event.' });
     expect(view.queryByText('Create event')).toBeNull();
+    expect(askingBody(view.container)).toBeNull();
     expect(view.getByText('Created the event.')).toBeTruthy();
     expect(header(view.container)?.textContent).toContain('Done');
     expect(answerArea(view.container)).toBe(area);
+    expect(area.className).not.toContain('hidden');
     expect(area.getAttribute('aria-expanded')).toBe('true');
   });
 });
@@ -437,7 +442,7 @@ function askingQuestion(
 }
 
 describe('MagicChipView asking a form', () => {
-  it('offers the choices in the pane and the decisions in the header', () => {
+  it('offers the choices in the area and the decisions at its bottom right', () => {
     const view = render(() => (
       <MagicChipView
         agentSessionId="session"
@@ -446,17 +451,23 @@ describe('MagicChipView asking a form', () => {
         onOpen={onOpen}
       />
     ));
-    expect(
-      pane(view.container)?.contains(view.getByRole('radio', { name: 'Red' }))
-    ).toBe(true);
-    expect(pane(view.container)?.textContent).toContain(
-      "What's the best colour?"
+    const body = askingBody(view.container);
+    expect(body?.className).toContain('h-22');
+    expect(body?.contains(view.getByRole('radio', { name: 'Red' }))).toBe(true);
+    expect(body?.textContent).toContain("What's the best colour?");
+    // The fields stretch to the area and scroll inside it.
+    expect(body?.querySelector('.overflow-y-auto')?.className).toContain(
+      'absolute inset-0'
     );
-    expect(header(view.container)?.contains(view.getByText('Submit'))).toBe(
+    expect(decisions(view.container)?.contains(view.getByText('Submit'))).toBe(
       true
     );
-    // The header is short of room, so Cancel stays in the session.
+    expect(decisions(view.container)?.className).toContain('justify-end');
+    // The row is short of room, so Cancel stays in the session.
     expect(view.queryByText('Cancel')).toBeNull();
+    expect(
+      view.container.querySelector('[data-magic-chip-pending]')
+    ).toBeNull();
 
     // A required question refuses an empty submit.
     fireEvent.click(view.getByText('Submit'));
@@ -474,40 +485,6 @@ describe('MagicChipView asking a form', () => {
     expect(respond).toHaveBeenLastCalledWith({ action: 'decline' });
     fireEvent.click(view.getByLabelText('Open in session'));
     expect(onOpen).toHaveBeenCalledOnce();
-  });
-
-  it('gives the question the whole card while the agent has said nothing, and the right side once it has', () => {
-    const [presentation, setPresentation] = createSignal(
-      askingQuestion(colourForm)
-    );
-    const view = render(() => (
-      <MagicChipView
-        agentSessionId="session"
-        presentation={presentation()}
-        answer={{ answering: false, respond }}
-      />
-    ));
-    expect(answerArea(view.container)?.className).toContain('hidden');
-    expect(
-      view.container.querySelector('[data-magic-chip-pending]')
-    ).toBeNull();
-    expect(pane(view.container)?.className).toContain('flex-1');
-    expect(pane(view.container)?.className).not.toContain('border-l');
-    // The pane stretches to the chip and scrolls inside it.
-    expect(pane(view.container)?.firstElementChild?.className).toContain(
-      'absolute inset-0'
-    );
-    expect(pane(view.container)?.firstElementChild?.className).toContain(
-      'overflow-y-auto'
-    );
-
-    setPresentation(
-      askingQuestion(colourForm, { markdown: 'Let me ask you something.' })
-    );
-    expect(answerArea(view.container)?.className).not.toContain('hidden');
-    expect(answerArea(view.container)?.className).toContain('h-22');
-    expect(pane(view.container)?.className).toContain('border-l');
-    expect(pane(view.container)?.className).not.toContain('flex-1');
   });
 
   it('types a custom answer and sends it under the custom key', () => {
@@ -567,6 +544,7 @@ describe('MagicChipView asking a form', () => {
     );
     const red = view.getByRole('radio', { name: 'Red' }) as HTMLButtonElement;
     expect(red.disabled).toBe(true);
+    expect(decisions(view.container)).toBeNull();
     expect(view.queryByText('Submit')).toBeNull();
     expect(view.queryByText('Decline')).toBeNull();
   });
