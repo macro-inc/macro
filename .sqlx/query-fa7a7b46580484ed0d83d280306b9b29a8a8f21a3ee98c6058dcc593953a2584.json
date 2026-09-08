@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ('20000000-0000-0000-0000-000000000002', 'document', 'macro|viewer@soup.test', 'user', 'view')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "fa7a7b46580484ed0d83d280306b9b29a8a8f21a3ee98c6058dcc593953a2584"
+}

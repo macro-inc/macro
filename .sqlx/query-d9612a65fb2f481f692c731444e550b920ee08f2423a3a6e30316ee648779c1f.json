@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Project\" SET \"parentId\" = '20000000-0000-0000-0000-000000000009' WHERE id = '20000000-0000-0000-0000-000000000001'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d9612a65fb2f481f692c731444e550b920ee08f2423a3a6e30316ee648779c1f"
+}

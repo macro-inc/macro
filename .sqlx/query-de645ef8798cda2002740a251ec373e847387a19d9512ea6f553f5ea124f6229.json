@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM team_user WHERE user_id = 'macro|viewer@soup.test'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "de645ef8798cda2002740a251ec373e847387a19d9512ea6f553f5ea124f6229"
+}

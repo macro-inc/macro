@@ -96,6 +96,8 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+models_permissions = { path = "../models_permissions" }
+share_permission_db_utils = { path = "../share_permission_db_utils" }
 ai_toolset = { path = "../ai_toolset" }
 cool_asserts = "2"
 filter_ast = { path = "../filter_ast" }

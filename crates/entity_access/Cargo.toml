@@ -52,6 +52,7 @@ sqlx = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+share_permission_db_utils = { path = "../share_permission_db_utils" }
 cool_asserts = "2"
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }

@@ -32,6 +32,147 @@ use std::sync::Arc;
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
+// Team sharing must feed both discovery and by-ID hydration, without history.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("team_share"))
+)]
+async fn canonical_team_share_visibility_expanded(pool: PgPool) {
+    use models_permissions::share_permission::{
+        access_level::AccessLevel,
+        team_share::{TeamShareLevel, TeamShareRequest, authorize_team_share},
+    };
+    use share_permission_db_utils::team_share;
+
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@soup.test").unwrap();
+    let viewer = MacroUserIdStr::parse_from_str("macro|viewer@soup.test").unwrap();
+    let other = MacroUserIdStr::parse_from_str("macro|other@soup.test").unwrap();
+    let entities: Vec<_> = [
+        (EntityType::Project, 1),
+        (EntityType::Document, 2),
+        (EntityType::Chat, 3),
+        (EntityType::Document, 4),
+        (EntityType::Document, 5),
+    ]
+    .into_iter()
+    .map(|(kind, id)| kind.with_entity_string(format!("20000000-0000-0000-0000-{id:012}")))
+    .collect();
+    let all_ids: HashSet<_> = entities
+        .iter()
+        .map(|e| Uuid::parse_str(&e.entity_id).unwrap())
+        .collect();
+    let mut visible = HashSet::new();
+    for level in [
+        Some(AccessLevel::View),
+        Some(AccessLevel::Comment),
+        Some(AccessLevel::Edit),
+        None,
+    ] {
+        for entity in &entities {
+            // Check before and after every individual share, not just the final
+            // grant population. This also catches accidental cross-kind leakage.
+            assert_team_share_expanded_ids(&pool, viewer.copied(), &entities, &visible).await;
+            let mut tx = pool.begin().await.unwrap();
+            let facts = team_share::load_facts(&mut tx, entity).await.unwrap();
+            let command = authorize_team_share(
+                Some(&owner),
+                &facts,
+                TeamShareRequest {
+                    access_level: Some(level),
+                    legacy_enabled: None,
+                },
+                TeamShareLevel::View,
+            )
+            .unwrap()
+            .unwrap();
+            team_share::apply(&mut tx, &command).await.unwrap();
+            tx.commit().await.unwrap();
+            let id = Uuid::parse_str(&entity.entity_id).unwrap();
+            if level.is_some() {
+                visible.insert(id);
+            } else {
+                visible.remove(&id);
+            }
+            assert_team_share_expanded_ids(&pool, viewer.copied(), &entities, &visible).await;
+            assert_team_share_expanded_ids(&pool, owner.copied(), &entities, &all_ids).await;
+            assert_team_share_expanded_ids(&pool, other.copied(), &entities, &HashSet::new()).await;
+        }
+    }
+    // A shared project supplies the same supported children through inheritance.
+    sqlx::query!(r#"UPDATE "Document" SET "projectId" = '20000000-0000-0000-0000-000000000001'"#)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!(r#"UPDATE "Chat" SET "projectId" = '20000000-0000-0000-0000-000000000001'"#)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    let facts = team_share::load_facts(&mut tx, &entities[0]).await.unwrap();
+    let command = authorize_team_share(
+        Some(&owner),
+        &facts,
+        TeamShareRequest {
+            access_level: Some(Some(AccessLevel::View)),
+            legacy_enabled: None,
+        },
+        TeamShareLevel::View,
+    )
+    .unwrap()
+    .unwrap();
+    team_share::apply(&mut tx, &command).await.unwrap();
+    tx.commit().await.unwrap();
+    assert_team_share_expanded_ids(&pool, viewer.copied(), &entities, &all_ids).await;
+    // Preserve a direct user path for the document when the viewer leaves.
+    sqlx::query!("INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ('20000000-0000-0000-0000-000000000002', 'document', 'macro|viewer@soup.test', 'user', 'view')").execute(&pool).await.unwrap();
+    sqlx::query!("DELETE FROM team_user WHERE user_id = 'macro|viewer@soup.test'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let retained = HashSet::from([Uuid::parse_str(&entities[1].entity_id).unwrap()]);
+    assert_team_share_expanded_ids(&pool, viewer.copied(), &entities, &retained).await;
+    assert_team_share_expanded_ids(&pool, owner, &entities, &all_ids).await;
+    sqlx::query!("DELETE FROM entity_access WHERE source_id = 'macro|viewer@soup.test'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_team_share_expanded_ids(&pool, viewer, &entities, &HashSet::new()).await;
+}
+
+async fn assert_team_share_expanded_ids(
+    pool: &PgPool,
+    user: MacroUserIdStr<'_>,
+    entities: &[model_entity::Entity<'_>],
+    expected: &HashSet<Uuid>,
+) {
+    let cursor_items = expanded_generic_cursor_soup(
+        pool,
+        user.copied(),
+        100,
+        Query::Sort(SimpleSortMethod::UpdatedAt, ()),
+    )
+    .await
+    .unwrap();
+    let by_id_items = expanded_soup_by_ids(pool, user, entities).await.unwrap();
+    // Expanded by-ID hydration intentionally omits project objects, unlike
+    // discovery. Keep checking the project through the cursor path.
+    let by_id_expected: HashSet<_> = entities
+        .iter()
+        .filter(|e| e.entity_type != EntityType::Project)
+        .map(|e| Uuid::parse_str(&e.entity_id).unwrap())
+        .filter(|id| expected.contains(id))
+        .collect();
+    for (items, expected) in [(cursor_items, expected), (by_id_items, &by_id_expected)] {
+        let ids: HashSet<_> = items.iter().map(|item| item.id()).collect();
+        assert_eq!(&ids, expected);
+        assert_eq!(
+            items.len(),
+            ids.len(),
+            "multiple access paths must not duplicate items"
+        );
+    }
+}
+
 macro_rules! unwrap_enum {
     // Base case: single variant
     ($value:expr, $variant:path) => {

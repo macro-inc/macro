@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ('40000000-0000-0000-0000-000000000001', $1, 'member')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ecd8dfec6e4cd99957282e180a952192f1f949f841044df27f9d398cde45857a"
+}

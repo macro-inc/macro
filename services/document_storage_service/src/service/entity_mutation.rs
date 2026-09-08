@@ -20,11 +20,6 @@
 use std::{future::Future, sync::Arc};
 
 use super::thread_share::ThreadShareError;
-use call::domain::ports::CallService;
-use channels::domain::ports::ChannelService;
-use chat::domain::ports::ChatService;
-use documents_hex::domain::ports::DocumentService;
-use email::domain::ports::EmailService;
 use entity_access::domain::{
     models::{AccessError, EditAccessLevel, EntityAccessReceipt, RequiredPermission},
     ports::EntityAccessService,
@@ -41,7 +36,6 @@ use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::{
     UpdateSharePermissionRequestV2, team_share::TeamSharePolicyError,
 };
-use projects_hex::domain::ports::ProjectService;
 
 #[cfg(test)]
 mod test;
@@ -211,13 +205,17 @@ impl<D, H, C, K, E, P, A, L> DssEntityMutationService<D, H, C, K, E, P, A, L> {
 
 impl<D, H, C, K, E, P, A, L> DssEntityMutationService<D, H, C, K, E, P, A, L>
 where
-    D: DocumentService
+    D: Send
+        + Sync
+        + 'static
         + RenameEntity
         + MoveEntity
         + UpdateEntitySharePolicy
         + TrashEntity
         + DuplicateEntity,
-    H: ChatService
+    H: Send
+        + Sync
+        + 'static
         + RenameEntity
         + MoveEntity
         + UpdateEntitySharePolicy
@@ -225,10 +223,12 @@ where
         + RestoreEntity
         + DeleteEntityPermanently
         + DuplicateEntity,
-    C: ChannelService + RenameEntity + DeleteEntityPermanently,
-    K: CallService + RenameEntity + UpdateEntitySharePolicy + DeleteEntityPermanently,
-    E: EmailService + MoveEntity,
-    P: ProjectService
+    C: Send + Sync + 'static + RenameEntity + DeleteEntityPermanently,
+    K: Send + Sync + 'static + RenameEntity + UpdateEntitySharePolicy + DeleteEntityPermanently,
+    E: Send + Sync + 'static + MoveEntity,
+    P: Send
+        + Sync
+        + 'static
         + RenameEntity
         + MoveEntity
         + UpdateEntitySharePolicy
@@ -715,13 +715,17 @@ where
 impl<D, H, C, K, E, P, A, L> EntityMutationService
     for DssEntityMutationService<D, H, C, K, E, P, A, L>
 where
-    D: DocumentService
+    D: Send
+        + Sync
+        + 'static
         + RenameEntity
         + MoveEntity
         + UpdateEntitySharePolicy
         + TrashEntity
         + DuplicateEntity,
-    H: ChatService
+    H: Send
+        + Sync
+        + 'static
         + RenameEntity
         + MoveEntity
         + UpdateEntitySharePolicy
@@ -729,10 +733,12 @@ where
         + RestoreEntity
         + DeleteEntityPermanently
         + DuplicateEntity,
-    C: ChannelService + RenameEntity + DeleteEntityPermanently,
-    K: CallService + RenameEntity + UpdateEntitySharePolicy + DeleteEntityPermanently,
-    E: EmailService + MoveEntity,
-    P: ProjectService
+    C: Send + Sync + 'static + RenameEntity + DeleteEntityPermanently,
+    K: Send + Sync + 'static + RenameEntity + UpdateEntitySharePolicy + DeleteEntityPermanently,
+    E: Send + Sync + 'static + MoveEntity,
+    P: Send
+        + Sync
+        + 'static
         + RenameEntity
         + MoveEntity
         + UpdateEntitySharePolicy

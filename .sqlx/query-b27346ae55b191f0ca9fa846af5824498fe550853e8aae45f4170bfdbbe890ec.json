@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM entity_access WHERE source_id = 'macro|viewer@soup.test'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "b27346ae55b191f0ca9fa846af5824498fe550853e8aae45f4170bfdbbe890ec"
+}
