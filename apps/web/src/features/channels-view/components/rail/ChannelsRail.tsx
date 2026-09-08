@@ -26,13 +26,10 @@ import {
 } from 'solid-js';
 import { useChannelsView } from '../../channels-view-context';
 import type { ChannelsGroup, ChannelsTab } from '../../types';
-import {
-  type ChannelRailContext,
-  ChannelRailProvider,
-} from './ChannelRailContext';
-import { ChannelsRailBrowse } from './ChannelsRailBrowse';
-import { ChannelsRailHeader } from './ChannelsRailHeader';
-import { ChannelsRailRecents } from './ChannelsRailRecents';
+import { type ChannelRailContext, ChannelRailProvider } from './Context';
+import { ChannelsRailBrowse } from './Browse';
+import { ChannelsRailHeader } from './Header';
+import { ChannelsRailRecents } from './Recents';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
 import { useChannelRailRows } from './hooks/useChannelRailRows';

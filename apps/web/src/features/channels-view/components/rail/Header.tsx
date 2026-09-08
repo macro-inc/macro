@@ -9,7 +9,7 @@ import ChatsIcon from '@phosphor/chats-circle.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown, Tabs } from '@ui';
 import { createSignal, Match, Switch } from 'solid-js';
-import { useChannelRail } from './ChannelRailContext';
+import { useChannelRail } from './Context';
 
 const CHANNEL_TABS = [
   {

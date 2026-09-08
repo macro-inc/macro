@@ -9,9 +9,9 @@ import { type Component, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { ChannelsGroup } from '../../types';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
-import { useChannelRail } from './ChannelRailContext';
-import { ChannelOption, SlimChannelItem } from './ChannelRailItem';
-import { CollapsibleSection, CreateRailAction } from './ChannelsRailSection';
+import { useChannelRail } from './Context';
+import { ChannelOption, SlimChannelItem } from './Item';
+import { CollapsibleSection, CreateRailAction } from './Section';
 
 type GroupConfig = {
   group: ChannelsGroup;

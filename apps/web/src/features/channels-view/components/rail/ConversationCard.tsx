@@ -14,7 +14,7 @@ import {
   ChannelCallIndicator,
   type ChannelRailItemProps,
   IncomingCallActions,
-} from './ChannelRailItem';
+} from './Item';
 
 export type ConversationCardProps = ChannelRailItemProps & {
   class?: string;

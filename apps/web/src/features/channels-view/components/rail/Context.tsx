@@ -3,7 +3,7 @@ import type { ChannelEntity } from '@entity';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import type { Accessor } from 'solid-js';
 import type { ChannelsGroup, ChannelsTab } from '../../types';
-import type { ChannelCallStatus } from './ChannelRailItem';
+import type { ChannelCallStatus } from './Item';
 
 export type ChannelRailContext = {
   mode: Accessor<'full' | 'slim'>;

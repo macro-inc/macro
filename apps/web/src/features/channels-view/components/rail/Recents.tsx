@@ -1,8 +1,8 @@
 import { Key } from '@solid-primitives/keyed';
 import { Match, Switch } from 'solid-js';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
-import { useChannelRail } from './ChannelRailContext';
-import { SlimChannelItem } from './ChannelRailItem';
+import { useChannelRail } from './Context';
+import { SlimChannelItem } from './Item';
 import { ConversationCard } from './ConversationCard';
 
 export function ChannelsRailRecents() {
