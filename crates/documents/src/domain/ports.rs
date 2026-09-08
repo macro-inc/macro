@@ -16,6 +16,9 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts,
+};
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 use super::content::DocumentContent;
@@ -175,7 +178,7 @@ pub trait DocumentRepo: Send + Sync + 'static {
     fn edit_document(
         &self,
         args: EditDocumentRepoArgs,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Update a document's `updatedAt` timestamp.
     fn update_document_modified(
@@ -234,18 +237,23 @@ pub trait DocumentRepo: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Get the team-share state of a document, resolved against the owner's team.
+    /// Load persisted ownership, membership and explicit sharing facts for policy.
+    fn get_team_share_facts(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<TeamShareFacts, DocumentError>> + Send;
+
+    /// Get explicit team-share state, never inferred from inherited grants.
     fn get_team_share(
         &self,
         document_id: &str,
-    ) -> impl Future<Output = Result<DocumentTeamShare, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<DocumentTeamShare, DocumentError>> + Send;
 
-    /// Grant or revoke the document owner's team's access on the document.
+    /// Apply an owner-authorized update after rechecking its facts atomically.
     fn set_team_share(
         &self,
-        document_id: &str,
-        share: bool,
-    ) -> impl Future<Output = Result<DocumentTeamShare, Self::Err>> + Send;
+        command: AuthorizedTeamShareCommand,
+    ) -> impl Future<Output = Result<DocumentTeamShare, DocumentError>> + Send;
 
     /// Get document metadata at a specific version ID.
     fn get_document_metadata_at_version(

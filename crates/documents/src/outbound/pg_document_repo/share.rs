@@ -1,10 +1,33 @@
 use entity_access_db_utils::AccessLevel;
+use model_entity::EntityType;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts,
+};
+use share_permission_db_utils::team_share::{self, TeamShareError};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::DocumentTeamShare;
+use crate::domain::models::{DocumentError, DocumentTeamShare};
 
-/// Share a document with the given team.
+// Existing repository operations retain their SQLx error type; conditional edits
+// expose domain errors so authorization conflicts reach callers without becoming 500s.
+impl From<sqlx::Error> for DocumentError {
+    fn from(error: sqlx::Error) -> Self {
+        Self::Internal(error.into())
+    }
+}
+
+pub(super) fn map_team_share_error(error: rootcause::Report<TeamShareError>) -> DocumentError {
+    match error.current_context() {
+        TeamShareError::NotFound => DocumentError::NotFound("team-share document".to_string()),
+        TeamShareError::ChangedFacts | TeamShareError::UntrackedGrant => {
+            DocumentError::Conflict(error.to_string())
+        }
+        _ => DocumentError::Internal(error.into()),
+    }
+}
+
+/// Share a newly created task with the given team (creation integration follows separately).
 #[tracing::instrument(err, skip(pool))]
 pub async fn share_with_team(
     pool: &PgPool,
@@ -30,117 +53,54 @@ pub async fn share_with_team(
     Ok(())
 }
 
-/// Resolve the document owner's team. Returns `None` when the owner does not
-/// belong to a team.
-async fn owner_team_id(pool: &PgPool, document_id: &str) -> Result<Option<Uuid>, sqlx::Error> {
-    sqlx::query_scalar!(
-        r#"
-        SELECT tu.team_id
-        FROM "Document" d
-        JOIN team_user tu ON tu.user_id = d.owner
-        WHERE d.id = $1
-        LIMIT 1
-        "#,
-        document_id,
+/// Read authoritative facts in one guarded snapshot, without creating permissions.
+#[tracing::instrument(err, skip(pool))]
+pub async fn get_team_share_facts(
+    pool: &PgPool,
+    document_id: &str,
+) -> Result<TeamShareFacts, DocumentError> {
+    let mut transaction = pool.begin().await?;
+    let facts = team_share::load_facts(
+        &mut transaction,
+        &EntityType::Document.with_entity_str(document_id),
     )
-    .fetch_optional(pool)
     .await
+    .map_err(map_team_share_error)?;
+    transaction.commit().await?;
+    Ok(facts)
 }
 
-/// Get the team-share state of a document, resolved against the owner's team.
+/// Read explicit state; inherited and untracked direct grants do not enable the toggle.
 #[tracing::instrument(err, skip(pool))]
 pub async fn get_team_share(
     pool: &PgPool,
     document_id: &str,
-) -> Result<DocumentTeamShare, sqlx::Error> {
-    let document_uuid = macro_uuid::string_to_uuid(document_id)
-        .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
-
-    let Some(team_id) = owner_team_id(pool, document_id).await? else {
-        return Ok(DocumentTeamShare {
-            team_id: None,
-            shared_with_team: false,
-        });
-    };
-
-    let shared = sqlx::query_scalar!(
-        r#"
-        SELECT EXISTS (
-            SELECT 1 FROM entity_access
-            WHERE entity_id = $1
-              AND entity_type = 'document'
-              AND source_id = $2
-              AND source_type = 'team'
-        ) as "exists!"
-        "#,
-        &document_uuid,
-        &team_id.to_string(),
-    )
-    .fetch_one(pool)
-    .await?;
-
+) -> Result<DocumentTeamShare, DocumentError> {
+    let facts = get_team_share_facts(pool, document_id).await?;
     Ok(DocumentTeamShare {
-        team_id: Some(team_id),
-        shared_with_team: shared,
+        team_id: facts.owner_team_id,
+        shared_with_team: facts.current.is_some(),
     })
 }
 
-/// Grant or revoke the document owner's team's access on the document.
-///
-/// Granting gives the team Edit access so teammates can collaboratively
-/// maintain team snippets; revoking removes the team-source access row
-/// (project-granted rows are left untouched). Returns the new state, or the
-/// unshared state when the owner has no team.
+/// Apply the canonical conditional update and commit before reporting success.
 #[tracing::instrument(err, skip(pool))]
 pub async fn set_team_share(
     pool: &PgPool,
-    document_id: &str,
-    share: bool,
-) -> Result<DocumentTeamShare, sqlx::Error> {
-    let document_uuid = macro_uuid::string_to_uuid(document_id)
-        .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
-
-    let Some(team_id) = owner_team_id(pool, document_id).await? else {
-        return Ok(DocumentTeamShare {
-            team_id: None,
-            shared_with_team: false,
-        });
-    };
-
-    if share {
-        sqlx::query!(
-            r#"
-            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-            VALUES ($1, 'document', $2, 'team', $3)
-            ON CONFLICT (entity_id, entity_type, source_id, source_type)
-                WHERE granted_from_project_id IS NULL
-                DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
-            "#,
-            &document_uuid,
-            &team_id.to_string(),
-            AccessLevel::Edit as _,
-        )
-        .execute(pool)
-        .await?;
-    } else {
-        sqlx::query!(
-            r#"
-            DELETE FROM entity_access
-            WHERE entity_id = $1
-              AND entity_type = 'document'
-              AND source_id = $2
-              AND source_type = 'team'
-              AND granted_from_project_id IS NULL
-            "#,
-            &document_uuid,
-            &team_id.to_string(),
-        )
-        .execute(pool)
-        .await?;
+    command: AuthorizedTeamShareCommand,
+) -> Result<DocumentTeamShare, DocumentError> {
+    if command.expected().entity.entity_type != EntityType::Document {
+        return Err(DocumentError::BadRequest(
+            "team-share command must target a document".to_string(),
+        ));
     }
-
+    let mut transaction = pool.begin().await?;
+    team_share::apply(&mut transaction, &command)
+        .await
+        .map_err(map_team_share_error)?;
+    transaction.commit().await?;
     Ok(DocumentTeamShare {
-        team_id: Some(team_id),
-        shared_with_team: share,
+        team_id: command.expected().owner_team_id,
+        shared_with_team: command.target().is_some(),
     })
 }

@@ -5,6 +5,10 @@ mod tests;
 
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use model_entity::EntityType;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
+    authorize_team_share,
+};
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
 };
@@ -312,6 +316,33 @@ impl<
             foreign_entity_service,
             macro_event_broker,
         }
+    }
+
+    async fn authorize_document_team_share(
+        &self,
+        receipt: &EntityAccessReceipt<EditAccessLevel>,
+        request: TeamShareRequest,
+    ) -> Result<Option<AuthorizedTeamShareCommand>, DocumentError> {
+        if request == TeamShareRequest::default() {
+            return Ok(None);
+        }
+        let facts = self
+            .repo
+            .get_team_share_facts(&receipt.entity().entity_id)
+            .await?;
+        authorize_team_share(
+            receipt.acting_user_id(),
+            &facts,
+            request,
+            TeamShareLevel::Edit,
+        )
+        .map_err(|error| match error {
+            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                DocumentError::Unauthorized
+            }
+            TeamSharePolicyError::InvalidRevision => DocumentError::Conflict(error.to_string()),
+            _ => DocumentError::BadRequest(error.to_string()),
+        })
     }
 
     fn get_signed_options(&self) -> SignedOptions {
@@ -1353,7 +1384,20 @@ impl<
             });
         }
 
-        // Check owner-only restrictions for authenticated users
+        let team_share = self
+            .authorize_document_team_share(
+                &entity_access_receipt,
+                TeamShareRequest {
+                    access_level: args
+                        .share_permission
+                        .as_ref()
+                        .and_then(|p| p.team_share_access_level),
+                    legacy_enabled: None,
+                },
+            )
+            .await?;
+
+        // Preserve existing restrictions for project and other permission updates.
         if let entity_access::domain::models::EntityPermission::AccessLevel { access_level } =
             entity_access_receipt.entity_permission()
         {
@@ -1364,7 +1408,13 @@ impl<
                 return Err(DocumentError::Unauthorized);
             }
 
-            if args.share_permission.is_some()
+            let requires_legacy_owner_access = args.share_permission.as_ref().is_some_and(|p| {
+                p.team_share_access_level.is_none()
+                    || p.link_share.is_some()
+                    || p.link_share_access_level.is_some()
+                    || p.channel_share_permissions.is_some()
+            });
+            if requires_legacy_owner_access
                 && *access_level
                     != models_permissions::share_permission::access_level::AccessLevel::Owner
             {
@@ -1418,11 +1468,11 @@ impl<
                 document_name: document_name.clone(),
                 project_id: args.project_id.clone(),
                 share_permission: args.share_permission,
+                team_share,
                 revoke_non_owner_user_access,
                 file_type: args.file_type.clone(),
             })
-            .await
-            .map_err(|e| DocumentError::Internal(e.into()))?;
+            .await?;
 
         // Update project modified timestamps. args.project_id of None means "no change",
         // so only move the document out of its old project when a different project (or
@@ -1910,23 +1960,19 @@ impl<
         Ok(())
     }
 
-    #[tracing::instrument(skip(self, entity_access_receipt))]
+    #[tracing::instrument(err, skip(self, entity_access_receipt))]
     async fn get_team_share(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<DocumentTeamShareResponse, DocumentError> {
         let document_id = &entity_access_receipt.entity().entity_id;
 
-        let state = self
-            .repo
-            .get_team_share(document_id)
-            .await
-            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let state = self.repo.get_team_share(document_id).await?;
 
         Ok(state.into())
     }
 
-    #[tracing::instrument(skip(self, entity_access_receipt))]
+    #[tracing::instrument(err, skip(self, entity_access_receipt))]
     async fn set_team_share(
         &self,
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -1934,17 +1980,17 @@ impl<
     ) -> Result<DocumentTeamShareResponse, DocumentError> {
         let document_id = entity_access_receipt.entity().entity_id.clone();
 
-        let state = self
-            .repo
-            .set_team_share(&document_id, share)
-            .await
-            .map_err(|e| DocumentError::Internal(e.into()))?;
-
-        if share && state.team_id.is_none() {
-            return Err(DocumentError::BadRequest(
-                "document owner does not belong to a team".to_string(),
-            ));
-        }
+        let command = self
+            .authorize_document_team_share(
+                &entity_access_receipt,
+                TeamShareRequest {
+                    access_level: None,
+                    legacy_enabled: Some(share),
+                },
+            )
+            .await?
+            .expect("a supplied legacy toggle produces a command");
+        let state = self.repo.set_team_share(command).await?;
 
         let _ = self
             .connection_service

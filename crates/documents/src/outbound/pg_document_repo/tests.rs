@@ -16,6 +16,264 @@ use crate::domain::models::{
 };
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
+use models_permissions::share_permission::team_share::{
+    TeamShareLevel, TeamShareRequest, authorize_team_share,
+};
+
+async fn set_legacy_team_share(
+    repo: &PgDocumentRepo,
+    document_id: &str,
+    enabled: bool,
+) -> Result<crate::domain::models::DocumentTeamShare, crate::domain::models::DocumentError> {
+    let facts = repo.get_team_share_facts(document_id).await?;
+    let command = authorize_team_share(
+        Some(&facts.owner),
+        &facts,
+        TeamShareRequest {
+            access_level: None,
+            legacy_enabled: Some(enabled),
+        },
+        TeamShareLevel::Edit,
+    )
+    .map_err(|e| crate::domain::models::DocumentError::BadRequest(e.to_string()))?
+    .unwrap();
+    repo.set_team_share(command).await
+}
+
+async fn team_edit_args(repo: &PgDocumentRepo, level: Option<AccessLevel>) -> EditDocumentRepoArgs {
+    let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+    let command = authorize_team_share(
+        Some(&facts.owner),
+        &facts,
+        TeamShareRequest {
+            access_level: Some(level),
+            legacy_enabled: None,
+        },
+        TeamShareLevel::Edit,
+    )
+    .unwrap()
+    .unwrap();
+    EditDocumentRepoArgs {
+        document_id: TEST_DOCUMENT_ID.to_string(),
+        document_name: Some("team-edit".to_string()),
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: Some(Some(LinkShare::Team)),
+            link_share_access_level: Some(Some(AccessLevel::Comment)),
+            team_share_access_level: Some(level),
+            channel_share_permissions: Some(vec![UpdateChannelSharePermission {
+                operation: UpdateOperation::Add,
+                channel_id: "c0000000-0000-0000-0000-000000000001".to_string(),
+                access_level: Some(AccessLevel::View),
+            }]),
+        }),
+        team_share: Some(command),
+        revoke_non_owner_user_access: true,
+        file_type: None,
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn team_edit_exact_levels_omission_and_legacy_preservation(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let mut revision = 0;
+    for level in [AccessLevel::Edit, AccessLevel::Comment, AccessLevel::View] {
+        let args = team_edit_args(&repo, Some(level)).await;
+        repo.edit_document(args).await.unwrap();
+        revision += 1;
+        let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+        assert_eq!(facts.revision, revision);
+        assert_eq!(AccessLevel::from(facts.current.unwrap().level), level);
+        let persisted = sqlx::query_scalar!(
+            r#"SELECT sp.team_share_access_level AS "level: AccessLevel"
+               FROM "SharePermission" sp JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
+               WHERE dp."documentId" = $1"#, TEST_DOCUMENT_ID,
+        ).fetch_one(&pool).await.unwrap();
+        assert_eq!(persisted, Some(level));
+        let direct = sqlx::query_scalar!(
+            r#"SELECT access_level AS "level: AccessLevel" FROM entity_access
+               WHERE entity_id = $1 AND entity_type = 'document' AND source_type = 'team'
+               AND source_id = $2 AND granted_from_project_id IS NULL"#,
+            uuid::Uuid::parse_str(TEST_DOCUMENT_ID).unwrap(),
+            TEST_TEAM_ID.to_string(),
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(direct, level);
+        set_legacy_team_share(&repo, TEST_DOCUMENT_ID, true)
+            .await
+            .unwrap();
+        revision += 1;
+        let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+        assert_eq!(facts.revision, revision);
+        assert_eq!(AccessLevel::from(facts.current.unwrap().level), level);
+
+        let mut args = team_edit_args(&repo, Some(level)).await;
+        args.team_share = None;
+        args.share_permission
+            .as_mut()
+            .unwrap()
+            .team_share_access_level = None;
+        repo.edit_document(args).await.unwrap();
+        assert_eq!(
+            repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap(),
+            facts
+        );
+    }
+    assert_eq!(
+        repo.get_basic_document(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .document_name,
+        "team-edit"
+    );
+    assert_eq!(
+        share_permission_columns(&pool, TEST_DOCUMENT_ID)
+            .await
+            .link_share
+            .as_deref(),
+        Some("TEAM")
+    );
+    for _ in 0..2 {
+        repo.edit_document(team_edit_args(&repo, None).await)
+            .await
+            .unwrap();
+        revision += 1;
+        let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+        assert!(facts.current.is_none());
+        assert_eq!(facts.revision, revision);
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn team_edit_stale_command_rolls_back_accompanying_changes(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let args = team_edit_args(&repo, Some(AccessLevel::View)).await;
+    set_legacy_team_share(&repo, TEST_DOCUMENT_ID, true)
+        .await
+        .unwrap();
+    let before = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
+    let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+    assert!(matches!(
+        repo.edit_document(args).await,
+        Err(crate::domain::models::DocumentError::Conflict(_))
+    ));
+    assert_eq!(
+        repo.get_basic_document(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .document_name,
+        before.document_name
+    );
+    assert_eq!(
+        repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap(),
+        facts
+    );
+    assert_eq!(
+        share_permission_columns(&pool, TEST_DOCUMENT_ID)
+            .await
+            .link_share
+            .as_deref(),
+        Some("PUBLIC")
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn team_edit_channel_failure_rolls_back_metadata_permissions_and_grant(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    insert_non_owner_user_access(&pool).await;
+    let args = team_edit_args(&repo, Some(AccessLevel::View)).await;
+    let before = repo.get_basic_document(TEST_DOCUMENT_ID).await.unwrap();
+    let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+    sqlx::raw_sql(
+        r#"
+        CREATE FUNCTION reject_channel_share() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'injected channel failure'; END $$;
+        CREATE TRIGGER reject_channel_share BEFORE INSERT ON "ChannelSharePermission"
+        FOR EACH ROW EXECUTE FUNCTION reject_channel_share();
+    "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(repo.edit_document(args).await.is_err());
+    assert_eq!(
+        repo.get_basic_document(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .document_name,
+        before.document_name
+    );
+    assert_eq!(
+        repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap(),
+        facts
+    );
+    assert_eq!(
+        share_permission_columns(&pool, TEST_DOCUMENT_ID)
+            .await
+            .link_share
+            .as_deref(),
+        Some("PUBLIC")
+    );
+    assert_eq!(direct_user_access_sources(&pool).await.len(), 2);
+    let team_grants = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND source_type = 'team'",
+        uuid::Uuid::parse_str(TEST_DOCUMENT_ID).unwrap(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(team_grants, Some(0));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn inherited_team_grant_does_not_enable_explicit_toggle(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+           VALUES ($1, 'document', $2, 'team', 'owner', $3)"#,
+        uuid::Uuid::parse_str(TEST_DOCUMENT_ID).unwrap(), TEST_TEAM_ID.to_string(),
+        "d0000000-0000-0000-0000-100000000001",
+    ).execute(&pool).await.unwrap();
+    assert!(
+        !repo
+            .get_team_share(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .shared_with_team
+    );
+    set_legacy_team_share(&repo, TEST_DOCUMENT_ID, true)
+        .await
+        .unwrap();
+    set_legacy_team_share(&repo, TEST_DOCUMENT_ID, false)
+        .await
+        .unwrap();
+    assert!(
+        !repo
+            .get_team_share(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .shared_with_team
+    );
+    let inherited = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND source_type = 'team' AND granted_from_project_id IS NOT NULL",
+        uuid::Uuid::parse_str(TEST_DOCUMENT_ID).unwrap(),
+    ).fetch_one(&pool).await.unwrap();
+    assert_eq!(inherited, Some(1));
+}
 
 const TEST_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000001");
 const SECOND_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000002");
@@ -426,6 +684,7 @@ async fn test_edit_document_name(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: Some("new-name".to_string()),
         project_id: None,
@@ -457,6 +716,7 @@ async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
         share_permission: None,
         revoke_non_owner_user_access: false,
         file_type: Some(FileTypeUpdate::Set(model::document::FileType::Rs)),
+        team_share: None,
     })
     .await
     .unwrap();
@@ -482,6 +742,7 @@ async fn test_edit_document_clear_file_type(pool: Pool<Postgres>) {
         share_permission: None,
         revoke_non_owner_user_access: false,
         file_type: Some(FileTypeUpdate::Clear),
+        team_share: None,
     })
     .await
     .unwrap();
@@ -501,6 +762,7 @@ async fn test_edit_document_project(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
@@ -530,6 +792,7 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
 
     // First set a project
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
@@ -551,6 +814,7 @@ async fn test_edit_document_remove_project(pool: Pool<Postgres>) {
 
     // Then remove it by passing empty string
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: Some("".to_string()),
@@ -577,6 +841,7 @@ async fn test_edit_document_public_to_null_revokes_non_owner_access(pool: Pool<P
     insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
         project_id: None,
@@ -611,6 +876,7 @@ async fn test_edit_document_public_to_team_revokes_non_owner_access(pool: Pool<P
     insert_non_owner_user_access(&pool).await;
 
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: TEST_DOCUMENT_ID.to_string(),
         document_name: None,
         project_id: None,
@@ -654,6 +920,7 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
             team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
         revoke_non_owner_user_access: false,
         file_type: None,
     })
@@ -675,6 +942,7 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
             team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
         revoke_non_owner_user_access: false,
         file_type: None,
     })
@@ -704,6 +972,7 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
     repo.edit_document(EditDocumentRepoArgs {
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: Some("renamed".to_string()),
+        team_share: None,
         project_id: Some("d0000000-0000-0000-0000-100000000001".to_string()),
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: Some(Some(LinkShare::Public)),
@@ -840,7 +1109,9 @@ async fn test_team_share_roundtrip(pool: Pool<Postgres>) {
     assert!(!state.shared_with_team);
 
     // Share grants the team Edit access
-    let state = repo.set_team_share(document_id, true).await.unwrap();
+    let state = set_legacy_team_share(&repo, document_id, true)
+        .await
+        .unwrap();
     assert_eq!(state.team_id, Some(TEST_TEAM_ID));
     assert!(state.shared_with_team);
 
@@ -863,7 +1134,9 @@ async fn test_team_share_roundtrip(pool: Pool<Postgres>) {
     assert!(state.shared_with_team);
 
     // Unshare removes the team row
-    let state = repo.set_team_share(document_id, false).await.unwrap();
+    let state = set_legacy_team_share(&repo, document_id, false)
+        .await
+        .unwrap();
     assert!(!state.shared_with_team);
 
     let count = sqlx::query_scalar!(
@@ -885,7 +1158,7 @@ async fn test_team_share_roundtrip(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_set_team_share_upgrades_existing_team_grant(pool: Pool<Postgres>) {
+async fn test_set_team_share_rejects_untracked_team_grant(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
     let document_id = "d0000000-0000-0000-0000-000000000001";
 
@@ -894,8 +1167,18 @@ async fn test_set_team_share_upgrades_existing_team_grant(pool: Pool<Postgres>) 
         .await
         .unwrap();
 
-    // Toggling share on upgrades the team row to Edit
-    repo.set_team_share(document_id, true).await.unwrap();
+    // An untracked grant is not consent and must not be silently adopted.
+    assert!(
+        !repo
+            .get_team_share(document_id)
+            .await
+            .unwrap()
+            .shared_with_team
+    );
+    assert!(matches!(
+        set_legacy_team_share(&repo, document_id, true).await,
+        Err(crate::domain::models::DocumentError::Conflict(_))
+    ));
 
     let doc_uuid = macro_uuid::string_to_uuid(document_id).unwrap();
     let rows = sqlx::query!(
@@ -911,7 +1194,7 @@ async fn test_set_team_share_upgrades_existing_team_grant(pool: Pool<Postgres>) 
     .await
     .unwrap();
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].access_level, Some("edit".to_string()));
+    assert_eq!(rows[0].access_level, Some("comment".to_string()));
 }
 
 #[sqlx::test(
@@ -934,9 +1217,13 @@ async fn test_team_share_no_team_owner(pool: Pool<Postgres>) {
     assert_eq!(state.team_id, None);
     assert!(!state.shared_with_team);
 
-    // Sharing is a no-op when the owner has no team
-    let state = repo
-        .set_team_share(&metadata.document_id, true)
+    // Enabling fails without a team, but an explicit clear still succeeds.
+    assert!(
+        set_legacy_team_share(&repo, &metadata.document_id, true)
+            .await
+            .is_err()
+    );
+    let state = set_legacy_team_share(&repo, &metadata.document_id, false)
         .await
         .unwrap();
     assert_eq!(state.team_id, None);
@@ -1417,6 +1704,7 @@ async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Po
     let channel_id = "c0000000-0000-0000-0000-000000000001";
 
     repo.edit_document(EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: None,
@@ -1491,6 +1779,7 @@ async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
     let channel_id = "c0000000-0000-0000-0000-000000000001";
 
     let make_args = || EditDocumentRepoArgs {
+        team_share: None,
         document_id: "d0000000-0000-0000-0000-000000000001".to_string(),
         document_name: None,
         project_id: None,

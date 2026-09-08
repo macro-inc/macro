@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sp.team_share_access_level AS \"level: AccessLevel\"\n               FROM \"SharePermission\" sp JOIN \"DocumentPermission\" dp ON dp.\"sharePermissionId\" = sp.id\n               WHERE dp.\"documentId\" = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "48d6f85b688e76fbb37d8a7bf83f41aad2a10e733cee628983cbb52ffe5a6f67"
+}

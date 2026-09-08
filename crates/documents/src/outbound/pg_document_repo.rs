@@ -14,6 +14,9 @@ mod share;
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata};
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts,
+};
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use sqlx::PgPool;
 
@@ -23,8 +26,8 @@ use sqlx::Row;
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
     BranchNameContext, Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
-    TeamTaskMetadata, Thread,
+    DocumentError, DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome,
+    ImportEmailAttachmentRepoArgs, TeamTaskMetadata, Thread,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -547,8 +550,34 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self, args))]
-    async fn edit_document(&self, args: EditDocumentRepoArgs) -> Result<(), Self::Err> {
+    async fn edit_document(&self, args: EditDocumentRepoArgs) -> Result<(), DocumentError> {
+        use share_permission_db_utils::team_share;
+
         let mut transaction = self.pool.begin().await?;
+        if let Some(command) = &args.team_share {
+            if command.expected().entity.entity_type != EntityType::Document
+                || command.expected().entity.entity_id != args.document_id
+                || args
+                    .share_permission
+                    .as_ref()
+                    .and_then(|p| p.team_share_access_level)
+                    != Some(command.target().map(|grant| grant.level.into()))
+            {
+                return Err(DocumentError::BadRequest(
+                    "team-share command does not match edit".to_string(),
+                ));
+            }
+            // Canonical apply acquires the common guard before any row mutations.
+            team_share::apply(&mut transaction, command)
+                .await
+                .map_err(share::map_team_share_error)?;
+        } else if args
+            .share_permission
+            .as_ref()
+            .is_some_and(|p| p.team_share_access_level.is_some())
+        {
+            return Err(DocumentError::Unauthorized);
+        }
 
         use crate::domain::models::FileTypeUpdate;
         let file_type_db = args.file_type.map(|update| match update {
@@ -853,17 +882,24 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_team_share(&self, document_id: &str) -> Result<DocumentTeamShare, Self::Err> {
+    async fn get_team_share_facts(
+        &self,
+        document_id: &str,
+    ) -> Result<TeamShareFacts, DocumentError> {
+        share::get_team_share_facts(&self.pool, document_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_share(&self, document_id: &str) -> Result<DocumentTeamShare, DocumentError> {
         share::get_team_share(&self.pool, document_id).await
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn set_team_share(
         &self,
-        document_id: &str,
-        share: bool,
-    ) -> Result<DocumentTeamShare, Self::Err> {
-        share::set_team_share(&self.pool, document_id, share).await
+        command: AuthorizedTeamShareCommand,
+    ) -> Result<DocumentTeamShare, DocumentError> {
+        share::set_team_share(&self.pool, command).await
     }
 
     #[tracing::instrument(err, skip(self))]
