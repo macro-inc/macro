@@ -1,6 +1,39 @@
+fragment FavoriteFields on GraphqlFavorite {
+  __typename
+  id
+  entityType
+  entityId
+  sortOrder
+  createdAt
+  fileType
+  documentSubType
+  channelType
+  channelId
+}
+
+query Favorites {
+  user {
+    id
+    favorites {
+      ...FavoriteFields
+    }
+  }
+}
+
+mutation SetFavorite($entity: EntityRefInput!, $favorite: Boolean!) {
+  setEntityFavorite(entity: $entity, favorite: $favorite) {
+    __typename
+    ... on GraphqlMutationError {
+      errorCode
+      message
+    }
+  }
+}
+
 mutation ReorderFavorites($input: ReorderFavoritesInput!) {
   reorderFavorites(input: $input) {
     __typename
+    id
     entityType
     entityId
     sortOrder

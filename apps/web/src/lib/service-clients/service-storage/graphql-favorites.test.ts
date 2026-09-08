@@ -1,6 +1,10 @@
+import { stringifyDocument } from '@urql/core';
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ReorderFavoritesDocument } from './graphql/generated/graphql';
+import {
+  FavoritesDocument,
+  ReorderFavoritesDocument,
+} from './graphql/generated/graphql';
 
 const { graphqlSoupEnabledMock, mutationMock, reorderFavoritesRestMock } =
   vi.hoisted(() => ({
@@ -39,12 +43,14 @@ function committedGraphqlResponse() {
       reorderFavorites: [
         {
           __typename: 'GraphqlFavorite' as const,
+          id: 'email_thread:thread-1',
           entityType: 'EMAIL_THREAD' as const,
           entityId: 'thread-1',
           sortOrder: 0,
         },
         {
           __typename: 'GraphqlFavorite' as const,
+          id: 'document:document-1',
           entityType: 'DOCUMENT' as const,
           entityId: 'document-1',
           sortOrder: 1,
@@ -97,7 +103,13 @@ describe('favorites reorder transport', () => {
           uuid: '86cc4bfe-c45a-4e28-880a-6ba5ca921d35',
           optimisticResponse: committedGraphqlResponse().data,
           linkPatches: [],
-          revalidations: [],
+          revalidations: [
+            {
+              query: stringifyDocument(FavoritesDocument),
+              operationName: 'Favorites',
+              variablesJson: '{}',
+            },
+          ],
         },
       }
     );

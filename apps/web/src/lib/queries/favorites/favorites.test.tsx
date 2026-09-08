@@ -3,6 +3,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from '@tanstack/solid-query';
+import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,22 +11,48 @@ import type { Favorite } from '../../service-clients/service-storage/generated/s
 import type { FavoritesList } from '../../service-clients/service-storage/generated/schemas/favoritesList';
 import { favoriteKeys } from './keys';
 
-const { graphqlSoupEnabledMock, reorderFavoritesMock } = vi.hoisted(() => ({
-  graphqlSoupEnabledMock: vi.fn(() => true),
-  reorderFavoritesMock: vi.fn(),
+const mocks = vi.hoisted(() => ({
+  graphqlSoupEnabled: vi.fn(() => true),
+  createGraphqlFavoritesQuery: vi.fn(),
+  createGraphqlReorderMutation: vi.fn(),
+  createGraphqlSetMutation: vi.fn(),
+  refreshGraphqlFavorites: vi.fn(),
+  graphqlReorderResult: vi.fn(),
+  graphqlReorderMutate: vi.fn(),
+  graphqlReorderMutateAsync: vi.fn(),
+  graphqlSetMutate: vi.fn(),
+  graphqlSetMutateAsync: vi.fn(),
+  getFavoritesRest: vi.fn(),
+  addFavoriteRest: vi.fn(),
+  removeFavoriteRest: vi.fn(),
+  reorderFavoritesRest: vi.fn(),
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
   enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: graphqlSoupEnabledMock,
+  isFeatureEnabled: mocks.graphqlSoupEnabled,
 }));
 
 vi.mock('@service-storage/client', () => ({
-  storageServiceClient: { favorites: {} },
+  storageServiceClient: {
+    favorites: {
+      getFavorites: mocks.getFavoritesRest,
+      addFavorite: mocks.addFavoriteRest,
+      removeFavoriteByEntity: mocks.removeFavoriteRest,
+      reorderFavorites: mocks.reorderFavoritesRest,
+    },
+  },
 }));
 
 vi.mock('@service-storage/graphql-favorites', () => ({
-  reorderFavorites: reorderFavoritesMock,
+  graphqlReorderFavoritesResult: mocks.graphqlReorderResult,
+}));
+
+vi.mock('./graphql', () => ({
+  createGraphqlFavoritesQuery: mocks.createGraphqlFavoritesQuery,
+  createGraphqlReorderFavoritesMutation: mocks.createGraphqlReorderMutation,
+  createGraphqlSetFavoriteMutation: mocks.createGraphqlSetMutation,
+  refreshActiveGraphqlFavoritesQueries: mocks.refreshGraphqlFavorites,
 }));
 
 vi.mock('../client', () => ({
@@ -34,7 +61,12 @@ vi.mock('../client', () => ({
   },
 }));
 
-import { useReorderFavoritesMutation } from './favorites';
+import {
+  useAddFavoriteMutation,
+  useFavoritesData,
+  useRemoveFavoriteMutation,
+  useReorderFavoritesMutation,
+} from './favorites';
 
 let testQueryClient: QueryClient;
 let dispose: (() => void) | undefined;
@@ -64,16 +96,45 @@ function renderHook<T>(factory: () => T): T {
   return hook;
 }
 
-describe('favorites reorder mutation', () => {
+describe('favorites transport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    graphqlSoupEnabledMock.mockReturnValue(true);
+    mocks.graphqlSoupEnabled.mockReturnValue(true);
     onlineManager.setOnline(true);
     testQueryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
         mutations: { retry: false },
       },
+    });
+
+    mocks.createGraphqlFavoritesQuery.mockReturnValue({
+      data: {
+        favorites: [favorite('document-1', 0), favorite('document-2', 1)],
+      },
+      isSuccess: true,
+    });
+    mocks.createGraphqlReorderMutation.mockReturnValue({
+      isPending: false,
+      error: null,
+      mutate: mocks.graphqlReorderMutate,
+      mutateAsync: mocks.graphqlReorderMutateAsync,
+    });
+    mocks.createGraphqlSetMutation.mockReturnValue({
+      isPending: false,
+      error: null,
+      mutate: mocks.graphqlSetMutate,
+      mutateAsync: mocks.graphqlSetMutateAsync,
+    });
+    mocks.graphqlSetMutateAsync.mockResolvedValue({
+      data: { setEntityFavorite: { __typename: 'GraphqlMutationSuccess' } },
+    });
+    mocks.graphqlReorderMutateAsync.mockResolvedValue({
+      data: { reorderFavorites: [] },
+    });
+    mocks.graphqlReorderResult.mockReturnValue({
+      kind: 'queued',
+      transactionId: 'transaction-1',
     });
   });
 
@@ -85,18 +146,71 @@ describe('favorites reorder mutation', () => {
     document.body.replaceChildren();
   });
 
-  it('keeps the optimistic order when GraphQL queues the mutation offline', async () => {
-    const previous: FavoritesList = {
-      favorites: [favorite('document-1', 0), favorite('document-2', 1)],
-    };
-    testQueryClient.setQueryData(favoriteKeys.list.queryKey, previous);
-    const invalidateQueries = vi.spyOn(testQueryClient, 'invalidateQueries');
-    reorderFavoritesMock.mockResolvedValue({
+  it('reads GraphQL favorites without registering a TanStack query', () => {
+    const favoritesData = renderHook(() => useFavoritesData());
+
+    expect(favoritesData()?.favorites.map((item) => item.entityId)).toEqual([
+      'document-1',
+      'document-2',
+    ]);
+    expect(mocks.createGraphqlFavoritesQuery).toHaveBeenCalledOnce();
+    expect(mocks.getFavoritesRest).not.toHaveBeenCalled();
+    expect(testQueryClient.getQueryCache().getAll()).toEqual([]);
+  });
+
+  it('keeps queued reorder entirely on the captured GraphQL path', async () => {
+    const mutation = renderHook(() => useReorderFavoritesMutation());
+    expect(mocks.graphqlSoupEnabled).toHaveBeenCalledOnce();
+
+    mocks.graphqlSoupEnabled.mockReturnValue(false);
+    onlineManager.setOnline(false);
+    const favorites = [
+      { entityType: 'document' as const, entityId: 'document-2' },
+      { entityType: 'document' as const, entityId: 'document-1' },
+    ];
+
+    await expect(mutation.mutateAsync({ favorites })).resolves.toEqual({
       kind: 'queued',
       transactionId: 'transaction-1',
     });
+
+    expect(mocks.graphqlReorderMutateAsync).toHaveBeenCalledWith({ favorites });
+    expect(mocks.reorderFavoritesRest).not.toHaveBeenCalled();
+    expect(testQueryClient.getMutationCache().getAll()).toEqual([]);
+  });
+
+  it('uses urql-solid rather than TanStack for GraphQL add and remove', async () => {
+    const mutations = renderHook(() => ({
+      add: useAddFavoriteMutation(),
+      remove: useRemoveFavoriteMutation(),
+    }));
+    const args = { entityType: 'document' as const, entityId: 'document-1' };
+
+    await mutations.add.mutateAsync(args);
+    await mutations.remove.mutateAsync(args);
+
+    expect(mocks.createGraphqlSetMutation).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ favorite: true })
+    );
+    expect(mocks.createGraphqlSetMutation).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ favorite: false })
+    );
+    expect(mocks.graphqlSetMutateAsync).toHaveBeenCalledTimes(2);
+    expect(mocks.addFavoriteRest).not.toHaveBeenCalled();
+    expect(mocks.removeFavoriteRest).not.toHaveBeenCalled();
+    expect(testQueryClient.getMutationCache().getAll()).toEqual([]);
+  });
+
+  it('keeps REST reorder optimism while GraphQL Soup is disabled', async () => {
+    mocks.graphqlSoupEnabled.mockReturnValue(false);
+    testQueryClient.setQueryData<FavoritesList>(favoriteKeys.list.queryKey, {
+      favorites: [favorite('document-1', 0), favorite('document-2', 1)],
+    });
+    mocks.reorderFavoritesRest.mockResolvedValue(ok(undefined));
+    const invalidateQueries = vi.spyOn(testQueryClient, 'invalidateQueries');
     const mutation = renderHook(() => useReorderFavoritesMutation());
-    onlineManager.setOnline(false);
 
     await mutation.mutateAsync({
       favorites: [
@@ -105,51 +219,13 @@ describe('favorites reorder mutation', () => {
       ],
     });
 
-    expect(reorderFavoritesMock).toHaveBeenCalledOnce();
     expect(
       testQueryClient
         .getQueryData<FavoritesList>(favoriteKeys.list.queryKey)
         ?.favorites.map((item) => item.entityId)
     ).toEqual(['document-2', 'document-1']);
-    expect(invalidateQueries).not.toHaveBeenCalled();
-  });
-
-  it('keeps the network policy and transport selected at hook creation', async () => {
-    reorderFavoritesMock.mockResolvedValue({
-      kind: 'queued',
-      transactionId: 'transaction-1',
-    });
-    const mutation = renderHook(() => useReorderFavoritesMutation());
-
-    expect(graphqlSoupEnabledMock).toHaveBeenCalledOnce();
-    graphqlSoupEnabledMock.mockReturnValue(false);
-    onlineManager.setOnline(false);
-
-    const favorites = [
-      { entityType: 'document' as const, entityId: 'document-2' },
-      { entityType: 'document' as const, entityId: 'document-1' },
-    ];
-    await mutation.mutateAsync({ favorites });
-
-    expect(mutation.isPaused).toBe(false);
-    expect(reorderFavoritesMock).toHaveBeenCalledWith({ favorites }, true);
-  });
-
-  it('revalidates the optimistic order after an immediate commit', async () => {
-    testQueryClient.setQueryData<FavoritesList>(favoriteKeys.list.queryKey, {
-      favorites: [favorite('document-1', 0), favorite('document-2', 1)],
-    });
-    const invalidateQueries = vi.spyOn(testQueryClient, 'invalidateQueries');
-    reorderFavoritesMock.mockResolvedValue({ kind: 'committed' });
-    const mutation = renderHook(() => useReorderFavoritesMutation());
-
-    await mutation.mutateAsync({
-      favorites: [
-        { entityType: 'document', entityId: 'document-2' },
-        { entityType: 'document', entityId: 'document-1' },
-      ],
-    });
-
+    expect(mocks.reorderFavoritesRest).toHaveBeenCalledOnce();
+    expect(mocks.createGraphqlReorderMutation).not.toHaveBeenCalled();
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: favoriteKeys.list.queryKey,
     });

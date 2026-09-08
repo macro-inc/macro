@@ -9,8 +9,8 @@ import type { AddFavoriteRequest } from '@service-storage/generated/schemas/addF
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { FavoritesList } from '@service-storage/generated/schemas/favoritesList';
 import {
+  graphqlReorderFavoritesResult,
   type ReorderFavoritesResult,
-  reorderFavorites,
 } from '@service-storage/graphql-favorites';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -18,6 +18,12 @@ import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 
+import {
+  createGraphqlFavoritesQuery,
+  createGraphqlReorderFavoritesMutation,
+  createGraphqlSetFavoriteMutation,
+  refreshActiveGraphqlFavoritesQueries,
+} from './graphql';
 import { favoriteKeys } from './keys';
 
 export type FavoriteEntityType = AddFavoriteRequest['entityType'];
@@ -63,8 +69,12 @@ export function favoriteEntityKey(
   return `${entityType}:${entityId}`;
 }
 
-/** The user's favorites. */
+/** The user's favorites from the transport selected at hook creation. */
 export function useFavoritesQuery() {
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    return createGraphqlFavoritesQuery();
+  }
+
   return useQuery(() => ({
     queryKey: favoriteKeys.list.queryKey,
     queryFn: async () =>
@@ -76,13 +86,12 @@ export function useFavoritesQuery() {
 /**
  * Non-suspending, non-throwing view of the favorites list.
  *
- * Reading `query.data` off the solid-query proxy suspends the nearest
- * Suspense boundary while the query is pending and throws once it errors.
- * Favorites are read from broad surfaces (command menu conditions and
- * descriptions, the sidebar, context menus) where a slow or failing
- * favorites request must never take the surface down. Gating on `isSuccess`
- * keeps the read reactive without either behavior; callers see `undefined`
- * until the list has loaded.
+ * The REST query's `data` property suspends while pending and throws on error,
+ * while the urql-solid result does neither. Favorites are read from broad
+ * surfaces (command menu conditions and descriptions, the sidebar, context
+ * menus) where a slow or failing request must never take the surface down.
+ * Gating on the shared `isSuccess` status keeps both transports reactive and
+ * returns `undefined` until the list has loaded.
  */
 export function useFavoritesData(): Accessor<FavoritesList | undefined> {
   const query = useFavoritesQuery();
@@ -100,12 +109,16 @@ function writeList(update: (prev: FavoritesList) => FavoritesList) {
 }
 
 export function invalidateFavorites() {
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    return refreshActiveGraphqlFavoritesQueries().then(() => undefined);
+  }
+
   return queryClient.invalidateQueries({
     queryKey: favoriteKeys.list.queryKey,
   });
 }
 
-type FavoriteMutationContext = { rollback: () => void };
+type FavoriteMutationContext = { rollback: () => void } | undefined;
 
 type AddFavoriteArgs = AddFavoriteRequest;
 type AddFavoriteCallbacks = MutationCallbacks<
@@ -115,7 +128,58 @@ type AddFavoriteCallbacks = MutationCallbacks<
   FavoriteMutationContext
 >;
 
+function pendingFavorite(args: AddFavoriteArgs): Favorite {
+  return {
+    entityType: args.entityType,
+    entityId: args.entityId,
+    sortOrder: Number.MAX_SAFE_INTEGER,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 export function useAddFavoriteMutation(callbacks?: AddFavoriteCallbacks) {
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    const mutation = createGraphqlSetFavoriteMutation<FavoriteMutationContext>({
+      favorite: true,
+      onMutate: async (args) =>
+        await callbacks?.onMutate?.(args, undefined as never),
+      onSuccess: async (favorite, args, context) => {
+        await callbacks?.onSuccess?.(
+          favorite ?? pendingFavorite(args),
+          args,
+          context,
+          undefined as never
+        );
+      },
+      onError: async (error, args, context) => {
+        await callbacks?.onError?.(error, args, context, undefined as never);
+      },
+      onSettled: async (favorite, error, args, context) => {
+        await callbacks?.onSettled?.(
+          favorite,
+          error,
+          args,
+          context,
+          undefined as never
+        );
+      },
+    });
+    return {
+      get isPending() {
+        return mutation.isPending;
+      },
+      get error() {
+        return mutation.error;
+      },
+      mutate: mutation.mutate,
+      async mutateAsync(args: AddFavoriteArgs): Promise<Favorite> {
+        const result = await mutation.mutateAsync(args);
+        if (result.error) throw result.error;
+        return pendingFavorite(args);
+      },
+    };
+  }
+
   return useMutation(() => ({
     mutationFn: async (args: AddFavoriteArgs) =>
       await throwOnErr(() => storageServiceClient.favorites.addFavorite(args)),
@@ -126,12 +190,7 @@ export function useAddFavoriteMutation(callbacks?: AddFavoriteCallbacks) {
             queryKey: favoriteKeys.list.queryKey,
           });
           const previous = readList();
-          const optimistic: Favorite = {
-            entityType: args.entityType,
-            entityId: args.entityId,
-            sortOrder: Number.MAX_SAFE_INTEGER,
-            createdAt: new Date().toISOString(),
-          };
+          const optimistic = pendingFavorite(args);
           writeList((prev) => ({
             ...prev,
             favorites: [...prev.favorites, optimistic],
@@ -166,6 +225,47 @@ type RemoveFavoriteCallbacks = MutationCallbacks<
 >;
 
 export function useRemoveFavoriteMutation(callbacks?: RemoveFavoriteCallbacks) {
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    const mutation = createGraphqlSetFavoriteMutation<FavoriteMutationContext>({
+      favorite: false,
+      onMutate: async (args) =>
+        await callbacks?.onMutate?.(args, undefined as never),
+      onSuccess: async (_favorite, args, context) => {
+        await callbacks?.onSuccess?.(
+          undefined,
+          args,
+          context,
+          undefined as never
+        );
+      },
+      onError: async (error, args, context) => {
+        await callbacks?.onError?.(error, args, context, undefined as never);
+      },
+      onSettled: async (_favorite, error, args, context) => {
+        await callbacks?.onSettled?.(
+          undefined,
+          error,
+          args,
+          context,
+          undefined as never
+        );
+      },
+    });
+    return {
+      get isPending() {
+        return mutation.isPending;
+      },
+      get error() {
+        return mutation.error;
+      },
+      mutate: mutation.mutate,
+      async mutateAsync(args: RemoveFavoriteArgs): Promise<void> {
+        const result = await mutation.mutateAsync(args);
+        if (result.error) throw result.error;
+      },
+    };
+  }
+
   return useMutation(() => ({
     mutationFn: async (args: RemoveFavoriteArgs) => {
       await throwOnErr(() =>
@@ -220,21 +320,62 @@ type ReorderFavoritesCallbacks = MutationCallbacks<
 export function useReorderFavoritesMutation(
   callbacks?: ReorderFavoritesCallbacks
 ) {
-  const graphqlSoupEnabled = isFeatureEnabled(enableGraphqlSoup);
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    const mutation =
+      createGraphqlReorderFavoritesMutation<FavoriteMutationContext>({
+        onMutate: async (args) =>
+          await callbacks?.onMutate?.(args, undefined as never),
+        onSuccess: async (result, args, context) => {
+          await callbacks?.onSuccess?.(
+            result,
+            args,
+            context,
+            undefined as never
+          );
+        },
+        onError: async (error, args, context) => {
+          await callbacks?.onError?.(error, args, context, undefined as never);
+        },
+        onSettled: async (result, error, args, context) => {
+          await callbacks?.onSettled?.(
+            result,
+            error,
+            args,
+            context,
+            undefined as never
+          );
+        },
+      });
+    return {
+      get isPending() {
+        return mutation.isPending;
+      },
+      get error() {
+        return mutation.error;
+      },
+      mutate: mutation.mutate,
+      async mutateAsync(
+        args: ReorderFavoritesArgs
+      ): Promise<ReorderFavoritesResult> {
+        if (args.favorites.length === 0) return { kind: 'committed' };
+        return graphqlReorderFavoritesResult(await mutation.mutateAsync(args));
+      },
+    };
+  }
+
   return useMutation(() => ({
-    // The GraphQL cache must see the mutation while offline so it can durably
-    // queue the optimistic transaction instead of TanStack pausing it in RAM.
-    networkMode: graphqlSoupEnabled ? 'always' : 'online',
     mutationFn: async (
       args: ReorderFavoritesArgs
     ): Promise<ReorderFavoritesResult> => {
       // Entities the user has not favorited (e.g. an optimistic row whose add
       // is still in flight) are ignored by the backend.
       if (args.favorites.length === 0) return { kind: 'committed' };
-      return await reorderFavorites(
-        { favorites: args.favorites },
-        graphqlSoupEnabled
+      await throwOnErr(() =>
+        storageServiceClient.favorites.reorderFavorites({
+          favorites: args.favorites,
+        })
       );
+      return { kind: 'committed' };
     },
     ...withCallbacks<
       ReorderFavoritesResult,
@@ -283,13 +424,7 @@ export function useReorderFavoritesMutation(
         onError: (_error, _args, context) => {
           context?.rollback();
         },
-        // A queued GraphQL mutation owns the optimistic order until replay.
-        // Refetching the REST list while offline would only hide that state.
-        onSettled: (result, error) => {
-          if (error || result?.kind === 'committed') {
-            return invalidateFavorites();
-          }
-        },
+        onSettled: () => invalidateFavorites(),
       },
       callbacks
     ),

@@ -15,6 +15,11 @@ impl GraphqlFavorite {
 /// GraphQL fields for an ordered favorite.
 #[Object]
 impl GraphqlFavorite {
+    /// Stable cache identity within the authenticated user's favorites collection.
+    async fn id(&self) -> ID {
+        ID(format!("{}:{}", self.0.entity_type, self.0.entity_id))
+    }
+
     /// Canonical type of the favorited entity.
     async fn entity_type(&self) -> GraphqlEntityType {
         GraphqlEntityType::new(self.0.entity_type)

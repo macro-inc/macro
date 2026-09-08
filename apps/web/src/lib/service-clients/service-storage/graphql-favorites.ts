@@ -7,11 +7,14 @@ import {
   executeOptimisticMutation,
   optimisticMutationDispositionOf,
 } from '@graphql-cache/exchange/optimistic';
-import type { Client } from '@urql/core';
+import type { Client, OperationResult } from '@urql/core';
 import { storageServiceClient } from './client';
+import type { Favorite } from './generated/schemas/favorite';
 import type { FavoriteEntityType } from './generated/schemas/favoriteEntityType';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import {
+  type FavoriteFieldsFragment,
+  FavoritesDocument,
   type GraphqlEntityType,
   ReorderFavoritesDocument,
   type ReorderFavoritesMutation,
@@ -39,6 +42,47 @@ const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   agent_session: 'AGENT_SESSION',
 } satisfies Record<FavoriteEntityType, GraphqlEntityType>;
 
+const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
+  AGENT_SESSION: 'agent_session',
+  CALENDAR_EVENT: 'calendar_event',
+  CALL: 'call',
+  CHANNEL: 'channel',
+  CHANNEL_MESSAGE: 'channel_message',
+  CHAT: 'chat',
+  CRM_COMPANY: 'crm_company',
+  CRM_CONTACT: 'crm_contact',
+  DOCUMENT: 'document',
+  EMAIL_THREAD: 'email_thread',
+  FOREIGN_ENTITY: 'foreign_entity',
+  PROJECT: 'project',
+  REMINDER: 'reminder',
+  SKILL: 'skill',
+  STATIC_FILE: 'static_file',
+  TEAM: 'team',
+  USER: 'user',
+} satisfies Record<GraphqlEntityType, FavoriteEntityType>;
+
+/** Convert a REST favorite entity type into its GraphQL equivalent. */
+export function toGraphqlFavoriteEntityType(
+  entityType: FavoriteEntityType
+): GraphqlEntityType {
+  return FAVORITE_ENTITY_TYPE_TO_GRAPHQL[entityType];
+}
+
+/** Convert one GraphQL favorite into the shared favorites-list shape. */
+export function mapGraphqlFavorite(favorite: FavoriteFieldsFragment): Favorite {
+  return {
+    channelId: favorite.channelId,
+    channelType: favorite.channelType,
+    createdAt: favorite.createdAt,
+    documentSubType: favorite.documentSubType,
+    entityId: favorite.entityId,
+    entityType: GRAPHQL_ENTITY_TYPE_TO_FAVORITE[favorite.entityType],
+    fileType: favorite.fileType,
+    sortOrder: favorite.sortOrder,
+  };
+}
+
 /**
  * Reorders describe the complete value of one user-owned slot, so a newer
  * offline reorder can safely replace an older queued reorder.
@@ -51,14 +95,17 @@ export type ReorderFavoritesResult =
   | { kind: 'committed' }
   | { kind: 'queued'; transactionId: string };
 
-/** Execute a durable optimistic GraphQL favorites reorder. */
-export async function executeGraphqlReorderFavorites(
+/** Submit a durable optimistic GraphQL favorites reorder. */
+export function executeGraphqlReorderFavoritesMutation(
   client: Client,
   args: ReorderFavoritesRequest
-): Promise<ReorderFavoritesResult> {
+): Promise<
+  OperationResult<ReorderFavoritesMutation, ReorderFavoritesMutationVariables>
+> {
   const favorites = args.favorites.map((favorite, sortOrder) => ({
     __typename: 'GraphqlFavorite' as const,
-    entityType: FAVORITE_ENTITY_TYPE_TO_GRAPHQL[favorite.entityType],
+    id: `${favorite.entityType}:${favorite.entityId}`,
+    entityType: toGraphqlFavoriteEntityType(favorite.entityType),
     entityId: favorite.entityId,
     sortOrder,
   }));
@@ -73,14 +120,25 @@ export async function executeGraphqlReorderFavorites(
   const optimisticData: ReorderFavoritesMutation = {
     reorderFavorites: favorites,
   };
-  const result = await executeOptimisticMutation(
+  return executeOptimisticMutation(
     client,
     ReorderFavoritesDocument,
     variables,
     optimisticData,
-    { uuid: REORDER_FAVORITES_OPTIMISTIC_UUID }
+    {
+      uuid: REORDER_FAVORITES_OPTIMISTIC_UUID,
+      revalidations: [{ document: FavoritesDocument, variables: {} }],
+    }
   ).toPromise();
+}
 
+/** Interpret a GraphQL reorder operation as a caller-facing disposition. */
+export function graphqlReorderFavoritesResult(
+  result: OperationResult<
+    ReorderFavoritesMutation,
+    ReorderFavoritesMutationVariables
+  >
+): ReorderFavoritesResult {
   const disposition = optimisticMutationDispositionOf(result);
   if (disposition?.kind === 'queued') {
     return {
@@ -97,6 +155,16 @@ export async function executeGraphqlReorderFavorites(
   }
 
   return { kind: 'committed' };
+}
+
+/** Execute a durable optimistic GraphQL favorites reorder. */
+export async function executeGraphqlReorderFavorites(
+  client: Client,
+  args: ReorderFavoritesRequest
+): Promise<ReorderFavoritesResult> {
+  return graphqlReorderFavoritesResult(
+    await executeGraphqlReorderFavoritesMutation(client, args)
+  );
 }
 
 /** Reorder favorites through the configured REST or GraphQL transport. */

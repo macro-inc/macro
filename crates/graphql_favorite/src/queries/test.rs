@@ -63,7 +63,7 @@ async fn lists_ordered_favorites_for_the_bound_user() {
     let reader = RecordingReader::default();
     let response = schema(reader.clone())
         .execute(
-            "{ favorites { entityType entityId sortOrder createdAt fileType documentSubType channelType channelId } }",
+            "{ favorites { id entityType entityId sortOrder createdAt fileType documentSubType channelType channelId } }",
         )
         .await;
 
@@ -72,6 +72,7 @@ async fn lists_ordered_favorites_for_the_bound_user() {
         response.data,
         value!({
             "favorites": [{
+                "id": "document:document-1",
                 "entityType": "DOCUMENT",
                 "entityId": "document-1",
                 "sortOrder": 2.5,

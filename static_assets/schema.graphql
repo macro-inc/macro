@@ -2057,6 +2057,10 @@ GraphQL fields for an ordered favorite.
 """
 type GraphqlFavorite {
 	"""
+	Stable cache identity within the authenticated user's favorites collection.
+	"""
+	id: ID!
+	"""
 	Canonical type of the favorited entity.
 	"""
 	entityType: GraphqlEntityType!
