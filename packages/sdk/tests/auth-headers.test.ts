@@ -36,6 +36,14 @@ describe('requestAuthHeaders', () => {
       "user API key passed as a bot token. Use auth: { type: 'user', apiKey } or MACRO_API_KEY.",
     );
   });
+
+  test('bot auth with a legacy API key rejects', async () => {
+    await expect(
+      requestAuthHeaders({ type: 'bot', token: 'legacy0123' }),
+    ).rejects.toThrow(
+      "user API key passed as a bot token. Use auth: { type: 'user', apiKey } or MACRO_API_KEY.",
+    );
+  });
 });
 
 describe('requestedAs', () => {

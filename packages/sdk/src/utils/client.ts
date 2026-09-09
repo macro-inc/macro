@@ -58,7 +58,7 @@ export async function requestAuthHeaders(
   return match(auth)
     .with({ type: 'bot' }, async (botAuth) => {
       const tok = await resolveToken(botAuth.token);
-      if (tok.startsWith(USER_API_KEY_PREFIX)) {
+      if (!tok.startsWith(BOT_TOKEN_PREFIX)) {
         throw new Error(
           "user API key passed as a bot token. Use auth: { type: 'user', apiKey } or MACRO_API_KEY.",
         );
