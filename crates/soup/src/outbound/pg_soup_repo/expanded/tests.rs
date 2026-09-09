@@ -6538,7 +6538,7 @@ async fn insert_notification(
     .execute(db)
     .await?;
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO user_notification (
             user_id,
@@ -6551,11 +6551,11 @@ async fn insert_notification(
             WHEN $4::bool THEN 'seen'::notification_state ELSE 'unseen'::notification_state END,
             CASE WHEN $4 THEN NOW() ELSE NULL END, NULL)
         "#,
+        user_id,
+        Uuid::parse_str(notification_id)?,
+        done,
+        seen,
     )
-    .bind(user_id)
-    .bind(notification_id)
-    .bind(done)
-    .bind(seen)
     .execute(db)
     .await?;
 

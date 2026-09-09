@@ -762,18 +762,18 @@ async fn insert_foreign_entity_notification(
     .expect("notification row should be inserted");
 
     let seen_at: Option<chrono::NaiveDateTime> = seen.then(|| Utc::now().naive_utc());
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO user_notification (user_id, notification_id, state, seen_at)
         VALUES ($1, $2, CASE WHEN $3::bool THEN 'done'::notification_state
             WHEN $4::timestamp IS NOT NULL THEN 'seen'::notification_state
             ELSE 'unseen'::notification_state END, $4)
         "#,
+        user_id,
+        notification_id,
+        done,
+        seen_at,
     )
-    .bind(user_id)
-    .bind(notification_id)
-    .bind(done)
-    .bind(seen_at)
     .execute(pool)
     .await
     .expect("user_notification row should be inserted");

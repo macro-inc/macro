@@ -343,10 +343,12 @@ async fn channel_conjuncts_ignore_thread_scoped_notifications(
 ) -> anyhow::Result<()> {
     use item_filters::ast::channel::ChannelLiteral;
 
-    sqlx::query("UPDATE user_notification SET state = 'done' WHERE notification_id = $1::uuid")
-        .bind(CHANNEL_X_INVITE)
-        .execute(&pool)
-        .await?;
+    sqlx::query!(
+        "UPDATE user_notification SET state = 'done' WHERE notification_id = $1::uuid",
+        Uuid::parse_str(CHANNEL_X_INVITE)?,
+    )
+    .execute(&pool)
+    .await?;
 
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();
@@ -378,13 +380,15 @@ async fn thread_and_foreign_entity_conjuncts_prefilter_candidates(
 ) -> anyhow::Result<()> {
     use item_filters::ast::channel::ChannelThreadLiteral;
 
-    sqlx::query("UPDATE user_notification SET state = 'done' WHERE notification_id = ANY($1::uuid[])")
-        .bind(vec![
+    sqlx::query!(
+        "UPDATE user_notification SET state = 'done' WHERE notification_id = ANY($1::uuid[])",
+        &[
             Uuid::parse_str(THREAD_M_MENTION)?,
             Uuid::parse_str(PR_F1_EVENT)?,
-        ])
-        .execute(&pool)
-        .await?;
+        ],
+    )
+    .execute(&pool)
+    .await?;
 
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();

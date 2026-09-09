@@ -427,7 +427,7 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
-    /// Mark notifications as seen and return the updated user-owned rows.
+    /// Atomically acknowledge notifications, preserving done state and existing view times.
     fn mark_notifications_seen(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -436,7 +436,7 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>,
     > + Send;
 
-    /// Mark notifications as done or undone and return the updated user-owned rows.
+    /// Atomically mark done or reopen done notifications as seen, preserving view times.
     fn mark_notifications_done(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -461,7 +461,7 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
 
     /// Return notification IDs that still exist for the user and are eligible for digest email.
     ///
-    /// Excludes notifications that are missing, soft-deleted, or already seen.
+    /// Includes only unseen notifications that exist and are not soft-deleted.
     fn get_digest_eligible_notification_ids(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -470,7 +470,7 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
 
     /// Get a user's non-deleted notifications with cursor-based pagination.
     ///
-    /// The metadata JSON column is deserialized into `T`. `filters` controls done/seen status.
+    /// The metadata JSON column is deserialized into `T`. `filters` selects exact states.
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,
