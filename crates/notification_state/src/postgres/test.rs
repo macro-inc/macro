@@ -1,3 +1,5 @@
+mod migration;
+
 use super::PgNotificationState;
 use crate::NotificationState;
 use sqlx::{Postgres, Type, TypeInfo};
