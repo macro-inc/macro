@@ -52,6 +52,13 @@ Both frontend AST compilers translate existing persisted UI `...Seen` / `...Done
 filter intent into state selections. Normalized caches reset when the GraphQL schema
 hash changes. `cache-wasm` was bumped to 0.6.7 so version-gated dev builds rebuild too.
 
+Opaque Soup cursors also embed the filter AST. Pre-cutover cursors containing boolean
+`ns` values or the removed `nd` literal are intentionally incompatible: clients must
+refresh and restart pagination during the coordinated cutover. Do not add a boolean
+fallback to the canonical state enum: legacy `ns: true` can match both seen and done,
+so mapping it to exact seen would silently change the query. Retaining old cursors
+would require a separate, versioned expression-level translator.
+
 ## Frontend and SDK behavior
 
 - Notification badges, row predicates, and read markers use state, not timestamps.
@@ -87,7 +94,11 @@ hash changes. `cache-wasm` was bumped to 0.6.7 so version-gated dev builds rebui
 - Regenerated GraphQL SDL/documents/cache schema, relevant OpenAPI clients, SDK clients,
   and cognition AI-tool schemas.
 - Full frontend typecheck and generated-cache-schema check.
-- Full frontend suite: **4,332 passed, one pre-existing todo**, across 468 test files.
+- Full frontend suite after rebasing and fixing PR review findings: **4,499 passed,
+  one pre-existing todo**, across 493 test files. CI's exact TypeScript command also passes.
+- Review regressions cover mixed Inbox state selections, inbox-scoped cache keys with
+  sibling state constraints, and untracked optimistic rollback snapshots. The new
+  regression tests failed before the fixes and pass afterward.
 - Biome checks on tracked frontend source. Ignored browser-test build bundles can make
   an unrestricted local `biome check` report diagnostics on minified generated JS.
 - Local EXPLAIN plans use the foreign-entity source index, per-user notification covering
