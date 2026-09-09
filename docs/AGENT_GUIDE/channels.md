@@ -44,27 +44,28 @@ bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cu
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 The reply renders a Magic Chip: a rounded card of constant height that is present
-from the moment the session boots. Its header names the bot as a mention (`@cursor`),
-the model when the runtime has reported one, and what the turn is doing (`Booting
-agent`, `Running command · cargo test`, `Waiting for you`, `Done`); clicking the header
-or its arrow (`Open in session`) opens the agent session. The area under the header
-holds the agent's latest passage: a pulsing star while the agent is busy before it
-writes, the passage as it streams, and the final passage once the turn ends - the last
-text the agent wrote, not the whole turn, and a finished turn with nothing said leaves
-the area empty. The passage is clipped to about seven lines with a fade and a `Show more`
-cue: click it to expand in place (`Show less` collapses it). Before an answer exists,
-clicking the area also opens the session.
-When the agent stops to ask a question the chip keeps its height and the question takes
-the area under the header in the passage's place: the prompt, then what is asked - a
-form's fields (choice rows with an accent box, an `Other` row when the agent allows a
-free-text answer, text and number inputs, a yes/no), a URL request's host and address, or
-a Macro user tool's draft (`SendEmail`, `CreateCalendarEvent`) summarized read-only -
-scrolling inside the chip when long. The decisions sit at the bottom right of that area:
-`Submit` (or `Open` for a URL) and `Decline` for a question; only the go-ahead (`Send
-email`, `Create event`) for a tool draft, whose editing and cancelling belong to the
-session behind the header's arrow. Only the session's owner gets the decisions; other
-viewers see the question read-only and the header names who is being waited on. Once
-answered, the area shows the agent's passage again.
+from the moment the session boots. Its header names the persona (`Macro Agent`,
+`Cursor Agent`), the model, and what the turn is doing (`Booting agent`, `Running
+command · cargo test`, `Waiting for you`, `Done`); clicking the header or its arrow
+(`Open in session`) opens the agent session. The area under the header holds the agent's
+latest passage: a pulsing star while the agent is busy before it writes, the passage as it
+streams, and the final passage once the turn ends - the last text the agent wrote, not the
+whole turn, and a finished turn with nothing said leaves the area empty. The area is
+clipped with a fade over its lower half and a `Show more` cue; hovering tints it, and
+clicking it expands it in place (`Show less` collapses it). Before anything is there to
+expand, clicking the area also opens the session.
+
+When the agent stops to ask a question the question takes the area in the passage's
+place, clipped and expandable the same way: the prompt, then what is asked - a form's
+fields (choice rows with an accent box, an `Other` row when the agent allows a free-text
+answer, text and number inputs, a yes/no), a URL request's host and address, or a Macro
+user tool's draft (`SendEmail`, `CreateCalendarEvent`) summarized read-only. A row at the
+bottom of the area carries the decisions, refusal first: `Dismiss · Send email · Open in
+session` (or `Create event`) for a tool draft, `Decline · Submit · Open in session` (or
+`Open` for a URL) for a question. Editing or cancelling a draft belongs to the session.
+Only the session's owner gets the decisions; other viewers see the question read-only and
+the header names who is being waited on. Once answered, the area shows the agent's
+passage again.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention. With GraphQL enabled, document mentions and preview cards load
 in bounded batches, including task status/priority/assignees and the viewer's edit

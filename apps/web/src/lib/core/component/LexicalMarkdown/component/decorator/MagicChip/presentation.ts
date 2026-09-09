@@ -23,9 +23,9 @@ export type MagicChipActivity = {
  * from the session's metadata, and whether this viewer is the one who may
  * answer (the session's owner) or is watching someone else be asked.
  */
-/** Who is answering, for the chip's header: the bot and its model. */
+/** Who is answering, for the chip's header: the persona and its model. */
 export type MagicChipHeader = {
-  /** The bot's display name, shown as an `@` mention. */
+  /** The persona's name, e.g. `Macro Agent`. */
   agent?: string;
   /** The model's display name, when the runtime has reported one. */
   model?: string;

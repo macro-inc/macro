@@ -181,6 +181,8 @@ export function QuestionActions(props: {
   onRespond: RespondToElicitation;
   /** Whether Cancel joins Decline; default yes. */
   cancel?: boolean;
+  /** Decline before the question's own button, as the chip's row reads. */
+  declineFirst?: boolean;
 }) {
   const respond = (answer: ElicitationAnswer) => {
     if (props.locked) return;
@@ -197,42 +199,49 @@ export function QuestionActions(props: {
     window.open(target, '_blank', 'noopener,noreferrer');
   };
 
+  const primary = (
+    <Switch>
+      <Match when={form(props.question)}>
+        {(question) => (
+          <Button
+            variant="cta"
+            size="xs"
+            disabled={props.locked}
+            onClick={() => submit(question().draft)}
+          >
+            Submit
+          </Button>
+        )}
+      </Match>
+      <Match when={url(props.question)}>
+        {(question) => (
+          <Button
+            variant="cta"
+            size="xs"
+            disabled={props.locked}
+            onClick={() => void open(question().url)}
+          >
+            Open
+          </Button>
+        )}
+      </Match>
+    </Switch>
+  );
+  const decline = (
+    <Button
+      variant="outline"
+      size="xs"
+      disabled={props.locked}
+      onClick={() => respond({ action: 'decline' })}
+    >
+      Decline
+    </Button>
+  );
+
   return (
     <>
-      <Switch>
-        <Match when={form(props.question)}>
-          {(question) => (
-            <Button
-              variant="cta"
-              size="xs"
-              disabled={props.locked}
-              onClick={() => submit(question().draft)}
-            >
-              Submit
-            </Button>
-          )}
-        </Match>
-        <Match when={url(props.question)}>
-          {(question) => (
-            <Button
-              variant="cta"
-              size="xs"
-              disabled={props.locked}
-              onClick={() => void open(question().url)}
-            >
-              Open
-            </Button>
-          )}
-        </Match>
-      </Switch>
-      <Button
-        variant="outline"
-        size="xs"
-        disabled={props.locked}
-        onClick={() => respond({ action: 'decline' })}
-      >
-        Decline
-      </Button>
+      {props.declineFirst ? decline : primary}
+      {props.declineFirst ? primary : decline}
       <Show when={props.cancel ?? true}>
         <Button
           variant="ghost"

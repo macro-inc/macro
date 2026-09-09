@@ -1,3 +1,4 @@
+import { harnessDisplayName } from '@app/features/block-agent/component/compose-agent-session-options';
 import {
   createElicitationController,
   type ElicitationController,
@@ -19,7 +20,6 @@ import type {
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentSessionLogEntryDto,
-  SessionBot,
   SessionStatusDto,
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
@@ -47,10 +47,38 @@ function magicChipStatus(
   return MAGIC_CHIP_STATUSES.find((candidate) => candidate === value);
 }
 
-/** The model's display name, or its id when the runtime lists no name. */
-function modelName(metadata: SessionMetadata | undefined): string | undefined {
+/** What the session row says about who runs it, until the fold says more. */
+type SessionIdentity = { harness: string; model: string };
+
+/**
+ * The persona as the header names it: the runtime's product name followed
+ * by "Agent" (`Macro Agent`, `Cursor Agent`), a titled slug for a runtime
+ * the composer does not name.
+ */
+function agentName(harness: string | undefined): string | undefined {
+  if (!harness) return undefined;
+  const known = harnessDisplayName(harness);
+  const name =
+    known === harness
+      ? harness
+          .split(/[-_]/)
+          .filter(Boolean)
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ')
+      : known;
+  return `${name} Agent`;
+}
+
+/**
+ * The model's display name from the fold, its id when the runtime lists no
+ * name, or the slug the session was created with before the fold reports.
+ */
+function modelName(
+  metadata: SessionMetadata | undefined,
+  session: SessionIdentity | undefined
+): string | undefined {
   const model = metadata?.model;
-  if (!model) return undefined;
+  if (!model) return session?.model || undefined;
   return (
     metadata.supportedModels.find((option) => option.id === model)?.name ??
     model
@@ -63,7 +91,7 @@ function modelName(metadata: SessionMetadata | undefined): string | undefined {
  * Also the chip's half of answering a question the agent stops to ask in
  * that turn: the session's metadata names the live question, the session
  * row names its owner, and {@link ElicitationController} sends the answer.
- * The header reads the bot and model off the same fold.
+ * The header names the persona and model from the session row and the fold.
  */
 export function createMagicChipModel(props: MagicChipDecoratorProps): {
   presentation: Accessor<MagicChipPresentation>;
@@ -74,7 +102,7 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
   const [persistedStatus, setPersistedStatus] = createSignal(props.status);
   const [ownerId, setOwnerId] = createSignal<string>();
-  const [bot, setBot] = createSignal<SessionBot>();
+  const [session, setSession] = createSignal<SessionIdentity>();
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
   const pendingElicitation = () => metadata()?.pendingElicitation ?? undefined;
   const viewerId = useUserId();
@@ -96,7 +124,13 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
       .get(props.agentSessionId)
       .catch(() => undefined);
     if (!active) return;
-    if (result?.isOk()) setOwnerId(result.value.ownerId);
+    if (result?.isOk()) {
+      setOwnerId(result.value.ownerId);
+      setSession({
+        harness: result.value.harness,
+        model: result.value.model,
+      });
+    }
     const status = result?.isOk()
       ? magicChipStatus(result.value.status)
       : undefined;
@@ -136,7 +170,6 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
       }
       release = acquired.release;
       setMessages(acquired.messages);
-      setBot(acquired.bot);
       setMetadata(acquired.metadata);
     })
     .catch((error: unknown) => {
@@ -189,8 +222,8 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
   };
 
   const header = (): MagicChipHeader | undefined => {
-    const agent = bot()?.name;
-    const model = modelName(metadata());
+    const agent = agentName(session()?.harness);
+    const model = modelName(metadata(), session());
     return agent || model ? { agent, model } : undefined;
   };
 

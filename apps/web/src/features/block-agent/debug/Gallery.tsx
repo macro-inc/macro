@@ -443,7 +443,10 @@ const FIXTURE_ELICITATION: ElicitationSchema = {
   ],
 };
 
-const GALLERY_CHIP_HEADER = { agent: 'cursor', model: 'Claude Opus 5 High' };
+const GALLERY_CHIP_HEADER = {
+  agent: 'Cursor Agent',
+  model: 'Claude Opus 5 High',
+};
 
 /** The chip through a turn: booting, writing, and done. */
 function MagicChipStateDemo(props: { presentation: MagicChipPresentation }) {

@@ -108,7 +108,7 @@ describe('MagicChipView', () => {
     expect(onOpen).toHaveBeenCalledTimes(3);
   });
 
-  it('names the bot and its model in the header', () => {
+  it('names the persona and its model in the header', () => {
     const { container } = render(() => (
       <MagicChipView
         agentSessionId="session"
@@ -116,11 +116,11 @@ describe('MagicChipView', () => {
           kind: 'working',
           activity: { label: 'Thinking', busy: true },
         }}
-        header={{ agent: 'cursor', model: 'Claude Opus 5' }}
+        header={{ agent: 'Cursor Agent', model: 'Claude Opus 5' }}
       />
     ));
     const label = headerLabel(container);
-    expect(label?.textContent).toContain('@cursor');
+    expect(label?.textContent).toContain('Cursor Agent');
     expect(label?.textContent).toContain('Claude Opus 5');
     expect(label?.textContent).toContain('Thinking');
   });
@@ -280,8 +280,15 @@ function asking(canAnswer: boolean, markdown = ''): MagicChipPresentation {
   };
 }
 
+/** The text of the decisions row, in order. */
+function decisionLabels(container: HTMLElement) {
+  return [...(decisions(container)?.querySelectorAll('button') ?? [])].map(
+    (button) => button.textContent?.trim()
+  );
+}
+
 describe('MagicChipView reviewing a tool draft', () => {
-  it('shows the draft in the area with only the go-ahead, bottom right', () => {
+  it('shows the draft in the area with Dismiss, the go-ahead, and the session on the row', () => {
     const view = render(() => (
       <MagicChipView
         agentSessionId="session"
@@ -290,19 +297,20 @@ describe('MagicChipView reviewing a tool draft', () => {
         onOpen={onOpen}
       />
     ));
-    // The question takes the area; the passage waits underneath.
-    expect(answerArea(view.container)?.className).toContain('hidden');
+    // The question takes the area in the passage's place.
+    const area = answerArea(view.container)!;
+    expect(area.className).toContain('h-41');
+    expect(view.queryByTestId('chip-markdown')).toBeNull();
     const body = askingBody(view.container);
-    expect(body?.className).toContain('h-41');
+    expect(area.contains(body)).toBe(true);
     expect(body?.textContent).toContain('Create calendar event?');
-    expect(body?.contains(view.getByTestId('event-draft'))).toBe(true);
     expect(view.getByTestId('event-draft').textContent).toBe('Q3 sync');
 
-    expect(
-      decisions(view.container)?.contains(view.getByText('Create event'))
-    ).toBe(true);
-    expect(view.queryByText('Cancel')).toBeNull();
-    expect(view.queryByText('Edit in session')).toBeNull();
+    expect(decisionLabels(view.container)).toEqual([
+      'Dismiss',
+      'Create event',
+      'Open in session',
+    ]);
     expect(header(view.container)?.textContent).toContain('Waiting for you');
     expect(
       header(view.container)?.contains(view.getByText('Create event'))
@@ -316,8 +324,39 @@ describe('MagicChipView reviewing a tool draft', () => {
       action: 'accept',
       content: { draft: JSON.stringify(draft) },
     });
+    fireEvent.click(view.getByText('Dismiss'));
+    expect(respond).toHaveBeenLastCalledWith({ action: 'decline' });
+    fireEvent.click(view.getByText('Open in session'));
     fireEvent.click(view.getByLabelText('Open in session'));
-    expect(onOpen).toHaveBeenCalledOnce();
+    expect(onOpen).toHaveBeenCalledTimes(2);
+  });
+
+  it('expands the question in place, and its buttons do not toggle it', () => {
+    const view = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={asking(true)}
+        answer={{ answering: false, respond }}
+        onOpen={onOpen}
+      />
+    ));
+    const area = answerArea(view.container)!;
+    const clip = () => view.container.querySelector('[data-magic-chip-clip]');
+    expect(area.getAttribute('aria-expanded')).toBe('false');
+    expect(clip()?.className).toContain('overflow-hidden');
+    expect(view.container.querySelector('[data-magic-chip-fade]')).toBeTruthy();
+    expect(area.textContent).toContain('Show more');
+
+    fireEvent.click(view.getByText('Dismiss'));
+    expect(area.getAttribute('aria-expanded')).toBe('false');
+
+    fireEvent.click(area);
+    expect(area.getAttribute('aria-expanded')).toBe('true');
+    expect(area.className).not.toContain('h-41');
+    expect(clip()?.className).not.toContain('overflow-hidden');
+    expect(view.container.querySelector('[data-magic-chip-fade]')).toBeNull();
+    expect(area.textContent).toContain('Show less');
+    expect(onOpen).not.toHaveBeenCalled();
   });
 
   it('a viewer who is not the owner sees the draft read-only and who is being waited on', () => {
@@ -340,7 +379,7 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(respond).not.toHaveBeenCalled();
   });
 
-  it('holds the button while an answer is on the wire', () => {
+  it('holds the buttons while an answer is on the wire', () => {
     const view = render(() => (
       <MagicChipView
         agentSessionId="session"
@@ -349,6 +388,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       />
     ));
     fireEvent.click(view.getByText('Create event'));
+    fireEvent.click(view.getByText('Dismiss'));
     expect(respond).not.toHaveBeenCalled();
   });
 
@@ -374,8 +414,8 @@ describe('MagicChipView reviewing a tool draft', () => {
 
     setPresentation(asking(true, 'Setting that up.'));
     expect(view.getByText('Create event')).toBeTruthy();
+    expect(view.queryByTestId('chip-markdown')).toBeNull();
     expect(answerArea(view.container)).toBe(area);
-    expect(area.className).toContain('hidden');
 
     setPresentation({ kind: 'settled', markdown: 'Created the event.' });
     expect(view.queryByText('Create event')).toBeNull();
@@ -383,7 +423,6 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(view.getByText('Created the event.')).toBeTruthy();
     expect(header(view.container)?.textContent).toContain('Done');
     expect(answerArea(view.container)).toBe(area);
-    expect(area.className).not.toContain('hidden');
     expect(area.getAttribute('aria-expanded')).toBe('true');
   });
 });
@@ -442,7 +481,7 @@ function askingQuestion(
 }
 
 describe('MagicChipView asking a form', () => {
-  it('offers the choices in the area and the decisions at its bottom right', () => {
+  it('offers the choices in the area and Decline, Submit, the session on the row', () => {
     const view = render(() => (
       <MagicChipView
         agentSessionId="session"
@@ -451,19 +490,16 @@ describe('MagicChipView asking a form', () => {
         onOpen={onOpen}
       />
     ));
+    const area = answerArea(view.container)!;
+    expect(area.className).toContain('h-41');
     const body = askingBody(view.container);
-    expect(body?.className).toContain('h-41');
     expect(body?.contains(view.getByRole('radio', { name: 'Red' }))).toBe(true);
     expect(body?.textContent).toContain("What's the best colour?");
-    // The fields stretch to the area and scroll inside it.
-    expect(body?.querySelector('.overflow-y-auto')?.className).toContain(
-      'absolute inset-0'
-    );
-    expect(decisions(view.container)?.contains(view.getByText('Submit'))).toBe(
-      true
-    );
-    expect(decisions(view.container)?.className).toContain('justify-end');
-    // The row is short of room, so Cancel stays in the session.
+    expect(decisionLabels(view.container)).toEqual([
+      'Decline',
+      'Submit',
+      'Open in session',
+    ]);
     expect(view.queryByText('Cancel')).toBeNull();
     expect(
       view.container.querySelector('[data-magic-chip-pending]')
@@ -474,7 +510,9 @@ describe('MagicChipView asking a form', () => {
     expect(respond).not.toHaveBeenCalled();
     expect(view.getByText('Required')).toBeTruthy();
 
+    // Picking a choice is the choice's, not a toggle of the area.
     fireEvent.click(view.getByRole('radio', { name: 'Blue' }));
+    expect(area.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(view.getByText('Submit'));
     expect(respond).toHaveBeenCalledWith({
       action: 'accept',
@@ -483,7 +521,7 @@ describe('MagicChipView asking a form', () => {
 
     fireEvent.click(view.getByText('Decline'));
     expect(respond).toHaveBeenLastCalledWith({ action: 'decline' });
-    fireEvent.click(view.getByLabelText('Open in session'));
+    fireEvent.click(view.getByText('Open in session'));
     expect(onOpen).toHaveBeenCalledOnce();
   });
 
