@@ -79,14 +79,14 @@ export function tagFacetOption<TItem extends TaggedItem>(
 }
 
 /**
- * Whether every selected tag can be resolved. A view gates its query on this
- * so a restored selection waits for the tag sets instead of listing unfiltered.
+ * Whether a view may run its query given the tag sets' load state. A restored
+ * tag selection waits for the sets so the list does not show the whole
+ * collection and then narrow; once they have loaded, a selected tag that no
+ * longer exists simply stops filtering rather than blocking the query.
  */
 export function tagFacetReady(
   selection: FacetSelection,
-  context: TagFacetContext
+  tagSetsReady: boolean
 ): boolean {
-  return (selection[TAG_FACET_ID] ?? []).every((id) =>
-    context.tagPropertyDefinitionByOptionId.has(id)
-  );
+  return tagSetsReady || (selection[TAG_FACET_ID] ?? []).length === 0;
 }

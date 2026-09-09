@@ -90,8 +90,11 @@ export function buildEmailSearchRequest(
   }
 
   // Tags are entity-wide in the search service, so they sit beside the
-  // per-type filters rather than inside `email_filters`.
-  const tagOptionIds = [...new Set(context.facets.tags ?? [])];
+  // per-type filters rather than inside `email_filters`. Like the list
+  // query, a selected tag that no longer exists stops filtering.
+  const tagOptionIds = [...new Set(context.facets.tags ?? [])].filter((id) =>
+    context.facetContext.tagPropertyDefinitionByOptionId.has(id)
+  );
 
   return {
     params: { cursor: null, page_size: 100 },

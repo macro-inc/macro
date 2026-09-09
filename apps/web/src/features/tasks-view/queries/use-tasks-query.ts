@@ -39,6 +39,7 @@ export type TasksDataSourceInput = Pick<
 export type UseTasksDataSourceOptions = {
   userId: Accessor<string | undefined>;
   tagSets: Accessor<readonly TagSetResponse[]>;
+  tagSetsReady: Accessor<boolean>;
   isGroupExpanded: (groupId: string) => boolean;
 };
 
@@ -64,7 +65,8 @@ export function useTasksDataSource(
     (): TaskFacetContext => createTagFacetContext(options.tagSets())
   );
 
-  const facetOptionsReady = () => tagFacetReady(state.facets, facetContext());
+  const facetOptionsReady = () =>
+    tagFacetReady(state.facets, options.tagSetsReady());
 
   const queryArgs = () =>
     buildTaskQuery({
@@ -245,7 +247,8 @@ export function useTasksDataSource(
 
   const isLoading = () => {
     if (!search.isSearching()) {
-      return query.isLoading && rows().length === 0;
+      // A query held back for the tag sets is loading, not empty.
+      return (query.isLoading || !facetOptionsReady()) && rows().length === 0;
     }
     if (tasks().length > 0) return false;
     if (usesServiceSearch()) return search.isLoading();

@@ -296,6 +296,19 @@ describe('buildEmailSearchRequest', () => {
     expect(filters.tag_filter_mode).toBe('any');
     expect(filters.email_filters).toEqual({});
   });
+
+  it('drops a selected tag that no longer exists, like the list query', () => {
+    const { filters } = requestFor({
+      facets: { tags: ['invoices', 'deleted-tag'] },
+      facetContext: createTagFacetContext(TAG_SETS),
+    });
+
+    expect(filters.tag_option_ids).toEqual(['invoices']);
+
+    const unresolved = requestFor({ facets: { tags: ['deleted-tag'] } });
+    expect(unresolved.filters.tag_option_ids).toBeUndefined();
+    expect(unresolved.filters.tag_filter_mode).toBeUndefined();
+  });
 });
 
 describe('groupEmailEntitiesByDate', () => {

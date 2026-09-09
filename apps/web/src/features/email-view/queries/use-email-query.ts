@@ -43,6 +43,7 @@ export type UseEmailDataSourceOptions = {
    * owner, above the view's tag-sets provider.
    */
   tagSets: Accessor<readonly TagSetResponse[]>;
+  tagSetsReady: Accessor<boolean>;
 };
 
 /**
@@ -92,8 +93,9 @@ export function useEmailDataSource(
   const queryArgs = createMemo(() => buildEmailQuery(queryContext()));
   // A restored tag selection waits for the tag sets rather than listing the
   // whole mailbox and then narrowing.
+  const facetsReady = () => tagFacetReady(state.facets, options.tagSetsReady());
   const query = useSoupAstItemsQuery(queryArgs, () => ({
-    enabled: tagFacetReady(state.facets, facetContext()),
+    enabled: facetsReady(),
   }));
 
   const selectEmails = (entities: EntityData[]): EmailEntity[] => {
@@ -224,7 +226,8 @@ export function useEmailDataSource(
 
   const isLoading = () => {
     if (!search.isSearching()) {
-      return query.isLoading && rawEntities().length === 0;
+      // A query held back for the tag sets is loading, not empty.
+      return (query.isLoading || !facetsReady()) && rawEntities().length === 0;
     }
     if (entities().items.length > 0) return false;
     if (usesServiceSearch()) return search.isLoading();

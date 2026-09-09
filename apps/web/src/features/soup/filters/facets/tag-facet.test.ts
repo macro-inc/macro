@@ -112,14 +112,14 @@ describe('tagFacetOption', () => {
 });
 
 describe('tagFacetReady', () => {
-  it('is ready with no selection or once every selected tag resolves', () => {
-    const context = createTagFacetContext(TAG_SETS);
+  it('waits for the tag sets only while a tag is selected', () => {
+    expect(tagFacetReady({}, false)).toBe(true);
+    expect(tagFacetReady({ read: ['unread'] }, false)).toBe(true);
+    expect(tagFacetReady({ tags: ['urgent'] }, false)).toBe(false);
+    expect(tagFacetReady({ tags: ['urgent'] }, true)).toBe(true);
+  });
 
-    expect(tagFacetReady({}, EMPTY_TAG_FACET_CONTEXT)).toBe(true);
-    expect(tagFacetReady({ tags: ['urgent'] }, context)).toBe(true);
-    expect(tagFacetReady({ tags: ['urgent'] }, EMPTY_TAG_FACET_CONTEXT)).toBe(
-      false
-    );
-    expect(tagFacetReady({ tags: ['urgent', 'gone'] }, context)).toBe(false);
+  it('does not hold the query for a tag that no longer exists', () => {
+    expect(tagFacetReady({ tags: ['gone'] }, true)).toBe(true);
   });
 });
