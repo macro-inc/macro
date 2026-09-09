@@ -318,6 +318,7 @@ pub struct CrmTeamSettings {
     /// falls back to its label heuristic.
     pub closed_stage_ids: Option<Vec<uuid::Uuid>>,
     /// System stage option id to team stage option id for seeded stages.
+    /// Entries may outlive their stage; readers check membership in the set.
     pub legacy_stage_ids: BTreeMap<uuid::Uuid, uuid::Uuid>,
     /// Team saved views — an opaque JSON array owned by the frontend.
     pub team_views: Value,

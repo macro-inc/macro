@@ -181,10 +181,8 @@ where
         }
     }
 
-    /// Drop closed and legacy entries that point at stages no longer in `set`.
-    /// A set with no map yet (customized before the map existed, or a failed
-    /// settings write) gets one from the labels still matching a default.
-    async fn prune_stage_settings(
+    /// Drop closed entries that point at stages no longer in `set`.
+    async fn prune_closed_stage_ids(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         settings: &CrmTeamSettings,
@@ -198,31 +196,22 @@ where
                 .filter(|id| live.contains(id))
                 .collect()
         });
-        let legacy = if settings.legacy_stage_ids.is_empty() {
-            legacy_stage_ids_for(set)
-        } else {
-            settings
-                .legacy_stage_ids
-                .iter()
-                .filter(|(_, team_id)| live.contains(team_id))
-                .map(|(system_id, team_id)| (*system_id, *team_id))
-                .collect()
-        };
-        self.write_stage_settings(access, settings, closed, legacy)
+        self.write_stage_settings(access, settings, closed, None)
             .await
     }
 
-    /// Patch `closed_stage_ids` and `legacy_stage_ids`, skipping fields that already match.
+    /// Patch `closed_stage_ids` and, when given, `legacy_stage_ids`, skipping
+    /// fields that already match.
     async fn write_stage_settings(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         settings: &CrmTeamSettings,
         closed: Option<Vec<Uuid>>,
-        legacy: BTreeMap<Uuid, Uuid>,
+        legacy: Option<BTreeMap<Uuid, Uuid>>,
     ) -> Result<(), CrmError> {
         let patch = CrmTeamSettingsPatch {
             closed_stage_ids: (settings.closed_stage_ids != closed).then_some(closed),
-            legacy_stage_ids: (settings.legacy_stage_ids != legacy).then_some(legacy),
+            legacy_stage_ids: legacy.filter(|legacy| *legacy != settings.legacy_stage_ids),
             ..Default::default()
         };
         if patch.closed_stage_ids.is_none() && patch.legacy_stage_ids.is_none() {
@@ -320,7 +309,7 @@ where
                 .stage_definitions
                 .create_team_stage_set(access, &labels)
                 .await?;
-            self.write_stage_settings(access, &settings, None, legacy_stage_ids_for(&set))
+            self.write_stage_settings(access, &settings, None, Some(legacy_stage_ids_for(&set)))
                 .await?;
             return Ok(set);
         };
@@ -380,7 +369,7 @@ where
                 .replace_stages(access, current.definition_id, plan)
                 .await?
         };
-        self.prune_stage_settings(access, &settings, &set).await?;
+        self.prune_closed_stage_ids(access, &settings, &set).await?;
         Ok(set)
     }
 
@@ -392,7 +381,7 @@ where
                 .delete_team_stage_set(access, current.definition_id)
                 .await?;
         }
-        self.write_stage_settings(access, &settings, None, BTreeMap::new())
+        self.write_stage_settings(access, &settings, None, Some(BTreeMap::new()))
             .await
     }
 }

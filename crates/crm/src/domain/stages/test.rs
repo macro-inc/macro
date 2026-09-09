@@ -617,15 +617,16 @@ async fn renaming_a_seeded_stage_keeps_its_legacy_entry() {
 }
 
 #[tokio::test]
-async fn deleting_a_seeded_stage_drops_its_legacy_entry() {
+async fn deleting_a_seeded_stage_leaves_the_map_alone() {
     let store = MemoryStore::customized(&["Lead", "Customer"]);
     let [lead, customer] = store.stage_ids()[..] else {
         panic!("expected two seeded stages");
     };
-    let settings = StubSettings::requiring(CrmPermissionRole::Admin).with_legacy(BTreeMap::from([
+    let legacy = BTreeMap::from([
         (StageOption::LEAD_UUID, lead),
         (StageOption::CUSTOMER_UUID, customer),
-    ]));
+    ]);
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin).with_legacy(legacy.clone());
     CrmStageServiceImpl::new(settings.clone(), store)
         .replace_stages(
             &receipt_with_role(TeamRole::Admin),
@@ -633,10 +634,8 @@ async fn deleting_a_seeded_stage_drops_its_legacy_entry() {
         )
         .await
         .unwrap();
-    assert_eq!(
-        settings.legacy(),
-        BTreeMap::from([(StageOption::LEAD_UUID, lead)])
-    );
+    assert!(settings.patches().is_empty());
+    assert_eq!(settings.legacy(), legacy);
 }
 
 #[tokio::test]
@@ -652,24 +651,4 @@ async fn reset_clears_legacy_ids() {
         .await
         .unwrap();
     assert!(settings.legacy().is_empty());
-}
-
-#[tokio::test]
-async fn a_set_without_a_map_gets_one_on_the_next_edit() {
-    let store = MemoryStore::customized(&["Lead", "Client"]);
-    let [lead, client] = store.stage_ids()[..] else {
-        panic!("expected two seeded stages");
-    };
-    let settings = StubSettings::requiring(CrmPermissionRole::Admin);
-    CrmStageServiceImpl::new(settings.clone(), store)
-        .replace_stages(
-            &receipt_with_role(TeamRole::Admin),
-            vec![keep(lead, "Lead"), keep(client, "Client")],
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        settings.legacy(),
-        BTreeMap::from([(StageOption::LEAD_UUID, lead)])
-    );
 }
