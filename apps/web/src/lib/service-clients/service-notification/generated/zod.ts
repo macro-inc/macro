@@ -88,6 +88,12 @@ then converts each row to [`UserNotificationRow<NotifEvent>`].
 export const listTypedNotificationsQueryLimitMin = 0;
 
 export const listTypedNotificationsQueryParams = zod.object({
+  states: zod
+    .string()
+    .optional()
+    .describe(
+      'Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.'
+    ),
   limit: zod
     .number()
     .min(listTypedNotificationsQueryLimitMin)
@@ -1438,6 +1444,12 @@ then converts each row to [`UserNotificationRow<NotifEvent>`].
 export const bulkGetTypedNotificationsByEventItemIdsQueryLimitMin = 0;
 
 export const bulkGetTypedNotificationsByEventItemIdsQueryParams = zod.object({
+  states: zod
+    .string()
+    .optional()
+    .describe(
+      'Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.'
+    ),
   limit: zod
     .number()
     .min(bulkGetTypedNotificationsByEventItemIdsQueryLimitMin)
@@ -2798,6 +2810,12 @@ export const getTypedNotificationsByEventItemIdParams = zod.object({
 export const getTypedNotificationsByEventItemIdQueryLimitMin = 0;
 
 export const getTypedNotificationsByEventItemIdQueryParams = zod.object({
+  states: zod
+    .string()
+    .optional()
+    .describe(
+      'Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.'
+    ),
   limit: zod
     .number()
     .min(getTypedNotificationsByEventItemIdQueryLimitMin)

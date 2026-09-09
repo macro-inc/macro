@@ -306,6 +306,15 @@
         "operationId": "list_typed_notifications",
         "parameters": [
           {
+            "name": "states",
+            "in": "query",
+            "description": "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Size limit per page.",
@@ -377,6 +386,15 @@
         "description": "Rows that fail to deserialize are dropped with a warning log.",
         "operationId": "bulk_get_typed_notifications_by_event_item_ids",
         "parameters": [
+          {
+            "name": "states",
+            "in": "query",
+            "description": "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "limit",
             "in": "query",
@@ -458,6 +476,15 @@
         "summary": "Typed wrapper for getting notifications by a single event item ID.",
         "operationId": "get_typed_notifications_by_event_item_id",
         "parameters": [
+          {
+            "name": "states",
+            "in": "query",
+            "description": "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "event_item_id",
             "in": "path",

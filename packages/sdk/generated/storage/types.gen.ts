@@ -4895,6 +4895,10 @@ export type EmailFilters = {
      */
     include_labels?: Array<string>;
     /**
+     * Filter by the email thread's read flag, independently of notification state.
+     */
+    is_read?: boolean | null;
+    /**
      * Restrict to specific inboxes by email_links.id. Empty means "any inbox the
      * caller can access" (soup expands to the full set at the router edge).
      */
@@ -6279,20 +6283,20 @@ export type NewChannelAttachment = {
 };
 
 /**
- * Notification state filters for channel message queries.
+ * Notification-level filters that apply to an entity type.
  */
 export type NotificationFilters = {
     /**
-     * Filter by notification done state. `Some(true)` selects done
-     * notifications; `Some(false)` selects not-done notifications.
+     * Include entities with a non-deleted notification in any of these exact states.
+     * Empty means no notification restriction. Active means `[unseen, seen]`.
      */
-    done?: boolean | null;
-    /**
-     * Filter by notification seen state. `Some(true)` selects seen
-     * notifications; `Some(false)` selects not-seen notifications.
-     */
-    seen?: boolean | null;
+    states?: Array<NotificationState>;
 };
+
+/**
+ * The mutually exclusive lifecycle states of a user's notification.
+ */
+export type NotificationState = 'unseen' | 'seen' | 'done';
 
 /**
  * A pending pairing, as shown to the approving user.
