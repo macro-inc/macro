@@ -1,3 +1,4 @@
+import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntityData } from '../../../features/entity/types/entity';
@@ -61,8 +62,7 @@ describe('channel activity and notification GraphQL cache separation', () => {
       entityType: 'CHANNEL' as const,
       entityId: 'channel-1',
       sent: true,
-      done: false,
-      seen: false,
+      state: 'UNSEEN' as 'UNSEEN' | 'SEEN' | 'DONE',
       createdAt: '2025-01-01T00:00:00Z',
       viewedAt: null as string | null,
       updatedAt: '2025-01-01T00:00:00Z',
@@ -76,7 +76,7 @@ describe('channel activity and notification GraphQL cache separation', () => {
           id: notificationRecord.id,
           entity_type: 'channel',
           entity_id: notificationRecord.entityId,
-          done: notificationRecord.done,
+          state: notificationStateFromGraphql(notificationRecord.state),
           viewed_at: notificationRecord.viewedAt,
           notification_event_type: notificationRecord.eventType,
           notification_metadata: {
@@ -108,7 +108,7 @@ describe('channel activity and notification GraphQL cache separation', () => {
         if (document === UpdateNotificationsDocument) {
           const updated = {
             ...notificationRecord,
-            seen: true,
+            state: 'SEEN' as const,
             viewedAt: '2025-01-01T00:00:02Z',
             updatedAt: '2025-01-01T00:00:02Z',
           };
@@ -151,8 +151,6 @@ describe('channel activity and notification GraphQL cache separation', () => {
               {
                 __typename: 'GraphqlNotification',
                 id: 'notification-1',
-                seen: true,
-                viewedAt: expect.any(String),
               },
             ],
           },

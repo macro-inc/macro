@@ -5,6 +5,7 @@ import {
 import type { Maybe } from '@core/types';
 import { throwOnErr } from '@core/util/result';
 import { channelThreadRootId } from '@notifications/channel-thread-root';
+import { nextNotificationState, notificationStatesForFilter } from '@notifications/notification-state';
 import type { UnifiedNotification } from '@notifications/types';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
@@ -119,7 +120,7 @@ function reapplyUnconfirmedInserts(queryKey: readonly unknown[]) {
       );
       const missing = [...unconfirmedInserts.values()]
         .map((entry) => entry.item)
-        .filter((item) => !presentIds.has(item.id));
+        .filter((item) => !presentIds.has(item.id) && (item.state === 'done') === notificationQueryWantsDone(queryKey));
       if (missing.length === 0) return data;
       return {
         ...data,
@@ -152,7 +153,7 @@ function userNotificationsQueryOptions(limit: number, done?: boolean) {
           await notificationServiceClient.userNotifications({
             limit: pageParam.limit,
             cursor: pageParam.cursor,
-            done,
+            states: notificationStatesForFilter('done', done ?? false),
           })
       );
     },
@@ -435,7 +436,7 @@ export async function fetchDoneNotificationIdsByEventItemIds(
           // Server max page size; bulk selections can span many threads, so
           // follow the cursor through every page rather than capping.
           limit: 500,
-          done: true,
+          states: ['done'],
           cursor,
         })
     );
@@ -463,6 +464,18 @@ type NotificationsMutationParams = {
 
 type NotificationData<T> = InfiniteData<GetAllUserNotificationsResponse, T>;
 
+function notificationQueryWantsDone(key: readonly unknown[]): boolean {
+  return key.some((part) => !!part && typeof part === 'object' && 'done' in part && part.done === true);
+}
+
+function updateUserNotificationQueries(
+  update: (data: NotificationData<UserNotificationsPageParam> | undefined, wantsDone: boolean) => NotificationData<UserNotificationsPageParam> | undefined
+) {
+  for (const [key] of queryClient.getQueriesData<NotificationData<UserNotificationsPageParam>>({ queryKey: notificationKeys.user._def })) {
+    queryClient.setQueryData<NotificationData<UserNotificationsPageParam>>(key, (data) => update(data, notificationQueryWantsDone(key)));
+  }
+}
+
 type NotificationsMutationContext = {
   /**
    * Snapshot of all cached `notificationKeys.user(...)` queries so we can rollback
@@ -473,7 +486,7 @@ type NotificationsMutationContext = {
   >;
 };
 
-type UpdaterWithParams<T, P> = (input: Maybe<T>, params: P) => Maybe<T>;
+type UpdaterWithParams<T, P> = (input: Maybe<T>, params: P, wantsDone: boolean) => Maybe<T>;
 
 type NotificationsUpdater = UpdaterWithParams<
   NotificationData<UserNotificationsPageParam>,
@@ -518,14 +531,7 @@ function createNotificationsMutateFn(
       queryKey: notificationKeys.user._def,
     });
 
-    queryClient.setQueriesData(
-      { queryKey: notificationKeys.user._def },
-      (input) =>
-        updaterFn(
-          input as Maybe<NotificationData<UserNotificationsPageParam>>,
-          params
-        )
-    );
+    updateUserNotificationQueries((input, wantsDone) => updaterFn(input, params, wantsDone));
 
     return { previousData };
   };
@@ -692,7 +698,7 @@ const mapNotificationsAsSeen = (
         ...page,
         items: page.items.map((n) =>
           params.notificationIds.includes(n.id)
-            ? { ...n, viewed_at: new Date().toISOString() }
+            ? { ...n, state: nextNotificationState(n.state, 'MARK_SEEN'), viewed_at: n.viewed_at ?? new Date().toISOString() }
             : n
         ),
       })),
@@ -711,14 +717,17 @@ export const useMarkNotificationsAsSeenMutation = createNotificationsMutation(
 
 const filterOutDoneNotifications = (
   input: Maybe<NotificationData<UserNotificationsPageParam>>,
-  params: NotificationsMutationParams
+  params: NotificationsMutationParams,
+  wantsDone: boolean
 ) => {
   return (
     input && {
       ...input,
       pages: input.pages.map((page) => ({
         ...page,
-        items: page.items.filter((n) => !params.notificationIds.includes(n.id)),
+        items: wantsDone
+          ? page.items.map((n) => params.notificationIds.includes(n.id) ? { ...n, state: 'done' as const } : n)
+          : page.items.filter((n) => !params.notificationIds.includes(n.id)),
       })),
     }
   );
@@ -744,7 +753,7 @@ type NotificationItem = GetAllUserNotificationsResponse['items'][number];
 
 export type NotificationStatusPatch = {
   id: string;
-  done: boolean;
+  state: NotificationItem['state'];
   viewed_at: string | null;
   updated_at: string;
 };
@@ -775,7 +784,7 @@ export const notificationStatusUpdateSchema = z.object({
         t: z.literal('Patch'),
         c: z.object({
           id: z.string(),
-          done: z.boolean(),
+          state: z.enum(['unseen', 'seen', 'done']),
           viewed_at: z.string().nullable(),
           updated_at: z.string(),
         }),
@@ -801,7 +810,7 @@ function applyNotificationStatusPatch(
 ): NotificationItem {
   return {
     ...notification,
-    ...(patch.done !== undefined ? { done: patch.done } : {}),
+    state: patch.state,
     ...(patch.viewed_at !== undefined ? { viewed_at: patch.viewed_at } : {}),
     ...(patch.updated_at !== undefined ? { updated_at: patch.updated_at } : {}),
   };
@@ -821,16 +830,14 @@ export function applyNotificationStatusUpdate(
   );
   const doneIds = new Set(
     [...patchById.values()]
-      .filter((patch) => patch.done === true)
+      .filter((patch) => patch.state === 'done')
       .map((patch) => patch.id)
   );
   const removeIds = new Set([...deleteIds, ...doneIds]);
 
   retireUnconfirmedInserts(removeIds);
 
-  queryClient.setQueriesData<NotificationData<UserNotificationsPageParam>>(
-    { queryKey: notificationKeys.user._def },
-    (data) => {
+  updateUserNotificationQueries((data, wantsDone) => {
       if (!data) return data;
 
       return {
@@ -838,13 +845,14 @@ export function applyNotificationStatusUpdate(
         pages: data.pages.map((page) => ({
           ...page,
           items: page.items
-            .filter((notification) => !removeIds.has(notification.id))
+            .filter((notification) => !deleteIds.has(notification.id))
             .map((notification) => {
               const patch = patchById.get(notification.id);
               return patch
                 ? applyNotificationStatusPatch(notification, patch)
                 : notification;
-            }),
+            })
+            .filter((notification) => (notification.state === 'done') === wantsDone),
         })),
       };
     }
@@ -936,25 +944,25 @@ export function snapshotUserNotifications(ids: string[]): NotificationItem[] {
  */
 export function restoreUserNotifications(notifications: NotificationItem[]) {
   if (notifications.length === 0) return;
-  queryClient.setQueriesData<NotificationData<UserNotificationsPageParam>>(
-    { queryKey: notificationKeys.user._def },
-    (data) => {
-      if (!data) return data;
-      const present = new Set(
-        data.pages.flatMap((page) => page.items.map((n) => n.id))
-      );
-      const missing = notifications
-        .filter((n) => !present.has(n.id))
-        .map((n) => ({ ...n, done: false }));
-      if (missing.length === 0) return data;
-      return {
-        ...data,
-        pages: data.pages.map((page, index) =>
-          index === 0 ? { ...page, items: [...missing, ...page.items] } : page
-        ),
-      };
-    }
-  );
+  const restored = new Map(notifications.map((n) => [n.id, { ...n, state: 'seen' as const }]));
+  updateUserNotificationQueries((data, wantsDone) => {
+    if (!data) return data;
+    const present = new Set(data.pages.flatMap((page) => page.items.map((n) => n.id)));
+    const missing = wantsDone ? [] : [...restored.values()].filter((n) => !present.has(n.id));
+    return {
+      ...data,
+      pages: data.pages.map((page, index) => ({
+        ...page,
+        items: [
+          ...(index === 0 ? missing : []),
+          ...page.items.flatMap((n) => restored.has(n.id)
+            ? wantsDone ? [] : [{ ...n, state: 'seen' as const }]
+            : [n]),
+        ],
+      })),
+    };
+  });
+
   queryClient.invalidateQueries({
     queryKey: notificationKeys.user._def,
     refetchType: 'none',
@@ -1022,9 +1030,8 @@ export function optimisticInsertNotification(
 
   trackUnconfirmedInsert(item);
 
-  queryClient.setQueriesData<NotificationData<UserNotificationsPageParam>>(
-    { queryKey: notificationKeys.user._def },
-    (data) => {
+  updateUserNotificationQueries((data, wantsDone) => {
+      if ((notification.state === 'done') !== wantsDone) return data;
       if (!data) return data;
 
       const exists = data.pages.some((page) =>

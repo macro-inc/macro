@@ -381,9 +381,9 @@ describe('removeSoupEntitiesFromDoneFilteredQueries', () => {
   const inboxViewKey = [...soupKeys.items._def, { emailView: 'inbox' }];
   const doneFilterKey = [
     ...soupKeys.items._def,
-    { ef: [{ l: { NotificationDone: false } }] },
+    { ef: [{ '|': [{ l: { NotificationState: 'unseen' } }, { l: { NotificationState: 'seen' } }] }] },
   ];
-  const ndFilterKey = [...soupKeys.items._def, { df: [{ l: { nd: false } }] }];
+  const ndFilterKey = [...soupKeys.items._def, { df: [{ '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] }] }];
   const allViewKey = [...soupKeys.items._def, { emailView: 'all' }];
 
   const itemsAt = (key: unknown[]) =>
@@ -1102,12 +1102,12 @@ describe('insertSoupEntity — folder membership gate', () => {
 describe('restoreSoupEntityToDoneFilteredQueries', () => {
   const doneFilteredAstKey = (suffix: string) => [
     ...soupKeys.astItems._def,
-    { chanf: [{ l: { NotificationDone: false } }] },
+    { chanf: [{ '|': [{ l: { NotificationState: 'unseen' } }, { l: { NotificationState: 'seen' } }] }] },
     suffix,
   ];
   const doneFilteredItemsKey = [
     ...soupKeys.items._def,
-    { ef: [{ l: { NotificationDone: false } }] },
+    { ef: [{ '|': [{ l: { NotificationState: 'unseen' } }, { l: { NotificationState: 'seen' } }] }] },
     'legacy-inbox',
   ];
   const allViewAstKey = [
@@ -1204,7 +1204,7 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
     );
     const key = [
       ...soupKeys.astItems._def,
-      { df: [{ l: { nd: false } }] },
+      { df: [{ '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] }] },
       STATUS_GROUP_BY,
       'grouped-inbox',
     ];
@@ -1243,7 +1243,7 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
       suffix,
     ];
     const doneFilteredKey = makeGroupQueryKey(
-      { df: [{ l: { nd: false } }] },
+      { df: [{ '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] }] },
       'done-filtered'
     );
     const allViewKey = makeGroupQueryKey({ emailView: 'all' }, 'all-view');
@@ -1286,7 +1286,7 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
     // insertGroupedPage cannot resolve a target group, so the query refetches.
     const key = [
       ...soupKeys.astItems._def,
-      { chanf: [{ l: { NotificationDone: false } }] },
+      { chanf: [{ '|': [{ l: { NotificationState: 'unseen' } }, { l: { NotificationState: 'seen' } }] }] },
       'grouped-date-inbox',
     ];
     testQueryClient.setQueryData(

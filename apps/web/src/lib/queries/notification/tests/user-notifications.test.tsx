@@ -200,7 +200,7 @@ function createMockNotification(
     updated_at: new Date().toISOString(),
     viewed_at: null,
     deleted_at: null,
-    done: false,
+    state: 'unseen',
     sent: true,
     notification_event_type: 'item_shared_user',
     notification_metadata: {
@@ -356,8 +356,8 @@ describe('notification realtime status updates', () => {
   });
 
   it('patches notifications in the user cache', () => {
-    const n1 = createMockNotification({ id: 'n1', viewed_at: null });
-    const n2 = createMockNotification({ id: 'n2', viewed_at: null });
+    const n1 = createMockNotification({ id: 'n1', viewed_at: null , state: 'unseen'});
+    const n2 = createMockNotification({ id: 'n2', viewed_at: null , state: 'unseen'});
     seedQueryCache([createMockNotificationPage([n1, n2])]);
 
     applyNotificationStatusUpdate({
@@ -367,8 +367,7 @@ describe('notification realtime status updates', () => {
           t: 'Patch',
           c: {
             id: 'n1',
-            done: false,
-            viewed_at: '2024-01-01T00:00:00.000Z',
+            state: 'seen', viewed_at: '2024-01-01T00:00:00.000Z',
             updated_at: '2024-01-01T00:00:01.000Z',
           },
         },
@@ -395,7 +394,7 @@ describe('notification realtime status updates', () => {
           t: 'Patch',
           c: {
             id: 'n2',
-            done: true,
+            state: 'done',
             viewed_at: null,
             updated_at: '2024-01-01T00:00:01.000Z',
           },
@@ -424,8 +423,8 @@ describe('notification mutations', () => {
 
   describe('useMarkNotificationsAsSeenMutation', () => {
     it('should optimistically update viewed_at when marking as seen', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewed_at: null });
-      const n2 = createMockNotification({ id: 'n2', viewed_at: null });
+      const n1 = createMockNotification({ id: 'n1', viewed_at: null , state: 'unseen'});
+      const n2 = createMockNotification({ id: 'n2', viewed_at: null , state: 'unseen'});
       seedQueryCache([createMockNotificationPage([n1, n2])]);
 
       executeGraphqlMutationMock.mockResolvedValue([]);
@@ -475,7 +474,7 @@ describe('notification mutations', () => {
     it('uses the REST fallback while GraphQL Soup is disabled', async () => {
       graphqlSoupEnabledMock.mockReturnValue(false);
       restMarkSeenMock.mockResolvedValue(ok({ success: true }));
-      const n1 = createMockNotification({ id: 'n1', viewed_at: null });
+      const n1 = createMockNotification({ id: 'n1', viewed_at: null , state: 'unseen'});
       seedQueryCache([createMockNotificationPage([n1])]);
 
       let mutatePromise: Promise<unknown> | undefined;
@@ -498,7 +497,7 @@ describe('notification mutations', () => {
     });
 
     it('should rollback optimistic update on error', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewed_at: null });
+      const n1 = createMockNotification({ id: 'n1', viewed_at: null , state: 'unseen'});
       seedQueryCache([createMockNotificationPage([n1])]);
 
       executeGraphqlMutationMock.mockRejectedValue(
@@ -528,8 +527,8 @@ describe('notification mutations', () => {
     });
 
     it('should handle marking notifications across multiple pages', async () => {
-      const n1 = createMockNotification({ id: 'n1', viewed_at: null });
-      const n2 = createMockNotification({ id: 'n2', viewed_at: null });
+      const n1 = createMockNotification({ id: 'n1', viewed_at: null , state: 'unseen'});
+      const n2 = createMockNotification({ id: 'n2', viewed_at: null , state: 'unseen'});
       seedQueryCache([
         createMockNotificationPage([n1]),
         createMockNotificationPage([n2]),

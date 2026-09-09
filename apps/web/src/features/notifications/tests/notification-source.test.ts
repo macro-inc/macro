@@ -86,7 +86,7 @@ function notification(
     entity_id: entityId,
     entity_type: entityType,
     created_at: '2026-08-17T00:00:00.000Z',
-    done: false,
+    state: 'unseen',
     notification_event_type: 'test',
     notification_metadata: {} as UnifiedNotification['notification_metadata'],
     sent: true,
@@ -329,7 +329,7 @@ describe('createNotificationSource', () => {
         channelMemoRuns += 1;
         return source
           .notifications()
-          .filter((item) => item.entity_type === 'channel' && !item.viewed_at);
+          .filter((item) => item.entity_type === 'channel' && item.state === 'unseen');
       });
       const emailViewedAt = createMemo(() => {
         emailMemoRuns += 1;

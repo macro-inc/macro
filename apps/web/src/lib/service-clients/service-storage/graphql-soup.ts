@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { notificationStateFromGraphql } from '@notifications/notification-state';
 import {
   ENABLE_BEARER_TOKEN_AUTH,
   enableGraphqlSoup,
@@ -1107,7 +1108,7 @@ export function mapGraphqlNotification(
     entity_type:
       record.entityType.toLowerCase() as ApiUserNotification['entity_type'],
     sent: record.sent,
-    done: record.done,
+    state: notificationStateFromGraphql(record.state),
     created_at: record.createdAt,
     viewed_at: record.viewedAt ?? undefined,
     updated_at: record.updatedAt,

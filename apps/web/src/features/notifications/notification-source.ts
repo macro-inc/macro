@@ -4,6 +4,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
+import { nextNotificationState } from './notification-state';
 import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
@@ -104,20 +105,34 @@ const QUERY_LIMIT = 500;
 // In-flight infinite-query page fetches can land after an optimistic cache
 // flip and overwrite it with stale server data; this map keeps the UI
 // consistent regardless of what the cache says.
+type DoneOverride = { done: boolean; reopened: boolean };
 const [doneOverrides, setDoneOverrides] = createRoot(() =>
-  createSignal<ReadonlyMap<string, boolean>>(new Map())
+  createSignal<ReadonlyMap<string, DoneOverride>>(new Map())
 );
 
 export function setDoneOverride(
   ids: readonly string[],
   done: boolean | undefined
 ) {
-  if (ids.length === 0) return;
+  const previous = new Map(ids.map((id) => [id, doneOverrides().get(id)]));
+  const applied = new Map<string, DoneOverride | undefined>();
   setDoneOverrides((prev) => {
     const next = new Map(prev);
     for (const id of ids) {
       if (done === undefined) next.delete(id);
-      else next.set(id, done);
+      else next.set(id, { done, reopened: !done && (prev.get(id)?.done === true || prev.get(id)?.reopened === true) });
+      applied.set(id, next.get(id));
+    }
+    return next;
+  });
+  // A failed older mutation must not undo a newer local action.
+  return () => setDoneOverrides((current) => {
+    const next = new Map(current);
+    for (const id of ids) {
+      if (current.get(id) !== applied.get(id)) continue;
+      const before = previous.get(id);
+      if (before === undefined) next.delete(id);
+      else next.set(id, before);
     }
     return next;
   });
@@ -172,14 +187,20 @@ export function createNotificationSource(
     const done = doneOverrides();
     return raw.map((notification) => {
       const doneOverride = done.get(notification.id);
-      if (notification.viewed_at && doneOverride === undefined) {
+      if (notification.state !== 'unseen' && doneOverride === undefined) {
         return notification;
       }
 
       return {
         ...notification,
-        ...(doneOverride !== undefined ? { done: doneOverride } : {}),
-        // Keep seen overrides granular. Reading one notification's viewed_at
+        get state() {
+          const state = doneOverride?.done ? 'done'
+            : doneOverride?.reopened ? 'seen'
+            : doneOverride ? nextNotificationState(notification.state, 'MARK_UNDONE')
+            : notification.state;
+          return state === 'unseen' && seenOverrides[notification.id] ? 'seen' : state;
+        },
+        // Keep seen overrides granular. Reading one notification's state/viewed_at
         // subscribes only to that id instead of invalidating the complete
         // notifications array and every channel/favorite consumer.
         get viewed_at() {
@@ -227,7 +248,7 @@ export function createNotificationSource(
     for (const id of seenIds) {
       const row = byId.get(id);
       if (!row) toPrune.push(id);
-      else if (row.viewed_at && quiet) toPrune.push(id);
+      else if (row.state !== 'unseen' && quiet) toPrune.push(id);
     }
     if (toPrune.length > 0) setSeenOverride(toPrune, undefined);
   });
@@ -271,7 +292,7 @@ export function createNotificationSource(
   if (!ENABLE_DOCUMENT_MENTION_NOTIFICATIONS) {
     createEffect(() => {
       const toDiscard = notifications().filter(
-        (n) => n.notification_event_type === 'document_mention' && !n.done
+        (n) => n.notification_event_type === 'document_mention' && n.state !== 'done'
       );
       if (toDiscard.length === 0) return;
       void markNotificationsAsDoneMutation.mutateAsync({
@@ -384,13 +405,13 @@ export function createNotificationSource(
   const bulkMarkAsDone = async (notifications: UnifiedNotification[]) => {
     if (notifications.length === 0) return;
     const ids = notifications.map((n) => n.id);
-    setDoneOverride(ids, true);
+    const rollback = setDoneOverride(ids, true);
     try {
       await markNotificationsAsDoneMutation.mutateAsync({
         notificationIds: ids,
       });
     } catch (err) {
-      setDoneOverride(ids, false);
+      rollback();
       throw err;
     }
   };

@@ -11,10 +11,10 @@ describe('inbox-query-filters', () => {
     it('applies inbox notification filters and email importance', () => {
       const result = applyInboxQueryFilters({});
 
-      expect(result.channel_filters?.notification_filters?.done).toBe(false);
-      expect(result.chat_filters?.notification_filters?.done).toBe(false);
-      expect(result.project_filters?.notification_filters?.done).toBe(false);
-      expect(result.document_filters?.notification_filters?.done).toBe(false);
+      expect(result.channel_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
+      expect(result.chat_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
+      expect(result.project_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
+      expect(result.document_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
       expect(result.email_filters?.importance).toBe(true);
     });
   });
@@ -35,12 +35,12 @@ describe('inbox-query-filters', () => {
       const result = removeInboxQueryFilters({
         channel_filters: {
           notification_filters: {
-            done: true,
+            states: ['done'],
           },
         },
       });
 
-      expect(result.channel_filters?.notification_filters?.done).toBe(true);
+      expect(result.channel_filters?.notification_filters?.states).toEqual(['done']);
     });
   });
 

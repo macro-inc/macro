@@ -440,26 +440,33 @@ export function removeSoupEntitiesFromQueriesReferencing(
   });
 }
 
-/**
- * Serialized-key test for soup queries that exclude done content. The markers
- * a compiled soup query key can carry: `emailView: 'inbox'` (server-side
- * inbox scoping of email views, e.g. mail Important/Noise) and compiled
- * done-filter literals — `NotificationDone` (emails/channels) or `nd`
- * (documents/chats/folders/foreign entities) with a `false` value, produced
- * by the `*Done: false` filter presets.
- */
+/** Detect positive active-state constraints without misreading OR/NOT subtrees. */
 function soupQueryExcludesDone(key: QueryKey): boolean {
-  const serialized = JSON.stringify(key);
-  return (
-    serialized.includes('"emailView":"inbox"') ||
-    serialized.includes('"NotificationDone":false') ||
-    serialized.includes('"nd":false') ||
-    // Reminders carry their done state on themselves rather than on a
-    // notification, so `reminderCompleted` — compiled to `remf.comp` — is the
-    // shape the Reminders Active and Scheduled tabs filter on. Without it,
-    // marking a reminder done left the row sitting there until the refetch.
-    serialized.includes('"comp":false')
-  );
+  const activeState = (value: unknown) =>
+    value === 'unseen' || value === 'seen' || value === 'UNSEEN' || value === 'SEEN';
+  const requiresActive = (value: unknown): boolean => {
+    if (!value || typeof value !== 'object') return false;
+    if (Array.isArray(value)) return value.some(requiresActive);
+    const node = value as Record<string, unknown>;
+    if ('!' in node || 'not' in node) return false;
+    if ('|' in node) {
+      return Array.isArray(node['|']) && node['|'].length > 0 && node['|'].every(requiresActive);
+    }
+    if ('or' in node) {
+      const branches = node.or as { left?: unknown; right?: unknown } | null;
+      return !!branches && requiresActive(branches.left) && requiresActive(branches.right);
+    }
+    if ('l' in node || 'literal' in node) {
+      const leaf = (node.l ?? node.literal) as Record<string, unknown> | null;
+      return !!leaf && typeof leaf === 'object' &&
+        (activeState(leaf.ns ?? leaf.NotificationState ?? leaf.notificationState) || leaf.comp === false);
+    }
+    if (node.emailView === 'inbox') return true;
+    const filter = node.notification_filters as { states?: unknown[] } | undefined;
+    if (filter?.states?.length && filter.states.every(activeState)) return true;
+    return Object.values(node).some(requiresActive);
+  };
+  return requiresActive(key);
 }
 
 /**
