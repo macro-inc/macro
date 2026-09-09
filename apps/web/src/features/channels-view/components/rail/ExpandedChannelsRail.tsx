@@ -19,6 +19,7 @@ import {
   ChannelRailItemContextMenu,
   ConversationCard,
   IncomingCallActions,
+  isPrimaryMouseDown,
 } from './ChannelRailItems';
 import {
   domIdForRow,
@@ -82,7 +83,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         role="treeitem"
         tabIndex={-1}
         class={cn(
-          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors',
+          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none',
           isDirectMessage(props.channel) ? 'min-h-10 py-2' : 'h-8',
           item().selected && !isTouchDevice() && 'bg-active text-ink',
           (!item().selected || isTouchDevice()) && 'text-ink-muted',
@@ -96,7 +97,10 @@ function ChannelOption(props: { channel: ChannelEntity }) {
             'hover:bg-hover hover:text-ink'
         )}
         aria-current={item().selected ? 'page' : undefined}
-        onClick={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
+        onMouseDown={(event) => {
+          if (!isPrimaryMouseDown(event)) return;
+          rail.activateRow(rowKeyForChannel(props.channel.id));
+        }}
       >
         <ChannelAvatar channel={props.channel} />
         <span class="min-w-0 flex-1 truncate text-sm font-medium">
@@ -184,7 +188,10 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           tabIndex={-1}
           class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none"
           aria-expanded={section().open}
-          onClick={() => rail.activateRow(rowKeyForSection(props.config.group))}
+          onMouseDown={(event) => {
+            if (!isPrimaryMouseDown(event)) return;
+            rail.activateRow(rowKeyForSection(props.config.group));
+          }}
         >
           <CaretDownIcon
             class={cn(

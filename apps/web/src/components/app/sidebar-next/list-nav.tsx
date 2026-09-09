@@ -9,12 +9,32 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useLocation } from '@solidjs/router';
 import { Button, cn } from '@ui';
+import { createSignal } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
 
 export type ListNavProps = {
   item: SidebarNextNavItem;
   onContextMenuOpenChange?: (open: boolean) => void;
+};
+
+type PendingNav = {
+  itemId: SidebarNextNavItem['id'];
+  /** The active split's content when the item was pressed. */
+  activeContentKey: string | undefined;
+};
+
+/**
+ * The nav item pressed most recently, highlighted before the split layout
+ * catches up. Shared across every rail button so only one item is ever
+ * pending. It stops applying the moment the active content changes — to the
+ * pressed view, or to anything else — so a stale press never sticks.
+ */
+const [pendingNav, setPendingNav] = createSignal<PendingNav>();
+
+const activeContentKey = () => {
+  const content = globalSplitManager()?.activeSplit()?.content();
+  return content ? `${content.type}:${content.id}` : undefined;
 };
 
 /**
@@ -38,7 +58,7 @@ export const ListNav = (props: ListNavProps) => {
 
   // Read the manager signal live: it is undefined until the split layout
   // mounts, which happens after the sidebar.
-  const isActive = () => {
+  const matchesActiveContent = () => {
     const activeContent = globalSplitManager()?.activeSplit()?.content();
     // With no active split to match on, fall back to the URL path.
     if (!activeContent) {
@@ -53,6 +73,17 @@ export const ListNav = (props: ListNavProps) => {
     );
   };
 
+  // Optimistic: the pressed item takes the highlight on mousedown, before the
+  // view swaps in. The pending press only counts while the active content is
+  // still what it was at press time; once anything moves, the real state wins.
+  const isActive = () => {
+    const pending = pendingNav();
+    if (pending && pending.activeContentKey === activeContentKey()) {
+      return pending.itemId === props.item.id;
+    }
+    return matchesActiveContent();
+  };
+
   const navigate = (event: MouseEvent) => {
     if (event.button !== 0) return;
     // The row acts on mousedown to beat the focus change, so suppress the
@@ -65,6 +96,11 @@ export const ListNav = (props: ListNavProps) => {
     const expected = content();
     const isSameContent =
       activeContent?.type === expected.type && activeContent.id === expected.id;
+
+    setPendingNav({
+      itemId: props.item.id,
+      activeContentKey: activeContentKey(),
+    });
 
     if (!isSameContent || event.shiftKey) {
       navigateToSidebarView({

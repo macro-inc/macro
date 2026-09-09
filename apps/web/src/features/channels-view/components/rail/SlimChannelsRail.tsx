@@ -27,6 +27,7 @@ import {
   ChannelCallIndicator,
   ChannelMutedIndicator,
   ChannelRailItemContextMenu,
+  isPrimaryMouseDown,
 } from './ChannelRailItems';
 import {
   domIdForRow,
@@ -142,7 +143,7 @@ function SlimChannelItem(props: { channel: ChannelEntity }) {
           role="treeitem"
           tabIndex={-1}
           class={cn(
-            'flex size-10 items-center justify-center rounded-full text-left outline-none transition-colors',
+            'flex size-10 items-center justify-center rounded-full text-left outline-none',
             item().selected && !isTouchDevice() && 'bg-active text-ink',
             (!item().selected || isTouchDevice()) && 'text-ink-muted',
             !item().selected &&
@@ -155,7 +156,10 @@ function SlimChannelItem(props: { channel: ChannelEntity }) {
               'hover:bg-hover hover:text-ink'
           )}
           aria-current={item().selected ? 'page' : undefined}
-          onClick={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
+          onMouseDown={(event) => {
+            if (!isPrimaryMouseDown(event)) return;
+            rail.activateRow(rowKeyForChannel(props.channel.id));
+          }}
         >
           <span class="relative">
             <SlimChannelAvatar channel={props.channel} />
@@ -291,7 +295,10 @@ function SlimGroupSection(props: { config: GroupConfig }) {
           class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none"
           aria-expanded={section().open}
           aria-label={props.config.label}
-          onClick={() => rail.activateRow(rowKeyForSection(props.config.group))}
+          onMouseDown={(event) => {
+            if (!isPrimaryMouseDown(event)) return;
+            rail.activateRow(rowKeyForSection(props.config.group));
+          }}
         >
           <span class="flex items-center justify-center [&_svg]:size-4">
             <Dynamic component={props.config.icon} />
