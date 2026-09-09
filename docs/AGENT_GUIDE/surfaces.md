@@ -95,8 +95,6 @@ Google's out-of-office event type.
 
 Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
-New recordings stage a shared screen with cameras in a side strip. Older
-recordings stay an equal-tile grid.
 
 ## Customers (CRM) — `/app/component/companies`
 

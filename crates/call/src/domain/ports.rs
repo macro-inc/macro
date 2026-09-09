@@ -500,13 +500,7 @@ pub trait CallRtcClient: Send + Sync + 'static {
         participant_identity: MacroUserIdStr<'a>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Start recording a room into the configured destination. Returns the
-    /// provider's egress ID.
-    ///
-    /// While nobody shares a screen, cameras fill the frame as equal tiles.
-    /// While someone shares, the shared screen fills the stage and cameras
-    /// move to a strip. The recording follows share start and stop for its
-    /// whole duration without further calls from the domain.
+    /// Start a room composite egress (recording). Returns the egress ID.
     fn start_room_composite_egress(
         &self,
         room_name: &str,
@@ -514,9 +508,6 @@ pub trait CallRtcClient: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
     /// Stop an active egress by ID.
-    ///
-    /// Stopping does not change layout. The composition is chosen when
-    /// recording starts.
     fn stop_egress(&self, egress_id: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Validate a webhook signature and parse the event from the raw body.

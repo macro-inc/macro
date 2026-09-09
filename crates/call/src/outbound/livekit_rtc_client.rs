@@ -27,9 +27,6 @@ use crate::domain::ports::CallRtcClient;
 
 const VOIP_TOKEN_MINT_CONCURRENCY: usize = 16;
 
-/// Empty layout is not default grid. The stock template only promotes layouts that start with `grid`.
-const STOCK_TEMPLATE_LAYOUT: &str = "grid";
-
 /// LiveKit implementation of [`CallRtcClient`].
 pub struct LivekitRtcClient {
     room_client: RoomClient,
@@ -108,7 +105,6 @@ fn build_room_composite_egress_request(
     });
 
     let options = RoomCompositeOptions {
-        layout: STOCK_TEMPLATE_LAYOUT.to_owned(),
         encoding: encoding::EncodingOptions {
             audio_codec: AudioCodec::Aac,
             video_codec: VideoCodec::H264Main,
