@@ -8,7 +8,7 @@
 	--fc-event-bg-color: color-mix(
 		in oklch,
 		var(--color-calendar) 5%,
-		var(--color-surface)
+		var(--color-panel)
 	);
 	--fc-event-border-color: var(--color-calendar);
 	--fc-event-text-color: var(--color-calendar);
@@ -488,7 +488,7 @@
 	.fc-event:not(.fc-daygrid-dot-event):not(
 		:has(.calendar-event-content-selected)
 	):has([data-response-status="accepted"]) {
-	--fc-event-bg-color: var(--color-surface);
+	--fc-event-bg-color: var(--color-panel);
 	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
 	background-image: linear-gradient(
 		color-mix(
@@ -528,7 +528,7 @@
 .calendar-view
 	.fc
 	.fc-event:has(.calendar-event-content[data-response-status="needs_action"]) {
-	--fc-event-bg-color: transparent;
+	--fc-event-bg-color: var(--color-panel);
 	--fc-event-text-color: var(--color-ink-muted);
 }
 
@@ -596,7 +596,7 @@
 		--fc-event-bg-color: color-mix(
 			in oklch,
 			var(--event-calendar-color, var(--color-calendar)) 18%,
-			var(--color-surface)
+			var(--color-panel)
 		);
 		--fc-event-text-color: var(--color-ink);
 		box-shadow:
@@ -667,7 +667,7 @@
 		--fc-event-bg-color: color-mix(
 			in oklch,
 			var(--event-calendar-color, var(--color-calendar)) 16%,
-			var(--color-surface)
+			var(--color-panel)
 		);
 		background-color: var(--fc-event-bg-color);
 		background-image: none;
