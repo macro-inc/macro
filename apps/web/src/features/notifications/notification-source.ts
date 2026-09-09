@@ -114,6 +114,7 @@ export function setDoneOverride(
   ids: readonly string[],
   done: boolean | undefined
 ) {
+  if (ids.length === 0) return () => undefined;
   const previous = new Map(ids.map((id) => [id, doneOverrides().get(id)]));
   const applied = new Map<string, DoneOverride | undefined>();
   setDoneOverrides((prev) => {
@@ -158,6 +159,7 @@ const [seenOverrides, setSeenOverrides] = createRoot(() =>
 );
 
 function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
+  if (ids.length === 0) return () => undefined;
   const token = Symbol();
   const previous = new Map(
     ids.map((id) => {

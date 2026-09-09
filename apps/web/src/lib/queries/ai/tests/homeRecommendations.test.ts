@@ -46,10 +46,10 @@ describe('buildRecommendationPrompt', () => {
     'calling ListNotifications exactly once'
   );
   check('requests active notifications', 'states ["unseen", "seen"]');
-  check(
-    'includes both unseen and seen active notifications',
-    'states ["unseen", "seen"]'
-  );
+  it('does not request legacy notification boolean fields', () => {
+    expect(prompt).not.toContain('done false');
+    expect(prompt).not.toContain('no seen filter');
+  });
   check('excludes emails from notification state', 'Never use notification');
   check('requires the canonical email source', 'ListEntities exactly once');
   check('requests active inbox emails', 'emailView "inbox"');

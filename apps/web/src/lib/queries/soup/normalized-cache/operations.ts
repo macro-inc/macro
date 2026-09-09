@@ -493,7 +493,8 @@ function soupQueryExcludesDone(
     const filter = node.notification_filters as
       | { states?: unknown[] }
       | undefined;
-    if (filter?.states?.length) return states(filter.states);
+    if (Array.isArray(filter?.states) && filter.states.length)
+      return states(filter.states);
     return combine(Object.values(node).map(inspect));
   };
   const result = inspect(key);
