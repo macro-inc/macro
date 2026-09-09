@@ -569,6 +569,12 @@ service_url! {
             dev: "https://dev-gateway.macro.com/agent-harness-egress",
             prod: "https://gateway.macro.com/agent-harness-egress",
         },
+        /// Macro MCP service base URL. Append `/mcp` for its transport endpoint.
+        pub McpServiceUrl {
+            local: "http://localhost:8080",
+            dev: "https://dev-gateway.macro.com/mcp",
+            prod: "https://gateway.macro.com/mcp",
+        },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
             local: "http://localhost:8095",

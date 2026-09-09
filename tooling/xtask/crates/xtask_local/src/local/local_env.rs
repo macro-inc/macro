@@ -313,10 +313,10 @@ struct AgentHarnessEnv {
     /// The egress proxy as its clients dial it: the run's Cursor egress
     /// tunnel when one opened, otherwise the in-network address.
     egress_url: String,
-    /// Macro's own MCP server as the egress proxy dials it. In-network and
-    /// cleartext, which the proxy permits only under `ENVIRONMENT=local`:
+    /// Macro's MCP service base URL, without its `/mcp` transport endpoint.
+    /// In-network and cleartext, which the proxy permits only locally:
     /// this hop never leaves the compose bridge.
-    macro_mcp_url: &'static str,
+    mcp_service_url: &'static str,
 }
 
 impl AgentHarnessEnv {
@@ -340,7 +340,7 @@ impl AgentHarnessEnv {
             egress_url: egress_public_url
                 .unwrap_or("http://agent-harness-service:8102")
                 .to_owned(),
-            macro_mcp_url: "http://mcp-service:8080/mcp",
+            mcp_service_url: "http://mcp-service:8080",
         }
     }
 
@@ -355,7 +355,10 @@ impl AgentHarnessEnv {
             "OVERRIDE_AGENT_HARNESS_EGRESS_URL".into(),
             self.egress_url.clone(),
         );
-        env.insert("MACRO_MCP_URL".into(), self.macro_mcp_url.into());
+        env.insert(
+            "OVERRIDE_MCP_SERVICE_URL".into(),
+            self.mcp_service_url.into(),
+        );
     }
 }
 

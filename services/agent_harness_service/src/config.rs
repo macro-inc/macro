@@ -159,11 +159,6 @@ pub struct Config {
     /// URL of Pipedream's remote MCP server.
     #[macro_config_default(String::from(pipedream_mcp::outbound::api::DEFAULT_MCP_URL))]
     pub pipedream_mcp_url: String,
-    /// Where the egress proxy reaches Macro's own MCP server (`mcp_service`),
-    /// endpoint path included - e.g. `https://mcp.macro.com/mcp`, or the
-    /// in-network `http://mcp-service:8080/mcp` on a local stack. Cleartext is
-    /// refused at boot unless `ENVIRONMENT=local`.
-    pub macro_mcp_url: String,
     /// RSA key Macro API tokens are signed with.
     pub macro_api_token_private_secret_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
     /// Issuer stamped into minted Macro API tokens.
