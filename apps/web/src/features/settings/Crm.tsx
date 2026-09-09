@@ -847,7 +847,9 @@ function DealStagesSection() {
                     <Checkbox.Control>
                       <Checkbox.Indicator />
                     </Checkbox.Control>
-                    <span class="text-sm text-ink">{stage.label}</span>
+                    <Checkbox.Label class="text-sm text-ink">
+                      {stage.label}
+                    </Checkbox.Label>
                   </Checkbox>
                 )}
               </For>
