@@ -162,6 +162,19 @@ describe('channel activity and notification GraphQL cache separation', () => {
     expect(unreadFilterFn(channel)).toBe(false);
   });
 
+  it('does not optimistically reopen done or overwrite a historic view on seen', async () => {
+    mutationMock.mockImplementation((_document, _variables, context) => ({
+      toPromise: async () => {
+        const patch = context.normalizedCacheOptimistic.optimisticResponse.updateNotifications[0];
+        expect(patch).toEqual({ __typename: 'GraphqlNotification', id: 'done-notification' });
+        return { data: { updateNotifications: [{ ...patch, state: 'DONE', viewedAt: '2020-01-01T00:00:00Z' }] } };
+      },
+    }));
+    const result = await updateNotifications({ notificationIds: ['done-notification'], operation: 'MARK_SEEN' });
+    expect(result[0].state).toBe('DONE');
+    expect(result[0].viewedAt).toBe('2020-01-01T00:00:00Z');
+  });
+
   it('uses only REST writes while GraphQL Soup is disabled', async () => {
     graphqlSoupEnabledMock.mockReturnValue(false);
     const activity = {

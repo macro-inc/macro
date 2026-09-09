@@ -391,6 +391,22 @@ describe('removeSoupEntitiesFromDoneFilteredQueries', () => {
       .getQueryData<InfiniteData<SoupPage, unknown>>(key)!
       .pages[0].items.map(getSoupItemId);
 
+  it('does not treat negated or mixed-OR state filters as active-only', () => {
+    const active = { l: { ns: 'unseen' } };
+    const cases = [
+      { '!': active },
+      { '|': [active, { l: { ns: 'done' } }] },
+      { '|': [active, { l: { id: 'e-1' } }] },
+      { l: { ns: 'done' } },
+    ];
+    for (const ast of cases) {
+      const key = [...soupKeys.items._def, { df: ast }];
+      testQueryClient.setQueryData(key, mockSoupCache([[emailItem('e-1')]]));
+      removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
+      expect(itemsAt(key)).toEqual(['e-1']);
+    }
+  });
+
   it('removes from done-filtered queries and keeps done-inclusive ones', () => {
     const data = () => mockSoupCache([[emailItem('e-1'), mockChatItem('c-1')]]);
     testQueryClient.setQueryData(inboxViewKey, data());
@@ -1137,6 +1153,19 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
     );
     return item;
   }
+
+  it('restores only queries whose state constraint accepts the arriving notification', () => {
+    cacheChannel('ch-1');
+    const unseen = [...soupKeys.astItems._def, { chanf: { l: { NotificationState: 'unseen' } } }];
+    const seen = [...soupKeys.astItems._def, { chanf: { l: { NotificationState: 'seen' } } }];
+    seedFlatAstQuery(unseen, [[]]);
+    seedFlatAstQuery(seen, [[]]);
+    seedFlatAstQuery(doneFilteredAstKey('union'), [[]]);
+    restoreSoupEntityToDoneFilteredQueries('ch-1', 'unseen');
+    expect(flatAstItemsAt(unseen)).toEqual(['ch-1']);
+    expect(flatAstItemsAt(seen)).toEqual([]);
+    expect(flatAstItemsAt(doneFilteredAstKey('union'))).toEqual(['ch-1']);
+  });
 
   it('prepends the cached entity to done-filtered queries missing it', () => {
     cacheChannel('ch-1');

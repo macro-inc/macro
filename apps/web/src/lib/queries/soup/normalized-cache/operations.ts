@@ -441,32 +441,42 @@ export function removeSoupEntitiesFromQueriesReferencing(
 }
 
 /** Detect positive active-state constraints without misreading OR/NOT subtrees. */
-function soupQueryExcludesDone(key: QueryKey): boolean {
-  const activeState = (value: unknown) =>
-    value === 'unseen' || value === 'seen' || value === 'UNSEEN' || value === 'SEEN';
-  const requiresActive = (value: unknown): boolean => {
-    if (!value || typeof value !== 'object') return false;
-    if (Array.isArray(value)) return value.some(requiresActive);
+function soupQueryExcludesDone(key: QueryKey, incomingState?: 'unseen' | 'seen'): boolean {
+  type Match = { excludesDone: boolean; acceptsIncoming: boolean };
+  const unknown: Match = { excludesDone: false, acceptsIncoming: true };
+  const combine = (parts: Match[], or = false): Match => ({
+    excludesDone: parts.length > 0 && (or ? parts.every((p) => p.excludesDone) : parts.some((p) => p.excludesDone)),
+    acceptsIncoming: or ? parts.some((p) => p.acceptsIncoming) : parts.every((p) => p.acceptsIncoming),
+  });
+  const states = (values: unknown[]): Match => ({
+    excludesDone: values.length > 0 && values.every((v) => v === 'unseen' || v === 'seen'),
+    acceptsIncoming: incomingState === undefined || values.includes(incomingState),
+  });
+  const inspect = (value: unknown): Match => {
+    if (!value || typeof value !== 'object') return unknown;
+    if (Array.isArray(value)) return combine(value.map(inspect));
     const node = value as Record<string, unknown>;
-    if ('!' in node || 'not' in node) return false;
-    if ('|' in node) {
-      return Array.isArray(node['|']) && node['|'].length > 0 && node['|'].every(requiresActive);
-    }
+    // No safe positive witness can be inferred from a negated subtree.
+    if ('!' in node || 'not' in node) return unknown;
+    if ('|' in node) return Array.isArray(node['|']) ? combine(node['|'].map(inspect), true) : unknown;
     if ('or' in node) {
       const branches = node.or as { left?: unknown; right?: unknown } | null;
-      return !!branches && requiresActive(branches.left) && requiresActive(branches.right);
+      return branches ? combine([inspect(branches.left), inspect(branches.right)], true) : unknown;
     }
     if ('l' in node || 'literal' in node) {
       const leaf = (node.l ?? node.literal) as Record<string, unknown> | null;
-      return !!leaf && typeof leaf === 'object' &&
-        (activeState(leaf.ns ?? leaf.NotificationState ?? leaf.notificationState) || leaf.comp === false);
+      if (!leaf || typeof leaf !== 'object') return unknown;
+      const state = leaf.ns ?? leaf.NotificationState ?? leaf.notificationState;
+      if (typeof state === 'string') return states([state.toLowerCase()]);
+      return leaf.comp === false ? { excludesDone: true, acceptsIncoming: true } : unknown;
     }
-    if (node.emailView === 'inbox') return true;
+    if (node.emailView === 'inbox') return { excludesDone: true, acceptsIncoming: true };
     const filter = node.notification_filters as { states?: unknown[] } | undefined;
-    if (filter?.states?.length && filter.states.every(activeState)) return true;
-    return Object.values(node).some(requiresActive);
+    if (filter?.states?.length) return states(filter.states);
+    return combine(Object.values(node).map(inspect));
   };
-  return requiresActive(key);
+  const result = inspect(key);
+  return result.excludesDone && result.acceptsIncoming;
 }
 
 /**
@@ -493,7 +503,8 @@ export function removeSoupEntitiesFromDoneFilteredQueries(
  * cached with staleTime Infinity) are restored the same way; groups that
  * can't be resolved locally (e.g. date buckets) invalidate instead.
  */
-export function restoreSoupEntityToDoneFilteredQueries(entityId: string): void {
+export function restoreSoupEntityToDoneFilteredQueries(entityId: string, incomingState: 'unseen' | 'seen' = 'unseen'): void {
+  const shouldRestore = (key: QueryKey) => soupQueryExcludesDone(key, incomingState);
   const item = getSoupEntityById(entityId);
   if (!item) return;
 
@@ -513,7 +524,7 @@ export function restoreSoupEntityToDoneFilteredQueries(entityId: string): void {
   for (const [key, prev] of queryClient.getQueriesData<SoupItemsInfiniteData>({
     queryKey: soupKeys.items._def,
   })) {
-    if (!soupQueryExcludesDone(key)) continue;
+    if (!shouldRestore(key)) continue;
     if (!prev?.pages?.length) continue;
     if (prev.pages.some((page) => containsEntity(page.items))) continue;
 
@@ -536,7 +547,7 @@ export function restoreSoupEntityToDoneFilteredQueries(entityId: string): void {
   ] of queryClient.getQueriesData<SoupAstItemsInfiniteData>({
     queryKey: soupKeys.astItems._def,
   })) {
-    if (!soupQueryExcludesDone(key)) continue;
+    if (!shouldRestore(key)) continue;
     if (!prev?.pages?.length) continue;
 
     const meta = metaFor(key);
@@ -587,7 +598,7 @@ export function restoreSoupEntityToDoneFilteredQueries(entityId: string): void {
     });
   }
 
-  insertGroupQueries(item, entityId, soupQueryExcludesDone);
+  insertGroupQueries(item, entityId, shouldRestore);
 }
 
 /** Remove entities from the soup queries whose key matches the predicate. */

@@ -1107,9 +1107,12 @@ export function optimisticInsertNotification(
     // so put the row back where it is missing; otherwise this notification
     // stays invisible in the inbox until the next refetch. No-op for rows
     // the refetch paths above insert.
-    restoreSoupEntityToDoneFilteredQueries(
-      threadRootId ?? notification.entity_id
-    );
+    if (notification.state !== 'done') {
+      restoreSoupEntityToDoneFilteredQueries(
+        threadRootId ?? notification.entity_id,
+        notification.state
+      );
+    }
   }
 
   // Cache is already updated via setQueriesData above. Mark as stale without

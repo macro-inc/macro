@@ -14,6 +14,7 @@ import { notificationKeys } from '../keys';
 import {
   applyNotificationStatusUpdate,
   optimisticInsertNotification,
+  restoreUserNotifications,
   type UserNotificationsQuery,
   useMarkNotificationsAsDoneMutation,
   useMarkNotificationsAsSeenMutation,
@@ -272,6 +273,32 @@ function renderWithClient(Component: () => JSX.Element): () => void {
     container.remove();
   };
 }
+
+describe('state-aware notification cache partitions', () => {
+  beforeEach(() => { testQueryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }); });
+  afterEach(() => testQueryClient.clear());
+  it('keeps done patches in history, and restores undo as seen only in active feeds', () => {
+    const notification = createMockNotification({ id: 'partitioned', state: 'unseen' });
+    const activeKey = seedQueryCache([createMockNotificationPage([notification])]);
+    const historyKey = notificationKeys.user({ limit: 20, done: true }).queryKey;
+    testQueryClient.setQueryData(historyKey, {
+      pages: [createMockNotificationPage([{ ...notification, state: 'done' }])], pageParams: [{ limit: 20 }],
+    });
+    applyNotificationStatusUpdate({ type: 'notification_status_updated', updates: [{ t: 'Patch', c: {
+      id: notification.id, state: 'done', viewed_at: null, updated_at: '2026-01-01T00:00:00Z',
+    } }] });
+    expect(getNotificationsFromCache()).toHaveLength(0);
+    const history = () => testQueryClient.getQueryData<{ pages: GetAllUserNotificationsResponse[] }>(historyKey)!.pages[0].items;
+    expect(history()[0].state).toBe('done');
+    restoreUserNotifications([notification as ApiUserNotification]);
+    expect(getNotificationsFromCache()[0].state).toBe('seen');
+    expect(getNotificationsFromCache()[0].viewed_at).toBeNull();
+    expect(history()).toHaveLength(0);
+    optimisticInsertNotification(createMockNotification({ id: 'fresh', state: 'unseen' }));
+    expect(history()).toHaveLength(0);
+    expect(testQueryClient.getQueryData(activeKey)).toBeDefined();
+  });
+});
 
 describe('useUserNotificationsQuery transport facade', () => {
   beforeEach(() => {
@@ -720,7 +747,7 @@ describe('optimisticInsertNotification', () => {
     // above can't restore page membership, so the insert path re-adds it.
     expect(
       vi.mocked(restoreSoupEntityToDoneFilteredQueries)
-    ).toHaveBeenCalledWith(newNotification.entity_id);
+    ).toHaveBeenCalledWith(newNotification.entity_id, 'unseen');
     expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
   });
 
@@ -787,7 +814,7 @@ describe('optimisticInsertNotification', () => {
     // the row restored into the done-filtered feeds.
     expect(
       vi.mocked(restoreSoupEntityToDoneFilteredQueries)
-    ).toHaveBeenCalledWith('thread-1');
+    ).toHaveBeenCalledWith('thread-1', 'unseen');
     expect(
       vi.mocked(restoreSoupEntityToDoneFilteredQueries)
     ).not.toHaveBeenCalledWith('channel-1');

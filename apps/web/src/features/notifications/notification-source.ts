@@ -145,14 +145,24 @@ export function setDoneOverride(
 // resurrects pre-write state when it lands. Entries are removed on mutation
 // failure (that rollback is deliberate) and pruned once the cache confirms
 // the seen state at a quiet moment.
+type SeenOverride = { viewedAt: string; token: symbol };
 const [seenOverrides, setSeenOverrides] = createRoot(() =>
-  createStore<Record<string, string | undefined>>({})
+  createStore<Record<string, SeenOverride | undefined>>({})
 );
 
 function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
-  if (ids.length === 0) return;
+  const token = Symbol();
+  const previous = new Map(ids.map((id) => {
+    const entry = seenOverrides[id];
+    return [id, entry ? { ...entry } : undefined] as const;
+  }));
   batch(() => {
-    for (const id of ids) setSeenOverrides(id, viewedAt);
+    for (const id of ids) setSeenOverrides(id, viewedAt === undefined ? undefined : { viewedAt, token });
+  });
+  return () => batch(() => {
+    for (const id of ids) {
+      if (seenOverrides[id]?.token === token) setSeenOverrides(id, previous.get(id));
+    }
   });
 }
 
@@ -205,7 +215,7 @@ export function createNotificationSource(
         // notifications array and every channel/favorite consumer.
         get viewed_at() {
           if (notification.viewed_at) return notification.viewed_at;
-          return seenOverrides[notification.id] ?? notification.viewed_at;
+          return seenOverrides[notification.id]?.viewedAt ?? notification.viewed_at;
         },
       };
     });
@@ -419,13 +429,13 @@ export function createNotificationSource(
   const bulkMarkAsRead = async (notifications: UnifiedNotification[]) => {
     if (notifications.length === 0) return;
     const ids = notifications.map((n) => n.id);
-    setSeenOverride(ids, new Date().toISOString());
+    const rollback = setSeenOverride(ids, new Date().toISOString());
     try {
       await markNotificationsAsSeenMutation.mutateAsync({
         notificationIds: ids,
       });
     } catch (err) {
-      setSeenOverride(ids, undefined);
+      rollback();
       throw err;
     }
   };

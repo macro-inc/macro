@@ -19,6 +19,13 @@ describe('inbox-query-filters', () => {
     });
   });
 
+  it('retains exact active subsets and never broadens a done-only selection to all states', () => {
+    expect(applyInboxQueryFilters({ document_filters: { notification_filters: { states: ['unseen'] } } }).document_filters?.notification_filters?.states).toEqual(['unseen']);
+    expect(applyInboxQueryFilters({ document_filters: { notification_filters: { states: ['seen'] } } }).document_filters?.notification_filters?.states).toEqual(['seen']);
+    expect(applyInboxQueryFilters({ document_filters: { notification_filters: { states: ['done'] } } }).document_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
+    expect(applyInboxQueryFilters({ document_filters: { notification_filters: { states: [] } } }).document_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
+  });
+
   describe('removeInboxQueryFilters', () => {
     it('strips inbox-applied filters from an inbox-applied payload', () => {
       const applied = applyInboxQueryFilters({});

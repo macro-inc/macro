@@ -2,7 +2,7 @@ import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { createMemo, createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createNotificationSource } from '../notification-source';
+import { createNotificationSource, setDoneOverride } from '../notification-source';
 import type { UnifiedNotification } from '../types';
 
 const mocks = vi.hoisted(() => ({
@@ -109,6 +109,50 @@ describe('createNotificationSource', () => {
       isLoading: false,
       refetch: vi.fn(),
     };
+  });
+
+  it('keeps done through a late seen action, and reopens as seen across stale snapshots', async () => {
+    const row = notification('lifecycle-stale', 'document', 'doc');
+    mocks.notificationsQuery = { data: [row], transport: 'graphql', isFetching: false };
+    const { source, dispose } = createRoot((dispose) => ({ source: createNotificationSource({} as ConnectionGatewayWebsocket), dispose }));
+    try {
+      await source.markAsDone(row);
+      await source.markAsRead(row);
+      expect(source.notifications()[0].state).toBe('done');
+      setDoneOverride([row.id], false);
+      expect(source.notifications()[0].state).toBe('seen');
+      expect(row.state).toBe('unseen'); // The in-flight server snapshot is still stale.
+    } finally {
+      setDoneOverride([row.id], undefined);
+      dispose();
+    }
+  });
+
+  it('rolls a failed done action back to unseen rather than reopening as seen', async () => {
+    const row = notification('lifecycle-rollback', 'document', 'doc');
+    mocks.notificationsQuery = { data: [row], transport: 'graphql', isFetching: false };
+    mocks.doneMutation.mutateAsync.mockRejectedValueOnce(new Error('failed'));
+    const { source, dispose } = createRoot((dispose) => ({ source: createNotificationSource({} as ConnectionGatewayWebsocket), dispose }));
+    try {
+      await expect(source.markAsDone(row)).rejects.toThrow('failed');
+      expect(source.notifications()[0].state).toBe('unseen');
+      expect(source.notifications()[0].viewed_at).toBeNull();
+    } finally { dispose(); }
+  });
+
+  it('does not let an older failed seen action roll back a newer acknowledgment', async () => {
+    const row = notification('lifecycle-overlap', 'document', 'doc');
+    mocks.notificationsQuery = { data: [row], transport: 'graphql', isFetching: false };
+    let rejectFirst!: (error: Error) => void;
+    mocks.seenMutation.mutateAsync.mockImplementationOnce(() => new Promise<void>((_, reject) => { rejectFirst = reject; }));
+    const { source, dispose } = createRoot((dispose) => ({ source: createNotificationSource({} as ConnectionGatewayWebsocket), dispose }));
+    try {
+      const first = source.markAsRead(row).catch(() => {});
+      await source.markAsRead(row);
+      rejectFirst(new Error('older request failed'));
+      await first;
+      expect(source.notifications()[0].state).toBe('seen');
+    } finally { dispose(); }
   });
 
   it('reactively exposes muted entity cache updates', async () => {
