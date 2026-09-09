@@ -37,12 +37,14 @@ import {
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   Match,
+  onCleanup,
   type Setter,
   Show,
   Switch,
@@ -146,10 +148,13 @@ export function InboxList(props: InboxListProps) {
 
     if (sourceRow?.kind !== 'entity') return;
 
+    previewAfterNavigation.clear();
+
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
     if (!isTouchDevice() && !newSplit) {
+      markEntitySeen(sourceRow.entity);
       showPreview(sourceRow.entity);
       return;
     }
@@ -168,9 +173,11 @@ export function InboxList(props: InboxListProps) {
   }
 
   function showPreview(entity: WithNotification<EntityData>) {
-    markEntitySeen(entity);
     props.onPreviewEntityChange(entity);
   }
+
+  const previewAfterNavigation = debounce(showPreview, 150);
+  onCleanup(() => previewAfterNavigation.clear());
 
   async function openEntity(
     entity: WithNotification<EntityData>,
@@ -296,9 +303,11 @@ export function InboxList(props: InboxListProps) {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
+        previewAfterNavigation.clear();
+
         const row = event.result?.item;
         if (!isTouchDevice() && row?.kind === 'entity') {
-          showPreview(row.entity);
+          previewAfterNavigation(row.entity);
         }
 
         if (event.kind !== 'move' || event.direction !== 1) return;
@@ -386,6 +395,7 @@ export function InboxList(props: InboxListProps) {
     if (nextTab === activeTab) return;
 
     activeTab = nextTab;
+    previewAfterNavigation.clear();
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
