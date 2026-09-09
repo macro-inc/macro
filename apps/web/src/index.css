@@ -147,8 +147,8 @@
   --glass-shadow-alpha: 0.55;
   --glass-highlight-base: 6%;
   --glass-shade-base: 40%;
-  --glass-rim-strong-base: 18%;
-  --glass-rim-soft-base: 12%;
+  --glass-rim-strong-base: 13.5%;
+  --glass-rim-soft-base: 9%;
 
   /* Depth-0 defaults for content rendered outside a Layer marker. */
   --layer-surface: var(--color-surface-0);
@@ -171,8 +171,8 @@ html[data-theme-light='true'] {
   --glass-shadow-alpha: 0.28;
   --glass-highlight-base: 55%;
   --glass-shade-base: 8%;
-  --glass-rim-strong-base: 70%;
-  --glass-rim-soft-base: 40%;
+  --glass-rim-strong-base: 52.5%;
+  --glass-rim-soft-base: 30%;
 }
 
 html[data-platform='ios'],

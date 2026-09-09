@@ -172,8 +172,15 @@ const ghostGlassSizeStyles: Record<ButtonSize, string> = {
   xl: 'not-disabled:hover:glass',
 };
 
-const glassClass = (variant: ButtonVariant, size: ButtonSize): string =>
-  variant === 'ghost' ? ghostGlassSizeStyles[size] : glassSizeStyles[size];
+const glassClass = (variant: ButtonVariant, size: ButtonSize): string => {
+  if (variant === 'ghost') return ghostGlassSizeStyles[size];
+  // The glass rim is the edge. `outline` is the one variant with a hard
+  // border of its own, and under the rim it reads as a double line — so the
+  // border goes transparent and the tinted fill plus rim carry the shape.
+  return variant === 'outline'
+    ? `${glassSizeStyles[size]} border-transparent`
+    : glassSizeStyles[size];
+};
 
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [

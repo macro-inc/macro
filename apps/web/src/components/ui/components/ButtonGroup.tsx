@@ -66,8 +66,14 @@ const ghostGlassSizeStyles: Record<ButtonSize, string> = {
   xl: 'hover:glass',
 };
 
-const glassClass = (variant: ButtonVariant, size: ButtonSize): string =>
-  variant === 'ghost' ? ghostGlassSizeStyles[size] : glassSizeStyles[size];
+const glassClass = (variant: ButtonVariant, size: ButtonSize): string => {
+  if (variant === 'ghost') return ghostGlassSizeStyles[size];
+  // Same rule as Button: the rim is the edge, so `outline` drops its hard
+  // border rather than drawing a second line under it.
+  return variant === 'outline'
+    ? `${glassSizeStyles[size]} border-transparent`
+    : glassSizeStyles[size];
+};
 
 const dividerVariantStyles: Record<ButtonVariant, string> = {
   danger: 'bg-failure/50',
