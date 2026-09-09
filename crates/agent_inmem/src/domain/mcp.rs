@@ -18,9 +18,11 @@ mod test;
 ///
 /// Restated from `agent_harness::MACRO_MCP_NAME` rather than imported - this
 /// crate is a runtime the harness drives, not a dependant of it - and pinned
-/// equal by a test in the composition root, which sees both. Macro's tools are
-/// native here (see [`ai_tools::all_tools`]), so the entry is skipped: dialing
-/// it would give the model every Macro tool twice.
+/// equal by a test in the composition root, which sees both. The entry is
+/// dialable - the egress service answers `/mcp-macro` for anyone holding the
+/// session token - but skipped anyway: Macro's tools are native here (see
+/// [`ai_tools::all_tools`]), so dialing it would give the model every Macro
+/// tool twice.
 pub const MACRO_MCP_NAME: &str = "macro";
 
 /// The servers this runtime should dial out of an ACP server list: HTTP

@@ -173,11 +173,11 @@ fn agent_harness_egress_url_selects_defaults_without_a_required_config_value() {
             (Environment::Local, "http://localhost:8102"),
             (
                 Environment::Develop,
-                "https://dev-gateway.macro.com/agent-harness-egress",
+                "https://agent-egress-service-dev.macro.com",
             ),
             (
                 Environment::Production,
-                "https://gateway.macro.com/agent-harness-egress",
+                "https://agent-egress-service.macro.com",
             ),
         ] {
             let url = AgentHarnessEgressUrl::new_for_environment(environment).unwrap();
@@ -573,7 +573,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.agent_harness_egress_url.as_ref(),
-        "https://dev-gateway.macro.com/agent-harness-egress",
+        "https://agent-egress-service-dev.macro.com",
     );
     assert_eq!(
         service_urls.mcp_service_url.as_ref(),
@@ -652,7 +652,7 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.agent_harness_egress_url.as_ref(),
-        "https://gateway.macro.com/agent-harness-egress",
+        "https://agent-egress-service.macro.com",
     );
     assert_eq!(
         service_urls.mcp_service_url.as_ref(),

@@ -7,9 +7,7 @@ use http::header::{AUTHORIZATION, HeaderName, HeaderValue};
 use mcp_toolset::{ConnectedServer, RemoteMcpToolSet, client_info};
 use rmcp::ServiceExt as _;
 use rmcp::transport::StreamableHttpClientTransport;
-use rmcp::transport::streamable_http_client::{
-    StreamableHttpClient, StreamableHttpClientTransportConfig,
-};
+use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 
 use crate::domain::mcp::McpToolConnector;
 
@@ -43,25 +41,20 @@ fn place_header(name: &str, value: &str) -> Option<HeaderPlacement> {
     Some(HeaderPlacement::Custom(header_name, header_value))
 }
 
-/// [`McpToolConnector`] over rmcp's streamable-HTTP client.
+/// [`McpToolConnector`] over rmcp's stock reqwest streamable-HTTP client.
 ///
-/// Each entry is dialed exactly as handed over: its URL is the egress proxy
-/// and its `Authorization` header is the session token, so this process holds
-/// no upstream credential any more than a sandbox does. What carries the
-/// request is the `Client` - in production
-/// [`EgressMcpClient`](super::egress_mcp::EgressMcpClient), which hands it
-/// to the proxy's service without a socket.
-#[derive(Clone)]
-pub struct AcpMcpConnector<Client> {
-    client: Client,
+/// Each entry is dialed exactly as handed over: its URL is the egress
+/// service and its `Authorization` header is the session token, so this
+/// process holds no upstream credential any more than a sandbox does, and
+/// reaches the proxy over the wire the way every other harness does.
+#[derive(Clone, Default)]
+pub struct AcpMcpConnector {
+    client: reqwest::Client,
 }
 
-impl<Client> AcpMcpConnector<Client>
-where
-    Client: StreamableHttpClient + Send + Sync,
-{
-    /// A connector sharing one client across every server it dials.
-    pub fn new(client: Client) -> Self {
+impl AcpMcpConnector {
+    /// A connector sharing one HTTP client across every server it dials.
+    pub fn new(client: reqwest::Client) -> Self {
         Self { client }
     }
 
@@ -99,10 +92,7 @@ where
     }
 }
 
-impl<Client> McpToolConnector for AcpMcpConnector<Client>
-where
-    Client: StreamableHttpClient + Send + Sync,
-{
+impl McpToolConnector for AcpMcpConnector {
     #[tracing::instrument(skip_all, fields(servers = servers.len()))]
     async fn connect(&self, servers: Vec<McpServerHttp>) -> Option<RemoteMcpToolSet> {
         if servers.is_empty() {

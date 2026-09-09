@@ -561,13 +561,20 @@ service_url! {
             dev: "https://dev-gateway.macro.com/agent-harness",
             prod: "https://gateway.macro.com/agent-harness",
         },
-        /// Sandbox-facing agent harness egress proxy URL.
-        /// Override the local default when sandbox clients need a Docker-network
-        /// address or a public tunnel rather than the host's loopback address.
+        /// Sandbox-facing agent egress proxy URL, served by
+        /// `agent_egress_service` on its own subdomain rather than behind the
+        /// shared gateway: a sandbox's git traffic is not something to route
+        /// through a path prefix everything else shares.
+        ///
+        /// The identifier and its `OVERRIDE_` env var keep the
+        /// `AGENT_HARNESS_EGRESS` name so the Doppler variable does not have
+        /// to change in lockstep with the deploy. Override the local default
+        /// when sandbox clients need a Docker-network address or a public
+        /// tunnel rather than the host's loopback address.
         pub AgentHarnessEgressUrl {
             local: "http://localhost:8102",
-            dev: "https://dev-gateway.macro.com/agent-harness-egress",
-            prod: "https://gateway.macro.com/agent-harness-egress",
+            dev: "https://agent-egress-service-dev.macro.com",
+            prod: "https://agent-egress-service.macro.com",
         },
         /// Macro MCP service base URL. Append `/mcp` for its transport endpoint.
         pub McpServiceUrl {
