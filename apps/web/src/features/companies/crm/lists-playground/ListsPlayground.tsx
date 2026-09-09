@@ -23,8 +23,17 @@ import {
 } from '@components/app/PipelineBoard';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { Entity } from '@entity';
 import CircleDashed from '@phosphor/circle-dashed.svg';
-import { cn, Layer, SegmentedControl } from '@ui';
+import {
+  Avatar,
+  Badge,
+  cn,
+  EmptyStatePanel,
+  SegmentedControl,
+  Tooltip,
+} from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import {
@@ -133,7 +142,7 @@ export default function ListsPlayground() {
         <StaticSplitLabel label="CRM lists (prototype)" />
       </SplitHeaderLeft>
       <div class="flex size-full min-h-0 flex-col">
-        <div class="flex flex-wrap items-center gap-3 border-b border-edge-muted px-3 py-2">
+        <div class="flex flex-wrap items-center gap-2 border-b border-edge-muted px-3 py-2">
           <SegmentedControl
             size="sm"
             aria-label="List"
@@ -150,24 +159,22 @@ export default function ListsPlayground() {
               ({list()?.parentType === 'contact' ? 'people' : 'companies'})
             </span>
           </span>
-          <div class="ml-auto flex items-center gap-3">
+          <div class="ml-auto flex items-center gap-2">
             <Show when={mode() === 'board' && selectAttributes().length > 1}>
-              <label class="flex items-center gap-1.5 text-xs text-ink-muted">
-                Board by
-                <SegmentedControl
-                  size="sm"
-                  aria-label="Board by"
-                  value={boardAttribute()?.id ?? ''}
-                  options={selectAttributes().map((attribute) => ({
-                    value: attribute.id,
-                    label: attribute.label,
-                  }))}
-                  onChange={(id) => {
-                    const current = list();
-                    if (current) setBoardAttributeIds(current.id, id);
-                  }}
-                />
-              </label>
+              <span class="text-xs text-ink-muted">Board by</span>
+              <SegmentedControl
+                size="sm"
+                aria-label="Board by"
+                value={boardAttribute()?.id ?? ''}
+                options={selectAttributes().map((attribute) => ({
+                  value: attribute.id,
+                  label: attribute.label,
+                }))}
+                onChange={(id) => {
+                  const current = list();
+                  if (current) setBoardAttributeIds(current.id, id);
+                }}
+              />
             </Show>
             <SegmentedControl
               size="sm"
@@ -185,47 +192,58 @@ export default function ListsPlayground() {
           <Show when={list()}>
             {(current) => (
               <Show
-                when={mode() === 'board'}
+                when={listEntries().length > 0}
                 fallback={
-                  <EntryTable
-                    list={current()}
-                    entries={listEntries()}
-                    membershipsElsewhere={membershipsElsewhere}
+                  <EmptyStatePanel
+                    centered
+                    title={`Nothing in ${current().name} yet`}
+                    description="Entries appear here once a record is added to the list."
                   />
                 }
               >
-                <PipelineBoard
-                  columns={columns()}
-                  items={listEntries()}
-                  itemKey={(entry) => entry.id}
-                  itemColumn={entryColumn}
-                  emptyKey={NOT_SET_KEY}
-                  onMove={moveEntry}
-                  columnIcon={(column, index) => (
-                    <Show
-                      when={column.key !== NOT_SET_KEY}
-                      fallback={
-                        <CircleDashed class="size-3.5 text-ink-extra-muted" />
-                      }
-                    >
-                      <CrmStageIcon
-                        optionId={column.key}
-                        index={index}
-                        class="size-3.5"
-                      />
-                    </Show>
-                  )}
-                  card={(entry, handle) => (
-                    <EntryCard
+                <Show
+                  when={mode() === 'board'}
+                  fallback={
+                    <EntryTable
                       list={current()}
-                      entry={entry}
-                      record={recordById.get(entry.recordId)}
-                      hiddenAttributeId={boardAttribute()?.id}
-                      elsewhere={membershipsElsewhere(entry)}
-                      handle={handle}
+                      entries={listEntries()}
+                      membershipsElsewhere={membershipsElsewhere}
                     />
-                  )}
-                />
+                  }
+                >
+                  <PipelineBoard
+                    columns={columns()}
+                    items={listEntries()}
+                    itemKey={(entry) => entry.id}
+                    itemColumn={entryColumn}
+                    emptyKey={NOT_SET_KEY}
+                    onMove={moveEntry}
+                    columnIcon={(column, index) => (
+                      <Show
+                        when={column.key !== NOT_SET_KEY}
+                        fallback={
+                          <CircleDashed class="size-3.5 text-ink-extra-muted" />
+                        }
+                      >
+                        <CrmStageIcon
+                          optionId={column.key}
+                          index={index}
+                          class="size-3.5"
+                        />
+                      </Show>
+                    )}
+                    card={(entry, handle) => (
+                      <EntryCard
+                        list={current()}
+                        entry={entry}
+                        record={recordById.get(entry.recordId)}
+                        hiddenAttributeId={boardAttribute()?.id}
+                        elsewhere={membershipsElsewhere(entry)}
+                        handle={handle}
+                      />
+                    )}
+                  />
+                </Show>
               </Show>
             )}
           </Show>
@@ -259,137 +277,165 @@ function EntryCard(props: {
     );
 
   return (
-    <Layer depth={2}>
-      <div
-        draggable={props.handle.draggable}
-        onDragStart={props.handle.onDragStart}
-        onDragEnd={props.handle.onDragEnd}
-        class={cn(
-          'flex flex-col gap-1.5 rounded-lg border border-edge-muted bg-panel p-2.5 text-sm',
-          'hover:border-edge hover:bg-active transition-colors',
-          props.handle.dragging && 'opacity-40'
-        )}
-      >
-        <div class="flex min-w-0 items-center gap-2">
-          <RecordGlyph record={props.record} />
-          <span class="min-w-0 truncate font-semibold">
-            {props.record?.name ?? props.entry.recordId}
-          </span>
-        </div>
-        <Show when={props.record?.detail}>
-          {(detail) => (
-            <span class="truncate text-xs text-ink-extra-muted">
-              {detail()}
-            </span>
-          )}
-        </Show>
-        <Show when={shownAttributes().length > 0}>
-          <dl class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-            <For each={shownAttributes()}>
-              {(attribute) => (
-                <>
-                  <dt class="text-ink-extra-muted">{attribute.label}</dt>
-                  <dd class="min-w-0 truncate text-ink-muted">
-                    <AttributeValue
-                      attribute={attribute}
-                      value={props.entry.values[attribute.id]}
-                    />
-                  </dd>
-                </>
-              )}
-            </For>
-          </dl>
-        </Show>
-        <Show when={props.elsewhere.length > 0}>
-          <div class="flex flex-wrap gap-1 pt-0.5">
-            <For each={props.elsewhere}>
-              {(membership) => (
-                <span
-                  class="rounded-sm border border-edge-muted px-1 py-px text-[11px] leading-4 text-ink-extra-muted"
-                  title={
-                    membership.sameList
-                      ? `Another ${props.list.name} entry for this record`
-                      : `Also in ${membership.list}`
-                  }
-                >
-                  {membership.sameList ? 'Also here' : membership.list}:{' '}
-                  {membership.stage}
-                </span>
-              )}
-            </For>
-          </div>
-        </Show>
+    <div
+      draggable={props.handle.draggable}
+      onDragStart={props.handle.onDragStart}
+      onDragEnd={props.handle.onDragEnd}
+      class={cn(
+        'flex flex-col gap-1.5 rounded-lg border border-edge-muted bg-panel p-2.5 text-sm',
+        'hover:border-edge hover:bg-active transition-colors',
+        props.handle.dragging && 'opacity-40'
+      )}
+    >
+      <div class="flex min-w-0 items-center gap-2">
+        <RecordIcon record={props.record} />
+        <span class="min-w-0 truncate font-semibold">
+          {props.record?.name ?? props.entry.recordId}
+        </span>
       </div>
-    </Layer>
+      <Show when={props.record?.detail}>
+        {(detail) => (
+          <span class="truncate text-xs text-ink-extra-muted">{detail()}</span>
+        )}
+      </Show>
+      <Show when={shownAttributes().length > 0}>
+        <dl class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5 text-xs">
+          <For each={shownAttributes()}>
+            {(attribute) => (
+              <>
+                <dt class="text-ink-extra-muted">{attribute.label}</dt>
+                <dd class="min-w-0 truncate text-ink-muted">
+                  <AttributeValue
+                    attribute={attribute}
+                    value={props.entry.values[attribute.id]}
+                  />
+                </dd>
+              </>
+            )}
+          </For>
+        </dl>
+      </Show>
+      <Show when={props.elsewhere.length > 0}>
+        <div class="flex flex-wrap gap-1 pt-0.5">
+          <For each={props.elsewhere}>
+            {(membership) => <MembershipBadge membership={membership} />}
+          </For>
+        </div>
+      </Show>
+    </div>
   );
 }
 
+/** Where else the record sits, as a pill: the list and its stage there. */
+function MembershipBadge(props: { membership: Membership }) {
+  const label = () =>
+    props.membership.sameList
+      ? `Also here: ${props.membership.stage}`
+      : `${props.membership.list}: ${props.membership.stage}`;
+  return (
+    <Tooltip
+      label={
+        props.membership.sameList
+          ? 'Another entry for this record in the same list'
+          : `Also in ${props.membership.list}`
+      }
+    >
+      <Badge variant="outline" size="sm" class="h-5 px-1.5 text-xxs">
+        {label()}
+      </Badge>
+    </Tooltip>
+  );
+}
+
+/**
+ * Entries as rows. The same grid-row shape as the CRM list view: a column
+ * template per list, header and rows placed by grid area, no table element.
+ */
 function EntryTable(props: {
   list: MockList;
   entries: MockEntry[];
   membershipsElsewhere: (entry: MockEntry) => Membership[];
 }) {
+  const areaFor = (attribute: ListAttribute) => `attr-${attribute.id}`;
+  const template = () => ({
+    'grid-template-columns': [
+      'minmax(220px, 1.4fr)',
+      ...props.list.attributes.map(() => 'minmax(120px, 1fr)'),
+      'minmax(180px, 1fr)',
+    ].join(' '),
+    'grid-template-areas': `"record ${props.list.attributes
+      .map(areaFor)
+      .join(' ')} elsewhere"`,
+  });
+
   return (
     <div class="size-full overflow-auto">
-      <table class="w-full border-collapse text-sm">
-        <thead class="sticky top-0 bg-surface text-left text-xs font-semibold text-ink-muted">
-          <tr>
-            <th class="border-b border-edge-muted px-3 py-2">
-              {props.list.parentType === 'contact' ? 'Person' : 'Company'}
-            </th>
-            <For each={props.list.attributes}>
-              {(attribute) => (
-                <th class="border-b border-edge-muted px-3 py-2">
-                  {attribute.label}
-                </th>
-              )}
-            </For>
-            <th class="border-b border-edge-muted px-3 py-2">Also in</th>
-          </tr>
-        </thead>
-        <tbody>
-          <For each={props.entries}>
-            {(entry) => {
-              const record = recordById.get(entry.recordId);
-              return (
-                <tr class="hover:bg-active">
-                  <td class="border-b border-edge-muted px-3 py-2">
-                    <div class="flex min-w-0 items-center gap-2">
-                      <RecordGlyph record={record} />
-                      <span class="truncate font-medium">
-                        {record?.name ?? entry.recordId}
-                      </span>
-                      <span class="truncate text-xs text-ink-extra-muted">
-                        {record?.detail}
-                      </span>
-                    </div>
-                  </td>
-                  <For each={props.list.attributes}>
-                    {(attribute) => (
-                      <td class="border-b border-edge-muted px-3 py-2 text-ink-muted">
-                        <AttributeValue
-                          attribute={attribute}
-                          value={entry.values[attribute.id]}
-                        />
-                      </td>
-                    )}
-                  </For>
-                  <td class="border-b border-edge-muted px-3 py-2 text-xs text-ink-extra-muted">
-                    {props
-                      .membershipsElsewhere(entry)
-                      .map((membership) =>
-                        membership.sameList
-                          ? `Also here (${membership.stage})`
-                          : `${membership.list} (${membership.stage})`
-                      )
-                      .join(', ')}
-                  </td>
-                </tr>
-              );
-            }}
-          </For>
-        </tbody>
-      </table>
+      <Entity.Layout
+        class="sticky top-0 grid min-h-8 items-center gap-2 border-b border-edge-muted bg-surface px-3 text-xs font-semibold text-ink-muted"
+        style={template()}
+      >
+        <Entity.Slot placement="record" class="min-w-0 truncate">
+          {props.list.parentType === 'contact' ? 'Person' : 'Company'}
+        </Entity.Slot>
+        <For each={props.list.attributes}>
+          {(attribute) => (
+            <Entity.Slot
+              placement={areaFor(attribute)}
+              class="min-w-0 truncate"
+            >
+              {attribute.label}
+            </Entity.Slot>
+          )}
+        </For>
+        <Entity.Slot placement="elsewhere" class="min-w-0 truncate">
+          Also in
+        </Entity.Slot>
+      </Entity.Layout>
+      <For each={props.entries}>
+        {(entry) => {
+          const record = recordById.get(entry.recordId);
+          return (
+            <Entity.Layout
+              class="grid min-h-9 items-center gap-2 border-b border-edge-muted px-3 text-sm hover:bg-active"
+              style={template()}
+            >
+              <Entity.Slot
+                placement="record"
+                class="flex min-w-0 items-center gap-2"
+              >
+                <RecordIcon record={record} />
+                <span class="truncate font-medium">
+                  {record?.name ?? entry.recordId}
+                </span>
+                <span class="truncate text-xs text-ink-extra-muted">
+                  {record?.detail}
+                </span>
+              </Entity.Slot>
+              <For each={props.list.attributes}>
+                {(attribute) => (
+                  <Entity.Slot
+                    placement={areaFor(attribute)}
+                    class="min-w-0 truncate text-ink-muted"
+                  >
+                    <AttributeValue
+                      attribute={attribute}
+                      value={entry.values[attribute.id]}
+                    />
+                  </Entity.Slot>
+                )}
+              </For>
+              <Entity.Slot
+                placement="elsewhere"
+                class="flex min-w-0 flex-wrap gap-1"
+              >
+                <For each={props.membershipsElsewhere(entry)}>
+                  {(membership) => <MembershipBadge membership={membership} />}
+                </For>
+              </Entity.Slot>
+            </Entity.Layout>
+          );
+        }}
+      </For>
     </div>
   );
 }
@@ -412,10 +458,10 @@ function AttributeValue(props: {
         when={props.attribute.kind === 'select'}
         fallback={<span>{formatValue(props.attribute, props.value)}</span>}
       >
-        <span class="inline-flex items-center gap-1">
+        <Badge variant="ghost" size="sm" class="h-5 gap-1 px-1.5">
           <CrmStageIcon optionId={String(props.value)} class="size-3" />
           {option()?.label ?? String(props.value)}
-        </span>
+        </Badge>
       </Show>
     </Show>
   );
@@ -436,24 +482,20 @@ function formatValue(
   return String(value);
 }
 
-/** Square initial for a company, round initials for a person. */
-function RecordGlyph(props: { record: MockRecord | undefined }) {
+/** The record's icon: the company glyph, or initials for a person. */
+function RecordIcon(props: { record: MockRecord | undefined }) {
   const initials = () => {
-    const name = props.record?.name ?? '?';
-    const parts = name.split(' ');
-    return props.record?.type === 'contact' && parts.length > 1
-      ? `${parts[0]?.[0] ?? ''}${parts[1]?.[0] ?? ''}`
-      : (name[0] ?? '?');
+    const parts = (props.record?.name ?? '?').split(' ');
+    return `${parts[0]?.[0] ?? ''}${parts[1]?.[0] ?? ''}`.toUpperCase();
   };
   return (
-    <span
-      class={cn(
-        'flex size-4 shrink-0 items-center justify-center bg-accent/15 text-[9px] font-semibold uppercase text-accent',
-        props.record?.type === 'contact' ? 'rounded-full' : 'rounded-sm'
-      )}
-      aria-hidden="true"
+    <Show
+      when={props.record?.type === 'contact'}
+      fallback={<EntityIcon targetType="crm_company" size="xs" />}
     >
-      {initials()}
-    </span>
+      <Avatar size="sm">
+        <Avatar.Fallback>{initials()}</Avatar.Fallback>
+      </Avatar>
+    </Show>
   );
 }

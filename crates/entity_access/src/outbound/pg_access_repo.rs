@@ -467,12 +467,14 @@ impl AccessRepository for PgAccessRepository {
         let entry_uuid = entry_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid CRM list entry ID format"))?;
-        Ok(queries::crm_list_entry_access::get_team_crm_list_entry_access(
-            &self.pool,
-            &entry_uuid,
-            &team_id,
+        Ok(
+            queries::crm_list_entry_access::get_team_crm_list_entry_access(
+                &self.pool,
+                &entry_uuid,
+                &team_id,
+            )
+            .await?,
         )
-        .await?)
     }
 
     #[tracing::instrument(err, skip(self))]

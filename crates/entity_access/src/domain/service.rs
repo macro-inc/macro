@@ -132,7 +132,9 @@ where
         entity_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<CrmEntityAccess>, AccessError> {
-        self.repo.get_crm_list_entry_access(entity_id, user_id).await
+        self.repo
+            .get_crm_list_entry_access(entity_id, user_id)
+            .await
     }
 
     /// Resolve a call id string to the channel id that owns it.
