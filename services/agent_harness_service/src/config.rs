@@ -144,13 +144,6 @@ pub struct Config {
     /// The egress router reads sandbox session tokens from `Authorization`.
     #[macro_config_default(8102)]
     pub egress_port: u16,
-    /// Where a sandbox should dial the egress proxy.
-    ///
-    /// Not derivable from `egress_port`: the sandbox reaches this through
-    /// whatever ingress fronts the deployment, not on the container's own port.
-    /// Production uses `https://gateway.macro.com/agent-harness-egress`;
-    /// development uses `https://dev-gateway.macro.com/agent-harness-egress`.
-    pub egress_base_url: String,
     /// OAuth client ID for the Pipedream API.
     pub pipedream_client_id: PipedreamClientId,
     /// OAuth client secret for the Pipedream API.

@@ -312,7 +312,7 @@ struct AgentHarnessEnv {
     network: String,
     /// The egress proxy as its clients dial it: the run's Cursor egress
     /// tunnel when one opened, otherwise the in-network address.
-    egress_base_url: String,
+    egress_url: String,
     /// Macro's own MCP server as the egress proxy dials it. In-network and
     /// cleartext, which the proxy permits only under `ENVIRONMENT=local`:
     /// this hop never leaves the compose bridge.
@@ -337,7 +337,7 @@ impl AgentHarnessEnv {
             // `credential.<url>.helper`, so an underscore here means the
             // scoped credential helper never fires and the clone prompts for
             // a password it has no terminal to read.
-            egress_base_url: egress_public_url
+            egress_url: egress_public_url
                 .unwrap_or("http://agent-harness-service:8102")
                 .to_owned(),
             macro_mcp_url: "http://mcp-service:8080/mcp",
@@ -351,7 +351,10 @@ impl AgentHarnessEnv {
         env.insert("DEV_DANGEROUS_LOCAL_CONTAINERS".into(), "true".into());
         env.insert("LOCAL_CONTAINER_IMAGE".into(), self.image.into());
         env.insert("LOCAL_CONTAINER_NETWORK".into(), self.network.clone());
-        env.insert("EGRESS_BASE_URL".into(), self.egress_base_url.clone());
+        env.insert(
+            "OVERRIDE_AGENT_HARNESS_EGRESS_URL".into(),
+            self.egress_url.clone(),
+        );
         env.insert("MACRO_MCP_URL".into(), self.macro_mcp_url.into());
     }
 }

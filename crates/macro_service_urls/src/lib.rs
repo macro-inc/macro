@@ -561,6 +561,14 @@ service_url! {
             dev: "https://dev-gateway.macro.com/agent-harness",
             prod: "https://gateway.macro.com/agent-harness",
         },
+        /// Sandbox-facing agent harness egress proxy URL.
+        /// Override the local default when sandbox clients need a Docker-network
+        /// address or a public tunnel rather than the host's loopback address.
+        pub AgentHarnessEgressUrl {
+            local: "http://localhost:8102",
+            dev: "https://dev-gateway.macro.com/agent-harness-egress",
+            prod: "https://gateway.macro.com/agent-harness-egress",
+        },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
             local: "http://localhost:8095",
