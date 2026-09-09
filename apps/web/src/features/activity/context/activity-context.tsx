@@ -3,10 +3,22 @@ import { tryMacroId, useDisplayName } from '@core/user';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { PropertyDefinitionDomain } from '@property/types';
+import { useBotsQuery } from '@queries/bots/bots';
+import {
+  firstPartyBotName,
+  getBotDisplayName,
+} from '@queries/channel/message-sender';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
-import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
+import {
+  type Accessor,
+  createContext,
+  getOwner,
+  type JSX,
+  runWithOwner,
+  useContext,
+} from 'solid-js';
 
 /** Resolved display for one referenced entity: name, icon, and link target. */
 export type EntityDisplay = {
@@ -39,10 +51,16 @@ export type ActivityContext = {
   /** The signed-in user, so their own rows read "You". */
   currentUserId: Accessor<string>;
   /**
-   * Display name for an actor id. Resolves to `undefined` when the id is
-   * not a user (automation rows), `''` while loading, else the name.
+   * Display name for a user actor id. Resolves to `undefined` when the id
+   * is not a user, `''` while loading, else the name.
    */
   displayName: (actorId: Accessor<string>) => Accessor<string | undefined>;
+  /**
+   * Display name for a bot by bare UUID. First-party bots resolve at once
+   * from constants; team bots resolve from the bots list, `undefined` while
+   * it loads, `Bot` when the list does not know the id or failed to load.
+   */
+  botName: (botId: Accessor<string>) => Accessor<string | undefined>;
   /** Name, icon, and link target for a referenced entity. */
   entityDisplay: (
     entityId: Accessor<string>,
@@ -65,6 +83,13 @@ export function useActivityContext(): ActivityContext {
 
 function appActivityContext(): ActivityContext {
   const userId = useUserId();
+  // One bots subscription per consumer, made under the consumer's owner the
+  // first time a bot row asks for a name and reused after that, so it is not
+  // rebuilt each time a recycled row changes actor and user-only surfaces
+  // never fetch the list at all.
+  const owner = getOwner();
+  let bots: ReturnType<typeof useBotsQuery> | undefined;
+  const botsQuery = () => (bots ??= runWithOwner(owner, useBotsQuery));
   return {
     graphql: () => getGraphqlSoupClient(),
     currentUserId: () => userId() ?? '',
@@ -73,6 +98,14 @@ function appActivityContext(): ActivityContext {
       if (!id) return () => undefined;
       const [name] = useDisplayName(id, { emailFallback: 'local-part' });
       return name;
+    },
+    botName: (botId) => () => {
+      const id = botId();
+      const firstParty = firstPartyBotName(id);
+      if (firstParty) return firstParty;
+      const list = botsQuery();
+      if (!list || list.isPending) return undefined;
+      return getBotDisplayName(`bot|${id}`, undefined, list.data ?? []);
     },
     entityDisplay: (entityId, entityType) =>
       usePropertyEntityDisplay(entityId, entityType),

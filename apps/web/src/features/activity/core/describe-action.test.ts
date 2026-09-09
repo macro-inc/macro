@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { describeAction, describeActionForEntity } from './describe-action';
-import type { ActivityAction } from './event';
+import {
+  describeAction,
+  describeActionForEntity,
+  describeRun,
+} from './describe-action';
+import type { ActivityAction, ActivityEvent } from './event';
 
 const DESCRIBE_CASES: Array<[ActivityAction, string]> = [
   [{ kind: 'created' }, 'created this'],
@@ -58,5 +62,98 @@ describe('describeAction', () => {
         tag: 'transmogrified_thoroughly',
       })
     ).toBe('transmogrified thoroughly');
+  });
+
+  const COUNTED_CASES: Array<[ActivityAction, string]> = [
+    [{ kind: 'created' }, 'created this 5 times'],
+    [{ kind: 'edited' }, 'made 5 edits'],
+    [{ kind: 'opened' }, 'opened this 5 times'],
+    [{ kind: 'deleted' }, 'deleted this 5 times'],
+    [{ kind: 'messaged' }, 'sent 5 messages'],
+    [{ kind: 'email-sent' }, 'sent 5 emails'],
+    [
+      { kind: 'property-changed', property: 'prop-1', from: null, to: 'Done' },
+      'made 5 property changes',
+    ],
+    [
+      { kind: 'participant-added', participant: 'macro|sarah@example.com' },
+      'added 5 participants',
+    ],
+    [
+      { kind: 'participant-removed', participant: 'macro|sarah@example.com' },
+      'removed 5 participants',
+    ],
+    [{ kind: 'call-started' }, 'started 5 calls'],
+    [{ kind: 'unknown', tag: 'transmogrified' }, 'transmogrified 5 times'],
+  ];
+
+  it.each(COUNTED_CASES)('folds a run count into %j', (action, expected) => {
+    expect(describeAction(action, 5)).toBe(expected);
+  });
+
+  it('reads a count of one as the plain phrase', () => {
+    expect(describeAction({ kind: 'edited' }, 1)).toBe('made an edit');
+  });
+});
+
+describe('describeRun', () => {
+  const event = (id: string, action: ActivityAction): ActivityEvent => ({
+    id,
+    actorId: 'macro|sarah@example.com',
+    entityId: 'doc-1',
+    entityType: 'document',
+    occurredAt: '2026-08-21T12:00:00.000Z',
+    action,
+  });
+
+  it('carries no count for a single', () => {
+    expect(
+      describeRun({ kind: 'single', event: event('a', { kind: 'edited' }) })
+    ).toEqual({ action: { kind: 'edited' }, countLabel: undefined });
+  });
+
+  it('counts a run in times', () => {
+    const events = ['a', 'b', 'c', 'd', 'e'].map((id) =>
+      event(id, { kind: 'edited' })
+    );
+    expect(
+      describeRun({
+        kind: 'run',
+        events,
+        first: events[0],
+        last: events[events.length - 1],
+      })
+    ).toEqual({ action: { kind: 'edited' }, countLabel: '5 times' });
+  });
+
+  it('counts a property run in changes and reads the net change', () => {
+    const newest = event('b', {
+      kind: 'property-changed',
+      property: 'status',
+      from: 'B',
+      to: 'C',
+    });
+    const oldest = event('a', {
+      kind: 'property-changed',
+      property: 'status',
+      from: 'A',
+      to: 'B',
+    });
+    expect(
+      describeRun({
+        kind: 'run',
+        events: [newest, oldest],
+        first: newest,
+        last: oldest,
+      })
+    ).toEqual({
+      action: {
+        kind: 'property-changed',
+        property: 'status',
+        from: 'A',
+        to: 'C',
+      },
+      countLabel: '2 changes',
+    });
   });
 });

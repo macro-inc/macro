@@ -26,6 +26,7 @@ import {
   unreadFilterFn,
   type WithNotification,
 } from '@entity';
+import { formatCompactRelativeTimestamp } from '@entity/utils/timestamp';
 import MacroLogo from '@icon/macro-logo.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import { formatCalendarReminderTime } from '@notifications';
@@ -57,7 +58,6 @@ import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import { InboxCard } from './InboxCard';
 import {
-  formatCompactRelativeTimestamp,
   getGithubTitle,
   getInboxTaskProperties,
   getNotificationTag,

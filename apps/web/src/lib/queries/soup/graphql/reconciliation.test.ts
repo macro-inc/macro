@@ -4,6 +4,7 @@ import {
   materializeReconciledSoup,
   soupItemKey,
   soupReconciliationBaseline,
+  unreconciledServerRecords,
 } from './reconciliation';
 
 const item = (id: string, typename = 'GraphqlSoupDocument') =>
@@ -49,6 +50,25 @@ describe('flat Soup baseline reconciliation', () => {
         'UPDATED_AT'
       )
     ).toBeUndefined();
+  });
+
+  it('merges new server rows without duplicates or resurrecting covered removals', () => {
+    const kept = item('kept');
+    const removed = item('removed');
+    const candidate = item('candidate');
+    const nextPage = item('next-page');
+    const sameIdProject = item('candidate', 'GraphqlSoupProject');
+    const baselineKeys = new Set([soupItemKey(kept), soupItemKey(removed)]);
+    const displayedKeys = new Set([soupItemKey(kept), soupItemKey(candidate)]);
+    expect(
+      unreconciledServerRecords(
+        [kept, removed, candidate, nextPage, nextPage, sameIdProject],
+        baselineKeys,
+        displayedKeys
+      )
+    ).toEqual([nextPage, sameIdProject]);
+    expect(baselineKeys.size).toBe(2);
+    expect(displayedKeys.size).toBe(2);
   });
 
   it('retains unknown baseline display data, omits unrenderable new items and never resurrects removals', () => {

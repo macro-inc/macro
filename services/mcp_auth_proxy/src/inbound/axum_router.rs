@@ -1,5 +1,8 @@
 //! Axum router for the MCP OAuth broker.
 
+#[cfg(test)]
+mod test;
+
 use std::time::Duration;
 
 use axum::{
@@ -218,19 +221,11 @@ where
             routing::get(protected_resource_metadata),
         )
         .route(
-            "/mcp/.well-known/oauth-protected-resource",
-            routing::get(protected_resource_metadata),
-        )
-        .route(
             "/.well-known/oauth-authorization-server",
             routing::get(authorization_server_metadata),
         )
         .route(
             "/.well-known/oauth-authorization-server/mcp",
-            routing::get(authorization_server_metadata),
-        )
-        .route(
-            "/mcp/.well-known/oauth-authorization-server",
             routing::get(authorization_server_metadata),
         )
         .route("/authorize", routing::get(authorize))
@@ -247,7 +242,13 @@ where
                 super::middleware::validate_bearer,
             ));
 
-    oauth_routes.merge(mcp_route).layer(mcp_cors_layer())
+    mount_at_root_and_prefix(oauth_routes.merge(mcp_route)).layer(mcp_cors_layer())
+}
+
+fn mount_at_root_and_prefix(inner: Router) -> Router {
+    Router::new()
+        .merge(inner.clone())
+        .nest(super::GATEWAY_PATH_PREFIX, inner)
 }
 
 /// CORS layer for the MCP router.

@@ -3000,7 +3000,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3785,6 +3785,7 @@ dependencies = [
  "soup",
  "soup_realtime",
  "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]

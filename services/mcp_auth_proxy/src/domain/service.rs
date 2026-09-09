@@ -81,6 +81,20 @@ pub trait InflightAuthStore: Send + Sync {
     fn cleanup_expired(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
+/// Streamable HTTP resource URL advertised in protected-resource metadata.
+///
+/// MCP clients require a `resource` field. When `MCP_PUBLIC_URL` is an origin
+/// (the current Doppler value), append `/mcp`. When it already ends in `/mcp`
+/// (a later gateway cutover), do not append again.
+fn mcp_resource_url(public_url: &str) -> String {
+    let base = public_url.trim_end_matches('/');
+    if base.ends_with("/mcp") {
+        base.to_owned()
+    } else {
+        format!("{base}/mcp")
+    }
+}
+
 /// Domain service backing the MCP OAuth broker.
 pub struct McpAuthProxyServiceImpl<I> {
     inflight_auth: Arc<I>,
@@ -205,6 +219,7 @@ where
         tracing::debug!("oauth-protected-resource metadata requested");
         let base = &self.public_url;
         serde_json::json!({
+            "resource": mcp_resource_url(base),
             "authorization_server": base,
             "authorization_servers": [base],
         })

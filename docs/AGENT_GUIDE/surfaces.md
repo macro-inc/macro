@@ -7,13 +7,25 @@ loaded server pages with matching cached entities. Complete matching updates can
 appear without a list refetch; confirmed non-matches and explicit deletions disappear.
 Rows whose current predicate facts are unknown retain their previous server membership
 and sort evidence until hydration or a network refresh resolves them. Unrelated
-notification-only cache records do not block other rows' updates.
+notification-only cache records do not block other rows' updates. While recomputation
+is pending, the last rendered result for the same query and cache generation stays
+visible; local results do not trigger the tab-loading bar. A fresh server response
+still replaces that result, and initial loads without usable data retain normal loading
+indicators.
 
 This is a best-effort display, not proof that every matching entity is cached. Loading
 more still follows the original server cursors and preserves already loaded pages.
+Newly loaded server rows join the retained display immediately, without duplicates or
+waiting for local recomputation to succeed. Removing pages from the server baseline
+invalidates overlays built from those pages.
 Changing filters or resetting the cache discards prior reconciliation evidence. Grouped
 lists, unsupported filters/sorts, and native/non-cache transports keep their existing
 network behavior.
+
+Realtime Soup batches coalesce repeated entity IDs (including entity type), keeping
+that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.
+If viewer-scoped hydration finds no item, the backend logs and omits that update;
+it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
 
 ## Inbox — `/app/component/inbox`
 
@@ -144,7 +156,19 @@ GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; pr
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)
 over a wrapping row of pill chips (entity icon, name, action count; click opens the entity,
 shift-click opens a new split; the section is absent when there are no entities), then a feed
-of "You edited/created X" entries.
+of "You edited/created X · 17h" entries grouped under day headers, with the compact relative
+time (`17h`, `8d`, `1mo`) inline after a middot rather than right-aligned; hovering the time
+shows the full date. Each row is a plain action glyph joined to its neighbours by a thin
+connector line (the line stops at day headers) and never wraps: a long entity name truncates
+with an ellipsis, and the full name is in the mention's hover preview. Consecutive same-actor,
+same-entity, same-action events within a day read as one line with a count (`You edited Doc X
+5 times · 2h`; property changes read the net change, `changed Status from A to C on Doc X · 3
+changes · 2h`), so the row count is lower than the event count (`[data-activity-run-size]`
+carries the fold size). The whole page is one virtualized list: only rows near the viewport
+are in the DOM, and scrolling near the bottom fetches the next page automatically (a
+`Loading…` tail appears while it lands). If a page fails, the tail reads `Couldn't load more.`
+with a `Retry` button and automatic paging stops until it is pressed. There is no `Show more`
+button.
 
 ## Home — `/app/component/home`
 

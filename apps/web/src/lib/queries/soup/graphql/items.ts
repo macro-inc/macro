@@ -47,7 +47,9 @@ import { mapSoupPageToEntityList } from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
 import {
   materializeReconciledSoup,
+  soupItemKey,
   soupReconciliationBaseline,
+  unreconciledServerRecords,
 } from './reconciliation';
 
 export type GraphqlSoupAstItemsQueryArgs = {
@@ -105,9 +107,11 @@ export function createGraphqlSoupAstItemsQuery(
     records: GraphqlSoupItem[];
   };
   type LocalProjection = {
-    revision: CacheRevision;
+    input: GraphqlSoupInput;
+    generation: number;
+    baselineKeys: ReadonlySet<string>;
+    displayedKeys: ReadonlySet<string>;
     data: SoupAstItemsData;
-    baseline: readonly GraphqlSoupItem[];
   };
   const [currentCacheRevision, setCurrentCacheRevision] = createSignal<
     CacheRevision | undefined
@@ -201,6 +205,7 @@ export function createGraphqlSoupAstItemsQuery(
     const host = getGraphqlSoupCacheHost();
     const records = serverRecords();
     const requestId = ++localRequest;
+    const requestGeneration = cacheGeneration;
     if (input !== previousInitialInput) {
       previousInitialInput = input;
       setLocalProjection(undefined);
@@ -297,17 +302,20 @@ export function createGraphqlSoupAstItemsQuery(
             setCurrentCacheRevision(latestRevision);
             continue;
           }
-          const items = materializeReconciledSoup(
+          const reconciledRecords = materializeReconciledSoup(
             result.keys,
             chunks.flatMap((chunk) => chunk.records),
             records
-          ).flatMap((record) => {
+          );
+          const items = reconciledRecords.flatMap((record) => {
             const item = mapGraphqlSoupItem(record);
             return item ? [item] : [];
           });
           setLocalProjection({
-            revision: latestRevision,
-            baseline: records,
+            input,
+            generation: requestGeneration,
+            baselineKeys: new Set(records.map(soupItemKey)),
+            displayedKeys: new Set(reconciledRecords.map(soupItemKey)),
             data: {
               entities: mapSoupPageToEntityList(
                 { items, next_cursor: undefined },
@@ -409,19 +417,63 @@ export function createGraphqlSoupAstItemsQuery(
       : []
   );
 
-  const authoritativeLocalProjection = (): LocalProjection | undefined => {
+  const serverRecordKeys = createMemo(
+    () => new Set(serverRecords().map(soupItemKey))
+  );
+
+  // Retain same-query rows across revisions and page additions, not across a
+  // query/generation change or removal of the baseline they were built from.
+  // Publishing a replacement still requires all the revision checks above.
+  const displayLocalProjection = (): LocalProjection | undefined => {
     const local = localProjection();
-    const revision = currentCacheRevision();
-    return local &&
-      local.revision === revision &&
-      local.baseline === serverRecords()
-      ? local
-      : undefined;
+    if (
+      !local ||
+      local.input !== firstPageInput() ||
+      local.generation !== cacheGeneration
+    )
+      return undefined;
+    const keys = serverRecordKeys();
+    for (const key of local.baselineKeys) {
+      if (!keys.has(key)) return undefined;
+    }
+    return local;
   };
   const networkIsAuthoritative = (): boolean =>
     networkAuthorityInput === firstPageInput() &&
     networkAuthorityRevision() !== undefined &&
     networkAuthorityRevision() === currentCacheRevision();
+
+  // An overlay covers only the server rows that existed when it was evaluated.
+  // New server pages must render immediately, even if the next evaluation stalls
+  // or fails. Preserve covered decisions and local additions, then append new
+  // rows in server-page order until a successful reconciliation orders the union.
+  const displayData = createMemo((): SoupAstItemsData | undefined => {
+    if (networkIsAuthoritative()) return query.data?.data;
+    const local = displayLocalProjection();
+    if (!local) return query.data?.data;
+    const additions = unreconciledServerRecords(
+      serverRecords(),
+      local.baselineKeys,
+      local.displayedKeys
+    ).flatMap((record) => {
+      const item = mapGraphqlSoupItem(record);
+      return item ? [item] : [];
+    });
+    if (additions.length === 0) return local.data;
+    const entities = mapSoupPageToEntityList(
+      { items: additions, next_cursor: undefined },
+      {
+        instructionsIdQuery,
+        showSupportedForeignEntities: options().showSupportedForeignEntities,
+      }
+    );
+    return entities.length === 0
+      ? local.data
+      : {
+          ...local.data,
+          entities: [...local.data.entities, ...entities],
+        };
+  });
 
   const error = (): CombinedError | undefined => query.error ?? undefined;
   createComputed(
@@ -433,20 +485,17 @@ export function createGraphqlSoupAstItemsQuery(
   );
 
   return {
-    data: () => {
-      if (networkIsAuthoritative()) return query.data?.data;
-      const local = authoritativeLocalProjection();
-      return local?.data ?? query.data?.data ?? localProjection()?.data;
-    },
+    data: displayData,
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
-    isLoading: () =>
-      query.isLoading && authoritativeLocalProjection() === undefined,
+    isLoading: () => query.isLoading && displayLocalProjection() === undefined,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () => query.isFetchingNextPage,
-    isPlaceholderData: () =>
-      !networkIsAuthoritative() && authoritativeLocalProjection() !== undefined,
+    // Current-query cache results are usable data, not previous-tab
+    // placeholders. In particular, local recomputation must not animate the
+    // mobile tab-loading bar or make the view report that it has no data.
+    isPlaceholderData: () => false,
     hasNextPage: () => query.hasNextPage,
     fetchNextPage: async () => {
       // The display overlay never owns or resets the server cursor chain.

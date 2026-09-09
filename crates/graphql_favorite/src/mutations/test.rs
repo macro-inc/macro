@@ -199,6 +199,8 @@ fn schema(
 
 #[tokio::test]
 async fn set_entity_favorite_preserves_the_toggle_and_delegates_to_favorites() {
+    // This isolated favorites schema has no Soup loader. Hydrated mutation
+    // effects are covered by complete_graph's composed-schema tests.
     let service = Arc::new(CapturingService::default());
     let response = schema(service.clone())
         .execute(
@@ -210,9 +212,6 @@ async fn set_entity_favorite_preserves_the_toggle_and_delegates_to_favorites() {
               ) {
                 result {
                   __typename
-                  ... on GraphqlMutationSuccess {
-                    effects { __typename }
-                  }
                 }
                 favorite {
                   id
@@ -234,7 +233,6 @@ async fn set_entity_favorite_preserves_the_toggle_and_delegates_to_favorites() {
             "setFavorite": {
                 "result": {
                     "__typename": "GraphqlMutationSuccess",
-                    "effects": [{ "__typename": "SoupUpdated" }],
                 },
                 "favorite": {
                     "id": "document:document-1",

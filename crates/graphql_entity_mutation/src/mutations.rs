@@ -10,7 +10,7 @@ use entity_mutation::{
 };
 use graphql_common::GraphqlEntityType;
 use graphql_permission::GraphqlEntityAccessLevel;
-use graphql_soup::{SoupEntityEdges, SoupPatch};
+use graphql_soup::{SoupEntityEdges, SoupItemDataLoader, SoupPatch};
 use model_entity::Entity;
 use models_permissions::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
@@ -358,15 +358,23 @@ impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
     /// Ordered normalized-cache effects produced by the mutation.
     async fn effects(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<SoupPatch<E>>> {
         let user_id = mutation_actor(ctx)?.user_id;
-        self.effects
-            .iter()
-            .map(|effect| match effect {
-                EntityMutationEffect::Updated(entity) => {
-                    Ok(SoupPatch::updated(user_id.clone(), entity.clone()))
+        let loader = ctx.data_opt::<SoupItemDataLoader>();
+        let patches =
+            async_graphql::futures_util::future::try_join_all(self.effects.iter().map(|effect| {
+                let user_id = user_id.clone();
+                async move {
+                    match effect {
+                        EntityMutationEffect::Updated(entity) => {
+                            SoupPatch::hydrate_updated(user_id, entity.clone(), loader).await
+                        }
+                        EntityMutationEffect::Deleted(entity) => {
+                            SoupPatch::deleted(entity.clone()).map(Some)
+                        }
+                    }
                 }
-                EntityMutationEffect::Deleted(entity) => SoupPatch::deleted(entity.clone()),
-            })
-            .collect()
+            }))
+            .await?;
+        Ok(patches.into_iter().flatten().collect())
     }
 }
 

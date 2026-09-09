@@ -70,7 +70,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "graphqlTypeName: String!",
         "entityId: ID!",
         "type SoupUpdated {",
-        "item: GraphqlSoupEntity",
+        "item: GraphqlSoupEntity!",
         "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
         "type GraphqlMutationSuccess {",
         "effects: [SoupPatch!]!",
@@ -285,6 +285,9 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
             !object.fields.contains_key("cacheProjection"),
             "{name} must not carry entity projection metadata"
         );
+        if name == "SoupUpdated" {
+            assert_eq!(object.fields["item"].ty.to_string(), "GraphqlSoupEntity!");
+        }
     }
 }
 

@@ -3,7 +3,8 @@ import {
   type OpenEntityTarget,
   useActivityContext,
 } from '../context/activity-context';
-import type { ActivityEvent } from '../core/event';
+import { entryAction, entryHead, type FeedEntry } from '../core/collapse-runs';
+import type { RailEnds } from '../core/feed-rows';
 import { createEntityOpener } from '../primitives/entity-opener';
 
 /**
@@ -11,28 +12,31 @@ import { createEntityOpener } from '../primitives/entity-opener';
  * `onOpen` to make the row click-to-open; leave it out for inert rows.
  */
 export function ActivityTimelineRow(props: {
-  event: ActivityEvent;
+  entry: FeedEntry;
   actorName?: string;
   showActor?: boolean;
+  rail?: RailEnds;
   onOpen?: (target: OpenEntityTarget) => void;
 }) {
   const context = useActivityContext();
+  const head = () => entryHead(props.entry);
   const opener = createEntityOpener(
     context,
-    () => props.event.entityId,
-    () => props.event.entityType,
+    () => head().entityId,
+    () => head().entityType,
     props.onOpen
   );
   const definition = context.propertyDefinition(() => {
-    const action = props.event.action;
+    const action = entryAction(props.entry);
     return action.kind === 'property-changed' ? action.property : undefined;
   });
 
   return (
     <ActivityTimelineRowView
-      event={props.event}
+      entry={props.entry}
       actorName={props.actorName}
       showActor={props.showActor}
+      rail={props.rail}
       display={opener()?.display}
       rowProps={opener()?.handlers}
       propertyDefinition={definition()}
