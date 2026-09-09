@@ -29,6 +29,7 @@ const EMPTY_METADATA: SessionMetadata = {
   availableCommands: [],
   status: null,
   pendingElicitation: null,
+  pullRequestUrl: null,
 };
 
 interface Pending {

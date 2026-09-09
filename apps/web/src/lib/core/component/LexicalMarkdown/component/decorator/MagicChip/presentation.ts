@@ -24,6 +24,8 @@ export type MagicChipHeader = {
   agent?: string;
   /** The model's display name, when the runtime has reported one. */
   model?: string;
+  /** The pull request the session's work is on, once the runtime reports one. */
+  pullRequestUrl?: string;
 };
 
 /**
