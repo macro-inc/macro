@@ -557,6 +557,23 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       );
       expect(query.hasNextPage()).toBe(false);
       expect(fake.executions).toHaveLength(2);
+      // Once a projection covers page two, resetting the chain must not keep
+      // those unloaded rows alive through that projection if reevaluation fails.
+      entityFilterMock.mockRejectedValue(new Error('reconciliation failed'));
+      const callsBeforeReset = entityFilterMock.mock.calls.length;
+      query.resetToInitialPage();
+      expect(
+        query.data()?.entities.some((item) => item.name === 'Second page')
+      ).toBe(false);
+      await vi.waitFor(() =>
+        expect(entityFilterMock.mock.calls.length).toBeGreaterThan(
+          callsBeforeReset
+        )
+      );
+      expect(
+        query.data()?.entities.some((item) => item.name === 'Second page')
+      ).toBe(false);
+      expect(query.hasNextPage()).toBe(true);
     } finally {
       dispose();
     }
