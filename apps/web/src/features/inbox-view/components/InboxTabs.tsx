@@ -53,6 +53,8 @@ export function InboxTabs() {
       <div class="h-10 min-w-0 flex-1">
         <PillTabs
           scrollable
+          class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+          contentClass="px-(--mobile-chrome-gutter)"
           leading={<InboxFilterDrawer />}
           items={INBOX_TABS}
           value={state.tab}

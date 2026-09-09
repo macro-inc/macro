@@ -407,7 +407,9 @@ function LegacyMailView() {
 
 function RegisteredMailView() {
   usePageViewTracking('mail');
-  const newAppViews = useNewAppViews();
+  const newAppViews = useNewAppViews({
+    enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
+  });
 
   return (
     <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>

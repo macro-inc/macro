@@ -18,6 +18,15 @@ Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
 
+With the new app views enabled, mobile and tablet Email use a floating, horizontally
+scrolling row of those tabs, with `Open email filters` at the left. The rest of the
+view is the email list, which scrolls beneath the header and supports pull to refresh
+and swiping left to mark emails done in Signal and Noise. The filter button opens a
+bottom drawer for status, done, attachment and calendar filters, plus the inbox
+selector when available. `Clear all`
+resets those filters and the inbox selection. Desktop keeps its sidebar, search field,
+filter menu and preview control.
+
 ## Search
 
 Sidebar `Search` button → `/app/.../component/search` with a focused query box. Results

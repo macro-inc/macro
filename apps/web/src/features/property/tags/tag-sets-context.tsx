@@ -41,7 +41,9 @@ export const TagSetsProvider: FlowComponent<{ tagSets: TagSets }> = (props) => {
 /** Explicit query-owning adapter for standalone tag-aware lists. */
 export const TagSetsQueryProvider: FlowComponent = (props) => {
   const tagsQuery = useTagsQuery();
-  const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
+  // Optional row metadata must not suspend the entire collection on a cold query.
+  const tagSets = (): TagSetResponse[] =>
+    tagsQuery.isSuccess ? tagsQuery.data : [];
 
   return <TagSetsProvider tagSets={tagSets}>{props.children}</TagSetsProvider>;
 };

@@ -36,6 +36,7 @@ import {
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Surface } from '@ui';
 import {
   createEffect,
@@ -174,6 +175,8 @@ export function EmailList(props: EmailListProps) {
     });
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
+  const topSpacerSize = createElementSize(topSpacer);
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
   const [grid, setGrid] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
@@ -210,13 +213,13 @@ export function EmailList(props: EmailListProps) {
 
   const rows = source.items;
 
-  const swipeRowsById = createMemo(() => {
+  const swipeRowsByEntityId = createMemo(() => {
     const entities = new Map<string, EmailActionRow>();
 
     for (const row of rows()) {
       if (row.kind !== 'entity') continue;
 
-      entities.set(row.id, { entity: row.entity, rowId: row.id });
+      entities.set(row.entity.id, { entity: row.entity, rowId: row.id });
     }
 
     return entities;
@@ -397,7 +400,8 @@ export function EmailList(props: EmailListProps) {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <Surface
-        depth={2}
+        depth={isTouchDevice() ? 0 : 2}
+        hideBorder={isTouchDevice()}
         ref={(element: HTMLDivElement) => {
           setGrid(element);
           props.ref?.(element);
@@ -407,7 +411,10 @@ export function EmailList(props: EmailListProps) {
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="soup-list relative flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl p-2 outline-none"
+        class={cn(
+          'soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none',
+          isTouchDevice() ? 'rounded-none bg-transparent' : 'rounded-2xl p-2'
+        )}
       >
         <PullToRefresh
           scrollContainer={pullScrollContainer}
@@ -417,12 +424,12 @@ export function EmailList(props: EmailListProps) {
         <ListLayoutProvider ref={grid}>
           <SwipableRowProvider
             container={viewport}
-            canSwipeLeft={(rowId) => {
-              const row = swipeRowsById().get(rowId);
+            canSwipeLeft={(entityId) => {
+              const row = swipeRowsByEntityId().get(entityId);
               return row ? markDoneActionFor(row) !== undefined : false;
             }}
-            onSwipeLeft={(rowId) => {
-              const row = swipeRowsById().get(rowId);
+            onSwipeLeft={(entityId) => {
+              const row = swipeRowsByEntityId().get(entityId);
               if (!row) return;
 
               const action = markDoneActionFor(row);
@@ -440,7 +447,7 @@ export function EmailList(props: EmailListProps) {
                   !isPullRefreshing()
                 }
               >
-                <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
+                <div class="grid min-h-0 flex-1 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                   <SpinnerIcon
                     aria-label="Loading email"
                     class="size-5 animate-spin"
@@ -451,7 +458,7 @@ export function EmailList(props: EmailListProps) {
               <Match when={!forceEmptyState() && source.error()}>
                 <div
                   ref={setEmptyViewport}
-                  class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto text-sm text-ink-muted"
+                  class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto text-sm text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
                 >
                   <span>Email couldn’t be loaded.</span>
                   <Button
@@ -468,7 +475,7 @@ export function EmailList(props: EmailListProps) {
               <Match when={forceEmptyState() || rows().length === 0}>
                 <div
                   ref={setEmptyViewport}
-                  class="min-h-0 flex-1 overflow-y-auto"
+                  class="min-h-0 flex-1 overflow-y-auto touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
                 >
                   <EmailEmptyState />
                 </div>
@@ -482,6 +489,12 @@ export function EmailList(props: EmailListProps) {
                   }}
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none"
                 >
+                  {/* Keep insets inside the scroller so rows slide under the floating chrome. */}
+                  <div
+                    ref={setTopSpacer}
+                    aria-hidden="true"
+                    class="h-0 touch:h-(--mobile-content-inset-top)"
+                  />
                   {/* A row subtree that suspends (the project crumb's preview query, say)
                       detaches only itself, not the list and its scroll position. */}
                   <Suspense>
@@ -489,6 +502,9 @@ export function EmailList(props: EmailListProps) {
                       ref={registerVirtualizer}
                       data={rows()}
                       scrollRef={viewport()}
+                      startMargin={
+                        isTouchDevice() ? (topSpacerSize.height ?? 0) : 0
+                      }
                       bufferSize={500}
                       itemSize={44}
                       keepMounted={
@@ -642,6 +658,12 @@ export function EmailList(props: EmailListProps) {
                       )}
                     </Virtualizer>
                   </Suspense>
+                  <Show when={isTouchDevice()}>
+                    <div
+                      aria-hidden="true"
+                      class="h-(--mobile-content-inset-bottom)"
+                    />
+                  </Show>
                 </div>
               </Match>
             </Switch>
