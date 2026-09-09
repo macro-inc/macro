@@ -3379,8 +3379,7 @@ async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
     let filters = EntityFilters {
         channel_filters: item_filters::ChannelFilters {
             notification_filters: item_filters::NotificationFilters {
-                done: Some(false),
-                ..Default::default()
+                states: item_filters::NotificationState::ACTIVE.to_vec(),
             },
             ..Default::default()
         },
@@ -3412,7 +3411,7 @@ async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
     assert_eq!(channel_filters.len(), 1);
     assert!(channel_filters[0].contains("ChannelId"));
     assert!(channel_filters[0].contains(&channel.to_string()));
-    assert!(channel_filters[0].contains("NotificationDone"));
+    assert!(channel_filters[0].contains("NotificationState"));
 
     let thread_filters = comms_service.thread_filters();
     assert_eq!(thread_filters.len(), 1);

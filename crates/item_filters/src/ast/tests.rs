@@ -451,12 +451,22 @@ fn it_expands_single_channel_thread_participant() {
 }
 
 #[test]
+fn notification_filter_dto_rejects_legacy_booleans_and_invalid_states() {
+    for value in [
+        json!({"done": true, "seen": false}),
+        json!({"states": ["active"]}),
+        json!({"states": [true]}),
+    ] {
+        assert!(serde_json::from_value::<crate::NotificationFilters>(value).is_err());
+    }
+}
+
+#[test]
 fn it_expands_document_notification_filters() {
     let f = EntityFilters {
         document_filters: DocumentFilters {
             notification_filters: crate::NotificationFilters {
-                done: Some(false),
-                seen: Some(false),
+                states: vec![crate::NotificationState::Unseen],
             },
             ..Default::default()
         },
@@ -473,8 +483,7 @@ fn it_expands_document_notification_filters() {
     .unwrap();
 
     let json = serde_json::to_string(&ast).unwrap();
-    assert!(json.contains(r#""nd":false"#));
-    assert!(json.contains(r#""ns":false"#));
+    assert_eq!(json, r#"{"l":{"ns":"unseen"}}"#);
 }
 
 #[test]
@@ -1171,8 +1180,10 @@ fn foreign_entity_notification_filters_expand_as_literals() {
     let f = EntityFilters {
         foreign_entity_filters: ForeignEntityFilters {
             notification_filters: crate::NotificationFilters {
-                done: Some(true),
-                seen: Some(false),
+                states: vec![
+                    crate::NotificationState::Done,
+                    crate::NotificationState::Unseen,
+                ],
             },
             ..Default::default()
         },
@@ -1190,12 +1201,12 @@ fn foreign_entity_notification_filters_expand_as_literals() {
 
     let json = serde_json::to_string(&ast).unwrap();
     assert!(
-        json.contains(r#""nd":true"#),
-        "expected done literal: {json}"
+        json.contains(r#""ns":"done""#),
+        "expected done state literal: {json}"
     );
     assert!(
-        json.contains(r#""ns":false"#),
-        "expected seen literal: {json}"
+        json.contains(r#""ns":"unseen""#),
+        "expected unseen state literal: {json}"
     );
 }
 
@@ -1205,8 +1216,7 @@ fn foreign_entity_notification_done_ands_with_source() {
         foreign_entity_filters: ForeignEntityFilters {
             foreign_entity_sources: vec!["github_pull_request".to_string()],
             notification_filters: crate::NotificationFilters {
-                done: Some(true),
-                seen: None,
+                states: vec![crate::NotificationState::Done],
             },
             ..Default::default()
         },
@@ -1226,7 +1236,7 @@ fn foreign_entity_notification_done_ands_with_source() {
     let exp = json!({
         "&": [
             { "l": { "fes": "github_pull_request" } },
-            { "l": { "nd": true } }
+            { "l": { "ns": "done" } }
         ]
     });
 

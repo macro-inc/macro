@@ -4119,22 +4119,28 @@ async fn test_dyn_filter_notification_done_false(db: PgPool) -> anyhow::Result<(
     let entity_filters = EntityFilters {
         document_filters: DocumentFilters {
             notification_filters: NotificationFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![
+                    item_filters::NotificationState::Unseen,
+                    item_filters::NotificationState::Seen,
+                ],
             },
             ..Default::default()
         },
         chat_filters: ChatFilters {
             notification_filters: NotificationFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![
+                    item_filters::NotificationState::Unseen,
+                    item_filters::NotificationState::Seen,
+                ],
             },
             ..Default::default()
         },
         project_filters: ProjectFilters {
             notification_filters: NotificationFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![
+                    item_filters::NotificationState::Unseen,
+                    item_filters::NotificationState::Seen,
+                ],
             },
             ..Default::default()
         },
@@ -4180,8 +4186,7 @@ async fn test_dyn_filter_notification_done_and_seen_false(db: PgPool) -> anyhow:
     };
 
     let notification_filters = NotificationFilters {
-        done: Some(false),
-        seen: Some(false),
+        states: vec![item_filters::NotificationState::Unseen],
     };
     let entity_filters = EntityFilters {
         document_filters: DocumentFilters {
@@ -6646,15 +6651,30 @@ async fn test_notification_optimization_preserves_access_control(db: PgPool) -> 
     }
 
     let ast = EntityFilterAst {
-        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::NotificationDone(
-            false,
-        )))),
-        chat_filter: Some(Arc::new(Expr::Literal(ChatLiteral::NotificationDone(
-            false,
-        )))),
-        project_filter: Some(Arc::new(Expr::Literal(ProjectLiteral::NotificationDone(
-            false,
-        )))),
+        document_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
+        chat_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
+        project_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
         ..mock_empty_ast()
     };
 
@@ -6717,25 +6737,54 @@ async fn test_optimized_notification_filter_matches_unoptimized_equivalent(
     }
 
     let optimized = EntityFilterAst {
-        document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::NotificationDone(
-            false,
-        )))),
-        chat_filter: Some(Arc::new(Expr::Literal(ChatLiteral::NotificationDone(
-            false,
-        )))),
-        project_filter: Some(Arc::new(Expr::Literal(ProjectLiteral::NotificationDone(
-            false,
-        )))),
+        document_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
+        chat_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
+        project_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
         ..mock_empty_ast()
     };
 
-    // This is logically equivalent to NotificationDone(false), but because the
+    // This is logically equivalent to Unseen OR Seen, but because the
     // notification predicate appears under OR it intentionally stays on the old
     // correlated-EXISTS path.
     let unoptimized_doc = Expr::Or(
-        Box::new(Expr::Literal(DocumentLiteral::NotificationDone(false))),
+        Box::new(Expr::or(
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        )),
         Box::new(Expr::And(
-            Box::new(Expr::Literal(DocumentLiteral::NotificationDone(false))),
+            Box::new(Expr::or(
+                filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                    item_filters::NotificationState::Unseen,
+                )),
+                filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                    item_filters::NotificationState::Seen,
+                )),
+            )),
             Box::new(Expr::Literal(DocumentLiteral::UpdatedAt(
                 DateLiteral::GreaterThan(
                     chrono::DateTime::parse_from_rfc3339("2000-01-01T00:00:00Z")?.into(),
@@ -6744,9 +6793,23 @@ async fn test_optimized_notification_filter_matches_unoptimized_equivalent(
         )),
     );
     let unoptimized_chat = Expr::Or(
-        Box::new(Expr::Literal(ChatLiteral::NotificationDone(false))),
+        Box::new(Expr::or(
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        )),
         Box::new(Expr::And(
-            Box::new(Expr::Literal(ChatLiteral::NotificationDone(false))),
+            Box::new(Expr::or(
+                filter_ast::Expr::val(ChatLiteral::NotificationState(
+                    item_filters::NotificationState::Unseen,
+                )),
+                filter_ast::Expr::val(ChatLiteral::NotificationState(
+                    item_filters::NotificationState::Seen,
+                )),
+            )),
             Box::new(Expr::Literal(ChatLiteral::UpdatedAt(
                 DateLiteral::GreaterThan(
                     chrono::DateTime::parse_from_rfc3339("2000-01-01T00:00:00Z")?.into(),
@@ -6755,9 +6818,23 @@ async fn test_optimized_notification_filter_matches_unoptimized_equivalent(
         )),
     );
     let unoptimized_project = Expr::Or(
-        Box::new(Expr::Literal(ProjectLiteral::NotificationDone(false))),
+        Box::new(Expr::or(
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        )),
         Box::new(Expr::And(
-            Box::new(Expr::Literal(ProjectLiteral::NotificationDone(false))),
+            Box::new(Expr::or(
+                filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                    item_filters::NotificationState::Unseen,
+                )),
+                filter_ast::Expr::val(ProjectLiteral::NotificationState(
+                    item_filters::NotificationState::Seen,
+                )),
+            )),
             Box::new(Expr::Literal(ProjectLiteral::UpdatedAt(
                 DateLiteral::GreaterThan(
                     chrono::DateTime::parse_from_rfc3339("2000-01-01T00:00:00Z")?.into(),

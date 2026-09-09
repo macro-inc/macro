@@ -2127,8 +2127,7 @@ async fn post_messages_forwards_notification_filter_for_authenticated_user() {
     let channel_id = Uuid::new_v4();
     let body = serde_json::json!({
         "notification_filters": {
-            "done": false,
-            "seen": true
+            "states": ["seen"]
         }
     })
     .to_string();
@@ -2144,8 +2143,10 @@ async fn post_messages_forwards_notification_filter_for_authenticated_user() {
     assert_eq!(res.status(), StatusCode::OK);
 
     let captured = svc.captured.lock().unwrap().clone().unwrap();
-    assert_eq!(captured.notification_filters.done, Some(false));
-    assert_eq!(captured.notification_filters.seen, Some(true));
+    assert_eq!(
+        captured.notification_filters.states,
+        vec![item_filters::NotificationState::Seen]
+    );
     let captured_user_id = svc
         .captured_notification_user_id
         .lock()

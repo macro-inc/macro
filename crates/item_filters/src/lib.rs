@@ -26,6 +26,7 @@ pub enum SearchOn {
 /// Notification-level filters that apply to an entity type.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
 pub struct NotificationFilters {
     /// Include entities with a non-deleted notification in any of these exact states.
     /// Empty means no notification restriction. Active means `[unseen, seen]`.

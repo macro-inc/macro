@@ -655,8 +655,10 @@ async fn test_dynamic_filter_document_notification_done(pool: PgPool) {
     let filter = item_filters::ast::EntityFilterAst::new_from_filters(EntityFilters {
         document_filters: DocumentFilters {
             notification_filters: NotificationFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![
+                    item_filters::NotificationState::Unseen,
+                    item_filters::NotificationState::Seen,
+                ],
             },
             ..Default::default()
         },

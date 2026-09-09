@@ -19,7 +19,7 @@ struct ForeignEntityBatchQuery<'a> {
     sort_method: SimpleSortMethod,
     filter_jsonpath: Option<&'a str>,
     participant_github_user_id: Option<&'a str>,
-    /// Macro user id used to scope the per-user notification done/seen predicates.
+    /// Macro user id used to scope the per-user notification state predicates.
     /// When a notification filter is requested but this is `None`, nothing matches.
     notification_user_id: Option<&'a str>,
     /// Accepted sets of states present on the entity (unseen=1, seen=2, done=4).
@@ -37,8 +37,8 @@ fn source_id_parts(source_ids: &[SourceId]) -> (Vec<String>, Vec<String>) {
         .unzip()
 }
 
-/// Marker error for filters that place a hoisted literal (see [`is_hoisted_literal`]) somewhere it
-/// cannot be lifted into a dedicated SQL predicate (under `Or`/`Not`).
+/// A participant or mixed metadata/notification subtree cannot be lifted safely.
+/// Pure notification subtrees support AND, OR, and NOT.
 struct UnsupportedHoistedFilter;
 
 /// Filters lifted off the top-level AND spine into dedicated SQL predicates because they cannot be
@@ -124,11 +124,9 @@ fn contains_hoisted_literal(expr: &Expr<ForeignEntityLiteral>) -> bool {
     }
 }
 
-/// Strip hoisted literals ([`ForeignEntityLiteral::IncludesMe`], notification done/seen) off the
-/// top-level AND spine of a filter tree, returning them alongside the jsonpath for the residual
-/// filter. Hoisted literals cannot be expressed in the jsonpath (they need the indexed metadata
-/// containment predicate or a join against the notification tables), so any occurrence under
-/// `Or`/`Not` is an error.
+/// Lift participant predicates and pure notification subtrees off the AND spine.
+/// Notification subtrees preserve their full boolean expression through a truth table;
+/// other literals remain in the metadata jsonpath. Mixed OR/NOT subtrees fail closed.
 fn extract_hoisted_filters(
     expr: &Expr<ForeignEntityLiteral>,
 ) -> Result<HoistedForeignEntityFilters, UnsupportedHoistedFilter> {
@@ -422,8 +420,8 @@ impl ForeignEntityRepository for PgForeignEntityRepo {
             }
         };
 
-        // Contradictory predicates on the AND spine (e.g. done=true AND done=false) can never
-        // match, so short-circuit before doing any work.
+        // No possible set of notifications satisfies this boolean expression.
+        // Different state literals joined by AND are not inherently contradictory.
         if notification_matches == Some(0) {
             return Ok(Vec::new());
         }

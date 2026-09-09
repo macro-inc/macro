@@ -24,17 +24,22 @@ use crate::outbound::pg_soup_repo::expanded::dynamic::{
     properties_filter_can_apply_to,
 };
 
-/// Literals reachable through `And` alone: conditions the whole tree implies,
-/// so applying them as a pre-filter can never drop a row the tree's full fold
-/// would admit. `Or` and `Not` subtrees contribute nothing.
-fn and_conjuncts<'a, T>(expr: &'a Expr<T>, out: &mut Vec<&'a T>) {
+// OR/NOT can be pushed down only when every literal in their subtree is
+// supported. Dropping an unsupported branch inside either can exclude valid rows.
+fn exact_subtree_sql<T>(expr: &Expr<T>, fold: &impl Fn(&T) -> Option<String>) -> Option<String> {
     match expr {
-        Expr::And(a, b) => {
-            and_conjuncts(a, out);
-            and_conjuncts(b, out);
-        }
-        Expr::Literal(literal) => out.push(literal),
-        Expr::Or(..) | Expr::Not(..) => {}
+        Expr::Literal(literal) => fold(literal),
+        Expr::And(a, b) => Some(format!(
+            "({} AND {})",
+            exact_subtree_sql(a, fold)?,
+            exact_subtree_sql(b, fold)?
+        )),
+        Expr::Or(a, b) => Some(format!(
+            "({} OR {})",
+            exact_subtree_sql(a, fold)?,
+            exact_subtree_sql(b, fold)?
+        )),
+        Expr::Not(expr) => Some(format!("NOT ({})", exact_subtree_sql(expr, fold)?)),
     }
 }
 
@@ -47,12 +52,15 @@ pub(super) fn implied_conjuncts_sql<T>(
     let Some(tree) = tree else {
         return String::new();
     };
-    let mut literals = Vec::new();
-    and_conjuncts(tree, &mut literals);
-    literals
-        .into_iter()
-        .filter_map(|literal| fold(literal).map(|sql| format!(" AND {sql}")))
-        .collect()
+    fn implied<T>(tree: &Expr<T>, fold: &impl Fn(&T) -> Option<String>) -> String {
+        match tree {
+            Expr::And(a, b) => format!("{}{}", implied(a, fold), implied(b, fold)),
+            _ => exact_subtree_sql(tree, fold)
+                .map(|sql| format!(" AND ({sql})"))
+                .unwrap_or_default(),
+        }
+    }
+    implied(tree, &fold)
 }
 
 /// The per-type `EXISTS` gate for documents: exists, not deleted, accessible,
