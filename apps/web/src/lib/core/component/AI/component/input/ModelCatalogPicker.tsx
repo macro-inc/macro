@@ -90,7 +90,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
         aria-label={props.ariaLabel}
         disabled={props.disabled}
       >
-        <span class="min-w-0 truncate">{displayValue()}</span>
+        <span class="truncate">{displayValue()}</span>
         <CaretDown class="size-3.5 rotate-[-90deg] opacity-70" />
       </Dropdown.Trigger>
       <Dropdown.Content
