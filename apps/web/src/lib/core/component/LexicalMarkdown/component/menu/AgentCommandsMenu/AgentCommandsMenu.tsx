@@ -158,6 +158,7 @@ export function AgentCommandsMenu(props: AgentCommandsMenuProps) {
   });
 
   const focusOut = () => {
+    if (!menuOpen()) return;
     closeMenu();
   };
   onMount(() => {

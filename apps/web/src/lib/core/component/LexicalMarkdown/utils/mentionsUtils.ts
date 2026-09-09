@@ -18,6 +18,9 @@ import {
   INSERT_GROUP_MENTION_COMMAND,
   INSERT_USER_MENTION_COMMAND,
 } from '../plugins/mentions';
+import { canTrackMentionFromBlock } from './mention-tracking';
+
+export { canTrackMentionFromBlock } from './mention-tracking';
 
 type GroupItem = {
   id: string;
@@ -171,7 +174,11 @@ export async function handleUserMention(
     if (onUserMention) {
       onUserMention(record);
     }
-    if (blockId && !disableMentionTracking) {
+    if (
+      blockId &&
+      !disableMentionTracking &&
+      canTrackMentionFromBlock(blockName)
+    ) {
       mentionId = await trackMention(blockId, 'user', user.id);
     }
   }
@@ -224,8 +231,7 @@ async function _handleEmailMention(
   let mentionId: string | undefined;
   if (
     blockId &&
-    parentBlockName !== 'channel' &&
-    parentBlockName !== 'chat' &&
+    canTrackMentionFromBlock(parentBlockName) &&
     !disableMentionTracking
   ) {
     mentionId = await trackMention(blockId, 'document', email.id);
@@ -295,8 +301,7 @@ export async function handleBasicMention(
   let mentionId: string | undefined;
   if (
     blockId &&
-    parentBlockName !== 'channel' &&
-    parentBlockName !== 'chat' &&
+    canTrackMentionFromBlock(parentBlockName) &&
     !disableMentionTracking
   ) {
     mentionId = await trackMention(blockId, 'document', item.id);
@@ -332,8 +337,7 @@ async function _handleChannelMention(
   let mentionId: string | undefined;
   if (
     blockId &&
-    parentBlockName !== 'channel' &&
-    parentBlockName !== 'chat' &&
+    canTrackMentionFromBlock(parentBlockName) &&
     !disableMentionTracking
   ) {
     mentionId = await trackMention(blockId, 'channel', channel.id);

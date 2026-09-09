@@ -78,6 +78,23 @@ export function validTriggerPosition(
 
 const CLEAN_REGEX = /^[@:\/;#]/g; // Matches menu triggers to clean the search term.
 
+/** True when `text` is this trigger, or the doubled form the typed key adds. */
+function searchTextMatchesType(
+  text: string | undefined | null,
+  type: InlineSearchNodesType
+): text is string {
+  return !!text && text.startsWith(type);
+}
+
+function $inlineSearchMatchesType(
+  node: InlineSearchNode,
+  type?: InlineSearchNodesType
+): boolean {
+  return (
+    type === undefined || searchTextMatchesType(node.getTextContent(), type)
+  );
+}
+
 export class InlineSearchNode extends TextNode {
   static getType() {
     return 'inline-search';
@@ -155,9 +172,16 @@ export function $handleInlineSearchNodeMutation(
     // If we are in live-collaboration mode, we need to ensure that the peerId on the node
     // is the same as the current peerId of the user.
     if (mutation === 'destroyed') {
-      if (isNodePeerIdValid(prevEditorState, nodeKey, peerIdValidator)) {
-        actions.onDestroy();
+      if (!isNodePeerIdValid(prevEditorState, nodeKey, peerIdValidator)) {
+        continue;
       }
+      const prevText = prevEditorState.read(() =>
+        $getNodeByKey(nodeKey)?.getTextContent()
+      );
+      // Slash/emoji/tag menus share this node type with @ mentions. Closing
+      // one must not tear down another — only destroy matching triggers.
+      if (!searchTextMatchesType(prevText, type)) continue;
+      actions.onDestroy();
     } else if (mutation === 'created') {
       editor.read(() => {}); // Node wont exist without flush.
       const state = editor.getEditorState();
@@ -165,7 +189,10 @@ export function $handleInlineSearchNodeMutation(
         const search = state.read(() =>
           $getNodeByKey(nodeKey)?.getTextContent()
         );
-        if (!search || search !== type) return;
+        // The typed trigger is captured into the node, so created text may be
+        // `@` or `@@` (and the same for `/`, `:`, …). Exact equality missed
+        // the doubled form and never opened the menu.
+        if (!searchTextMatchesType(search, type)) continue;
         actions.onCreate();
       }
     } else if (mutation === 'updated') {
@@ -175,10 +202,9 @@ export function $handleInlineSearchNodeMutation(
         const search = state.read(() =>
           $getNodeByKey(nodeKey)?.getTextContent()
         );
-        if (search) {
-          let cleanedSearch = search.trim().replace(CLEAN_REGEX, '');
-          actions.onUpdate(cleanedSearch);
-        }
+        if (!searchTextMatchesType(search, type)) continue;
+        let cleanedSearch = search.trim().replace(CLEAN_REGEX, '');
+        actions.onUpdate(cleanedSearch);
       }
     }
   }
@@ -200,15 +226,20 @@ export function $isInlineSearchNode(
 }
 
 /**
- * Collapses all inline search nodes in the editor, replacing them with regular text nodes.
- * This is used when escaping or exiting the inline search menu.
+ * Collapses inline search nodes, replacing them with regular text nodes.
+ * Pass `type` so a `/` menu close does not also collapse an `@` mention search
+ * (and vice versa) — they share this node class in the same editor.
  */
-export function $collapseInlineSearch(peerIdValidator?: PeerIdValidator) {
+export function $collapseInlineSearch(
+  peerIdValidator?: PeerIdValidator,
+  type?: InlineSearchNodesType
+) {
   let didReplaceNode = false;
   for (const { node } of $dfsIterator()) {
     if (
       $isInlineSearchNode(node) &&
-      $isNodePeerIdValid(node, peerIdValidator)
+      $isNodePeerIdValid(node, peerIdValidator) &&
+      $inlineSearchMatchesType(node, type)
     ) {
       didReplaceNode = true;
       node.replace($createTextNode(node.getTextContent()));
@@ -218,15 +249,19 @@ export function $collapseInlineSearch(peerIdValidator?: PeerIdValidator) {
 }
 
 /**
- * Removes all inline search nodes in the editor. This is used for clearing out the inline search
- * before inserting a mention.
+ * Removes inline search nodes. Used for clearing the active search before
+ * inserting a mention. Pass `type` to leave other trigger searches intact.
  */
-export function $removeInlineSearch(peerIdValidator?: PeerIdValidator) {
+export function $removeInlineSearch(
+  peerIdValidator?: PeerIdValidator,
+  type?: InlineSearchNodesType
+) {
   let didRemove = false;
   for (const { node } of $dfsIterator()) {
     if (
       $isInlineSearchNode(node) &&
-      $isNodePeerIdValid(node, peerIdValidator)
+      $isNodePeerIdValid(node, peerIdValidator) &&
+      $inlineSearchMatchesType(node, type)
     ) {
       didRemove = true;
       node.remove();

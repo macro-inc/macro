@@ -101,19 +101,31 @@ function registerActionsPlugin(
 
     editor.registerCommand(
       CLOSE_ACTION_SEARCH_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Actions
+        ),
       COMMAND_PRIORITY_LOW
     ),
 
     editor.registerCommand(
       KEY_ESCAPE_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Actions
+        ),
       COMMAND_PRIORITY_HIGH
     ),
 
     editor.registerCommand(
       REMOVE_ACTION_SEARCH_COMMAND,
-      () => $removeInlineSearch(props.peerIdValidator),
+      () =>
+        $removeInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Actions
+        ),
       COMMAND_PRIORITY_HIGH
     ),
 

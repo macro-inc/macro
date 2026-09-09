@@ -8,11 +8,12 @@ import {
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_GROUP_MENTION_COMMAND,
 } from '../../../../plugins/mentions';
-import type {
-  HandlerDependencies,
-  MentionItem,
+import {
+  canTrackMentionFromBlock,
+  type HandlerDependencies,
+  handleUserMention,
+  type MentionItem,
 } from '../../../../utils/mentionsUtils';
-import { handleUserMention } from '../../../../utils/mentionsUtils';
 import { getBlockNameFromEntity } from './entityUtils';
 
 // Resolve the display name for a mention insert. `entity.name` is the
@@ -55,8 +56,7 @@ async function handleEntityMention(
   let mentionId: string | undefined;
   if (
     blockId &&
-    blockName !== 'channel' &&
-    blockName !== 'chat' &&
+    canTrackMentionFromBlock(blockName) &&
     !disableMentionTracking
   ) {
     const trackType =

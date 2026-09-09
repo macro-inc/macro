@@ -81,18 +81,30 @@ function registerEmojisPlugin(editor: LexicalEditor, props: EmojiPluginProps) {
     ),
     editor.registerCommand(
       CLOSE_EMOJI_SEARCH_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Emojis
+        ),
       COMMAND_PRIORITY_LOW
     ),
     editor.registerCommand(
       KEY_ESCAPE_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Emojis
+        ),
       COMMAND_PRIORITY_HIGH
     ),
 
     editor.registerCommand(
       REMOVE_EMOJI_SEARCH_COMMAND,
-      () => $removeInlineSearch(props.peerIdValidator),
+      () =>
+        $removeInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Emojis
+        ),
       COMMAND_PRIORITY_HIGH
     ),
     editor.registerCommand(

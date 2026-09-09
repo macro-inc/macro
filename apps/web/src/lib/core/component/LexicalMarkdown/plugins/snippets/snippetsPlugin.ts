@@ -239,18 +239,30 @@ function registerSnippetsPlugin(
     ),
     editor.registerCommand(
       CLOSE_SNIPPET_SEARCH_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Snippets
+        ),
       COMMAND_PRIORITY_LOW
     ),
     editor.registerCommand(
       KEY_ESCAPE_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Snippets
+        ),
       COMMAND_PRIORITY_HIGH
     ),
 
     editor.registerCommand(
       REMOVE_SNIPPET_SEARCH_COMMAND,
-      () => $removeInlineSearch(props.peerIdValidator),
+      () =>
+        $removeInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Snippets
+        ),
       COMMAND_PRIORITY_HIGH
     ),
     editor.registerCommand(

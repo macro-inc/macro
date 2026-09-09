@@ -96,17 +96,29 @@ function registerSkillsPlugin(editor: LexicalEditor, props: SkillsPluginProps) {
     ),
     editor.registerCommand(
       CLOSE_SKILL_SEARCH_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Actions
+        ),
       COMMAND_PRIORITY_LOW
     ),
     editor.registerCommand(
       KEY_ESCAPE_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Actions
+        ),
       COMMAND_PRIORITY_HIGH
     ),
     editor.registerCommand(
       REMOVE_SKILL_SEARCH_COMMAND,
-      () => $removeInlineSearch(props.peerIdValidator),
+      () =>
+        $removeInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Actions
+        ),
       COMMAND_PRIORITY_HIGH
     ),
     // Menu ENTERS should not propagate to the editor.

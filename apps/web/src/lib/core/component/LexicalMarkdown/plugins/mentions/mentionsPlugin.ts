@@ -604,18 +604,30 @@ function registerMentionsPlugin(
 
     editor.registerCommand(
       CLOSE_INLINE_SEARCH_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Mentions
+        ),
       COMMAND_PRIORITY_LOW
     ),
     editor.registerCommand(
       KEY_ESCAPE_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Mentions
+        ),
       COMMAND_PRIORITY_HIGH
     ),
 
     editor.registerCommand(
       REMOVE_INLINE_SEARCH_COMMAND,
-      () => $removeInlineSearch(props.peerIdValidator),
+      () =>
+        $removeInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Mentions
+        ),
       COMMAND_PRIORITY_HIGH
     ),
 

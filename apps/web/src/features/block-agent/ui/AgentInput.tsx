@@ -113,6 +113,7 @@ export function AgentInput(props: AgentInputProps) {
     .withMentions({
       showOpenTabs: true,
       block: 'agent',
+      disableMentionTracking: true,
     })
     .withEmojis()
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })

@@ -76,7 +76,10 @@ function registerHashSymbolListener(
     if (e.key === '#') {
       if (props.menu?.isOpen()) {
         editor.update(() => {
-          $collapseInlineSearch(props.peerIdValidator);
+          $collapseInlineSearch(
+            props.peerIdValidator,
+            InlineSearchNodesType.Tags
+          );
         });
         props.menu.closeMenu();
         return;
@@ -121,7 +124,10 @@ function registerTagsPlugin(editor: LexicalEditor, props: TagsPluginProps) {
       (payload) => {
         if (!insertTags) {
           editor.update(() => {
-            $removeInlineSearch(props.peerIdValidator);
+            $removeInlineSearch(
+              props.peerIdValidator,
+              InlineSearchNodesType.Tags
+            );
           });
           props.onCreateTag?.(payload);
           return true;
@@ -175,19 +181,28 @@ function registerTagsPlugin(editor: LexicalEditor, props: TagsPluginProps) {
 
     editor.registerCommand(
       CLOSE_INLINE_SEARCH_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Tags
+        ),
       COMMAND_PRIORITY_LOW
     ),
 
     editor.registerCommand(
       KEY_ESCAPE_COMMAND,
-      () => $collapseInlineSearch(props.peerIdValidator),
+      () =>
+        $collapseInlineSearch(
+          props.peerIdValidator,
+          InlineSearchNodesType.Tags
+        ),
       COMMAND_PRIORITY_HIGH
     ),
 
     editor.registerCommand(
       REMOVE_INLINE_SEARCH_COMMAND,
-      () => $removeInlineSearch(props.peerIdValidator),
+      () =>
+        $removeInlineSearch(props.peerIdValidator, InlineSearchNodesType.Tags),
       COMMAND_PRIORITY_HIGH
     ),
 
