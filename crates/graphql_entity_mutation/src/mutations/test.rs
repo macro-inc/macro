@@ -96,6 +96,17 @@ impl QueryRoot {
         true
     }
 
+    /// Exercise input coercion, adapter validation, and conversion without a domain service.
+    async fn convert_share_policy(
+        &self,
+        input: super::UpdateEntitySharePolicyInput,
+    ) -> async_graphql::Result<
+        async_graphql::Json<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    > {
+        super::validate_share_policy_inputs(std::slice::from_ref(&input))?;
+        Ok(async_graphql::Json(input.into_model().policy))
+    }
+
     /// Return a successful domain outcome whose deletion cannot be represented by Soup.
     async fn unsupported_deletion(&self) -> super::GraphqlMutationSuccess<TestSoupEdges> {
         super::GraphqlMutationSuccess {
@@ -211,6 +222,98 @@ fn batch_validation_rejects_oversized_and_duplicate_requests() {
     assert!(error.message.contains("duplicate entity"));
 }
 
+#[tokio::test]
+async fn graphql_team_share_variables_preserve_undefined_null_and_values() {
+    let schema = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription).finish();
+    for (variables, expected) in [
+        (value!({}), value!({ "channelSharePermissions": null })),
+        (
+            value!({ "teamShareAccessLevel": null }),
+            value!({ "teamShareAccessLevel": null, "channelSharePermissions": null }),
+        ),
+        (
+            value!({ "teamShareAccessLevel": "VIEW" }),
+            value!({ "teamShareAccessLevel": "view", "channelSharePermissions": null }),
+        ),
+        (
+            value!({ "teamShareAccessLevel": "COMMENT" }),
+            value!({ "teamShareAccessLevel": "comment", "channelSharePermissions": null }),
+        ),
+        (
+            value!({ "teamShareAccessLevel": "EDIT" }),
+            value!({ "teamShareAccessLevel": "edit", "channelSharePermissions": null }),
+        ),
+        // The adapter forwards OWNER so the domain can reject it per entity.
+        (
+            value!({ "teamShareAccessLevel": "OWNER" }),
+            value!({ "teamShareAccessLevel": "owner", "channelSharePermissions": null }),
+        ),
+    ] {
+        let response = schema
+            .execute(
+                Request::new(
+                    r#"query($policy: EntitySharePolicyInput!) {
+                        convertSharePolicy(input: {
+                            entity: { type: DOCUMENT, id: "document-1" }
+                            policy: $policy
+                        })
+                    }"#,
+                )
+                .variables(async_graphql::Variables::from_value(
+                    value!({ "policy": variables }),
+                )),
+            )
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.data, value!({ "convertSharePolicy": expected }));
+    }
+}
+
+#[tokio::test]
+async fn graphql_team_share_literals_are_independent_of_link_sharing() {
+    let schema = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription).finish();
+    for (policy, expected) in [
+        ("{}", value!({ "channelSharePermissions": null })),
+        (
+            "{ teamShareAccessLevel: null, linkShare: PUBLIC, linkShareAccessLevel: VIEW }",
+            value!({
+                "teamShareAccessLevel": null,
+                "linkShare": "PUBLIC",
+                "linkShareAccessLevel": "view",
+                "channelSharePermissions": null,
+            }),
+        ),
+        (
+            "{ teamShareAccessLevel: EDIT, linkShare: null, linkShareAccessLevel: null }",
+            value!({
+                "teamShareAccessLevel": "edit",
+                "linkShare": null,
+                "linkShareAccessLevel": null,
+                "channelSharePermissions": null,
+            }),
+        ),
+        (
+            "{ linkShare: TEAM, linkShareAccessLevel: COMMENT }",
+            value!({
+                "linkShare": "TEAM",
+                "linkShareAccessLevel": "comment",
+                "channelSharePermissions": null,
+            }),
+        ),
+    ] {
+        let response = schema
+            .execute(format!(
+                r#"{{ convertSharePolicy(input: {{
+                    entity: {{ type: DOCUMENT, id: "document-1" }}
+                    policy: {policy}
+                }}) }}"#,
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(response.data, value!({ "convertSharePolicy": expected }));
+    }
+}
+
 fn share_policy_input(
     link_share: MaybeUndefined<super::GraphqlLinkShare>,
     link_share_access_level: MaybeUndefined<GraphqlEntityAccessLevel>,
@@ -218,6 +321,7 @@ fn share_policy_input(
     super::EntitySharePolicyInput {
         link_share,
         link_share_access_level,
+        team_share_access_level: MaybeUndefined::Undefined,
         channel_share_permissions: None,
     }
 }
@@ -317,6 +421,7 @@ fn share_policy_validation_requires_access_levels_for_channel_grants() {
         policy: super::EntitySharePolicyInput {
             link_share: MaybeUndefined::Undefined,
             link_share_access_level: MaybeUndefined::Undefined,
+            team_share_access_level: MaybeUndefined::Undefined,
             channel_share_permissions: Some(vec![super::ChannelSharePolicyInput {
                 operation: super::GraphqlSharePolicyOperation::Add,
                 channel_id: "channel-1".into(),
