@@ -5,11 +5,9 @@ import {
   QuestionFields,
   type RespondToElicitation,
 } from '@app/features/block-agent/component/parts/LiveElicitation';
-import {
-  EmailDraft,
-  EventDraft,
-} from '@app/features/block-agent/component/parts/UserToolCall';
-import { DRAFT_FIELD } from '@app/features/block-agent/state/elicitation-review-sink';
+import { createElicitationReviewSink } from '@app/features/block-agent/state/elicitation-review-sink';
+import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
+import { EmailDraftComposer } from '@core/component/AI/component/tool/email/DraftComposer';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
@@ -17,7 +15,6 @@ import {
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import CaretRight from '@phosphor/caret-right.svg';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
 import type {
@@ -34,7 +31,6 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
-import { match } from 'ts-pattern';
 import {
   type MagicChipActivity,
   type MagicChipHeader,
@@ -47,18 +43,23 @@ function answerMarkdown(presentation: MagicChipPresentation) {
   return presentation.kind === 'working' ? undefined : presentation.markdown;
 }
 
-/** A press on one of the area's own controls is that control's, not a toggle. */
-function isControl(target: EventTarget | null) {
-  return (
-    target instanceof Element &&
-    target.closest('button, input, textarea, a, label') !== null
-  );
+const TEXT_ENTRY =
+  'input, textarea, [contenteditable]:not([contenteditable="false"])';
+
+const CONTROL = `${TEXT_ENTRY}, button, select, a, label, [role="button"], [role="option"], [role="menuitem"]`;
+
+/**
+ * A press on one of the area's own controls is that control's, not a toggle
+ * of the area (which is itself a button, so the search stops at it).
+ */
+function isControl(target: EventTarget | null, area: Element) {
+  if (!(target instanceof Element) || target === area) return false;
+  const control = target.closest(CONTROL);
+  return control !== null && control !== area && area.contains(control);
 }
 
 function isTextEntry(target: EventTarget | null) {
-  return (
-    target instanceof Element && target.closest('input, textarea') !== null
-  );
+  return target instanceof Element && target.closest(TEXT_ENTRY) !== null;
 }
 
 /** What the chip's answer to a question does. */
@@ -68,8 +69,8 @@ export type MagicChipAnswer = {
   respond: (answer: ElicitationAnswer) => Promise<boolean>;
 };
 
-/** A Macro user tool the agent drafted, awaiting the user's go-ahead. */
-type ReviewedTool = { name: string; data: unknown; draft: unknown };
+/** A Macro user tool the agent drafted, for the tool's own composer. */
+type ReviewedTool = { name: string; data: unknown };
 
 /**
  * The chip's side of a question: the shared live state for a form, URL, or
@@ -90,11 +91,7 @@ function createChipQuestion(asking: MagicChipQuestion): ChipQuestion {
   return call.isOk()
     ? {
         kind: 'user_tool',
-        tool: {
-          name: call.value.name,
-          data: call.value.data,
-          draft: request.draft,
-        },
+        tool: { name: call.value.name, data: call.value.data },
       }
     : createLiveQuestion({ kind: 'form', schema: request.schema });
 }
@@ -148,72 +145,47 @@ const ActivityText: Component<{ activity: MagicChipActivity }> = (props) => (
 
 /**
  * The decisions for a live question, on the row under the area: the refusal
- * first (`Dismiss` for a tool draft, `Decline` for a question), then the
- * go-ahead (`Send email`, `Create event`, `Submit`, `Open`), then the way
- * into the session. The chip sends a tool draft as the agent wrote it;
- * editing it is the session's.
+ * first (`Dismiss` for a tool draft, `Decline` for a question), the go-ahead
+ * for a question (`Submit`, `Open`), then the way into the session. A tool
+ * draft's go-ahead is its composer's own Send or Create, in the area.
  */
 const AskingActions: Component<ChipAsking & { onOpen?: () => void }> = (
   props
-) => {
-  const confirmLabel = (tool: ReviewedTool) =>
-    match(tool.name)
-      .with('CreateCalendarEvent', () => 'Create event')
-      .with('SendEmail', () => 'Send email')
-      .otherwise(() => 'Confirm');
-  const accept = (tool: ReviewedTool) =>
-    void props.respond({
-      action: 'accept',
-      content: { [DRAFT_FIELD]: JSON.stringify(tool.draft ?? {}) },
-    });
-  return (
-    <>
-      <Switch>
-        <Match when={reviewedTool(props.question)}>
-          {(tool) => (
-            <>
-              <Button
-                variant="outline"
-                size="xs"
-                disabled={props.locked}
-                onClick={() => void props.respond({ action: 'decline' })}
-              >
-                Dismiss
-              </Button>
-              <Button
-                variant="cta"
-                size="xs"
-                disabled={props.locked}
-                onClick={() => accept(tool())}
-              >
-                {confirmLabel(tool())}
-              </Button>
-            </>
-          )}
-        </Match>
-        <Match when={liveQuestion(props.question)}>
-          {(question) => (
-            <QuestionActions
-              question={question()}
-              locked={props.locked}
-              onRespond={props.respond}
-              cancel={false}
-              declineFirst
-            />
-          )}
-        </Match>
-      </Switch>
-      <Button
-        variant="ghost"
-        size="xs"
-        disabled={!props.onOpen}
-        onClick={props.onOpen}
-      >
-        Open in session
-      </Button>
-    </>
-  );
-};
+) => (
+  <>
+    <Switch>
+      <Match when={reviewedTool(props.question)}>
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={props.locked}
+          onClick={() => void props.respond({ action: 'decline' })}
+        >
+          Dismiss
+        </Button>
+      </Match>
+      <Match when={liveQuestion(props.question)}>
+        {(question) => (
+          <QuestionActions
+            question={question()}
+            locked={props.locked}
+            onRespond={props.respond}
+            cancel={false}
+            declineFirst
+          />
+        )}
+      </Match>
+    </Switch>
+    <Button
+      variant="ghost"
+      size="xs"
+      disabled={!props.onOpen}
+      onClick={props.onOpen}
+    >
+      Open in session
+    </Button>
+  </>
+);
 
 /**
  * The chip's top row: who is answering (`Macro Agent · model`), what the turn is
@@ -308,57 +280,55 @@ const Passage: Component<{ markdown: string }> = (props) => (
 
 /**
  * The question in the passage's place: the prompt and what is asked - a
- * tool draft summarized read-only, a form's fields, a URL and its host.
+ * Macro user tool's draft in the tool's own composer (the calendar event
+ * form, the email compose), editable in place and sent from there; a form's
+ * fields; a URL and its host. Cropped at the chip's height until expanded.
  */
-const Question: Component<ChipAsking> = (props) => (
-  <div class="flex min-w-0 flex-col gap-2" data-magic-chip-asking>
-    <span class="text-sm leading-5 text-ink wrap-break-word">
-      {props.asking.question.message}
-    </span>
-    <Switch>
-      <Match when={reviewedTool(props.question)}>
-        {(tool) => (
-          <Switch>
-            <Match when={tool().name === 'CreateCalendarEvent'}>
-              <EventDraft event={tool().data as CreateCalendarEvent} />
-            </Match>
-            <Match when={tool().name === 'SendEmail'}>
-              <EmailDraft email={tool().data as SendEmail} inFlight={false} />
-            </Match>
-          </Switch>
-        )}
-      </Match>
-      <Match when={liveQuestion(props.question)}>
-        {(question) => (
-          <QuestionFields question={question()} locked={props.locked} />
-        )}
-      </Match>
-    </Switch>
-  </div>
-);
-
-/**
- * The disclosure cue: `Show more` over the fade, `Show less` under the text.
- * The collapsed cue steps aside while the area is hovered so it never sits
- * on top of the text the hover is inviting you to read.
- */
-const ExpandHint: Component<{ expanded: boolean }> = (props) => (
-  <span
-    class="pointer-events-none flex items-center gap-1 text-xs text-ink-extra-muted transition-opacity motion-reduce:transition-none"
-    classList={{
-      'absolute right-0 bottom-0 pb-0.5 group-hover/answer:opacity-0':
-        !props.expanded,
-      'pt-1 pb-0.5': props.expanded,
-    }}
-    aria-hidden="true"
-  >
-    <CaretRight
-      class="size-3 shrink-0 transition-transform motion-reduce:transition-none"
-      classList={{ 'rotate-90': props.expanded }}
-    />
-    {props.expanded ? 'Show less' : 'Show more'}
-  </span>
-);
+const Question: Component<ChipAsking> = (props) => {
+  const reviewKey = () =>
+    props.asking.question.toolCall ?? String(props.asking.question.requestId);
+  const sink = <T,>() =>
+    createElicitationReviewSink<T>({
+      canAnswer: () => props.asking.canAnswer,
+      ownerName: () => props.asking.ownerName,
+      answering: () => props.locked && props.asking.canAnswer,
+      respond: props.respond,
+    });
+  return (
+    <div class="flex min-w-0 flex-col gap-2" data-magic-chip-asking>
+      <span class="text-sm leading-5 text-ink wrap-break-word">
+        {props.asking.question.message}
+      </span>
+      <Switch>
+        <Match when={reviewedTool(props.question)}>
+          {(tool) => (
+            <Switch>
+              <Match when={tool().name === 'CreateCalendarEvent'}>
+                <CalendarDraftComposer
+                  initialData={tool().data as CreateCalendarEvent}
+                  sink={sink<CreateCalendarEvent>()}
+                  previewKey={reviewKey()}
+                />
+              </Match>
+              <Match when={tool().name === 'SendEmail'}>
+                <EmailDraftComposer
+                  initialData={tool().data as SendEmail}
+                  sink={sink<SendEmail>()}
+                  debugName={`magic-chip-review:${reviewKey()}`}
+                />
+              </Match>
+            </Switch>
+          )}
+        </Match>
+        <Match when={liveQuestion(props.question)}>
+          {(question) => (
+            <QuestionFields question={question()} locked={props.locked} />
+          )}
+        </Match>
+      </Switch>
+    </div>
+  );
+};
 
 /**
  * One card for the whole turn, at one height: a header naming the persona,
@@ -366,7 +336,7 @@ const ExpandHint: Component<{ expanded: boolean }> = (props) => (
  * over an area that holds the agent's latest passage - a pulsing star while
  * the agent is busy before it writes, the passage as it streams, the final
  * passage once the turn ends - or, while the agent waits on a question, the
- * question itself with its decisions on the row beneath. The area is clipped
+ * question itself with its decisions on the row beneath. The area is cropped
  * with a fade; clicking it expands it in place.
  */
 export const MagicChipView: Component<{
@@ -425,8 +395,8 @@ export const MagicChipView: Component<{
   };
 
   // Before there is anything to expand, the whole card leads to the session.
-  const onAreaClick = (event: MouseEvent) => {
-    if (isControl(event.target)) return;
+  const onAreaClick = (event: MouseEvent & { currentTarget: Element }) => {
+    if (isControl(event.target, event.currentTarget)) return;
     if (expandable()) setExpanded((open) => !open);
     else props.onOpen?.();
   };
@@ -453,7 +423,7 @@ export const MagicChipView: Component<{
           role="button"
           tabIndex={0}
           aria-expanded={expandable() ? expanded() : undefined}
-          class="group/answer flex min-w-0 flex-col text-left hover:bg-hover"
+          class="flex min-w-0 flex-col text-left"
           classList={{ 'h-41': !expanded() }}
           data-magic-chip-answer
           onClick={onAreaClick}
@@ -483,21 +453,12 @@ export const MagicChipView: Component<{
             >
               {(current) => <Question {...current()} />}
             </Show>
-            <Show when={expandable()}>
-              <Show
-                when={expanded()}
-                fallback={
-                  <>
-                    <div
-                      class="pointer-events-none absolute inset-x-0 top-1/2 bottom-0 bg-linear-to-b from-transparent via-surface/80 to-surface group-hover/answer:via-hover/80 group-hover/answer:to-hover"
-                      data-magic-chip-fade
-                    />
-                    <ExpandHint expanded={false} />
-                  </>
-                }
-              >
-                <ExpandHint expanded />
-              </Show>
+            {/* Cropped content fades out; expanding shows it whole. */}
+            <Show when={expandable() && !expanded()}>
+              <div
+                class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-surface to-transparent"
+                data-magic-chip-fade
+              />
             </Show>
           </div>
           <Show when={chipAsking()?.asking.canAnswer && chipAsking()}>

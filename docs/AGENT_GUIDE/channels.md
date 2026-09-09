@@ -51,21 +51,21 @@ command · cargo test`, `Waiting for you`, `Done`); clicking the header or its a
 latest passage: a pulsing star while the agent is busy before it writes, the passage as it
 streams, and the final passage once the turn ends - the last text the agent wrote, not the
 whole turn, and a finished turn with nothing said leaves the area empty. The area is
-clipped with a fade over its lower half and a `Show more` cue; hovering tints it, and
-clicking it expands it in place (`Show less` collapses it). Before anything is there to
-expand, clicking the area also opens the session.
+cropped at the chip's height with a fade at its foot; clicking it expands it in place, and
+clicking again collapses it. Before anything is there to expand, clicking the area also
+opens the session.
 
 When the agent stops to ask a question the question takes the area in the passage's
-place, clipped and expandable the same way: the prompt, then what is asked - a form's
+place, cropped and expandable the same way: the prompt, then what is asked - a form's
 fields (choice rows with an accent box, an `Other` row when the agent allows a free-text
 answer, text and number inputs, a yes/no), a URL request's host and address, or a Macro
-user tool's draft (`SendEmail`, `CreateCalendarEvent`) summarized read-only. A row at the
-bottom of the area carries the decisions, refusal first: `Dismiss · Send email · Open in
-session` (or `Create event`) for a tool draft, `Decline · Submit · Open in session` (or
-`Open` for a URL) for a question. Editing or cancelling a draft belongs to the session.
-Only the session's owner gets the decisions; other viewers see the question read-only and
-the header names who is being waited on. Once answered, the area shows the agent's
-passage again.
+user tool's draft (`SendEmail`, `CreateCalendarEvent`) in the tool's own composer - the
+same email compose or calendar event form the session shows, editable in place; expand
+the area to reach its `Send`/`Create`, which answers with the edited draft. A row at the
+bottom of the area carries the other decisions, refusal first: `Dismiss · Open in session`
+for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) for a question.
+Only the session's owner can act; other viewers see the question read-only and the header
+names who is being waited on. Once answered, the area shows the agent's passage again.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention. With GraphQL enabled, document mentions and preview cards load
 in bounded batches, including task status/priority/assignees and the viewer's edit

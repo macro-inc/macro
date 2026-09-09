@@ -56,13 +56,35 @@ function decisions(container: HTMLElement) {
   return container.querySelector('[data-magic-chip-decisions]');
 }
 
-vi.mock('@app/features/block-agent/component/parts/UserToolCall', () => ({
-  EventDraft: (props: { event: { title: string } }) => (
-    <div data-testid="event-draft">{props.event.title}</div>
-  ),
-  EmailDraft: (props: { email: { subject: string } }) => (
-    <div data-testid="email-draft">{props.email.subject}</div>
-  ),
+// The composers are the chat block's real editors over calendar and email
+// queries; the chip's job is to mount the right one and wire its sink, so
+// each stub exposes the sink through two buttons.
+type StubSink = {
+  canAct: () => boolean;
+  onExecute: (args: unknown) => Promise<boolean>;
+  onReject: () => Promise<boolean>;
+};
+function composerStub(kind: string) {
+  return (props: { initialData: unknown; sink: StubSink }) => (
+    <div data-testid={`${kind}-composer`} data-can-act={props.sink.canAct()}>
+      <button
+        type="button"
+        data-testid="composer-execute"
+        onClick={() => void props.sink.onExecute(props.initialData)}
+      />
+      <button
+        type="button"
+        data-testid="composer-reject"
+        onClick={() => void props.sink.onReject()}
+      />
+    </div>
+  );
+}
+vi.mock('@core/component/AI/component/tool/calendar/DraftComposer', () => ({
+  CalendarDraftComposer: composerStub('calendar'),
+}));
+vi.mock('@core/component/AI/component/tool/email/DraftComposer', () => ({
+  EmailDraftComposer: composerStub('email'),
 }));
 
 const respond = vi.fn<(answer: ElicitationAnswer) => Promise<boolean>>();
@@ -170,14 +192,12 @@ describe('MagicChipView', () => {
     expect(area.getAttribute('aria-expanded')).toBe('false');
     expect(area.className).toContain('h-41');
     expect(fade()).toBeTruthy();
-    expect(area.textContent).toContain('Show more');
 
     fireEvent.click(area);
     expect(area.getAttribute('aria-expanded')).toBe('true');
     expect(area.className).not.toContain('h-41');
     expect(clip()?.className).not.toContain('overflow-hidden');
     expect(fade()).toBeNull();
-    expect(area.textContent).toContain('Show less');
     expect(onOpen).not.toHaveBeenCalled();
 
     fireEvent.keyDown(area, { key: 'Enter' });
@@ -185,23 +205,7 @@ describe('MagicChipView', () => {
     expect(area.className).toContain('h-41');
     expect(clip()?.className).toContain('overflow-hidden');
     expect(fade()).toBeTruthy();
-    expect(area.textContent).toContain('Show more');
     expect(onOpen).not.toHaveBeenCalled();
-  });
-
-  it('keeps the disclosure hint out of the reply preview text', () => {
-    const { container } = render(() => (
-      <MagicChipView
-        agentSessionId="session"
-        presentation={{ kind: 'settled', markdown: 'All done' }}
-      />
-    ));
-
-    fireEvent.click(answerArea(container)!);
-    expect(answerArea(container)?.textContent).toContain('Show less');
-    expect(
-      container.querySelector('[data-message-reply-preview]')?.textContent
-    ).toBe('All done');
   });
 
   it('reads Done in the header once the turn settles', () => {
@@ -288,7 +292,7 @@ function decisionLabels(container: HTMLElement) {
 }
 
 describe('MagicChipView reviewing a tool draft', () => {
-  it('shows the draft in the area with Dismiss, the go-ahead, and the session on the row', () => {
+  it('mounts the draft in its composer with Dismiss and the session on the row', () => {
     const view = render(() => (
       <MagicChipView
         agentSessionId="session"
@@ -304,26 +308,27 @@ describe('MagicChipView reviewing a tool draft', () => {
     const body = askingBody(view.container);
     expect(area.contains(body)).toBe(true);
     expect(body?.textContent).toContain('Create calendar event?');
-    expect(view.getByTestId('event-draft').textContent).toBe('Q3 sync');
+    // The tool's own composer, editable in place, with Create as its own.
+    const composer = view.getByTestId('calendar-composer');
+    expect(body?.contains(composer)).toBe(true);
+    expect(composer.dataset.canAct).toBe('true');
 
     expect(decisionLabels(view.container)).toEqual([
       'Dismiss',
-      'Create event',
       'Open in session',
     ]);
     expect(header(view.container)?.textContent).toContain('Waiting for you');
     expect(
-      header(view.container)?.contains(view.getByText('Create event'))
-    ).toBe(false);
-    expect(
       headerLabel(view.container)?.getAttribute('data-message-reply-preview')
     ).toBe('Waiting for you · Create calendar event?');
 
-    fireEvent.click(view.getByText('Create event'));
+    fireEvent.click(view.getByTestId('composer-execute'));
     expect(respond).toHaveBeenCalledWith({
       action: 'accept',
       content: { draft: JSON.stringify(draft) },
     });
+    fireEvent.click(view.getByTestId('composer-reject'));
+    expect(respond).toHaveBeenLastCalledWith({ action: 'decline' });
     fireEvent.click(view.getByText('Dismiss'));
     expect(respond).toHaveBeenLastCalledWith({ action: 'decline' });
     fireEvent.click(view.getByText('Open in session'));
@@ -345,9 +350,9 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(area.getAttribute('aria-expanded')).toBe('false');
     expect(clip()?.className).toContain('overflow-hidden');
     expect(view.container.querySelector('[data-magic-chip-fade]')).toBeTruthy();
-    expect(area.textContent).toContain('Show more');
 
     fireEvent.click(view.getByText('Dismiss'));
+    fireEvent.click(view.getByTestId('composer-execute'));
     expect(area.getAttribute('aria-expanded')).toBe('false');
 
     fireEvent.click(area);
@@ -355,7 +360,6 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(area.className).not.toContain('h-41');
     expect(clip()?.className).not.toContain('overflow-hidden');
     expect(view.container.querySelector('[data-magic-chip-fade]')).toBeNull();
-    expect(area.textContent).toContain('Show less');
     expect(onOpen).not.toHaveBeenCalled();
   });
 
@@ -371,9 +375,10 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(header(view.container)?.textContent).toContain(
       'Waiting for Alice Owner'
     );
-    expect(view.getByTestId('event-draft')).toBeTruthy();
+    // The composer is there to read, but cannot act for a viewer.
+    expect(view.getByTestId('calendar-composer').dataset.canAct).toBe('false');
+    fireEvent.click(view.getByTestId('composer-execute'));
     expect(decisions(view.container)).toBeNull();
-    expect(view.queryByText('Create event')).toBeNull();
     fireEvent.click(view.getByLabelText('Open in session'));
     expect(onOpen).toHaveBeenCalled();
     expect(respond).not.toHaveBeenCalled();
@@ -387,7 +392,8 @@ describe('MagicChipView reviewing a tool draft', () => {
         answer={{ answering: true, respond }}
       />
     ));
-    fireEvent.click(view.getByText('Create event'));
+    expect(view.getByTestId('calendar-composer').dataset.canAct).toBe('false');
+    fireEvent.click(view.getByTestId('composer-execute'));
     fireEvent.click(view.getByText('Dismiss'));
     expect(respond).not.toHaveBeenCalled();
   });
@@ -413,12 +419,12 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(area.getAttribute('aria-expanded')).toBe('true');
 
     setPresentation(asking(true, 'Setting that up.'));
-    expect(view.getByText('Create event')).toBeTruthy();
+    expect(view.getByTestId('calendar-composer')).toBeTruthy();
     expect(view.queryByTestId('chip-markdown')).toBeNull();
     expect(answerArea(view.container)).toBe(area);
 
     setPresentation({ kind: 'settled', markdown: 'Created the event.' });
-    expect(view.queryByText('Create event')).toBeNull();
+    expect(view.queryByTestId('calendar-composer')).toBeNull();
     expect(askingBody(view.container)).toBeNull();
     expect(view.getByText('Created the event.')).toBeTruthy();
     expect(header(view.container)?.textContent).toContain('Done');
