@@ -70,10 +70,7 @@ export function EmailSidebar() {
   });
 
   return (
-    <ViewSidebar.Root
-      aria-label="Email navigation"
-      class="gap-4 pt-2"
-    >
+    <ViewSidebar.Root aria-label="Email navigation" class="gap-4 pt-2">
       <SplitPanel.ControlGroup>
         <SplitPanel.CloseButton />
         <SplitPanel.BackButton />
@@ -85,20 +82,20 @@ export function EmailSidebar() {
       </ViewSidebar.Header>
 
       <ViewSidebar.Content class="flex flex-col gap-6">
-        <Button
-          type="button"
-          variant="ghost"
-          class="h-10 shrink-0 justify-start gap-3 rounded-xl bg-hover px-3 text-ink"
-          onClick={composeEmail}
-        >
-          <ComposeIcon class="size-4 shrink-0" />
-          Compose
-        </Button>
-
         <div class="flex flex-col gap-3">
           <EmailInboxSelector variant="sidebar" />
-          <EmailNavigation />
+          <Button
+            type="button"
+            variant="ghost"
+            class="h-10 shrink-0 justify-start gap-3 rounded-xl bg-hover px-3 text-ink"
+            onClick={composeEmail}
+          >
+            <ComposeIcon class="size-4 shrink-0" />
+            Compose
+          </Button>
         </div>
+
+        <EmailNavigation />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );
