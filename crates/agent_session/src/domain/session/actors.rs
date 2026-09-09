@@ -408,6 +408,16 @@ where
                     });
                 }
                 Effect::TurnEnded { action_id } => {
+                    // The counterpart to `agent.session.disconnect`: a turn
+                    // that ended here reached its stop reason, so a session
+                    // whose last turn has this span and no disconnect after
+                    // it finished cleanly. One per turn.
+                    let _ended = tracing::info_span!(
+                        "agent.session.turn_ended",
+                        agent.session.id = %self.machine.id(),
+                        agent.action.id = %action_id,
+                    )
+                    .entered();
                     tracing::info!(
                         id = %self.machine.id(),
                         %action_id,
@@ -425,16 +435,34 @@ where
                     let _ = token.completed.send(result);
                 }
                 Effect::Stop { reason } => {
+                    // The one place a session's `disconnected` event is
+                    // written. The frame itself carries no cause, so a
+                    // routine idle teardown and a runtime lost mid-turn are
+                    // indistinguishable downstream - in the log, in the
+                    // status projection, and in the composer that reads it.
+                    // Recording the close reason here is what tells them
+                    // apart after the fact.
+                    let span = tracing::info_span!(
+                        "agent.session.disconnect",
+                        agent.session.id = %self.machine.id(),
+                        agent.session.close_reason = %reason,
+                        agent.session.disconnect_persisted = tracing::field::Empty,
+                    );
                     let terminal_log = self.log(
                         None,
                         Message::ToServer(ToServerMessage::Event {
                             event: SystemEvent::Disconnected,
                         }),
                     );
-                    let result = tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, terminal_log).await;
+                    let result = tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, terminal_log)
+                        .instrument(span.clone())
+                        .await;
                     match result {
-                        Ok(Ok(())) => {}
+                        Ok(Ok(())) => {
+                            span.record("agent.session.disconnect_persisted", "yes");
+                        }
                         Ok(Err(error)) => {
+                            span.record("agent.session.disconnect_persisted", "failed");
                             tracing::error!(
                                 error = ?error,
                                 id = %self.machine.id(),
@@ -442,6 +470,7 @@ where
                             );
                         }
                         Err(_) => {
+                            span.record("agent.session.disconnect_persisted", "timed_out");
                             tracing::error!(
                                 id = %self.machine.id(),
                                 "agent session timed out persisting its disconnect"
