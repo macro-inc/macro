@@ -8283,6 +8283,39 @@ export const getEntityPermissionResponse = zod
 /**
  * @summary List the caller's favorites.
  */
+export const listFavoritesQueryParams = zod.object({
+  entityType: zod
+    .array(
+      zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'reminder',
+          'skill',
+          'agent_session',
+        ])
+        .describe('The type of an entity in Macro')
+    )
+    .optional()
+    .describe('Restrict to favorites of these entity types.'),
+  entityId: zod
+    .array(zod.string())
+    .optional()
+    .describe('Restrict to favorites with these entity ids.'),
+});
+
 export const listFavoritesResponse = zod
   .object({
     favorites: zod
@@ -27438,35 +27471,35 @@ export const listRemindersQueryLimitMin = 0;
 
 export const listRemindersQueryParams = zod.object({
   entityType: zod
-    .enum([
-      'user',
-      'chat',
-      'channel',
-      'channel_message',
-      'document',
-      'project',
-      'email_thread',
-      'calendar_event',
-      'team',
-      'call',
-      'foreign_entity',
-      'static_file',
-      'crm_company',
-      'crm_contact',
-      'reminder',
-      'skill',
-      'agent_session',
-    ])
+    .array(
+      zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'reminder',
+          'skill',
+          'agent_session',
+        ])
+        .describe('The type of an entity in Macro')
+    )
     .optional()
-    .describe(
-      'Restrict to reminders attached to this entity type. Requires `entityId`.'
-    ),
+    .describe('Restrict to reminders attached to an entity of these types.'),
   entityId: zod
-    .string()
+    .array(zod.string())
     .optional()
-    .describe(
-      'Restrict to reminders attached to this entity id. Requires `entityType`.'
-    ),
+    .describe('Restrict to reminders attached to these entity ids.'),
   includeCompleted: zod
     .boolean()
     .optional()

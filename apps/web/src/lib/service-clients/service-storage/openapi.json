@@ -8492,6 +8492,56 @@
         "tags": ["favorites"],
         "summary": "List the caller's favorites.",
         "operationId": "list_favorites",
+        "parameters": [
+          {
+            "name": "entityType",
+            "in": "query",
+            "description": "Restrict to favorites of these entity types.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill",
+                  "agent_session"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "description": "Restrict to favorites with these entity ids.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -11067,40 +11117,50 @@
           {
             "name": "entityType",
             "in": "query",
-            "description": "Restrict to reminders attached to this entity type. Requires `entityId`.",
+            "description": "Restrict to reminders attached to an entity of these types.",
             "required": false,
             "schema": {
-              "type": "string",
-              "description": "The type of an entity in Macro",
-              "enum": [
-                "user",
-                "chat",
-                "channel",
-                "channel_message",
-                "document",
-                "project",
-                "email_thread",
-                "calendar_event",
-                "team",
-                "call",
-                "foreign_entity",
-                "static_file",
-                "crm_company",
-                "crm_contact",
-                "reminder",
-                "skill",
-                "agent_session"
-              ]
-            }
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill",
+                  "agent_session"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
           },
           {
             "name": "entityId",
             "in": "query",
-            "description": "Restrict to reminders attached to this entity id. Requires `entityType`.",
+            "description": "Restrict to reminders attached to these entity ids.",
             "required": false,
             "schema": {
-              "type": "string"
-            }
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true
           },
           {
             "name": "includeCompleted",

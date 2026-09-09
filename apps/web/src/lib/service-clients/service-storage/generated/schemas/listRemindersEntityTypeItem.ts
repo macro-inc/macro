@@ -5,11 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListRemindersEntityType =
-  (typeof ListRemindersEntityType)[keyof typeof ListRemindersEntityType];
+/**
+ * The type of an entity in Macro
+ */
+export type ListRemindersEntityTypeItem =
+  (typeof ListRemindersEntityTypeItem)[keyof typeof ListRemindersEntityTypeItem];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ListRemindersEntityType = {
+export const ListRemindersEntityTypeItem = {
   user: 'user',
   chat: 'chat',
   channel: 'channel',
