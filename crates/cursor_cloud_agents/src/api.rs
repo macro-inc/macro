@@ -324,6 +324,7 @@ impl CursorAgents for CursorClient {
         &self,
         prompt: &str,
         repo: Option<&RepoUrl>,
+        open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
     ) -> Result<(CursorAgentId, CursorRunId), rootcause::Report> {
@@ -341,6 +342,9 @@ impl CursorAgents for CursorClient {
                 .unwrap_or_default(),
             model: model.map(ModelSelection::from),
             mcp_servers: mcp_servers.iter().map(McpServerSelection::from).collect(),
+            // A repo-less agent has nothing to open a pull request against,
+            // whatever the caller asked for.
+            auto_create_pr: open_pull_request && repo.is_some(),
         };
         let reply: CreateAgentResponse = self.post_json("/v1/agents", &request).await?;
         tracing::info!(agent = %reply.agent.id, url = %reply.agent.url, "cursor agent created");

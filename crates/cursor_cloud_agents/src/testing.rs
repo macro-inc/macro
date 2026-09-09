@@ -82,9 +82,10 @@ pub fn raw_record(event: CursorEvent) -> NativeRecord {
             status,
             text,
             duration_ms,
+            git,
         } => (
             "result".into(),
-            json!({"runId": run_id, "status": status, "text": text, "durationMs": duration_ms}),
+            json!({"runId": run_id, "status": status, "text": text, "durationMs": duration_ms, "git": git}),
         ),
         CursorEvent::Heartbeat => ("heartbeat".into(), json!({})),
         CursorEvent::Error { code, message } => {
@@ -118,8 +119,14 @@ impl ScriptSender {
 /// What a [`FakeCursor`] was asked to do.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CursorCall {
-    /// `create_agent(prompt, repo, mcp_servers, model)`.
-    CreateAgent(String, Option<RepoUrl>, Vec<McpServer>, Option<ModelChoice>),
+    /// `create_agent(prompt, repo, open_pull_request, mcp_servers, model)`.
+    CreateAgent(
+        String,
+        Option<RepoUrl>,
+        bool,
+        Vec<McpServer>,
+        Option<ModelChoice>,
+    ),
     /// `create_run(agent, prompt, model)`.
     CreateRun(CursorAgentId, String, Option<ModelChoice>),
     /// `cancel_run(agent, run)`.
@@ -296,12 +303,14 @@ impl CursorAgents for FakeCursor {
         &self,
         prompt: &str,
         repo: Option<&RepoUrl>,
+        open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
     ) -> Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         self.record(CursorCall::CreateAgent(
             prompt.to_owned(),
             repo.cloned(),
+            open_pull_request,
             mcp_servers.to_vec(),
             model.cloned(),
         ));
@@ -535,6 +544,7 @@ pub fn script_legacy_history(cursor: &FakeCursor) {
         status: RunStatus::Finished,
         text: None,
         duration_ms: None,
+        git: None,
     })
     .unwrap();
     tx.send(CursorEvent::Done).unwrap();

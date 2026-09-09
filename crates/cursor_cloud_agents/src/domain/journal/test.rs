@@ -29,10 +29,11 @@ fn fake_wire_encoder_matches_recorded_vocabulary() {
         status: RunStatus::Finished,
         text: Some("answer".into()),
         duration_ms: Some(42),
+        git: None,
     });
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&result.data).unwrap(),
-        serde_json::json!({"runId": "r", "status": "FINISHED", "text": "answer", "durationMs": 42})
+        serde_json::json!({"runId": "r", "status": "FINISHED", "text": "answer", "durationMs": 42, "git": null})
     );
 }
 
@@ -170,7 +171,8 @@ fn result_requires_a_known_terminal_status_before_completeness_or_tool_cleanup()
                         run_id: run.clone(),
                         status,
                         text: Some("not final".into()),
-                        duration_ms: None
+                        duration_ms: None,
+                        git: None,
                     }))
                 )
                 .is_err()

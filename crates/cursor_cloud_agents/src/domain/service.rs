@@ -612,8 +612,18 @@ where
                     .expect("session state poisoned")
                     .mcp_servers
                     .clone();
+                // Every repository session opens a pull request for now. The
+                // answer will come from what the prompt asked for once a
+                // classifier can tell; the port already takes it as a decision.
+                let open_pull_request = session.repo.is_some();
                 self.cursor
-                    .create_agent(prompt, session.repo.as_ref(), &mcp_servers, model.as_ref())
+                    .create_agent(
+                        prompt,
+                        session.repo.as_ref(),
+                        open_pull_request,
+                        &mcp_servers,
+                        model.as_ref(),
+                    )
                     .await
                     .map_err(SessionError::from)
             }

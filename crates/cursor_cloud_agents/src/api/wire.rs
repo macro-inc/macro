@@ -172,6 +172,13 @@ pub struct CreateAgentRequest {
     /// empty list.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mcp_servers: Vec<McpServerSelection>,
+    /// Ask Cursor to push its work to a generated branch and open a pull
+    /// request against the starting ref. Cursor spells the field `autoCreatePR`,
+    /// which the struct's camel case would mangle to `autoCreatePr`, so the
+    /// rename is explicit. Omitted when false so a repo-less agent — which has
+    /// nothing to open a pull request against — sends no opinion at all.
+    #[serde(rename = "autoCreatePR", skip_serializing_if = "std::ops::Not::not")]
+    pub auto_create_pr: bool,
 }
 
 /// `POST /v1/agents` response: the agent and its first run together.

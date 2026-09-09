@@ -37,10 +37,18 @@ pub trait CursorAgents: Sync {
     /// `model` absent means "whatever the user's own Cursor settings resolve
     /// to" — Cursor falls back user default, then team, then system — which is
     /// a better default than any id this crate could pick.
+    ///
+    /// `open_pull_request` asks Cursor to push its work to a generated branch
+    /// and open a pull request against the starting ref. It is a caller's
+    /// decision, not a property of the request shape, so it is a parameter:
+    /// today the caller answers "whenever there is a repository", and later a
+    /// classifier will answer from what the prompt actually asked for. It is
+    /// meaningless without a repository.
     fn create_agent(
         &self,
         prompt: &str,
         repo: Option<&RepoUrl>,
+        open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
     ) -> impl Future<Output = Result<(CursorAgentId, CursorRunId), rootcause::Report>> + Send;

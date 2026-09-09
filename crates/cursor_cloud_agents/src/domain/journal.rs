@@ -169,6 +169,7 @@ impl ReplayMachine {
                         status,
                         text,
                         duration_ms: None,
+                        git: None,
                     },
                 )
             }
