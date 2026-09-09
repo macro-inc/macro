@@ -15117,8 +15117,11 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "model-entity",
  "models_permissions",
+ "rootcause",
  "sqlx",
+ "thiserror 2.0.18",
  "tokio",
  "workspace-hack",
 ]

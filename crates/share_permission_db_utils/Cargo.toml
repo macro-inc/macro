@@ -9,8 +9,11 @@ anyhow = { workspace = true }
 entity_access_db_utils = { path = "../entity_access_db_utils" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+model-entity = { path = "../model-entity" }
 models_permissions = { path = "../models_permissions" }
+rootcause = { workspace = true }
 sqlx = { workspace = true }
+thiserror = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
