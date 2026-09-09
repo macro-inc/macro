@@ -197,7 +197,7 @@ export function TasksSidebar() {
     );
 
   return (
-    <ViewSidebar.Root aria-label="Tasks navigation" class="gap-3 bg-panel pt-2">
+    <ViewSidebar.Root aria-label="Tasks navigation" class="gap-4 bg-panel pt-2">
       <div class="flex items-center">
         <SplitPanel.ControlGroup>
           <SplitPanel.CloseButton />

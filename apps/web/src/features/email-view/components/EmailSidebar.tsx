@@ -6,8 +6,8 @@ import { AnimatedSignalIcon } from '@icon/wide-signal';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FileIcon from '@phosphor/file.svg';
+import ComposeIcon from '@phosphor/note-pencil.svg';
 import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { Button } from '@ui';
 import { type Component, For } from 'solid-js';
@@ -72,7 +72,7 @@ export function EmailSidebar() {
   return (
     <ViewSidebar.Root
       aria-label="Email navigation"
-      class="gap-4 border-r-0 pt-2"
+      class="gap-4 pt-2"
     >
       <SplitPanel.ControlGroup>
         <SplitPanel.CloseButton />
@@ -82,21 +82,23 @@ export function EmailSidebar() {
 
       <ViewSidebar.Header>
         <ViewSidebar.Title>Email</ViewSidebar.Title>
-        <Button
-          type="button"
-          variant="cta"
-          size="md"
-          class="rounded-lg px-3"
-          onClick={composeEmail}
-        >
-          <PlusIcon class="size-4 shrink-0" />
-          New
-        </Button>
       </ViewSidebar.Header>
 
-      <ViewSidebar.Content class="flex flex-col gap-3 pt-1">
-        <EmailInboxSelector variant="sidebar" />
-        <EmailNavigation />
+      <ViewSidebar.Content class="flex flex-col gap-6">
+        <Button
+          type="button"
+          variant="ghost"
+          class="h-10 shrink-0 justify-start gap-3 rounded-xl bg-hover px-3 text-ink"
+          onClick={composeEmail}
+        >
+          <ComposeIcon class="size-4 shrink-0" />
+          Compose
+        </Button>
+
+        <div class="flex flex-col gap-3">
+          <EmailInboxSelector variant="sidebar" />
+          <EmailNavigation />
+        </div>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

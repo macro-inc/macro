@@ -88,7 +88,7 @@ export function EmailInboxSelector(props: EmailInboxSelectorProps) {
           class={cn(
             compact()
               ? 'size-8 shrink-0 rounded-full'
-              : 'h-9 w-full min-w-0 justify-start gap-2.5 rounded-xl bg-surface px-3 font-medium',
+              : 'h-10 w-full min-w-0 justify-start gap-2.5 rounded-xl bg-surface px-3 font-medium',
             props.class
           )}
         >
