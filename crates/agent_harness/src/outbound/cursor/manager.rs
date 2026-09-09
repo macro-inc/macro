@@ -572,12 +572,13 @@ where
         &self,
         prompt: &str,
         repo: Option<&CursorRepoUrl>,
+        open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
     ) -> std::result::Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         let (agent, run) = self
             .client
-            .create_agent(prompt, repo, mcp_servers, model)
+            .create_agent(prompt, repo, open_pull_request, mcp_servers, model)
             .await?;
         let summary = self
             .client

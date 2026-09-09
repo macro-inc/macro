@@ -94,6 +94,7 @@ fn finished(run: &str) -> CursorEvent {
         status: RunStatus::Finished,
         text: None,
         duration_ms: Some(1),
+        git: None,
     }
 }
 
@@ -103,6 +104,7 @@ fn cancelled(run: &str) -> CursorEvent {
         status: RunStatus::Cancelled,
         text: None,
         duration_ms: Some(1),
+        git: None,
     }
 }
 
@@ -143,6 +145,7 @@ async fn first_prompt_creates_the_agent_with_the_session_repo() {
         vec![CursorCall::CreateAgent(
             "do it".to_owned(),
             Some(repo),
+            true,
             Vec::new(),
             None
         )]
@@ -553,6 +556,7 @@ async fn a_cancelled_result_reports_cancelled_without_a_client_cancel() {
             status: RunStatus::Cancelled,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -627,6 +631,7 @@ async fn an_error_run_status_fails_the_turn() {
             status: RunStatus::Error,
             text: None,
             duration_ms: Some(1),
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -658,6 +663,7 @@ async fn an_unknown_terminal_status_fails_the_turn() {
             status: RunStatus::Unknown("EXPLODED".to_owned()),
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -754,6 +760,7 @@ async fn a_cancelled_run_reports_cancelled_from_its_result() {
             status: RunStatus::Cancelled,
             text: None,
             duration_ms: Some(1),
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -795,6 +802,7 @@ async fn session_mcp_servers_reach_agent_creation() {
         vec![CursorCall::CreateAgent(
             "go".to_owned(),
             None,
+            false,
             servers,
             None
         )]
@@ -818,6 +826,7 @@ async fn a_session_without_mcp_servers_forwards_none() {
         vec![CursorCall::CreateAgent(
             "go".to_owned(),
             None,
+            false,
             Vec::new(),
             None
         )]
