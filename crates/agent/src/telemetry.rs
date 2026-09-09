@@ -193,6 +193,10 @@ impl GenAiContext {
     /// `detail` the message, which is recorded bounded when content may be
     /// captured and left out otherwise - a provider's error text can quote the
     /// request.
+    ///
+    /// A model call still in flight - its `chat` span parked, its turn hook
+    /// never to fire - failed the same way: the span is marked and released,
+    /// so a failed call never reads as a successful one with no response.
     pub(crate) fn record_agent_failure(
         &self,
         agent_span: &tracing::Span,
@@ -203,20 +207,29 @@ impl GenAiContext {
         if !self.0.enabled {
             return;
         }
-        agent_span.set_str_array(attr::RESPONSE_FINISH_REASONS, [finish_reason]);
         let description = if self.0.policy.capture {
             genai_telemetry::truncate_chars(detail, self.0.policy.limits.max_part_chars)
                 .into_owned()
         } else {
             format!("the agent run ended with {error_type}")
         };
-        agent_span.set_error(error_type, description);
+        agent_span.set_str_array(attr::RESPONSE_FINISH_REASONS, [finish_reason]);
+        agent_span.set_error(error_type, description.clone());
+        if let Some(chat_span) = self
+            .0
+            .chat_span
+            .lock()
+            .expect("chat span slot poisoned")
+            .take()
+        {
+            chat_span.set_str_array(attr::RESPONSE_FINISH_REASONS, [finish_reason]);
+            chat_span.set_error(error_type, description);
+        }
     }
 
     /// Release the parked `chat` span, if any, so it closes now. Called when
-    /// a run ends on a path that fires no turn hook - a provider error, a
-    /// cancellation, exhausted invalid-tool retries, the consumer dropping the
-    /// stream - and a no-op when the hook already released it.
+    /// a run ends without its turn hook firing and without a recorded failure;
+    /// a no-op when the hook (or `record_agent_failure`) already released it.
     pub(crate) fn finish_run(&self) {
         self.0
             .chat_span

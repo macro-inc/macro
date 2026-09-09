@@ -363,6 +363,26 @@ async fn a_provider_error_marks_the_agent_span_failed() {
         string_array_attribute(agent, attr::RESPONSE_FINISH_REASONS),
         Some(vec!["error".to_string()])
     );
+
+    // The model call that was in flight failed the same way: its span carries
+    // the request, the failure, and no output.
+    let chats = spans_with_operation(&spans, attr::operation::CHAT);
+    assert_eq!(chats.len(), 1, "{}", describe(&spans));
+    let chat = chats[0];
+    assert!(
+        matches!(chat.status, opentelemetry::trace::Status::Error { .. }),
+        "{chat:#?}"
+    );
+    assert_eq!(
+        string_attribute(chat, attr::ERROR_TYPE).as_deref(),
+        Some("streaming_error")
+    );
+    assert_eq!(
+        string_array_attribute(chat, attr::RESPONSE_FINISH_REASONS),
+        Some(vec!["error".to_string()])
+    );
+    assert!(string_attribute(chat, attr::INPUT_MESSAGES).is_some());
+    assert_eq!(string_attribute(chat, attr::OUTPUT_MESSAGES), None);
 }
 
 /// A tool that never returns, so a run can be abandoned mid-flight.
