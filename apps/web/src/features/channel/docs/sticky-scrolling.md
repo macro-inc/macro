@@ -51,6 +51,12 @@ Viewport and inset changes explicitly scroll to the end only if previously pinne
 The offset observer distinguishes instant programmatic scrolls from user scrolling,
 so iOS does not replay deferred momentum adjustments after a navigation has already
 accounted for those measurements. Actual touch/momentum deferral remains in the core.
+That deferral holds while a finger is on the list. iOS ends a touch that turns into
+a scroll, or that the OS takes over, with `touchcancel` rather than `touchend`;
+`@tanstack/virtual-core` only released on `touchend`, so one such touch left every
+later end correction deferred and a longer sent message lost the pin for good.
+The patch in `apps/web/patches` releases on `touchcancel` too; drop it once upstream
+does the same.
 
 Message IDs also key Solid's rendered components, preserving editors and expanded
 threads across pagination. `Key` owns each row's virtual-item accessor; a shared
