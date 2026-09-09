@@ -1,15 +1,6 @@
 // @vitest-environment jsdom
-import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import { resolveSearchHighlightRanges } from './searchHighlightTarget';
-
-if (typeof globalThis.document === 'undefined') {
-  const dom = new JSDOM('<!doctype html><html><body></body></html>');
-  globalThis.document = dom.window.document;
-  globalThis.HTMLElement = dom.window.HTMLElement;
-  globalThis.Node = dom.window.Node;
-  globalThis.NodeFilter = dom.window.NodeFilter;
-}
 
 function mentionChip(title: string, collapsed = false): HTMLElement {
   const root = document.createElement('span');
