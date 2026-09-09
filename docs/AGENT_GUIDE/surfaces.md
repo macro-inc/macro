@@ -135,7 +135,8 @@ button.
 Once the heatmap card scrolls away, the day header for the topmost visible row stays pinned at
 the top of the list (`[data-activity-pinned-day]`, a non-interactive copy), so a snapshot taken
 mid-scroll shows that label twice at most. The heatmap always shows the whole year, including
-the partial first and current weeks: its cells shrink from 12px to 8px as the pane narrows, and
+the partial first and current weeks, and spans the card at every width: in a wide pane the
+space between week columns opens up, its cells shrink from 14px to 8px as the pane narrows, and
 below that (a phone) the week area scrolls sideways with the month letters, opened on the newest
 week and with no visible scrollbar. Under ~672px the four stats read as a two-column grid; under
 ~448px (a phone) the legend drops its `Fewer`/`More` words, each stat stacks its label over its

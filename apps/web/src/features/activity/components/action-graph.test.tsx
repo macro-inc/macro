@@ -56,15 +56,14 @@ describe('ActionGraph', () => {
     ).toHaveLength(53);
   });
 
-  it('takes the full cell size in a wide pane', () => {
-    layout.weekAreaPx = 900;
+  it('takes the full cell size in a wide pane and spans it with the seams', () => {
+    layout.weekAreaPx = 1002;
     const { container } = render(() => <ActionGraph overview={overview} />);
-    expect(heatmapStyle(container).getPropertyValue('--heatmap-cell')).toBe(
-      '12px'
-    );
-    expect(heatmapStyle(container).getPropertyValue('--heatmap-gap')).toBe(
-      '3px'
-    );
+    const style = heatmapStyle(container);
+    expect(style.getPropertyValue('--heatmap-cell')).toBe('14px');
+    expect(style.getPropertyValue('--heatmap-gap')).toBe('3px');
+    // (1002 - 53 * 14) / 52 = 5px between the week columns.
+    expect(style.getPropertyValue('--heatmap-column-gap')).toBe('5px');
   });
 
   it('shrinks the cells in a narrow pane and keeps every week', () => {
@@ -77,6 +76,9 @@ describe('ActionGraph', () => {
     expect(heatmapStyle(container).getPropertyValue('--heatmap-gap')).toBe(
       '2px'
     );
+    expect(
+      heatmapStyle(container).getPropertyValue('--heatmap-column-gap')
+    ).toBe('2px');
   });
 
   it('renders the skeleton with the same columns and no numbers', () => {

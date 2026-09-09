@@ -36,9 +36,15 @@ export type ContributionGrid = {
 export type HeatmapGeometry = {
   /** Edge of one day cell. */
   cell: number;
-  /** Between day cells and between week columns. */
+  /** Between the day cells of a week (the row gap). */
   gap: number;
-  /** `columns * cell + (columns - 1) * gap`. */
+  /**
+   * Between week columns. Equal to `gap` unless the pane is wider than the
+   * year at the largest cell, when the leftover is spread here so the board
+   * still spans the card.
+   */
+  columnGap: number;
+  /** `columns * cell + (columns - 1) * columnGap`. */
   width: number;
   /** `7 * cell + 6 * gap`. */
   height: number;
@@ -47,7 +53,7 @@ export type HeatmapGeometry = {
 };
 
 /** Cell edge when the pane has room. */
-export const HEATMAP_MAX_CELL = 12;
+export const HEATMAP_MAX_CELL = 14;
 /** Cell edge below which the area scrolls instead of shrinking further. */
 export const HEATMAP_MIN_CELL = 8;
 
@@ -70,21 +76,31 @@ function geometry(
   columns: number,
   measuredWidth: number | null
 ): HeatmapGeometry {
-  const width = columns * cell + Math.max(0, columns - 1) * gap;
+  const seams = Math.max(0, columns - 1);
+  const natural = columns * cell + seams * gap;
+  const overflows = measuredWidth !== null && natural > measuredWidth;
+  // Leftover width (a wide pane, or rounding the cell down) opens the seams
+  // between columns so the last week sits at the card's right edge.
+  const columnGap =
+    measuredWidth === null || overflows || seams === 0
+      ? gap
+      : (measuredWidth - columns * cell) / seams;
   return {
     cell,
     gap,
-    width,
+    columnGap,
+    width: columns * cell + seams * columnGap,
     height: 7 * cell + 6 * gap,
-    overflows: measuredWidth !== null && width > measuredWidth,
+    overflows,
   };
 }
 
 /**
- * Size the year to the pane. Cells are 12px with 3px gaps when they fit,
- * shrink to 10px at that gap, then to 8px at 2px gaps, and below that the
- * area scrolls sideways at 8px. Unmeasured (`null`) or empty grids take the
- * full size so the first paint has the final shape at a wide pane.
+ * Size the year to the pane. Cells are up to 14px at 3px row gaps, with any
+ * width beyond that spread between the columns so the board spans the card;
+ * they shrink to 10px at that gap, then to 8px at 2px gaps, and below that
+ * the area scrolls sideways at 8px. Unmeasured (`null`) or empty grids take
+ * the full cell so the first paint has the final shape at a wide pane.
  */
 export function heatmapGeometry(
   measuredWidth: number | null,
@@ -127,7 +143,7 @@ export function weeksFromEnd(
   area: ScrollExtent,
   geometry: HeatmapGeometry
 ): number {
-  const pitch = geometry.cell + geometry.gap;
+  const pitch = geometry.cell + geometry.columnGap;
   return Math.max(
     0,
     (area.scrollWidth - area.clientWidth - area.scrollLeft) / pitch
@@ -140,7 +156,7 @@ export function scrollLeftAtWeeksFromEnd(
   area: Pick<ScrollExtent, 'scrollWidth' | 'clientWidth'>,
   geometry: HeatmapGeometry
 ): number {
-  const pitch = geometry.cell + geometry.gap;
+  const pitch = geometry.cell + geometry.columnGap;
   return Math.max(0, area.scrollWidth - area.clientWidth - weeks * pitch);
 }
 

@@ -38,6 +38,7 @@ const WEEKDAY_LABELS = ['', 'M', '', 'W', '', 'F', ''];
 const CELL_CLASS = 'size-(--heatmap-cell)';
 const COLUMN_CLASS = 'w-(--heatmap-cell)';
 const GAP_CLASS = 'gap-(--heatmap-gap)';
+const COLUMN_GAP_CLASS = 'gap-(--heatmap-column-gap)';
 const MONTH_ROW_CLASS = 'mb-1 h-3';
 
 function dateLabel(date: string): string {
@@ -72,9 +73,11 @@ function dayStat(date: string | null): string {
  * the numbers and day cells. Pass a `placeholderOverview` so the geometry
  * matches the card that replaces it.
  *
- * The whole year is always on the board. Cells shrink with the pane down to
- * `HEATMAP_MIN_CELL`, and below that the week area scrolls sideways, opened
- * on the newest week. The geometry comes from measuring the week area.
+ * The whole year is always on the board and spans the card: in a wide pane
+ * the leftover width opens the seams between weeks, cells shrink with the
+ * pane down to `HEATMAP_MIN_CELL`, and below that the week area scrolls
+ * sideways, opened on the newest week. The geometry comes from measuring
+ * the week area.
  */
 export function ActionGraph(props: {
   overview: ActivityOverview;
@@ -226,6 +229,7 @@ function ContributionHeatmap(props: {
       style={{
         '--heatmap-cell': `${props.geometry.cell}px`,
         '--heatmap-gap': `${props.geometry.gap}px`,
+        '--heatmap-column-gap': `${props.geometry.columnGap}px`,
       }}
       data-activity-heatmap
     >
@@ -239,7 +243,7 @@ function ContributionHeatmap(props: {
         onScroll={rememberPan}
         data-activity-heatmap-weeks
       >
-        <div class={cn('flex w-max', GAP_CLASS)}>
+        <div class={cn('flex w-max', COLUMN_GAP_CLASS)}>
           <For each={props.weeks}>
             {(week, index) => (
               <HeatmapWeek

@@ -149,35 +149,35 @@ describe('heatmapGeometry', () => {
     expect(heatmapGeometry(null, columns)).toEqual({
       cell: HEATMAP_MAX_CELL,
       gap: 3,
-      width: 53 * 12 + 52 * 3,
-      height: 7 * 12 + 6 * 3,
+      columnGap: 3,
+      width: 53 * 14 + 52 * 3,
+      height: 7 * 14 + 6 * 3,
       overflows: false,
     });
   });
 
-  it('caps the cell at the full size in a wide pane', () => {
-    const wide = heatmapGeometry(1000, columns);
-    expect(wide).toMatchObject({ cell: 12, gap: 3, overflows: false });
-    expect(wide.width).toBe(792);
-    expect(wide.height).toBe(102);
+  it('caps the cell in a wide pane and opens the seams so the year spans it', () => {
+    const wide = heatmapGeometry(1002, columns);
+    expect(wide).toMatchObject({ cell: 14, gap: 3, overflows: false });
+    // (1002 - 53 * 14) / 52 = 5px between columns; rows keep the 3px gap.
+    expect(wide.columnGap).toBe(5);
+    expect(wide.width).toBe(1002);
+    expect(wide.height).toBe(7 * 14 + 6 * 3);
   });
 
-  it('shrinks the cell at the wide gap while ten pixels still fit', () => {
-    // 53 * 11 + 52 * 3 = 739.
-    expect(heatmapGeometry(740, columns)).toMatchObject({
-      cell: 11,
-      gap: 3,
-      width: 739,
-      overflows: false,
-    });
+  it('spreads the rounding remainder so a fitted pane is spanned exactly', () => {
+    // 53 * 11 + 52 * 3 = 739 fits in 745; the 6px remainder opens the seams.
+    const fitted = heatmapGeometry(745, columns);
+    expect(fitted).toMatchObject({ cell: 11, gap: 3, overflows: false });
+    expect(fitted.columnGap).toBeCloseTo(3 + 6 / 52);
+    expect(fitted.width).toBeCloseTo(745);
   });
 
   it('tightens the gap once the cell would fall under ten pixels', () => {
-    // At gap 3, 640 fits a 9px cell; at gap 2 it fits 10, capped to 9: 53 * 9 + 52 * 2 = 581.
+    // At gap 3, 640 fits a 9px cell; at gap 2 it fits 10, capped to 9.
     expect(heatmapGeometry(640, columns)).toMatchObject({
       cell: 9,
       gap: 2,
-      width: 581,
       height: 75,
       overflows: false,
     });
@@ -188,12 +188,15 @@ describe('heatmapGeometry', () => {
     expect(heatmapGeometry(528, columns)).toMatchObject({
       cell: HEATMAP_MIN_CELL,
       gap: 2,
+      columnGap: 2,
       width: 528,
       overflows: false,
     });
+    // Overflowing keeps the natural seams: the area scrolls instead.
     expect(heatmapGeometry(336, columns)).toMatchObject({
       cell: HEATMAP_MIN_CELL,
       gap: 2,
+      columnGap: 2,
       width: 528,
       height: 68,
       overflows: true,
@@ -222,7 +225,7 @@ describe('week-anchored scroll position', () => {
   });
 
   it('counts panned distance in week columns, not pixels', () => {
-    const pitch = phone.cell + phone.gap;
+    const pitch = phone.cell + phone.columnGap;
     const atEnd = area.scrollWidth - area.clientWidth;
     expect(
       weeksFromEnd({ ...area, scrollLeft: atEnd - 12 * pitch }, phone)
@@ -237,7 +240,7 @@ describe('week-anchored scroll position', () => {
   });
 
   it('lands on the same weeks after the pane changes size', () => {
-    const pitch = phone.cell + phone.gap;
+    const pitch = phone.cell + phone.columnGap;
     const panned = {
       ...area,
       scrollLeft: area.scrollWidth - area.clientWidth - 8 * pitch,
