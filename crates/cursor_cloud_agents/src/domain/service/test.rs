@@ -2518,3 +2518,41 @@ async fn actual_load_frames_restore_terminal_outcomes_and_leave_partial_tail_ope
         }
     }
 }
+
+/// A repository the Cursor account has not connected is the one rejection a
+/// person can fix, and they can only fix it if the error says which
+/// repository and what to do — not Cursor's raw error body.
+#[tokio::test]
+async fn an_unconnected_repository_reaches_the_client_as_an_instruction() {
+    let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("an https remote");
+    let (service, cursor, _output) = service(Some(repo));
+    let id = service.new_session(Path::new(""), vec![]);
+    cursor.script_repository_rejection();
+
+    let error = service
+        .prompt(&id, "do the thing")
+        .await
+        .expect_err("an unconnected repository fails the prompt");
+
+    // What `inbound::acp` puts in the JSON-RPC error, verbatim.
+    assert_eq!(
+        error.to_string(),
+        "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again."
+    );
+    assert!(
+        !error.to_string().contains("repository_access"),
+        "cursor's own body stays in the logs: {error}"
+    );
+    assert!(
+        service
+            .session(&id)
+            .expect("session exists")
+            .state
+            .lock()
+            .expect("state poisoned")
+            .journal_entries
+            .iter()
+            .any(|entry| matches!(entry.input, JournalInput::PromptAborted(_))),
+        "a rejected prompt is journalled as aborted"
+    );
+}
