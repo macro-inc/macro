@@ -4,7 +4,14 @@ import {
   hasImageAttachmentFilter,
   hasPdfAttachmentFilter,
 } from '@app/features/next-soup/filters/predicates';
-import { clause, type Facet, type FacetOption } from '@app/features/soup';
+import {
+  clause,
+  type Facet,
+  type FacetOption,
+  TAG_FACET_ID,
+  type TagFacetContext,
+  tagFacetOption,
+} from '@app/features/soup';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
 import type { EmailEntity, EntityData } from '@entity';
 import type { EmailFilterGroupId, EmailFilterOptionId } from '../types';
@@ -15,7 +22,11 @@ type EmailFilterOption = {
   iconType?: EntityIconSelector;
 };
 
-type EmailFacetOption = FacetOption<EmailEntity, undefined> & EmailFilterOption;
+/** Tags are the one facet whose options come from data rather than a list. */
+export type EmailFacetContext = TagFacetContext;
+
+type EmailFacetOption = FacetOption<EmailEntity, EmailFacetContext> &
+  EmailFilterOption;
 
 function readOption(
   id: EmailFilterOptionId,
@@ -90,11 +101,17 @@ const EMAIL_CALENDAR_OPTIONS: EmailFacetOption[] = [
   },
 ];
 
-export const EMAIL_FACETS: Facet<EmailEntity, undefined, EmailFacetOption>[] = [
+export const EMAIL_FACETS: Facet<EmailEntity, EmailFacetContext>[] = [
   { id: 'read', mode: 'or', options: EMAIL_READ_OPTIONS },
   { id: 'done', mode: 'or', options: EMAIL_DONE_OPTIONS },
   { id: 'attachments', mode: 'or', options: EMAIL_ATTACHMENT_OPTIONS },
   { id: 'calendar', mode: 'or', options: EMAIL_CALENDAR_OPTIONS },
+  {
+    id: TAG_FACET_ID,
+    mode: 'or',
+    options: (optionId, context) =>
+      tagFacetOption<EmailEntity>(optionId, context),
+  },
 ];
 
 type EmailFilterGroup = {

@@ -3,11 +3,13 @@ import {
   buildFlatSoupRows,
   buildGroupedSoupRows,
   createSearchState,
+  createTagFacetContext,
   deduplicateSoupEntities,
   isSoupRowVisible,
   type SoupGroup,
   type SoupRow,
   sortItems,
+  tagFacetReady,
   useSearchContext,
 } from '@app/features/soup';
 import {
@@ -58,23 +60,11 @@ export function useTasksDataSource(
   state: TasksDataSourceInput,
   options: UseTasksDataSourceOptions
 ): TasksDataSource {
-  const facetContext = createMemo((): TaskFacetContext => {
-    const tagPropertyDefinitionByOptionId = new Map<string, string>();
-    for (const set of options.tagSets()) {
-      for (const option of set.options) {
-        tagPropertyDefinitionByOptionId.set(
-          option.id,
-          option.propertyDefinitionId
-        );
-      }
-    }
-    return { tagPropertyDefinitionByOptionId };
-  });
+  const facetContext = createMemo(
+    (): TaskFacetContext => createTagFacetContext(options.tagSets())
+  );
 
-  const facetOptionsReady = () =>
-    (state.facets.tags ?? []).every((id) =>
-      facetContext().tagPropertyDefinitionByOptionId.has(id)
-    );
+  const facetOptionsReady = () => tagFacetReady(state.facets, facetContext());
 
   const queryArgs = () =>
     buildTaskQuery({

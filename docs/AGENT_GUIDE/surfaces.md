@@ -49,10 +49,13 @@ With the new app views enabled, mobile and tablet Email use a floating, horizont
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the
 view is the email list, which scrolls beneath the header and supports pull to refresh
 and swiping left to mark emails done in Signal and Noise. The filter button opens a
-bottom drawer for status, done, attachment and calendar filters, plus the inbox
+bottom drawer for status, done, attachment, calendar and tag filters, plus the inbox
 selector when available. `Clear all`
 resets those filters and the inbox selection. Desktop keeps its sidebar, search field,
-filter menu and preview control.
+filter menu and preview control. The desktop sidebar ends with a collapsible `Tags`
+section (every personal and team tag, plus a `New tag` button): clicking a tag opens the
+`All` tab filtered to threads carrying it, clicking it again clears it, and choosing any
+tab clears it like the other filters.
 
 ## Search
 

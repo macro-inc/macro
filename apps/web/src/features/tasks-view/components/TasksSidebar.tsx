@@ -3,7 +3,6 @@ import {
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
-import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -11,6 +10,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import NoteIcon from '@phosphor/note-pencil.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import UsersIcon from '@phosphor/users-three.svg';
+import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button } from '@ui';
 import { For } from 'solid-js';
@@ -66,16 +66,10 @@ function Tab(props: {
 }
 
 export function TasksNavigation(props: { onNavigate?: () => void }) {
-  const { state, setState } = useTasksView();
+  const { state, setFacets, isSidebarSectionOpen, setSidebarSectionOpen } =
+    useTasksView();
   const team = useCurrentTeamQuery();
   const teamName = () => team.data?.team.name ?? 'Team';
-  const isTeamExpanded = () =>
-    !state.collapsedSidebarSectionIds.includes('team');
-  const setTeamExpanded = (expanded: boolean) =>
-    setState(
-      'collapsedSidebarSectionIds',
-      expanded ? removeValue('team') : addUnique('team')
-    );
 
   return (
     <div class="flex flex-col gap-3">
@@ -86,8 +80,8 @@ export function TasksNavigation(props: { onNavigate?: () => void }) {
       </ViewSidebar.Nav>
 
       <CollapsibleSection.Root
-        open={isTeamExpanded()}
-        onOpenChange={setTeamExpanded}
+        open={isSidebarSectionOpen('team')}
+        onOpenChange={(open) => setSidebarSectionOpen('team', open)}
       >
         <CollapsibleSection.Trigger>
           <UsersIcon aria-hidden="true" class="size-4 shrink-0" />
@@ -108,6 +102,15 @@ export function TasksNavigation(props: { onNavigate?: () => void }) {
           </ViewSidebar.Nav>
         </CollapsibleSection.Content>
       </CollapsibleSection.Root>
+
+      {/* Tags narrow the current tab; switching tabs clears them like any facet. */}
+      <SidebarTagsSection
+        activeIds={state.facets.tags ?? []}
+        onActiveIdsChange={(ids) => setFacets({ ...state.facets, tags: ids })}
+        open={isSidebarSectionOpen('tags')}
+        onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
+        onNavigate={props.onNavigate}
+      />
     </div>
   );
 }

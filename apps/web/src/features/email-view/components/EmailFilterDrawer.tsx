@@ -28,9 +28,9 @@ export function EmailFilterDrawer() {
       <div class="px-3 pb-3 empty:hidden">
         <EmailInboxSelector />
       </div>
-      <Accordion multiple collapsible defaultValue={[filters.groups[0].id]}>
+      <Accordion multiple collapsible defaultValue={[filters.groups()[0].id]}>
         <div class="flex flex-col gap-3">
-          <For each={filters.groups}>
+          <For each={filters.groups()}>
             {(group) => (
               <MobileFilterDrawer.Section
                 value={group.id}

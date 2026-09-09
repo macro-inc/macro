@@ -4,7 +4,9 @@ import {
   buildGroupedSoupRows,
   createSearchState,
   createSoupLoadMoreRow,
+  createTagFacetContext,
   type SoupRow,
+  tagFacetReady,
   testFacets,
 } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -17,9 +19,10 @@ import {
   type WithNotification,
 } from '@entity';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
-import { createMemo } from 'solid-js';
+import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
+import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
-import { EMAIL_FACETS } from '../filters/email-facets';
+import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
 import type { EmailTab, EmailViewState } from '../types';
 import { buildEmailQuery, type EmailQueryContext } from './email-query';
 import { groupEmailEntitiesByDate } from './email-results';
@@ -33,6 +36,14 @@ export type EmailDataSourceInput = Pick<
   EmailViewState,
   'tab' | 'search' | 'inboxIds' | 'facets'
 >;
+
+export type UseEmailDataSourceOptions = {
+  /**
+   * Read by the caller, not here: the source runs under the split panel's
+   * owner, above the view's tag-sets provider.
+   */
+  tagSets: Accessor<readonly TagSetResponse[]>;
+};
 
 /**
  * The server owns importance, calendar, sent and inbox scoping, so — as with
@@ -59,21 +70,31 @@ type AdmittedEmails = {
 
 /** Query, service search, and row assembly owned by the Email view. */
 export function useEmailDataSource(
-  state: EmailDataSourceInput
+  state: EmailDataSourceInput,
+  options: UseEmailDataSourceOptions
 ): EmailDataSource {
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
+
+  const facetContext = createMemo(
+    (): EmailFacetContext => createTagFacetContext(options.tagSets())
+  );
 
   const queryContext = createMemo(
     (): EmailQueryContext => ({
       tab: state.tab,
       inboxIds: state.inboxIds === undefined ? undefined : [...state.inboxIds],
       facets: state.facets,
+      facetContext: facetContext(),
     })
   );
 
   const queryArgs = createMemo(() => buildEmailQuery(queryContext()));
-  const query = useSoupAstItemsQuery(queryArgs);
+  // A restored tag selection waits for the tag sets rather than listing the
+  // whole mailbox and then narrowing.
+  const query = useSoupAstItemsQuery(queryArgs, () => ({
+    enabled: tagFacetReady(state.facets, facetContext()),
+  }));
 
   const selectEmails = (entities: EntityData[]): EmailEntity[] => {
     const context = queryContext();
@@ -129,7 +150,7 @@ export function useEmailDataSource(
       ].join('|');
       const selection = { ...context.facets, read: [] };
       const matchesOtherFacets = (email: EmailEntity) =>
-        testFacets(selection, EMAIL_FACETS, email, undefined);
+        testFacets(selection, EMAIL_FACETS, email, context.facetContext);
 
       // Without a read filter there is nothing to admit, so no ids are kept.
       if (activeRead.length === 0) {
@@ -146,7 +167,9 @@ export function useEmailDataSource(
           : new Set<string>();
       const readSelection = { read: activeRead };
       for (const email of emails) {
-        if (testFacets(readSelection, EMAIL_FACETS, email, undefined)) {
+        if (
+          testFacets(readSelection, EMAIL_FACETS, email, context.facetContext)
+        ) {
           admittedIds.add(email.id);
         }
       }
