@@ -364,6 +364,12 @@ returns the existing `UserToolResponse` envelope; chat still receives
 `PendingUserExecution` and finishes through its composer endpoint. The agent-loop
 finisher and neutral `UserToolReviewer` abstraction have been removed.
 
+External email reviews show To, Subject, and Body, plus populated Cc/Bcc and explicit
+reply/signature settings. Addresses are edited as comma-separated text. Inmem
+advertises `experimental["macro/composer"]` to Macro MCP when it supports forms;
+that opts into the full-draft fields used by the web composer. External email
+forms omit the JSON draft and body encoding controls.
+
 Forms use standard MCP primitive fields, projected from the draft with defaults.
 The optional string `draft` accepts the complete edited arguments as JSON, allowing
 nested recipients and other complex arguments without a private schema type.

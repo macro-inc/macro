@@ -50,6 +50,115 @@ pub(super) fn project_form(
         .map_err(|error| error.to_string())
 }
 
+/// External email clients get editable address lists and the message, without
+/// the private composer's transport fields. Explicit reply/signature choices
+/// remain visible so the user can review them.
+pub(super) fn email_form(draft: &Value) -> Result<ElicitationSchema, String> {
+    let mut properties = Map::new();
+    for (name, title, description) in [
+        ("to", "To", "Email addresses, separated by commas."),
+        ("cc", "Cc", "Email addresses, separated by commas."),
+        ("bcc", "Bcc", "Email addresses, separated by commas."),
+    ] {
+        let recipients = draft.get(name).and_then(Value::as_array);
+        if name != "to" && recipients.is_none_or(Vec::is_empty) {
+            continue;
+        }
+        let addresses = recipients
+            .into_iter()
+            .flatten()
+            .filter_map(|recipient| recipient.get("email").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join(", ");
+        properties.insert(
+            name.into(),
+            json!({"type":"string", "title":title,
+            "description":description, "default":addresses}),
+        );
+    }
+    for (name, title, description, kind) in [
+        ("subject", "Subject", "Email subject.", "string"),
+        (
+            "body",
+            "Body",
+            "Email message (Markdown supported).",
+            "string",
+        ),
+        (
+            "replyingToId",
+            "Reply to message",
+            "Message ID this email replies to.",
+            "string",
+        ),
+        (
+            "includeSignature",
+            "Include signature",
+            "Include your email signature.",
+            "boolean",
+        ),
+    ] {
+        let value = draft.get(name).filter(|value| !value.is_null());
+        if value.is_none() && !["subject", "body"].contains(&name) {
+            continue;
+        }
+        let mut field = json!({"type":kind,"title":title,"description":description});
+        if let Some(value) = value {
+            field["default"] = value.clone();
+        }
+        properties.insert(name.into(), field);
+    }
+    serde_json::from_value(json!({"type":"object","properties":properties}))
+        .map_err(|error| error.to_string())
+}
+
+/// Turn plain address edits back into tool recipients. Keep display names for
+/// unchanged addresses; never interpret a malformed address as the old value.
+fn email_recipient_edits(draft: &Value, content: &mut Map<String, Value>) -> Result<(), String> {
+    for name in ["to", "cc", "bcc"] {
+        let Some(value) = content.get(name) else {
+            continue;
+        };
+        let text = value
+            .as_str()
+            .ok_or("recipient fields must be comma-separated email addresses")?;
+        let mut recipients = Vec::new();
+        for address in text
+            .split(',')
+            .map(str::trim)
+            .filter(|address| !address.is_empty())
+        {
+            let valid = address.split_once('@').is_some_and(|(local, domain)| {
+                !local.is_empty() && !domain.is_empty() && !domain.contains('@')
+            }) && !address
+                .chars()
+                .any(|c| c.is_whitespace() || matches!(c, '<' | '>' | ';'));
+            if !valid {
+                return Err(
+                    "Enter email addresses separated by commas (without display names).".into(),
+                );
+            }
+            let original = draft
+                .get(name)
+                .and_then(Value::as_array)
+                .and_then(|values| {
+                    values
+                        .iter()
+                        .find(|value| value["email"].as_str() == Some(address))
+                });
+            recipients.push(
+                original
+                    .cloned()
+                    .unwrap_or_else(|| json!({"email":address})),
+            );
+        }
+        if name == "to" && recipients.is_empty() {
+            return Err("At least one To recipient is required.".into());
+        }
+        content.insert(name.into(), Value::Array(recipients));
+    }
+    Ok(())
+}
+
 /// Merge edited fields, rejecting a malformed replacement instead of executing the old draft.
 pub(super) fn apply_review(draft: &Value, content: &Value) -> Result<Value, String> {
     let content = content
@@ -182,6 +291,14 @@ pub(super) fn reviewed_arguments(
         .cloned()
         .ok_or("the accepted form must contain an object")?;
     let format = content.remove("bodyFormat").unwrap_or(json!("markdown"));
+    // A complete composer draft takes precedence over any prepopulated fields.
+    if content
+        .get(DRAFT_FIELD)
+        .and_then(Value::as_str)
+        .is_none_or(|text| text.trim().is_empty())
+    {
+        email_recipient_edits(draft, &mut content)?;
+    }
     let mut reviewed = apply_review(draft, &Value::Object(content))?;
     let body = reviewed
         .get("body")

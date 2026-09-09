@@ -177,10 +177,19 @@ where
                     "This tool requires form elicitation support; nothing was executed.",
                 ));
             }
-            let schema = review::project_form(
-                &review::tool_schema(&request.name, &tool.input_schema),
-                &arguments,
-            )
+            let composer = context
+                .peer
+                .peer_info()
+                .and_then(|info| info.capabilities.experimental.as_ref())
+                .is_some_and(|caps| caps.contains_key("macro/composer"));
+            let schema = if request.name == "SendEmail" && !composer {
+                review::email_form(&arguments)
+            } else {
+                review::project_form(
+                    &review::tool_schema(&request.name, &tool.input_schema),
+                    &arguments,
+                )
+            }
             .map_err(|error| rmcp::ErrorData::internal_error(error, None))?;
             let params = rmcp::model::CreateElicitationRequestParams::FormElicitationParams {
                 meta: Some(rmcp::model::Meta(

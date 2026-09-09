@@ -69,3 +69,61 @@ fn email_forms_render_markdown_and_preserve_explicit_composer_html() {
     );
     assert!(reviewed_arguments("SendEmail", &draft, &json!({"bodyFormat":"unknown"})).is_err());
 }
+
+#[test]
+fn email_form_is_readable_and_only_shows_relevant_fields() {
+    let draft = json!({"to":[{"email":"wolf@example.com","name":"Wolf"}],
+        "subject":"Frogs","body":"Hello\n\nFrogs!","cc":[],"includeSignature":null});
+    let form = serde_json::to_value(email_form(&draft).unwrap()).unwrap();
+    let fields = form["properties"].as_object().unwrap();
+    assert_eq!(
+        fields.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["body", "subject", "to"]
+    );
+    assert_eq!(fields["to"]["default"], "wolf@example.com");
+    assert_eq!(fields["body"]["title"], "Body");
+    assert_eq!(fields["body"]["default"], "Hello\n\nFrogs!");
+    let form = serde_json::to_value(
+        email_form(&json!({
+            "to":[],"bcc":[{"email":"private@example.com"}],
+            "includeSignature":false,"replyingToId":"message-id"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(form["properties"]["bcc"]["default"], "private@example.com");
+    assert_eq!(form["properties"]["includeSignature"]["default"], false);
+    assert_eq!(form["properties"]["replyingToId"]["default"], "message-id");
+}
+
+#[test]
+fn email_address_edits_preserve_names_clear_cc_and_reject_invalid_input() {
+    let draft = json!({"body":"Hello", "to":[{"email":"wolf@example.com","name":"Wolf"}],
+        "cc":[{"email":"old@example.com"}]});
+    let edited = reviewed_arguments(
+        "SendEmail",
+        &draft,
+        &json!({
+            "to":"wolf@example.com, new@example.com", "cc":""
+        }),
+    )
+    .unwrap();
+    assert_eq!(
+        edited["to"],
+        json!([{"email":"wolf@example.com","name":"Wolf"},{"email":"new@example.com"}])
+    );
+    assert_eq!(edited["cc"], json!([]));
+    for invalid in [
+        json!(""),
+        json!("not-an-address"),
+        json!("a@example.com\nBcc:x@example.com"),
+        json!(42),
+    ] {
+        assert!(reviewed_arguments("SendEmail", &draft, &json!({"to":invalid})).is_err());
+    }
+    // Composer JSON replaces the whole draft, even when other fields were prefilled.
+    let edited = reviewed_arguments("SendEmail", &draft, &json!({
+        "to":"not-an-address", "draft":json!({"body":"Edited","to":[{"email":"composer@example.com"}]}).to_string()
+    })).unwrap();
+    assert_eq!(edited["to"], json!([{"email":"composer@example.com"}]));
+}

@@ -112,3 +112,24 @@ async fn mcp_form_bridge_preserves_answers_and_only_trusts_macro_composer_metada
         service.cancel().await.unwrap();
     }
 }
+
+#[test]
+fn composer_capability_is_only_advertised_to_macro_with_user_input() {
+    use rmcp::ClientHandler;
+    for (server, has_input) in [("macro", true), ("thirdparty", true), ("macro", false)] {
+        let client = ElicitationClient {
+            server: server.into(),
+            input: has_input.then(|| {
+                std::sync::Arc::new(FormRecorder::default())
+                    as crate::domain::user_input::SharedUserInputRequester
+            }),
+        };
+        let info = client.get_info();
+        let composer = info
+            .capabilities
+            .experimental
+            .as_ref()
+            .is_some_and(|caps| caps.contains_key("macro/composer"));
+        assert_eq!(composer, server == "macro" && has_input);
+    }
+}

@@ -85,7 +85,8 @@ The new Macro agent uses Macro MCP for workspace tools. Sending email and creati
 calendar events opens a review composer; edit the draft and explicitly Send/Create,
 or decline. The accepted review and the final tool result may appear as separate
 rows. Questions from other MCP servers show the requesting server name and use
-ordinary forms. Concurrent questions appear one at a time. If a server session
+ordinary forms. External MCP clients review emails using address, subject, and
+body fields; the Macro web UI keeps its email composer. Concurrent questions appear one at a time. If a server session
 expires during a deploy, reconnect the agent session; do not blindly repeat an
 action whose result is uncertain. The classic in-channel `@Macro` behavior is
 unchanged.

@@ -23,6 +23,12 @@ impl rmcp::ClientHandler for ElicitationClient {
     fn get_info(&self) -> rmcp::model::ClientInfo {
         let mut info = client_info();
         if self.input.is_some() {
+            if self.server == MACRO_MCP_NAME {
+                info.capabilities
+                    .experimental
+                    .get_or_insert_with(Default::default)
+                    .insert("macro/composer".into(), Default::default());
+            }
             info.capabilities.elicitation = Some(rmcp::model::ElicitationCapability {
                 form: Some(Default::default()),
                 url: None,
