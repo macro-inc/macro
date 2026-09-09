@@ -564,6 +564,20 @@ registerComponent(
   })
 );
 
+// Prototype of Attio-style CRM lists on fixtures; see the page's module doc.
+const CrmListsPlayground = lazy(
+  () => import('@companies/crm/lists-playground/ListsPlayground')
+);
+registerComponent(
+  'crm-lists-playground',
+  withAuth(() => {
+    if (!isFeatureEnabled(enableCrm)) {
+      return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
+    }
+    return <CrmListsPlayground />;
+  })
+);
+
 registerComponent(
   'folders',
   withAuth(() => {
