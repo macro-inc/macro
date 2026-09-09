@@ -106,10 +106,12 @@ Board/List views, `Company` create button. Requires a team ("Join a team to enab
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)
 over a wrapping row of pill chips (entity icon, name, action count; click opens the entity,
-shift-click opens a new split; the section is absent when there are no entities), then a feed of "You edited/created X" entries grouped
-under day headers. The whole page is one virtualized list: only rows near the viewport are
-in the DOM, and scrolling near the bottom fetches the next page automatically (a `Loading…`
-tail appears while it lands). There is no `Show more` button.
+shift-click opens a new split; the section is absent when there are no entities), then a feed
+of "You edited/created X" entries grouped under day headers. The whole page is one virtualized
+list: only rows near the viewport are in the DOM, and scrolling near the bottom fetches the
+next page automatically (a `Loading…` tail appears while it lands). If a page fails, the tail
+reads `Couldn't load more.` with a `Retry` button and automatic paging stops until it is
+pressed. There is no `Show more` button.
 
 ## Home — `/app/component/home`
 

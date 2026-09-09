@@ -60,6 +60,8 @@ vi.mock('@service-storage/websocket', () => ({
 
 afterEach(cleanup);
 
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 function renderView() {
   const context = createMockActivityContext();
   const onOpen = vi.fn();
@@ -152,6 +154,42 @@ describe('MyActivityView', () => {
     // No more pages: scrolling to the end fetches nothing.
     scroll(2200);
     expect(feedRequests()).toBe(2);
+  });
+
+  it('offers a retry instead of re-paging when the next page fails', async () => {
+    const { container, graphql } = renderView();
+    graphql
+      .latest('MyActivity')
+      .resolve(feedPage([createdEvent, messagedEvent], 'cursor-2'));
+    const scroll = virtual.onScroll;
+    if (!scroll) throw new Error('virtualizer did not register onScroll');
+    const feedRequests = () =>
+      graphql.pending.filter((op) => op.name === 'MyActivity').length;
+
+    scroll(1500);
+    expect(feedRequests()).toBe(2);
+    graphql.latest('MyActivity').fail('boom');
+    await settle();
+
+    const tail = container.querySelector('[data-activity-feed-tail]');
+    expect(tail?.textContent).toContain("Couldn't load more.");
+    expect(tail?.textContent).not.toContain('Loading…');
+
+    // Still resting near the end: no automatic re-fetch.
+    scroll(1500);
+    scroll(1600);
+    expect(feedRequests()).toBe(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await settle();
+    expect(feedRequests()).toBe(3);
+    expect(container.textContent).toContain('Loading…');
+
+    graphql
+      .latest('MyActivity')
+      .resolve(feedPage([{ ...createdEvent, id: 'evt-99' }], null));
+    expect(rows()).toHaveLength(3);
+    expect(container.querySelector('[data-activity-feed-tail]')).toBeNull();
   });
 
   it('asks the host to open the row entity', () => {

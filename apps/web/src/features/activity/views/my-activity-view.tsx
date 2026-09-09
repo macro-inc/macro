@@ -146,17 +146,27 @@ function FeedRowView(props: {
 }
 
 function FeedTail(props: { state: MyActivityState }) {
-  const loadingMore = () => {
+  const ready = () => {
     const feed = props.state.feed();
-    return feed.t === 'ready' && feed.loadingMore;
+    return feed.t === 'ready' ? feed : undefined;
   };
   return (
     <div
-      class="flex h-10 items-center justify-center text-ink-muted text-sm"
+      class="flex h-10 items-center justify-center gap-2 text-ink-muted text-sm"
       aria-live="polite"
       data-activity-feed-tail
     >
-      <Show when={loadingMore()}>Loading…</Show>
+      <Show when={ready()?.loadingMore}>Loading…</Show>
+      <Show when={!ready()?.loadingMore && ready()?.moreFailed}>
+        <span>Couldn't load more.</span>
+        <button
+          type="button"
+          class="text-ink underline-offset-2 hover:underline"
+          onClick={() => props.state.retryMore()}
+        >
+          Retry
+        </button>
+      </Show>
     </div>
   );
 }

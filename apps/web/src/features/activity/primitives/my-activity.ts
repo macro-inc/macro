@@ -10,7 +10,14 @@ export type FeedView =
   | { t: 'loading' }
   | { t: 'error' }
   | { t: 'empty' }
-  | { t: 'ready'; groups: FeedGroup[]; hasMore: boolean; loadingMore: boolean };
+  | {
+      t: 'ready';
+      groups: FeedGroup[];
+      hasMore: boolean;
+      loadingMore: boolean;
+      /** The last next-page request failed; auto-paging waits for `retryMore`. */
+      moreFailed: boolean;
+    };
 
 export type OverviewView =
   | { t: 'loading' }
@@ -22,8 +29,14 @@ export type MyActivityState = {
   feed: Accessor<FeedView>;
   /** Every virtualized row of the screen: the overview first, then the feed. */
   rows: Accessor<FeedRow[]>;
-  /** Fetch the next feed page. No-op while one is in flight or none remain. */
+  /**
+   * Fetch the next feed page. No-op while one is in flight, none remain, or
+   * the last attempt failed (so a scroller resting near the end does not
+   * hammer a failing endpoint).
+   */
   loadMore: () => void;
+  /** Retry the failed next page. The one way to page again after a failure. */
+  retryMore: () => void;
 };
 
 /**
@@ -54,6 +67,7 @@ export function createMyActivityState(
         groups: groups(),
         hasMore: feedQuery.hasNextPage,
         loadingMore: feedQuery.isFetchingNextPage,
+        moreFailed: feedQuery.isFetchNextPageError,
       };
     }
     if (feedQuery.isLoading) return { t: 'loading' };
@@ -70,13 +84,19 @@ export function createMyActivityState(
     return reuseRows(previous, [{ kind: 'overview' }, ...feedRows]);
   }, []);
 
+  const fetchNext = () => {
+    if (!feedQuery.hasNextPage || feedQuery.isFetchingNextPage) return;
+    void feedQuery.fetchNextPage();
+  };
+
   return {
     overview,
     feed,
     rows,
     loadMore: () => {
-      if (!feedQuery.hasNextPage || feedQuery.isFetchingNextPage) return;
-      void feedQuery.fetchNextPage();
+      if (feedQuery.isFetchNextPageError) return;
+      fetchNext();
     },
+    retryMore: fetchNext,
   };
 }
