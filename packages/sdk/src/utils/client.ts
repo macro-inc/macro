@@ -77,9 +77,14 @@ export async function requestAuthHeaders(
       }
       return headers;
     })
-    .with({ type: 'user', apiKey: P.string }, ({ apiKey }) => [
-      [USER_API_KEY_HEADER, apiKey] as const,
-    ])
+    .with({ type: 'user', apiKey: P.string }, ({ apiKey }) => {
+      if (apiKey.startsWith(BOT_TOKEN_PREFIX)) {
+        throw new Error(
+          "bot token passed as a user credential. Use auth: { type: 'bot', token } or MACRO_BOT_TOKEN.",
+        );
+      }
+      return [[USER_API_KEY_HEADER, apiKey] as const];
+    })
     .with({ type: 'user' }, async ({ token }) => {
       const pair = userCredentialHeader(await resolveToken(token));
       return [pair];

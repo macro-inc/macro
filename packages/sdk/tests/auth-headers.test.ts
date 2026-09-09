@@ -9,10 +9,18 @@ describe('requestAuthHeaders', () => {
     ).toEqual([['x-macro-user-api-key', 'mak_abc']]);
   });
 
-  test('auth.apiKey sends the user API key header without a prefix check', async () => {
+  test('auth.apiKey sends a legacy unprefixed key', async () => {
     expect(
       await requestAuthHeaders({ type: 'user', apiKey: 'legacy0123' }),
     ).toEqual([['x-macro-user-api-key', 'legacy0123']]);
+  });
+
+  test('auth.apiKey rejects an mbot_ token', async () => {
+    await expect(
+      requestAuthHeaders({ type: 'user', apiKey: 'mbot_x' }),
+    ).rejects.toThrow(
+      "bot token passed as a user credential. Use auth: { type: 'bot', token } or MACRO_BOT_TOKEN.",
+    );
   });
 
   test('token JWT sends Authorization Bearer', async () => {
