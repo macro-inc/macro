@@ -109,7 +109,11 @@ const compileLeaf = (
   }
 
   if (config.notification) {
-    return AST.or(notificationStatesForFilter(config.notification, value).map((state) => AST.literal(config.backend, state)));
+    return AST.or(
+      notificationStatesForFilter(config.notification, value).map((state) =>
+        AST.literal(config.backend, state)
+      )
+    );
   }
   const format = config.formatValue ?? ((input: unknown) => input);
 

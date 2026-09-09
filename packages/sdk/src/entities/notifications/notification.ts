@@ -1,4 +1,7 @@
-import type { GetTypedNotificationByIdResponses, NotificationState } from '../../../generated/notification/types.gen';
+import type {
+  GetTypedNotificationByIdResponses,
+  NotificationState,
+} from '../../../generated/notification/types.gen';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
@@ -38,7 +41,9 @@ export class Notification extends MacroEntity<NotificationDetail> {
         await client.notification.listTypedNotifications({
           query: {
             ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
-            ...(opts?.states !== undefined ? { states: opts.states.join(',') } : {}),
+            ...(opts?.states !== undefined
+              ? { states: opts.states.join(',') }
+              : {}),
             ...(cursor ? { cursor } : {}),
           },
         }),

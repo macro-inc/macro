@@ -25,15 +25,23 @@ describe('makeGraphqlSoupInput', () => {
         params: { limit: 100, sort_method: 'updated_at' },
         body: { df: { l: { ns: state } }, ef: { l: { Read: true } } },
       });
-      expect(input).toMatchObject({ initial: { filters: {
-        documentFilter: { literal: { notificationState: state.toUpperCase() } },
-        emailFilter: { tree: { literal: { read: true } } },
-      } } });
+      expect(input).toMatchObject({
+        initial: {
+          filters: {
+            documentFilter: {
+              literal: { notificationState: state.toUpperCase() },
+            },
+            emailFilter: { tree: { literal: { read: true } } },
+          },
+        },
+      });
     }
-    expect(() => makeGraphqlSoupInput({
-      params: { limit: 100, sort_method: 'updated_at' },
-      body: { df: { l: { ns: false } } },
-    })).toThrow();
+    expect(() =>
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: { df: { l: { ns: false } } },
+      })
+    ).toThrow();
   });
   it('maps compiled soup AST and request params into GraphQL Soup input', () => {
     const input = makeInput({
@@ -54,7 +62,12 @@ describe('makeGraphqlSoupInput', () => {
         filters: {
           documentFilter: {
             and: {
-              left: { or: { left: { literal: { notificationState: 'UNSEEN' } }, right: { literal: { notificationState: 'SEEN' } } } },
+              left: {
+                or: {
+                  left: { literal: { notificationState: 'UNSEEN' } },
+                  right: { literal: { notificationState: 'SEEN' } },
+                },
+              },
               right: { literal: { updatedAt: { gte: UPDATED_AT } } },
             },
           },
@@ -81,7 +94,12 @@ describe('makeGraphqlSoupInput', () => {
         filters: {
           channelFilter: {
             and: {
-              left: { or: { left: { literal: { notificationState: 'UNSEEN' } }, right: { literal: { notificationState: 'SEEN' } } } },
+              left: {
+                or: {
+                  left: { literal: { notificationState: 'UNSEEN' } },
+                  right: { literal: { notificationState: 'SEEN' } },
+                },
+              },
               right: { literal: { isParticipant: true } },
             },
           },
@@ -155,7 +173,12 @@ describe('makeGraphqlSoupInput', () => {
         limit: 100,
         sortMethod: 'UPDATED_AT',
         filters: {
-          documentFilter: { or: { left: { literal: { notificationState: 'UNSEEN' } }, right: { literal: { notificationState: 'SEEN' } } } },
+          documentFilter: {
+            or: {
+              left: { literal: { notificationState: 'UNSEEN' } },
+              right: { literal: { notificationState: 'SEEN' } },
+            },
+          },
         },
       },
     });

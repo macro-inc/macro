@@ -111,8 +111,16 @@ const FIELD_CONFIG: Record<
   emailCalendarOnly: { target: 'ef', field: 'CalendarOnly' },
   channelId: { target: 'chanf', field: 'ChannelId' },
   channelType: { target: 'chanf', field: 'ChannelType' },
-  channelSeen: { target: 'chanf', field: 'NotificationState', notification: 'seen' },
-  channelDone: { target: 'chanf', field: 'NotificationState', notification: 'done' },
+  channelSeen: {
+    target: 'chanf',
+    field: 'NotificationState',
+    notification: 'seen',
+  },
+  channelDone: {
+    target: 'chanf',
+    field: 'NotificationState',
+    notification: 'done',
+  },
   channelImportance: { target: 'chanf', field: 'Importance' },
   channelIsParticipant: { target: 'chanf', field: 'IsParticipant' },
   channelSenderId: { target: 'chanf', field: 'Sender' },
@@ -120,8 +128,16 @@ const FIELD_CONFIG: Record<
   channelThreadId: { target: 'cthf', field: 'ThreadId' },
   channelThreadRootSenderId: { target: 'cthf', field: 'RootSender' },
   channelThreadParticipantId: { target: 'cthf', field: 'Participant' },
-  channelThreadSeen: { target: 'cthf', field: 'NotificationState', notification: 'seen' },
-  channelThreadDone: { target: 'cthf', field: 'NotificationState', notification: 'done' },
+  channelThreadSeen: {
+    target: 'cthf',
+    field: 'NotificationState',
+    notification: 'seen',
+  },
+  channelThreadDone: {
+    target: 'cthf',
+    field: 'NotificationState',
+    notification: 'done',
+  },
   chatId: { target: 'cf', field: 'cid' },
   chatOwnerId: { target: 'cf', field: 'o' },
   chatProjectId: { target: 'cf', field: 'pid' },
@@ -234,9 +250,14 @@ function pushFieldFiltersToTargets(
     }
 
     const format = config.formatValue ?? ((v: unknown) => v);
-    const literal = (value: unknown): BackendAst => config.notification
-      ? AST.or(notificationStatesForFilter(config.notification, value).map((state) => AST.literal(config.field, state)))
-      : AST.literal(config.field, format(value));
+    const literal = (value: unknown): BackendAst =>
+      config.notification
+        ? AST.or(
+            notificationStatesForFilter(config.notification, value).map(
+              (state) => AST.literal(config.field, state)
+            )
+          )
+        : AST.literal(config.field, format(value));
 
     if (Array.isArray(includeVal) || Array.isArray(excludeVal)) {
       const includeVals = includeVal as unknown[] | undefined;
@@ -255,21 +276,15 @@ function pushFieldFiltersToTargets(
 
         if (filtered.length > 0) {
           byTarget[config.target].push(
-            AST.not(
-              AST.or(filtered.map((v) => literal(v)))
-            )
+            AST.not(AST.or(filtered.map((v) => literal(v))))
           );
         }
       }
     } else {
       if (includeVal !== undefined) {
-        byTarget[config.target].push(
-          literal(includeVal)
-        );
+        byTarget[config.target].push(literal(includeVal));
       } else if (excludeVal !== undefined) {
-        byTarget[config.target].push(
-          AST.not(literal(excludeVal))
-        );
+        byTarget[config.target].push(AST.not(literal(excludeVal)));
       }
     }
   }

@@ -39,8 +39,16 @@ export const FILTER_TARGETS = {
     fileAssoc: { backend: 'fa' },
     subType: { backend: 'dst' },
     documentOwnerId: { backend: 'o' },
-    documentSeen: { backend: 'ns', notification: 'seen', domain: [true, false] },
-    documentDone: { backend: 'ns', notification: 'done', domain: [true, false] },
+    documentSeen: {
+      backend: 'ns',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    documentDone: {
+      backend: 'ns',
+      notification: 'done',
+      domain: [true, false],
+    },
     documentImportance: { backend: 'imp', domain: [true, false] },
     isEmailAttachment: { backend: 'iea', domain: [true, false] },
     documentCreatedAt: { backend: 'ca', compile: 'dateRange' },
@@ -50,8 +58,16 @@ export const FILTER_TARGETS = {
   // calf — calendar events
   calf: {
     calendarEventId: { backend: 'id' },
-    calendarEventSeen: { backend: 'ns', notification: 'seen', domain: [true, false] },
-    calendarEventDone: { backend: 'ns', notification: 'done', domain: [true, false] },
+    calendarEventSeen: {
+      backend: 'ns',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    calendarEventDone: {
+      backend: 'ns',
+      notification: 'done',
+      domain: [true, false],
+    },
   },
 
   // ef — email
@@ -64,7 +80,11 @@ export const FILTER_TARGETS = {
       formatValue: (value) => ({ Partial: value }),
     },
     emailSeen: { backend: 'Read', domain: [true, false] },
-    emailDone: { backend: 'NotificationState', notification: 'done', domain: [true, false] },
+    emailDone: {
+      backend: 'NotificationState',
+      notification: 'done',
+      domain: [true, false],
+    },
     emailImportance: { backend: 'Importance', domain: [true, false] },
     emailShared: { backend: 'Shared' },
     emailCalendarOnly: { backend: 'CalendarOnly', domain: [true, false] },
@@ -76,8 +96,16 @@ export const FILTER_TARGETS = {
     channelId: { backend: 'ChannelId' },
     channelType: { backend: 'ChannelType' },
     channelSenderId: { backend: 'Sender' },
-    channelSeen: { backend: 'NotificationState', notification: 'seen', domain: [true, false] },
-    channelDone: { backend: 'NotificationState', notification: 'done', domain: [true, false] },
+    channelSeen: {
+      backend: 'NotificationState',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    channelDone: {
+      backend: 'NotificationState',
+      notification: 'done',
+      domain: [true, false],
+    },
     channelImportance: { backend: 'Importance', domain: [true, false] },
     channelIsParticipant: { backend: 'IsParticipant', domain: [true, false] },
   },
@@ -88,8 +116,16 @@ export const FILTER_TARGETS = {
     channelThreadId: { backend: 'ThreadId' },
     channelThreadRootSenderId: { backend: 'RootSender' },
     channelThreadParticipantId: { backend: 'Participant' },
-    channelThreadSeen: { backend: 'NotificationState', notification: 'seen', domain: [true, false] },
-    channelThreadDone: { backend: 'NotificationState', notification: 'done', domain: [true, false] },
+    channelThreadSeen: {
+      backend: 'NotificationState',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    channelThreadDone: {
+      backend: 'NotificationState',
+      notification: 'done',
+      domain: [true, false],
+    },
   },
 
   // cf — chats / agents
@@ -127,8 +163,16 @@ export const FILTER_TARGETS = {
   fef: {
     foreignEntityRecordId: { backend: 'id' },
     foreignEntitySource: { backend: 'fes' },
-    foreignEntitySeen: { backend: 'ns', notification: 'seen', domain: [true, false] },
-    foreignEntityDone: { backend: 'ns', notification: 'done', domain: [true, false] },
+    foreignEntitySeen: {
+      backend: 'ns',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    foreignEntityDone: {
+      backend: 'ns',
+      notification: 'done',
+      domain: [true, false],
+    },
     foreignEntityIncludesMe: { backend: 'me', compile: 'unit' },
   },
 
