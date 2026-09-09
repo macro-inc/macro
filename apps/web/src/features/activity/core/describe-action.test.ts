@@ -75,8 +75,14 @@ describe('describeAction', () => {
       { kind: 'property-changed', property: 'prop-1', from: null, to: 'Done' },
       'made 5 property changes',
     ],
-    [{ kind: 'participant-added' }, 'added 5 participants'],
-    [{ kind: 'participant-removed' }, 'removed 5 participants'],
+    [
+      { kind: 'participant-added', participant: 'macro|sarah@example.com' },
+      'added 5 participants',
+    ],
+    [
+      { kind: 'participant-removed', participant: 'macro|sarah@example.com' },
+      'removed 5 participants',
+    ],
     [{ kind: 'call-started' }, 'started 5 calls'],
     [{ kind: 'unknown', tag: 'transmogrified' }, 'transmogrified 5 times'],
   ];
