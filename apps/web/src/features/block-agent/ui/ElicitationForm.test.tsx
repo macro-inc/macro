@@ -120,6 +120,38 @@ describe('single-choice elicitation', () => {
     expect(view.answer()).toEqual({ colour: 'red' });
   });
 
+  it('is one tab stop whose arrow keys move the choice, Other included', () => {
+    const view = form(question('colour_custom'));
+    const red = view.getByRole('radio', { name: 'Red' });
+    const literal = view.getByRole('radio', { name: 'A literal option' });
+    const other = view.getByRole('radio', { name: 'Other' });
+    expect(red.tabIndex).toBe(0);
+    expect(literal.tabIndex).toBe(-1);
+    expect(other.tabIndex).toBe(-1);
+    expect(view.getByRole('radiogroup').getAttribute('aria-labelledby')).toBe(
+      view.getByText('Colour').id
+    );
+
+    fireEvent.keyDown(red, { key: 'ArrowDown' });
+    expect(view.checked(literal)).toBe(true);
+    expect(literal.tabIndex).toBe(0);
+    expect(red.tabIndex).toBe(-1);
+    expect(document.activeElement).toBe(literal);
+
+    fireEvent.keyDown(literal, { key: 'ArrowDown' });
+    expect(view.checked(other)).toBe(true);
+    expect(view.answer()).toEqual({});
+
+    // Wraps, and the Other text box keeps its own arrows.
+    fireEvent.keyDown(other, { key: 'ArrowRight' });
+    expect(view.checked(red)).toBe(true);
+    fireEvent.click(other);
+    fireEvent.keyDown(view.getByPlaceholderText('Type your own answer'), {
+      key: 'ArrowUp',
+    });
+    expect(view.checked(other)).toBe(true);
+  });
+
   it('typing directly selects Other and keeps an empty Other selected', () => {
     const view = form(question('colour_custom'));
     const text = view.getByPlaceholderText('Type your own answer');

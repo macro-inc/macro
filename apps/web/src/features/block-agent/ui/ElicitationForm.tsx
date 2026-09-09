@@ -6,8 +6,9 @@
  * Choices are rows in the app's menu idiom - a box that fills accent when
  * chosen, round for one answer and square for several - rather than the
  * browser's radio and checkbox glyphs, so a question reads like the rest of
- * the session. The rows keep their ARIA roles (`radio`, `checkbox`) so the
- * form is navigable the way the native controls were.
+ * the session. The rows keep their ARIA roles (`radio`, `checkbox`); a radio
+ * group keeps one tab stop and moves its choice with the arrow keys, as the
+ * native control does.
  */
 
 import CheckIcon from '@phosphor/check.svg';
@@ -102,6 +103,8 @@ function ChoiceRow(props: {
   role: 'radio' | 'checkbox';
   checked: boolean;
   disabled?: boolean;
+  /** A radio group's one tab stop is its chosen (or first) row. */
+  tabIndex?: number;
   onSelect: () => void;
   option: ElicitationOption;
 }) {
@@ -110,6 +113,7 @@ function ChoiceRow(props: {
       type="button"
       role={props.role}
       aria-checked={props.checked}
+      tabIndex={props.tabIndex}
       class="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink outline-none not-disabled:hover:bg-ink/5 focus-visible:bg-ink/5 disabled:opacity-50"
       disabled={props.disabled}
       onClick={props.onSelect}
@@ -128,6 +132,7 @@ function OtherRow(props: {
   role: 'radio' | 'checkbox';
   checked: boolean;
   disabled?: boolean;
+  tabIndex?: number;
   text: string;
   onSelect: () => void;
   onInput: (text: string) => void;
@@ -145,6 +150,7 @@ function OtherRow(props: {
         role={props.role}
         aria-checked={props.checked}
         aria-label="Other"
+        tabIndex={props.tabIndex}
         class="flex items-center outline-none"
         disabled={props.disabled}
         onClick={props.onSelect}
@@ -166,12 +172,19 @@ function OtherRow(props: {
   );
 }
 
+/**
+ * One answer from several, with the keyboard behavior of a native radio
+ * group: one tab stop (the chosen row, or the first), and the arrow keys
+ * move the choice - onto the Other row too, when there is one.
+ */
 function SingleChoice(props: {
   field: SingleSelect;
   value: FieldValue | undefined;
   disabled?: boolean;
+  labelId: string;
   onChange: (next: FieldValue) => void;
 }) {
+  let group: HTMLDivElement | undefined;
   const selection = (): SingleSelection =>
     props.value?.kind === 'single_select'
       ? props.value.selection
@@ -186,16 +199,60 @@ function SingleChoice(props: {
     const current = selection();
     return current.kind === 'custom' ? current.text : '';
   };
+  // The rows in order, Other last; the tab stop is the chosen one, else the
+  // first.
+  const rowCount = () =>
+    props.field.options.length + (props.field.customField ? 1 : 0);
+  const chosenIndex = () => {
+    const current = selection();
+    if (current.kind === 'option') {
+      const index = props.field.options.findIndex(
+        (option) => option.value === current.value
+      );
+      return index === -1 ? 0 : index;
+    }
+    return current.kind === 'custom' ? props.field.options.length : 0;
+  };
+  const tabIndex = (index: number) => (index === chosenIndex() ? 0 : -1);
+  const choose = (index: number) => {
+    const option = props.field.options[index];
+    if (option) pick({ kind: 'option', value: option.value });
+    else if (selection().kind !== 'custom') pick({ kind: 'custom', text: '' });
+    group?.querySelectorAll<HTMLElement>('[role="radio"]')[index]?.focus();
+  };
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (props.disabled) return;
+    // Arrows inside the Other text box edit it; only a row moves the choice.
+    if (
+      !(event.target instanceof Element) ||
+      event.target.getAttribute('role') !== 'radio'
+    )
+      return;
+    const step = match(event.key)
+      .with('ArrowDown', 'ArrowRight', () => 1)
+      .with('ArrowUp', 'ArrowLeft', () => -1)
+      .otherwise(() => 0);
+    if (step === 0) return;
+    event.preventDefault();
+    choose((chosenIndex() + step + rowCount()) % rowCount());
+  };
 
   return (
-    <div role="radiogroup" class="flex flex-col">
+    <div
+      ref={group}
+      role="radiogroup"
+      aria-labelledby={props.labelId}
+      class="flex flex-col"
+      onKeyDown={onKeyDown}
+    >
       <For each={props.field.options}>
-        {(option) => (
+        {(option, index) => (
           <ChoiceRow
             role="radio"
             option={option}
             checked={chosen(option)}
             disabled={props.disabled}
+            tabIndex={tabIndex(index())}
             onSelect={() => pick({ kind: 'option', value: option.value })}
           />
         )}
@@ -205,6 +262,7 @@ function SingleChoice(props: {
           role="radio"
           checked={selection().kind === 'custom'}
           disabled={props.disabled}
+          tabIndex={tabIndex(props.field.options.length)}
           text={customText()}
           onSelect={() => {
             if (selection().kind !== 'custom')
@@ -221,6 +279,7 @@ function MultiChoice(props: {
   field: MultiSelect;
   value: FieldValue | undefined;
   disabled?: boolean;
+  labelId: string;
   onChange: (next: FieldValue) => void;
 }) {
   const current = (): MultiSelectValue =>
@@ -242,7 +301,7 @@ function MultiChoice(props: {
   const custom = () => current().custom;
 
   return (
-    <div role="group" class="flex flex-col">
+    <div role="group" aria-labelledby={props.labelId} class="flex flex-col">
       <For each={props.field.options}>
         {(option) => (
           <ChoiceRow
@@ -286,6 +345,8 @@ function FieldControl(props: {
   field: ElicitationPropertySchema;
   value: FieldValue | undefined;
   disabled?: boolean;
+  /** The id of the field's title, for the groups' `aria-labelledby`. */
+  labelId: string;
   onChange: (next: FieldValue) => void;
 }): JSX.Element {
   return (
@@ -298,6 +359,7 @@ function FieldControl(props: {
               field={field}
               value={props.value}
               disabled={props.disabled}
+              labelId={props.labelId}
               onChange={props.onChange}
             />
           )
@@ -347,6 +409,7 @@ function FieldControl(props: {
             field={field}
             value={props.value}
             disabled={props.disabled}
+            labelId={props.labelId}
             onChange={props.onChange}
           />
         ))
@@ -360,6 +423,11 @@ function FieldControl(props: {
   );
 }
 
+/** The id of a field's title, which its group of choices is labelled by. */
+function labelIdOf(property: ElicitationProperty) {
+  return `elicitation-${property.name}-label`;
+}
+
 function Field(props: {
   property: ElicitationProperty;
   required: boolean;
@@ -369,7 +437,9 @@ function Field(props: {
   return (
     <div class="flex flex-col gap-1">
       <div class="flex items-baseline gap-1 text-xs text-ink-muted">
-        <span>{props.property.title ?? props.property.name}</span>
+        <span id={labelIdOf(props.property)}>
+          {props.property.title ?? props.property.name}
+        </span>
         <Show when={props.required}>
           <span aria-hidden="true" class="text-failure">
             *
@@ -410,6 +480,7 @@ export function ElicitationForm(props: ElicitationFormProps) {
               field={property.schema}
               value={props.values[property.name]}
               disabled={props.disabled}
+              labelId={labelIdOf(property)}
               onChange={(next) => props.onChange(property.name, next)}
             />
           </Field>

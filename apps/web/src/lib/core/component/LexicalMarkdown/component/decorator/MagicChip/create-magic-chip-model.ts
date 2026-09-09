@@ -1,4 +1,8 @@
-import { harnessDisplayName } from '@app/features/block-agent/component/compose-agent-session-options';
+import {
+  harnessDisplayName,
+  harnessTitle,
+  modelDisplayName,
+} from '@app/features/block-agent/component/compose-agent-session-options';
 import {
   createElicitationController,
   type ElicitationController,
@@ -22,7 +26,7 @@ import type {
   AgentSessionLogEntryDto,
   SessionStatusDto,
 } from '@service-agent-harness/generated/schemas';
-import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   deriveMagicChipPresentation,
   type MagicChipHeader,
@@ -58,15 +62,7 @@ type SessionIdentity = { harness: string; model: string };
 function agentName(harness: string | undefined): string | undefined {
   if (!harness) return undefined;
   const known = harnessDisplayName(harness);
-  const name =
-    known === harness
-      ? harness
-          .split(/[-_]/)
-          .filter(Boolean)
-          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ')
-      : known;
-  return `${name} Agent`;
+  return `${known === harness ? harnessTitle(harness) : known} Agent`;
 }
 
 /**
@@ -79,10 +75,7 @@ function modelName(
 ): string | undefined {
   const model = metadata?.model;
   if (!model) return session?.model || undefined;
-  return (
-    metadata.supportedModels.find((option) => option.id === model)?.name ??
-    model
-  );
+  return modelDisplayName(model, metadata.supportedModels);
 }
 
 /**
@@ -205,7 +198,9 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
     };
   };
 
-  const presentation = () => {
+  // Memoized: the view reads these from many places per flush, and a fold
+  // pushes a frame per streamed chunk.
+  const presentation = createMemo(() => {
     const turn = props.promptedMessage.turn;
     const messagesForTurn = messages().filter(
       (message) => message.turn === turn
@@ -219,13 +214,13 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
         (message) => message.author.kind === 'agent'
       ),
     });
-  };
+  });
 
-  const header = (): MagicChipHeader | undefined => {
+  const header = createMemo((): MagicChipHeader | undefined => {
     const agent = agentName(session()?.harness);
     const model = modelName(metadata(), session());
     return agent || model ? { agent, model } : undefined;
-  };
+  });
 
   return { presentation, header, elicitation };
 }

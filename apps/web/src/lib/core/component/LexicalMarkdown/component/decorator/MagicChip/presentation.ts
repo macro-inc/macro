@@ -18,11 +18,6 @@ export type MagicChipActivity = {
   busy: boolean;
 };
 
-/**
- * A question the agent is waiting on, as the chip offers it: the live slot
- * from the session's metadata, and whether this viewer is the one who may
- * answer (the session's owner) or is watching someone else be asked.
- */
 /** Who is answering, for the chip's header: the persona and its model. */
 export type MagicChipHeader = {
   /** The persona's name, e.g. `Macro Agent`. */
@@ -31,6 +26,11 @@ export type MagicChipHeader = {
   model?: string;
 };
 
+/**
+ * A question the agent is waiting on, as the chip offers it: the live slot
+ * from the session's metadata, and whether this viewer is the one who may
+ * answer (the session's owner) or is watching someone else be asked.
+ */
 export type MagicChipQuestion = {
   question: PendingElicitation;
   canAnswer: boolean;

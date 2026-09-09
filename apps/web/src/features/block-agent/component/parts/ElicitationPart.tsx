@@ -15,32 +15,25 @@
  * under review opens the tool's own composer here.
  */
 
-import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
-import { EmailDraftComposer } from '@core/component/AI/component/tool/email/DraftComposer';
 import type {
   AnsweredField,
   AnsweredValue,
   MessagePart,
 } from '@service-agent-fold/generated/types';
-import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
-import type {
-  CreateCalendarEvent,
-  SendEmail,
-} from '@service-cognition/generated/tools/types';
-import { Button } from '@ui';
-import { createMemo, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { useAgentSession } from '../../context/AgentSessionContext';
-import { createElicitationReviewSink } from '../../state/elicitation-review-sink';
 import { ToolCard } from '../../ui';
-import { LiveQuestionCard, type RespondToElicitation } from './LiveElicitation';
+import {
+  LiveQuestionCard,
+  parseDraftedTool,
+  type RespondToElicitation,
+  UserToolComposer,
+  type UserToolRequest,
+} from './LiveElicitation';
 import { UserToolCall } from './UserToolCall';
 
 type ElicitationPartData = Extract<MessagePart, { kind: 'elicitation' }>;
-type UserToolRequest = Extract<
-  ElicitationPartData['request'],
-  { kind: 'user_tool' }
->;
 
 function outcomeLabel(part: ElicitationPartData): string {
   return match(part.outcome)
@@ -118,11 +111,11 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
 }
 
 /**
- * A Macro user tool under review, in the tool's own composer: the calendar
- * event form for `CreateCalendarEvent`, the email compose for `SendEmail`.
- * The composer's Create/Send accepts the review with the whole edited draft;
- * Cancel declines it. A draft the tool's schema rejects, or a tool with no
- * composer here, falls back to the flat form the agent also sent.
+ * A Macro user tool under review, in the tool's own composer. A draft the
+ * tool's schema rejects, or a tool with no composer here, falls back to the
+ * flat form the agent also sent. The email composer has only Send, so the
+ * card adds a Cancel: without it the turn could only be refused from the
+ * chip, or by stopping it.
  */
 function LiveUserTool(props: {
   request: UserToolRequest;
@@ -131,66 +124,33 @@ function LiveUserTool(props: {
   onRespond: RespondToElicitation;
 }) {
   const { elicitation } = useAgentSession();
-  const typed = createMemo(() => {
-    const call = deserializeToolCall({
-      id: props.toolCall,
-      name: props.request.tool,
-      json: props.request.draft,
-    });
-    return call.isOk() ? call.value : undefined;
-  });
-  const sink = <T,>() =>
-    createElicitationReviewSink<T>({
-      canAnswer: elicitation.canAnswer,
-      ownerName: elicitation.ownerName,
-      answering: elicitation.answering,
-      respond: props.onRespond,
-    });
-
+  const drafted = createMemo(() =>
+    parseDraftedTool(props.request, props.toolCall)
+  );
+  const fallback = (
+    <LiveQuestionCard
+      request={{ kind: 'form', schema: props.request.schema }}
+      locked={props.locked}
+      onRespond={props.onRespond}
+    />
+  );
   return (
-    <Switch
-      fallback={
-        <LiveQuestionCard
-          request={{ kind: 'form', schema: props.request.schema }}
-          locked={props.locked}
-          onRespond={props.onRespond}
+    <Show when={drafted()} fallback={fallback}>
+      {(tool) => (
+        <UserToolComposer
+          tool={tool()}
+          toolCall={props.toolCall}
+          cancel
+          fallback={fallback}
+          review={{
+            canAnswer: elicitation.canAnswer,
+            ownerName: elicitation.ownerName,
+            answering: elicitation.answering,
+            respond: props.onRespond,
+          }}
         />
-      }
-    >
-      <Match when={typed()?.name === 'CreateCalendarEvent' && typed()}>
-        {(tool) => (
-          <CalendarDraftComposer
-            initialData={tool().data as CreateCalendarEvent}
-            sink={sink<CreateCalendarEvent>()}
-            previewKey={props.toolCall}
-          />
-        )}
-      </Match>
-      <Match when={typed()?.name === 'SendEmail' && typed()}>
-        {(tool) => (
-          <div class="flex flex-col gap-2">
-            <EmailDraftComposer
-              initialData={tool().data as SendEmail}
-              sink={sink<SendEmail>()}
-              debugName={`agent-review:${props.toolCall}`}
-            />
-            {/* The email composer has only Send; the calendar one answers a
-                decline through the sink's `onReject`. Without this the turn
-                could only be refused from the chip, or by stopping it. */}
-            <div class="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="xs"
-                disabled={props.locked}
-                onClick={() => void props.onRespond({ action: 'decline' })}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
-      </Match>
-    </Switch>
+      )}
+    </Show>
   );
 }
 

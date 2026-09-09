@@ -1,13 +1,13 @@
 import {
   createLiveQuestion,
+  type DraftedTool,
   type LiveQuestion,
+  parseDraftedTool,
   QuestionActions,
   QuestionFields,
   type RespondToElicitation,
+  UserToolComposer,
 } from '@app/features/block-agent/component/parts/LiveElicitation';
-import { createElicitationReviewSink } from '@app/features/block-agent/state/elicitation-review-sink';
-import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
-import { EmailDraftComposer } from '@core/component/AI/component/tool/email/DraftComposer';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
@@ -16,11 +16,6 @@ import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
-import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
-import type {
-  CreateCalendarEvent,
-  SendEmail,
-} from '@service-cognition/generated/tools/types';
 import { Button, Layer } from '@ui';
 import {
   type Component,
@@ -69,35 +64,29 @@ export type MagicChipAnswer = {
   respond: (answer: ElicitationAnswer) => Promise<boolean>;
 };
 
-/** A Macro user tool the agent drafted, for the tool's own composer. */
-type ReviewedTool = { name: string; data: unknown };
-
 /**
  * The chip's side of a question: the shared live state for a form, URL, or
- * unknown mode, or a recognized Macro user tool's draft. A draft the tool's
- * schema rejects falls back to the flat form the agent also sent, as the
- * session does.
+ * unknown mode, or a Macro user tool's draft for the tool's own composer. A
+ * draft the tool's schema rejects falls back to the flat form the agent also
+ * sent, as the session does.
  */
-type ChipQuestion = LiveQuestion | { kind: 'user_tool'; tool: ReviewedTool };
+type ChipQuestion =
+  | LiveQuestion
+  | { kind: 'user_tool'; tool: DraftedTool; toolCall: string };
 
 function createChipQuestion(asking: MagicChipQuestion): ChipQuestion {
   const request = asking.question.request;
   if (request.kind !== 'user_tool') return createLiveQuestion(request);
-  const call = deserializeToolCall({
-    id: asking.question.toolCall ?? String(asking.question.requestId),
-    name: request.tool,
-    json: request.draft,
-  });
-  return call.isOk()
-    ? {
-        kind: 'user_tool',
-        tool: { name: call.value.name, data: call.value.data },
-      }
+  const toolCall =
+    asking.question.toolCall ?? String(asking.question.requestId);
+  const tool = parseDraftedTool(request, toolCall);
+  return tool
+    ? { kind: 'user_tool', tool, toolCall }
     : createLiveQuestion({ kind: 'form', schema: request.schema });
 }
 
 function reviewedTool(question: ChipQuestion) {
-  return question.kind === 'user_tool' ? question.tool : undefined;
+  return question.kind === 'user_tool' ? question : undefined;
 }
 
 function liveQuestion(question: ChipQuestion): LiveQuestion | undefined {
@@ -280,55 +269,43 @@ const Passage: Component<{ markdown: string }> = (props) => (
 
 /**
  * The question in the passage's place: the prompt and what is asked - a
- * Macro user tool's draft in the tool's own composer (the calendar event
- * form, the email compose), editable in place and sent from there; a form's
- * fields; a URL and its host. Cropped at the chip's height until expanded.
+ * Macro user tool's draft in the tool's own composer, editable in place and
+ * sent from there; a form's fields; a URL and its host. Cropped at the
+ * chip's height until expanded.
  */
-const Question: Component<ChipAsking> = (props) => {
-  const reviewKey = () =>
-    props.asking.question.toolCall ?? String(props.asking.question.requestId);
-  const sink = <T,>() =>
-    createElicitationReviewSink<T>({
-      canAnswer: () => props.asking.canAnswer,
-      ownerName: () => props.asking.ownerName,
-      answering: () => props.locked && props.asking.canAnswer,
-      respond: props.respond,
-    });
-  return (
-    <div class="flex min-w-0 flex-col gap-2" data-magic-chip-asking>
-      <span class="text-sm leading-5 text-ink wrap-break-word">
-        {props.asking.question.message}
-      </span>
-      <Switch>
-        <Match when={reviewedTool(props.question)}>
-          {(tool) => (
-            <Switch>
-              <Match when={tool().name === 'CreateCalendarEvent'}>
-                <CalendarDraftComposer
-                  initialData={tool().data as CreateCalendarEvent}
-                  sink={sink<CreateCalendarEvent>()}
-                  previewKey={reviewKey()}
-                />
-              </Match>
-              <Match when={tool().name === 'SendEmail'}>
-                <EmailDraftComposer
-                  initialData={tool().data as SendEmail}
-                  sink={sink<SendEmail>()}
-                  debugName={`magic-chip-review:${reviewKey()}`}
-                />
-              </Match>
-            </Switch>
-          )}
-        </Match>
-        <Match when={liveQuestion(props.question)}>
-          {(question) => (
-            <QuestionFields question={question()} locked={props.locked} />
-          )}
-        </Match>
-      </Switch>
-    </div>
-  );
-};
+const Question: Component<ChipAsking> = (props) => (
+  <div class="flex min-w-0 flex-col gap-2" data-magic-chip-asking>
+    <span class="text-sm leading-5 text-ink wrap-break-word">
+      {props.asking.question.message}
+    </span>
+    <Switch>
+      <Match when={reviewedTool(props.question)}>
+        {(review) => (
+          // A press anywhere in the composer is the composer's: its widgets
+          // are not all controls the area could recognize, and none may
+          // collapse it mid-edit.
+          <div onClick={(event) => event.stopPropagation()}>
+            <UserToolComposer
+              tool={review().tool}
+              toolCall={review().toolCall}
+              review={{
+                canAnswer: () => props.asking.canAnswer,
+                ownerName: () => props.asking.ownerName,
+                answering: () => props.locked && props.asking.canAnswer,
+                respond: props.respond,
+              }}
+            />
+          </div>
+        )}
+      </Match>
+      <Match when={liveQuestion(props.question)}>
+        {(question) => (
+          <QuestionFields question={question()} locked={props.locked} />
+        )}
+      </Match>
+    </Switch>
+  </div>
+);
 
 /**
  * One card for the whole turn, at one height: a header naming the persona,
@@ -348,12 +325,12 @@ export const MagicChipView: Component<{
   answer?: MagicChipAnswer;
   onOpen?: () => void;
 }> = (props) => {
-  const asking = () =>
-    props.presentation.kind === 'asking'
-      ? props.presentation.asking
-      : undefined;
-  const markdown = () => answerMarkdown(props.presentation);
-  const status = () => presentationStatus(props.presentation);
+  // Memoized: read from many places per flush, once per streamed chunk.
+  const asking = createMemo(() =>
+    props.presentation.kind === 'asking' ? props.presentation.asking : undefined
+  );
+  const markdown = createMemo(() => answerMarkdown(props.presentation));
+  const status = createMemo(() => presentationStatus(props.presentation));
   const [expanded, setExpanded] = createSignal(false);
 
   // One draft per question: keyed on the request id so metadata refreshes of

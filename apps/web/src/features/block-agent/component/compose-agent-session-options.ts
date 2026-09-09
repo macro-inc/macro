@@ -41,6 +41,24 @@ export function isManagedHarness(harness: string): boolean {
   );
 }
 
+/** 'claude-code' → 'Claude Code'; the fallback when nothing names a harness. */
+export function harnessTitle(harness: string | undefined): string {
+  if (!harness) return 'Agent session';
+  return harness
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/** A model's display name, or its id when the runtime lists no name for it. */
+export function modelDisplayName(
+  id: string,
+  available: readonly Pick<ModelOption, 'id' | 'name'>[]
+): string {
+  return available.find((model) => model.id === id)?.name ?? id;
+}
+
 /**
  * User-facing name for the runtime a persona runs on. Harness ids are
  * plumbing ("in-memory", "sandbox"); the product names are the coders.
@@ -124,9 +142,7 @@ export function personaDefaultLabel(
 ): string {
   const defaultModel = persona?.defaultModel;
   if (!defaultModel) return 'Agent default';
-  const name =
-    available.find((model) => model.id === defaultModel)?.name ?? defaultModel;
-  return `Agent default · ${name}`;
+  return `Agent default · ${modelDisplayName(defaultModel, available)}`;
 }
 
 /** Short label for the closed model pill. */
@@ -135,12 +151,8 @@ export function modelPillLabel(
   persona: PersonaOption | undefined,
   available: readonly ModelOption[]
 ): string {
-  if (override) {
-    return available.find((model) => model.id === override)?.name ?? override;
-  }
+  if (override) return modelDisplayName(override, available);
   const defaultModel = persona?.defaultModel;
   if (!defaultModel) return 'Default model';
-  return (
-    available.find((model) => model.id === defaultModel)?.name ?? defaultModel
-  );
+  return modelDisplayName(defaultModel, available);
 }

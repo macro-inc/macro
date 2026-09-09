@@ -67,6 +67,8 @@ type StubSink = {
 function composerStub(kind: string) {
   return (props: { initialData: unknown; sink: StubSink }) => (
     <div data-testid={`${kind}-composer`} data-can-act={props.sink.canAct()}>
+      {/* A widget the area cannot recognize as a control. */}
+      <div data-testid="composer-surface" />
       <button
         type="button"
         data-testid="composer-execute"
@@ -354,6 +356,7 @@ describe('MagicChipView reviewing a tool draft', () => {
 
     fireEvent.click(view.getByText('Dismiss'));
     fireEvent.click(view.getByTestId('composer-execute'));
+    fireEvent.click(view.getByTestId('composer-surface'));
     expect(area.getAttribute('aria-expanded')).toBe('false');
 
     fireEvent.click(area);
