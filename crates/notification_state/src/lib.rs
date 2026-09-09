@@ -4,6 +4,8 @@
 //! Viewing timestamps are historical metadata, not another representation of state.
 //! In particular, a notification backfilled as done may never have recorded a view.
 
+pub mod graphql;
+
 #[cfg(feature = "postgres")]
 pub mod postgres;
 

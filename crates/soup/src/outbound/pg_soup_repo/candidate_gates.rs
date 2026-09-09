@@ -18,9 +18,8 @@ use uuid::Uuid;
 
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     NotificationPredicate, access_semi_join, build_chat_filter, build_document_filter,
-    build_notification_done_clause, build_notification_exists_clause,
-    build_notification_seen_clause, build_project_filter, build_properties_filter,
-    chat_filter_is_impossible, document_filter_is_impossible,
+    build_notification_exists_clause, build_notification_state_clause, build_project_filter,
+    build_properties_filter, chat_filter_is_impossible, document_filter_is_impossible,
     document_filter_needs_task_property_joins, project_filter_is_impossible,
     properties_filter_can_apply_to,
 };
@@ -163,8 +162,7 @@ pub(super) fn channel_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
         filter.and_then(|f| f.channel_filter.as_deref()),
         |literal| {
             let predicate = match literal {
-                ChannelLiteral::NotificationDone(done) => NotificationPredicate::Done(*done),
-                ChannelLiteral::NotificationSeen(seen) => NotificationPredicate::Seen(*seen),
+                ChannelLiteral::NotificationState(state) => NotificationPredicate::state(*state),
                 _ => return None,
             };
             Some(build_notification_exists_clause(
@@ -202,8 +200,9 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
         filter.and_then(|f| f.channel_thread_filter.as_deref()),
         |literal| {
             let predicate = match literal {
-                ChannelThreadLiteral::NotificationDone(done) => NotificationPredicate::Done(*done),
-                ChannelThreadLiteral::NotificationSeen(seen) => NotificationPredicate::Seen(*seen),
+                ChannelThreadLiteral::NotificationState(state) => {
+                    NotificationPredicate::state(*state)
+                }
                 _ => return None,
             };
             Some(build_notification_exists_clause(
@@ -249,16 +248,13 @@ pub(super) fn email_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> Stri
         |literal| match literal {
             EmailLiteral::Importance(true) => Some("et.is_signal".to_string()),
             EmailLiteral::Importance(false) => Some("NOT et.is_signal".to_string()),
-            EmailLiteral::NotificationDone(done) => Some(build_notification_done_clause(
+            EmailLiteral::NotificationState(state) => Some(build_notification_state_clause(
                 "et.id",
                 "email_thread",
-                *done,
+                *state,
             )),
-            EmailLiteral::NotificationSeen(seen) => Some(build_notification_seen_clause(
-                "et.id",
-                "email_thread",
-                *seen,
-            )),
+            EmailLiteral::Read(true) => Some("et.is_read".to_string()),
+            EmailLiteral::Read(false) => Some("NOT et.is_read".to_string()),
             _ => None,
         },
     );

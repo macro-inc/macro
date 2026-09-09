@@ -368,9 +368,7 @@ fn foreign_entity_matches_literal(entity: &ForeignEntity, literal: &ForeignEntit
         // "me" and notification done/seen resolution happen in the repository (against the
         // metadata participant list and the notification tables); the fake cannot resolve them,
         // so fail closed.
-        ForeignEntityLiteral::IncludesMe
-        | ForeignEntityLiteral::NotificationDone(_)
-        | ForeignEntityLiteral::NotificationSeen(_) => false,
+        ForeignEntityLiteral::IncludesMe | ForeignEntityLiteral::NotificationState(_) => false,
     }
 }
 

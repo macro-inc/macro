@@ -7273,6 +7273,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "notification",
+ "notification_state",
  "rootcause",
  "serde_json",
  "tokio",
@@ -7368,6 +7369,7 @@ dependencies = [
  "item_filters",
  "macro_user_id",
  "model_file_type",
+ "notification_state",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -8778,6 +8780,7 @@ dependencies = [
  "model_file_type",
  "nom 8.0.0",
  "non_empty",
+ "notification_state",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -11313,6 +11316,7 @@ dependencies = [
 name = "notification_state"
 version = "0.1.0"
 dependencies = [
+ "async-graphql",
  "schemars 1.2.1",
  "serde",
  "serde_json",

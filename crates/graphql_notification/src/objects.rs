@@ -3,29 +3,9 @@ use std::sync::Arc;
 use async_graphql::{Context, ID, Object, dataloader::DataLoader};
 use graphql_common::GraphqlSoupEntityType;
 use model_notifications::NotifEvent;
-use notification::domain::models::{NotificationState, UserNotificationRow};
+use notification::domain::models::UserNotificationRow;
 
-/// The mutually exclusive lifecycle state of a notification.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, async_graphql::Enum)]
-#[graphql(name = "NotificationState")]
-pub enum GraphqlNotificationState {
-    /// Not yet acknowledged.
-    Unseen,
-    /// Acknowledged but not completed.
-    Seen,
-    /// Completed.
-    Done,
-}
-
-impl From<NotificationState> for GraphqlNotificationState {
-    fn from(state: NotificationState) -> Self {
-        match state {
-            NotificationState::Unseen => Self::Unseen,
-            NotificationState::Seen => Self::Seen,
-            NotificationState::Done => Self::Done,
-        }
-    }
-}
+use notification_state::graphql::GraphqlNotificationState;
 
 #[cfg(test)]
 mod test;
