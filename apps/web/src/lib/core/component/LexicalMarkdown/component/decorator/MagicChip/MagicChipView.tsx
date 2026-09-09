@@ -27,6 +27,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
+import { MagicChipPullRequest } from './MagicChipPullRequest';
 import {
   type MagicChipActivity,
   type MagicChipHeader,
@@ -179,8 +180,8 @@ const AskingActions: Component<ChipAsking & { onOpen?: () => void }> = (
 
 /**
  * The chip's top row: who is answering (`Macro Agent · model`), what the turn is
- * doing, and the way into the session. The whole label opens the session,
- * as does the arrow.
+ * doing, the pull request the session opened once there is one, and the way
+ * into the session. The whole label opens the session, as does the arrow.
  */
 const ChipHeader: Component<{
   header?: MagicChipHeader;
@@ -228,6 +229,9 @@ const ChipHeader: Component<{
       </Show>
       <ActivityText activity={props.status} />
     </button>
+    <Show when={props.header?.pullRequestUrl}>
+      {(url) => <MagicChipPullRequest url={url()} />}
+    </Show>
     <Show when={props.onCollapse}>
       <Button
         variant="ghost"
