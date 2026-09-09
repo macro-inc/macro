@@ -1,15 +1,7 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Layer, Tooltip } from '@ui';
 import { format } from 'date-fns';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  on,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { OVERVIEW_TZ, parseOverviewDate } from '../core/activity-dates';
 import {
@@ -189,31 +181,20 @@ function ContributionHeatmap(props: {
     }
   };
 
-  createEffect(
-    on(
-      () => props.geometry,
-      (geometry) => {
-        if (!weekArea) return;
-        if (!geometry.overflows) {
-          panned = undefined;
-          return;
-        }
-        const element = weekArea;
-        // Entering overflow opens on the newest week; later geometry changes
-        // (a pane drag, a rotation) keep the weeks the user was looking at.
-        const target = panned ?? 0;
-        const frame = requestAnimationFrame(() => {
-          element.scrollLeft = scrollLeftAtWeeksFromEnd(
-            target,
-            element,
-            geometry
-          );
-          panned = target;
-        });
-        onCleanup(() => cancelAnimationFrame(frame));
-      }
-    )
-  );
+  // Runs after the style bindings below have applied the new variables, so
+  // the scroll extents it reads are already the new geometry's.
+  createEffect(() => {
+    const geometry = props.geometry;
+    if (!weekArea) return;
+    if (!geometry.overflows) {
+      panned = undefined;
+      return;
+    }
+    // Entering overflow opens on the newest week; later geometry changes
+    // (a pane drag, a rotation) keep the weeks the user was looking at.
+    panned ??= 0;
+    weekArea.scrollLeft = scrollLeftAtWeeksFromEnd(panned, weekArea, geometry);
+  });
 
   return (
     <div
