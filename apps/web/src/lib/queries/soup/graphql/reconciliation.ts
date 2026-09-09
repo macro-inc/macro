@@ -26,6 +26,23 @@ export function soupReconciliationBaseline(
     : undefined;
 }
 
+/** Rows discovered by server pagination after an overlay was computed. Do not
+ * re-add covered baseline rows (including confirmed non-matches), or duplicate
+ * local candidates that pagination now also returns. */
+export function unreconciledServerRecords(
+  records: readonly GraphqlSoupItem[],
+  baselineKeys: ReadonlySet<string>,
+  displayedKeys: ReadonlySet<string>
+): GraphqlSoupItem[] {
+  const seen = new Set([...baselineKeys, ...displayedKeys]);
+  return records.filter((record) => {
+    const key = soupItemKey(record);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Materialize only reconciled survivors, preserving baseline display data if
  * a selected record is incomplete. Unrenderable new candidates are omitted. */
 export function materializeReconciledSoup(

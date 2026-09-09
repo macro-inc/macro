@@ -562,6 +562,154 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it.each(['error', 'unsupported', 'incomplete'] as const)(
+    'shows later server pages while reconciliation is pending and after %s',
+    async (outcome) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      let revision = REVISION_1;
+      let notify: (revision: string) => void = () => {};
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let retries = 0;
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: typeof notify) => {
+          notify = callback;
+          return () => {};
+        },
+        onCacheGenerationChanged: () => () => {},
+      });
+      makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+        cursor
+          ? { continuation: { cursor } }
+          : { initial: { sortMethod: 'UPDATED_AT', limit: 2 } }
+      );
+      entityFilterMock.mockImplementation(async () => {
+        if (revision !== REVISION_2) {
+          retries += 1;
+          await pending;
+          if (outcome === 'error') throw new Error('reconciliation failed');
+          return { kind: outcome, revision };
+        }
+        return {
+          kind: 'reconciled',
+          revision,
+          keys: ['GraphqlSoupDocument:new', 'GraphqlSoupDocument:kept'],
+          retainedKeys: [],
+          optimistic: false,
+        };
+      });
+      readRecordsByKeysMock.mockImplementation(async () => ({
+        revision,
+        records: [
+          {
+            recordKey: 'GraphqlSoupDocument:new',
+            record: {
+              __typename: 'GraphqlSoupDocument',
+              id: 'new',
+              name: 'New candidate',
+            },
+          },
+        ],
+      }));
+      let dispose!: () => void;
+      let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+      createRoot((stop) => {
+        dispose = stop;
+        query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true })
+        );
+      });
+      const names = () => query.data()?.entities.map((item) => item.name);
+      try {
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: [
+              { id: 'kept', name: 'Baseline survivor' },
+              { id: 'removed', name: 'Confirmed non-match' },
+            ],
+            next_cursor: 'server-cursor-2',
+          })
+        );
+        revision = REVISION_2;
+        notify(revision);
+        await vi.waitFor(() =>
+          expect(names()).toEqual(['New candidate', 'Baseline survivor'])
+        );
+        const secondPage = query.fetchNextPage();
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
+        revision = '3';
+        notify(revision);
+        fake.executions[1].next(
+          graphqlSoupPage({
+            // The candidate is also returned by pagination: render it only once.
+            items: [
+              { id: 'new', name: 'New candidate' },
+              { id: 'second', name: 'Second page' },
+            ],
+            next_cursor: 'server-cursor-3',
+          }),
+          { source: 'live-network', revision }
+        );
+        await secondPage;
+        await vi.waitFor(() => expect(retries).toBeGreaterThan(0));
+        expect(names()).toEqual([
+          'New candidate',
+          'Baseline survivor',
+          'Second page',
+        ]);
+        expect(query.isLoading()).toBe(false);
+        expect(query.isPlaceholderData()).toBe(false);
+        release();
+        await vi.waitFor(() =>
+          expect(entityFilterMock).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+              baseline: expect.arrayContaining([
+                expect.objectContaining({ key: 'GraphqlSoupDocument:second' }),
+              ]),
+            })
+          )
+        );
+        expect(names()).toEqual([
+          'New candidate',
+          'Baseline survivor',
+          'Second page',
+        ]);
+        // A second load-more must not rely on local evaluation recovering.
+        const thirdPage = query.fetchNextPage();
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(3));
+        expect(fake.executions[2].variables).toEqual({
+          input: { continuation: { cursor: 'server-cursor-3' } },
+        });
+        revision = '4';
+        notify(revision);
+        fake.executions[2].next(
+          graphqlSoupPage({
+            items: [{ id: 'third', name: 'Third page' }],
+            next_cursor: null,
+          }),
+          { source: 'live-network', revision }
+        );
+        await thirdPage;
+        expect(names()).toEqual([
+          'New candidate',
+          'Baseline survivor',
+          'Second page',
+          'Third page',
+        ]);
+        expect(query.hasNextPage()).toBe(false);
+      } finally {
+        release();
+        dispose();
+      }
+    }
+  );
+
   it('never supplies another filter or cache generation as baseline evidence', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

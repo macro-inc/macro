@@ -15,6 +15,9 @@ indicators.
 
 This is a best-effort display, not proof that every matching entity is cached. Loading
 more still follows the original server cursors and preserves already loaded pages.
+Newly loaded server rows join the retained display immediately, without duplicates or
+waiting for local recomputation to succeed. Removing pages from the server baseline
+invalidates overlays built from those pages.
 Changing filters or resetting the cache discards prior reconciliation evidence. Grouped
 lists, unsupported filters/sorts, and native/non-cache transports keep their existing
 network behavior.

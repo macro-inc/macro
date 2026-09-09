@@ -47,7 +47,9 @@ import { mapSoupPageToEntityList } from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
 import {
   materializeReconciledSoup,
+  soupItemKey,
   soupReconciliationBaseline,
+  unreconciledServerRecords,
 } from './reconciliation';
 
 export type GraphqlSoupAstItemsQueryArgs = {
@@ -107,6 +109,8 @@ export function createGraphqlSoupAstItemsQuery(
   type LocalProjection = {
     input: GraphqlSoupInput;
     generation: number;
+    baselineKeys: ReadonlySet<string>;
+    displayedKeys: ReadonlySet<string>;
     data: SoupAstItemsData;
   };
   const [currentCacheRevision, setCurrentCacheRevision] = createSignal<
@@ -298,17 +302,20 @@ export function createGraphqlSoupAstItemsQuery(
             setCurrentCacheRevision(latestRevision);
             continue;
           }
-          const items = materializeReconciledSoup(
+          const reconciledRecords = materializeReconciledSoup(
             result.keys,
             chunks.flatMap((chunk) => chunk.records),
             records
-          ).flatMap((record) => {
+          );
+          const items = reconciledRecords.flatMap((record) => {
             const item = mapGraphqlSoupItem(record);
             return item ? [item] : [];
           });
           setLocalProjection({
             input,
             generation: requestGeneration,
+            baselineKeys: new Set(records.map(soupItemKey)),
+            displayedKeys: new Set(reconciledRecords.map(soupItemKey)),
             data: {
               entities: mapSoupPageToEntityList(
                 { items, next_cursor: undefined },
@@ -410,21 +417,63 @@ export function createGraphqlSoupAstItemsQuery(
       : []
   );
 
-  // A revision change invalidates local authority, not the rows already on
-  // screen. Retain that display until its replacement is ready, but never
-  // across a different query or cache generation. Publishing a replacement
-  // still requires all the revision checks above.
+  const serverRecordKeys = createMemo(
+    () => new Set(serverRecords().map(soupItemKey))
+  );
+
+  // Retain same-query rows across revisions and page additions, not across a
+  // query/generation change or removal of the baseline they were built from.
+  // Publishing a replacement still requires all the revision checks above.
   const displayLocalProjection = (): LocalProjection | undefined => {
     const local = localProjection();
-    return local?.input === firstPageInput() &&
-      local?.generation === cacheGeneration
-      ? local
-      : undefined;
+    if (
+      !local ||
+      local.input !== firstPageInput() ||
+      local.generation !== cacheGeneration
+    )
+      return undefined;
+    const keys = serverRecordKeys();
+    for (const key of local.baselineKeys) {
+      if (!keys.has(key)) return undefined;
+    }
+    return local;
   };
   const networkIsAuthoritative = (): boolean =>
     networkAuthorityInput === firstPageInput() &&
     networkAuthorityRevision() !== undefined &&
     networkAuthorityRevision() === currentCacheRevision();
+
+  // An overlay covers only the server rows that existed when it was evaluated.
+  // New server pages must render immediately, even if the next evaluation stalls
+  // or fails. Preserve covered decisions and local additions, then append new
+  // rows in server-page order until a successful reconciliation orders the union.
+  const displayData = createMemo((): SoupAstItemsData | undefined => {
+    if (networkIsAuthoritative()) return query.data?.data;
+    const local = displayLocalProjection();
+    if (!local) return query.data?.data;
+    const additions = unreconciledServerRecords(
+      serverRecords(),
+      local.baselineKeys,
+      local.displayedKeys
+    ).flatMap((record) => {
+      const item = mapGraphqlSoupItem(record);
+      return item ? [item] : [];
+    });
+    if (additions.length === 0) return local.data;
+    const entities = mapSoupPageToEntityList(
+      { items: additions, next_cursor: undefined },
+      {
+        instructionsIdQuery,
+        showSupportedForeignEntities: options().showSupportedForeignEntities,
+      }
+    );
+    return entities.length === 0
+      ? local.data
+      : {
+          ...local.data,
+          entities: [...local.data.entities, ...entities],
+        };
+  });
 
   const error = (): CombinedError | undefined => query.error ?? undefined;
   createComputed(
@@ -436,10 +485,7 @@ export function createGraphqlSoupAstItemsQuery(
   );
 
   return {
-    data: () => {
-      if (networkIsAuthoritative()) return query.data?.data;
-      return displayLocalProjection()?.data ?? query.data?.data;
-    },
+    data: displayData,
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
