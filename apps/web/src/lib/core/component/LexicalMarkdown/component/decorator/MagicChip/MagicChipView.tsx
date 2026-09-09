@@ -382,6 +382,14 @@ export const MagicChipView: Component<{
         locked ? false : ((await props.answer?.respond(answer)) ?? false),
     };
   };
+  // The question's state, kept through its own teardown: once the answer
+  // lands the pending question clears while the composer's effects are still
+  // winding down, and a prop getter reading a `<Show>` accessor then would
+  // read a stale one. Children key on the request id and read this instead.
+  const held = createMemo<ChipAsking | undefined>(
+    (previous) => chipAsking() ?? previous,
+    undefined
+  );
   // There is something to expand once the agent has written, or asked.
   const expandable = () => Boolean(markdown()) || Boolean(chipAsking());
   // While the answer area has no prose, a reply to the message previews the
@@ -441,7 +449,8 @@ export const MagicChipView: Component<{
             data-magic-chip-clip
           >
             <Show
-              when={chipAsking()}
+              when={requestKey()}
+              keyed
               fallback={
                 <Show
                   when={markdown()}
@@ -451,7 +460,8 @@ export const MagicChipView: Component<{
                 </Show>
               }
             >
-              {(current) => <Question {...current()} />}
+              {/* `held` is set whenever a request id is. */}
+              <Question {...held()!} />
             </Show>
             {/* Cropped content fades out; expanding shows it whole. */}
             <Show when={expandable() && !expanded()}>
@@ -461,15 +471,13 @@ export const MagicChipView: Component<{
               />
             </Show>
           </div>
-          <Show when={chipAsking()?.asking.canAnswer && chipAsking()}>
-            {(current) => (
-              <div
-                class="flex shrink-0 items-center justify-end gap-2 px-3 pb-2"
-                data-magic-chip-decisions
-              >
-                <AskingActions {...current()} onOpen={props.onOpen} />
-              </div>
-            )}
+          <Show when={requestKey() && held()?.asking.canAnswer}>
+            <div
+              class="flex shrink-0 items-center justify-end gap-2 px-3 pb-2"
+              data-magic-chip-decisions
+            >
+              <AskingActions {...held()!} onOpen={props.onOpen} />
+            </div>
           </Show>
         </div>
       </div>

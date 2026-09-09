@@ -399,6 +399,9 @@ describe('MagicChipView reviewing a tool draft', () => {
   });
 
   it('keeps the expanded answer while a review takes the area and gives it back', () => {
+    // Answering unmounts the question while the composer's effects wind
+    // down; nothing may read a `<Show>` accessor that has gone stale.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const [presentation, setPresentation] = createSignal<MagicChipPresentation>(
       {
         kind: 'answering',
@@ -423,6 +426,7 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(view.queryByTestId('chip-markdown')).toBeNull();
     expect(answerArea(view.container)).toBe(area);
 
+    fireEvent.click(view.getByText('Dismiss'));
     setPresentation({ kind: 'settled', markdown: 'Created the event.' });
     expect(view.queryByTestId('calendar-composer')).toBeNull();
     expect(askingBody(view.container)).toBeNull();
@@ -430,6 +434,10 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(header(view.container)?.textContent).toContain('Done');
     expect(answerArea(view.container)).toBe(area);
     expect(area.getAttribute('aria-expanded')).toBe('true');
+    expect(
+      warn.mock.calls.some((call) => String(call[0]).includes('stale'))
+    ).toBe(false);
+    warn.mockRestore();
   });
 });
 
