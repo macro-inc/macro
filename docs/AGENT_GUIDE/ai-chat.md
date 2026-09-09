@@ -16,25 +16,61 @@ directly at `/app/agent/<uuid>` (the runtime starts while the block mounts).
 That create path focuses the agent composer so you can type immediately.
 When the `enable-agent-session-composer` flag is on (default in dev;
 `VITE_ENABLE_AGENT_SESSION_COMPOSER` overrides), the same entry instead opens
-the **New agent session** composer popover. The prompt textarea (`Give your agent a
-prompt...`) is focused on open, so you can `type_text` immediately. Below the prompt a
-**Agent** section (`aria-label` `Agent`) lists the choices in the open, as a
-`radiogroup` of cards (`role="radio"`, `aria-checked`): **Macro** `@macro`
-(the default), **Cursor** `@cursor` (disabled with a `Connect Cursor in
-Settings → Harness` hint until a Cursor API key is stored), then the user's
-own agents, each card showing avatar, name and `@handle · Macro|Cursor` for
-the runtime (a disabled card reads `@cursor · Not connected`). Every agent is
-shown; the cards form an even grid that fills the popover width. Click a card
-or use arrow keys to change agent. The **Model
-override** pill (`aria-label` `Model override`) at the bottom left opens a
-menu whose first row is `Agent default · <model>`, followed by at most five
-featured models; longer catalogs put the rest under a `More models` submenu.
-Changing agent resets the override. Tab order is prompt → selected agent card → Model →
-**Create Session**; the close `X` is skipped. The menu opens on Enter/Space
-and selects with arrow keys + Enter. Escape in the prompt first blurs to the
-dialog, a second Escape closes it. Press **Create Session** or
-`Cmd/Ctrl+Enter`; the composer closes and the new `/app/agent/<uuid>` session
-opens while its runtime starts.
+the **Start a session** composer popover. A centered title sits above two rounded
+boxes of equal width: a shallow agent strip and a prompt box about twice its
+height, separated by a small gap. The picker has
+compact choices in a horizontally scrolling `radiogroup` (`aria-label="Agent"`,
+`aria-orientation="horizontal"`, `role="radio"`, `aria-checked`). All agents are
+available by scrolling sideways, with recent successful choices first.
+An accent **Create agent** button stays fixed to the right of the strip.
+It closes the session composer and opens the new-agent form at
+`/app/settings/agents?createAgent=true`; it does not create a session.
+Recents are remembered per user on this device. With no history, **Macro**
+`@macro` (the default) and **Cursor** `@cursor` lead, followed by saved agents.
+Without a connected Cursor API key, Cursor is a **Connect Cursor** button:
+clicking it closes the composer and opens Settings → Harness without creating
+a session. It is keyboard-accessible; arrow navigation focuses it without
+activating it. Connected Cursor remains a selectable agent. Setup navigation
+is disabled while a session is being created or its setup is being retried.
+Each row shows its `@handle` beneath the name. There are no coding tags;
+default models appear only in the prompt's model selector.
+There is no search field or browse/expand control. Left/Right change the selected
+agent and scroll it into view; Home/End jump to the first/last available agent.
+Unavailable agents without a connection action are skipped.
+
+The prompt box uses the agent session composer's surface, regular message text,
+and arrow send button, with a three-line editing area. It names the
+current selection:
+`What would you like Macro to work on?` becomes
+`What would you like Cursor to work on?` when Cursor is selected. Its aria-label
+is `Task for the agent`. The dialog's default autofocus lands on the selected
+agent row, its first tabbable control.
+The prompt and agent strip share the same surface layer and background.
+A centered caption below the prompt describes the selected runtime: Macro
+shows “Starts quickly and runs in-memory. Great for workspace tasks”; Cursor
+shows “Bring in Cursor for some heavier coding work”. Local-connector agents
+are still excluded from creation by this modal's managed-session endpoint.
+The **Model override** selector (`aria-label="Model override"`) sits inside the
+prompt box at the bottom left. It
+shows `default (<model name>)` when using the agent's configured default and
+the model name alone when overridden. It has no model icon. Saved-agent defaults
+come from their configuration; built-in defaults are loaded from model discovery.
+While a default is unknown, the selector reads `default`. Changing agent resets
+the override. Tab order is selected agent row (and any connection action) →
+**Create agent** → prompt → model → **Start session**.
+Escape in the prompt first blurs to the dialog; a second Escape closes it.
+Press the arrow send button (labelled **Start session**) or `Cmd/Ctrl+Enter`;
+the button shows a spinner and is labelled **Starting…**
+while the server creates the session, applies the model override, and accepts the
+first prompt. It then closes
+and opens the real `/app/agent/<uuid>` URL. It never navigates to a temporary
+`pending-…` URL. Creation failures keep the prompt in the modal and show **Retry**.
+If model setup or prompt delivery fails after creation, **Retry** reuses that
+session, and **Open session** opens it directly; agent and model selection stay
+locked to the session already created.
+Leaving Macro selected uses the backend's in-memory default in every
+environment, including production; it does not provision a Daytona container.
+Explicit coding-agent selections still use their configured runtimes.
 
 ## Start a doc-scoped chat
 

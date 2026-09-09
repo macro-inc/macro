@@ -186,17 +186,9 @@ async fn run() -> anyhow::Result<()> {
         config.environment,
         Environment::Local | Environment::Develop
     );
-    // The in-process "macro(new)" bot is a compile-time identity, not
-    // configuration: it is always `bot_id::MACRO_NEW_BOT_ID`, so the only real
-    // question is whether this environment serves it. Production stays off
-    // until its AI tool config lands - `build_tool_service_context_from_env`
-    // below is fatal, so turning it on without that config would refuse to
-    // boot. (`@macro` itself is not served here at all: its mentions get the
-    // classic in-channel reply from `document_storage_service`.)
-    let inmem_bot = match config.environment {
-        Environment::Local | Environment::Develop => Some(bot_id::MACRO_NEW_BOT_ID),
-        Environment::Production => None,
-    };
+    // Unselected sessions use the in-process bot in every environment.
+    // Explicit coding-agent selections still use their configured runtimes.
+    let inmem_bot = bot_id::MACRO_NEW_BOT_ID;
 
     let pool = PgPoolOptions::new()
         .min_connections(1)
@@ -369,33 +361,25 @@ async fn run() -> anyhow::Result<()> {
     // against it, so the two must be the same string.
     let egress_base_url = AgentHarnessEgressUrl::new()?.to_string();
 
-    let mut inmem_model_engine: Option<Arc<dyn TurnEngine>> = None;
-    let inmem = match inmem_bot {
-        Some(_) => {
-            let tool_context = ai_tools::build_tool_service_context_from_env(
-                pool.clone(),
-                event_broker_tracker.clone(),
-            )
+    let tool_context =
+        ai_tools::build_tool_service_context_from_env(pool.clone(), event_broker_tracker.clone())
             .await
             .context("failed to build the in-memory agent tool context")?;
-            let engine = Arc::new(RigTurnEngine::new(pool.clone(), tool_context));
-            inmem_model_engine = Some(engine.clone());
-            // Cold attaches (fresh spawns and post-restart resumes) rebuild
-            // their model context from the same log every frame lands in.
-            let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
-            Some(InMemRuntime {
-                manager: InMemAgentManager::new(
-                    engine,
-                    frames,
-                    Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
-                        Arc::clone(&egress),
-                        &egress_base_url,
-                    ))),
-                )
-                .with_dev_commands(enable_dev_commands),
-            })
-        }
-        None => None,
+    let inmem_model_engine: Arc<dyn TurnEngine> =
+        Arc::new(RigTurnEngine::new(pool.clone(), tool_context));
+    // Cold attaches (fresh spawns and post-restart resumes) rebuild
+    // their model context from the same log every frame lands in.
+    let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
+    let inmem = InMemRuntime {
+        manager: InMemAgentManager::new(
+            Arc::clone(&inmem_model_engine),
+            frames,
+            Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
+                Arc::clone(&egress),
+                &egress_base_url,
+            ))),
+        )
+        .with_dev_commands(enable_dev_commands),
     };
     // The sandbox provider serves every bot but the in-memory one, which the
     // router pulls out by bot id before the provider ever sees it.
@@ -408,7 +392,7 @@ async fn run() -> anyhow::Result<()> {
         lifecycle_publisher.clone(),
         replica,
     );
-    let sandbox_and_inmem = RoutedContainers::new(sandbox, inmem, inmem_sessions);
+    let sandbox_and_inmem = RoutedContainers::new(sandbox, Some(inmem), inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
     // deployment-wide key to arm this with: the manager reads each session
@@ -444,18 +428,16 @@ async fn run() -> anyhow::Result<()> {
             mcp_servers: AgentMcpServers::OwnerConnections,
         },
     )];
-    if let Some(inmem_bot) = inmem_bot {
-        fixed_runtimes.push((
-            inmem_bot,
-            AgentRuntimeConfig {
-                kind: AgentKind::InMemory,
-                model: config.inmem_model.clone(),
-                harness: config.inmem_harness_slug.clone(),
-                instructions: String::new(),
-                mcp_servers: AgentMcpServers::OwnerConnections,
-            },
-        ));
-    }
+    fixed_runtimes.push((
+        inmem_bot,
+        AgentRuntimeConfig {
+            kind: AgentKind::InMemory,
+            model: config.inmem_model.clone(),
+            harness: config.inmem_harness_slug.clone(),
+            instructions: String::new(),
+            mcp_servers: AgentMcpServers::OwnerConnections,
+        },
+    ));
     fixed_runtimes.push((
         bot_id::CURSOR_BOT_ID,
         AgentRuntimeConfig {
@@ -474,7 +456,7 @@ async fn run() -> anyhow::Result<()> {
     // for it.
     tracing::info!(
         bots = ?fixed_runtimes.iter().map(|(bot, _)| bot.as_uuid()).collect::<Vec<_>>(),
-        in_process_bot = ?inmem_bot.map(BotId::as_uuid),
+        in_process_bot = %inmem_bot.as_uuid(),
         environment = %config.environment,
         "agent harness serving bots"
     );
@@ -526,29 +508,26 @@ async fn run() -> anyhow::Result<()> {
     let runtimes = RuntimeRegistry::with_presence(Arc::new(PgHarnessPresence::new(pool.clone())));
     let redis = redis::Client::open(config.redis_uri.as_ref())
         .context("failed to create the runtime command Redis client")?;
-    let mut defaults = HarnessDefaults::new(SessionDefaults {
+    let defaults = HarnessDefaults::new(SessionDefaults {
         bot_id,
         model: config.harness_model.clone(),
         harness: config.harness_slug.clone(),
         repo_url: config.harness_repo_url.clone(),
-    });
-    if let Some(bot) = inmem_bot {
-        defaults = defaults
-            .with_bot(
-                bot,
-                SessionDefaults {
-                    bot_id: bot,
-                    model: config.inmem_model.clone(),
-                    harness: config.inmem_harness_slug.clone(),
-                    // Stamped but unused: the in-process agent has no
-                    // workspace to clone anything into.
-                    repo_url: config.harness_repo_url.clone(),
-                },
-            )
-            // Sessions nothing names a bot for (the create menu's) run
-            // in-process too; only mentioning the coder bot gets a sandbox.
-            .with_managed_bot(bot);
-    }
+    })
+    .with_bot(
+        inmem_bot,
+        SessionDefaults {
+            bot_id: inmem_bot,
+            model: config.inmem_model.clone(),
+            harness: config.inmem_harness_slug.clone(),
+            // Stamped but unused: the in-process agent has no
+            // workspace to clone anything into.
+            repo_url: config.harness_repo_url.clone(),
+        },
+    )
+    // Sessions nothing names a bot for (the create menu's) run in-process;
+    // explicitly selected coding agents keep their configured runtimes.
+    .with_managed_bot(inmem_bot);
 
     let harness = Arc::new(AgentHarnessService::new(
         sessions,
@@ -629,7 +608,7 @@ async fn run() -> anyhow::Result<()> {
     )));
     let model_service = Arc::new(AgentModelsServiceImpl::new(
         VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
-        InMemoryModels::new(inmem_model_engine, config.inmem_model.clone()),
+        InMemoryModels::new(Some(inmem_model_engine), config.inmem_model.clone()),
         CursorModels::new(cursor_keys, CURSOR_API_BASE_URL.to_owned()),
         macrod_models,
         model_probe_timeout,
