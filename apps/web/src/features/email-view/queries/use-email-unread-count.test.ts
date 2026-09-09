@@ -1,14 +1,29 @@
 import type { SoupAstItemsQueryArgs } from '@queries/soup/items';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useEmailUnreadCount } from './use-email-unread-count';
+import { createRoot } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useEmailUnreadCount as createCount } from './use-email-unread-count';
+
+const disposers: (() => void)[] = [];
+afterEach(() => {
+  for (const dispose of disposers.splice(0)) dispose();
+});
+
+function useEmailUnreadCount() {
+  return createRoot((dispose) => {
+    disposers.push(dispose);
+    return createCount();
+  });
+}
 
 const mocks = vi.hoisted(() => ({
   query: {
     isLoading: false,
     error: null as Error | null,
     isPlaceholderData: false,
+    isEnabled: false,
+    hasNextPage: false,
     data: {
-      groups: [{ totalCount: 120, itemIds: ['one-loaded-row'] }],
+      entities: [{ id: 'email-1', type: 'email', isRead: false }],
     },
   },
   buildEmailQuery: vi.fn(() => ({
@@ -35,8 +50,9 @@ describe('useEmailUnreadCount', () => {
     mocks.query.isLoading = false;
     mocks.query.error = null;
     mocks.query.isPlaceholderData = false;
+    mocks.query.hasNextPage = false;
     mocks.query.data = {
-      groups: [{ totalCount: 120, itemIds: ['one-loaded-row'] }],
+      entities: [{ id: 'email-1', type: 'email', isRead: false }],
     };
   });
 
@@ -48,20 +64,47 @@ describe('useEmailUnreadCount', () => {
       facets: { read: ['unread'] },
     });
     expect(mocks.args).toEqual({
-      params: { limit: 1, sort_method: 'updated_at' },
+      params: { limit: 100, sort_method: 'updated_at' },
       body: { emailView: 'inbox' },
-      groupBy: { type: 'entity_type' },
     });
     expect(mocks.args?.transport).toBeUndefined();
   });
 
-  it('counts all server rows, not just hydrated rows, and reads updated totals', () => {
+  it('counts a complete result and responds to cached read changes', () => {
     const count = useEmailUnreadCount();
-    expect(count()).toBe(120);
-    mocks.query.data.groups[0].totalCount = 119;
-    expect(count()).toBe(119);
-    mocks.query.data.groups = [];
+    expect(count()).toBe(1);
+    mocks.query.data.entities[0].isRead = true;
     expect(count()).toBe(0);
+    mocks.query.data.entities = [];
+    expect(count()).toBe(0);
+  });
+
+  it('does not claim an exact count for an incomplete page', () => {
+    mocks.query.hasNextPage = true;
+    expect(useEmailUnreadCount()()).toBeUndefined();
+  });
+
+  it('displays 99+ only after confirming 100 distinct unread threads', () => {
+    mocks.query.hasNextPage = true;
+    mocks.query.data.entities = Array.from({ length: 100 }, (_, i) => ({
+      id: `email-${i}`,
+      type: 'email',
+      isRead: false,
+    }));
+    const count = useEmailUnreadCount();
+    expect(count()).toBe('99+');
+    mocks.query.data.entities[0].isRead = true;
+    expect(count()).toBeUndefined();
+    mocks.query.hasNextPage = false;
+    expect(count()).toBe(99);
+  });
+
+  it('excludes duplicate threads and non-email rows', () => {
+    mocks.query.data.entities.push(
+      { id: 'email-1', type: 'email', isRead: false },
+      { id: 'document-1', type: 'document', isRead: false }
+    );
+    expect(useEmailUnreadCount()()).toBe(1);
   });
 
   it('does not read data or suspend while pending', () => {

@@ -37,6 +37,22 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 - Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
   `Settings (Ctrl ;)`, `Log out`.
 
+### New outer sidebar badges
+
+The icon-only sidebar shows unread badges for Notifications, Email, and Chat
+(Channels). Notifications counts unread Signal rows: a channel-level row and a
+thread-reply row count separately. Email counts unread Signal threads across linked
+inboxes. Chat counts distinct unread channels, including DMs and unread thread
+activity. A separate phone badge indicates an active channel call.
+
+Counts display `99+` after 100 matching rows are confirmed. Zero and unavailable
+counts have no numeric badge. These are currently bounded list queries, not the
+planned general server-count API: they load additional pages until 100 matching
+rows are confirmed or the list is exhausted. An incomplete result is hidden while
+those pages load rather than shown as an exact total. A missing badge is not proof
+that there are no unread items. Accessible button names include visible unread
+counts and active-call state; match names by prefix when locating these buttons.
+
 ## Favorites
 
 Use an entity's command/context menu to add or remove it from Favorites; drag rows

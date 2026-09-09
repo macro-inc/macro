@@ -7,45 +7,20 @@ import {
   testFacets,
   useSearchContext,
 } from '@app/features/soup';
-import { withEntityNotifications } from '@app/features/soup/entity-notifications';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import {
-  enableCalendarUi,
-  enableInboxNotifiedSort,
-  enableReminders,
-  enableSnippets,
-  enableSupportedSoupForeignEntities,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import {
-  type EntityData,
-  isSnippetEntity,
-  type WithNotification,
-} from '@entity';
-import type { NotificationSource } from '@notifications';
+import type { EntityData, WithNotification } from '@entity';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
-import { startOfDay, subWeeks } from 'date-fns';
 import { createMemo } from 'solid-js';
-import { match } from 'ts-pattern';
-import {
-  noiseFilter,
-  signalFilter,
-} from '../../next-soup/filters/inbox-filters';
-import {
-  notDoneFilter,
-  scheduledRemindersFilter,
-} from '../../next-soup/filters/predicates';
 import { INBOX_FACETS, type InboxFacetContext } from '../inbox-facets';
-import type { InboxTab, InboxViewState } from '../types';
-import { soupItemMatchesInboxTab } from './inbox-item-filter';
+import type { InboxViewState } from '../types';
 import {
-  buildInboxQuery,
-  type InboxQueryCapabilities,
-  type InboxViewContext,
-} from './inbox-query';
-import { groupInboxEntitiesByDate, inboxSortTimestamp } from './inbox-results';
+  selectInboxEntities,
+  useInboxQueryCapabilities,
+} from './inbox-eligibility';
+import { soupItemMatchesInboxTab } from './inbox-item-filter';
+import { buildInboxQuery, type InboxViewContext } from './inbox-query';
+import { groupInboxEntitiesByDate } from './inbox-results';
 import { buildInboxSearchRequest } from './inbox-search';
 
 export type InboxDataSourceItem = SoupRow<WithNotification<EntityData>>;
@@ -57,64 +32,15 @@ export type InboxDataSourceInput = Pick<
   'tab' | 'search' | 'groupBy' | 'facets'
 >;
 
-function matchesCapabilities(
-  entity: EntityData,
-  capabilities: InboxQueryCapabilities
-): boolean {
-  if (entity.type === 'calendar_event') return capabilities.calendar;
-  if (entity.type === 'foreign') return capabilities.foreignEntities;
-  if (entity.type === 'reminder') return capabilities.reminders;
-  if (isSnippetEntity(entity)) return capabilities.snippets;
-
-  return true;
-}
-
-function matchesTab(
-  entity: WithNotification<EntityData>,
-  tab: InboxTab,
-  source: NotificationSource
-): boolean {
-  return match(tab)
-    .with('signal', () => {
-      if (!signalFilter(entity) || !notDoneFilter(source)(entity)) return false;
-
-      if (
-        entity.type !== 'document' &&
-        entity.type !== 'email' &&
-        entity.type !== 'chat' &&
-        entity.type !== 'project'
-      ) {
-        return true;
-      }
-
-      return (
-        new Date(inboxSortTimestamp(entity) ?? 0).getTime() >=
-        subWeeks(startOfDay(new Date()), 2).getTime()
-      );
-    })
-    .with('noise', () => noiseFilter(entity) && notDoneFilter(source)(entity))
-    .with('reminders', () => scheduledRemindersFilter(entity))
-    .exhaustive();
-}
-
 export function useInboxDataSource(
   state: InboxDataSourceInput
 ): InboxDataSource {
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
 
-  const foreignEntities = useFeatureFlag(enableSupportedSoupForeignEntities);
-  const notifiedSort = useFeatureFlag(enableInboxNotifiedSort);
+  const capabilities = useInboxQueryCapabilities();
 
   const facetContext = (): InboxFacetContext => ({ notificationSource });
-
-  const capabilities = (): InboxQueryCapabilities => ({
-    calendar: isFeatureEnabled(enableCalendarUi),
-    foreignEntities: foreignEntities().enabled,
-    notifiedSort: notifiedSort().enabled,
-    reminders: isFeatureEnabled(enableReminders),
-    snippets: isFeatureEnabled(enableSnippets),
-  });
 
   const viewContext = createMemo(
     (): InboxViewContext => ({
@@ -135,24 +61,15 @@ export function useInboxDataSource(
     const tab = viewContext().tab;
     return {
       enabled: true,
-      showSupportedForeignEntities: foreignEntities().enabled,
+      showSupportedForeignEntities: capabilities().foreignEntities,
       meta: {
         insertFilter: (item) => soupItemMatchesInboxTab(item, tab),
       },
     };
   });
 
-  const transformEntities = (entities: EntityData[]) => {
-    const context = viewContext();
-    return entities
-      .filter((entity) => matchesCapabilities(entity, context.capabilities))
-      .map((entity) =>
-        withEntityNotifications(entity, notificationSource, {
-          scopeChannelThreads: true,
-        })
-      )
-      .filter((entity) => matchesTab(entity, context.tab, notificationSource));
-  };
+  const transformEntities = (entities: EntityData[]) =>
+    selectInboxEntities(entities, viewContext(), notificationSource);
 
   const { entityPool } = useSearchContext();
   const localPool = createMemo(() => {

@@ -1,4 +1,6 @@
+import { useChannelsUnreadCount } from '@app/features/channels-view/use-channels-unread-count';
 import { useEmailUnreadCount } from '@app/features/email-view/queries/use-email-unread-count';
+import { useInboxUnreadCount } from '@app/features/inbox-view/queries/use-inbox-unread-count';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
@@ -42,6 +44,13 @@ export const SidebarRail = (props: SidebarRailProps) => {
   const layout = useSplitLayout();
   const activeCalls = useActiveCallsQuery();
   const emailUnreadCount = useEmailUnreadCount();
+  const inboxUnreadCount = useInboxUnreadCount();
+  const channelsUnreadCount = useChannelsUnreadCount();
+  const unreadCounts = {
+    inbox: inboxUnreadCount,
+    mail: emailUnreadCount,
+    channels: channelsUnreadCount,
+  };
   // The outer rail must not suspend while call state is loading.
   const hasActiveCall = () =>
     activeCalls.isSuccess && (activeCalls.data?.length ?? 0) > 0;
@@ -86,7 +95,9 @@ export const SidebarRail = (props: SidebarRailProps) => {
                 <ListNav
                   item={item}
                   unreadCount={
-                    item.id === 'mail' ? emailUnreadCount() : undefined
+                    item.id in unreadCounts
+                      ? unreadCounts[item.id as keyof typeof unreadCounts]()
+                      : undefined
                   }
                   hasActiveCall={item.id === 'channels' && hasActiveCall()}
                 />

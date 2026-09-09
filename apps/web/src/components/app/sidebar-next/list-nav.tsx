@@ -16,7 +16,7 @@ import type { SidebarNextNavItem } from './nav-items';
 
 export type ListNavProps = {
   item: SidebarNextNavItem;
-  unreadCount?: number;
+  unreadCount?: number | '99+';
   hasActiveCall?: boolean;
   onContextMenuOpenChange?: (open: boolean) => void;
 };
@@ -39,7 +39,8 @@ export const ListNav = (props: ListNavProps) => {
   const location = useLocation();
 
   const content = () => sidebarContent(props.item.id, props.item.params);
-  const hasUnread = () => (props.unreadCount ?? 0) > 0;
+  const hasUnread = () =>
+    props.unreadCount === '99+' || (props.unreadCount ?? 0) > 0;
   const label = () =>
     [
       props.item.label,
@@ -103,7 +104,7 @@ export const ListNav = (props: ListNavProps) => {
         size="icon-md"
         class="cursor-default rounded-xl"
         label={label()}
-        tooltip={`Go to ${label()}`}
+        tooltip={`Go to ${props.item.label}`}
         tooltipPlacement="right"
         hotkey={[TOKENS.sidebar.goToLeader, props.item.hotkeyToken]}
         draggable={false}
@@ -145,7 +146,9 @@ export const ListNav = (props: ListNavProps) => {
             data-sidebar-unread-count
             class="pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold tabular-nums text-panel ring-2 ring-surface"
           >
-            {(props.unreadCount ?? 0) > 99 ? '99+' : props.unreadCount}
+            {props.unreadCount === '99+' || (props.unreadCount ?? 0) > 99
+              ? '99+'
+              : props.unreadCount}
           </span>
         </Show>
         <Show when={props.hasActiveCall}>

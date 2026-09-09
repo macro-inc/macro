@@ -54,15 +54,6 @@ const SIDEBAR_NEXT_NAV_ITEMS = [
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {
-    id: 'documents',
-    label: 'Drive',
-    href: LIST_VIEW_PATHS.documents,
-    icon: FolderSimpleIcon,
-    iconActive: FolderSimpleFillIcon,
-    hotkey: 'f',
-    hotkeyToken: TOKENS.sidebar.goTo.documents,
-  },
-  {
     id: 'mail',
     label: 'Email',
     href: LIST_VIEW_PATHS.mail,
@@ -79,6 +70,15 @@ const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: ChatsCircleFillIcon,
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
+  },
+  {
+    id: 'documents',
+    label: 'Drive',
+    href: LIST_VIEW_PATHS.documents,
+    icon: FolderSimpleIcon,
+    iconActive: FolderSimpleFillIcon,
+    hotkey: 'f',
+    hotkeyToken: TOKENS.sidebar.goTo.documents,
   },
   {
     id: 'tasks',
