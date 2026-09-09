@@ -477,12 +477,13 @@ async fn deleting_an_unclosed_stage_leaves_settings_alone() {
     let [lead, won] = store.stage_ids()[..] else {
         panic!("expected two seeded stages");
     };
-    let settings = StubSettings::requiring(CrmPermissionRole::Admin).with_closed(vec![won]);
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin)
+        .with_closed(vec![won])
+        .with_legacy(BTreeMap::from([(StageOption::LEAD_UUID, lead)]));
     CrmStageServiceImpl::new(settings.clone(), store)
         .replace_stages(&receipt_with_role(TeamRole::Admin), vec![keep(won, "Won")])
         .await
         .unwrap();
-    let _ = lead;
     assert!(settings.patches().is_empty());
 }
 
@@ -636,6 +637,46 @@ async fn deleting_a_seeded_stage_leaves_the_map_alone() {
         .unwrap();
     assert!(settings.patches().is_empty());
     assert_eq!(settings.legacy(), legacy);
+}
+
+#[tokio::test]
+async fn a_set_without_a_map_gets_one_on_the_next_edit() {
+    let store = MemoryStore::customized(&["Lead", "Client"]);
+    let [lead, client] = store.stage_ids()[..] else {
+        panic!("expected two seeded stages");
+    };
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin);
+    CrmStageServiceImpl::new(settings.clone(), store)
+        .replace_stages(
+            &receipt_with_role(TeamRole::Admin),
+            vec![keep(lead, "Lead"), keep(client, "Client")],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        settings.legacy(),
+        BTreeMap::from([(StageOption::LEAD_UUID, lead)])
+    );
+}
+
+#[tokio::test]
+async fn a_backfilled_map_reads_labels_from_before_the_edit() {
+    let store = MemoryStore::customized(&["Lead", "Client"]);
+    let [lead, client] = store.stage_ids()[..] else {
+        panic!("expected two seeded stages");
+    };
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin);
+    CrmStageServiceImpl::new(settings.clone(), store)
+        .replace_stages(
+            &receipt_with_role(TeamRole::Admin),
+            vec![keep(lead, "Prospect"), keep(client, "Client")],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        settings.legacy(),
+        BTreeMap::from([(StageOption::LEAD_UUID, lead)])
+    );
 }
 
 #[tokio::test]

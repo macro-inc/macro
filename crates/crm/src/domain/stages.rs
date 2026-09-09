@@ -181,12 +181,14 @@ where
         }
     }
 
-    /// Drop closed entries that point at stages no longer in `set`.
+    /// Drop closed entries that point at stages no longer in `set`; write
+    /// `legacy` when given.
     async fn prune_closed_stage_ids(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         settings: &CrmTeamSettings,
         set: &TeamStageSet,
+        legacy: Option<BTreeMap<Uuid, Uuid>>,
     ) -> Result<(), CrmError> {
         let live: Vec<Uuid> = set.stages.iter().map(|stage| stage.id).collect();
         let closed = settings.closed_stage_ids.as_ref().map(|closed| {
@@ -196,7 +198,7 @@ where
                 .filter(|id| live.contains(id))
                 .collect()
         });
-        self.write_stage_settings(access, settings, closed, None)
+        self.write_stage_settings(access, settings, closed, legacy)
             .await
     }
 
@@ -329,6 +331,12 @@ where
             )));
         }
 
+        // Backfill a map the first settings write never landed, from the pre-edit labels.
+        let legacy = settings
+            .legacy_stage_ids
+            .is_empty()
+            .then(|| legacy_stage_ids_for(&current));
+
         let kept: HashSet<Uuid> = requested.iter().filter_map(|stage| stage.id).collect();
         let mut plan = StageReplacePlan {
             delete: current
@@ -369,7 +377,8 @@ where
                 .replace_stages(access, current.definition_id, plan)
                 .await?
         };
-        self.prune_closed_stage_ids(access, &settings, &set).await?;
+        self.prune_closed_stage_ids(access, &settings, &set, legacy)
+            .await?;
         Ok(set)
     }
 
