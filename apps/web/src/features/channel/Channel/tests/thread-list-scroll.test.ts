@@ -1,5 +1,6 @@
 import { createScrollIntentTracker } from '@core/util/scroll-intent';
 import { describe, expect, it, vi } from 'vitest';
+import { createScrollSource } from '../create-scroll-source';
 
 function scrollSurface(onUserIntent: () => void) {
   const tracker = createScrollIntentTracker(onUserIntent);
@@ -76,5 +77,62 @@ describe('createScrollIntentTracker', () => {
 
     const farFuture = Date.now() + 500;
     expect(tracker.lastDirection(farFuture)).toBe(undefined);
+  });
+});
+
+describe('createScrollSource', () => {
+  function source(interacting = false) {
+    let isInteracting = interacting;
+    const scrollSource = createScrollSource(() => isInteracting);
+    const scroll = (offset: number, isScrolling = true) => {
+      const isUserScroll = scrollSource.classify(offset, isScrolling);
+      scrollSource.release(isUserScroll);
+      return isUserScroll;
+    };
+    return {
+      scrollSource,
+      scroll,
+      setInteracting: (value: boolean) => {
+        isInteracting = value;
+      },
+    };
+  }
+
+  it('reports a gesture and its momentum until the end event', () => {
+    const { scrollSource, scroll, setInteracting } = source(true);
+    expect(scroll(100)).toBe(true);
+    setInteracting(false);
+    expect(scroll(180)).toBe(true);
+    expect(scrollSource.isGestureActive()).toBe(true);
+    expect(scroll(180, false)).toBe(false);
+    expect(scrollSource.isGestureActive()).toBe(false);
+  });
+
+  it('does not report an instant programmatic scroll', () => {
+    const { scrollSource, scroll } = source();
+    scrollSource.markProgrammatic(640);
+    expect(scroll(640.5)).toBe(false);
+  });
+
+  it('does not report the browser clamping scrollTop after content shrank', () => {
+    const { scrollSource, scroll } = source();
+    scrollSource.markProgrammatic(1233);
+    expect(scroll(1233)).toBe(false);
+    // No scrollend follows a clamp, so a misreport here would hold iOS size
+    // compensation until the next real scroll.
+    expect(scroll(1224)).toBe(false);
+    expect(scrollSource.isGestureActive()).toBe(false);
+  });
+
+  it('keeps the gesture active while the end event is being handled', () => {
+    const { scrollSource, setInteracting } = source(true);
+    expect(scrollSource.classify(100, true)).toBe(true);
+    scrollSource.release(true);
+    setInteracting(false);
+    const isUserScroll = scrollSource.classify(100, false);
+    expect(isUserScroll).toBe(false);
+    expect(scrollSource.isGestureActive()).toBe(true);
+    scrollSource.release(isUserScroll);
+    expect(scrollSource.isGestureActive()).toBe(false);
   });
 });

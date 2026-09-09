@@ -27,6 +27,7 @@ import {
 } from 'solid-js';
 import { NEAR_BOTTOM_THRESHOLD } from './constants';
 import { createScrollLifecycle } from './create-scroll-lifecycle';
+import { createScrollSource } from './create-scroll-source';
 
 type ScrollAlignment = NonNullable<ScrollToOptions['align']>;
 
@@ -130,8 +131,7 @@ export function ThreadList(props: ThreadListProps) {
   const initialSizes = new Map(
     snapshot?.measurements?.map(({ key, size }) => [key, size])
   );
-  let programmaticOffset: number | undefined;
-  let userScrollActive = false;
+  const scrollSource = createScrollSource(scrollIntent.isUserInteracting);
   let stateQueued = false;
   let nearTopFired = false;
   let nearBottomFired = false;
@@ -257,27 +257,19 @@ export function ThreadList(props: ThreadListProps) {
       const deferredPrepend =
         (options.adjustments ?? 0) > 0 &&
         offset > domOffset + 1.5 &&
-        (userScrollActive || scrollIntent.isUserInteracting());
+        (scrollSource.isGestureActive() || scrollIntent.isUserInteracting());
       elementScroll(deferredPrepend ? domOffset : offset, options, instance);
-      programmaticOffset =
+      scrollSource.markProgrammatic(
         options.behavior === 'smooth'
           ? undefined
-          : instance.scrollElement?.scrollTop;
+          : instance.scrollElement?.scrollTop
+      );
     },
     observeElementOffset: (instance, callback) =>
       observeElementOffset(instance, (offset, isScrolling) => {
-        // An instant navigation/correction is not touch momentum. Reporting
-        // its scroll event as momentum makes iOS defer size compensation and
-        // replay it after scrollToIndex has already reconciled the same sizes.
-        const isOwnScroll =
-          programmaticOffset !== undefined &&
-          Math.abs(offset - programmaticOffset) < 1.5;
-        programmaticOffset = undefined;
-        if (isScrolling && !isOwnScroll) userScrollActive = true;
-        callback(offset, isScrolling && !isOwnScroll);
-        // Keep the gesture active while the end callback flushes any deferred
-        // correction, including momentum lasting past the input-event timeout.
-        if (!isScrolling || isOwnScroll) userScrollActive = false;
+        const isUserScroll = scrollSource.classify(offset, isScrolling);
+        callback(offset, isUserScroll);
+        scrollSource.release(isUserScroll);
       }),
     observeElementRect: (instance, callback) =>
       observeElementRect(instance, (rect) => {
