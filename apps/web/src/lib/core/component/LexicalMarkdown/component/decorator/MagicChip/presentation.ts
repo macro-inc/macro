@@ -289,6 +289,20 @@ function turnInFlightActivity(
   return partActivity((blocked ?? runningTool ?? latest)!);
 }
 
+/**
+ * A chip whose turn has not reached the agent yet, while the session is
+ * already running — typically a follow-up queued behind another turn.
+ */
+function queuedActivity(
+  latestEvent: string | undefined,
+  persistedStatus: MagicChipStatus
+): MagicChipActivity | undefined {
+  if (latestEvent !== 'acp_ready' && persistedStatus !== 'acp_ready') {
+    return undefined;
+  }
+  return { label: 'Queued', busy: true };
+}
+
 /** The session's persisted lifecycle, when the fold has nothing livelier. */
 function statusActivity(status: MagicChipStatus): MagicChipActivity {
   return match(status)
@@ -350,13 +364,15 @@ export function deriveMagicChipPresentation(
   }
 
   // Best available answer first: how the turn ended, then what it is doing,
-  // then that it exists at all, then the session's lifecycle — live before
-  // persisted.
+  // then that it exists at all, then a chip whose turn has not been
+  // delivered yet while the session is already running, then the session's
+  // lifecycle — live before persisted.
   const activity =
     turnEndedActivity(response) ??
     liveEventActivity(latestEvent, 'disconnected') ??
     turnInFlightActivity(response) ??
     (prompt ? { label: 'Waiting for agent', busy: true } : undefined) ??
+    queuedActivity(latestEvent, persistedStatus) ??
     liveEventActivity(latestEvent, 'acp_ready') ??
     statusActivity(persistedStatus);
 

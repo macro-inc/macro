@@ -7,7 +7,8 @@
 //! - [`open`]: creating sessions - from a mention, from the create menu, or
 //!   for an external runtime - and provisioning their egress.
 //! - [`deliver`]: composing a queued action with channel context and handing
-//!   it to the running agent, announcing it in the channel first.
+//!   it to the running agent. Channel prompts announce a magic chip as soon
+//!   as they are accepted — including while another turn is still running.
 //! - [`lifecycle`]: everything after open - control events, sandbox size,
 //!   turn boundaries, teardown.
 //!

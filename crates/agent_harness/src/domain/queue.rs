@@ -3,9 +3,11 @@
 //! Prompts (and compaction) occupy a whole agent turn, and ACP runs one turn
 //! at a time - so while a turn runs, further turn-occupying actions wait here
 //! rather than interleaving on the wire. Entries hold the *raw* user text:
-//! composition and announcement happen at dispatch, which is what makes a
-//! queued prompt editable and gives it fresh channel context when it actually
-//! runs.
+//! composition happens at dispatch, which is what makes a queued prompt
+//! editable and gives it fresh channel context when it actually runs. The
+//! magic-chip announcement posts as soon as the prompt is accepted when a
+//! turn is already in flight, so the thread answers immediately; otherwise
+//! it still posts at dispatch, before delivery.
 //!
 //! In-memory on purpose. The queue lives beside the session's live actor on
 //! the replica that manages it, and dies with the process - a restart loses
@@ -44,12 +46,13 @@ pub struct QueuedEntry {
     pub action: AgentAction,
     /// The user who queued it, absent when a bot acted on nobody's behalf.
     pub actor: Option<MacroUserIdStr<'static>>,
-    /// Where to announce the prompt at dispatch, when it came from somewhere
-    /// the session should answer back into.
+    /// Where to announce the prompt, when it came from somewhere the
+    /// session should answer back into.
     pub announce: Option<AnnounceOrigin>,
-    /// Whether the chip has been posted. Set by the dispatch that posts it,
-    /// and carried through a requeue, so a dispatch that fails *after*
-    /// announcing retries without posting a second chip.
+    /// Whether the chip has been posted. Set when the chip is announced —
+    /// at enqueue if the session is busy, otherwise at the dispatch that
+    /// posts it — and carried through a requeue, so a retry does not post
+    /// a second chip.
     pub announced: bool,
     /// When it was accepted.
     pub created_at: DateTime<Utc>,
@@ -137,6 +140,33 @@ impl SessionQueues {
         self.queues
             .get(&session)
             .is_some_and(|queue| queue.iter().any(|entry| entry.action_id == action_id))
+    }
+
+    /// How many waiting entries sit ahead of this one, oldest first.
+    ///
+    /// Used to reserve a fold turn for a chip posted before dispatch: each
+    /// waiting entry occupies a turn, so the nth waiter is `next_turn + n`.
+    #[must_use]
+    pub fn waiting_ahead(&self, session: AgentSessionId, action_id: AgentActionId) -> u32 {
+        self.queues
+            .get(&session)
+            .and_then(|queue| {
+                queue
+                    .iter()
+                    .position(|entry| entry.action_id == action_id)
+                    .map(|position| u32::try_from(position).unwrap_or(u32::MAX))
+            })
+            .unwrap_or(0)
+    }
+
+    /// Remember that this entry's chip has been posted.
+    pub fn mark_announced(&self, session: AgentSessionId, action_id: AgentActionId) {
+        let Some(mut queue) = self.queues.get_mut(&session) else {
+            return;
+        };
+        if let Some(entry) = queue.iter_mut().find(|entry| entry.action_id == action_id) {
+            entry.announced = true;
+        }
     }
 
     /// Replace a queued prompt's text. The entry keeps its place and its id.

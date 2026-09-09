@@ -43,6 +43,8 @@ own time zone (their primary calendar's), so it resolves relative times ("tomorr
 bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+If the agent is still working on an earlier turn, the follow-up waits in the
+session queue, but the reply Magic Chip posts immediately.
 The reply renders a Magic Chip: a rounded card of constant height that is present
 from the moment the session boots. Its answer area shows a pulsing star while the
 agent works, then the opening of the answer clipped to four lines and faded out; its

@@ -1,5 +1,7 @@
-//! Delivering one queued action to the running agent: announce it in the
-//! channel, compose it with channel context, and prompt the runtime.
+//! Delivering one queued action to the running agent: compose it with
+//! channel context and prompt the runtime. Channel prompts announce a magic
+//! chip when they are accepted (see enqueue), or here at dispatch if they
+//! have not been announced yet.
 
 use super::*;
 

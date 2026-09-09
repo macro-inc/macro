@@ -1307,6 +1307,88 @@ async fn session_with_a_running_turn(
 }
 
 #[tokio::test]
+async fn a_channel_prompt_during_a_running_turn_announces_immediately() {
+    let ((service, _repo, containers, announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+    let announcements_before = announcer.announced().len();
+
+    let result = service
+        .execute(
+            id,
+            HarnessCommand::Deliver(forward_message("and then this")),
+        )
+        .await
+        .expect("a mid-turn channel prompt is accepted");
+
+    assert_eq!(result, CommandOutcome::Queued);
+    assert_eq!(
+        announcer.announced().len(),
+        announcements_before + 1,
+        "the chip posts while the prompt is still waiting"
+    );
+    assert_eq!(
+        announcer
+            .announced()
+            .last()
+            .map(|a| a.prompted_content.as_str()),
+        Some("and then this")
+    );
+    assert_eq!(
+        announcer.announced().last().map(|a| a.prompted_message_id),
+        Some(MessageId {
+            turn: agent_session::domain::model::TurnId(1),
+            author: AuthorKind::User,
+        }),
+        "the waiting chip reserves the next fold turn"
+    );
+    assert_eq!(prompts(&agent).len(), 1, "nothing reached the agent yet");
+
+    agent.completes_prompt().await;
+    agent.wait_for_requests(4).await;
+    turns.settled(id).await;
+
+    assert_eq!(
+        announcer.announced().len(),
+        announcements_before + 1,
+        "dispatch does not post a second chip"
+    );
+    assert_eq!(
+        prompts(&agent)[1],
+        vec![ContentBlock::from(context_prompt("and then this"))]
+    );
+}
+
+#[tokio::test]
+async fn two_queued_channel_prompts_reserve_distinct_chip_turns() {
+    let ((service, _repo, containers, announcer, _runtimes), _turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    session_with_a_running_turn(&service, &containers, id).await;
+    let announcements_before = announcer.announced().len();
+
+    service
+        .execute(id, HarnessCommand::Deliver(forward_message("second")))
+        .await
+        .expect("the first waiter is accepted");
+    service
+        .execute(id, HarnessCommand::Deliver(forward_message("third")))
+        .await
+        .expect("the second waiter is accepted");
+
+    let announced = announcer.announced();
+    assert_eq!(announced.len(), announcements_before + 2);
+    let turns: Vec<_> = announced
+        .iter()
+        .skip(announcements_before)
+        .map(|announcement| announcement.prompted_message_id.turn.0)
+        .collect();
+    assert_eq!(turns, [1, 2], "each waiting chip gets its own fold turn");
+}
+
+#[tokio::test]
 async fn a_prompt_during_a_running_turn_queues_and_dispatches_when_it_ends() {
     let ((service, _repo, containers, _announcer, _runtimes), mut turns) =
         harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());

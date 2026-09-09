@@ -22,6 +22,24 @@ describe('deriveMagicChipPresentation', () => {
     });
   });
 
+  it('names a chip whose turn has not been delivered while the session is running', () => {
+    expect(
+      deriveMagicChipPresentation({ persistedStatus: 'acp_ready' })
+    ).toMatchObject({
+      kind: 'working',
+      activity: { label: 'Queued', busy: true },
+    });
+    expect(
+      deriveMagicChipPresentation({
+        persistedStatus: 'booting',
+        latestEvent: 'acp_ready',
+      })
+    ).toMatchObject({
+      kind: 'working',
+      activity: { label: 'Queued', busy: true },
+    });
+  });
+
   it('describes a working subagent by what its child call is doing', () => {
     expect(
       deriveMagicChipPresentation({

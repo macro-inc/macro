@@ -330,20 +330,27 @@ where
     /// necessarily: entries can linger from a drain that failed, and FIFO
     /// order holds regardless. The outcome reports what happened to *this*
     /// action - still waiting, or on the wire.
+    ///
+    /// A prompt that has to wait still posts its magic chip now: the thread
+    /// should answer immediately, the same way a free session does. Dispatch
+    /// later skips a chip that is already up.
     pub(super) async fn enqueue_then_dispatch(
         &self,
         session_id: AgentSessionId,
         command: DeliverAction,
     ) -> Result<CommandOutcome> {
         let action_id = command.id;
+        let action = command.action;
+        let actor = command.actor;
+        let announce = command.announce;
         queue_result(
             self.queues.enqueue(
                 session_id,
                 QueuedEntry {
                     action_id,
-                    action: command.action,
-                    actor: command.actor,
-                    announce: command.announce,
+                    action: action.clone(),
+                    actor: actor.clone(),
+                    announce: announce.clone(),
                     announced: false,
                     created_at: chrono::Utc::now(),
                 },
@@ -352,7 +359,8 @@ where
         )?;
 
         let dispatched = if self.busy.contains_key(&session_id) {
-            Ok(())
+            self.announce_while_queued(session_id, action_id, &action, actor.as_ref(), announce)
+                .await
         } else {
             self.dispatch_next(session_id).await
         };
@@ -364,6 +372,33 @@ where
         } else {
             CommandOutcome::Completed
         })
+    }
+
+    /// Post the magic chip for a prompt that will wait behind a running turn.
+    ///
+    /// Turn ids are reserved in queue order so two waiting chips do not
+    /// share a fold key: each waiter occupies a turn, so the nth is
+    /// `next_turn + n`. A failed post leaves `announced` unset so dispatch
+    /// can retry.
+    pub(super) async fn announce_while_queued(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+        action: &AgentAction,
+        actor: Option<&MacroUserIdStr<'static>>,
+        announce: Option<AnnounceOrigin>,
+    ) -> Result<()> {
+        let reserved = self.queues.waiting_ahead(session_id, action_id);
+        let Some(mut announcement) = self
+            .announcement(session_id, action, actor, announce)
+            .await?
+        else {
+            return Ok(());
+        };
+        announcement.prompted_message_id.turn.0 += reserved;
+        self.announcer.announce(announcement).await?;
+        self.queues.mark_announced(session_id, action_id);
+        Ok(())
     }
 
     /// Push the queue as it now stands to the session's viewers.
@@ -391,12 +426,13 @@ where
     /// Deliver the oldest queued action, marking the session busy on success.
     ///
     /// Composition runs first so a lexical failure never posts a chip for a
-    /// prompt that will not reach the agent. The chip is then announced
-    /// (from the raw text) before delivery, so it exists to anchor the turn
-    /// the agent streams into - and it is announced *at most once* per
-    /// entry: the claimed entry remembers a successful announce, so a
-    /// dispatch that fails after the chip posted retries without posting a
-    /// second one.
+    /// prompt that will not reach the agent — unless the chip was already
+    /// posted when the prompt was accepted behind a running turn. The chip
+    /// is otherwise announced (from the raw text) before delivery, so it
+    /// exists to anchor the turn the agent streams into - and it is
+    /// announced *at most once* per entry: the claimed entry remembers a
+    /// successful announce, so a dispatch that fails after the chip posted
+    /// retries without posting a second one.
     ///
     /// A failed dispatch puts the entry back at the front: it stays next in
     /// line for the next turn end or the next prompt, and stays visible in
