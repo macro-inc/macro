@@ -144,4 +144,23 @@ describe('Button', () => {
     expect(button.dataset.variant).toBe('accent');
     expect(button.dataset.size).toBe('icon-xs');
   });
+
+  it('matches the group radius to the resolved button size', () => {
+    render(() => (
+      <ButtonGroup variant="outline" size="xl">
+        <Button>Previous</Button>
+        <ButtonGroup.Divider />
+        <Button>Next</Button>
+      </ButtonGroup>
+    ));
+
+    const group = screen.getByRole('group');
+    expect(group.dataset.size).toBe('xl');
+    expect(group.classList).toContain('rounded-lg');
+    expect(group.classList).not.toContain('rounded-sm');
+
+    const divider = screen.getByRole('separator');
+    expect(divider.classList).toContain('data-[orientation=horizontal]:w-px');
+    expect(divider.classList).toContain('bg-edge-muted');
+  });
 });

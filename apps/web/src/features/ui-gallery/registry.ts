@@ -1,5 +1,5 @@
 import { extractTypeSource } from './source';
-import { DOC_CATEGORIES, type ComponentDoc, type DocCategory } from './types';
+import { type ComponentDoc, DOC_CATEGORIES, type DocCategory } from './types';
 
 /**
  * Every `.docs.tsx` file under `components/ui`, discovered at build time.

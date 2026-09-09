@@ -4,7 +4,7 @@ import { type DocEntry, loadTypeSource } from '../registry';
 import { extractDemoSource, extractGuidelines } from '../source';
 import type { DocDemo, DocStatus } from '../types';
 import { CodeBlock } from './CodeBlock';
-import { DemoPreview, type PreviewSettings } from './DemoPreview';
+import { DemoPreview } from './DemoPreview';
 
 const STATUS_LABEL: Record<DocStatus, string> = {
   stable: 'Stable',
@@ -16,7 +16,7 @@ const STATUS_LABEL: Record<DocStatus, string> = {
 function DemoSection(props: {
   demo: DocDemo;
   source: string | undefined;
-  settings: PreviewSettings;
+  showCode: boolean;
 }) {
   return (
     <section class="flex flex-col gap-3">
@@ -27,39 +27,37 @@ function DemoSection(props: {
         </Show>
       </div>
 
-      <DemoPreview
-        settings={props.settings}
-        depth={props.demo.depth}
-        fill={props.demo.fill}
-      >
+      <DemoPreview depth={props.demo.depth} fill={props.demo.fill}>
         {props.demo.render()}
       </DemoPreview>
 
-      <Show
-        when={props.source}
-        fallback={
-          <p class="text-xs text-ink-subtle">
-            No source found. Wrap this demo in{' '}
-            <code class="font-mono text-ink-muted">
-              {`// #region demo:${props.demo.id}`}
-            </code>{' '}
-            / <code class="font-mono text-ink-muted">{'// #endregion'}</code> to
-            show its code here.
-          </p>
-        }
-      >
-        {(source) => <CodeBlock code={source()} />}
+      <Show when={props.showCode}>
+        <Show
+          when={props.source}
+          fallback={
+            <p class="text-xs text-ink-subtle">
+              No source found. Wrap this demo in{' '}
+              <code class="font-mono text-ink-muted">
+                {`// #region demo:${props.demo.id}`}
+              </code>{' '}
+              / <code class="font-mono text-ink-muted">{'// #endregion'}</code>{' '}
+              to show its code here.
+            </p>
+          }
+        >
+          {(source) => <CodeBlock code={source()} />}
+        </Show>
       </Show>
     </section>
   );
 }
 
 /** One component's page: header, demos with source, props, and guidelines. */
-export function DocPage(props: { entry: DocEntry; settings: PreviewSettings }) {
+export function DocPage(props: { entry: DocEntry; showCode: boolean }) {
   // Raw file text is fetched per page rather than bundled with the registry, so
   // the gallery chunk stays free of a second copy of every docs file.
   const [source] = createResource(
-    () => props.entry,
+    () => (props.showCode ? props.entry : undefined),
     (entry) => entry.loadSource()
   );
 
@@ -92,7 +90,7 @@ export function DocPage(props: { entry: DocEntry; settings: PreviewSettings }) {
   };
 
   const [propTypes] = createResource(
-    () => props.entry,
+    () => (props.showCode ? props.entry : undefined),
     async (entry) => {
       const names = entry.doc.propTypes ?? [
         `${entry.doc.name.replace(/\s+/g, '')}Props`,
@@ -111,7 +109,7 @@ export function DocPage(props: { entry: DocEntry; settings: PreviewSettings }) {
   };
 
   return (
-    <article class="flex flex-col gap-10 max-w-3xl">
+    <article class="flex flex-col gap-10 max-w-3xl mx-auto">
       <header class="flex flex-col gap-3">
         <div class="flex items-center gap-2">
           <h1 class="text-2xl font-semibold text-ink">
@@ -126,8 +124,10 @@ export function DocPage(props: { entry: DocEntry; settings: PreviewSettings }) {
           </Show>
         </div>
         <p class="text-sm text-ink-muted">{props.entry.doc.description}</p>
-        <Show when={props.entry.doc.import}>
-          {(line) => <CodeBlock compact code={line()} />}
+        <Show when={props.showCode}>
+          <Show when={props.entry.doc.import}>
+            {(line) => <CodeBlock compact code={line()} />}
+          </Show>
         </Show>
       </header>
 
@@ -137,13 +137,13 @@ export function DocPage(props: { entry: DocEntry; settings: PreviewSettings }) {
             <DemoSection
               demo={demo}
               source={sourceFor(demo)}
-              settings={props.settings}
+              showCode={props.showCode}
             />
           )}
         </For>
       </div>
 
-      <Show when={resolvedPropTypes().length}>
+      <Show when={props.showCode && resolvedPropTypes().length}>
         <section class="flex flex-col gap-3">
           <h2 class="text-lg font-semibold text-ink">Props</h2>
           <p class="text-sm text-ink-muted">

@@ -10,16 +10,14 @@ function DepthsDemo() {
     <div class="grid w-full grid-cols-1 gap-4 md:grid-cols-3">
       <For each={[0, 1, 2, 3, 4] as const}>
         {(depth) => (
-          <Panel depth={depth} class="min-h-28">
+          <Panel depth={depth} class="min-h-28 bg-surface">
             <Panel.Header class="px-3">
               <span class="font-mono text-xs text-ink-subtle">
                 depth={depth}
               </span>
             </Panel.Header>
             <Panel.Body class="p-3">
-              <p class="text-sm text-ink-muted">
-                Reads `bg-surface` from its layer.
-              </p>
+              <p class="text-sm text-ink-muted">Hello!</p>
             </Panel.Body>
           </Panel>
         )}
@@ -32,13 +30,13 @@ function DepthsDemo() {
 // #region demo:nesting
 function NestingDemo() {
   return (
-    <Panel depth={0} class="w-full p-3">
+    <Panel depth={0} class="w-full p-3 bg-surface">
       <p class="mb-2 font-mono text-xs text-ink-subtle">depth 0</p>
-      <Panel depth={1} class="p-3">
+      <Panel depth={1} class="p-3 bg-surface">
         <p class="mb-2 font-mono text-xs text-ink-subtle">depth 1</p>
-        <Panel depth={2} class="p-3">
+        <Panel depth={2} class="p-3 bg-surface">
           <p class="mb-2 font-mono text-xs text-ink-subtle">depth 2</p>
-          <Panel depth={3} class="p-3">
+          <Panel depth={3} class="p-3 bg-surface">
             <p class="font-mono text-xs text-ink-subtle">depth 3</p>
           </Panel>
         </Panel>
@@ -52,22 +50,20 @@ function NestingDemo() {
 function LayerTokensDemo() {
   return (
     <div class="grid w-full grid-cols-1 gap-4 md:grid-cols-3">
-      <For each={[1, 2, 3] as const}>
+      <For each={[0, 1, 2] as const}>
         {(depth) => (
-          <Panel depth={depth} class="p-3">
+          <Panel depth={depth} class="p-3 bg-surface">
             <p class="mb-3 font-mono text-xs text-ink-subtle">depth={depth}</p>
             <div class="flex flex-col gap-2">
-              <div class="rounded-sm bg-inset p-2 text-xs text-ink-muted">
-                bg-inset
-              </div>
-              <div class="rounded-sm bg-surface p-2 text-xs text-ink-muted">
-                bg-surface
-              </div>
-              <Layer offset={1}>
-                <div class="rounded-sm bg-surface p-2 text-xs text-ink-muted">
-                  Layer offset=1 + bg-surface
-                </div>
-              </Layer>
+              <For each={[-2, -1, 0, 1, 2] as const}>
+                {(offset) => (
+                  <Layer offset={offset}>
+                    <div class="rounded-sm bg-surface p-2 text-xs text-ink-muted">
+                      Layer offset={offset > 0 ? `+${offset}` : offset}
+                    </div>
+                  </Layer>
+                )}
+              </For>
             </div>
           </Panel>
         )}

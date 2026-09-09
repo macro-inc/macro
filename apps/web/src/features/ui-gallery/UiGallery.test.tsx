@@ -1,11 +1,26 @@
 import { MemoryRouter, Route } from '@solidjs/router';
-import { Suspense } from 'solid-js';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
+import { type JSX, Suspense } from 'solid-js';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CoveragePage } from './components/CoveragePage';
 import { DocPage } from './components/DocPage';
 import { coverageRows, DOC_ENTRIES } from './registry';
 import UiGallery from './UiGallery';
+
+vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
+  SplitHeaderLeft: (props: { children: JSX.Element }) => props.children,
+  SplitHeaderRight: (props: { children: JSX.Element }) => props.children,
+}));
+
+vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
+  StaticSplitLabel: (props: { label: string }) => <span>{props.label}</span>,
+}));
 
 class ResizeObserverStub {
   observe() {}
@@ -30,17 +45,44 @@ function renderGallery() {
 describe('UiGallery', () => {
   it('renders the sidebar with every documented component', () => {
     renderGallery();
+    const search = screen.getByRole('searchbox', {
+      name: 'Search components',
+    });
+    expect(search.dataset.slot).toBe('input-group-control');
+    const inputGroup = search.closest('[data-slot="input-group"]');
+    expect(inputGroup?.classList).toContain('bg-input');
+    expect(search.classList).toContain('bg-transparent');
+    expect(search.classList).toContain(
+      '[&::-webkit-search-cancel-button]:hidden'
+    );
     for (const entry of DOC_ENTRIES) {
       expect(screen.getAllByText(entry.doc.name).length).toBeGreaterThan(0);
     }
   });
 
-  it('shows the first page when no page is selected', () => {
+  it('shows Foundation Colors when no page is selected', () => {
     renderGallery();
-    const first = DOC_ENTRIES[0]!;
     expect(
-      screen.getByRole('heading', { level: 1, name: first.doc.name })
+      screen.getByRole('heading', { level: 1, name: 'Colors' })
     ).toBeTruthy();
+  });
+
+  it('hides page code by default and toggles all examples from the header', async () => {
+    const { container } = renderGallery();
+    const toggle = screen.getByRole('switch', { name: 'Show code' });
+
+    expect((toggle as HTMLInputElement).checked).toBe(false);
+    expect(container.querySelectorAll('pre')).toHaveLength(0);
+
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(container.querySelectorAll('pre').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(container.querySelectorAll('pre')).toHaveLength(0);
+    });
   });
 
   it('offers the coverage report', () => {
@@ -76,7 +118,7 @@ describe('DocPage suspense safety', () => {
 
     const { container } = render(() => (
       <Suspense fallback={<span data-testid="suspended">suspended</span>}>
-        <DocPage entry={entry} settings={{ theme: null, depth: 1 }} />
+        <DocPage entry={entry} showCode={false} />
       </Suspense>
     ));
 

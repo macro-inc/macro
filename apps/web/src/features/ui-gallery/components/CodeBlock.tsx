@@ -1,7 +1,7 @@
 import { tsxLanguage } from '@codemirror/lang-javascript';
+import { classHighlighter, highlightCode } from '@lezer/highlight';
 import CheckIcon from '@phosphor/check.svg';
 import CopyIcon from '@phosphor/copy.svg';
-import { classHighlighter, highlightCode } from '@lezer/highlight';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 
@@ -71,7 +71,7 @@ export function CodeBlock(props: {
   return (
     <div
       class={cn(
-        'group/code relative bg-inset border border-edge-muted rounded-md overflow-hidden',
+        'group/code relative bg-code-buffer border border-edge-muted rounded-md overflow-hidden',
         props.class
       )}
     >

@@ -1,20 +1,22 @@
 import { useSearchParams } from '@solidjs/router';
-import { DEFAULT_THEMES } from '@theme/themes';
-import type { ThemeV3 } from '@theme/types/themeTypes';
-import { Scroll } from '@ui';
+import { Scroll, ToggleSwitch } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import './gallery.css';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '@components/app/split-layout/components/SplitHeader';
+import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { CoveragePage } from './components/CoveragePage';
 import { DocPage } from './components/DocPage';
-import type { PreviewSettings } from './components/DemoPreview';
 import { COVERAGE_SLUG, GallerySidebar } from './components/GallerySidebar';
-import { PreviewToolbar } from './components/PreviewToolbar';
-import { DOC_ENTRIES, findEntry } from './registry';
+import { DOC_ENTRIES, findEntry, groupEntries } from './registry';
 
 /** Query param carrying the selected page, so a component is linkable. The
  *  split layout drops params from `component/<id>` URLs, so selection lives in
  *  the query string the same way the CRM's saved view does. */
 const PAGE_PARAM = 'ui';
+const DEFAULT_ENTRY = groupEntries(DOC_ENTRIES)[0]?.entries[0];
 
 /**
  * Browsable documentation for the `@ui` library: a stable sidebar and page
@@ -26,47 +28,48 @@ const PAGE_PARAM = 'ui';
  */
 export default function UiGallery() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [theme, setTheme] = createSignal<ThemeV3 | null>(null);
-  const [depth, setDepth] = createSignal<0 | 1 | 2 | 3 | 4>(1);
+  const [showCode, setShowCode] = createSignal(false);
 
   const selected = () => {
     const param = searchParams[PAGE_PARAM];
     const slug = Array.isArray(param) ? param[0] : param;
-    return slug ?? DOC_ENTRIES[0]?.slug ?? COVERAGE_SLUG;
+    return slug ?? DEFAULT_ENTRY?.slug ?? COVERAGE_SLUG;
   };
 
   const select = (slug: string) =>
     setSearchParams({ [PAGE_PARAM]: slug }, { scroll: false });
 
   const entry = createMemo(() => findEntry(selected()));
-  const settings = (): PreviewSettings => ({ theme: theme(), depth: depth() });
 
   return (
-    <div class="ui-gallery size-full flex min-h-0 bg-page">
-      <GallerySidebar
-        entries={DOC_ENTRIES}
-        selected={selected()}
-        onSelect={select}
-      />
+    <>
+      <SplitHeaderLeft>
+        <StaticSplitLabel label="UI Components" />
+      </SplitHeaderLeft>
+      <SplitHeaderRight>
+        <ToggleSwitch
+          checked={showCode()}
+          onChange={setShowCode}
+          label="Show code"
+          labelClass="text-xs text-ink-muted"
+        />
+      </SplitHeaderRight>
 
-      <div class="flex-1 min-w-0 flex flex-col">
-        <div class="flex items-center justify-end gap-4 px-8 h-12 shrink-0 border-b border-edge-muted">
-          <PreviewToolbar
-            themes={DEFAULT_THEMES}
-            settings={settings()}
-            onThemeChange={setTheme}
-            onDepthChange={setDepth}
-          />
-        </div>
+      <div class="ui-gallery size-full flex min-h-0 border-t border-edge-muted">
+        <GallerySidebar
+          entries={DOC_ENTRIES}
+          selected={selected()}
+          onSelect={select}
+        />
 
-        <Scroll class="flex-1 min-h-0">
-          <div class="px-8 py-8">
+        <div class="flex-1 min-w-0 flex flex-col">
+          <Scroll class="flex-1 min-h-0 p-4 select-children">
             <Show when={entry()} fallback={<CoveragePage onSelect={select} />}>
-              {(found) => <DocPage entry={found()} settings={settings()} />}
+              {(found) => <DocPage entry={found()} showCode={showCode()} />}
             </Show>
-          </div>
-        </Scroll>
+          </Scroll>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

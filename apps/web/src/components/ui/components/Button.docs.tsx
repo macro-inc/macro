@@ -83,17 +83,25 @@ function IconOnlyDemo() {
 // #region demo:group
 function GroupDemo() {
   return (
-    <ButtonGroup>
-      <Button variant="outline">
-        <TrashIcon />
-        Delete
-      </Button>
-      <Button variant="outline">Duplicate</Button>
-      <Button variant="outline">
-        Next
-        <ArrowRightIcon />
-      </Button>
-    </ButtonGroup>
+    <div class="flex flex-col gap-4 items-center">
+      <For each={['sm', 'md', 'lg'] as const}>
+        {(size) => (
+          <ButtonGroup variant="outline" size={size}>
+            <Button>
+              <TrashIcon />
+              Delete
+            </Button>
+            <ButtonGroup.Divider />
+            <Button>Duplicate</Button>
+            <ButtonGroup.Divider />
+            <Button>
+              Next
+              <ArrowRightIcon />
+            </Button>
+          </ButtonGroup>
+        )}
+      </For>
+    </div>
   );
 }
 // #endregion
@@ -149,7 +157,7 @@ export default defineDoc({
       id: 'group',
       title: 'Button group',
       description:
-        '`ButtonGroup` joins related actions into a single segmented control and squares off the interior corners.',
+        '`ButtonGroup` joins related actions into a single segmented control. Add `ButtonGroup.Divider` between segments; the group owns the shared border and corner radius.',
       render: GroupDemo,
     },
     {

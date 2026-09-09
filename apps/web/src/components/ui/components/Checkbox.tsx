@@ -27,7 +27,7 @@ type LabelProps = ComponentProps<typeof KobalteCheckbox.Label>;
 
 const CONTROL_CLASS = cn(
   'inline-flex items-center justify-center size-4 shrink-0 rounded-sm text-surface',
-  'bg-surface border border-edge',
+  'bg-surface border-1 border-edge',
   'data-checked:bg-accent data-checked:border-accent',
   'data-indeterminate:bg-accent data-indeterminate:border-accent',
   'data-disabled:opacity-50 data-disabled:cursor-not-allowed',
@@ -123,7 +123,7 @@ export const InlineCheckbox = (props: { checked: boolean }) => (
       'inline-flex items-center justify-center size-3.5 shrink-0 rounded-sm',
       props.checked
         ? 'bg-accent text-surface'
-        : 'bg-transparent border border-edge-muted text-transparent'
+        : 'bg-transparent border-1 border-edge-muted text-transparent'
     )}
   >
     <CheckIcon class="size-2.5" />
