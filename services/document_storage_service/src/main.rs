@@ -1440,6 +1440,9 @@ async fn run() -> anyhow::Result<()> {
                     properties_service.clone(),
                 ),
             )),
+            list_service: Arc::new(crm::domain::lists::CrmListServiceImpl::new(
+                crm::outbound::lists_store::PgListStore::new(db.clone()),
+            )),
             entity_access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
         },

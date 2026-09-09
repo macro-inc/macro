@@ -37,11 +37,12 @@ use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
 pub async fn handler<
     C: CrmService,
     St,
+    Li,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: CrmContactAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
-    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Li, Eas, Auth>>,
     Path(contact_id): Path<Uuid>,
 ) -> Result<Json<CrmContactResponse>, CrmError> {
     let contact = state

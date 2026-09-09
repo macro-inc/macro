@@ -47,6 +47,9 @@ pub mod team_settings;
 /// The team's deal stage set, gated on `edit_stages_role`.
 pub mod stages;
 
+/// CRM lists and their entries. Slice 3 spike.
+pub mod lists;
+
 use std::sync::Arc;
 
 use axum::{
@@ -60,29 +63,35 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 
-use crate::domain::{model::CrmError, service::CrmService, stages::CrmStageService};
+use crate::domain::{
+    lists::CrmListService, model::CrmError, service::CrmService, stages::CrmStageService,
+};
 
 /// Router state for the CRM endpoints, including service-backed authorization
 /// for direct user credentials and internal service access.
-pub struct CrmRouterState<C, St, Eas, Auth> {
+pub struct CrmRouterState<C, St, Li, Eas, Auth> {
     /// CRM service.
     pub service: Arc<C>,
     /// Team deal stage service.
     pub stage_service: Arc<St>,
+    /// Team list service.
+    pub list_service: Arc<Li>,
     /// Entity access service used by the team-scoped extractors.
     pub entity_access_service: Arc<Eas>,
     /// State used to authorize direct users and internal service callers.
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for Arc<Eas> {
-    fn from_ref(state: &CrmRouterState<C, St, Eas, Auth>) -> Self {
+impl<C, St, Li, Eas, Auth> FromRef<CrmRouterState<C, St, Li, Eas, Auth>> for Arc<Eas> {
+    fn from_ref(state: &CrmRouterState<C, St, Li, Eas, Auth>) -> Self {
         state.entity_access_service.clone()
     }
 }
 
-impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &CrmRouterState<C, St, Eas, Auth>) -> Self {
+impl<C, St, Li, Eas, Auth> FromRef<CrmRouterState<C, St, Li, Eas, Auth>>
+    for MacroAuthorizationState<Auth>
+{
+    fn from_ref(state: &CrmRouterState<C, St, Li, Eas, Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
@@ -102,18 +111,19 @@ impl<C> Clone for CrmServiceRef<C> {
     }
 }
 
-impl<C, St, Eas, Auth> FromRef<CrmRouterState<C, St, Eas, Auth>> for CrmServiceRef<C> {
-    fn from_ref(state: &CrmRouterState<C, St, Eas, Auth>) -> Self {
+impl<C, St, Li, Eas, Auth> FromRef<CrmRouterState<C, St, Li, Eas, Auth>> for CrmServiceRef<C> {
+    fn from_ref(state: &CrmRouterState<C, St, Li, Eas, Auth>) -> Self {
         CrmServiceRef(state.service.clone())
     }
 }
 
 // Manual Clone so C, St, Eas, and Auth don't need Clone.
-impl<C, St, Eas, Auth> Clone for CrmRouterState<C, St, Eas, Auth> {
+impl<C, St, Li, Eas, Auth> Clone for CrmRouterState<C, St, Li, Eas, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             stage_service: self.stage_service.clone(),
+            list_service: self.list_service.clone(),
             entity_access_service: self.entity_access_service.clone(),
             authorization_state: self.authorization_state.clone(),
         }
@@ -121,10 +131,11 @@ impl<C, St, Eas, Auth> Clone for CrmRouterState<C, St, Eas, Auth> {
 }
 
 /// Build the CRM router with all endpoints.
-pub fn crm_router<C, St, Eas, Auth, S>(state: CrmRouterState<C, St, Eas, Auth>) -> Router<S>
+pub fn crm_router<C, St, Li, Eas, Auth, S>(state: CrmRouterState<C, St, Li, Eas, Auth>) -> Router<S>
 where
     C: CrmService,
     St: CrmStageService,
+    Li: CrmListService,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
@@ -132,64 +143,74 @@ where
     Router::new()
         .route(
             "/companies",
-            post(create_company::handler::<C, St, Eas, Auth>),
+            post(create_company::handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}/email-sync",
-            put(set_email_sync::handler::<C, St, Eas, Auth>),
+            put(set_email_sync::handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}/hidden",
-            put(set_company_hidden::handler::<C, St, Eas, Auth>),
+            put(set_company_hidden::handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}/name",
-            put(set_company_name::handler::<C, St, Eas, Auth>),
+            put(set_company_name::handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}",
-            get(get_company::handler::<C, St, Eas, Auth>),
+            get(get_company::handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/companies/{company_id}/contacts",
-            get(list_company_contacts::handler::<C, St, Eas, Auth>)
-                .post(create_contact::handler::<C, St, Eas, Auth>),
+            get(list_company_contacts::handler::<C, St, Li, Eas, Auth>)
+                .post(create_contact::handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/contacts/by-email",
-            get(get_contact_by_email::handler::<C, St, Eas, Auth>),
+            get(get_contact_by_email::handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}",
-            get(get_contact::handler::<C, St, Eas, Auth>),
+            get(get_contact::handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}/hidden",
-            put(set_contact_hidden::handler::<C, St, Eas, Auth>),
+            put(set_contact_hidden::handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}/name",
-            put(set_contact_name::handler::<C, St, Eas, Auth>),
+            put(set_contact_name::handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/comments/{entity_type}/{entity_id}",
-            get(comments::list_handler::<C, St, Eas, Auth>)
-                .post(comments::create_handler::<C, St, Eas, Auth>),
+            get(comments::list_handler::<C, St, Li, Eas, Auth>)
+                .post(comments::create_handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/comment/{comment_id}",
-            patch(comments::edit_handler::<C, St, Eas, Auth>)
-                .delete(comments::delete_handler::<C, St, Eas, Auth>),
+            patch(comments::edit_handler::<C, St, Li, Eas, Auth>)
+                .delete(comments::delete_handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/settings",
-            get(team_settings::get_handler::<C, St, Eas, Auth>)
-                .put(team_settings::update_handler::<C, St, Eas, Auth>),
+            get(team_settings::get_handler::<C, St, Li, Eas, Auth>)
+                .put(team_settings::update_handler::<C, St, Li, Eas, Auth>),
         )
         .route(
             "/stages",
-            put(stages::replace_handler::<C, St, Eas, Auth>)
-                .delete(stages::reset_handler::<C, St, Eas, Auth>),
+            put(stages::replace_handler::<C, St, Li, Eas, Auth>)
+                .delete(stages::reset_handler::<C, St, Li, Eas, Auth>),
+        )
+        .route(
+            "/lists",
+            get(lists::list_handler::<C, St, Li, Eas, Auth>)
+                .post(lists::create_handler::<C, St, Li, Eas, Auth>),
+        )
+        .route(
+            "/lists/{list_id}/entries",
+            get(lists::list_entries_handler::<C, St, Li, Eas, Auth>)
+                .post(lists::add_entry_handler::<C, St, Li, Eas, Auth>),
         )
         .with_state(state)
 }
@@ -201,6 +222,18 @@ impl IntoResponse for CrmError {
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
                     message: "crm company not found for team".into(),
+                }),
+            ),
+            CrmError::ListNotFoundForTeam => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    message: "crm company not found for team".into(),
+                }),
+            ),
+            CrmError::ListAdminRequired => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "querying hidden crm entities requires admin/owner team role".into(),
                 }),
             ),
             CrmError::ContactNotFoundForTeam => (

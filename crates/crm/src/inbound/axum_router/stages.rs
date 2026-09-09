@@ -86,11 +86,12 @@ impl From<TeamStageSet> for CrmStagesResponse {
 pub async fn replace_handler<
     C,
     St: CrmStageService,
+    Li,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Li, Eas, Auth>>,
     Json(req): Json<ReplaceCrmStagesRequest>,
 ) -> Result<Json<CrmStagesResponse>, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;
@@ -122,11 +123,12 @@ pub async fn replace_handler<
 pub async fn reset_handler<
     C,
     St: CrmStageService,
+    Li,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Li, Eas, Auth>>,
 ) -> Result<StatusCode, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;
     state.stage_service.reset_stages(&receipt).await?;

@@ -47,11 +47,12 @@ pub struct SetContactHiddenRequest {
 pub async fn handler<
     C: CrmService,
     St,
+    Li,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: CrmContactAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
-    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Li, Eas, Auth>>,
     Path(contact_id): Path<Uuid>,
     Json(req): Json<SetContactHiddenRequest>,
 ) -> Result<StatusCode, CrmError> {

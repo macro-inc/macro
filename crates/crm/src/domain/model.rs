@@ -396,6 +396,12 @@ pub enum CrmError {
     /// is below admin/owner.
     #[error("changing crm permission or stage settings requires admin/owner team role")]
     SettingsAdminRequired,
+    /// List id is not owned by the requesting team.
+    #[error("crm list not found for team")]
+    ListNotFoundForTeam,
+    /// Creating a list requires an admin/owner team role.
+    #[error("creating crm lists requires admin/owner team role")]
+    ListAdminRequired,
     /// Caller's team role is below the team's `edit_stages_role`.
     #[error("editing deal stages requires the {} team role", .0.as_db_str())]
     StageEditRoleRequired(CrmPermissionRole),

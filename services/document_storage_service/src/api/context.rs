@@ -153,9 +153,13 @@ pub(crate) type DssCrmStageService = crm::domain::stages::CrmStageServiceImpl<
     crm::outbound::stage_definitions::PropertiesStageDefinitionStore<PropertiesService>,
 >;
 
+pub(crate) type DssCrmListService =
+    crm::domain::lists::CrmListServiceImpl<crm::outbound::lists_store::PgListStore>;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
     DssCrmStageService,
+    DssCrmListService,
     EntityAccessService,
     AuthorizationService,
 >;

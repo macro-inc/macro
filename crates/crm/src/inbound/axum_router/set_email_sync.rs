@@ -52,11 +52,12 @@ pub struct SetEmailSyncRequest {
 pub async fn handler<
     C: CrmService,
     St,
+    Li,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: CrmCompanyAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
-    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Li, Eas, Auth>>,
     Path(company_id): Path<Uuid>,
     Json(req): Json<SetEmailSyncRequest>,
 ) -> Result<StatusCode, CrmError> {

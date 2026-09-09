@@ -50,11 +50,12 @@ pub struct GetContactByEmailResponse {
 pub async fn handler<
     C: CrmService,
     St,
+    Li,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Li, Eas, Auth>>,
     Query(params): Query<GetContactByEmailParams>,
 ) -> Result<Json<GetContactByEmailResponse>, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;

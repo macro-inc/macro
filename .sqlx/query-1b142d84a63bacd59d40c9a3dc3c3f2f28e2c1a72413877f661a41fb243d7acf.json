@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT e.id, e.list_id, e.parent_id, e.created_at, e.updated_at\n            FROM crm_list_entries e\n            JOIN crm_lists l\n                ON l.id = e.list_id\n            LEFT JOIN crm_companies c\n                ON l.parent_type = 'company' AND c.id = e.parent_id\n            LEFT JOIN crm_contacts ct\n                ON l.parent_type = 'contact' AND ct.id = e.parent_id\n            LEFT JOIN crm_companies cc\n                ON cc.id = ct.company_id\n            WHERE e.list_id = $1\n              AND ($2 OR COALESCE(c.hidden, ct.hidden OR cc.hidden, false) = false)\n            ORDER BY e.created_at, e.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "list_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "parent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1b142d84a63bacd59d40c9a3dc3c3f2f28e2c1a72413877f661a41fb243d7acf"
+}

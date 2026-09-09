@@ -78,7 +78,8 @@
                 "COMPANY",
                 "TASK",
                 "CALL_RECORD",
-                "CALENDAR_EVENT"
+                "CALENDAR_EVENT",
+                "CRM_LIST_ENTRY"
               ]
             }
           }

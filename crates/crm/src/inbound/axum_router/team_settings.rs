@@ -118,11 +118,12 @@ impl From<UpdateCrmTeamSettingsRequest> for CrmTeamSettingsPatch {
 pub async fn get_handler<
     C: CrmService,
     St,
+    Li,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Li, Eas, Auth>>,
 ) -> Result<Json<CrmTeamSettingsResponse>, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;
     let settings = state.service.get_team_settings(&receipt).await?;
@@ -152,11 +153,12 @@ pub async fn get_handler<
 pub async fn update_handler<
     C: CrmService,
     St,
+    Li,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Li, Eas, Auth>>,
     Json(req): Json<UpdateCrmTeamSettingsRequest>,
 ) -> Result<Json<CrmTeamSettingsResponse>, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;

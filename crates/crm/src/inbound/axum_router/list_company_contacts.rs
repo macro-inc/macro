@@ -86,11 +86,12 @@ impl From<CrmContact> for CrmContactResponse {
 pub async fn handler<
     C: CrmService,
     St,
+    Li,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: CrmCompanyAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
-    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Li, Eas, Auth>>,
     Path(company_id): Path<Uuid>,
 ) -> Result<Json<Vec<CrmContactResponse>>, CrmError> {
     let contacts = state

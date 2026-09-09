@@ -22,6 +22,10 @@ pub mod service;
 #[cfg(feature = "ports")]
 pub mod stages;
 
+/// CRM lists: collections over companies or contacts whose entries carry
+/// their own properties. Slice 3 spike.
+pub mod lists;
+
 /// Capability-token receipt wrappers gating per-entity CRM service calls
 #[cfg(feature = "ports")]
 pub mod auth;

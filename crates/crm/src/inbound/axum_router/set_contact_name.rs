@@ -51,11 +51,12 @@ pub struct SetContactNameRequest {
 pub async fn handler<
     C: CrmService,
     St,
+    Li,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: CrmContactAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
-    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Li, Eas, Auth>>,
     Path(contact_id): Path<Uuid>,
     Json(req): Json<SetContactNameRequest>,
 ) -> Result<StatusCode, CrmError> {

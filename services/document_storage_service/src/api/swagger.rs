@@ -386,6 +386,10 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::team_settings::update_handler,
         crm::inbound::axum_router::stages::replace_handler,
         crm::inbound::axum_router::stages::reset_handler,
+        crm::inbound::axum_router::lists::list_handler,
+        crm::inbound::axum_router::lists::create_handler,
+        crm::inbound::axum_router::lists::list_entries_handler,
+        crm::inbound::axum_router::lists::add_entry_handler,
     ),
     components(
         schemas(
@@ -730,6 +734,11 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::stages::ReplaceCrmStagesRequest,
             crm::inbound::axum_router::stages::CrmStageInput,
             crm::inbound::axum_router::stages::CrmStagesResponse,
+            crm::inbound::axum_router::lists::CrmListParentTypeApi,
+            crm::inbound::axum_router::lists::CrmListResponse,
+            crm::inbound::axum_router::lists::CrmListEntryResponse,
+            crm::inbound::axum_router::lists::CreateCrmListRequest,
+            crm::inbound::axum_router::lists::AddCrmListEntryRequest,
             crm::inbound::axum_router::stages::CrmStageResponse,
             crm::domain::comment::CrmCommentEntityType,
             crm::domain::comment::CrmThread,

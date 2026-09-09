@@ -47,11 +47,12 @@ pub struct CreateCrmCompanyRequest {
 pub async fn handler<
     C: CrmService,
     St,
+    Li,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Li, Eas, Auth>>,
     Json(req): Json<CreateCrmCompanyRequest>,
 ) -> Result<Json<CrmCompanyResponse>, CrmError> {
     let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;

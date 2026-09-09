@@ -1,0 +1,80 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO crm_lists (team_id, name, parent_type)\n            VALUES ($1, $2, $3)\n            RETURNING\n                id,\n                team_id,\n                name,\n                parent_type AS \"parent_type: CrmListParentType\",\n                builtin,\n                created_at,\n                updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "parent_type: CrmListParentType",
+        "type_info": {
+          "Custom": {
+            "name": "crm_list_parent_type",
+            "kind": {
+              "Enum": [
+                "company",
+                "contact"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "builtin",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "crm_list_parent_type",
+            "kind": {
+              "Enum": [
+                "company",
+                "contact"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "488e26f0992745577bc215e2b02cc83d02a549c4519b56d5acf752d24556362a"
+}

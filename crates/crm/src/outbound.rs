@@ -13,6 +13,9 @@ pub mod search_repo;
 /// Properties-service implementation of the team stage definition store
 #[cfg(feature = "outbound")]
 pub mod stage_definitions;
+
+/// [`crate::domain::lists::ListStore`] over MacroDB.
+pub mod lists_store;
 /// Unfurl-backed implementation of the company metadata resolver
 #[cfg(feature = "outbound")]
 pub mod unfurl_resolver;

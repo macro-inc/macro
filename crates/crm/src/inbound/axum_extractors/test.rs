@@ -538,11 +538,13 @@ fn test_router(
     let state: CrmRouterState<
         FakeCrmService,
         (),
+        (),
         FakeEntityAccessService,
         TestAuthorizationService,
     > = CrmRouterState {
         service: Arc::new(crm_service.clone()),
         stage_service: Arc::new(()),
+        list_service: Arc::new(()),
         entity_access_service: Arc::new(entity_access.clone()),
         authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
     };
