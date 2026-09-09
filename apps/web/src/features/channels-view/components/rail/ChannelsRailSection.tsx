@@ -42,7 +42,7 @@ function SectionScrollArea(props: {
       <ScrollIndicators
         scrollRef={scrollRoot}
         appearance="gradient"
-        gradientColor="inset"
+        gradientColor="panel"
       />
       <Show when={activity.direction()}>
         {(direction) => (

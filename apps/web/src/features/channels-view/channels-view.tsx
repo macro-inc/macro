@@ -58,6 +58,7 @@ function ChannelsViewRoot() {
           width: state.asideWidth,
           min: CHANNELS_MIN_RAIL_WIDTH,
           max: CHANNELS_MAX_RAIL_WIDTH,
+          preserveDuringResize: false,
         };
 
   const sources = useChannelsSources((scope) =>
@@ -113,7 +114,7 @@ function ChannelsViewRoot() {
                     aside={railLayout()}
                     breakpoints={{ collapsed: 0 }}
                     layoutBreakpoint="collapsed"
-                    main={{ min: 224 }}
+                    main={{ min: 224, preferredWidth: 640 }}
                     resizable={railMode() === 'full'}
                   >
                     <ViewShell.Aside
