@@ -16,6 +16,7 @@ const SERVICE_NAMES = [
   'email-service',
   'document-cognition',
   'agent-harness-service',
+  'agent-egress-service',
 ];
 
 for (const service_name of SERVICE_NAMES) {

@@ -35,8 +35,6 @@ type Args = {
   containerEnvVars: { name: string; value: pulumi.Output<string> | string }[];
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   serviceContainerPort: number;
-  /** Container port of the sandbox-facing egress proxy listener. */
-  egressContainerPort: number;
   healthCheckPath: string;
   ecsClusterArn: pulumi.Output<string> | string;
   cloudStorageClusterName: pulumi.Output<string> | string;
@@ -61,9 +59,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
   public ecr: awsx.ecr.Repository;
   public serviceSg: aws.ec2.SecurityGroup;
   public domain: string;
-  public egressDomain: string;
   public targetGroup: aws.lb.TargetGroup;
-  public egressTargetGroup: aws.lb.TargetGroup;
   public service: awsx.ecs.FargateService;
   public cloudStorageClusterName: pulumi.Output<string> | string;
   public tags: { [key: string]: string };
@@ -79,7 +75,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       tags,
       platform,
       serviceContainerPort,
-      egressContainerPort,
       healthCheckPath,
       ecsClusterArn,
       cloudStorageClusterName,
@@ -90,7 +85,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     } = args;
 
     this.domain = getServiceUrl(ServiceUrl.AGENT_HARNESS_SERVICE_URL);
-    this.egressDomain = getServiceUrl(ServiceUrl.AGENT_HARNESS_EGRESS_URL);
     this.cloudStorageClusterName = cloudStorageClusterName;
     this.tags = tags;
 
@@ -248,27 +242,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
 
     this.targetGroup = gatewayTargetGroup.target_group;
 
-    // Forward the egress prefix unchanged to its own listener. Session-token
-    // Authorization headers are handled by the egress router as before.
-    // Use a new target group: AWS cannot attach one to two ALBs during cutover.
-    // Keep the name (including the helper's -tg suffix) below 32 characters.
-    const egress = new ServiceTargetGroup(
-      `ah-egress-gateway-${stack}`,
-      {
-        listenerArn: gatewayLoadBalancer.httpsListenerArn,
-        vpcId: vpc.vpcId,
-        containerPort: egressContainerPort,
-        healthCheckPath,
-        pathPatterns: ['/agent-harness-egress', '/agent-harness-egress/*'],
-        service: GatewayService.AGENT_HARNESS_EGRESS,
-        serviceSecurityGroupId: serviceSg.id,
-        albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
-        tags,
-      },
-      { parent: this }
-    );
-    this.egressTargetGroup = egress.target_group;
-
     const dopplerEcsEnvironment = new DopplerEcsEnvironment(
       BASE_NAME,
       { tags: this.tags },
@@ -301,18 +274,11 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         // and JWT secrets, so a 0s grace period trips the circuit breaker
         // before the replacement binds. Ignore those checks until then.
         healthCheckGracePeriodSeconds: 120,
-        // Both listeners use the shared gateway, with separate target groups
-        // for the control API and sandbox egress proxy.
         loadBalancers: [
           {
             targetGroupArn: gatewayTargetGroup.target_group.arn,
             containerName: 'service',
             containerPort: serviceContainerPort,
-          },
-          {
-            targetGroupArn: this.egressTargetGroup.arn,
-            containerName: 'service',
-            containerPort: egressContainerPort,
           },
         ],
         taskDefinitionArgs: {
@@ -361,13 +327,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
                   containerPort: serviceContainerPort,
                   targetGroup: this.targetGroup,
                 },
-                {
-                  appProtocol: 'http',
-                  name: `${BASE_NAME}-egress-tcp-${stack}`,
-                  hostPort: egressContainerPort,
-                  containerPort: egressContainerPort,
-                  targetGroup: this.egressTargetGroup,
-                },
               ],
             },
           },
@@ -385,7 +344,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         // ECS refuses a service whose target group is not yet associated
         // with a load balancer; it is the listener rule that creates that
         // association.
-        dependsOn: [gatewayTargetGroup.listener_rule, egress.listener_rule],
+        dependsOn: [gatewayTargetGroup.listener_rule],
       }
     );
 

@@ -1,7 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import {
-  config,
   getAiToolsInfra,
   getMacroApiToken,
   getServiceUrl,
@@ -30,19 +29,10 @@ const jwtSecretKeyArn = aws.secretsmanager
   .getSecretVersionOutput({ secretId: `fusionauth-jwt-secret-${stack}` })
   .apply((secret) => secret.arn);
 
-// The egress proxy mints GitHub App installation tokens and Macro API tokens
-// inline, so the task role needs the App's PEM and the signing key - both
-// held as Secrets Manager secret names the service resolves at runtime.
-const githubSyncAppPemArn = aws.secretsmanager
-  .getSecretVersionOutput({ secretId: config.require('github_sync_app_pem') })
-  .apply((secret) => secret.arn);
-
-const macroApiTokenPrivateKeyArn = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('macro_api_token_private_secret_key'),
-  })
-  .apply((secret) => secret.arn);
-
+// The GitHub App PEM and the Macro API *signing* key went with the egress
+// proxy to `infra/stacks/agent-egress-service`: minting those tokens was the
+// only thing that ever read them here. The public key stays - it verifies
+// tokens rather than mints them.
 const MACRO_API_TOKENS = getMacroApiToken();
 
 // ── AI tools infra ───────────────────────────────────────────────────────────
@@ -87,15 +77,12 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
   tags,
   platform: { family: 'linux', architecture: 'amd64' },
   serviceContainerPort: 8101,
-  egressContainerPort: 8102,
   healthCheckPath: '/health',
   ecsClusterArn: cloudStorageClusterArn,
   cloudStorageClusterName,
   secretKeyArns: [
     jwtSecretKeyArn,
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
-    macroApiTokenPrivateKeyArn,
-    githubSyncAppPemArn,
     ...aiTools.secretArns,
   ],
   queueArns:
@@ -123,5 +110,4 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
 export const agentHarnessServiceUrl = getServiceUrl(
   ServiceUrl.AGENT_HARNESS_SERVICE_URL
 );
-export const agentHarnessEgressUrl = pulumi.interpolate`${service.egressDomain}`;
 export const agentHarnessServiceRoleArn = service.role.arn;
