@@ -174,7 +174,7 @@ function MoreViewsMenu(props: {
         </MobileTouchMenu.Item>
         <MobileTouchMenu.Separator />
         {/* Rows render top → bottom ending at the thumb: reverse the shared
-            canonical order so Inbox lands nearest it. */}
+            canonical order so Notifications lands nearest it. */}
         <For each={[...dockViews()].reverse()}>
           {(view) => (
             <MobileTouchMenu.Item
