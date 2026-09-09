@@ -11,6 +11,7 @@ import {
   useBlockId,
   useMaybeBlockAliasedName,
 } from '@core/block';
+import { registerLoroHistory } from '@core/component/LexicalMarkdown/collaboration/undo';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -45,6 +46,7 @@ import {
   LexicalWrapperContext,
   type LexicalWrapperWithMapping,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { pluginExtension } from '@core/component/LexicalMarkdown/extensions/pluginExtension';
 import {
   awaitPlugin,
   CLOSE_INLINE_SEARCH_COMMAND,
@@ -52,6 +54,7 @@ import {
   createDragInsertStore,
   createProgressStatsStore,
   createWordcountStatsStore,
+  customDeletePlugin,
   DefaultShortcuts,
   diffPlugin,
   documentMetadataPlugin,
@@ -103,6 +106,7 @@ import {
   type PersistentLocation,
   parsePersistentLocation,
 } from '@core/component/LexicalMarkdown/plugins/location';
+import { markdownShortcutsPlugin } from '@core/component/LexicalMarkdown/plugins/markdown-shortcuts';
 import {
   INSERT_MEDIA_COMMAND,
   mediaPlugin,
@@ -118,6 +122,7 @@ import {
 import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
+  bindStateAs,
   editorFocusSignal,
   editorIsEmpty,
   getSaveState,
@@ -163,9 +168,13 @@ import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
+import { CheckListExtension } from '@lexical/list';
+import { CODE } from '@lexical/markdown';
+import { RichTextExtension } from '@lexical/rich-text';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   $isInlineSearchNode,
+  ALL_TRANSFORMERS,
   AwaitNode,
   CommentNode,
   createPeerIdValidator,
@@ -173,6 +182,7 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@macro-inc/lexical-core';
+import { HR } from '@macro-inc/lexical-core/transformers/transformers';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { onElementConnect } from '@solid-primitives/lifecycle';
@@ -180,7 +190,12 @@ import { isIOS } from '@solid-primitives/platform';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { $getRoot, $isElementNode, type EditorState } from 'lexical';
+import {
+  $getRoot,
+  $isElementNode,
+  type AnyLexicalExtensionArgument,
+  type EditorState,
+} from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -347,11 +362,24 @@ export function MarkdownEditor(props: {
     return createPeerIdValidator(peerId, true);
   };
 
-  const configureEditor = (wrapper: LexicalWrapperWithMapping) => {
-    const { editor, plugins } = wrapper;
-    [state, setState] = createSignal(editor.getEditorState());
+  const editorExtensions = (wrapper: LexicalWrapperWithMapping) => {
+    const result: AnyLexicalExtensionArgument[] = [
+      RichTextExtension,
+      CheckListExtension,
+    ];
+    const use = (
+      name: string,
+      plugin: (editor: typeof wrapper.editor) => () => void
+    ) => {
+      result.push(pluginExtension(`markdown-editor/${name}`, plugin));
+    };
 
-    plugins.use(
+    use('state', (editor) => {
+      [state, setState] = createSignal(editor.getEditorState());
+      return bindStateAs(editor, setState, 'json');
+    });
+    use(
+      'location',
       locationPlugin({
         mapping: wrapper.mapping,
         revokeOptions: {
@@ -363,124 +391,139 @@ export function MarkdownEditor(props: {
         },
       })
     );
-
-    plugins
-      .richText()
-      .list()
-      .markdownShortcuts()
-      .delete()
-      .state<EditorState>(setState, 'json')
-      .history(400, props.loroManager)
-      .use(tabIndentationPlugin())
-      .use(selectionDataPlugin(wrapper))
-      .use(horizontalRulePlugin())
-      .use(
-        emojisPlugin({
-          menu: emojiMenuOperations,
-          peerIdValidator: peerIdValidator(),
-        })
-      )
-      .use(
-        mentionsPlugin({
-          menu: mentionsMenuOperations,
-          peerIdValidator: peerIdValidator(),
-          sourceDocumentId: blockId,
-        })
-      )
-      .use(
-        tagsPlugin({
-          menu: tagsMenuOperations,
-          peerIdValidator: peerIdValidator(),
-        })
-      )
-      .use(
-        snippetsPlugin({
-          menu: snippetsMenuOperations,
-          peerIdValidator: peerIdValidator(),
-          sourceDocumentId: blockId,
-        })
-      )
-      .use(
-        actionsPlugin({
-          menu: actionsMenuOperations,
-          peerIdValidator: peerIdValidator(),
-        })
-      )
-      .use(mediaPlugin())
-      .use(
-        tablePlugin({
-          hasCellMerge: true,
-          hasCellBackgroundColor: true,
-          hasTabHandler: true,
-          hasHorizontalScroll: true,
-        })
-      )
-      .use(tableCellResizerPlugin())
-      .use(tableTouchSelectionPlugin())
-      .use(
-        filePastePlugin({
-          onPasteFilesAndDirs: (fileEntries, directories) =>
-            handleFileFolderDrop(
-              fileEntries,
-              directories,
-              createFilesReadyHandler(editor, blockId)
-            ),
-        })
-      )
-      .use(
-        findAndReplacePlugin({
-          getListOffset: () => findAndReplaceStore.listOffset,
-          setListOffset: onSetListOffset,
-        })
-      )
-      .use(textPastePlugin())
-      .use(restoreFocusPlugin())
-      .use(markdownPastePlugin())
-      .use(normalizeEnterPlugin())
-      .use(trailingParagraphPlugin())
-      .use(
-        checkboxToTaskPlugin({
-          currentUserId: userId(),
-          parentTaskId: blockName === 'task' ? blockId : undefined,
-        })
-      )
-      .use(
-        keyboardShortcutsPlugin({
-          shortcuts: [
-            ...DefaultShortcuts,
-            {
-              label: `${IS_MAC ? 'meta' : 'ctrl'}+shift+o`,
-              test: (e) =>
-                e.code === 'KeyO' &&
-                e.shiftKey &&
-                (IS_MAC ? e.metaKey : e.ctrlKey),
-              handler: (editor) => {
-                const userId = useUserId()();
-                if (!userId) return;
-                editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {});
-              },
-              priority: 0,
+    use(
+      'markdown-shortcuts',
+      markdownShortcutsPlugin({
+        transformers: ALL_TRANSFORMERS,
+        triggerOnEnterTransformers: [HR, CODE],
+      })
+    );
+    use('delete', customDeletePlugin());
+    use('history', (editor) =>
+      registerLoroHistory(editor, props.loroManager.doc, 400)
+    );
+    use('tab-indentation', tabIndentationPlugin());
+    use('selection-data', selectionDataPlugin(wrapper));
+    use('horizontal-rule', horizontalRulePlugin());
+    use(
+      'emojis',
+      emojisPlugin({
+        menu: emojiMenuOperations,
+        peerIdValidator: peerIdValidator(),
+      })
+    );
+    use(
+      'mentions',
+      mentionsPlugin({
+        menu: mentionsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+        sourceDocumentId: blockId,
+      })
+    );
+    use(
+      'tags',
+      tagsPlugin({
+        menu: tagsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+      })
+    );
+    use(
+      'snippets',
+      snippetsPlugin({
+        menu: snippetsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+        sourceDocumentId: blockId,
+      })
+    );
+    use(
+      'actions',
+      actionsPlugin({
+        menu: actionsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+      })
+    );
+    use('media', mediaPlugin());
+    use(
+      'tables',
+      tablePlugin({
+        hasCellMerge: true,
+        hasCellBackgroundColor: true,
+        hasTabHandler: true,
+        hasHorizontalScroll: true,
+      })
+    );
+    use('table-cell-resizer', tableCellResizerPlugin());
+    use('table-touch-selection', tableTouchSelectionPlugin());
+    use('file-paste', (editor) =>
+      filePastePlugin({
+        onPasteFilesAndDirs: (fileEntries, directories) =>
+          handleFileFolderDrop(
+            fileEntries,
+            directories,
+            createFilesReadyHandler(editor, blockId)
+          ),
+      })(editor)
+    );
+    use(
+      'find-and-replace',
+      findAndReplacePlugin({
+        getListOffset: () => findAndReplaceStore.listOffset,
+        setListOffset: onSetListOffset,
+      })
+    );
+    use('text-paste', textPastePlugin());
+    use('restore-focus', restoreFocusPlugin());
+    use('markdown-paste', markdownPastePlugin());
+    use('normalize-enter', normalizeEnterPlugin());
+    use('trailing-paragraph', trailingParagraphPlugin());
+    use(
+      'checkbox-to-task',
+      checkboxToTaskPlugin({
+        currentUserId: userId(),
+        parentTaskId: blockName === 'task' ? blockId : undefined,
+      })
+    );
+    use(
+      'keyboard-shortcuts',
+      keyboardShortcutsPlugin({
+        shortcuts: [
+          ...DefaultShortcuts,
+          {
+            label: `${IS_MAC ? 'meta' : 'ctrl'}+shift+o`,
+            test: (e) =>
+              e.code === 'KeyO' &&
+              e.shiftKey &&
+              (IS_MAC ? e.metaKey : e.ctrlKey),
+            handler: (editor) => {
+              const userId = useUserId()();
+              if (!userId) return;
+              editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {});
             },
-          ],
-        })
-      )
-      .use(
-        documentMetadataPlugin({
-          onVersionError: (error) => setEditorError(error),
-        })
-      )
-      .use(pinnedPropertiesPlugin())
-      .use(awaitPlugin());
+            priority: 0,
+          },
+        ],
+      })
+    );
+    use(
+      'document-metadata',
+      documentMetadataPlugin({
+        onVersionError: (error) => setEditorError(error),
+      })
+    );
+    use('pinned-properties', pinnedPropertiesPlugin());
+    use('await', awaitPlugin());
 
     if (isIOS || isNativeMobilePlatform()) {
-      plugins.use(
+      use(
+        'ios-cursor-scroll',
         iosCursorScrollPlugin({ scrollContainer: () => md.scrollContainer })
       );
     }
 
     if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
       const peerId = () => props.loroManager.peerIdStr;
-      plugins.use(
+      use(
+        'peer-id',
         peerIdPlugin({
           peerId,
           nodes: [InlineSearchNode, CommentNode, AwaitNode],
@@ -489,7 +532,8 @@ export function MarkdownEditor(props: {
     }
 
     if (ENABLE_MARKDOWN_DIFF) {
-      plugins.use(
+      use(
+        'diff',
         diffPlugin({
           revisionsSignal: revisionsSignal,
           nodeIdMap: wrapper.mapping,
@@ -498,7 +542,8 @@ export function MarkdownEditor(props: {
     }
 
     if (ENABLE_MARKDOWN_AI_GENERATE) {
-      plugins.use(
+      use(
+        'generate',
         generatePlugin({
           completionSignal: completionSignal,
           isGeneratingSignal,
@@ -511,23 +556,28 @@ export function MarkdownEditor(props: {
       );
     }
 
-    plugins.use(
+    use(
+      'code',
       codePlugin({
         accessories: accessoryStore,
         setAccessories: setAccessoryStore,
       })
     );
-    plugins.use(listToTablePlugin());
+    use('list-to-table', listToTablePlugin());
 
     if (isFeatureEnabled(enableGitBlame)) {
-      plugins.use(
+      use(
+        'blame-tooltip',
         blameTooltipPlugin({ setState: (state) => setBlameTooltipStore(state) })
       );
     }
-    plugins.use(
+    use(
+      'wordcount',
       wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
     );
-    plugins.use(progressPlugin({ setStore: setProgressStats }));
+    use('progress', progressPlugin({ setStore: setProgressStats }));
+
+    return result;
   };
 
   const lexicalWrapper = createLexicalWrapper({
@@ -535,11 +585,11 @@ export function MarkdownEditor(props: {
     namespace: 'block-md-main',
     isInteractable: isContentEditable,
     withIds: true,
-    configure: (wrapper) =>
-      configureEditor(wrapper as LexicalWrapperWithMapping),
+    extensions: (wrapper) =>
+      editorExtensions(wrapper as LexicalWrapperWithMapping),
   });
 
-  const { editor, cleanup: cleanupPlugins } = lexicalWrapper;
+  const { editor, cleanup: cleanupEditor } = lexicalWrapper;
 
   setMdStore('editor', editor);
   setMdStore('mapping', lexicalWrapper.mapping);
@@ -755,7 +805,7 @@ export function MarkdownEditor(props: {
 
   onCleanup(() => {
     additionalCleanups.forEach((cleanup) => cleanup());
-    cleanupPlugins();
+    cleanupEditor();
   });
 
   const [titleEditorMenuOpen, setTitleEditorMenuOpen] = createSignal(false);

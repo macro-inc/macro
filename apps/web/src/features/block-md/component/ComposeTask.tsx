@@ -4,7 +4,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
-import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { createLegacyLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
   autoRegister,
   emojisPlugin,
@@ -194,7 +194,7 @@ export function ComposeTaskTitleEditor(props: {
   );
   const [rootConnected, setRootConnected] = createSignal(false);
 
-  const { editor, plugins, cleanup } = createLexicalWrapper({
+  const { editor, plugins, cleanup } = createLegacyLexicalWrapper({
     namespace: 'task-composer-title',
     type: 'title',
     isInteractable: () => !props.disabled(),

@@ -13,7 +13,7 @@ import {
   MarkdownEditorErrors,
 } from '@core/component/LexicalMarkdown/constants';
 import {
-  createLexicalWrapper,
+  createLegacyLexicalWrapper,
   LexicalWrapperContext,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
@@ -136,7 +136,7 @@ export function InstructionsEditor(props: {
     return (canEdit() ?? false) && !editorError();
   });
 
-  const lexicalWrapper = createLexicalWrapper({
+  const lexicalWrapper = createLegacyLexicalWrapper({
     type: 'markdown-sync',
     namespace: 'block-md-instructions',
     isInteractable: isContentEditable,

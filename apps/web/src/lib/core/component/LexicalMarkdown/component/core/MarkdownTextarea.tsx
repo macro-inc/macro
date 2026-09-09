@@ -26,7 +26,7 @@ import {
 import type { SetStoreFunction } from 'solid-js/store';
 import { FloatingMenuGroup } from '../../context/FloatingMenuContext';
 import {
-  createLexicalWrapper,
+  createLegacyLexicalWrapper,
   LexicalWrapperContext,
 } from '../../context/LexicalWrapperContext';
 import {
@@ -138,7 +138,7 @@ interface MarkdownTextareaProps {
 export function MarkdownTextarea(props: MarkdownTextareaProps) {
   let mountRef!: HTMLDivElement;
   let scrollContainerRef: HTMLDivElement | undefined;
-  const lexicalWrapper = createLexicalWrapper({
+  const lexicalWrapper = createLegacyLexicalWrapper({
     type: props.type ?? 'markdown',
     namespace: 'markdown-textarea',
     isInteractable: props.editable,

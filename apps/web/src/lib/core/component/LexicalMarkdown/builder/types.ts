@@ -14,7 +14,6 @@ import type {
   createDraggableBlockStore,
   createDragInsertStore,
   ItemMention,
-  PluginManager,
   SelectionData,
 } from '../plugins';
 import type { Action } from '../plugins/actions/types';
@@ -211,7 +210,6 @@ export interface EditorInternals {
 export interface EditorHandle {
   controls: EditorControls;
   lexical: LexicalEditor;
-  plugins: PluginManager;
   selection?: Store<SelectionData>;
   /** @internal consumed by MarkdownShell component; do not access directly */
   _internal: EditorInternals;

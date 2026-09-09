@@ -2,7 +2,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { createLegacyLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
   autoRegister,
   singleLinePlugin,
@@ -98,7 +98,7 @@ function ComposeSkillTitleEditor(props: {
   );
   const [rootConnected, setRootConnected] = createSignal(false);
 
-  const { editor, plugins, cleanup } = createLexicalWrapper({
+  const { editor, plugins, cleanup } = createLegacyLexicalWrapper({
     namespace: 'skill-composer-title',
     type: 'title',
     isInteractable: () => !props.disabled(),

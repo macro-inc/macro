@@ -1,11 +1,22 @@
 import { handleFileFolderDrop } from '@core/util/upload';
-import type { EditorType } from '@macro-inc/lexical-core';
-import type { SerializedEditorState } from 'lexical';
+import { HistoryExtension } from '@lexical/history';
+import { CheckListExtension } from '@lexical/list';
+import { CODE } from '@lexical/markdown';
+import { PlainTextExtension } from '@lexical/plain-text';
+import { RichTextExtension } from '@lexical/rich-text';
+import { ALL_TRANSFORMERS, type EditorType } from '@macro-inc/lexical-core';
+import { HR } from '@macro-inc/lexical-core/transformers/transformers';
+import {
+  type AnyLexicalExtensionArgument,
+  configExtension,
+  type SerializedEditorState,
+} from 'lexical';
 import { createSignal } from 'solid-js';
 import {
   createLexicalWrapper,
   type LexicalWrapper,
 } from '../context/LexicalWrapperContext';
+import { pluginExtension } from '../extensions/pluginExtension';
 import {
   actionsPlugin,
   agentCommandsPlugin,
@@ -14,6 +25,7 @@ import {
   createAccessoryStore,
   createDraggableBlockStore,
   createDragInsertStore,
+  customDeletePlugin,
   draggableBlockPlugin,
   dragInsertPlugin,
   emojisPlugin,
@@ -34,10 +46,12 @@ import {
   trailingParagraphPlugin,
 } from '../plugins';
 import { checkboxToTaskPlugin } from '../plugins/checkbox-to-task';
+import { markdownShortcutsPlugin } from '../plugins/markdown-shortcuts';
 import { normalizeEnterPlugin } from '../plugins/normalize-enter';
 import { restoreFocusPlugin } from '../plugins/restore-focus';
 import { createMenuOperations } from '../shared/inlineMenu';
 import {
+  bindStateAs,
   getSaveState,
   initializeEditorEmpty,
   initializeEditorWithState,
@@ -123,84 +137,98 @@ export function buildHandleFromConfig(
   const draggableBlockStore = draggableBlockStoreResult?.[0];
   const setDraggableBlockStore = draggableBlockStoreResult?.[1];
 
-  const configure = (lexicalWrapper: LexicalWrapper) => {
-    if (config.skipPreviewFetch) {
-      lexicalWrapper.skipPreviewFetch = true;
-    }
-
-    const { editor, plugins } = lexicalWrapper;
+  const extensions = (lexicalWrapper: LexicalWrapper) => {
+    const result: AnyLexicalExtensionArgument[] = [];
+    const use = (name: string, plugin: PluginFunction) => {
+      result.push(pluginExtension(`builder/${name}`, plugin));
+    };
 
     if (config.type === 'plain-text') {
-      plugins.plainText().state<string>(setMarkdownState, 'plain');
+      result.push(PlainTextExtension);
+      use('state', (editor) => bindStateAs(editor, setMarkdownState, 'plain'));
     } else if (config.singleLine) {
-      plugins.richText().state<string>(setMarkdownState, 'markdown');
+      result.push(RichTextExtension);
+      use('state', (editor) =>
+        bindStateAs(editor, setMarkdownState, 'markdown')
+      );
     } else {
       // Full markdown: everything
-      plugins
-        .richText()
-        .list()
-        .markdownShortcuts()
-        .delete()
-        .state<string>(setMarkdownState, 'markdown');
+      result.push(RichTextExtension, CheckListExtension);
+      use(
+        'markdown-shortcuts',
+        markdownShortcutsPlugin({
+          transformers: ALL_TRANSFORMERS,
+          triggerOnEnterTransformers: [HR, CODE],
+        })
+      );
+      use('delete', customDeletePlugin());
+      use('state', (editor) =>
+        bindStateAs(editor, setMarkdownState, 'markdown')
+      );
     }
 
     if (config.type !== 'plain-text' && !config.singleLine) {
-      plugins.use(trailingParagraphPlugin());
+      use('trailing-paragraph', trailingParagraphPlugin());
     }
 
     // History
     if (config.history) {
-      plugins.history(config.history.timeGap);
+      result.push(
+        configExtension(HistoryExtension, {
+          delay: config.history.timeGap ?? 400,
+        })
+      );
     }
 
     // Single line mode
     if (config.singleLine) {
-      plugins.use(singleLinePlugin());
+      use('single-line', singleLinePlugin());
     }
 
     // Restore focus (registered early, before other plugins)
     if (config.restoreFocus) {
-      plugins.use(restoreFocusPlugin());
+      use('restore-focus', restoreFocusPlugin());
     }
 
     // Text paste handling
-    plugins.use(textPastePlugin());
+    use('text-paste', textPastePlugin());
 
     // Markdown paste handling (rich & full editors only)
     if (config.type !== 'plain-text') {
-      plugins.use(markdownPastePlugin());
+      use('markdown-paste', markdownPastePlugin());
     }
 
     // Tab indentation (unless custom handler)
     if (!config.handlers.onTab) {
-      plugins.use(tabIndentationPlugin());
+      use('tab-indentation', tabIndentationPlugin());
     }
 
     // Horizontal rules & normalize-enter (full multi-line markdown only)
     if (config.type !== 'plain-text' && !config.singleLine) {
-      plugins.use(horizontalRulePlugin());
-      plugins.use(normalizeEnterPlugin());
+      use('horizontal-rule', horizontalRulePlugin());
+      use('normalize-enter', normalizeEnterPlugin());
     }
 
     // Await placeholders for in-flight async operations (any non-plain-text editor).
     if (config.type !== 'plain-text') {
-      plugins.use(awaitPlugin());
+      use('await', awaitPlugin());
     }
 
     // Selection / formatting state
     if (config.selectionData) {
-      plugins.use(selectionDataPlugin(lexicalWrapper));
+      use('selection-data', selectionDataPlugin(lexicalWrapper));
     }
 
     // Actions / slash-command menu (not available for plain-text)
     if (actionsMenuOps) {
-      plugins.use(actionsPlugin({ menu: actionsMenuOps }));
+      use('actions', actionsPlugin({ menu: actionsMenuOps }));
     }
 
     // Mentions & Emojis (not available for plain-text — nodes not registered)
     if (config.type !== 'plain-text') {
       if (config.mentions && mentionsMenuOps) {
-        plugins.use(
+        use(
+          'mentions',
           mentionsPlugin({
             menu: mentionsMenuOps,
             onCreateMention: config.mentions.onCreate,
@@ -211,7 +239,8 @@ export function buildHandleFromConfig(
       }
 
       if (config.tags && tagsMenuOps) {
-        plugins.use(
+        use(
+          'tags',
           tagsPlugin({
             menu: tagsMenuOps,
             insertTags: config.tags.insertTags,
@@ -225,11 +254,12 @@ export function buildHandleFromConfig(
       }
 
       if (emojisMenuOps) {
-        plugins.use(emojisPlugin({ menu: emojisMenuOps }));
+        use('emojis', emojisPlugin({ menu: emojisMenuOps }));
       }
 
       if (snippetsMenuOps) {
-        plugins.use(
+        use(
+          'snippets',
           snippetsPlugin({
             menu: snippetsMenuOps,
             sourceDocumentId: config.mentions?.sourceDocumentId,
@@ -238,11 +268,12 @@ export function buildHandleFromConfig(
       }
 
       if (skillsMenuOps) {
-        plugins.use(skillsPlugin({ menu: skillsMenuOps }));
+        use('skills', skillsPlugin({ menu: skillsMenuOps }));
       }
 
       if (agentCommandsMenuOps && config.agentCommands) {
-        plugins.use(
+        use(
+          'agent-commands',
           agentCommandsPlugin({
             menu: agentCommandsMenuOps,
             commands: config.agentCommands.commands,
@@ -252,16 +283,19 @@ export function buildHandleFromConfig(
     }
 
     if (mediaEnabled) {
-      plugins.use(mediaPlugin());
+      use('media', mediaPlugin());
     }
 
     // File drag-and-drop from desktop
     if (fileDropConfig && setDragInsertStore) {
-      plugins.use(dragInsertPlugin({ setState: setDragInsertStore }));
+      use('drag-insert', dragInsertPlugin({ setState: setDragInsertStore }));
     }
 
     if (config.draggableBlocks && setDraggableBlockStore) {
-      plugins.use(draggableBlockPlugin({ setState: setDraggableBlockStore }));
+      use(
+        'draggable-block',
+        draggableBlockPlugin({ setState: setDraggableBlockStore })
+      );
     }
 
     // File clipboard paste — auto-register when fileDrop is enabled, since
@@ -269,7 +303,8 @@ export function buildHandleFromConfig(
     // path) without processing the files. A custom filePaste config from
     // withFilePaste() takes precedence.
     if (fileDropConfig && !config.filePaste) {
-      plugins.use(
+      use(
+        'file-drop-paste',
         filePastePlugin({
           onPasteFilesAndDirs: (fileEntries, directories) => {
             handleFileFolderDrop(
@@ -291,7 +326,8 @@ export function buildHandleFromConfig(
 
     // Code blocks with syntax highlighting
     if (config.code && accessoryStore && setAccessoryStore) {
-      plugins.use(
+      use(
+        'code',
         codePlugin({
           accessories: accessoryStore,
           setAccessories: setAccessoryStore,
@@ -301,12 +337,13 @@ export function buildHandleFromConfig(
 
     // Checkbox to task conversion
     if (config.checkboxToTask) {
-      plugins.use(checkboxToTaskPlugin());
+      use('checkbox-to-task', checkboxToTaskPlugin());
     }
 
     // File paste handling
     if (config.filePaste) {
-      plugins.use(
+      use(
+        'file-paste',
         filePastePlugin({
           onPasteFilesAndDirs: config.filePaste.onPasteFilesAndDirs,
         })
@@ -315,7 +352,8 @@ export function buildHandleFromConfig(
 
     // Keyboard focus leave detection
     if (config.focusLeave) {
-      plugins.use(
+      use(
+        'keyboard-focus',
         keyboardFocusPlugin({
           onFocusLeaveStart: config.focusLeave.onStart,
           onFocusLeaveEnd: config.focusLeave.onEnd,
@@ -331,9 +369,11 @@ export function buildHandleFromConfig(
       );
     }
 
-    for (const plugin of additionalPlugins) {
-      plugins.use(plugin);
+    for (const [index, plugin] of additionalPlugins.entries()) {
+      use(`custom-${index}`, plugin);
     }
+
+    return result;
   };
 
   const lexicalWrapper = config.withIds
@@ -342,16 +382,18 @@ export function buildHandleFromConfig(
         namespace: config.namespace,
         isInteractable,
         withIds: true,
-        configure,
+        skipPreviewFetch: config.skipPreviewFetch,
+        extensions,
       })
     : createLexicalWrapper({
         type: config.type as EditorType,
         namespace: config.namespace,
         isInteractable,
-        configure,
+        skipPreviewFetch: config.skipPreviewFetch,
+        extensions,
       });
 
-  const { editor, plugins, cleanup: cleanupLexical } = lexicalWrapper;
+  const { editor, cleanup: cleanupLexical } = lexicalWrapper;
 
   const controls: EditorControls = {
     focus: () => editor.focus(),
@@ -390,7 +432,6 @@ export function buildHandleFromConfig(
   return {
     controls,
     lexical: editor,
-    plugins,
     selection: lexicalWrapper.selection,
     _internal: {
       builderConfig: config,

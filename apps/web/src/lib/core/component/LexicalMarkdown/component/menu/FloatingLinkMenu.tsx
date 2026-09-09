@@ -61,11 +61,9 @@ export function FloatingLinkMenu(props: {
   closePopup?: () => void;
   autoLinkMatchMode?: AutoLinkMatchMode;
 }) {
-  const { plugins, editor } = useContext(LexicalWrapperContext) ?? {};
-  if (!plugins || !editor) {
-    console.error(
-      'FloatingLinkMenu requires plugins and editor from LexicalWrapperContext!'
-    );
+  const { editor } = useContext(LexicalWrapperContext) ?? {};
+  if (!editor) {
+    console.error('FloatingLinkMenu requires LexicalWrapperContext!');
     return '';
   }
 
@@ -239,13 +237,13 @@ export function FloatingLinkMenu(props: {
     editor.focus();
   };
 
-  plugins.use(
+  autoRegister(
     linksPlugin({
       onHoverLink,
       onClickLink,
       onCreateLink,
       autoLinkMatchMode: props.autoLinkMatchMode,
-    })
+    })(editor)
   );
 
   const keydown = (e: KeyboardEvent) => {

@@ -1,7 +1,7 @@
 import type { EditorType } from '@macro-inc/lexical-core';
 import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
-import type { PluginManager, SelectionData } from '../plugins';
+import type { SelectionData } from '../plugins';
 import type { Action } from '../plugins/actions/types';
 import { buildHandleFromConfig } from './buildHandleFromConfig';
 import type {
@@ -225,8 +225,8 @@ export class EditorConfigBuilder implements EditorBuilder {
 
   /**
    * Register a custom Lexical plugin as part of the builder chain.
-   * Plugins are queued here and applied during `buildHandle()` after all
-   * built-in plugins have been registered.
+   * Plugins are queued here, adapted into named extensions, and composed into
+   * the editor graph after the built-in extensions.
    */
   use(pluginFn: (editor: LexicalEditor) => () => void): this {
     this._queuedPlugins.push(pluginFn);
@@ -262,13 +262,6 @@ export class EditorConfigBuilder implements EditorBuilder {
     return this._handle.lexical;
   }
 
-  /** The plugin manager. Available after `<MarkdownShell>` mounts. */
-  get plugins(): PluginManager {
-    if (!this._handle)
-      throw new Error('editor.plugins accessed before <MarkdownShell> mounted');
-    return this._handle.plugins;
-  }
-
   /** Reactive selection state, if `.withSelectionData()` was enabled. Available after `<MarkdownShell>` mounts. */
   get selection(): Store<SelectionData> | undefined {
     return this._handle?.selection;
@@ -281,8 +274,8 @@ export class EditorConfigBuilder implements EditorBuilder {
  * Chain feature methods to opt into capabilities, then pass the builder to
  * directly to `<MarkdownShell editor={...} />`.
  *
- * Use the builder variable to access `controls`, `lexical`, `plugins`, and
- * `selection` after the component has mounted.
+ * Use the builder variable to access `controls`, `lexical`, and `selection`
+ * after the component has mounted.
  *
  * @param type - Lexical editor mode. Defaults to `'markdown'` (full rich-text).
  *   Use `'chat'` for a mode that supports mention nodes without media nodes.

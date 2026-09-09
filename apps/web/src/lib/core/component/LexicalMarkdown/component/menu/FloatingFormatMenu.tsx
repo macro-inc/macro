@@ -138,7 +138,7 @@ export function FloatingFormatMenu(props: {
   // On mobile the native selection toolbar takes this menu's place.
   if (isMobile()) return '';
 
-  const { editor, plugins } = lexicalWrapper;
+  const { editor } = lexicalWrapper;
   const selection = (): SelectionData | undefined => lexicalWrapper.selection;
 
   const [menuOpen, setMenuOpen] = createMenuOpenSignal(
@@ -148,11 +148,11 @@ export function FloatingFormatMenu(props: {
   const [selectionInfo, setSelectionInfo] =
     createSignal<EnhancedSelection | null>(null, { equals: () => false });
 
-  plugins.use(
+  autoRegister(
     popupPlugin({
       setIsPopupVisible: setMenuOpen,
       setSelection: setSelectionInfo,
-    })
+    })(editor)
   );
 
   // Lag the open state so the menu doesn't flash while a selection is being

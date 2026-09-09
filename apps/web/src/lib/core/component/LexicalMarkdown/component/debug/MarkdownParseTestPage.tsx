@@ -11,7 +11,7 @@ import {
   Show,
 } from 'solid-js';
 import {
-  createLexicalWrapper,
+  createLegacyLexicalWrapper,
   LexicalWrapperContext,
 } from '../../context/LexicalWrapperContext';
 import {
@@ -147,7 +147,7 @@ export function TestEditor(props: {
   let mountRef!: HTMLDivElement;
 
   const lexicalWrapper = createMemo(() =>
-    createLexicalWrapper({
+    createLegacyLexicalWrapper({
       type: 'markdown',
       namespace: 'markdown-textarea',
       isInteractable: () => true,
