@@ -58,7 +58,7 @@ export type ActivityContext = {
   /**
    * Display name for a bot by bare UUID. First-party bots resolve at once
    * from constants; team bots resolve from the bots list, `undefined` while
-   * it loads, `Bot` when the list does not know the id.
+   * it loads, `Bot` when the list does not know the id or failed to load.
    */
   botName: (botId: Accessor<string>) => Accessor<string | undefined>;
   /** Name, icon, and link target for a referenced entity. */
@@ -104,8 +104,8 @@ function appActivityContext(): ActivityContext {
       const firstParty = firstPartyBotName(id);
       if (firstParty) return firstParty;
       const list = botsQuery();
-      if (!list?.isSuccess) return undefined;
-      return getBotDisplayName(`bot|${id}`, undefined, list.data);
+      if (!list || list.isPending) return undefined;
+      return getBotDisplayName(`bot|${id}`, undefined, list.data ?? []);
     },
     entityDisplay: (entityId, entityType) =>
       usePropertyEntityDisplay(entityId, entityType),

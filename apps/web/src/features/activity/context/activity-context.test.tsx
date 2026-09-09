@@ -29,6 +29,7 @@ describe('appActivityContext.botName', () => {
   beforeEach(() => {
     useBotsQuery.mockReset();
     useBotsQuery.mockReturnValue({
+      isPending: false,
       isSuccess: true,
       data: [
         { id: TEAM_BOT, name: 'Triage' },
@@ -47,6 +48,31 @@ describe('appActivityContext.botName', () => {
       expect(second()).toBe('Digest');
       expect(first()).toBe('Triage');
       expect(useBotsQuery).toHaveBeenCalledTimes(1);
+      dispose();
+    });
+  });
+
+  it('is undefined while the list loads and `Bot` once it has failed', () => {
+    useBotsQuery.mockReturnValue({
+      isPending: true,
+      isSuccess: false,
+      data: undefined,
+    });
+    createRoot((dispose) => {
+      const context = useActivityContext();
+      expect(context.botName(() => TEAM_BOT)()).toBeUndefined();
+      dispose();
+    });
+
+    useBotsQuery.mockReturnValue({
+      isPending: false,
+      isSuccess: false,
+      isError: true,
+      data: undefined,
+    });
+    createRoot((dispose) => {
+      const context = useActivityContext();
+      expect(context.botName(() => TEAM_BOT)()).toBe('Bot');
       dispose();
     });
   });
