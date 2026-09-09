@@ -2688,13 +2688,15 @@ async fn notification_not_seen_filter_matches_top_level_messages_and_thread_repl
 async fn notification_done_and_seen_filters_match_soup_independent_exists_semantics(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    insert_channel_message_notification(&pool, USER_A, CH1, MSG3, false, true).await?;
-    insert_channel_message_notification(&pool, USER_A, CH1, MSG3, true, false).await?;
+    // The unseen row satisfies not-done; the separate done row satisfies seen.
+    // Both rows are valid states, and neither alone satisfies both predicates.
+    insert_channel_message_notification(&pool, USER_A, CH1, MSG3, false, false).await?;
+    insert_channel_message_notification(&pool, USER_A, CH1, MSG3, true, true).await?;
 
     let filters = ChannelMessageFilters {
         notification_filters: NotificationFilters {
             done: Some(false),
-            seen: Some(false),
+            seen: Some(true),
         },
         ..Default::default()
     };
