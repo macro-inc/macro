@@ -183,6 +183,14 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never sets models")
     }
 
+    async fn set_repo_url(
+        &self,
+        _id: AgentSessionId,
+        _repo_url: Option<String>,
+    ) -> SessionResult<()> {
+        unimplemented!("the router never sets repositories")
+    }
+
     async fn delete(&self, _id: AgentSessionId) -> SessionResult<()> {
         unimplemented!("the router never deletes sessions")
     }

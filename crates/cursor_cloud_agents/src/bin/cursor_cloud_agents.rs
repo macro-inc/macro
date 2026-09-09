@@ -21,8 +21,8 @@
 //!
 //! Environment:
 //! - `CURSOR_API_KEY` (required): a `crsr_…` user or service-account key.
-//! - `CURSOR_REPO`: repository override; otherwise resolved from the
-//!   session's `cwd` origin remote.
+//! - `CURSOR_REPO`: repository override; otherwise resolved from the origin
+//!   remote of the directory the agent was started in.
 //! - `CURSOR_REF`: starting ref for new agents (default `main`).
 //! - `CURSOR_MODEL`: model id (default: server default).
 //! - `CURSOR_API_BASE`: API base url (default `https://api.cursor.com`).
@@ -40,7 +40,7 @@ use cursor_cloud_agents::api::{ApiKey, CursorClient, CursorConfig};
 use cursor_cloud_agents::domain::model::RepoUrl;
 use cursor_cloud_agents::domain::service::CursorSessionService;
 use cursor_cloud_agents::inbound::acp::{AcpNotifier, serve};
-use cursor_cloud_agents::outbound::git::GitRepoResolver;
+use cursor_cloud_agents::outbound::git::GitRepositoryChooser;
 use macro_env_var::{env_var, maybe_env_var};
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -127,7 +127,11 @@ async fn main() -> ExitCode {
     };
 
     let override_repo = CursorRepo::new().and_then(|repo| repo.value().and_then(RepoUrl::parse));
-    let repos = GitRepoResolver { override_repo };
+    // Resolved once, from where the client started this process: a session's
+    // `cwd` no longer reaches the choice, because the hosted harness decides
+    // per prompt and has no checkout to look at.
+    let chooser =
+        GitRepositoryChooser::new(override_repo, &std::env::current_dir().unwrap_or_default());
 
     // ACP has no capability field for "I will never ask permission", and a
     // client's gate silently not applying is the kind of thing a user only
@@ -149,7 +153,7 @@ async fn main() -> ExitCode {
         CursorSessionService::new(
             client,
             notifier.clone(),
-            repos,
+            chooser,
             Arc::new(cursor_cloud_agents::outbound::memory_journal::MemoryJournal::default()),
         )
         .with_default_model(configured_model),

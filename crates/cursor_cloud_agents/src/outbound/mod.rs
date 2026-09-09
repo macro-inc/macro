@@ -1,6 +1,6 @@
 //! Driven adapters other than the Cursor API client.
 
-/// Repository resolution from a checkout's git remote.
+/// Repository choice from a checkout's git remote.
 pub mod git;
 
 /// Process-local journal for standalone agents and tests.

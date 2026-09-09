@@ -9,6 +9,7 @@ pub mod cursor;
 pub mod daytona;
 pub mod egress;
 pub mod forward;
+pub mod github_repositories;
 pub mod local;
 pub(crate) mod managed_containers;
 pub mod namespace;
