@@ -30,9 +30,11 @@ import { Button, cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';
 
-/** Compact ghost pill — same size as the short-list trigger and chat's selector. */
+/** Compact ghost pill — same size as the short-list trigger and chat's selector.
+ *  Width follows the model name; `max-w-full` only kicks in if the composer
+ *  itself is narrower than the label, in which case the text ellipsizes. */
 const PILL_TRIGGER_CLASS =
-  'h-6 w-auto max-w-[9rem] min-w-0 justify-start gap-1 rounded-full border-transparent bg-ink/5 px-2 text-left text-xs text-ink-muted hover:bg-ink/10';
+  'h-6 w-auto max-w-full min-w-0 shrink justify-start gap-1 overflow-hidden rounded-full border-transparent bg-ink/5 px-2 text-left text-xs text-ink-muted hover:bg-ink/10';
 
 /** Height of one model row — `h-7` on the item, so the cap is exact. */
 const ROW_HEIGHT_PX = 28;
@@ -183,7 +185,11 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         class={PILL_TRIGGER_CLASS}
         disabled={disabled()}
       >
-        <TextShimmer text={label()} active={props.changingTo !== undefined} />
+        <TextShimmer
+          text={label()}
+          active={props.changingTo !== undefined}
+          class="min-w-0 truncate"
+        />
         <CaretDown />
       </Dropdown.Trigger>
       <Dropdown.Content class="overflow-hidden">

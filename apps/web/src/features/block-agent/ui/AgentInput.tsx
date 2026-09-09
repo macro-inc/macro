@@ -164,7 +164,7 @@ export function AgentInput(props: AgentInputProps) {
     <div ref={containerRef} data-keep-keyboard class="flex flex-col gap-1.5">
       {/* Desktop: the model pill sits above the box, as it always has. */}
       <Show when={!isTouchDevice() && props.modelControl}>
-        <div class="flex items-center px-0.5">{props.modelControl}</div>
+        <div class="flex min-w-0 items-center px-0.5">{props.modelControl}</div>
       </Show>
       {/* h-auto beats Surface's size-full so the in-flow controls are not
           clipped over the editor (that was Auto sitting on the placeholder). */}
