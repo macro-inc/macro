@@ -160,7 +160,7 @@ describe('createMyActivityState', () => {
     if (after.t !== 'ready') throw new Error('feed should stay ready');
     expect(after.moreFailed).toBe(false);
     expect(after.hasMore).toBe(false);
-    expect(after.groups.flatMap((g) => g.events)).toHaveLength(2);
+    expect(after.groups.flatMap((g) => g.entries)).toHaveLength(2);
   });
 
   it('is empty when the first page has no rows', () => {

@@ -111,7 +111,9 @@ describe('EntityActivitySection', () => {
     const visible = rows();
     expect(visible).toHaveLength(4);
     expect(visible[0]?.getAttribute('data-activity-run-size')).toBe('3');
-    expect(visible[0]?.textContent).toContain('3 times');
+    // No entity on the panel's own rows, so the count folds into the verb.
+    expect(visible[0]?.textContent).toContain('made 3 edits');
+    expect(visible[0]?.textContent).not.toContain('times');
     expect(visible[1]?.getAttribute('data-activity-action')).toBe('opened');
     expect(visible[2]?.getAttribute('data-activity-action')).toBe('edited');
     expect(visible[3]?.getAttribute('data-activity-action')).toBe('created');

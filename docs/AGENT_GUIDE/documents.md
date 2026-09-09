@@ -55,7 +55,7 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
 - Collapsed sections: `Stats`, `History` (version time-travel), `Activity`.
 - `Activity` lists the same glyph-rail lines as `/app/component/activity` (plain glyphs on a
   thin connector, one line each with long names truncated, compact `17h` / `8d` / `1mo`
-  times; consecutive edits fold into one `3 times` line). Past four entries it shows the
+  times; consecutive edits fold into one `made 3 edits` line). Past four entries it shows the
   three newest, a `View all activities` toggle row (dotted connector, caret glyph), and the
   oldest fetched entry (usually `created this`) pinned last; the toggle flips to `Show less`
   once expanded.

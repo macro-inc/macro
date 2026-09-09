@@ -59,6 +59,11 @@ export function ActivityTimelineRow(props: {
     const current = action();
     return current.kind === 'property-changed' ? current : undefined;
   };
+  // Rows with a named entity, and property runs anywhere, take the count as
+  // a suffix ("… 5 times", "… 3 changes"); a plain phrase without an entity
+  // folds it in instead ("made 5 edits").
+  const countSuffix = () =>
+    props.display || propertyChange() ? described().countLabel : undefined;
 
   return (
     <div
@@ -129,6 +134,7 @@ export function ActivityTimelineRow(props: {
               <span class="min-w-0 truncate text-ink-muted">
                 <ActionPhrase
                   action={action()}
+                  count={entrySize(props.entry)}
                   propertyDefinition={props.propertyDefinition}
                   capitalize={!showActor()}
                 />
@@ -170,7 +176,7 @@ export function ActivityTimelineRow(props: {
             )}
           </Show>
         </span>
-        <Show when={described().countLabel}>
+        <Show when={countSuffix()}>
           {(label) => (
             <>
               <Show when={propertyChange()}>

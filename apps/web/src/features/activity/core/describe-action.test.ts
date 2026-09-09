@@ -63,6 +63,31 @@ describe('describeAction', () => {
       })
     ).toBe('transmogrified thoroughly');
   });
+
+  const COUNTED_CASES: Array<[ActivityAction, string]> = [
+    [{ kind: 'created' }, 'created this 5 times'],
+    [{ kind: 'edited' }, 'made 5 edits'],
+    [{ kind: 'opened' }, 'opened this 5 times'],
+    [{ kind: 'deleted' }, 'deleted this 5 times'],
+    [{ kind: 'messaged' }, 'sent 5 messages'],
+    [{ kind: 'email-sent' }, 'sent 5 emails'],
+    [
+      { kind: 'property-changed', property: 'prop-1', from: null, to: 'Done' },
+      'made 5 property changes',
+    ],
+    [{ kind: 'participant-added' }, 'added 5 participants'],
+    [{ kind: 'participant-removed' }, 'removed 5 participants'],
+    [{ kind: 'call-started' }, 'started 5 calls'],
+    [{ kind: 'unknown', tag: 'transmogrified' }, 'transmogrified 5 times'],
+  ];
+
+  it.each(COUNTED_CASES)('folds a run count into %j', (action, expected) => {
+    expect(describeAction(action, 5)).toBe(expected);
+  });
+
+  it('reads a count of one as the plain phrase', () => {
+    expect(describeAction({ kind: 'edited' }, 1)).toBe('made an edit');
+  });
 });
 
 describe('describeRun', () => {

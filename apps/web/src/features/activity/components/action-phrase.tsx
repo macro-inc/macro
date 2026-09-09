@@ -11,10 +11,11 @@ function capitalize(value: string): string {
 /**
  * The verb half of an activity row: property changes render their resolved
  * transition ("changed Status from … to …"), everything else the plain verb
- * phrase.
+ * phrase with the run `count` folded in ("made 5 edits").
  */
 export function ActionPhrase(props: {
   action: ActivityAction;
+  count?: number;
   propertyDefinition?: PropertyDefinitionDomain;
   capitalize?: boolean;
 }) {
@@ -23,8 +24,8 @@ export function ActionPhrase(props: {
       when={props.action.kind === 'property-changed' ? props.action : undefined}
       fallback={
         props.capitalize
-          ? capitalize(describeAction(props.action))
-          : describeAction(props.action)
+          ? capitalize(describeAction(props.action, props.count))
+          : describeAction(props.action, props.count)
       }
     >
       {(change) => (
