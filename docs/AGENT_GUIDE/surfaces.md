@@ -164,8 +164,9 @@ list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
 Workspace → `Team`, `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
-with `Customize stages`, inline rename, move up/down, delete, `Add stage`, `Reset to
-defaults`, and `Closed stages` checkboxes, editable by the role set as `edit_stages_role`),
+with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
+buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
+checkboxes, editable by the role set as `edit_stages_role`),
 `Connections` (email/tool OAuth), `MCP server`
 (setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`, `Harness`;
 `Log out`.
