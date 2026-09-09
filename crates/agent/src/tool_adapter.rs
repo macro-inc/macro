@@ -107,23 +107,31 @@ impl ToolsetToolAdapter {
                         let request_context = request_context.clone();
                         let tool_name = tool_name.clone();
                         Box::pin(async move {
+                            let req_ctx = request_context
+                                .read()
+                                .expect("request_context lock poisoned")
+                                .clone();
                             // Bypasses `ToolSet::try_tool_call`, so it carries
-                            // the same `execute_tool` telemetry itself.
-                            let telemetry = ToolCallSpan::begin(&tool_name, &args);
+                            // the same `execute_tool` telemetry itself - under
+                            // the same request-level opt-out.
+                            let telemetry = req_ctx
+                                .genai_telemetry
+                                .then(|| ToolCallSpan::begin(&tool_name, &args));
+                            let span = telemetry.as_ref().map_or_else(tracing::Span::none, |t| {
+                                t.span().clone()
+                            });
                             let result: Result<ToolResult<serde_json::Value>, ToolSetError> =
                                 async {
                                     let callable = (deserializer)(&args)
                                         .map_err(ToolSetError::Deserialization)?;
                                     let ctx = (*context).clone();
-                                    let req_ctx = request_context
-                                        .read()
-                                        .expect("request_context lock poisoned")
-                                        .clone();
                                     Ok(callable.call(ctx, req_ctx).await)
                                 }
-                                .instrument(telemetry.span().clone())
+                                .instrument(span)
                                 .await;
-                            telemetry.finish(&result);
+                            if let Some(telemetry) = &telemetry {
+                                telemetry.finish(&result);
+                            }
                             match result {
                                 Ok(Ok(value)) => Ok(ToolOutput::json(value)),
                                 Ok(Err(e)) => {

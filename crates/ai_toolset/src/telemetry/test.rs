@@ -345,3 +345,25 @@ async fn oversized_content_is_bounded_and_flagged() {
         Some(Value::Bool(true))
     );
 }
+
+/// A request that opted out - another layer reports its tool calls - runs
+/// its tools without `execute_tool` telemetry of their own.
+#[tokio::test]
+async fn a_request_that_opted_out_records_no_tool_span() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let toolset = toolset();
+
+    toolset
+        .try_tool_call(
+            (),
+            request_context().with_genai_telemetry(false),
+            "echo_tool",
+            &json!({ "value": "quiet" }),
+        )
+        .await
+        .expect("dispatch")
+        .expect("tool success");
+
+    let spans = finished(&exporter, &provider);
+    assert!(tool_spans(&spans).is_empty(), "{spans:#?}");
+}

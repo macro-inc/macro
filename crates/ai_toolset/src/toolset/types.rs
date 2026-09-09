@@ -230,7 +230,12 @@ where
         tool_name: &str,
         json: &serde_json::Value,
     ) -> Result<ToolResult<UserToolResponse<serde_json::Value>>, ToolSetError> {
-        let telemetry = ToolCallSpan::begin(tool_name, json);
+        let telemetry = request_context
+            .genai_telemetry
+            .then(|| ToolCallSpan::begin(tool_name, json));
+        let span = telemetry
+            .as_ref()
+            .map_or_else(tracing::Span::none, |telemetry| telemetry.span().clone());
         let result: Result<ToolResult<serde_json::Value>, ToolSetError> = async {
             let tool = self
                 .user_tools
@@ -242,11 +247,13 @@ where
                 })?;
             Ok(tool.call(context, request_context).await)
         }
-        .instrument(telemetry.span().clone())
+        .instrument(span)
         .await;
         // Recorded before the API wrapper goes on, so the span carries the
         // tool's own output rather than `{"UserAction": ...}`.
-        telemetry.finish(&result);
+        if let Some(telemetry) = &telemetry {
+            telemetry.finish(&result);
+        }
         result.map(|result| result.map(UserToolResponse::UserAction))
     }
 

@@ -519,3 +519,70 @@ async fn a_cancelled_run_is_recorded_as_cancelled_not_failed() {
         Some(vec!["cancelled".to_string()])
     );
 }
+
+/// With GenAI telemetry off - a loop whose turns another layer reports - the
+/// run records nothing GenAI onto any span, tool calls included; the runtime's
+/// structural spans still nest under a plain `agent.turn`.
+#[tokio::test]
+async fn a_loop_with_telemetry_off_records_no_genai_content() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let model = MockCompletionModel::from_stream_turns([
+        vec![
+            MockStreamEvent::tool_call("call-1", "echo_tool", json!({ "value": "a" })),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::text("done"),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+    ]);
+    let toolset = util::single_tool_set::<EchoTool, ()>();
+    let mut session = util::test_loop()
+        .with_genai_telemetry(false)
+        .test_session(
+            toolset,
+            Arc::new(()),
+            "test preamble",
+            util::usage_ctx(),
+            model,
+        )
+        .await;
+
+    let result = util::drive(&mut session, "call echo").await;
+    assert_eq!(result.content(), "done");
+    drop(session);
+
+    let spans = finished(&exporter, &provider);
+    assert!(
+        spans.iter().any(|span| span.name == "agent.turn"),
+        "{:?}",
+        names(&spans)
+    );
+    for span in &spans {
+        assert_eq!(
+            string_attribute(span, attr::INPUT_MESSAGES),
+            None,
+            "{span:#?}"
+        );
+        assert_eq!(
+            string_attribute(span, attr::OUTPUT_MESSAGES),
+            None,
+            "{span:#?}"
+        );
+        assert_eq!(
+            string_attribute(span, attr::TOOL_CALL_ARGUMENTS),
+            None,
+            "{span:#?}"
+        );
+        assert_eq!(
+            string_attribute(span, attr::TOOL_CALL_RESULT),
+            None,
+            "{span:#?}"
+        );
+        assert_eq!(
+            string_attribute(span, attr::TOOL_DEFINITIONS),
+            None,
+            "{span:#?}"
+        );
+    }
+}

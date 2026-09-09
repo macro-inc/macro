@@ -116,16 +116,17 @@ impl AgentLoop {
     }
 
     /// Whether this loop records GenAI telemetry on the runtime's spans: the
-    /// `invoke_agent` span with the run's input, output and usage, and the
-    /// content, tool definitions and conversation id on each `chat` span. On
-    /// by default.
+    /// `invoke_agent` span with the run's input, output and usage, the
+    /// content, tool definitions and conversation id on each `chat` span, and
+    /// the arguments and result on each `execute_tool` span. On by default.
     ///
     /// Off for a loop whose turns are already traced from outside - Macro's
     /// in-process agent session runtime, whose ACP frames the session actor
     /// projects onto GenAI spans for every harness alike. With it off the run
     /// is still wrapped in a span (so the runtime adopts it rather than
     /// opening an `invoke_agent` of its own), but that span carries no GenAI
-    /// fields and nothing is recorded onto the runtime's spans.
+    /// fields, nothing is recorded onto the runtime's spans, and the tool
+    /// calls run with `RequestContext::genai_telemetry` off.
     pub fn with_genai_telemetry(mut self, enabled: bool) -> Self {
         self.genai_telemetry = enabled;
         self
@@ -205,8 +206,9 @@ impl AgentLoop {
                 buffer.lock().expect("loaded_buffer poisoned").extend(tools)
             })
         };
-        let request_context =
-            RequestContext::new(usage_ctx.user.clone()).with_tool_search(Arc::new(catalog), loader);
+        let request_context = RequestContext::new(usage_ctx.user.clone())
+            .with_tool_search(Arc::new(catalog), loader)
+            .with_genai_telemetry(self.genai_telemetry);
         // TODO this is cringe, make request context a RW lock newtype
         let request_context_rw = Arc::new(RwLock::new(request_context.clone()));
 

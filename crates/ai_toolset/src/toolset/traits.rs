@@ -31,7 +31,9 @@ pub trait ToolSet<Context>: Send + Sync {
     /// pipelines. Every call runs inside `execute_tool` telemetry: the span is
     /// enriched when the agent runtime already opened it, opened otherwise, and
     /// records the arguments, the result and any failure (see
-    /// [`crate::telemetry::ToolCallSpan`]).
+    /// [`crate::telemetry::ToolCallSpan`]) - unless the request opted out
+    /// ([`RequestContext::genai_telemetry`]) because another layer reports its
+    /// tool calls.
     fn try_tool_call<'a>(
         &'a self,
         context: Context,
@@ -43,6 +45,11 @@ pub trait ToolSet<Context>: Send + Sync {
         Context: Send + 'a,
     {
         Box::pin(async move {
+            if !request_context.genai_telemetry {
+                return self
+                    .dispatch_tool_call(context, request_context, tool_name, json)
+                    .await;
+            }
             let telemetry = ToolCallSpan::begin(tool_name, json);
             let result = self
                 .dispatch_tool_call(context, request_context, tool_name, json)
