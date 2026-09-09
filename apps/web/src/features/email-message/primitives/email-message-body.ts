@@ -68,7 +68,6 @@ export function createEmailMessageBody(
   });
   createEffect(() => rendered()?.renderer.setExpanded(props.isBodyExpanded()));
   return {
-    isPersonal: () => props.isPersonal,
     showFullHTML,
     setShowFullHTML,
     host: () => rendered()?.host,

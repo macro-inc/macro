@@ -141,7 +141,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
   const attachmentPersistence = createAttachmentPersistence({
     services: props.attachmentStorage,
-    attachments: () => form.attachments,
+    attachments: form.attachments,
     draftId: currentDraftId,
     inboxId: activeInboxId,
   });
@@ -266,7 +266,6 @@ export function createEmailComposer(props: EmailComposerOptions) {
     persist: ({ draft, inboxId }) => persistDraft(draft, inboxId),
     paused: persistencePaused,
   });
-  const executeSaveDraft = () => autosave.save();
   const markDirtyAndScheduleSave = () => {
     if (persistencePaused()) return;
     setDraftDirty(true);
@@ -432,7 +431,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
       // draft id to snapshot and restore (the send reuses the draft's db_id).
       autosave.cancel();
       try {
-        await executeSaveDraft();
+        await autosave.save();
       } catch {
         // Draft save is best-effort; the send still works without one.
       }
@@ -522,7 +521,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     delivery: props.delivery,
     notices: props.notices,
     draftId: currentDraftId,
-    saveDraft: executeSaveDraft,
+    saveDraft: autosave.save,
     threadId: currentThreadId,
     inboxId: activeInboxId,
     sendTime: form.sendTime,
@@ -690,7 +689,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
       form.setSelectedInbox(inboxId);
       setDraftDirty(true);
       autosave.cancel();
-      void executeSaveDraft().catch(() => {});
+      void autosave.save().catch(() => {});
     },
     hasPaidAccess,
   };

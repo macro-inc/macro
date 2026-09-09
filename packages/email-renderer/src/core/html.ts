@@ -212,17 +212,14 @@ export function sanitizeEmailHtml(
   return serialize(elements(document).find((node) => node.tagName === 'html')!);
 }
 
-interface ContentOptions {
-  removeSignature?: boolean;
-  removeTrailingBrs?: boolean;
-  images?: ImagePolicy;
-}
-function parseEmailContent(html: string, options: ContentOptions = {}) {
-  const { body, styles } = documentParts(
-    html,
-    options.images ?? IMAGES_ALLOWED,
-    { stripColorScheme: true }
-  );
+function parseEmailContent(
+  html: string,
+  images: ImagePolicy,
+  showQuotedContent = false
+) {
+  const { body, styles } = documentParts(html, images, {
+    stripColorScheme: true,
+  });
   const nodes = elements(body);
   const hasTable = nodes.some((node) => node.tagName === 'table');
   const signatureNode = nodes.find(
@@ -230,19 +227,19 @@ function parseEmailContent(html: string, options: ContentOptions = {}) {
       hasClass(node, 'gmail_signature') ||
       hasClass(node, 'macro-email-signature')
   );
-  let signature: string | null = null;
-  if (options.removeSignature !== false && signatureNode) {
-    signature = serializeOuter(signatureNode);
-    remove(signatureNode);
-    const prefix = nodes.find((node) =>
-      hasClass(node, 'gmail_signature_prefix')
-    );
-    if (prefix) remove(prefix);
+  if (!showQuotedContent) {
+    if (signatureNode) {
+      remove(signatureNode);
+      const prefix = nodes.find((node) =>
+        hasClass(node, 'gmail_signature_prefix')
+      );
+      if (prefix) remove(prefix);
+    }
+    trim(body);
   }
-  if (options.removeTrailingBrs !== false) trim(body);
   return {
     mainContent: styles + (styles ? '\n' : '') + serialize(body),
-    signature,
+    hasSignature: !!signatureNode,
     hasTable,
   };
 }
@@ -288,13 +285,9 @@ export function prepareEmailBody(
   const replyless =
     input.replylessHtml || (quote ? styles + serialize(body) : input.html);
   const full = !!(options.showQuotedContent || options.showFullContent);
-  const shortened = parseEmailContent(replyless, { images });
+  const shortened = parseEmailContent(replyless, images);
   const parsed = full
-    ? parseEmailContent(input.html, {
-        removeSignature: !options.showQuotedContent,
-        removeTrailingBrs: !options.showQuotedContent,
-        images,
-      })
+    ? parseEmailContent(input.html, images, options.showQuotedContent)
     : shortened;
   return {
     html: parsed.mainContent,
@@ -302,7 +295,7 @@ export function prepareEmailBody(
     hasTable: parsed.hasTable,
     hasHiddenContent:
       !!quote ||
-      !!shortened.signature ||
+      shortened.hasSignature ||
       replyless.replace(/\s+/g, '') !== input.html.replace(/\s+/g, ''),
   };
 }

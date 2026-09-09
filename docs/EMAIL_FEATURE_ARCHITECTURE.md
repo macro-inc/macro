@@ -47,10 +47,9 @@ may import a block package, `@core/block`, or block-related signal modules.
 
 ## Production entry points and reusable surfaces
 
-- `email-message/email-message.tsx` constructs rendering capabilities and mounts
-  `views/email-message.tsx`. The reusable view receives one `EmailMessage` plus
-  resolved presentation values and event callbacks. A thread supplies selection,
-  expansion, reply actions, and a footer through those inputs.
+- `email-message/views/email-message.tsx` receives one `EmailMessage` plus
+  resolved presentation values and event callbacks. Its caller provides the
+  rendering context, selection, expansion, reply actions, and footer.
 - `email-thread/email-thread.tsx` constructs the existing shared thread query,
   source adapter, viewer/contact capabilities, thread commands, composer capabilities,
   notification subscription, rendering adapters, and host-independent cache
@@ -260,8 +259,10 @@ its failure handling. Adapter tests therefore exercise real TanStack mutations.
 Replies still clear optimistically when dispatch starts. After successful send,
 the controller establishes the mark-done undo handle before starting a detached,
 error-reported refresh. A slow refresh must not delay Undo or leave an
-Undo-restored editor disabled. Standalone compose marks completion before its
-navigation callback, so disposal cannot autosave or resend the successful message.
+Undo-restored editor disabled. Each send owns its mentions, completion target,
+and undo handle; sending again must preserve the earlier notification's undo
+action. Standalone compose marks completion before its navigation callback, so
+disposal cannot autosave or resend the successful message.
 
 `EmailThreadSource.refresh()` and `fetchOlder()` require `Promise<void>`. Their
 adapters await the underlying query, and callers that need fresh messages await

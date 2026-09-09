@@ -1,4 +1,7 @@
-import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
+import type {
+  EmailFormRecipients,
+  EmailRecipient,
+} from '@app/features/email-compose/core/email-recipient';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import type { EmailContact as ContactInfo } from '../../email-message/core/email-message';
 export const convertEmailRecipientToContactInfo = (
@@ -25,14 +28,9 @@ export const convertContactInfoToEmailRecipient = (
 export const getReplyAllRecipients = (
   referenceMessage: EmailMessage | undefined,
   userEmail: string
-): {
-  to: EmailRecipient[];
-  cc: EmailRecipient[];
-  bcc: EmailRecipient[];
-} => {
+): EmailFormRecipients => {
+  if (!referenceMessage) return { to: [], cc: [], bcc: [] };
   let to: EmailRecipient[] = [];
-  let cc: EmailRecipient[] = [];
-  if (!referenceMessage) return { to, cc, bcc: [] };
 
   // If last message was from user - reply to the to recipients (cc is handled separately below)
   if (referenceMessage?.from?.email === userEmail) {
@@ -52,42 +50,16 @@ export const getReplyAllRecipients = (
     );
     to = [sender, ...otherRecipients].map(convertContactInfoToEmailRecipient);
   }
-  if (
-    referenceMessage.cc &&
-    referenceMessage.cc.filter((recipient) => recipient.email !== userEmail)
-      .length > 0
-  ) {
-    cc = referenceMessage.cc
-      .filter((recipient) => recipient.email !== userEmail)
-      .map(convertContactInfoToEmailRecipient);
-  }
+  const cc = (referenceMessage.cc ?? [])
+    .filter((recipient) => recipient.email !== userEmail)
+    .map(convertContactInfoToEmailRecipient);
   return { to, cc, bcc: [] };
-};
-
-// Whether Reply-all is meaningfully different from Reply for this message.
-// Hidden when the user sent the message (Reply == Reply-all per
-// getReplyRecipientsFromParent), or when no recipient remains in to/cc
-// after filtering out both the user and the sender.
-export const isReplyAllEligible = (
-  message: EmailMessage,
-  userEmail: string
-): boolean => {
-  const sender = message.from?.email;
-  if (sender === userEmail) return false;
-  const isOther = (email: string) => email !== userEmail && email !== sender;
-  const otherTo = message.to.filter((r) => isOther(r.email));
-  const otherCc = message.cc.filter((r) => isOther(r.email));
-  return otherTo.length + otherCc.length > 0;
 };
 
 export const getReplyRecipientsFromParent = (
   replyingTo: EmailMessage | undefined,
   userEmail: string
-): {
-  to: EmailRecipient[];
-  cc: EmailRecipient[];
-  bcc: EmailRecipient[];
-} => {
+): EmailFormRecipients => {
   if (!replyingTo) return { to: [], cc: [], bcc: [] };
   // If last message was from user, reply === replyAll
   if (replyingTo?.from?.email === userEmail) {

@@ -3,7 +3,6 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
-import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -18,7 +17,7 @@ import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, Layer, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
-import { type Accessor, createSignal, For, onMount, Show } from 'solid-js';
+import { createSignal, For, onMount, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { SignaturePreview } from '../components/signature-preview';
@@ -30,56 +29,11 @@ import { ReplyEnvelope } from './reply-envelope';
 false && fileFolderDrop;
 false && fileSelector;
 
-function createConfiguredEmailMarkdownEditor(options: ReplyEditorOptions) {
-  const editor = buildConfig('markdown')
-    .namespace(options.namespace)
-    .withMentions({
-      onUserMention: options.onUserMention,
-      onDocumentMention: options.onDocumentMention,
-    })
-    .withEmojis()
-    .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
-    .withHistory({ timeGap: 400 })
-    .withMedia()
-    .withCode()
-    .withCheckboxToTask()
-    .withRestoreFocus()
-    .withSelectionData()
-    .withFloatingFormatMenu()
-    .use((editor) => registerToggleAppendedThread(editor))
-    .onChange(options.onChange);
-
-  if (options.onPasteFilesAndDirs) {
-    editor.withFilePaste({
-      onPasteFilesAndDirs: options.onPasteFilesAndDirs,
-    });
-  }
-
-  if ((isIOS || isNativeMobilePlatform()) && options.scrollContainer) {
-    editor.use(
-      iosCursorScrollPlugin({ scrollContainer: options.scrollContainer })
-    );
-  }
-
-  return editor;
-}
-
 import {
   createReplyComposer,
   type ReplyComposerOptions,
 } from '../primitives/reply-composer';
 
-type ReplyEditorOptions = {
-  namespace: string;
-  onChange?: (markdown: string) => void;
-  onUserMention?: (mention: UserMentionRecord) => void;
-  onDocumentMention?: (item: { id: string }) => void;
-  onPasteFilesAndDirs?: (
-    files: FileSystemFileEntry[],
-    directories: FileSystemDirectoryEntry[]
-  ) => void;
-  scrollContainer?: Accessor<HTMLElement | undefined>;
-};
 type ReplyInputViewProps = Omit<
   ReplyComposerOptions,
   | 'drafts'
@@ -115,13 +69,11 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       hasPaidAccess: composeContext.hasPaidAccess,
       recordMention: composeContext.recordMention,
       focusAfterReplyRequest: () => !composeContext.presentation.isTouch(),
-      newMessage: props.newMessage,
       session: props.session,
       sourceEntityId: props.sourceEntityId,
       replyingTo: props.replyingTo,
       isEditingExisting: props.isEditingExisting,
       draft: props.draft,
-      preloadedBody: props.preloadedBody,
       preloadedHtml: props.preloadedHtml,
       formSeed: props.formSeed,
       onEngaged: props.onEngaged,
@@ -144,7 +96,6 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     quoteCollapsed,
     setQuoteCollapsed,
     savedDraftId,
-    initialHtml,
     handleEditorConnect,
     isSending,
     isUploading,
@@ -178,28 +129,45 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     isMobileDrawer() ? undefined : signatureHtml();
   // File sharing and editor plugin wiring belong to this view. The controller only
   // needs to know when editor content has changed and requires another save.
-  const editorConfig = createConfiguredEmailMarkdownEditor({
-    namespace: 'email-base-input-markdown',
-    scrollContainer: state.scrollContainer,
-    onChange: state.onContentChange,
-    onUserMention: state.handleUserMention,
-    onDocumentMention: (item) => {
-      composeContext.editorFiles.makePublic(item.id);
-      scheduleDraftSave();
-    },
-    onPasteFilesAndDirs: (files, directories) => {
-      composeContext.editorFiles.uploadEditorFiles({
-        editor: editor(),
-        sourceId: props.sourceEntityId,
-        files,
-        directories,
-        onUploaded: (ids) => {
-          ids.forEach(composeContext.editorFiles.makePublic);
-          scheduleDraftSave();
-        },
-      });
-    },
-  });
+  const editorConfig = buildConfig('markdown')
+    .namespace('email-base-input-markdown')
+    .withMentions({
+      onUserMention: state.handleUserMention,
+      onDocumentMention: (item) => {
+        composeContext.editorFiles.makePublic(item.id);
+        scheduleDraftSave();
+      },
+    })
+    .withEmojis()
+    .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
+    .withHistory({ timeGap: 400 })
+    .withMedia()
+    .withCode()
+    .withCheckboxToTask()
+    .withRestoreFocus()
+    .withSelectionData()
+    .withFloatingFormatMenu()
+    .use(registerToggleAppendedThread)
+    .onChange(state.onContentChange)
+    .withFilePaste({
+      onPasteFilesAndDirs: (files, directories) => {
+        composeContext.editorFiles.uploadEditorFiles({
+          editor: editor(),
+          sourceId: props.sourceEntityId,
+          files,
+          directories,
+          onUploaded: (ids) => {
+            ids.forEach(composeContext.editorFiles.makePublic);
+            scheduleDraftSave();
+          },
+        });
+      },
+    });
+  if (isIOS || isNativeMobilePlatform()) {
+    editorConfig.use(
+      iosCursorScrollPlugin({ scrollContainer: state.scrollContainer })
+    );
+  }
   const markdownHandle = editorConfig.buildHandle();
   setEditor(markdownHandle.lexical);
   // Set up hotkey scope for the compose message component
@@ -216,7 +184,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
-          if (form().sendTime()) return false;
+          if (form.sendTime()) return false;
           sendEmail();
           return true;
         },
@@ -230,7 +198,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         scopeId: composeHotkeyScope,
         description: 'Send and mark done',
         keyDownHandler: () => {
-          if (form().sendTime()) return false;
+          if (form.sendTime()) return false;
           sendEmail(true);
           return true;
         },
@@ -285,14 +253,14 @@ export function ReplyInputView(props: ReplyInputViewProps) {
   });
 
   const AttachmentsRow = (rowProps?: { class?: string }) => (
-    <Show when={form().attachments.list().length > 0}>
+    <Show when={form.attachments.list().length > 0}>
       <div
         class={cn(
           'ph-no-capture shrink-0 flex gap-1 flex-wrap w-full py-2',
           rowProps?.class
         )}
       >
-        <For each={form().attachments.list()}>
+        <For each={form.attachments.list()}>
           {(attachment) => (
             <EmailAttachmentPill
               attachment={{
@@ -384,18 +352,18 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       </Show>
       <ReplyEnvelope
         fields={state.recipients}
-        values={() => form().recipients()}
+        values={form.recipients}
         options={props.session.recipientOptions}
         inboxes={composeContext.accounts.inboxes}
         activeInboxId={activeInboxId}
         senderEmail={activeInboxEmail}
         onSenderChange={persistDraftOnSenderSwitch}
-        subject={() => form().subject()}
+        subject={form.subject}
         onSubjectChange={(subject) => {
-          form().setSubject(subject);
+          form.setSubject(subject);
           scheduleDraftSave();
         }}
-        showSubject={!!(props.isEditingExisting || props.newMessage)}
+        showSubject={!!props.isEditingExisting}
         mobile={isMobileDrawer}
         portalScope={composePortalScope}
         replyType={state.replyType}
@@ -472,7 +440,6 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               isDragging() && 'blur'
             )}
             disabled={isSending()}
-            initialValue={initialHtml() ? undefined : props.preloadedBody}
             placeholder={
               isMobileDrawer()
                 ? 'Use `@` to reference files'
@@ -515,7 +482,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         {/* Quoted-text controls live below the scroll area so they stay
             anchored to the composer bottom instead of scrolling with (and
             floating over) tall content. */}
-        <Show when={form().replyAppended() && quoteCollapsed()}>
+        <Show when={form.replyAppended() && quoteCollapsed()}>
           <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
             <Button
               variant="ghost"
@@ -536,7 +503,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           when={
             props.replyingTo() &&
             // The collapse pill above already covers this state
-            !(form().replyAppended() && quoteCollapsed())
+            !(form.replyAppended() && quoteCollapsed())
           }
         >
           <div
@@ -546,7 +513,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           >
             <Tooltip
               label={
-                form().replyAppended() ? 'Hide quoted text' : 'Show quoted text'
+                form.replyAppended() ? 'Hide quoted text' : 'Show quoted text'
               }
             >
               <KToggleButton
@@ -554,7 +521,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                 variant="ghost"
                 size="icon-sm"
                 class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
-                pressed={form().replyAppended()}
+                pressed={form.replyAppended()}
                 onChange={toggleQuotedText}
               >
                 <DotsThree />
@@ -610,14 +577,14 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               >
                 <EmailDateSelector
                   mobile={composeContext.presentation.isMobile()}
-                  sendTime={form().sendTime() ?? null}
+                  sendTime={form.sendTime() ?? null}
                   onSendTimeChange={handleSendTimeChange}
                   disabled={scheduleSendDisabled()}
                   disablePortal={composeContext.presentation.isTouch()}
                 />
               </Show>
               <SendButton
-                disabled={isUploading() || isSending() || !!form().sendTime()}
+                disabled={isUploading() || isSending() || !!form.sendTime()}
                 pending={isSending()}
                 hidden={sendActionHidden()}
                 onClick={() => sendEmail()}

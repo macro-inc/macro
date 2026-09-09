@@ -90,6 +90,55 @@ function composer(
 }
 
 describe('send and schedule ordering', () => {
+  it('undoes only the mark-done belonging to the selected send', async () => {
+    const context = createComposeContext();
+    const first = {
+      draftId: 'first-send',
+      threadId: 'thread',
+      inboxId: 'inbox',
+    };
+    const second = { ...first, draftId: 'second-send' };
+    vi.mocked(context.drafts.saveDraft)
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second);
+    vi.mocked(context.delivery.sendMessage)
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second);
+    vi.mocked(context.delivery.undoSend).mockImplementation(
+      async ({ onUndone }) => {
+        await onUndone();
+      }
+    );
+    const undoFirst = vi.fn(async () => {});
+    const undoSecond = vi.fn(async () => {});
+    const onMarkDone = vi
+      .fn()
+      .mockImplementationOnce((options) =>
+        options.onUndoHandle({ id: 'first', undo: undoFirst, dispose() {} })
+      )
+      .mockImplementationOnce((options) =>
+        options.onUndoHandle({ id: 'second', undo: undoSecond, dispose() {} })
+      );
+    const state = replyComposer(context, undefined, { onMarkDone });
+    try {
+      await state.sendEmail(true);
+      const firstNotice = vi.mocked(context.notices.feedback.success).mock
+        .lastCall;
+      state.edit('Another reply');
+      await state.sendEmail(true);
+      expect(context.delivery.sendMessage).toHaveBeenCalledTimes(2);
+      firstNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.drafts.restoreDraft).toHaveBeenCalledWith(
+        expect.objectContaining({ draftId: first.draftId })
+      );
+      expect(undoFirst).toHaveBeenCalledOnce();
+      expect(undoSecond).not.toHaveBeenCalled();
+    } finally {
+      state.dispose();
+    }
+  });
+
   it('undoes mark-done while the post-send refresh is still pending', async () => {
     const composeContext = createComposeContext();
     const { promise: refresh, resolve: finish } = Promise.withResolvers<void>();
@@ -168,11 +217,11 @@ describe('send and schedule ordering', () => {
     first.dispose();
     const newer = replyComposer(composeContext);
     try {
-      newer.form().setSubject('New subject');
+      newer.form.setSubject('New subject');
       newer.edit('Newer reply');
       reject(new Error('Offline'));
       await send;
-      expect(newer.form().subject()).toBe('New subject');
+      expect(newer.form.subject()).toBe('New subject');
       expect(decodeBase64Utf8(newer.collectDraft()?.body_html ?? '')).toContain(
         'Newer reply'
       );
@@ -276,14 +325,14 @@ describe('send and schedule ordering', () => {
     ).mockReturnValueOnce(uploading);
     const state = replyComposer(composeContext);
     try {
-      state.form().setSelectedInbox('secondary');
+      state.form.setSelectedInbox('secondary');
       state.handleAddAttachments([new File(['attachment'], 'review.txt')]);
       await vi.advanceTimersByTimeAsync(500);
       const scheduling = state.handleSendTimeChange(
         new Date('2026-10-01T12:00:00Z')
       );
       await vi.advanceTimersByTimeAsync(0);
-      state.form().setSelectedInbox('inbox');
+      state.form.setSelectedInbox('inbox');
       expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
       finish();
       await scheduling;
@@ -381,7 +430,7 @@ describe('send and schedule ordering', () => {
         mimeType: 'text/plain',
         fileSize: 10,
       };
-      state.form().attachments.add(attachment);
+      state.form.attachments.add(attachment);
       state.edit('Forwarding');
       await vi.advanceTimersByTimeAsync(500);
       state.handleRemoveAttachment(attachment);
@@ -443,9 +492,9 @@ describe('send and schedule ordering', () => {
       const target = () => message(`cross-inbox-${remount}`);
       let state = replyComposer(composeContext, target);
       try {
-        state.form().setSelectedInbox('secondary');
-        state.form().setSubject('Custom reply subject');
-        state.form().setRecipients('cc', [
+        state.form.setSelectedInbox('secondary');
+        state.form.setSubject('Custom reply subject');
+        state.form.setRecipients('cc', [
           {
             kind: 'custom',
             id: 'reviewer@example.com',
@@ -564,11 +613,8 @@ describe('send and schedule ordering', () => {
         Promise.withResolvers<PersistedEmailIdentity>();
       const { promise: scheduled, resolve: finishScheduling } =
         Promise.withResolvers<void>();
-      const composeContext = createComposeContext({
-        delivery: {
-          schedule: vi.fn(() => scheduled),
-        },
-      });
+      const composeContext = createComposeContext();
+      vi.mocked(composeContext.delivery.schedule).mockReturnValue(scheduled);
       vi.mocked(composeContext.drafts.saveDraft).mockImplementationOnce(
         () => saving
       );

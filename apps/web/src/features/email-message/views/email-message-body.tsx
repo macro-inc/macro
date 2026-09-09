@@ -10,13 +10,8 @@ import {
   type EmailMessageBodyProps,
 } from '../primitives/email-message-body';
 export function EmailMessageBody(props: EmailMessageBodyProps) {
-  const {
-    isPersonal,
-    showFullHTML,
-    setShowFullHTML,
-    host,
-    hasHiddenReplyStructure,
-  } = createEmailMessageBody(props, useEmailRenderingContext());
+  const { showFullHTML, setShowFullHTML, host, hasHiddenReplyStructure } =
+    createEmailMessageBody(props, useEmailRenderingContext());
   return (
     <div
       class="ph-no-capture flex flex-col [&_.md-p:first-child]:mt-0 [&_.md-p:last-child]:mb-0"
@@ -32,7 +27,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
       <div
         class="relative"
         classList={{
-          isPersonal: isPersonal(),
+          isPersonal: props.isPersonal,
           'line-clamp-3': !props.isBodyExpanded(),
         }}
       >

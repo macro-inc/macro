@@ -1,12 +1,7 @@
 import { vi } from 'vitest';
 import type { EmailComposeContext } from '../context/compose-capabilities';
 /** Fake capabilities: no production modules or app providers are needed by a controller. */
-export function createComposeContext(
-  overrides: {
-    drafts?: Partial<EmailComposeContext['drafts']>;
-    delivery?: Partial<EmailComposeContext['delivery']>;
-  } = {}
-): EmailComposeContext {
+export function createComposeContext(): EmailComposeContext {
   return {
     recipientName: (id) => id,
     recordMention: vi.fn(),
@@ -52,7 +47,6 @@ export function createComposeContext(
       })),
       deleteDraft: vi.fn(async () => {}),
       restoreDraft: vi.fn(async () => {}),
-      ...overrides.drafts,
     },
     delivery: {
       sendMessage: vi.fn(async () => ({
@@ -64,7 +58,6 @@ export function createComposeContext(
       schedule: vi.fn(async () => {}),
       archive: vi.fn(async () => {}),
       undoSend: vi.fn(async () => {}),
-      ...overrides.delivery,
     },
     attachmentStorage: {
       uploadAttachments: vi.fn(async () => {}),

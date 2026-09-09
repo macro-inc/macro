@@ -33,24 +33,16 @@ export interface EmailMessageViewProps {
 
 export function EmailMessageView(props: EmailMessageViewProps) {
   const [expandedHeader, setExpandedHeader] = createSignal(false);
-  const isBodyExpanded = createMemo(() => {
-    return props.isExpanded;
-  });
+  const isBodyExpanded = () => props.isExpanded;
 
   // Hide attachments that are referenced in inline images
   const inlineContentIds = createMemo(() => {
     const set = new Set<string>();
-    const collectFromHtml = (html: string) => {
-      const regex = /src=["']cid:([^"']+)["']/gi;
-      let match = regex.exec(html);
-      while (match !== null) {
-        const raw = match[1];
-        const normalized = raw.replace(/[<>]/g, '').trim();
-        if (normalized) set.add(normalized);
-        match = regex.exec(html);
-      }
-    };
-    collectFromHtml(props.message.body_html_sanitized ?? '');
+    const html = props.message.body_html_sanitized ?? '';
+    for (const match of html.matchAll(/src=["']cid:([^"']+)["']/gi)) {
+      const normalized = match[1].replace(/[<>]/g, '').trim();
+      if (normalized) set.add(normalized);
+    }
     return set;
   });
 
@@ -83,14 +75,6 @@ export function EmailMessageView(props: EmailMessageViewProps) {
         (!a.mime_type?.startsWith('image/') &&
           !a.mime_type?.startsWith('video/'))
     );
-  });
-
-  const draftAttachments = createMemo(() => {
-    return props.message.attachments_draft ?? [];
-  });
-
-  const forwardedAttachments = createMemo(() => {
-    return props.message.attachments_forwarded ?? [];
   });
 
   return (
@@ -194,11 +178,12 @@ export function EmailMessageView(props: EmailMessageViewProps) {
           {/* Draft attachments */}
           <Show
             when={
-              draftAttachments().length > 0 || forwardedAttachments().length > 0
+              props.message.attachments_draft.length > 0 ||
+              props.message.attachments_forwarded.length > 0
             }
           >
             <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
-              <For each={draftAttachments()}>
+              <For each={props.message.attachments_draft}>
                 {(attachment) => (
                   <EmailAttachmentPill
                     attachment={{
@@ -208,7 +193,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
                   />
                 )}
               </For>
-              <For each={forwardedAttachments()}>
+              <For each={props.message.attachments_forwarded}>
                 {(attachment) => (
                   <EmailAttachmentPill
                     attachment={{

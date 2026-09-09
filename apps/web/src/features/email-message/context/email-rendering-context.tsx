@@ -6,11 +6,9 @@ import type {
 import { type Accessor, createContext, useContext } from 'solid-js';
 import type { EmailAttachment } from '../core/email-message';
 
-export type EmailRenderingTheme = ThemeColorParams;
-
 /** Rendering capabilities shared by email surfaces; no thread or block state. */
 export interface EmailRenderingContextValue {
-  theme: Accessor<EmailRenderingTheme>;
+  theme: Accessor<ThemeColorParams>;
   images?: ImagePolicy;
   prepareLinks?: (container: HTMLElement) => void;
   resolveImages(

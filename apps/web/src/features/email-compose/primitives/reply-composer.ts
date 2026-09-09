@@ -3,29 +3,8 @@ import {
   MAX_ATTACHMENTS_BYTES_SIZE,
 } from '@app/features/email-compose/core/constants';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
-import type {
-  EmailAttachmentStorage,
-  EmailComposeAccounts,
-  EmailComposeFeedback,
-  EmailDelivery,
-  EmailDraftStorage,
-  EmailUndoHandle,
-  PersistedEmailIdentity,
-} from '../context/compose-capabilities';
-import type { EmailReplySession } from '../context/email-form-inputs';
-import type { EmailDraft } from '../core/email-draft';
-import { createAttachmentPersistence } from './attachment-persistence';
-import { createDraftAutosave } from './draft-autosave';
-import { createEmailSendSchedule } from './email-send-schedule';
-import { createReplyComposerFocus } from './reply-composer-focus';
-import { createReplyRecipientFields } from './reply-recipient-fields';
-import { createEmailUndoStore } from './undo-store';
-
-type EmailDraftId = string | null;
-
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils/setEditorStateFromHtml';
-
 import { plural } from '@core/util/string';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import {
@@ -45,13 +24,25 @@ import {
   type Setter,
   untrack,
 } from 'solid-js';
+import type {
+  EmailAttachmentStorage,
+  EmailComposeAccounts,
+  EmailComposeFeedback,
+  EmailDelivery,
+  EmailDraftStorage,
+  EmailUndoHandle,
+} from '../context/compose-capabilities';
+import type { EmailReplySession } from '../context/email-form-inputs';
+import type { EmailDraft } from '../core/email-draft';
 import {
   convertContactInfoToEmailRecipient,
   convertEmailRecipientToContactInfo,
 } from '../core/recipient-conversion';
-import { getReplyTypeFromDraft } from '../core/reply-type';
+import { createAttachmentPersistence } from './attachment-persistence';
+import { createDraftAutosave } from './draft-autosave';
 import type { DraftFormAttachment } from './email-form-state';
 import type { EmailFormContextValue, FormAccessKey } from './email-form-types';
+import { createEmailSendSchedule } from './email-send-schedule';
 import { addUserMentionToCc } from './mention-to-cc';
 import {
   clearEmailBody,
@@ -60,7 +51,10 @@ import {
   prepareMacroBody,
   TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
 } from './prepare-email-body';
+import { createReplyComposerFocus } from './reply-composer-focus';
+import { createReplyRecipientFields } from './reply-recipient-fields';
 import { endUndoSend } from './undo-send-claim';
+import { createEmailUndoStore } from './undo-store';
 
 type UndoReplySnapshot = {
   threadId: string;
@@ -82,7 +76,6 @@ type UndoReplySnapshot = {
 const replyUndo = createEmailUndoStore<UndoReplySnapshot>();
 
 export type ReplyComposerOptions = {
-  newMessage?: boolean;
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
   delivery: EmailDelivery;
@@ -97,7 +90,6 @@ export type ReplyComposerOptions = {
   replyingTo: Accessor<EmailMessage | undefined>;
   isEditingExisting?: boolean;
   draft?: EmailMessage;
-  preloadedBody?: string;
   preloadedHtml?: string;
   /** Seed identity of the draft this composer mounted from — becomes part of
    * the form-state cache key so a remount on a newer draft version gets a
@@ -108,9 +100,7 @@ export type ReplyComposerOptions = {
    * undo-send restore. The parent latches the seed key on it so the input
    * stops remounting on later draft versions. */
   onEngaged?: () => void;
-  sideEffectOnSend?: (
-    newMessageId: EmailDraftId | null
-  ) => void | Promise<void>;
+  sideEffectOnSend?: (newMessageId: string | null) => void | Promise<void>;
   onMarkDone?: (opts?: {
     silent?: boolean;
     onUndoHandle?: (handle: EmailUndoHandle) => void;
@@ -138,7 +128,7 @@ export function createReplyComposer(
     const current = ctx.thread();
     return current?.db_id === initialThread?.db_id ? current : initialThread;
   };
-  const formState = forms(
+  const form = forms(
     replyTarget?.db_id
       ? {
           type: 'replying_to',
@@ -153,7 +143,6 @@ export function createReplyComposer(
           }
         : undefined
   );
-  const form = () => formState;
   const sourceEntityId = props.sourceEntityId;
   const undoKey = `${sourceEntityId}:${replyTarget?.db_id ?? draftSeed?.replying_to_id ?? draftSeed?.db_id ?? 'new'}`;
   const userEmail = props.viewerEmail;
@@ -161,7 +150,7 @@ export function createReplyComposer(
   const primaryInboxId = props.accounts.primaryId;
   // Capture this domain inbox ID for each asynchronous operation.
   const activeInboxId = () =>
-    form().selectedInboxId() ??
+    form.selectedInboxId() ??
     thread()?.link_id ??
     draftSeed?.link_id ??
     primaryInboxId() ??
@@ -200,11 +189,11 @@ export function createReplyComposer(
   // draft reloaded with the quote already appended opens expanded instead —
   // that's how the composer looked when the draft was saved.
   const [quoteCollapsed, setQuoteCollapsed] = createSignal(
-    !form().replyAppended()
+    !form.replyAppended()
   );
   const recipients = createReplyRecipientFields({
-    values: () => form().recipients(),
-    setValues: (field, values) => form().setRecipients(field, values),
+    values: form.recipients,
+    setValues: form.setRecipients,
     onChange: scheduleDraftSave,
     container: dom.container,
   });
@@ -242,10 +231,10 @@ export function createReplyComposer(
   // it again. Use bodyHtml as initialHtml for the editor, restore attachments
   // on mount.
   const restoreEnvelope = (snapshot: UndoReplySnapshot) => {
-    form().setSelectedInbox(snapshot.inboxId);
-    form().setSubject(snapshot.draftRestore.subject);
+    form.setSelectedInbox(snapshot.inboxId);
+    form.setSubject(snapshot.draftRestore.subject);
     for (const field of ['to', 'cc', 'bcc'] as const) {
-      form().setRecipients(
+      form.setRecipients(
         field,
         (snapshot.draftRestore[field] ?? []).map(
           convertContactInfoToEmailRecipient
@@ -259,10 +248,10 @@ export function createReplyComposer(
       // Restored content is local state worth keeping — latch the seed.
       props.onEngaged?.();
       for (const attachment of restoredSnapshot.attachments) {
-        form().attachments.add(attachment);
+        form.attachments.add(attachment);
       }
       setIncludeSignature(restoredSnapshot.includeSignature);
-      form().setReplyAppended(restoredSnapshot.replyAppended);
+      form.setReplyAppended(restoredSnapshot.replyAppended);
       // Reopen with the quote visible, as it was when the send was undone.
       if (restoredSnapshot.replyAppended) setQuoteCollapsed(false);
     });
@@ -280,10 +269,10 @@ export function createReplyComposer(
       setEditorStateFromHtml(currentEditor, snapshot.bodyHtml);
     }
     for (const attachment of snapshot.attachments) {
-      form().attachments.add(attachment);
+      form.attachments.add(attachment);
     }
     setIncludeSignature(snapshot.includeSignature);
-    form().setReplyAppended(snapshot.replyAppended);
+    form.setReplyAppended(snapshot.replyAppended);
     // Reopen with the quote visible, as it was when the send was undone.
     if (snapshot.replyAppended) setQuoteCollapsed(false);
   };
@@ -310,18 +299,9 @@ export function createReplyComposer(
     setEditorConnected(true);
   };
 
-  let pendingMentions: { documentId: string }[] = [];
-  const [shouldMarkDoneOnSuccess, setShouldMarkDoneOnSuccess] =
-    createSignal(false);
-  // Undo entry for the mark-done triggered by the latest send, so undo-send
-  // can reverse it. Cleared on each send: undo-send must only un-mark-done
-  // when this send did the marking.
-  let markDoneUndoHandle: EmailUndoHandle | undefined;
-  let pendingMarkDoneNavigationTargetId: string | undefined;
-
   // Everything that follows a successful unschedule: consume the send
   // snapshot, scrub the sent message from the thread cache, restore the
-  // server-side draft and the composer, and reverse the send's mark-done.
+  // server-side draft and the composer.
   const restoreAfterUndoSend = async (
     draftId: string,
     sentThreadId: string | undefined,
@@ -345,116 +325,22 @@ export function createReplyComposer(
       setTimeout(() => replyUndo.restore(undoKey, snapshot), 0);
       props.setShowReply?.(true);
     }
-
-    // Reverse the mark-done this send triggered (restores the soup rows,
-    // notification state, and unarchives), then refresh the thread's soup
-    // item the same way a send does so inbox views show the restored draft.
-    const doneHandle = markDoneUndoHandle;
-    markDoneUndoHandle = undefined;
-    if (doneHandle) {
-      await doneHandle.undo({
-        onError: () =>
-          props.notices.feedback.failure('Failed to restore thread to inbox'),
-      });
-    }
-  };
-
-  // Undo retains the sending inbox and thread after navigation disposes the view.
-  const undoSend = (
-    draftId: string,
-    threadId: string | undefined,
-    inboxId: string | undefined
-  ) =>
-    props.delivery.undoSend({
-      threadId,
-      draftId,
-      inboxId,
-      onUndone: () => restoreAfterUndoSend(draftId, threadId, inboxId),
-    });
-
-  const afterSend = (
-    identity: PersistedEmailIdentity,
-    inboxId: string | undefined
-  ) => {
-    autosave.cancel();
-    const draftId = identity.draftId;
-    if (draftId) endUndoSend(draftId);
-    try {
-      const toastId = props.notices.feedback.success('Email sent', {
-        actions: draftId
-          ? [
-              {
-                label: 'Undo',
-                onClick: () => {
-                  if (toastId != null) props.notices.feedback.dismiss(toastId);
-                  void undoSend(draftId, identity.threadId, inboxId).catch(
-                    props.notices.reportError
-                  );
-                },
-              },
-            ]
-          : undefined,
-        duration: 5_000,
-      });
-    } catch (error) {
-      props.notices.reportError(error);
-    }
-    const mentions = pendingMentions;
-    pendingMentions = [];
-    for (const mention of mentions) {
-      try {
-        props.recordMention(sourceEntityId, mention.documentId);
-      } catch (error) {
-        props.notices.reportError(error);
-      }
-    }
-    if (shouldMarkDoneOnSuccess()) {
-      try {
-        props.onMarkDone?.({
-          silent: true,
-          onUndoHandle: (handle) => {
-            markDoneUndoHandle = handle;
-          },
-          nextEntityId: pendingMarkDoneNavigationTargetId,
-        });
-      } catch (error) {
-        props.notices.reportError(error);
-        props.notices.feedback.failure(
-          'Email sent, but unable to mark thread done'
-        );
-      } finally {
-        pendingMarkDoneNavigationTargetId = undefined;
-        setShouldMarkDoneOnSuccess(false);
-      }
-    }
-    try {
-      // Presentation refresh must not keep a successfully sent or undone reply disabled.
-      void Promise.resolve(props.sideEffectOnSend?.(draftId ?? null)).catch(
-        props.notices.reportError
-      );
-    } catch (error) {
-      props.notices.reportError(error);
-    }
   };
 
   const attachmentPersistence = createAttachmentPersistence({
     services: props.attachmentStorage,
-    attachments: () => form().attachments,
+    attachments: form.attachments,
     draftId: savedDraftId,
     inboxId: activeInboxId,
   });
 
   createEffect(
-    on(
-      () => form().editRevision(),
-      () => scheduleDraftSave(),
-      { defer: true }
-    )
+    on(form.editRevision, () => scheduleDraftSave(), { defer: true })
   );
 
   // The mounted composer owns focus, editor commands, and their cleanup.
   createEffect(() => {
-    const rt = form().replyType();
+    const rt = form.replyType();
     if (!editorConnected()) return;
     untrack(() => {
       setComposerExpanded(false);
@@ -463,7 +349,7 @@ export function createReplyComposer(
         focus.forward();
         const message = replyTarget;
         const currentEditor = editor();
-        if (message && currentEditor && form().replyAppended()) {
+        if (message && currentEditor && form.replyAppended()) {
           // The editor's lazy command registration completes after this batch.
           const timer = setTimeout(
             () =>
@@ -486,16 +372,6 @@ export function createReplyComposer(
     });
   });
 
-  const effectiveReplyType = createMemo(() => {
-    return (
-      form().replyType() ??
-      getReplyTypeFromDraft(draftSeed) ??
-      ((replyTarget?.to.length ?? 0) + (replyTarget?.cc.length ?? 0) > 1
-        ? 'reply-all'
-        : 'reply')
-    );
-  });
-
   const [sendPhase, setSendPhase] = createSignal<
     'idle' | 'preparing' | 'sending'
   >('idle');
@@ -515,21 +391,21 @@ export function createReplyComposer(
     if (
       !hasDraftContent(
         prepared.bodyText,
-        form().subject(),
-        form().attachments.list().length
+        form.subject(),
+        form.attachments.list().length
       )
     ) {
       return null;
     }
     // We attach the drafts entirely using bodyHTML (because this is how the appended reply parsing works) so we are not including bodyMacro or bodyText
     return {
-      bcc: form().recipients().bcc.map(convertEmailRecipientToContactInfo),
+      bcc: form.recipients().bcc.map(convertEmailRecipientToContactInfo),
       body_html: prepared.bodyHtml,
-      cc: form().recipients().cc.map(convertEmailRecipientToContactInfo),
+      cc: form.recipients().cc.map(convertEmailRecipientToContactInfo),
       provider_id: draftSeed?.provider_id,
       replying_to_id: replyTarget?.db_id,
-      subject: form().subject(),
-      to: form().recipients().to.map(convertEmailRecipientToContactInfo),
+      subject: form.subject(),
+      to: form.recipients().to.map(convertEmailRecipientToContactInfo),
     };
   }
 
@@ -558,20 +434,9 @@ export function createReplyComposer(
       setSavedDraft(undefined);
       return;
     }
-    const newMessage = props.newMessage ?? false;
-
-    if (!currentThread && !newMessage) {
+    if (!currentThread) {
       props.notices.reportError(
         new Error('Failed to save draft: thread not found')
-      );
-      return;
-    }
-
-    if (newMessage && currentThread) {
-      props.notices.reportError(
-        new Error(
-          'Failed to save draft: new message and current thread cannot be provided together'
-        )
       );
       return;
     }
@@ -580,8 +445,8 @@ export function createReplyComposer(
       draft: {
         ...draftToSave,
         db_id: savedDraftId(),
-        provider_thread_id: currentThread?.provider_id,
-        thread_db_id: currentThread?.db_id,
+        provider_thread_id: currentThread.provider_id,
+        thread_db_id: currentThread.db_id,
       },
       inboxId,
       completingThread,
@@ -596,8 +461,8 @@ export function createReplyComposer(
       });
       await attachmentPersistence.upload(draftId, { inboxId });
 
-      const forwarded = form()
-        .attachments.list()
+      const forwarded = form.attachments
+        .list()
         .filter((attachment) => attachment.type === 'forwarded');
       if (forwarded.length) {
         await props.attachmentStorage.addForwardedAttachments({
@@ -633,7 +498,7 @@ export function createReplyComposer(
   const persistDraftOnSenderSwitch = (inboxId: string) => {
     if (submitting() || pendingDeletion || scheduling()) return;
     props.onEngaged?.();
-    form().setSelectedInbox(inboxId);
+    form.setSelectedInbox(inboxId);
     autosave.cancel();
     void executeSaveDraft().catch(() => {});
   };
@@ -643,8 +508,8 @@ export function createReplyComposer(
 
     if (!requestReplyType) return;
 
-    if (form().replyType() !== requestReplyType) {
-      form().setReplyType(requestReplyType);
+    if (form.replyType() !== requestReplyType) {
+      form.setReplyType(requestReplyType);
     } else if (requestReplyType === 'forward') {
       // setReplyType is skipped when the type is unchanged, so land the
       // cursor in the To field explicitly
@@ -675,9 +540,9 @@ export function createReplyComposer(
     if (submitting() || pendingDeletion || attachmentPersistence.uploading())
       return;
 
-    const to = form().recipients().to.map(convertEmailRecipientToContactInfo);
-    const cc = form().recipients().cc.map(convertEmailRecipientToContactInfo);
-    const bcc = form().recipients().bcc.map(convertEmailRecipientToContactInfo);
+    const to = form.recipients().to.map(convertEmailRecipientToContactInfo);
+    const cc = form.recipients().cc.map(convertEmailRecipientToContactInfo);
+    const bcc = form.recipients().bcc.map(convertEmailRecipientToContactInfo);
 
     if ((to?.length ?? 0) + (cc?.length ?? 0) + (bcc?.length ?? 0) === 0) {
       props.notices.feedback.failure(
@@ -687,9 +552,7 @@ export function createReplyComposer(
     }
 
     const currentThread = thread();
-    const newMessage = props.newMessage ?? false;
-
-    if (!currentThread && !newMessage) {
+    if (!currentThread) {
       props.notices.reportError(
         new Error("Can't send email, no email thread found")
       );
@@ -697,16 +560,8 @@ export function createReplyComposer(
       return;
     }
 
-    if (newMessage && currentThread) {
-      props.notices.feedback.failure('Email failed to send');
-      props.notices.reportError(
-        'New message and thread cannot be provided together'
-      );
-      return;
-    }
-
     let inboxId = activeInboxId();
-    if (newMessage || !inboxId) {
+    if (!inboxId) {
       if (props.accounts.loading()) {
         props.notices.feedback.alert('Loading email accounts...');
         return;
@@ -720,15 +575,15 @@ export function createReplyComposer(
         return;
       }
 
-      const linksData = { links: props.accounts.inboxes() };
-      if (!linksData || linksData.links.length < 1) {
+      const inboxes = props.accounts.inboxes();
+      if (inboxes.length < 1) {
         props.notices.feedback.failure(
           'Email failed to send: No email account connected'
         );
         props.notices.reportError('No links found');
         return;
       }
-      inboxId = primaryInboxId() ?? linksData.links[0].id;
+      inboxId = primaryInboxId() ?? inboxes[0].id;
     }
 
     const currentEditor = editor();
@@ -736,8 +591,8 @@ export function createReplyComposer(
     // Sending a reply marks the thread done. Gated on inbox_visible because
     // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
     // replying from search or the sent view) would be unarchived.
-    const willMarkDone = markDone || (currentThread?.inbox_visible ?? false);
-    pendingMarkDoneNavigationTargetId = willMarkDone
+    const willMarkDone = markDone || currentThread.inbox_visible;
+    const nextEntityId = willMarkDone
       ? ctx.getMarkDoneNavigationTargetId()
       : undefined;
 
@@ -761,17 +616,17 @@ export function createReplyComposer(
             inboxId,
             draftId: snapshotDraftId,
             bodyHtml: snapshotHtml,
-            attachments: [...form().attachments.list()],
+            attachments: [...form.attachments.list()],
             includeSignature: includeSignature(),
-            replyAppended: form().replyAppended(),
+            replyAppended: form.replyAppended(),
             draftRestore: {
               bcc,
               cc,
               db_id: snapshotDraftId,
               provider_id: draftSeed?.provider_id,
-              provider_thread_id: currentThread?.provider_id,
+              provider_thread_id: currentThread.provider_id,
               replying_to_id: replyTarget?.db_id,
-              subject: form().subject(),
+              subject: form.subject(),
               thread_db_id: snapshotThreadId,
               to,
             },
@@ -780,7 +635,7 @@ export function createReplyComposer(
       }
 
       // Scheduling may have started while the draft save was pending.
-      if (scheduling() || form().sendTime()) {
+      if (scheduling() || form.sendTime()) {
         return;
       }
 
@@ -797,7 +652,7 @@ export function createReplyComposer(
         currentEditor,
         replyingTo
           ? {
-              replyType: effectiveReplyType(),
+              replyType: form.replyType(),
               replyingTo,
             }
           : undefined
@@ -806,10 +661,6 @@ export function createReplyComposer(
         cleanupWatermark();
         return;
       }
-
-      pendingMentions = prepared.mentions;
-      setShouldMarkDoneOnSuccess(willMarkDone);
-      markDoneUndoHandle = undefined;
 
       const processedMacroBody = prepareMacroBody(bodyMacro());
 
@@ -825,10 +676,10 @@ export function createReplyComposer(
           body_text: prepared.bodyText,
           cc,
           provider_id: draftSeed?.provider_id,
-          provider_thread_id: currentThread?.provider_id,
+          provider_thread_id: currentThread.provider_id,
           replying_to_id: replyTarget?.db_id,
-          subject: form().subject(),
-          thread_db_id: currentThread?.db_id,
+          subject: form.subject(),
+          thread_db_id: currentThread.db_id,
           to,
           // Replies/forwards follow the inbox's "add to replies & forwards"
           // setting on the backend; only signal an explicit per-reply dismiss.
@@ -852,8 +703,6 @@ export function createReplyComposer(
         result = await pendingSend;
       } catch (error) {
         autosave.cancel();
-        pendingMarkDoneNavigationTargetId = undefined;
-        setShouldMarkDoneOnSuccess(false);
         if (mounted && currentDraftId) {
           const snapshot = replyUndo.peek(currentDraftId);
           if (snapshot) restoreMountedReply(snapshot);
@@ -862,7 +711,79 @@ export function createReplyComposer(
         props.notices.feedback.failure('Failed to send email');
         return;
       }
-      afterSend(result, inboxId);
+      autosave.cancel();
+      const draftId = result.draftId;
+      if (draftId) endUndoSend(draftId);
+      // Each undo action retains this send's inbox, thread and mark-done, even
+      // if the composer sends again or navigation disposes the view.
+      let markDoneUndoHandle: EmailUndoHandle | undefined;
+      const undoSend = (draftId: string) =>
+        props.delivery.undoSend({
+          threadId: result.threadId,
+          draftId,
+          inboxId,
+          onUndone: async () => {
+            await restoreAfterUndoSend(draftId, result.threadId, inboxId);
+            const doneHandle = markDoneUndoHandle;
+            markDoneUndoHandle = undefined;
+            await doneHandle?.undo({
+              onError: () =>
+                props.notices.feedback.failure(
+                  'Failed to restore thread to inbox'
+                ),
+            });
+          },
+        });
+      try {
+        const toastId = props.notices.feedback.success('Email sent', {
+          actions: draftId
+            ? [
+                {
+                  label: 'Undo',
+                  onClick: () => {
+                    if (toastId != null)
+                      props.notices.feedback.dismiss(toastId);
+                    void undoSend(draftId).catch(props.notices.reportError);
+                  },
+                },
+              ]
+            : undefined,
+          duration: 5_000,
+        });
+      } catch (error) {
+        props.notices.reportError(error);
+      }
+      for (const mention of prepared.mentions) {
+        try {
+          props.recordMention(sourceEntityId, mention.documentId);
+        } catch (error) {
+          props.notices.reportError(error);
+        }
+      }
+      if (willMarkDone) {
+        try {
+          props.onMarkDone?.({
+            silent: true,
+            onUndoHandle: (handle) => {
+              markDoneUndoHandle = handle;
+            },
+            nextEntityId,
+          });
+        } catch (error) {
+          props.notices.reportError(error);
+          props.notices.feedback.failure(
+            'Email sent, but unable to mark thread done'
+          );
+        }
+      }
+      try {
+        // Presentation refresh must not keep a successfully sent or undone reply disabled.
+        void Promise.resolve(props.sideEffectOnSend?.(draftId ?? null)).catch(
+          props.notices.reportError
+        );
+      } catch (error) {
+        props.notices.reportError(error);
+      }
     } catch (error) {
       props.notices.reportError(error);
     } finally {
@@ -874,7 +795,7 @@ export function createReplyComposer(
     clearEmailBody(editor());
     setBodyMacro('');
     setSavedDraft(undefined);
-    form().reset();
+    form.reset();
   };
 
   const clearDraftState = () => {
@@ -898,7 +819,7 @@ export function createReplyComposer(
         });
       }
       resetState();
-      form().setReplyAppended(false);
+      form.setReplyAppended(false);
       clearDraftState();
     } finally {
       // Yield past any sync/microtask save scheduling triggered by resetState,
@@ -916,10 +837,10 @@ export function createReplyComposer(
     addUserMentionToCc({
       mention,
       recipientOptions: ctx.recipientOptions(),
-      toRecipients: form().recipients().to,
-      ccRecipients: form().recipients().cc,
-      bccRecipients: form().recipients().bcc,
-      setCc: (next) => form().setRecipients('cc', next),
+      toRecipients: form.recipients().to,
+      ccRecipients: form.recipients().cc,
+      bccRecipients: form.recipients().bcc,
+      setCc: (next) => form.setRecipients('cc', next),
       onRecipientAdded: (email) => {
         props.notices.feedback.success(`${email} added to CC`);
       },
@@ -927,7 +848,7 @@ export function createReplyComposer(
   };
 
   const handleAddAttachments = (files: File[]) => {
-    const currentAttachments = form().attachments.list();
+    const currentAttachments = form.attachments.list();
 
     const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
 
@@ -954,7 +875,7 @@ export function createReplyComposer(
     }
 
     for (const file of files) {
-      form().attachments.add({
+      form.attachments.add({
         type: 'local',
         file,
       });
@@ -972,10 +893,10 @@ export function createReplyComposer(
     saveDraft: executeSaveDraft,
     threadId: savedDraftThreadId,
     inboxId: activeInboxId,
-    sendTime: () => form().sendTime(),
-    setSendTime: (date) => form().setSendTime(date),
+    sendTime: form.sendTime,
+    setSendTime: form.setSendTime,
     recipientCount: () => {
-      const recipients = form().recipients();
+      const recipients = form.recipients();
       return (
         recipients.to.length + recipients.cc.length + recipients.bcc.length
       );
@@ -992,25 +913,25 @@ export function createReplyComposer(
     submitting() ||
     scheduling() ||
     attachmentPersistence.uploading() ||
-    !!form().sendTime();
+    !!form.sendTime();
   const scheduleSendDisabled = () =>
     scheduleBlocked() ||
     scheduling() ||
-    (form().recipients().to.length === 0 &&
-      form().recipients().cc.length === 0 &&
-      form().recipients().bcc.length === 0);
+    (form.recipients().to.length === 0 &&
+      form.recipients().cc.length === 0 &&
+      form.recipients().bcc.length === 0);
   const toggleQuotedText = () => {
     const replyingTo = replyTarget;
     if (!replyingTo) return;
 
-    const currentlyAppended = form().replyAppended();
-    form().setReplyAppended(!currentlyAppended);
+    const currentlyAppended = form.replyAppended();
+    form.setReplyAppended(!currentlyAppended);
     // Explicitly showing quoted text via the toolbar reveals it uncollapsed
     if (!currentlyAppended) setQuoteCollapsed(false);
 
     editor()?.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
       replyingTo,
-      replyType: effectiveReplyType(),
+      replyType: form.replyType(),
       visible: !currentlyAppended,
       isPersonal: ctx.isPersonalReply(),
     });
@@ -1027,7 +948,7 @@ export function createReplyComposer(
     form,
     activeInboxId,
     activeInboxEmail,
-    replyType: effectiveReplyType,
+    replyType: form.replyType,
     signatureHtml: replySignatureHtml,
     setIncludeSignature,
     setScrollContainer,
@@ -1036,7 +957,6 @@ export function createReplyComposer(
     quoteCollapsed,
     setQuoteCollapsed,
     savedDraftId,
-    initialHtml,
     handleEditorConnect,
     isSending: submitting,
     isUploading: attachmentPersistence.uploading,

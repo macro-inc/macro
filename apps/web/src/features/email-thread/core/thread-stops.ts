@@ -50,7 +50,7 @@ export function adjacentStop(
 }
 
 /** First Arrow with no cursor: next lands on the oldest card, prev on the newest. */
-export function enterListStop(
+function enterListStop(
   stops: ThreadStop[],
   dir: NavDirection
 ): ThreadStop | undefined {

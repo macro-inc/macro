@@ -1,14 +1,10 @@
-import type { EmailFormRecipients } from '../core/email-recipient';
-
-export type {
-  EmailFormRecipients,
-  RecipientFieldId,
-} from '../core/email-recipient';
-
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
 import type { ComposeBodyActions } from '../context/editor-capabilities';
-import type { EmailRecipient } from '../core/email-recipient';
+import type {
+  EmailFormRecipients,
+  EmailRecipient,
+} from '../core/email-recipient';
 import type { DraftFormAttachment } from './email-form-state';
 
 export type ComposeValidationError = {

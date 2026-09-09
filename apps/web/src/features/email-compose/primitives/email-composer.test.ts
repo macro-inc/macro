@@ -79,9 +79,8 @@ describe('standalone compose controller', () => {
 
   it('blocks immediate send and overlapping changes while a scheduling request is pending', async () => {
     const pending = Promise.withResolvers<void>();
-    const context = createComposeContext({
-      delivery: { schedule: vi.fn(() => pending.promise) },
-    });
+    const context = createComposeContext();
+    vi.mocked(context.delivery.schedule).mockReturnValue(pending.promise);
     const root = mountEmailComposer(context);
     try {
       root.edit('Schedule this reply', 'Schedule review');

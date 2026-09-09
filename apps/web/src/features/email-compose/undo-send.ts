@@ -27,7 +27,7 @@ import { endUndoSend, tryBeginUndoSend } from './primitives/undo-send-claim';
  * already-undone send as success. 400 (already sent — the undo window passed)
  * and 404 (not found) are definitive and not retried.
  */
-export async function unscheduleWithRetry(
+async function unscheduleWithRetry(
   draftId: string,
   linkId: string | undefined
 ) {

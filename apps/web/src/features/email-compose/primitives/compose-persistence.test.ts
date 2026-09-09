@@ -151,10 +151,8 @@ it('keeps a successful send completed when navigation fails', async () => {
   const composeContext = createComposeContext();
   const error = new Error('Navigation failed');
   const root = mountEmailComposer(composeContext, {
-    host: {
-      showThread: () => {
-        throw error;
-      },
+    showThread: () => {
+      throw error;
     },
   });
   root.edit('Send this');

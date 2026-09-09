@@ -15,7 +15,7 @@ type AttachmentState = Pick<
 
 /** Attachment transport and completion, independent of draft/send orchestration. */
 export function createAttachmentPersistence(options: {
-  attachments: Accessor<AttachmentState>;
+  attachments: AttachmentState;
   draftId: Accessor<string | null | undefined>;
   inboxId: Accessor<string | undefined>;
   services: Pick<
@@ -31,8 +31,7 @@ export function createAttachmentPersistence(options: {
   return {
     uploading,
     async upload(draftId: string, inbox = { inboxId: options.inboxId() }) {
-      const attachments = options
-        .attachments()
+      const attachments = options.attachments
         .list()
         .filter(
           (
@@ -46,10 +45,8 @@ export function createAttachmentPersistence(options: {
           draftId: draftId,
           attachments: attachments.map((attachment) => attachment.file),
           inboxId: inbox.inboxId,
-          onAttachmentAdded: (file, id) =>
-            options.attachments().assignAttachmentId(file, id),
-          onAttachmentUploadFailed: (file) =>
-            options.attachments().clearAttachmentId(file),
+          onAttachmentAdded: options.attachments.assignAttachmentId,
+          onAttachmentUploadFailed: options.attachments.clearAttachmentId,
         });
         const settled = run.then(
           () => undefined,
@@ -67,7 +64,7 @@ export function createAttachmentPersistence(options: {
       if (run) await run;
     },
     remove(attachment: DraftFormAttachment) {
-      const state = options.attachments();
+      const state = options.attachments;
       if (attachment.type === 'local') state.removeByFile(attachment.file);
       else if (attachment.type === 'forwarded')
         state.removeForwarded(attachment.attachmentId);

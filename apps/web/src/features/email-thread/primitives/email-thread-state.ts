@@ -121,9 +121,10 @@ export function createEmailThreadState(
     createSignal(false);
   const [mobileReplyComposerMessageId, setMobileReplyComposerMessageId] =
     createSignal<string>();
-  const [replyRequestMessageId, setReplyRequestMessageId] =
-    createSignal<string>();
-  const [replyRequestType, setReplyRequestType] = createSignal<ReplyType>();
+  const [replyRequest, setReplyRequest] = createSignal<{
+    messageId: string;
+    replyType: ReplyType;
+  }>();
   const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
     Record<string, boolean>
   >({});
@@ -163,60 +164,31 @@ export function createEmailThreadState(
     setFocusedMessageId(messageId);
   };
 
-  const isContainerFilled = () => {
-    const messageList = messagesListRef();
-    const containerRef = messagesContainerRef();
-
-    if (
-      !messageList ||
-      !containerRef ||
-      !untrack(() => selected())?.db_id ||
-      threadContext.source.isFetching()
-    ) {
-      return false;
-    }
-
-    // Older-page prefetch when the first batch does not overflow moved to
-    // MessageList (`listNeedsOlderPage` + `fetchOlderMessages`).
-    return true;
-  };
-
   const onInitialDataLoad = (callback: () => boolean) => {
     createEffect(() => {
-      if (hasHandledTarget()) return;
-      const fetching = threadContext.source.isFetching();
-      if (fetching) return;
-      // Check if initial loading is complete
-      const isInitialLoadComplete =
-        (isContainerFilled() || threadContext.source.hasMore() === false) &&
-        !threadContext.source.isFetching();
-
-      if (!isInitialLoadComplete) return;
-
-      // Skip if basic requirements not met
-      if (!untrack(messagesListRef)) {
+      if (hasHandledTarget() || threadContext.source.isFetching()) return;
+      if (!messagesListRef()) return;
+      if (
+        (!messagesContainerRef() || !untrack(selected)?.db_id) &&
+        threadContext.source.hasMore()
+      )
         return;
-      }
 
       setHasHandledTarget(callback());
     });
   };
 
-  const onExpandMessageBody = (messageId: string, expanded: boolean) => {
-    setExpandedMessageBodyIds(messageId, expanded);
-  };
-
   return {
     registerMessagesList: setMessagesListRef,
     registerMessagesContainer: setMessagesContainerRef,
-    thread: createMemo(() => selected()),
+    thread: selected,
     recipientOptions: recipients.options,
     onRecipientsChange: recipients.add,
     ...threadContext.createCommands(threadSnapshot),
     messagesContainerRef,
     messagesListRef,
     query: {
-      hasMore: () => threadContext.source.hasMore() ?? false,
+      hasMore: threadContext.source.hasMore,
       fetchNextPage: threadContext.source.fetchOlder,
       isFetching: () =>
         threadContext.source.isLoading() ||
@@ -249,7 +221,7 @@ export function createEmailThreadState(
         return senders;
       }),
       expandedBodyIds: expandedMessageBodyIds,
-      setExpandedBodyId: onExpandMessageBody,
+      setExpandedBodyId: setExpandedMessageBodyIds,
       isBodyExpanded: (id: string) => expandedMessageBodyIds[id] ?? false,
       replyingToMessageId,
       setReplyingToMessageId,
@@ -270,15 +242,13 @@ export function createEmailThreadState(
       },
     },
     replyRequest: {
-      messageId: replyRequestMessageId,
-      replyType: replyRequestType,
+      messageId: () => replyRequest()?.messageId,
+      replyType: () => replyRequest()?.replyType,
       set: (messageId: string, replyType: ReplyType) => {
-        setReplyRequestMessageId(messageId);
-        setReplyRequestType(replyType);
+        setReplyRequest({ messageId, replyType });
       },
       clear: () => {
-        setReplyRequestMessageId(undefined);
-        setReplyRequestType(undefined);
+        setReplyRequest(undefined);
       },
     },
     permissions: () => ({ isOwner: selected()?.access_level === 'owner' }),

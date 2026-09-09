@@ -1,9 +1,6 @@
 import type { EmailFormRecipients } from '../core/email-recipient';
 
-export type {
-  EmailFormRecipients,
-  RecipientFieldId,
-} from '../core/email-recipient';
+export type { EmailFormRecipients } from '../core/email-recipient';
 
 import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
@@ -48,15 +45,10 @@ export interface EmailFormStateOptions {
 }
 
 type EmailFormState = {
-  recipients: {
-    to: EmailRecipient[];
-    cc: EmailRecipient[];
-    bcc: EmailRecipient[];
-  };
+  recipients: EmailFormRecipients;
   replyType: ReplyType;
   withQuotedText: boolean;
   subject: string;
-  markdownBody: string;
   sendTime?: Date;
 };
 
@@ -69,7 +61,6 @@ const EMPTY_FORM_STATE: EmailFormState = {
   replyType: 'reply-all',
   withQuotedText: false,
   subject: '',
-  markdownBody: '',
 };
 
 /**
@@ -91,7 +82,7 @@ export function createEmailFormState(
   let replyingTo: EmailMessage | undefined;
 
   if (purpose?.type === 'replying_to') {
-    replyingTo = options?.getMessageById?.(purpose.messageId);
+    replyingTo = options?.getMessageById(purpose.messageId);
   }
 
   let draft: EmailMessage | undefined;
@@ -99,7 +90,7 @@ export function createEmailFormState(
   if (purpose?.type === 'draft') {
     draft = options?.getMessageById(purpose.messageId);
   } else if (purpose?.type === 'replying_to') {
-    draft = options?.getDraftForMessageReply(purpose?.messageId);
+    draft = options?.getDraftForMessageReply(purpose.messageId);
   }
 
   // The inbox this compose sends from. Defaults to the inbox that owns the
@@ -145,9 +136,9 @@ export function createEmailFormState(
 
     if (draft) {
       initialRecipients = {
-        to: draft.to.map(convertContactInfoToEmailRecipient) ?? [],
-        cc: draft.cc.map(convertContactInfoToEmailRecipient) ?? [],
-        bcc: draft.bcc.map(convertContactInfoToEmailRecipient) ?? [],
+        to: draft.to.map(convertContactInfoToEmailRecipient),
+        cc: draft.cc.map(convertContactInfoToEmailRecipient),
+        bcc: draft.bcc.map(convertContactInfoToEmailRecipient),
       };
     } else if (replyingTo) {
       initialRecipients =
@@ -161,22 +152,17 @@ export function createEmailFormState(
       replyType,
       withQuotedText: draftContainsAppendedReply(),
       subject: initialSubject,
-      markdownBody: '',
       sendTime: draft?.scheduled_send_time
         ? new Date(draft.scheduled_send_time)
         : undefined,
     } satisfies EmailFormState;
   };
 
-  const [state, setState] = createStore<EmailFormState>({
-    ...getInitialState(),
-  });
+  const [state, setState] = createStore<EmailFormState>(getInitialState());
 
   // Values and edit revisions may outlive a mounted composer; effects do not.
   const [editRevision, setEditRevision] = createSignal(0);
 
-  // TODO: Replace this signal with a memo deriving the attachments from the draft data
-  // and a temporary queue to track attachments to be uploaded on draft save
   const [attachments, setAttachments] = createSignal<DraftFormAttachment[]>([
     ...(draft?.attachments_draft.map((a) => ({
       type: 'remote' as const,
@@ -214,7 +200,6 @@ export function createEmailFormState(
 
   const setReplyType = (next: ReplyType) => {
     setState('replyType', next);
-    const rt = state.replyType;
     const msg = replyingTo;
 
     // Clear forwarded attachments when switching away from forward
@@ -223,7 +208,7 @@ export function createEmailFormState(
     if (msg) {
       let calculated: EmailFormRecipients = { to: [], cc: [], bcc: [] };
 
-      switch (rt) {
+      switch (next) {
         case 'reply-all': {
           calculated = getReplyAllRecipients(msg, inboxEmail());
           break;
@@ -233,13 +218,13 @@ export function createEmailFormState(
         }
       }
 
-      setRecipients('to', calculated.to ?? []);
-      setRecipients('cc', calculated.cc ?? []);
-      setRecipients('bcc', calculated.bcc ?? []);
+      setRecipients('to', calculated.to);
+      setRecipients('cc', calculated.cc);
+      setRecipients('bcc', calculated.bcc);
 
-      setSubject(getSubjectText(msg, rt));
+      setSubject(getSubjectText(msg, next));
 
-      if (rt === 'forward') {
+      if (next === 'forward') {
         setState('withQuotedText', true);
         // Populate forwarded attachments from original message (skip inline images)
         const fwdAttachments: DraftFormAttachment[] = (msg.attachments ?? [])
@@ -256,7 +241,7 @@ export function createEmailFormState(
     }
 
     callDirty();
-    return rt;
+    return next;
   };
 
   // Change the inbox this compose sends from. For an active reply, re-derive the
@@ -268,9 +253,9 @@ export function createEmailFormState(
       state.replyType === 'reply-all'
         ? getReplyAllRecipients(replyingTo, inboxEmail())
         : getReplyRecipientsFromParent(replyingTo, inboxEmail());
-    setRecipients('to', recalculated.to ?? []);
-    setRecipients('cc', recalculated.cc ?? []);
-    setRecipients('bcc', recalculated.bcc ?? []);
+    setRecipients('to', recalculated.to);
+    setRecipients('cc', recalculated.cc);
+    setRecipients('bcc', recalculated.bcc);
   };
 
   const setSendTime = (date: Date | null) => {
@@ -281,8 +266,8 @@ export function createEmailFormState(
     setEditRevision((revision) => revision + 1);
   };
 
-  const reset = () => {
-    setState(reconcile({ ...getInitialState() }));
+  const reset = (next: EmailFormState) => {
+    setState(reconcile(next));
     const recipients = state.recipients;
 
     // Notify context of the full recipient list after reset
@@ -292,18 +277,7 @@ export function createEmailFormState(
     setAttachments([]);
   };
 
-  const clear = () => {
-    setState(reconcile({ ...EMPTY_FORM_STATE }));
-    const recipients = state.recipients;
-
-    // Notify context of the full recipient list after reset
-    const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
-    options?.onRecipientsChange?.(unwrap(all));
-
-    setAttachments([]);
-  };
-
-  const value = {
+  return {
     draft,
     replyAppended: () => state.withQuotedText,
     setReplyAppended: (next: boolean) => setState('withQuotedText', next),
@@ -313,13 +287,13 @@ export function createEmailFormState(
     setSubject,
     replyType: () => state.replyType,
     setReplyType,
-    selectedInboxId: () => selectedInboxId(),
+    selectedInboxId,
     setSelectedInbox,
     editRevision,
     sendTime: () => state.sendTime,
     setSendTime,
-    reset,
-    clear,
+    reset: () => reset(getInitialState()),
+    clear: () => reset({ ...EMPTY_FORM_STATE }),
     attachments: {
       list: attachments,
       add: (attachment: DraftFormAttachment) => {
@@ -362,6 +336,4 @@ export function createEmailFormState(
       },
     },
   };
-
-  return value;
 }

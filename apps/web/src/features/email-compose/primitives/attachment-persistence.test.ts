@@ -23,7 +23,7 @@ function setup(
     };
     const persistence = createAttachmentPersistence({
       services,
-      attachments: () => form.attachments,
+      attachments: form.attachments,
       draftId: () => 'draft',
       inboxId: () => 'secondary-inbox',
     });

@@ -6,7 +6,6 @@ export {
   isTruncatedMiddleMessage,
   isUnreadMessage,
   type NavDirection,
-  type OpenTargetMessage,
   truncatedMiddleCount,
 } from '../core/thread-window';
 
@@ -111,7 +110,7 @@ export function messageElement(
   return el instanceof HTMLElement ? el : undefined;
 }
 
-export function alignElementInContainer(
+function alignElementInContainer(
   container: HTMLElement,
   element: HTMLElement,
   align: ScrollAlign,
@@ -246,7 +245,7 @@ export function leadingThrottle(intervalMs: number): () => boolean {
   };
 }
 
-export function revealMessageInView(
+function revealMessageInView(
   messageId: string,
   messages: Array<{ db_id?: string | null }>,
   container: HTMLElement,
