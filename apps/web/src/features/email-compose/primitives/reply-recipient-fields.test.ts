@@ -27,6 +27,7 @@ function setup(initial: EmailFormRecipients) {
     const fields = createReplyRecipientFields({
       values,
       container: () => container,
+      disabled: () => false,
       onChange,
       setValues: (field, recipients) =>
         setValues((prev) => ({ ...prev, [field]: recipients })),
@@ -49,6 +50,9 @@ describe('reply recipient fields', () => {
 
   it('keeps the panel open for recipient popovers and releases its outside listener', () => {
     const state = setup({ to: [alice], cc: [alice], bcc: [] });
+    const otherPopover = document.createElement('div');
+    otherPopover.dataset.popperPositioner = '';
+    document.body.append(otherPopover);
     const popover = document.createElement('div');
     popover.dataset.popperPositioner = '';
     document.body.append(popover);

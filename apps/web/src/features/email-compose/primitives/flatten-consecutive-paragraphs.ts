@@ -1,5 +1,5 @@
 /**
- * Flattens runs of consecutive `<p>` siblings into a single `<div>` with
+ * Flattens runs of consecutive `<p>` siblings with matching attributes into a `<div>` with
  * explicit `<br>` separators, matching how Gmail structures composed mail.
  * Email clients apply their own margins to `<p>`, so relying on them renders
  * differently per client. The editor shows a paragraph break as a blank line,
@@ -7,61 +7,29 @@
  * export their own `<br>` and need no extra separator.
  */
 export function flattenConsecutiveParagraphs(container: Element) {
-  const paragraphs = container.querySelectorAll('p');
-  const groups = [];
-  let currentGroup: Element[] = [];
+  let nextSibling: Element | null = null;
+  let div: HTMLDivElement | undefined;
 
-  for (let i = 0; i < paragraphs.length; i++) {
-    if (i === 0) {
-      currentGroup.push(paragraphs[i]);
-      continue;
+  for (const p of container.querySelectorAll('p')) {
+    const attributes = Array.from(p.attributes);
+    if (
+      !div ||
+      p !== nextSibling ||
+      div.attributes.length !== attributes.length ||
+      attributes.some(({ name, value }) => div?.getAttribute(name) !== value)
+    ) {
+      div = document.createElement('div');
+      for (const { name, value } of attributes) div.setAttribute(name, value);
+      p.before(div);
     }
-
-    // Check if this paragraph immediately follows the previous one
-    const prev = paragraphs[i - 1];
-    if (prev.nextElementSibling === paragraphs[i]) {
-      currentGroup.push(paragraphs[i]);
-    } else {
-      // Start a new group
-      groups.push(currentGroup);
-      currentGroup = [paragraphs[i]];
+    nextSibling = p.nextElementSibling;
+    const isEmpty =
+      !p.textContent?.trim() && !p.querySelector('img, video, iframe, canvas');
+    div.append(...p.childNodes);
+    if (nextSibling?.matches('p') && !isEmpty) {
+      // Retain the blank line even when the next paragraph has a different style.
+      div.append(document.createElement('br'), document.createElement('br'));
     }
-  }
-
-  // Don't forget the last group
-  if (currentGroup.length > 0) {
-    groups.push(currentGroup);
-  }
-
-  // Combine each group and replace in the DOM
-  for (let i = 0; i < groups.length; i++) {
-    const group = groups[i];
-    const div = document.createElement('div');
-
-    for (let j = 0; j < group.length; j++) {
-      const p = group[j];
-
-      const isEmpty =
-        !p.textContent?.trim() &&
-        !p.querySelector('img, video, iframe, canvas');
-
-      if (p.childNodes.length) {
-        div.append(...p.childNodes);
-      }
-
-      if (j < group.length - 1 && !isEmpty) {
-        // Paragraph break = one blank line for the recipient
-        div.appendChild(document.createElement('br'));
-        div.appendChild(document.createElement('br'));
-      }
-    }
-
-    // Replace the first paragraph with the combined div
-    group[0]?.parentNode?.replaceChild(div, group[0]);
-
-    // Remove the rest of the paragraphs in this group
-    for (let j = 1; j < group.length; j++) {
-      group[j].remove();
-    }
+    p.remove();
   }
 }

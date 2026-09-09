@@ -44,8 +44,9 @@ or the latest message when none is selected. `F` opens a forward and focuses To.
 An edited reply remains a draft when navigating away and returning. Standalone
 compose also flushes pending edits when leaving through app navigation. During
 send or discard, its sender and scheduling controls cannot change the operation.
-Attachment remove buttons are named `Remove <filename>` and support keyboard
-activation. Removing a forwarded file keeps the received original.
+Attachments that can be opened are buttons named by their filename; Tab to one
+and press Enter or Space. Removal is a separate button named `Remove <filename>`.
+Removing a forwarded file keeps the received original.
 AI email tool drafts persist body-only edits; changing recipients or the subject
 is not required to save the body.
 The three-dot button beneath a body reveals quoted content and a trimmed
@@ -63,7 +64,8 @@ A presentation or refresh error after successful delivery is not a reason to sen
 again.
 
 While a schedule change is pending, immediate send and further schedule changes
-are disabled. A failed schedule or unschedule keeps the last confirmed time.
+are disabled. Reply recipients cannot be edited or dragged during scheduling,
+sending, or discarding. A failed schedule or unschedule keeps the last confirmed time.
 If scheduling succeeds but marking the thread done fails, the email remains
 scheduled and a notice explains the separate failure. Check the confirmed time
 before retrying; do not treat that notice as a failed schedule.

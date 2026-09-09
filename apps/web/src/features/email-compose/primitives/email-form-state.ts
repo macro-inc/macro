@@ -6,6 +6,7 @@ import type { EmailRecipient } from '@app/features/email-compose/core/email-reci
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { createSignal, type Setter } from 'solid-js';
 import { createStore, reconcile, unwrap } from 'solid-js/store';
+import { match } from 'ts-pattern';
 import type { EmailFormContextInputs } from '../context/email-form-inputs';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import {
@@ -206,17 +207,11 @@ export function createEmailFormState(
     setAttachments((prev) => prev.filter((a) => a.type !== 'forwarded'));
 
     if (msg) {
-      let calculated: EmailFormRecipients = { to: [], cc: [], bcc: [] };
-
-      switch (next) {
-        case 'reply-all': {
-          calculated = getReplyAllRecipients(msg, inboxEmail());
-          break;
-        }
-        case 'reply': {
-          calculated = getReplyRecipientsFromParent(msg, inboxEmail());
-        }
-      }
+      const calculated = match(next)
+        .with('reply-all', () => getReplyAllRecipients(msg, inboxEmail()))
+        .with('reply', () => getReplyRecipientsFromParent(msg, inboxEmail()))
+        .with('forward', () => ({ to: [], cc: [], bcc: [] }))
+        .exhaustive();
 
       setRecipients('to', calculated.to);
       setRecipients('cc', calculated.cc);

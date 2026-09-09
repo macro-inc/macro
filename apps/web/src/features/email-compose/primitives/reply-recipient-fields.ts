@@ -9,6 +9,7 @@ export function createReplyRecipientFields(options: {
   setValues: (field: RecipientFieldId, values: EmailRecipient[]) => void;
   onChange: () => void;
   container: Accessor<HTMLElement | undefined>;
+  disabled: Accessor<boolean>;
 }) {
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
@@ -26,6 +27,10 @@ export function createReplyRecipientFields(options: {
     recipient: EmailRecipient,
     e: DragEvent
   ) => {
+    if (options.disabled()) {
+      e.preventDefault();
+      return;
+    }
     if (!e.dataTransfer) return;
     setRecipientDragState({ recipient, sourceField: field });
     e.dataTransfer.effectAllowed = 'move';
@@ -41,6 +46,7 @@ export function createReplyRecipientFields(options: {
     recipient: EmailRecipient,
     sourceField: 'to' | 'cc' | 'bcc'
   ) => {
+    if (options.disabled()) return;
     const sourceList = options.values()[sourceField];
     options.setValues(
       sourceField,
@@ -59,12 +65,11 @@ export function createReplyRecipientFields(options: {
   // the composer or selecting outside its recipient popover.
   const expandedPointerDownHandler = (e: PointerEvent) => {
     if (showExpandedRecipients()) {
-      const target = e.target as Node | null;
-      if (!target) return;
-      const combobox = document.querySelector('div[data-popper-positioner]');
+      const target = e.target;
+      if (!(target instanceof Element)) return;
       if (
         !options.container()?.contains(target) &&
-        !combobox?.contains(target)
+        !target.closest('div[data-popper-positioner]')
       ) {
         setShowExpandedRecipients(false);
         setShowCc(options.values().cc.length > 0);
@@ -89,6 +94,7 @@ export function createReplyRecipientFields(options: {
   };
 
   return {
+    disabled: options.disabled,
     showExpandedRecipients,
     setShowExpandedRecipients,
     toRef,
@@ -108,6 +114,7 @@ export function createReplyRecipientFields(options: {
     mobileDrawerCcBccOpen,
     toggleMobileDrawerCcBcc,
     setRecipients(field: RecipientFieldId, values: EmailRecipient[]) {
+      if (options.disabled()) return;
       options.setValues(field, values);
       options.onChange();
     },

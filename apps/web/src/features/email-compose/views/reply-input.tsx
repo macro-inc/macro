@@ -98,7 +98,6 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     savedDraftId,
     handleEditorConnect,
     isSending,
-    isUploading,
     collectDraft,
     scheduleDraftSave,
     persistDraftOnSenderSwitch,
@@ -584,7 +583,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                 />
               </Show>
               <SendButton
-                disabled={isUploading() || isSending() || !!form.sendTime()}
+                disabled={sendActionDisabled()}
                 pending={isSending()}
                 hidden={sendActionHidden()}
                 onClick={() => sendEmail()}

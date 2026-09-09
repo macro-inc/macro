@@ -196,6 +196,7 @@ export function createReplyComposer(
     setValues: form.setRecipients,
     onChange: scheduleDraftSave,
     container: dom.container,
+    disabled: () => submitting() || pendingDeletion() || scheduling(),
   });
   const focus = createReplyComposerFocus({
     editor,
@@ -377,7 +378,7 @@ export function createReplyComposer(
   >('idle');
   const submitting = () => sendPhase() !== 'idle';
   const sending = () => sendPhase() === 'sending';
-  let pendingDeletion = false;
+  const [pendingDeletion, setPendingDeletion] = createSignal(false);
 
   function collectDraft() {
     $removeAllWatermarkNodes(editor());
@@ -481,13 +482,13 @@ export function createReplyComposer(
   const autosave = createDraftAutosave({
     capture: captureSave,
     persist: persistDraft,
-    paused: () => submitting() || pendingDeletion,
+    paused: () => submitting() || pendingDeletion(),
   });
   function executeSaveDraft(completingThread = false) {
     return autosave.save(captureSave(completingThread));
   }
   function scheduleDraftSave() {
-    if (submitting() || pendingDeletion) return;
+    if (submitting() || pendingDeletion()) return;
     props.onEngaged?.();
     autosave.schedule();
   }
@@ -496,7 +497,7 @@ export function createReplyComposer(
   // without a text edit, so it moves to the new inbox and the choice survives a
   // refresh. Driven by the explicit switch (below) rather than inbox reactivity.
   const persistDraftOnSenderSwitch = (inboxId: string) => {
-    if (submitting() || pendingDeletion || scheduling()) return;
+    if (submitting() || pendingDeletion() || scheduling()) return;
     props.onEngaged?.();
     form.setSelectedInbox(inboxId);
     autosave.cancel();
@@ -537,7 +538,7 @@ export function createReplyComposer(
 
   const sendEmail = async (markDone = false) => {
     if (scheduling()) return;
-    if (submitting() || pendingDeletion || attachmentPersistence.uploading())
+    if (submitting() || pendingDeletion() || attachmentPersistence.uploading())
       return;
 
     const to = form.recipients().to.map(convertEmailRecipientToContactInfo);
@@ -804,9 +805,9 @@ export function createReplyComposer(
   };
 
   const deleteDraftAndReset = async () => {
-    if (submitting() || pendingDeletion || scheduling()) return;
+    if (submitting() || pendingDeletion() || scheduling()) return;
     // Keep Lexical's deferred reset notification from recreating a discarded draft.
-    pendingDeletion = true;
+    setPendingDeletion(true);
     autosave.cancel();
     try {
       await autosave.settled().catch(() => {});
@@ -828,12 +829,13 @@ export function createReplyComposer(
       // unable to save further edits.
       setTimeout(() => {
         autosave.cancel();
-        pendingDeletion = false;
+        setPendingDeletion(false);
       }, 0);
     }
   };
 
   const handleUserMention = (mention: UserMentionRecord) => {
+    if (recipients.disabled()) return;
     addUserMentionToCc({
       mention,
       recipientOptions: ctx.recipientOptions(),
@@ -903,13 +905,13 @@ export function createReplyComposer(
     },
   });
   const scheduling = schedule.pending;
-  const scheduleBlocked = () => pendingDeletion || sending();
+  const scheduleBlocked = () => pendingDeletion() || sending();
   const handleSendTimeChange = (date: Date | null) =>
     scheduleBlocked() ? Promise.resolve() : schedule.change(date);
 
   const hasBodyText = () => bodyMacro().trim().length > 0;
   const sendActionDisabled = () =>
-    pendingDeletion ||
+    pendingDeletion() ||
     submitting() ||
     scheduling() ||
     attachmentPersistence.uploading() ||
@@ -959,7 +961,6 @@ export function createReplyComposer(
     savedDraftId,
     handleEditorConnect,
     isSending: submitting,
-    isUploading: attachmentPersistence.uploading,
     recipients,
     collectDraft,
     scheduleDraftSave,

@@ -1,4 +1,4 @@
-import { createRoot, createSignal } from 'solid-js';
+import { createMemo, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import type {
@@ -59,6 +59,7 @@ function replyComposer(
     state.onContentChange('Ready to send');
     return {
       ...state,
+      sendActionDisabled: createMemo(state.sendActionDisabled),
       dispose,
       edit(text: string) {
         setEmailEditorText(editor, text);
@@ -90,6 +91,37 @@ function composer(
 }
 
 describe('send and schedule ordering', () => {
+  it('keeps reply recipients unchanged while a schedule is pending', async () => {
+    const context = createComposeContext();
+    const pending = Promise.withResolvers<void>();
+    vi.mocked(context.delivery.schedule).mockReturnValueOnce(pending.promise);
+    const state = replyComposer(context);
+    const originalTo = [...state.form.recipients().to];
+    const schedule = state.handleSendTimeChange(
+      new Date('2026-12-01T12:00:00Z')
+    );
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.delivery.schedule).toHaveBeenCalledOnce();
+      expect(state.sendActionDisabled()).toBe(true);
+      state.recipients.setRecipients('to', []);
+      state.recipients.handleRecipientDrop('cc', originalTo[0], 'to');
+      expect(state.form.recipients().to).toEqual(originalTo);
+      expect(state.form.recipients().cc).toEqual([]);
+      pending.resolve();
+      await schedule;
+      state.recipients.setRecipients('to', []);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.delivery.unschedule).toHaveBeenCalledOnce();
+      expect(state.form.sendTime()).toBeUndefined();
+      expect(state.sendActionDisabled()).toBe(false);
+    } finally {
+      pending.resolve();
+      await schedule;
+      state.dispose();
+    }
+  });
+
   it('undoes only the mark-done belonging to the selected send', async () => {
     const context = createComposeContext();
     const first = {
@@ -392,11 +424,13 @@ describe('send and schedule ordering', () => {
       try {
         state.edit('Ready');
         await vi.advanceTimersByTimeAsync(500);
+        expect(state.sendActionDisabled()).toBe(false);
         const completing =
           operation === 'send'
             ? state.sendEmail()
             : state.deleteDraftAndReset();
         await vi.advanceTimersByTimeAsync(0);
+        expect(state.sendActionDisabled()).toBe(true);
         const saves = vi.mocked(composeContext.drafts.saveDraft).mock.calls
           .length;
         await state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'));
@@ -408,6 +442,7 @@ describe('send and schedule ordering', () => {
         finish();
         await completing;
         await vi.advanceTimersByTimeAsync(1000);
+        expect(state.sendActionDisabled()).toBe(false);
         expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(saves);
       } finally {
         finish();

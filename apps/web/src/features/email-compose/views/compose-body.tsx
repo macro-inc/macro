@@ -142,12 +142,14 @@ export function ComposeBody(props: {
                 });
               }}
               onFocusLeaveStart={(e) => {
+                if (!ctx.bodyActions.focusSibling) return;
                 e.preventDefault();
-                ctx.bodyActions.focusSibling?.('prev');
+                ctx.bodyActions.focusSibling('prev');
               }}
               onFocusLeaveEnd={(e) => {
+                if (!ctx.bodyActions.focusSibling) return;
                 e.preventDefault();
-                ctx.bodyActions.focusSibling?.('next');
+                ctx.bodyActions.focusSibling('next');
               }}
               portalScope="local"
               onPasteFilesAndDirs={(files, directories) => {

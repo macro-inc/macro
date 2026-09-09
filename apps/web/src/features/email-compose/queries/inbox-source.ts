@@ -18,7 +18,9 @@ export function createEmailInboxSource(
     inboxes: EmailInbox[];
   }>((previous) => {
     const id = owner();
-    if (!query.isSuccess && !query.isError)
+    // A newly mounted source can use cached data after a failed refresh.
+    // Once mounted, failed reads may only retain the same owner's snapshot.
+    if (!query.isSuccess && (!query.isError || previous))
       return {
         owner: id,
         inboxes: previous && previous.owner === id ? previous.inboxes : [],

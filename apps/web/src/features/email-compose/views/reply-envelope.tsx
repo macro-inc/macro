@@ -65,6 +65,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
     mobile?: boolean;
   }) => (
     <RecipientSelector<EmailRecipient['kind']>
+      disabled={props.fields.disabled()}
       openOnFocus={false}
       class={
         field.mobile

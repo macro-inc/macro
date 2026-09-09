@@ -45,4 +45,27 @@ describe('flattenConsecutiveParagraphs', () => {
       '<div><b>one</b><br><br><i>two</i></div>'
     );
   });
+
+  it('preserves paragraph attributes when joining matching paragraphs', () => {
+    expect(
+      flatten(
+        '<p class="note" dir="rtl" style="text-align:right">one</p><p class="note" dir="rtl" style="text-align:right">two</p>'
+      )
+    ).toBe(
+      '<div class="note" dir="rtl" style="text-align:right">one<br><br>two</div>'
+    );
+    expect(flatten('<p id="anchor" style="text-align:center">only</p>')).toBe(
+      '<div id="anchor" style="text-align:center">only</div>'
+    );
+  });
+
+  it('keeps different paragraph alignment and blank-line spacing separate', () => {
+    expect(
+      flatten(
+        '<p style="text-align:center">one</p><p style="text-align:right">two</p><p>three</p>'
+      )
+    ).toBe(
+      '<div style="text-align:center">one<br><br></div><div style="text-align:right">two<br><br></div><div>three</div>'
+    );
+  });
 });
