@@ -33,6 +33,7 @@
 pub mod attr;
 mod content;
 pub mod messages;
+pub mod propagation;
 mod span;
 
 pub use content::{

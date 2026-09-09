@@ -34,6 +34,7 @@ use memory::domain::service::MemoryServiceImpl;
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use sqlx::PgPool;
 use tokio::sync::mpsc;
+use tracing::Instrument as _;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
@@ -101,11 +102,14 @@ impl TurnEngine for RigTurnEngine {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
         let db = self.db.clone();
         let tool_context = self.tool_context.clone();
-        tokio::spawn(async move {
-            if let Err(error) = drive_turn(db, tool_context, request, &parts).await {
-                let _ = parts.send(Err(error)).await;
+        tokio::spawn(
+            async move {
+                if let Err(error) = drive_turn(db, tool_context, request, &parts).await {
+                    let _ = parts.send(Err(error)).await;
+                }
             }
-        });
+            .in_current_span(),
+        );
         receiver
     }
 }

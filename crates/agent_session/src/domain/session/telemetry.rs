@@ -203,7 +203,7 @@ impl GenAiProjector {
     /// the prompt - when there is one.
     pub(crate) fn on_outbound(
         &mut self,
-        message: &ToRuntimeMessage,
+        message: &mut ToRuntimeMessage,
         parent: Option<&tracing::Span>,
     ) {
         let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = message else {
@@ -221,6 +221,15 @@ impl GenAiProjector {
         } else if PromptRequest::matches_method(method) {
             let prompt: Option<PromptRequest> = deserialize_params(request.params.as_ref());
             self.begin_turn(request.id.clone(), prompt, parent);
+            if let Some(turn) = &self.turn
+                && let Some(RawJsonRpcParams::Object(params)) = &mut request.params
+                && let Some(meta) = params
+                    .entry("_meta")
+                    .or_insert_with(|| Value::Object(Default::default()))
+                    .as_object_mut()
+            {
+                genai_telemetry::propagation::inject(&turn.span, meta);
+            }
         }
     }
 

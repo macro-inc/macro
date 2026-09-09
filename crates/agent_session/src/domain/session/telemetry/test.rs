@@ -87,8 +87,8 @@ fn projector(policy: ContentPolicy) -> GenAiProjector {
 /// Feed a recorded log through the projector the way the actor does: frames
 /// to the runtime through `on_outbound`, frames from it through `on_inbound`.
 fn replay(projector: &mut GenAiProjector, jsonl: &str) {
-    for entry in parse_log(jsonl) {
-        match &entry.content {
+    for mut entry in parse_log(jsonl) {
+        match &mut entry.content {
             Message::ToRuntime(message) => projector.on_outbound(message, None),
             Message::ToServer(message) => projector.on_inbound(message),
         }
@@ -325,7 +325,7 @@ fn a_refused_prompt_ends_the_turn_in_error() {
         RequestId::Str("p1".to_owned()),
     )
     .expect("a request");
-    projector.on_outbound(&ToRuntimeMessage::Acp(AcpMessage(prompt)), None);
+    projector.on_outbound(&mut ToRuntimeMessage::Acp(AcpMessage(prompt)), None);
     projector.on_inbound(&ToServerMessage::Acp(AcpMessage(
         RawJsonRpcMessage::response(
             RequestId::Str("p1".to_owned()),
@@ -476,6 +476,9 @@ fn macro_tools_are_listed_by_their_bare_names_for_the_in_process_agent() {
 #[test]
 fn the_turn_hangs_off_the_command_that_carried_the_prompt() {
     let (exporter, provider, _guard) = otel_test_pipeline();
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
     let mut projector = projector(ContentPolicy::enabled());
     let command = tracing::info_span!("agent.session.command");
     let command_id = command.context().span().span_context().span_id();
@@ -486,7 +489,13 @@ fn the_turn_hangs_off_the_command_that_carried_the_prompt() {
         RequestId::Str("p1".to_owned()),
     )
     .expect("a request");
-    projector.on_outbound(&ToRuntimeMessage::Acp(AcpMessage(prompt)), Some(&command));
+    let mut message = ToRuntimeMessage::Acp(AcpMessage(prompt));
+    projector.on_outbound(&mut message, Some(&command));
+    let wire = serde_json::to_value(&message).expect("serialize prompt");
+    let request: PromptRequest = serde_json::from_value(wire["params"].clone()).expect("prompt");
+    let runtime = tracing::info_span!(parent: None, "runtime");
+    genai_telemetry::propagation::set_parent(&runtime, request.meta.as_ref());
+    drop(runtime);
     projector.on_inbound(&ToServerMessage::Acp(AcpMessage(
         RawJsonRpcMessage::response(
             RequestId::Str("p1".to_owned()),
@@ -499,6 +508,13 @@ fn the_turn_hangs_off_the_command_that_carried_the_prompt() {
     let agent = spans_named(&spans, "invoke_agent");
     assert_eq!(agent.len(), 1);
     assert_eq!(agent[0].parent_span_id, command_id);
+    let runtime = spans_named(&spans, "runtime");
+    assert_eq!(runtime.len(), 1);
+    assert_eq!(runtime[0].parent_span_id, agent[0].span_context.span_id());
+    assert_eq!(
+        runtime[0].span_context.trace_id(),
+        agent[0].span_context.trace_id()
+    );
     assert_eq!(
         string_array_attribute(agent[0], attr::RESPONSE_FINISH_REASONS),
         Some(vec!["cancelled".to_owned()])
@@ -520,7 +536,7 @@ fn the_model_comes_from_the_runtime_config_options() {
         RequestId::Str("n1".to_owned()),
     )
     .expect("a request");
-    projector.on_outbound(&ToRuntimeMessage::Acp(AcpMessage(open)), None);
+    projector.on_outbound(&mut ToRuntimeMessage::Acp(AcpMessage(open)), None);
     projector.on_inbound(&ToServerMessage::Acp(AcpMessage(
         RawJsonRpcMessage::response(
             RequestId::Str("n1".to_owned()),
@@ -543,7 +559,7 @@ fn the_model_comes_from_the_runtime_config_options() {
         RequestId::Str("p1".to_owned()),
     )
     .expect("a request");
-    projector.on_outbound(&ToRuntimeMessage::Acp(AcpMessage(prompt)), None);
+    projector.on_outbound(&mut ToRuntimeMessage::Acp(AcpMessage(prompt)), None);
     projector.on_inbound(&ToServerMessage::Acp(AcpMessage(
         RawJsonRpcMessage::response(
             RequestId::Str("p1".to_owned()),
@@ -632,7 +648,7 @@ fn a_tool_call_opened_outside_any_turn_survives_a_later_turn_ending() {
         RequestId::Str("p1".to_owned()),
     )
     .expect("a request");
-    projector.on_outbound(&ToRuntimeMessage::Acp(AcpMessage(prompt)), None);
+    projector.on_outbound(&mut ToRuntimeMessage::Acp(AcpMessage(prompt)), None);
     projector.on_inbound(&ToServerMessage::Acp(AcpMessage(
         RawJsonRpcMessage::response(
             RequestId::Str("p1".to_owned()),
@@ -688,7 +704,7 @@ fn attached_resources_are_named_not_copied() {
         RequestId::Str("p1".to_owned()),
     )
     .expect("a request");
-    projector.on_outbound(&ToRuntimeMessage::Acp(AcpMessage(prompt)), None);
+    projector.on_outbound(&mut ToRuntimeMessage::Acp(AcpMessage(prompt)), None);
     projector.on_inbound(&ToServerMessage::Acp(AcpMessage(
         RawJsonRpcMessage::response(
             RequestId::Str("p1".to_owned()),
