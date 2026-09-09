@@ -42,6 +42,7 @@ activity = { path = "../activity", default-features = false }
 anyhow = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
+cowlike = { path = "../cowlike" }
 documents = { path = "../documents", default-features = false, features = [
   "ports",
 ], optional = true }
@@ -55,6 +56,7 @@ foreign_entity = { path = "../foreign_entity", default-features = false, feature
 hex = { workspace = true }
 hmac = { workspace = true }
 jsonwebtoken = { workspace = true }
+lru = { workspace = true }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [

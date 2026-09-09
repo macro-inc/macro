@@ -341,6 +341,34 @@ impl GithubSyncRepo for PgGithubSyncRepo {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn get_installation_ids_for_sources(
+        &self,
+        macro_id: &str,
+        team_ids: &[uuid::Uuid],
+    ) -> Result<Vec<String>, Self::Err> {
+        // `source_id` is text for both source types, so team ids are compared
+        // in their canonical string form rather than cast row by row.
+        let team_source_ids: Vec<String> = team_ids.iter().map(uuid::Uuid::to_string).collect();
+
+        let installation_ids: Vec<String> = sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT id AS "id!"
+            FROM github_app_installation
+            WHERE (source_type = 'user'::github_app_installation_source_type AND source_id = $1)
+               OR (source_type = 'team'::github_app_installation_source_type
+                   AND source_id = ANY($2::text[]))
+            ORDER BY id
+            "#,
+            macro_id,
+            &team_source_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(installation_ids)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn upsert_installation_sources(
         &self,
         installation_id: &str,

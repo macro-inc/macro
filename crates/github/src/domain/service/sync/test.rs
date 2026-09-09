@@ -581,6 +581,26 @@ impl GithubSyncRepo for StubSyncRepo {
         Ok(member_ids)
     }
 
+    async fn get_installation_ids_for_sources(
+        &self,
+        macro_id: &str,
+        team_ids: &[uuid::Uuid],
+    ) -> Result<Vec<String>, Self::Err> {
+        let rows = self.installation_source_rows.lock().unwrap();
+        let mut installation_ids: Vec<String> = rows
+            .iter()
+            .filter(|(_, sources)| {
+                sources.iter().any(|source| match source {
+                    GithubAppInstallationSource::User(user) => user == macro_id,
+                    GithubAppInstallationSource::Team(team) => team_ids.contains(team),
+                })
+            })
+            .map(|(installation_id, _)| installation_id.clone())
+            .collect();
+        installation_ids.sort();
+        Ok(installation_ids)
+    }
+
     async fn get_installation_sources(
         &self,
         installation_id: &str,
@@ -871,6 +891,22 @@ impl GithubSyncClient for StubSyncClient {
         _permissions: &[(&str, &str)],
     ) -> Result<GithubInstallationAccessToken, GithubError> {
         unimplemented!("the sync service mints unscoped installation tokens")
+    }
+
+    async fn generate_installation_wide_access_token(
+        &self,
+        _jwt: &AppJwt,
+        _installation_id: u64,
+        _permissions: &[(&str, &str)],
+    ) -> Result<GithubInstallationAccessToken, GithubError> {
+        unimplemented!("the sync service mints unscoped installation tokens")
+    }
+
+    async fn list_installation_repositories(
+        &self,
+        _access_token: &str,
+    ) -> Result<Vec<crate::domain::models::GithubRepository>, GithubError> {
+        unimplemented!("the sync service does not list repositories")
     }
 
     async fn create_pr_comment(
