@@ -117,6 +117,14 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never lists thread sessions")
     }
 
+    async fn recent_for_owner(
+        &self,
+        _owner: &MacroUserIdStr<'_>,
+        _limit: std::num::NonZeroUsize,
+    ) -> SessionResult<Vec<agent_session::domain::model::RecentAgentSession>> {
+        unimplemented!("the manager never summarizes an owner's recent sessions")
+    }
+
     async fn session_bot(&self, _id: BotId) -> SessionResult<SessionBot> {
         unimplemented!("the manager never renders bots")
     }

@@ -9,8 +9,9 @@ use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
     AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, ReplicaAddress, ReplicaId, SandboxSize,
-    SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, RecentAgentSession, ReplicaAddress,
+    ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus,
+    StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -22,6 +23,7 @@ use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -248,6 +250,37 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             Some(session) => ChannelSession::CreatedFromThread(session.clone()),
             None => ChannelSession::None,
         })
+    }
+
+    async fn recent_for_owner(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        limit: NonZeroUsize,
+    ) -> Result<Vec<RecentAgentSession>> {
+        let mut found: Vec<AgentSession> = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .values()
+            .filter(|session| session.owner_id.as_ref() == owner.as_ref())
+            .cloned()
+            .collect();
+        found.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.id.as_uuid().cmp(&a.id.as_uuid()))
+        });
+        Ok(found
+            .into_iter()
+            .take(limit.get())
+            .map(|session| RecentAgentSession {
+                id: session.id,
+                name: session.name,
+                harness: session.harness,
+                repo_url: session.repo_url,
+                created_at: session.created_at,
+            })
+            .collect())
     }
 
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {

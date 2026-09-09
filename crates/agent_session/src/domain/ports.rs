@@ -12,6 +12,7 @@ use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessa
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use std::num::NonZeroUsize;
 
 /// A bidirectional connection to an agent runtime.
 pub trait AgentConnector:
@@ -310,6 +311,18 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         &self,
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
+
+    /// The owner's newest sessions, newest first, at most `limit`.
+    ///
+    /// A summary of what this person has been working on lately, so it reads
+    /// the narrow [`RecentAgentSession`] rather than whole sessions: nothing
+    /// here drives a session, and a bounded prompt cannot spend a full row's
+    /// worth of columns on each one.
+    fn recent_for_owner<'owner>(
+        &self,
+        owner: &MacroUserIdStr<'owner>,
+        limit: NonZeroUsize,
+    ) -> impl Future<Output = Result<Vec<RecentAgentSession>>> + Send;
 
     /// The agent behind a session, for rendering the messages it sent.
     ///

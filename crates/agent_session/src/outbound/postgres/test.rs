@@ -659,6 +659,49 @@ async fn find_all_for_thread_returns_every_session_on_the_thread(pool: PgPool) {
     assert!(empty.is_empty());
 }
 
+/// The recent list is the owner's own, newest first, and stops at `limit` -
+/// a prompt summarizing what someone has been working on must not be handed
+/// somebody else's work, nor an unbounded history.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn recent_for_owner_returns_the_owners_newest_sessions(pool: PgPool) {
+    const OTHER_OWNER: &str = "macro|agent-session-other-owner@example.com";
+
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    insert_user(&pool, OTHER_OWNER).await;
+
+    let oldest = create_session(&repo, new_session(bot_id, None, None)).await;
+    let middle = create_session(&repo, new_session(bot_id, None, None)).await;
+    let newest = create_session(&repo, new_session(bot_id, None, None)).await;
+    let someone_else = create_session(
+        &repo,
+        CreateAgentSessionParams {
+            owner_id: user_id(OTHER_OWNER),
+            ..new_session(bot_id, None, None)
+        },
+    )
+    .await;
+
+    let recent = AgentSessionRepo::recent_for_owner(
+        &repo,
+        &user_id(OWNER),
+        NonZeroUsize::new(2).expect("2 is not zero"),
+    )
+    .await
+    .expect("list the owner's recent sessions");
+
+    assert_eq!(
+        recent.iter().map(|session| session.id).collect::<Vec<_>>(),
+        vec![newest.id, middle.id]
+    );
+    assert!(recent.iter().all(|session| session.id != oldest.id));
+    assert!(recent.iter().all(|session| session.id != someone_else.id));
+    assert_eq!(recent[0].name, DEFAULT_AGENT_SESSION_NAME);
+    assert_eq!(recent[0].harness, newest.harness);
+    assert_eq!(recent[0].repo_url, newest.repo_url);
+    assert_eq!(recent[0].created_at, newest.created_at);
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn find_for_channel_requires_thread_and_bot_for_originating_match(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
