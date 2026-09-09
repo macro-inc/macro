@@ -338,7 +338,7 @@ impl AgentHarnessEnv {
             // scoped credential helper never fires and the clone prompts for
             // a password it has no terminal to read.
             egress_url: egress_public_url
-                .unwrap_or("http://agent-harness-service:8102")
+                .unwrap_or("http://agent-egress-service:8080")
                 .to_owned(),
             mcp_service_url: "http://mcp-service:8080",
         }

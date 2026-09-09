@@ -361,7 +361,7 @@ fn the_egress_url_override_is_the_hyphenated_in_network_alias() {
         named_env
             .get("OVERRIDE_AGENT_HARNESS_EGRESS_URL")
             .map(String::as_str),
-        Some("http://agent-harness-service:8102")
+        Some("http://agent-egress-service:8080")
     );
     assert!(!named_env.contains_key("EGRESS_BASE_URL"));
 }

@@ -273,6 +273,20 @@ pub const RUST_SERVICES: &[RustService] = &[
         no_default_features: false,
     },
     RustService {
+        compose_name: "agent_egress_service",
+        cargo_bin: "agent_egress_service",
+        package: "agent_egress_service",
+        // Published by `gen_compose`'s egress special case rather than the
+        // generic host-port path: the Cursor tunnel needs it on the default
+        // instance too, and nothing routes to it through the proxy.
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
         compose_name: "mcp_service",
         cargo_bin: "mcp_service",
         package: "mcp_service",

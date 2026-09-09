@@ -104,9 +104,9 @@ pub enum Port {
     AgentProxy = 8091,
     /// Agent session control API.
     AgentHarness = 8101,
-    /// The agent egress proxy, `agent_harness_service`'s second listener.
-    /// Published on every local instance - it is what the Cursor egress
-    /// tunnel points at, and Cursor's cloud is outside the compose network.
+    /// The agent egress proxy, `agent_egress_service`. Published on every
+    /// local instance - it is what the Cursor egress tunnel points at, and
+    /// Cursor's cloud is outside the compose network.
     AgentHarnessEgress = 8102,
     /// Scheduled actions API and dispatcher (default compose port 8099).
     ScheduledAction = 8099,

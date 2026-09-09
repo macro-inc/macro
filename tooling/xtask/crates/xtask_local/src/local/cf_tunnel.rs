@@ -6,7 +6,7 @@
 //! - **egress**: a `@cursor` session runs on cursor.com, not in the compose
 //!   network, and the MCP servers the harness hands it point at
 //!   `AgentHarnessEgressUrl`. In-network that URL is
-//!   `http://agent-harness-service:8102`, which means nothing to Cursor's VM —
+//!   `http://agent-egress-service:8080`, which means nothing to Cursor's VM —
 //!   so the tunnel targets the instance's published egress port and sets
 //!   `OVERRIDE_AGENT_HARNESS_EGRESS_URL` to the minted
 //!   `https://….trycloudflare.com` hostname instead.

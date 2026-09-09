@@ -367,6 +367,34 @@ services:
           - agent-harness-service
 
   # ============================================================================
+  # agent_egress_service
+  # The sandbox-facing egress proxy: session token in, upstream credential
+  # stamped on. Its clients are agent sandboxes and the in-memory runtime, so
+  # it is reached across the compose network; `just run_local` publishes a host
+  # port on top of this for the Cursor egress tunnel.
+  # ============================================================================
+  agent_egress_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/agent_egress_service"]
+    restart: on-failure
+    environment:
+      # In-network mcp-service address; the local default (http://localhost:8080)
+      # would point at this container itself.
+      - OVERRIDE_MCP_SERVICE_URL=http://mcp-service:8080
+    depends_on:
+      - postgres
+    networks:
+      databases:
+      services:
+        aliases:
+          # Hyphens, because a sandbox's git reaches the egress proxy by this
+          # name and git percent-encodes `_` in a host before matching
+          # `credential.<url>.helper`. Under the compose service name the
+          # scoped helper silently never fires and the clone prompts for a
+          # password it has no terminal to read.
+          - agent-egress-service
+
+  # ============================================================================
   # mcp_service
   # Macro's own MCP server: the DCS AI toolset over streamable HTTP, OAuth
   # 2.1-fronted. Its one local client is the agent egress proxy, which serves
