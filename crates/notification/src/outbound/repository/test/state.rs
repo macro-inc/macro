@@ -51,6 +51,25 @@ async fn persisted_transitions_match_domain_policy(pool: Pool<Postgres>) -> Resu
                     user.as_ref(), id,
                 ).fetch_one(&pool).await?;
                 assert_eq!(stored, expected);
+                for filter_state in [
+                    NotificationState::Unseen,
+                    NotificationState::Seen,
+                    NotificationState::Done,
+                ] {
+                    let matching = pool
+                        .get_user_notifications::<serde_json::Value>(
+                            user.clone(),
+                            10,
+                            Query::Sort(CreatedAt, ()),
+                            crate::domain::models::request::NotificationListFilters {
+                                states: vec![filter_state],
+                                include_types: vec![],
+                                entities: vec![],
+                            },
+                        )
+                        .await?;
+                    assert_eq!(matching.len(), usize::from(expected == filter_state));
+                }
             }
         }
     }

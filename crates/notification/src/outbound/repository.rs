@@ -181,14 +181,10 @@ fn push_notification_status_filters(
 ) {
     builder.push(" AND un.deleted_at IS NULL");
 
-    if let Some(done) = filters.done {
-        builder.push(" AND (un.state = 'done') = ");
-        builder.push_bind(done);
-    }
-
-    if let Some(seen) = filters.seen {
-        builder.push(" AND (un.state <> 'unseen') = ");
-        builder.push_bind(seen);
+    if !filters.states.is_empty() {
+        builder.push(" AND un.state = ANY(");
+        builder.push_bind(filters.states.clone());
+        builder.push(")");
     }
 }
 
@@ -1208,8 +1204,7 @@ impl NotificationDbOps for PgPool {
         }
 
         let filters = NotificationListFilters {
-            done: Some(false),
-            seen: None,
+            states: NotificationState::ACTIVE.to_vec(),
             include_types: Vec::new(),
             entities: entities.clone(),
         };

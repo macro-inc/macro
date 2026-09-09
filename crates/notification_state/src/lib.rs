@@ -30,6 +30,15 @@ impl NotificationState {
     /// States included by the default active-notification list.
     pub const ACTIVE: [Self; 2] = [Self::Unseen, Self::Seen];
 
+    /// The canonical name used in JSON and PostgreSQL.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unseen => "unseen",
+            Self::Seen => "seen",
+            Self::Done => "done",
+        }
+    }
+
     /// Apply a user's intent without reopening a completed notification on a late view.
     ///
     /// Reopening always produces `Seen`, never `Unseen`. Operations are idempotent.
@@ -41,6 +50,37 @@ impl NotificationState {
             (_, NotificationAction::MarkDone) => Self::Done,
             (Self::Done, NotificationAction::Reopen) => Self::Seen,
             _ => self,
+        }
+    }
+}
+
+impl std::fmt::Display for NotificationState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// A value is not one of the canonical notification state names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ParseNotificationStateError;
+
+impl std::fmt::Display for ParseNotificationStateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("expected unseen, seen, or done")
+    }
+}
+
+impl std::error::Error for ParseNotificationStateError {}
+
+impl std::str::FromStr for NotificationState {
+    type Err = ParseNotificationStateError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "unseen" => Ok(Self::Unseen),
+            "seen" => Ok(Self::Seen),
+            "done" => Ok(Self::Done),
+            _ => Err(ParseNotificationStateError),
         }
     }
 }

@@ -136,7 +136,7 @@ impl NotificationEntityFilter {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ListNotifications",
-    description = "List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `done` and `seen` to request done/not-done or seen/unseen notifications."
+    description = "List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `states` to select exact unseen, seen, or done states. Seen excludes done; an empty list includes all states."
 )]
 pub struct ListNotifications {
     /// Maximum number of notifications to return. Defaults to 20, max 50.
@@ -144,19 +144,13 @@ pub struct ListNotifications {
     #[serde(default)]
     pub limit: Option<u32>,
 
-    /// Filter by done status. If omitted, only not-done notifications are returned.
+    /// Exact notification states to include. Omitted defaults to unseen and seen.
+    /// An empty list includes all states; seen never includes done.
     #[schemars(
-        description = "Filter by done status. If omitted, only not-done notifications are returned. Set true for done notifications, false for not-done notifications."
+        description = "Exact states to include: unseen, seen, done. Defaults to [unseen, seen]. An empty list includes all states."
     )]
     #[serde(default)]
-    pub done: Option<bool>,
-
-    /// Filter by seen status. If omitted, both seen and unseen notifications are returned.
-    #[schemars(
-        description = "Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications."
-    )]
-    #[serde(default)]
-    pub seen: Option<bool>,
+    pub states: Option<Vec<crate::domain::models::NotificationState>>,
 
     /// Filter to specific notification item types. If omitted, returns all types.
     #[schemars(
@@ -248,8 +242,9 @@ where
                 Some(limit),
                 models_pagination::Query::Sort(CreatedAt, ()),
                 NotificationListFilters {
-                    done: self.done.or(Some(false)),
-                    seen: self.seen,
+                    states: self.states.clone().unwrap_or_else(|| {
+                        crate::domain::models::NotificationState::ACTIVE.to_vec()
+                    }),
                     include_types: self.include_types.clone().unwrap_or_default(),
                     entities: self
                         .entities

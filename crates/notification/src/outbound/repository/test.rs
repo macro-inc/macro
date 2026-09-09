@@ -788,7 +788,7 @@ async fn test_get_user_notifications(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("user_notifications"))
 )]
-async fn test_get_user_notifications_filters_done_and_seen(pool: Pool<Postgres>) {
+async fn test_get_user_notifications_filters_exact_states(pool: Pool<Postgres>) {
     let user = MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap();
     let notification_id = uuid::Uuid::parse_str("0193b1ea-a542-7589-893b-2b4a509c1e76").unwrap();
 
@@ -810,21 +810,20 @@ async fn test_get_user_notifications_filters_done_and_seen(pool: Pool<Postgres>)
         .unwrap();
     assert!(active.is_empty());
 
-    let done_and_seen: Vec<UserNotificationRow<TestNotification>> = pool
+    let done: Vec<UserNotificationRow<TestNotification>> = pool
         .get_user_notifications(
             user.clone(),
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(true),
-                seen: Some(true),
+                states: vec![NotificationState::Done],
                 include_types: Vec::new(),
                 entities: Vec::new(),
             },
         )
         .await
         .unwrap();
-    assert_eq!(done_and_seen.len(), 1);
+    assert_eq!(done.len(), 1);
 
     let unseen: Vec<UserNotificationRow<TestNotification>> = pool
         .get_user_notifications(
@@ -832,8 +831,7 @@ async fn test_get_user_notifications_filters_done_and_seen(pool: Pool<Postgres>)
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: None,
-                seen: Some(false),
+                states: vec![NotificationState::Unseen],
                 include_types: Vec::new(),
                 entities: Vec::new(),
             },
@@ -856,8 +854,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: vec![crate::domain::models::request::NotificationCategory::Document],
                 entities: Vec::new(),
             },
@@ -872,8 +869,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: vec![crate::domain::models::request::NotificationCategory::Email],
                 entities: Vec::new(),
             },
@@ -888,8 +884,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![EntityType::Document.with_entity_string("item-1".to_string())],
             },
@@ -904,8 +899,7 @@ async fn test_get_user_notifications_filters_type_and_entity(pool: Pool<Postgres
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![EntityType::EmailThread.with_entity_string("item-1".to_string())],
             },
@@ -1120,8 +1114,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: vec![NotificationCategory::Github],
                 entities: Vec::new(),
             },
@@ -1171,8 +1164,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![
                     EntityType::ForeignEntity.with_entity_string(foreign_entity_id.clone()),
@@ -1196,8 +1188,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![
                     EntityType::ForeignEntity
@@ -1227,8 +1218,7 @@ async fn test_get_user_notifications_filters_github_type_and_entity(pool: Pool<P
             10,
             Query::Sort(CreatedAt, ()),
             NotificationListFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![NotificationState::Unseen, NotificationState::Seen],
                 include_types: Vec::new(),
                 entities: vec![EntityType::Document.with_entity_string(foreign_entity_id)],
             },

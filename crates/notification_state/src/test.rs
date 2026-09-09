@@ -61,6 +61,8 @@ fn serializes_as_lowercase_state_names() {
         .into_iter()
         .zip(["\"unseen\"", "\"seen\"", "\"done\""])
     {
+        assert_eq!(state.as_str().parse::<NotificationState>().unwrap(), state);
+        assert_eq!(state.to_string(), state.as_str());
         assert_eq!(serde_json::to_string(&state).unwrap(), json);
         assert_eq!(
             serde_json::from_str::<NotificationState>(json).unwrap(),
@@ -71,6 +73,9 @@ fn serializes_as_lowercase_state_names() {
 
 #[test]
 fn rejects_invalid_wire_states() {
+    for invalid in ["", "active", "Seen", "not_done", "unseen,seen"] {
+        assert!(invalid.parse::<NotificationState>().is_err());
+    }
     for json in [
         "null",
         "true",

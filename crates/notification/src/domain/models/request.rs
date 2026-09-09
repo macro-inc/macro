@@ -302,10 +302,8 @@ pub struct UpdateNotificationsForEntitiesRequest<'a> {
 /// Optional filters for listing user notifications.
 #[derive(Debug, Clone)]
 pub struct NotificationListFilters {
-    /// Filter by done status. `None` means include both done and not-done notifications.
-    pub done: Option<bool>,
-    /// Filter by seen status. `None` means include both seen and unseen notifications.
-    pub seen: Option<bool>,
+    /// Exact states to include. Empty means no state restriction.
+    pub states: Vec<super::NotificationState>,
     /// Optional user-facing notification categories to include. Empty means include all types.
     pub include_types: Vec<NotificationCategory>,
     /// Optional specific entities to include. Empty means include all entities.
@@ -316,8 +314,7 @@ impl NotificationListFilters {
     /// Default product behavior: list active notifications, which excludes done notifications.
     pub fn active() -> Self {
         Self {
-            done: Some(false),
-            seen: None,
+            states: super::NotificationState::ACTIVE.to_vec(),
             include_types: Vec::new(),
             entities: Vec::new(),
         }
