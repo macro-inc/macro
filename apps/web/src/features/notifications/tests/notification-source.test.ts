@@ -1,6 +1,6 @@
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
-import { createMemo, createRoot, createSignal } from 'solid-js';
+import { createEffect, createMemo, createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createNotificationSource,
@@ -187,6 +187,44 @@ describe('createNotificationSource', () => {
       dispose();
     }
   });
+
+  it.each(['seen', 'done'] as const)(
+    'does not subscribe an effect to %s rollback snapshots',
+    async (operation) => {
+      const row = notification(`untracked-${operation}`, 'document', 'doc');
+      mocks.notificationsQuery = {
+        data: [row],
+        transport: 'graphql',
+        isFetching: false,
+      };
+      let runs = 0;
+      const { source, dispose } = createRoot((dispose) => {
+        const source = createNotificationSource(
+          {} as ConnectionGatewayWebsocket
+        );
+        createEffect(() => {
+          runs += 1;
+          // Bound a regression so an accidental subscription cannot loop the test.
+          if (runs > 1) return;
+          void (operation === 'seen'
+            ? source.bulkMarkAsRead([row])
+            : source.bulkMarkAsDone([row]));
+        });
+        return { source, dispose };
+      });
+      try {
+        await Promise.resolve();
+        await (operation === 'seen'
+          ? source.bulkMarkAsRead([row])
+          : source.bulkMarkAsDone([row]));
+        await Promise.resolve();
+        expect(runs).toBe(1);
+      } finally {
+        setDoneOverride([row.id], undefined);
+        dispose();
+      }
+    }
+  );
 
   it('reactively exposes muted entity cache updates', async () => {
     const [mutedEntities, setMutedEntities] = createSignal<

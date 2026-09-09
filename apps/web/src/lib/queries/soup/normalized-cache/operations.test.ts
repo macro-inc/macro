@@ -1203,6 +1203,46 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
     expect(flatAstItemsAt(doneFilteredAstKey('union'))).toEqual(['ch-1']);
   });
 
+  it('combines inbox scoping with sibling AST and DTO state constraints', () => {
+    cacheChannel('ch-1');
+    const seenOnly = [
+      [
+        ...soupKeys.astItems._def,
+        { emailView: 'inbox', chanf: { l: { NotificationState: 'seen' } } },
+      ],
+      [
+        ...soupKeys.astItems._def,
+        { emailView: 'inbox', notification_filters: { states: ['seen'] } },
+      ],
+      [
+        ...soupKeys.astItems._def,
+        {
+          emailView: 'inbox',
+          notification_filters: { states: ['unseen', 'seen'] },
+          chanf: { l: { NotificationState: 'seen' } },
+        },
+      ],
+    ];
+    const active = [
+      ...soupKeys.astItems._def,
+      {
+        emailView: 'inbox',
+        chanf: {
+          '|': [
+            { l: { NotificationState: 'unseen' } },
+            { l: { NotificationState: 'seen' } },
+          ],
+        },
+      },
+    ];
+    for (const key of [...seenOnly, active]) seedFlatAstQuery(key, [[]]);
+    restoreSoupEntityToDoneFilteredQueries('ch-1', 'unseen');
+    for (const key of seenOnly) expect(flatAstItemsAt(key)).toEqual([]);
+    expect(flatAstItemsAt(active)).toEqual(['ch-1']);
+    restoreSoupEntityToDoneFilteredQueries('ch-1', 'seen');
+    for (const key of seenOnly) expect(flatAstItemsAt(key)).toEqual(['ch-1']);
+  });
+
   it('prepends the cached entity to done-filtered queries missing it', () => {
     cacheChannel('ch-1');
     seedFlatAstQuery(doneFilteredAstKey('inbox'), [[mockChatItem('c-1')]]);

@@ -488,14 +488,24 @@ function soupQueryExcludesDone(
         ? { excludesDone: true, acceptsIncoming: true }
         : unknown;
     }
-    if (node.emailView === 'inbox')
-      return { excludesDone: true, acceptsIncoming: true };
+    const matches: Match[] = [];
+    if (node.emailView === 'inbox') {
+      matches.push({ excludesDone: true, acceptsIncoming: true });
+    }
     const filter = node.notification_filters as
       | { states?: unknown[] }
       | undefined;
-    if (Array.isArray(filter?.states) && filter.states.length)
-      return states(filter.states);
-    return combine(Object.values(node).map(inspect));
+    if (Array.isArray(filter?.states) && filter.states.length) {
+      matches.push(states(filter.states));
+    }
+    // Inbox scoping and DTO selections are witnesses, not terminal nodes:
+    // every sibling state constraint must also accept the arriving state.
+    for (const [field, child] of Object.entries(node)) {
+      if (field !== 'emailView' && field !== 'notification_filters') {
+        matches.push(inspect(child));
+      }
+    }
+    return combine(matches);
   };
   const result = inspect(key);
   return result.excludesDone && result.acceptsIncoming;

@@ -54,6 +54,34 @@ describe('inbox-query-filters', () => {
     ).toEqual(['unseen', 'seen']);
   });
 
+  it('intersects mixed notification selections with active states without losing read intent', () => {
+    for (const states of [
+      ['seen', 'done'],
+      ['unseen', 'done'],
+      ['done', 'seen', 'unseen', 'seen'],
+    ] as const) {
+      const input = {
+        document_filters: { notification_filters: { states: [...states] } },
+        chat_filters: { notification_filters: { states: [...states] } },
+        channel_filters: { notification_filters: { states: [...states] } },
+        project_filters: { notification_filters: { states: [...states] } },
+      };
+      const result = applyInboxQueryFilters(input);
+      expect(input.channel_filters.notification_filters.states).toEqual(states);
+      const expected = (['unseen', 'seen'] as const).filter((state) =>
+        states.some((selected) => selected === state)
+      );
+      for (const filter of [
+        result.document_filters,
+        result.chat_filters,
+        result.channel_filters,
+        result.project_filters,
+      ]) {
+        expect(filter?.notification_filters?.states).toEqual(expected);
+      }
+    }
+  });
+
   describe('removeInboxQueryFilters', () => {
     it('strips inbox-applied filters from an inbox-applied payload', () => {
       const applied = applyInboxQueryFilters({});

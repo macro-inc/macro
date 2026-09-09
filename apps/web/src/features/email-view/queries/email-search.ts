@@ -3,11 +3,11 @@ import {
   NIL_UUID,
   type SoupSearchRequest,
 } from '@app/features/soup';
+import { notificationStatesForFilter } from '@notifications/notification-state';
 import type { SearchSoupQueryArgs } from '@queries/soup/search';
 import type {
   EmailFilters,
   EntityFilters,
-  NotificationFilters,
 } from '@service-search/generated/models';
 import { match } from 'ts-pattern';
 import type { EmailTab } from '../types';
@@ -51,18 +51,15 @@ const soleSelection = (selection: string[] | undefined) =>
  */
 function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
   const filters: Partial<EmailFilters> = {};
-  const notification: NotificationFilters = {};
-
   const read = soleSelection(facets.read);
-  if (read === 'unread') notification.seen = false;
-  if (read === 'read') notification.seen = true;
+  if (read === 'unread') filters.is_read = false;
+  if (read === 'read') filters.is_read = true;
 
   const done = soleSelection(facets.done);
-  if (done === 'not-done') notification.done = false;
-  if (done === 'done') notification.done = true;
-
-  if (Object.keys(notification).length > 0) {
-    filters.notification_filters = notification;
+  if (done === 'not-done' || done === 'done') {
+    filters.notification_filters = {
+      states: notificationStatesForFilter('done', done === 'done'),
+    };
   }
 
   if ((facets.calendar ?? []).includes('has-calendar-invite')) {

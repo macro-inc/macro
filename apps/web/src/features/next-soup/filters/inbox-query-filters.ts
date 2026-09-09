@@ -22,16 +22,15 @@ function withInboxNotification<T extends FilterWithNotification>(
       },
     } as T;
   }
+  const selected = filters.notification_filters?.states;
+  const active = INBOX_STATES.filter((state) => selected?.includes(state));
   return {
     ...filters,
     notification_filters: {
-      // Entering Inbox applies its active-state preset. A read-only subset
-      // is preserved; an explicit Done selection is replaced by the preset.
-      states:
-        filters.notification_filters?.states?.length &&
-        filters.notification_filters.states.every((state) => state !== 'done')
-          ? [...filters.notification_filters.states]
-          : [...INBOX_STATES],
+      // Intersect mixed read/unread selections with the active preset. Keep
+      // the existing preset reset for absent, empty, or Done-only selections;
+      // an empty states array would incorrectly disable notification filtering.
+      states: active.length ? active : [...INBOX_STATES],
     },
   };
 }
