@@ -7,7 +7,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { compareDateDesc, type DateValue } from '@core/util/date';
-import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { formatRelativeTimestamp } from '@entity';
 import {
@@ -238,7 +237,7 @@ export function References(props: ReferenceProps) {
   }) => {
     openWithSplit(
       { type: blockName, id: blockId },
-      { preferNewSplit: openInNewSplitForMention(event ?? {}) }
+      { preferNewSplit: event?.altKey !== true }
     );
   };
 
@@ -259,7 +258,7 @@ export function References(props: ReferenceProps) {
       messageId,
       threadId,
       {
-        preferNewSplit: openInNewSplitForMention(event ?? {}),
+        preferNewSplit: event?.altKey !== true,
       }
     );
   };

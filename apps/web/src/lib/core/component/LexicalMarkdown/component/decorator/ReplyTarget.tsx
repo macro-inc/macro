@@ -27,7 +27,7 @@ export function ReplyTarget(props: ReplyTargetDecoratorProps) {
         [CHANNEL_PARAMS.message]: props.targetMessageId,
         [CHANNEL_PARAMS.thread]: props.targetThreadId,
       },
-      openInNewSplitForMention(event)
+      openInNewSplitForMention(event.altKey, true)
     );
   });
 

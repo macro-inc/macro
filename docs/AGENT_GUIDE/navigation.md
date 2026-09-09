@@ -72,9 +72,8 @@ category, Esc closes.
 - `/` — search everything. `j`/`k` — move in lists. `e` — mark done. `g` then `i` — inbox.
 - Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
-  `:` emoji. Clicking a mention/reference chip opens it in a new split when possible;
-  Shift also prefers a new split (same as lists); Option/Alt stays in the current split.
-  Clicking a rendered tag opens a Search split filtered to that tag.
+  `:` emoji. Clicking a mention chip opens a new split when possible; Option/Alt keeps
+  it in the current split. Clicking a rendered tag opens a Search split filtered to that tag.
 
 Settings → Agents and Settings → Harness render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model

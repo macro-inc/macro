@@ -4,10 +4,7 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
-import {
-  type MentionOpenModifiers,
-  openInNewSplitForMention,
-} from '@core/util/openInNewSplit';
+import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { truncateString } from '@core/util/string';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import type { NamedSubType } from '@entity';
@@ -80,11 +77,11 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     id: string,
     fileType?: FileType,
     subType?: NamedSubType,
-    event?: MentionOpenModifiers
+    altKey?: boolean
   ) {
     const _type = subType ?? fileType ?? type;
     if (!_type) return;
-    openItem(_type, id, openInNewSplitForMention(event));
+    openItem(_type, id, openInNewSplitForMention(altKey, true));
   }
 
   const name = () => {
@@ -278,7 +275,7 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                       item.id,
                       item.fileType,
                       item.subType?.type as NamedSubType | undefined,
-                      e
+                      e.altKey
                     );
                   });
 
