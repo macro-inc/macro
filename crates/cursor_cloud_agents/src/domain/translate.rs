@@ -27,10 +27,11 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::event::{CursorEvent, InteractionUpdate, ToolCallEvent};
+use crate::domain::event::{CursorEvent, GitState, InteractionUpdate, ToolCallEvent};
 use agent_client_protocol::schema::v1::{
-    ContentBlock, ContentChunk, Diff, SessionUpdate, TextContent, ToolCall, ToolCallContent,
-    ToolCallLocation, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
+    ContentBlock, ContentChunk, Diff, SessionInfoUpdate, SessionUpdate, TextContent, ToolCall,
+    ToolCallContent, ToolCallLocation, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields,
+    ToolKind,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -46,6 +47,10 @@ pub struct TranslateMachine {
     open: HashSet<String>,
     /// Kinds learned from Cursor's typed tool descriptor, keyed by call id.
     learned_kinds: HashMap<String, ToolKind>,
+    /// The pull request last announced to the client. Every run's result
+    /// restates the agent's pushed branches, so without this the same url
+    /// would be announced once per turn.
+    pull_request_url: Option<String>,
 }
 
 impl TranslateMachine {
@@ -65,10 +70,12 @@ impl TranslateMachine {
                 self.interaction(&update);
                 Vec::new()
             }
+            // The run's git state is the one thing a result carries that the
+            // client wants to know: the pull request Cursor opened.
+            CursorEvent::Result { git, .. } => self.pull_request(git.as_ref()),
             // Lifecycle and keepalives: the session service consumes these as
             // the turn's boundary; they have no ACP counterpart.
             CursorEvent::Status { .. }
-            | CursorEvent::Result { .. }
             | CursorEvent::Heartbeat
             | CursorEvent::Error { .. }
             | CursorEvent::Done => Vec::new(),
@@ -77,6 +84,32 @@ impl TranslateMachine {
                 Vec::new()
             }
         }
+    }
+
+    /// The pull request a run's git state names, announced as a
+    /// `session_info_update` under `_meta.cursor.pullRequestUrl` the first
+    /// time it is seen. ACP has no field for it, and `_meta` is the protocol's
+    /// extension point; the fold reads this namespace back into the session's
+    /// metadata. A result with no pull request - the usual case for a
+    /// question, or for a session that has not asked for one - announces
+    /// nothing, and a pull request once announced stays announced: Cursor
+    /// does not report a pull request going away.
+    fn pull_request(&mut self, git: Option<&GitState>) -> Vec<SessionUpdate> {
+        let Some(url) = git.and_then(pull_request_url) else {
+            return Vec::new();
+        };
+        if self.pull_request_url.as_deref() == Some(url) {
+            return Vec::new();
+        }
+        self.pull_request_url = Some(url.to_owned());
+        let mut meta = serde_json::Map::new();
+        meta.insert(
+            "cursor".to_owned(),
+            serde_json::json!({ "pullRequestUrl": url }),
+        );
+        vec![SessionUpdate::SessionInfoUpdate(
+            SessionInfoUpdate::new().meta(meta),
+        )]
     }
 
     /// One `tool_call` event: an announcement the first time a call id is
@@ -189,6 +222,16 @@ impl TranslateMachine {
 }
 
 /// A text delta as the given chunk variant; empty deltas produce nothing.
+/// The first branch with a pull request. Stacked agents can push several
+/// branches, but this session opened one agent against one repository, so
+/// the first is the session's own.
+fn pull_request_url(git: &GitState) -> Option<&str> {
+    git.branches
+        .iter()
+        .find_map(|branch| branch.pr_url.as_deref())
+        .filter(|url| !url.is_empty())
+}
+
 fn chunk(text: &str, variant: impl Fn(ContentChunk) -> SessionUpdate) -> Vec<SessionUpdate> {
     if text.is_empty() {
         return Vec::new();

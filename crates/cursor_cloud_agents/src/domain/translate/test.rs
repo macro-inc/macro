@@ -58,3 +58,45 @@ fn closing_drains_so_a_second_call_finds_nothing_left() {
     assert_eq!(machine.close_open_calls().len(), 1);
     assert!(machine.close_open_calls().is_empty());
 }
+
+fn result(pr_url: Option<&str>) -> CursorEvent {
+    use crate::domain::event::{GitBranch, GitState};
+    use crate::domain::model::{CursorRunId, RunStatus};
+    CursorEvent::Result {
+        run_id: CursorRunId::new("run-1".to_owned()),
+        status: RunStatus::Finished,
+        text: Some("done".to_owned()),
+        duration_ms: Some(1),
+        git: Some(GitState {
+            branches: vec![GitBranch {
+                repo_url: "github.com/macro-inc/macro".to_owned(),
+                branch: Some("cursor/fix-1234".to_owned()),
+                pr_url: pr_url.map(str::to_owned),
+            }],
+        }),
+    }
+}
+
+#[test]
+fn a_result_with_a_pull_request_announces_it_once() {
+    let mut machine = TranslateMachine::new();
+    let url = "https://github.com/macro-inc/macro/pull/6303";
+
+    let updates = machine.push(result(Some(url)));
+    let [SessionUpdate::SessionInfoUpdate(info)] = updates.as_slice() else {
+        panic!("expected one session_info_update, got {updates:?}");
+    };
+    assert_eq!(
+        info.meta.as_ref().and_then(|meta| meta.get("cursor")),
+        Some(&serde_json::json!({ "pullRequestUrl": url }))
+    );
+
+    // The next run restates the same branches; the client heard already.
+    assert!(machine.push(result(Some(url))).is_empty());
+}
+
+#[test]
+fn a_result_without_a_pull_request_announces_nothing() {
+    let mut machine = TranslateMachine::new();
+    assert!(machine.push(result(None)).is_empty());
+}

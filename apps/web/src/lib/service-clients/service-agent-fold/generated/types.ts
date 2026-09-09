@@ -753,6 +753,13 @@ export type SessionMetadata = {
    *  connection that asked is gone - the request id dies with it.
    */
   pendingElicitation: PendingElicitation | null;
+  /**
+   *  The pull request the session's work is on, when the harness reports
+   *  one (Cursor announces it under `_meta.cursor.pullRequestUrl` on a
+   *  `session_info_update` once a run has opened it). Latest-wins and never
+   *  cleared by the fold: no harness reports a pull request going away.
+   */
+  pullRequestUrl: string | null;
 };
 
 /**

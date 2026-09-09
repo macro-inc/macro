@@ -1,6 +1,6 @@
 //! Config options, available commands, and session info: the metadata.
 
-use crate::domain::harness::ToolFrame;
+use crate::domain::harness::{ToolFrame, cursor};
 use crate::domain::model::{AvailableCommand, Harness};
 use crate::domain::model_selection::model_selection;
 use agent_client_protocol::schema::MaybeUndefined;
@@ -127,15 +127,25 @@ impl FoldState {
     }
 
     /// Handle a `session_info_update`: take the title, minding the
-    /// absent/null/value distinction - absent means unchanged.
+    /// absent/null/value distinction - absent means unchanged - and the pull
+    /// request a harness announces in its `_meta`.
     pub(super) fn apply_session_info(&mut self, update: &SessionInfoUpdate) -> bool {
-        let title = match &update.title {
-            MaybeUndefined::Undefined => return false,
-            MaybeUndefined::Null => None,
-            MaybeUndefined::Value(title) => Some(title.clone()),
+        let title_changed = match &update.title {
+            MaybeUndefined::Undefined => false,
+            MaybeUndefined::Null => self.metadata.title.take().is_some(),
+            MaybeUndefined::Value(title) => {
+                let changed = self.metadata.title.as_deref() != Some(title.as_str());
+                self.metadata.title = Some(title.clone());
+                changed
+            }
         };
-        let changed = self.metadata.title != title;
-        self.metadata.title = title;
-        changed
+        let pull_request_changed = match cursor::pull_request_url(update.meta.as_ref()) {
+            Some(url) if self.metadata.pull_request_url.as_deref() != Some(url.as_str()) => {
+                self.metadata.pull_request_url = Some(url);
+                true
+            }
+            _ => false,
+        };
+        title_changed || pull_request_changed
     }
 }

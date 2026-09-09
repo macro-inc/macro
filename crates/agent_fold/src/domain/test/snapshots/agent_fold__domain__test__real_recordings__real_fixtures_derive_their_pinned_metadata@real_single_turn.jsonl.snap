@@ -431,4 +431,5 @@ SessionMetadata {
         "acp_ready",
     ),
     pending_elicitation: None,
+    pull_request_url: None,
 }
