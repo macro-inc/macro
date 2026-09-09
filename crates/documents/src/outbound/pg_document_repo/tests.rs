@@ -583,6 +583,7 @@ async fn test_edit_document_public_to_null_revokes_non_owner_access(pool: Pool<P
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: Some(None),
             link_share_access_level: Some(None),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
         revoke_non_owner_user_access: true,
@@ -616,6 +617,7 @@ async fn test_edit_document_public_to_team_revokes_non_owner_access(pool: Pool<P
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: Some(Some(LinkShare::Team)),
             link_share_access_level: Some(Some(AccessLevel::Comment)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
         revoke_non_owner_user_access: true,
@@ -649,6 +651,7 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
         revoke_non_owner_user_access: false,
@@ -669,6 +672,7 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(None),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
         revoke_non_owner_user_access: false,
@@ -704,6 +708,7 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: Some(Some(LinkShare::Public)),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
         revoke_non_owner_user_access: false,
@@ -1418,6 +1423,7 @@ async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Po
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: None,
+            team_share_access_level: None,
             channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                 operation: UpdateOperation::Add,
                 channel_id: channel_id.to_string(),
@@ -1491,6 +1497,7 @@ async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: None,
+            team_share_access_level: None,
             channel_share_permissions: Some(vec![UpdateChannelSharePermission {
                 operation: UpdateOperation::Add,
                 channel_id: channel_id.to_string(),

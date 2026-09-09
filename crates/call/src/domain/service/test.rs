@@ -1494,6 +1494,7 @@ async fn edit_call_record_publishes_updated_event_for_share_permission_only() {
                             models_permissions::share_permission::LinkShare::Public,
                         )),
                         link_share_access_level: None,
+                        team_share_access_level: None,
                         channel_share_permissions: None,
                     },
                 ),

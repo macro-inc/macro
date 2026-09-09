@@ -248,6 +248,7 @@ impl EntitySharePolicyInput {
                 .link_share_access_level
                 .map_value(GraphqlEntityAccessLevel::into_model)
                 .into(),
+            team_share_access_level: None,
             channel_share_permissions: self.channel_share_permissions.map(|entries| {
                 entries
                     .into_iter()

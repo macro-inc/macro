@@ -61,6 +61,7 @@ pub(crate) async fn get_chat_share_permission(
         id: result.id,
         link_share,
         link_share_access_level: result.link_share_access_level,
+        team_share_access_level: None,
         owner: result.owner,
         channel_share_permissions,
     })

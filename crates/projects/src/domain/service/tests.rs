@@ -499,6 +499,7 @@ fn share_update() -> UpdateSharePermissionRequestV2 {
     UpdateSharePermissionRequestV2 {
         link_share: Some(Some(LinkShare::Public)),
         link_share_access_level: Some(Some(AccessLevel::View)),
+        team_share_access_level: None,
         channel_share_permissions: None,
     }
 }
