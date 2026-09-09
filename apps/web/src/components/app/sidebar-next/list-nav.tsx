@@ -9,7 +9,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useLocation } from '@solidjs/router';
 import { Button, cn } from '@ui';
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
 
@@ -84,8 +84,29 @@ export const ListNav = (props: ListNavProps) => {
     return matchesActiveContent();
   };
 
+  // Opening a view is a synchronous store replace plus the new view's first
+  // render, all inside the event handler. Painted in the same frame, the
+  // highlight would only appear once that render finished. Let the browser
+  // paint the pending highlight first, then navigate on the next tick.
+  let scheduledFrame: number | undefined;
+  let scheduledTick: ReturnType<typeof setTimeout> | undefined;
+  const afterNextPaint = (run: () => void) => {
+    if (scheduledFrame !== undefined) cancelAnimationFrame(scheduledFrame);
+    if (scheduledTick !== undefined) clearTimeout(scheduledTick);
+    scheduledFrame = requestAnimationFrame(() => {
+      scheduledFrame = undefined;
+      scheduledTick = setTimeout(() => {
+        scheduledTick = undefined;
+        run();
+      }, 0);
+    });
+  };
+  onCleanup(() => {
+    if (scheduledFrame !== undefined) cancelAnimationFrame(scheduledFrame);
+    if (scheduledTick !== undefined) clearTimeout(scheduledTick);
+  });
+
   const navigate = (event: MouseEvent) => {
-    if (event.button !== 0) return;
     // The row acts on mousedown to beat the focus change, so suppress the
     // default selection/focus behaviour.
     event.preventDefault();
@@ -103,17 +124,40 @@ export const ListNav = (props: ListNavProps) => {
     });
 
     if (!isSameContent || event.shiftKey) {
-      navigateToSidebarView({
-        viewId: props.item.id,
-        params: props.item.params,
-        shiftKey: event.shiftKey,
-        activeSplit,
-        openWithSplit: layout.openWithSplit,
-        referredFrom: 'sidebar',
+      const { shiftKey } = event;
+      afterNextPaint(() => {
+        navigateToSidebarView({
+          viewId: props.item.id,
+          params: props.item.params,
+          shiftKey,
+          activeSplit: globalSplitManager()?.activeSplit(),
+          openWithSplit: layout.openWithSplit,
+          referredFrom: 'sidebar',
+        });
+        globalSplitManager()?.returnFocus();
       });
+      return;
     }
 
     globalSplitManager()?.returnFocus();
+  };
+
+  // A primary press navigates on mousedown. The click that follows is a no-op,
+  // but a click with no preceding mousedown still has to navigate: keyboard
+  // activation (`detail` is 0 for those), or a trackpad tap whose mousedown
+  // never reached us.
+  let pressHandled = false;
+  const onMouseDown = (event: MouseEvent) => {
+    if (event.button !== 0) return;
+    pressHandled = true;
+    navigate(event);
+  };
+  const onClick = (event: MouseEvent) => {
+    const handled = pressHandled;
+    pressHandled = false;
+    if (event.button !== 0) return;
+    if (handled && event.detail !== 0) return;
+    navigate(event);
   };
 
   return (
@@ -138,7 +182,8 @@ export const ListNav = (props: ListNavProps) => {
         // tests use keep working.
         data-active={isActive() ? '' : undefined}
         data-sidebar-next-item={props.item.id}
-        onMouseDown={navigate}
+        onMouseDown={onMouseDown}
+        onClick={onClick}
       >
         {/* Flush to the screen edge: the button sits inside the rail's own
             `px-3`, so -12px lands the bar's outer edge at x=0. Absolutely
