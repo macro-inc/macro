@@ -1,7 +1,6 @@
 import { getFaviconUrl } from '@app/util/favicon';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { markdownToPlainText } from '@macro-inc/lexical-core';
-import { checkEmailNotificationSignal } from '@queries/notification/email-signal';
 import { themeReactive } from '../theme/signals/themeReactive';
 import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
 import { GITHUB_EVENT_TYPES } from './github-event-types';
@@ -93,28 +92,6 @@ export async function maybeHandlePlatformNotification(
     )
   ) {
     return;
-  }
-
-  // Staff receive realtime in-app rows for Noise too. Keep those updates,
-  // but only surface Signal email as a browser/system popup, on either transport.
-  if (notification.notification_metadata.tag === 'new_email') {
-    try {
-      const signal = await checkEmailNotificationSignal(notification.entity_id);
-      if (signal.isErr()) {
-        console.warn(
-          'Failed to check email notification Signal eligibility',
-          signal.error
-        );
-        return;
-      }
-      if (!signal.value) return;
-    } catch (error) {
-      console.warn(
-        'Failed to check email notification Signal eligibility',
-        error
-      );
-      return;
-    }
   }
 
   const platformNotificationData = await toPlatformNotificationData(
