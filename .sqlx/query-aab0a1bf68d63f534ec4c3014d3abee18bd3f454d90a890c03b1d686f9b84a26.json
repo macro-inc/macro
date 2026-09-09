@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH entity AS (\n            SELECT d.owner, dp.\"sharePermissionId\" AS permission_id\n            FROM \"Document\" d LEFT JOIN \"DocumentPermission\" dp ON dp.\"documentId\" = d.id\n            WHERE $2 = 'document' AND d.id = $1\n            UNION ALL\n            SELECT p.\"userId\", pp.\"sharePermissionId\"\n            FROM \"Project\" p LEFT JOIN \"ProjectPermission\" pp ON pp.\"projectId\" = p.id\n            WHERE $2 = 'project' AND p.id = $1\n            UNION ALL\n            SELECT c.\"userId\", cp.\"sharePermissionId\"\n            FROM \"Chat\" c LEFT JOIN \"ChatPermission\" cp ON cp.\"chatId\" = c.id\n            WHERE $2 = 'chat' AND c.id = $1\n            UNION ALL\n            SELECT l.macro_id, tp.\"sharePermissionId\"\n            FROM email_threads t JOIN email_links l ON l.id = t.link_id\n            LEFT JOIN \"EmailThreadPermission\" tp ON tp.\"threadId\" = t.id::text\n            WHERE $2 = 'email_thread' AND t.id = $3\n            UNION ALL\n            SELECT c.created_by, c.share_permission_id FROM calls c\n            WHERE $2 = 'call' AND c.id = $3\n            UNION ALL\n            SELECT c.created_by, c.share_permission_id FROM call_records c\n            WHERE $2 = 'call' AND c.id = $3 AND NOT EXISTS (SELECT 1 FROM calls WHERE id = $3)\n        )\n        SELECT e.owner AS \"owner!\", e.permission_id,\n            sp.id AS \"stored_permission_id?\",\n            sp.team_share_access_level AS \"level: AccessLevel\",\n            sp.team_share_team_id AS team_id, sp.team_share_revision AS \"revision?\",\n            (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = e.owner\n             ORDER BY tu.team_role DESC LIMIT 1) AS owner_team_id\n        FROM entity e LEFT JOIN \"SharePermission\" sp ON sp.id = e.permission_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "permission_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "stored_permission_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "revision?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "owner_team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      false,
+      true,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "aab0a1bf68d63f534ec4c3014d3abee18bd3f454d90a890c03b1d686f9b84a26"
+}

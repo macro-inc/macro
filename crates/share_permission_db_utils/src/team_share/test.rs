@@ -50,7 +50,9 @@ async fn apply_inserts_updates_and_deletes_direct_team_entity_access(
     let uuid = Uuid::parse_str(&entity.entity_id)?;
     let mut tx = pool.begin().await?;
     let facts = load_facts(&mut tx, &entity).await?;
-    let team_id = facts.owner_team_id.expect("fixture owner belongs to a team");
+    let team_id = facts
+        .owner_team_id
+        .expect("fixture owner belongs to a team");
 
     apply(&mut tx, &command(&facts, Some(AccessLevel::Comment))).await?;
     assert_eq!(
