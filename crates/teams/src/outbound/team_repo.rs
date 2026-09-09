@@ -2,9 +2,10 @@
 use crate::domain::{
     model::{
         AcceptedTeamInvite, CreateTeamError, InviteUsersToTeamError, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, Team, TeamError, TeamInvite,
-        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamRole,
-        TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain, normalize_team_slug,
+        RemoveTeamInviteError, RemoveUserFromTeamError, StartupType, Team, TeamError, TeamInvite,
+        TeamInviteDetails, TeamInviteSnapshot, TeamMember, TeamMembers, TeamPlan, TeamProfile,
+        TeamRole, TeamWithMembers, ToggleAutoJoinDomainError, is_generic_email_domain,
+        normalize_team_slug,
     },
     team_repo::{TeamMembersService, TeamRepository},
 };
@@ -92,6 +93,7 @@ impl TeamRepositoryImpl {
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
         team_slug: &str,
+        profile: &TeamProfile,
         subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, sqlx::Error> {
         let mut transaction = self.pool.begin().await?;
@@ -100,10 +102,12 @@ impl TeamRepositoryImpl {
 
         let team = sqlx::query!(
             r#"
-            INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying)
-            VALUES ($1, $2, $3, $4, 1, $5, $6)
+            INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying,
+                startup_type, logo_url)
+            VALUES ($1, $2, $3, $4, 1, $5, $6, $7, $8)
             RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,
-                default_link_share as "default_link_share: LinkShare"
+                default_link_share as "default_link_share: LinkShare",
+                startup_type as "startup_type: StartupType", logo_url
             "#,
             id,
             team_name,
@@ -111,6 +115,8 @@ impl TeamRepositoryImpl {
             user_id.as_ref(),
             subscription_id.map(|s| s.to_string()),
             subscription_id.is_some(),
+            profile.startup_type as Option<StartupType>,
+            profile.logo_url.as_deref(),
         )
         .try_map(|row| {
             Ok(Team {
@@ -127,6 +133,8 @@ impl TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                startup_type: row.startup_type,
+                logo_url: row.logo_url,
             })
         })
         .fetch_one(&mut *transaction)
@@ -336,13 +344,14 @@ impl TeamRepository for TeamRepositoryImpl {
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
         team_slug: &str,
+        profile: &TeamProfile,
         subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, CreateTeamError> {
         if team_name.is_empty() || team_name.len() > 50 {
             return Err(CreateTeamError::InvalidTeamName(team_name.to_string()));
         }
 
-        self.create_team_inner(user_id, team_name, team_slug, subscription_id)
+        self.create_team_inner(user_id, team_name, team_slug, profile, subscription_id)
             .await
             .map_err(|e| e.into())
     }
@@ -1042,6 +1051,7 @@ impl TeamRepository for TeamRepositoryImpl {
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
+                t.startup_type as "startup_type: StartupType", t.logo_url,
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1062,6 +1072,8 @@ impl TeamRepository for TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                startup_type: row.startup_type,
+                logo_url: row.logo_url,
             })
         })
         .fetch_one(&self.pool)
@@ -1102,6 +1114,7 @@ impl TeamRepository for TeamRepositoryImpl {
             SELECT t.id, t.name, t.slug, t.owner_id, t.auto_join_domain, t.enterprise,
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
+                t.startup_type as "startup_type: StartupType", t.logo_url,
                 COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
@@ -1123,6 +1136,8 @@ impl TeamRepository for TeamRepositoryImpl {
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
                 default_link_share: row.default_link_share,
+                startup_type: row.startup_type,
+                logo_url: row.logo_url,
             })
         })
         .fetch_all(&self.pool)
@@ -1233,15 +1248,27 @@ impl TeamRepository for TeamRepositoryImpl {
         // "keep".
         let default_link_share_provided = req.default_link_share.is_some();
         let default_link_share = req.default_link_share.flatten();
+        // Same double-option shape for the profile fields: `null` clears.
+        let startup_type_provided = req.startup_type.is_some();
+        let startup_type = req.startup_type.flatten();
+        let logo_url_provided = req.logo_url.is_some();
+        let logo_url = req.logo_url.clone().flatten();
 
-        if req.name.is_some() || normalized_slug.is_some() || default_link_share_provided {
+        if req.name.is_some()
+            || normalized_slug.is_some()
+            || default_link_share_provided
+            || startup_type_provided
+            || logo_url_provided
+        {
             let result = sqlx::query!(
                 r#"
                 UPDATE team
                 SET
                     name = COALESCE($2, name),
                     slug = COALESCE($3, slug),
-                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END
+                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END,
+                    startup_type = CASE WHEN $6 THEN $7 ELSE startup_type END,
+                    logo_url = CASE WHEN $8 THEN $9 ELSE logo_url END
                 WHERE id = $1
                 "#,
                 team_id,
@@ -1249,6 +1276,10 @@ impl TeamRepository for TeamRepositoryImpl {
                 normalized_slug.as_deref(),
                 default_link_share_provided,
                 default_link_share as Option<LinkShare>,
+                startup_type_provided,
+                startup_type as Option<StartupType>,
+                logo_url_provided,
+                logo_url.as_deref(),
             )
             .execute(&self.pool)
             .await?;

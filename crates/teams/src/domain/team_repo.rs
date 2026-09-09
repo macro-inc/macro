@@ -11,8 +11,8 @@ use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
     PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
     RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
-    TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
-    ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
+    TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamProfile, TeamRole,
+    TeamWithMembers, ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
 };
 
 /// The TeamRepository defines a set of actions to perform on teams data
@@ -47,13 +47,15 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<bool, TeamError>> + Send;
 
-    /// Creates a new team with the provided normalized slug. `subscription_id` is `None` for
-    /// free teams (capped at [`crate::domain::model::FREE_TEAM_MAX_MEMBERS`] members).
+    /// Creates a new team with the provided normalized slug and (already
+    /// validated) profile. `subscription_id` is `None` for free teams (capped
+    /// at [`crate::domain::model::FREE_TEAM_MAX_MEMBERS`] members).
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
         team_slug: &str,
+        profile: &TeamProfile,
         subscription_id: Option<&stripe::SubscriptionId>,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
@@ -325,12 +327,14 @@ pub trait TeamMembersService: Clone + Send + Sync + 'static {
 
 /// The TeamService defines a set of actions to perform on the teams
 pub trait TeamService: Clone + Send + Sync + 'static {
-    /// Creates a new team. `subscription_id` is `None` for free teams
-    /// (capped at [`crate::domain::model::FREE_TEAM_MAX_MEMBERS`] members).
+    /// Creates a new team carrying `profile` (startup type and logo).
+    /// `subscription_id` is `None` for free teams (capped at
+    /// [`crate::domain::model::FREE_TEAM_MAX_MEMBERS`] members).
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        profile: &TeamProfile,
         subscription_id: Option<&stripe::SubscriptionId>,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 

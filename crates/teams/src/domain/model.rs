@@ -262,6 +262,14 @@ pub struct PatchTeamRequest {
     /// leave unchanged or pass `null` to default to link sharing off.
     #[serde(default, deserialize_with = "double_option")]
     pub default_link_share: Option<Option<LinkShare>>,
+    /// What kind of startup the team is building. Omit to leave unchanged
+    /// or pass `null` to clear.
+    #[serde(default, deserialize_with = "double_option")]
+    pub startup_type: Option<Option<StartupType>>,
+    /// Absolute URL of the team's logo image. Omit to leave unchanged or
+    /// pass `null` to remove the logo.
+    #[serde(default, deserialize_with = "double_option")]
+    pub logo_url: Option<Option<String>>,
 }
 
 /// Request to update the team plan
@@ -318,6 +326,172 @@ pub struct TeamCheckoutSessionRequest {
 // onboarding flow's team suggestion) share the same judgment.
 pub use generic_email_domains::{GENERIC_EMAIL_DOMAINS, is_generic_email_domain};
 
+/// What kind of startup a team is building. Captured at team creation
+/// (the onboarding team step) so the workspace can be tailored later.
+///
+/// Stored as its snake_case wire value in `team.startup_type` (TEXT with a
+/// CHECK constraint mirroring these variants).
+#[derive(Eq, PartialEq, Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum StartupType {
+    /// AI / machine learning
+    Ai,
+    /// B2B SaaS
+    B2bSaas,
+    /// Developer tools and infrastructure
+    DeveloperTools,
+    /// Financial technology
+    Fintech,
+    /// Healthcare and biotech
+    HealthcareBiotech,
+    /// Consumer products
+    Consumer,
+    /// Marketplaces and e-commerce
+    MarketplaceEcommerce,
+    /// Hardware, robotics, and deep tech
+    HardwareDeeptech,
+    /// Climate and energy
+    ClimateEnergy,
+    /// Anything else
+    Other,
+}
+
+impl StartupType {
+    /// Every variant, in display order.
+    pub const ALL: [StartupType; 10] = [
+        StartupType::Ai,
+        StartupType::B2bSaas,
+        StartupType::DeveloperTools,
+        StartupType::Fintech,
+        StartupType::HealthcareBiotech,
+        StartupType::Consumer,
+        StartupType::MarketplaceEcommerce,
+        StartupType::HardwareDeeptech,
+        StartupType::ClimateEnergy,
+        StartupType::Other,
+    ];
+
+    /// The snake_case wire/storage value — identical to the serde form.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            StartupType::Ai => "ai",
+            StartupType::B2bSaas => "b2b_saas",
+            StartupType::DeveloperTools => "developer_tools",
+            StartupType::Fintech => "fintech",
+            StartupType::HealthcareBiotech => "healthcare_biotech",
+            StartupType::Consumer => "consumer",
+            StartupType::MarketplaceEcommerce => "marketplace_ecommerce",
+            StartupType::HardwareDeeptech => "hardware_deeptech",
+            StartupType::ClimateEnergy => "climate_energy",
+            StartupType::Other => "other",
+        }
+    }
+}
+
+impl std::str::FromStr for StartupType {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        StartupType::ALL
+            .into_iter()
+            .find(|variant| variant.as_str() == value)
+            .ok_or_else(|| format!("unknown startup type: {value}"))
+    }
+}
+
+impl std::fmt::Display for StartupType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+// Stored as TEXT, so the sqlx integration is by string rather than a Postgres
+// enum type — adding a variant is then a CHECK-constraint change, not a type
+// migration.
+#[cfg(feature = "outbound")]
+impl sqlx::Type<sqlx::Postgres> for StartupType {
+    fn type_info() -> sqlx::postgres::PgTypeInfo {
+        <String as sqlx::Type<sqlx::Postgres>>::type_info()
+    }
+
+    fn compatible(ty: &sqlx::postgres::PgTypeInfo) -> bool {
+        <String as sqlx::Type<sqlx::Postgres>>::compatible(ty)
+    }
+}
+
+#[cfg(feature = "outbound")]
+impl<'query> sqlx::Encode<'query, sqlx::Postgres> for StartupType {
+    fn encode_by_ref(
+        &self,
+        buffer: &mut sqlx::postgres::PgArgumentBuffer,
+    ) -> Result<sqlx::encode::IsNull, sqlx::error::BoxDynError> {
+        let value = self.as_str();
+        <&str as sqlx::Encode<sqlx::Postgres>>::encode_by_ref(&value, buffer)
+    }
+
+    fn size_hint(&self) -> usize {
+        self.as_str().len()
+    }
+}
+
+#[cfg(feature = "outbound")]
+impl<'row> sqlx::Decode<'row, sqlx::Postgres> for StartupType {
+    fn decode(value: sqlx::postgres::PgValueRef<'row>) -> Result<Self, sqlx::error::BoxDynError> {
+        let value = <String as sqlx::Decode<sqlx::Postgres>>::decode(value)?;
+        value.parse::<StartupType>().map_err(Into::into)
+    }
+}
+
+/// Longest logo URL the team accepts. Logos are uploaded to the static file
+/// service, whose URLs are far shorter; this only bounds abuse.
+pub const MAX_TEAM_LOGO_URL_LEN: usize = 2048;
+
+/// Checks that `url` is an absolute http(s) URL of sane length. The team only
+/// stores the URL (the image itself lives in the static file service), so
+/// this is shape validation, not a fetch.
+pub fn validate_team_logo_url(url: &str) -> Result<(), TeamError> {
+    if url.len() > MAX_TEAM_LOGO_URL_LEN {
+        return Err(TeamError::BadRequest(format!(
+            "team logo url cannot be longer than {MAX_TEAM_LOGO_URL_LEN} characters"
+        )));
+    }
+    let is_http = url.starts_with("https://") || url.starts_with("http://");
+    let has_host = url
+        .split_once("://")
+        .is_some_and(|(_, rest)| !rest.is_empty() && !rest.starts_with('/'));
+    if !is_http || !has_host || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err(TeamError::BadRequest(
+            "team logo url must be an absolute http(s) URL".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Optional descriptive details a team carries beyond its name: what kind of
+/// startup it is and its logo. Both are set at creation (the onboarding team
+/// step) and editable afterwards via `PATCH /team`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct TeamProfile {
+    /// What kind of startup the team is building.
+    pub startup_type: Option<StartupType>,
+    /// Absolute URL of the team's logo image (typically a static file
+    /// service URL).
+    pub logo_url: Option<String>,
+}
+
+impl TeamProfile {
+    /// Validates the profile's fields; the startup type is validated by
+    /// deserialization, so only the logo URL needs checking.
+    pub fn validate(&self) -> Result<(), TeamError> {
+        if let Some(logo_url) = self.logo_url.as_deref() {
+            validate_team_logo_url(logo_url)?;
+        }
+        Ok(())
+    }
+}
+
 /// The Team struct
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -344,6 +518,10 @@ pub struct Team {
     /// shared via link without an explicit choice. `None` means link sharing
     /// is off by default. Defaults to [`LinkShare::Team`].
     pub(crate) default_link_share: Option<LinkShare>,
+    /// What kind of startup the team is building, when known.
+    pub(crate) startup_type: Option<StartupType>,
+    /// Absolute URL of the team's logo image, when set.
+    pub(crate) logo_url: Option<String>,
 }
 
 impl Team {
@@ -367,7 +545,16 @@ impl Team {
             enterprise,
             allow_non_admin_invites: true,
             default_link_share: Some(LinkShare::Team),
+            startup_type: None,
+            logo_url: None,
         }
+    }
+
+    /// Returns the team carrying `profile`'s startup type and logo.
+    pub fn with_profile(mut self, profile: TeamProfile) -> Self {
+        self.startup_type = profile.startup_type;
+        self.logo_url = profile.logo_url;
+        self
     }
 }
 
@@ -416,6 +603,16 @@ impl Team {
     /// when link sharing is off by default
     pub fn default_link_share(&self) -> Option<LinkShare> {
         self.default_link_share
+    }
+
+    /// What kind of startup the team is building, when known
+    pub fn startup_type(&self) -> Option<StartupType> {
+        self.startup_type
+    }
+
+    /// Absolute URL of the team's logo image, when set
+    pub fn logo_url(&self) -> Option<&str> {
+        self.logo_url.as_deref()
     }
 }
 
@@ -524,6 +721,9 @@ pub enum CreateTeamError {
     /// The team name is invalid
     #[error("The team name is invalid: {0}")]
     InvalidTeamName(String),
+    /// The team profile (startup type / logo) is invalid
+    #[error("The team profile is invalid: {0}")]
+    InvalidTeamProfile(String),
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),
