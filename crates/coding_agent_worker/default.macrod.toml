@@ -1,7 +1,7 @@
 # macrod configuration. Pairing adds a bearer token here; keep this file private.
 
 [macro]
-api_url = "https://agent-harness.macro.com"
+api_url = "https://gateway.macro.com/agent-harness"
 storage_url = "https://gateway.macro.com/dss"
 web_url = "https://macro.com/app"
 

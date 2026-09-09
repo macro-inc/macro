@@ -18,11 +18,32 @@ vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
 }));
 
 // jsdom has no layout, so the virtualizer renders every row and exposes a
-// fake handle plus its scroll callback so tests can drive paging.
-const virtual = vi.hoisted(() => ({
-  onScroll: undefined as ((offset: number) => void) | undefined,
-  handle: { scrollSize: 3000, viewportSize: 800, scrollOffset: 0 },
-}));
+// fake handle plus its scroll callback so tests can drive paging. The fake
+// treats every row as `rowPx` tall for `findItemIndex`.
+const virtual = vi.hoisted(() => {
+  const rowPx = 100;
+  return {
+    rowPx,
+    onScroll: undefined as ((offset: number) => void) | undefined,
+    handle: {
+      scrollSize: 3000,
+      viewportSize: 800,
+      scrollOffset: 0,
+      findItemIndex: (offset: number) => Math.floor(offset / rowPx),
+    },
+  };
+});
+
+// jsdom has no ResizeObserver; the graph and the mobile insets measure
+// themselves with one.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
 
 vi.mock('virtua/solid', async () => {
   const { For } = await import('solid-js');
@@ -245,6 +266,39 @@ describe('MyActivityView', () => {
     expect(visible[1]?.textContent).not.toContain('Todo');
     expect(visible[2]?.getAttribute('data-activity-run-size')).toBe('1');
     expect(visible[2]?.textContent).not.toContain('times');
+  });
+
+  it('pins the day header of the first visible row once the overview scrolls away', () => {
+    const { container, graphql } = renderView();
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    graphql.latest('MyActivity').resolve(
+      feedPage([
+        {
+          ...createdEvent,
+          id: 'c-today',
+          occurredAt: new Date().toISOString(),
+        },
+        { ...editedEvent, id: 'e-yesterday', occurredAt: yesterday },
+      ])
+    );
+    // Rows: overview, Today, entry, Yesterday, entry.
+    const pinned = () => container.querySelector('[data-activity-pinned-day]');
+    const scroll = virtual.onScroll;
+    if (!scroll) throw new Error('virtualizer did not register onScroll');
+
+    expect(pinned()).toBeNull();
+
+    scroll(virtual.rowPx * 1);
+    expect(pinned()?.textContent).toBe('Today');
+
+    scroll(virtual.rowPx * 2);
+    expect(pinned()?.textContent).toBe('Today');
+
+    scroll(virtual.rowPx * 3);
+    expect(pinned()?.textContent).toBe('Yesterday');
+
+    scroll(0);
+    expect(pinned()).toBeNull();
   });
 
   it('asks the host to open the row entity', () => {

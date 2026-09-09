@@ -5,14 +5,22 @@ import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type ChannelEntity, Entity } from '@entity';
 import ChannelIcon from '@icon/wide-channel.svg';
+import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
 import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { Key } from '@solid-primitives/keyed';
-import { cn, Dropdown, Tabs, Tooltip } from '@ui';
-import { type Component, For, Match, Show, Switch } from 'solid-js';
+import { Button, cn, Dropdown, Tabs, Tooltip } from '@ui';
+import {
+  type Component,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { Virtualizer } from 'virtua/solid';
 import type { ChannelsGroup } from '../../types';
 import { channelInitials, isDirectMessage } from '../../utils';
 import {
@@ -26,10 +34,17 @@ import {
   rowKeyForSection,
   useChannelsRail,
 } from './ChannelsRailContext';
-import { CollapsibleSection, RailModeButton } from './ChannelsRailSection';
+import {
+  CollapsibleSection,
+  RailListLoading,
+  RailListLoadingMore,
+  RailModeButton,
+} from './ChannelsRailSection';
 import {
   useChannelRailItemState,
+  useChannelRailScopeState,
   useChannelRailSectionState,
+  useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
 
 function BrowseTabLabel() {
@@ -73,6 +88,22 @@ const GROUPS: GroupConfig[] = [
     icon: ChatTeardropIcon,
   },
 ];
+
+function SlimListError(props: { retry: () => Promise<void> }) {
+  return (
+    <div class="flex min-h-10 items-center justify-center">
+      <Button
+        variant="outline"
+        size="icon-sm"
+        label="Retry loading conversations"
+        tooltipPlacement="right"
+        onClick={() => void props.retry()}
+      >
+        <ArrowClockwiseIcon class="size-4" />
+      </Button>
+    </div>
+  );
+}
 
 function SlimChannelAvatar(props: { channel: ChannelEntity }) {
   return (
@@ -228,14 +259,18 @@ function SlimHeader() {
 
 function SlimGroupSection(props: { config: GroupConfig }) {
   const rail = useChannelsRail();
+  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
   const { state: section, clearVisibleActivity } = useChannelRailSectionState(
     () => props.config.group
   );
-  const registerScrollRef = (element: HTMLDivElement) =>
+  const pagination = useChannelRailVirtualizer(() => props.config.group);
+  const registerScrollRef = (element: HTMLDivElement) => {
+    setScrollRoot(element);
     rail.registerScrollRef(props.config.group, element);
+  };
 
   return (
     <CollapsibleSection.Root
@@ -277,11 +312,46 @@ function SlimGroupSection(props: { config: GroupConfig }) {
         activityTooltip
         onActivityVisible={clearVisibleActivity}
       >
-        <Show when={!forceEmptyState()}>
-          <Key each={section().items} by={(channel) => channel.id}>
-            {(channel) => <SlimChannelItem channel={channel()} />}
-          </Key>
-        </Show>
+        <Switch>
+          <Match when={forceEmptyState()}>{null}</Match>
+          <Match
+            when={section().source.isLoading() && section().items.length === 0}
+          >
+            <RailListLoading />
+          </Match>
+          <Match
+            when={section().source.error() && section().items.length === 0}
+          >
+            <SlimListError retry={section().source.refresh} />
+          </Match>
+          <Match when={section().items.length > 0}>
+            <Virtualizer
+              ref={pagination.registerVirtualizer}
+              data={section().items}
+              scrollRef={scrollRoot()}
+              itemSize={42}
+              bufferSize={240}
+              keepMounted={section().keepMounted}
+              onScroll={pagination.loadMoreNearEnd}
+            >
+              {(channel) => (
+                <div class="flex justify-center pb-0.5">
+                  <SlimChannelItem channel={channel} />
+                </div>
+              )}
+            </Virtualizer>
+            <Show when={section().source.isLoadingMore()}>
+              <RailListLoadingMore variant="slim" />
+            </Show>
+            <Show
+              when={
+                section().source.error() && !section().source.isLoadingMore()
+              }
+            >
+              <SlimListError retry={section().source.refresh} />
+            </Show>
+          </Match>
+        </Switch>
       </CollapsibleSection.Content>
     </CollapsibleSection.Root>
   );
@@ -298,21 +368,54 @@ function SlimBrowse() {
 }
 
 function SlimRecents() {
-  const rail = useChannelsRail();
+  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  const scope = useChannelRailScopeState(() => 'recents');
+  const pagination = useChannelRailVirtualizer(() => 'recents');
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
-  const hasItems = () =>
-    !forceEmptyState() && rail.recentConversations().length > 0;
 
   return (
-    <Show when={hasItems()}>
-      <div class="flex w-full flex-col gap-0.5">
-        <Key each={rail.recentConversations()} by={(channel) => channel.id}>
-          {(channel) => <SlimChannelItem channel={channel()} />}
-        </Key>
-      </div>
-    </Show>
+    <Switch>
+      <Match when={forceEmptyState()}>{null}</Match>
+      <Match when={scope().source.isLoading() && scope().items.length === 0}>
+        <RailListLoading />
+      </Match>
+      <Match when={scope().source.error() && scope().items.length === 0}>
+        <SlimListError retry={scope().source.refresh} />
+      </Match>
+      <Match when={scope().items.length > 0}>
+        <div
+          ref={setScrollRoot}
+          class="scrollbar-hidden size-full min-h-0 overflow-y-auto"
+          aria-busy={scope().source.isLoadingMore()}
+        >
+          <Virtualizer
+            ref={pagination.registerVirtualizer}
+            data={scope().items}
+            scrollRef={scrollRoot()}
+            itemSize={42}
+            bufferSize={240}
+            keepMounted={scope().keepMounted}
+            onScroll={pagination.loadMoreNearEnd}
+          >
+            {(channel) => (
+              <div class="flex justify-center pb-0.5">
+                <SlimChannelItem channel={channel} />
+              </div>
+            )}
+          </Virtualizer>
+          <Show when={scope().source.isLoadingMore()}>
+            <RailListLoadingMore variant="slim" />
+          </Show>
+          <Show
+            when={scope().source.error() && !scope().source.isLoadingMore()}
+          >
+            <SlimListError retry={scope().source.refresh} />
+          </Show>
+        </div>
+      </Match>
+    </Switch>
   );
 }
 
@@ -332,10 +435,7 @@ export function SlimChannelsRail() {
           role="tree"
           tabIndex={-1}
           aria-activedescendant={activeDescendant()}
-          class={cn(
-            'scrollbar-hidden min-h-0 flex-1 outline-none',
-            rail.tab() === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
-          )}
+          class="min-h-0 flex-1 overflow-hidden outline-none"
         >
           <Switch>
             <Match when={rail.tab() === 'browse'}>

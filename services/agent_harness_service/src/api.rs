@@ -33,14 +33,20 @@ pub mod swagger;
 #[cfg(test)]
 mod test;
 
-/// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
-/// alongside `/` so the dedicated ALB keeps working during cutover.
+/// Path prefixes the shared gateway ALB forwards unmodified.
 const GATEWAY_PATH_PREFIX: &str = "/agent-harness";
+const EGRESS_GATEWAY_PATH_PREFIX: &str = "/agent-harness-egress";
 
-fn mount_at_root_and_prefix(inner: Router) -> Router {
-    Router::new()
-        .merge(inner.clone())
-        .nest(GATEWAY_PATH_PREFIX, inner)
+// Keep root mounts for direct health checks, local ingress, and cutover.
+fn mount_at_root_and_prefix(inner: Router, prefix: &str) -> Router {
+    Router::new().merge(inner.clone()).nest(prefix, inner)
+}
+
+fn egress_app<Service>(state: EgressRouterState<Service>) -> Router
+where
+    Service: EgressService + 'static,
+{
+    mount_at_root_and_prefix(egress_router(state), EGRESS_GATEWAY_PATH_PREFIX)
 }
 
 fn health_router(ready: tokio::sync::watch::Receiver<bool>) -> Router {
@@ -59,7 +65,7 @@ pub async fn serve_egress<Service>(
 where
     Service: EgressService + 'static,
 {
-    let app = egress_router(EgressRouterState::new(service));
+    let app = egress_app(EgressRouterState::new(service));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -95,7 +101,7 @@ where
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         .merge(health_router(runtime_commands_ready))
         .layer(macro_cors::cors_layer());
-    let app = mount_at_root_and_prefix(inner)
+    let app = mount_at_root_and_prefix(inner, GATEWAY_PATH_PREFIX)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .merge(SwaggerUi::new("/agent-harness/docs").url(
             "/agent-harness/api-doc/openapi.json",

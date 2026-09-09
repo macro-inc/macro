@@ -10,7 +10,6 @@ import {
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { compareDateDesc } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
 import {
   createEffect,
@@ -20,9 +19,14 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
+import type { VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../../channels-view-context';
-import type { ChannelsGroup, ChannelsTab } from '../../types';
-import { channelHasMessages, isDirectMessage } from '../../utils';
+import { type ChannelsSources, deduplicateChannels } from '../../queries';
+import type {
+  ChannelsGroup,
+  ChannelsQueryScope,
+  ChannelsTab,
+} from '../../types';
 import {
   type ChannelRailRow,
   type ChannelsRailContext,
@@ -38,12 +42,78 @@ import { SlimChannelsRail } from './SlimChannelsRail';
 
 const CHANNEL_GROUPS: ChannelsGroup[] = ['channels', 'direct_messages'];
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
+const DM_LOADING_PREVIEW_OFFSET = 80;
 
 export type ChannelsRailProps = {
-  channels: ChannelEntity[];
+  sources: ChannelsSources;
   mode: 'full' | 'slim';
   onModeChange: (mode: 'full' | 'slim') => void;
 };
+
+type ChannelRailItemsByScope = Record<
+  ChannelsQueryScope,
+  readonly ChannelEntity[]
+>;
+
+export function buildChannelRailRows(
+  tab: ChannelsTab,
+  expandedGroups: Record<ChannelsGroup, boolean>,
+  items: ChannelRailItemsByScope
+): ChannelRailRow[] {
+  if (tab === 'recents') {
+    return items.recents.map((channel, localIndex) => ({
+      kind: 'conversation',
+      id: `channel:${channel.id}`,
+      scope: 'recents',
+      localIndex,
+      channel,
+    }));
+  }
+
+  const rows: ChannelRailRow[] = [
+    {
+      kind: 'section',
+      id: 'section:channels',
+      group: 'channels',
+    },
+  ];
+  if (expandedGroups.channels) {
+    rows.push(
+      ...items.channels.map(
+        (channel, localIndex): ChannelRailRow => ({
+          kind: 'conversation',
+          id: `channel:${channel.id}`,
+          group: 'channels',
+          scope: 'channels',
+          localIndex,
+          channel,
+        })
+      )
+    );
+  }
+
+  rows.push({
+    kind: 'section',
+    id: 'section:direct_messages',
+    group: 'direct_messages',
+  });
+  if (expandedGroups.direct_messages) {
+    rows.push(
+      ...items.direct_messages.map(
+        (channel, localIndex): ChannelRailRow => ({
+          kind: 'conversation',
+          id: `channel:${channel.id}`,
+          group: 'direct_messages',
+          scope: 'direct_messages',
+          localIndex,
+          channel,
+        })
+      )
+    );
+  }
+
+  return rows;
+}
 
 export function ChannelsRail(props: ChannelsRailProps) {
   const { state, setGroupOpen, setSelectedChannelId, setTab } =
@@ -54,79 +124,27 @@ export function ChannelsRail(props: ChannelsRailProps) {
     Partial<Record<ChannelsGroup, HTMLDivElement>>
   >({});
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
+  const [virtualizers, setVirtualizers] = createSignal<
+    Partial<Record<ChannelsQueryScope, VirtualizerHandle>>
+  >({});
 
   const channelCalls = useChannelCalls();
-  const channelActivity = useChannelRailActivity(
-    () => props.channels,
-    channelCalls
+  const channels = createMemo(() =>
+    deduplicateChannels([
+      props.sources.channels.items(),
+      props.sources.direct_messages.items(),
+      props.sources.recents.items(),
+    ])
   );
+  const channelActivity = useChannelRailActivity(channels, channelCalls);
 
-  const teamChannels = createMemo(() =>
-    props.channels.filter((channel) => !isDirectMessage(channel))
+  const visibleRows = createMemo(() =>
+    buildChannelRailRows(state.tab, state.expandedGroups, {
+      channels: props.sources.channels.items(),
+      direct_messages: props.sources.direct_messages.items(),
+      recents: props.sources.recents.items(),
+    })
   );
-  const directMessages = createMemo(() =>
-    props.channels.filter(isDirectMessage)
-  );
-  const recentConversations = createMemo(() =>
-    props.channels
-      .filter(channelHasMessages)
-      .sort((a, b) =>
-        compareDateDesc(
-          a.latestRootMessage?.createdAt,
-          b.latestRootMessage?.createdAt
-        )
-      )
-  );
-
-  const visibleRows = createMemo<ChannelRailRow[]>(() => {
-    if (state.tab === 'recents') {
-      return recentConversations().map((channel) => ({
-        kind: 'conversation',
-        id: `channel:${channel.id}`,
-        channel,
-      }));
-    }
-
-    const rows: ChannelRailRow[] = [
-      {
-        kind: 'section',
-        id: 'section:channels',
-        group: 'channels',
-      },
-    ];
-    if (state.expandedGroups.channels) {
-      rows.push(
-        ...teamChannels().map(
-          (channel): ChannelRailRow => ({
-            kind: 'conversation',
-            id: `channel:${channel.id}`,
-            group: 'channels',
-            channel,
-          })
-        )
-      );
-    }
-
-    rows.push({
-      kind: 'section',
-      id: 'section:direct_messages',
-      group: 'direct_messages',
-    });
-    if (state.expandedGroups.direct_messages) {
-      rows.push(
-        ...directMessages().map(
-          (channel): ChannelRailRow => ({
-            kind: 'conversation',
-            id: `channel:${channel.id}`,
-            group: 'direct_messages',
-            channel,
-          })
-        )
-      );
-    }
-
-    return rows;
-  });
 
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
     createListController<ChannelRailRow>({
@@ -149,9 +167,17 @@ export function ChannelsRail(props: ChannelsRailProps) {
   );
 
   const scrollHandle: ListScrollHandle = {
-    scrollToIndex: (index) => {
+    scrollToIndex: (index, options) => {
       const row = list.items.at(index);
       if (!row) return;
+
+      if (row.kind === 'conversation') {
+        const virtualizer = virtualizers()[row.scope];
+        if (virtualizer) {
+          virtualizer.scrollToIndex(row.localIndex, options);
+          return;
+        }
+      }
 
       const element = document.getElementById(domIdForRow(listDomId, row.id));
       const scrollRoot =
@@ -187,6 +213,44 @@ export function ChannelsRail(props: ChannelsRailProps) {
       scrollHandle: () => scrollHandle,
       enabled: panel.isPanelActive,
       navigation: {
+        onBeforeMove: ({ direction, current }) => {
+          const row = current?.item;
+          if (direction !== 1 || row?.kind !== 'conversation') return true;
+
+          const source = props.sources[row.scope];
+          if (row.localIndex < source.items().length - 1) return true;
+
+          if (!source.isLoadingMore()) {
+            if (!source.hasMore()) return true;
+            void source.loadMore();
+          }
+
+          if (row.scope === 'direct_messages') {
+            requestAnimationFrame(() => {
+              const scrollRoot = sectionScrollRoots().direct_messages;
+              const element = document.getElementById(
+                domIdForRow(listDomId, row.id)
+              );
+              if (!scrollRoot || !element) return;
+
+              const scrollBounds = scrollRoot.getBoundingClientRect();
+              const elementBounds = element.getBoundingClientRect();
+              const previewOffset = Math.max(
+                0,
+                Math.min(
+                  DM_LOADING_PREVIEW_OFFSET,
+                  scrollBounds.height - elementBounds.height
+                )
+              );
+              scrollRoot.scrollTop += Math.max(
+                0,
+                elementBounds.bottom + previewOffset - scrollBounds.bottom
+              );
+            });
+          }
+
+          return false;
+        },
         onNavigate: (event) => {
           listRoot()?.focus({ preventScroll: true });
 
@@ -267,15 +331,30 @@ export function ChannelsRail(props: ChannelsRailProps) {
     list.activate.key(rowId, { reason: 'pointer' });
   };
 
+  const registerVirtualizer = (
+    scope: ChannelsQueryScope,
+    handle: VirtualizerHandle
+  ) => {
+    setVirtualizers((current) => ({ ...current, [scope]: handle }));
+
+    return () => {
+      setVirtualizers((current) => {
+        if (current[scope] !== handle) return current;
+
+        const next = { ...current };
+        delete next[scope];
+        return next;
+      });
+    };
+  };
+
   const rail: ChannelsRailContext = {
     railId: listDomId,
     list,
     tab: () => state.tab,
     selectTab: setTab,
     setMode: (mode) => props.onModeChange(mode),
-    teamChannels,
-    directMessages,
-    recentConversations,
+    sources: props.sources,
     selectedChannelId: () => state.selectedChannelId,
     isGroupOpen: (group) => state.expandedGroups[group],
     registerRootRef: setListRoot,
@@ -286,6 +365,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         [group]: element,
       }));
     },
+    registerVirtualizer,
     channelActivity,
   };
 

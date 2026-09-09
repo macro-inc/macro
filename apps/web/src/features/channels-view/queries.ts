@@ -1,21 +1,21 @@
+import type { ListDataSource } from '@app/components/list';
 import {
   compileToAst,
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
-import type { ChannelEntity } from '@entity';
+import { type ChannelEntity, type EntityData, isChannelEntity } from '@entity';
 import {
   type SoupAstItemsQueryArgs,
   type SoupAstParams,
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import type { ChannelsQueryScope } from './types';
 import { channelHasMessages, isDirectMessage } from './utils';
 
 const CHANNELS_QUERY_PARAMS = {
   limit: 100,
-  sort_method: 'updated_at',
 } satisfies SoupAstParams;
 
 type ChannelsQueryDefinition = {
@@ -24,9 +24,13 @@ type ChannelsQueryDefinition = {
   matches: (channel: ChannelEntity) => boolean;
 };
 
+export type ChannelsDataSource = ListDataSource<ChannelEntity>;
+
+export type ChannelsSources = Record<ChannelsQueryScope, ChannelsDataSource>;
+
 export const CHANNELS_QUERY_DEFINITIONS = {
   recents: {
-    params: CHANNELS_QUERY_PARAMS,
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
     filters: defineQueryFilters({
       include: {
         channelImportance: true,
@@ -36,7 +40,7 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     matches: channelHasMessages,
   },
   channels: {
-    params: CHANNELS_QUERY_PARAMS,
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
     filters: defineQueryFilters({
       include: { channelIsParticipant: [true] },
       exclude: { channelType: ['direct_message'] },
@@ -44,7 +48,7 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     matches: (channel) => !isDirectMessage(channel),
   },
   direct_messages: {
-    params: CHANNELS_QUERY_PARAMS,
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
     filters: defineQueryFilters({
       include: {
         channelType: ['direct_message'],
@@ -68,14 +72,114 @@ export function channelsQueryArgs(
 
 export function filterChannelsForScope(
   scope: ChannelsQueryScope,
-  channels: ChannelEntity[]
+  channels: readonly ChannelEntity[]
 ): ChannelEntity[] {
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
 }
 
-export function useChannelsQuery(scope: Accessor<ChannelsQueryScope>) {
+export function channelByIdQueryArgs(channelId: string): SoupAstItemsQueryArgs {
+  return {
+    params: {
+      ...CHANNELS_QUERY_PARAMS,
+      limit: 1,
+      sort_method: 'created_at',
+    },
+    body: compileToAst(
+      queryStateFrom(
+        defineQueryFilters({
+          include: { channelId: [channelId] },
+        })
+      )
+    ),
+  };
+}
+
+export function deduplicateChannels(
+  collections: readonly (readonly ChannelEntity[])[]
+): ChannelEntity[] {
+  const channelsById = new Map<string, ChannelEntity>();
+
+  for (const channels of collections) {
+    for (const channel of channels) {
+      if (!channelsById.has(channel.id)) {
+        channelsById.set(channel.id, channel);
+      }
+    }
+  }
+
+  return [...channelsById.values()];
+}
+
+export function resolveSelectedChannel(
+  selectedChannelId: string | undefined,
+  loadedChannels: readonly ChannelEntity[],
+  fallbackEntities: readonly EntityData[] = []
+): ChannelEntity | undefined {
+  if (selectedChannelId === undefined) return;
+
+  return (
+    loadedChannels.find((channel) => channel.id === selectedChannelId) ??
+    fallbackEntities.find(
+      (entity): entity is ChannelEntity =>
+        isChannelEntity(entity) && entity.id === selectedChannelId
+    )
+  );
+}
+
+function useChannelsDataSource(
+  scope: ChannelsQueryScope,
+  enabled: Accessor<boolean>
+): ChannelsDataSource {
+  const query = useSoupAstItemsQuery(
+    () => channelsQueryArgs(scope),
+    () => ({ enabled: enabled(), staleTime: 30_000 })
+  );
+  const items = createMemo<ChannelEntity[]>((previous) => {
+    if (!query.isEnabled || query.isLoading) return previous;
+
+    const channels = (query.data?.entities ?? []).filter(isChannelEntity);
+    return filterChannelsForScope(scope, channels);
+  }, []);
+
+  return {
+    items,
+    isLoading: () => query.isEnabled && query.isLoading && items().length === 0,
+    isFetching: () => query.isEnabled && query.isFetching,
+    error: () => (query.isEnabled ? (query.error ?? undefined) : undefined),
+    hasMore: () => query.isEnabled && query.hasNextPage,
+    isLoadingMore: () => query.isEnabled && query.isFetchingNextPage,
+    loadMore: async () => {
+      if (!query.isEnabled || query.isFetchingNextPage || !query.hasNextPage) {
+        return;
+      }
+
+      await query.fetchNextPage();
+    },
+    refresh: async () => {
+      if (!query.isEnabled) return;
+      await query.refresh();
+    },
+  };
+}
+
+export function useChannelsSources(
+  enabled: (scope: ChannelsQueryScope) => boolean
+): ChannelsSources {
+  return {
+    channels: useChannelsDataSource('channels', () => enabled('channels')),
+    direct_messages: useChannelsDataSource('direct_messages', () =>
+      enabled('direct_messages')
+    ),
+    recents: useChannelsDataSource('recents', () => enabled('recents')),
+  };
+}
+
+export function useChannelByIdQuery(
+  channelId: Accessor<string | undefined>,
+  enabled: Accessor<boolean>
+) {
   return useSoupAstItemsQuery(
-    () => channelsQueryArgs(scope()),
-    () => ({ staleTime: 30_000 })
+    () => channelByIdQueryArgs(channelId() ?? ''),
+    () => ({ enabled: enabled(), staleTime: 30_000 })
   );
 }

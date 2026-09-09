@@ -6,9 +6,9 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
-import { Key } from '@solid-primitives/keyed';
 import { cn, Hotkey, Tabs } from '@ui';
-import { For, Match, Show, Switch } from 'solid-js';
+import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import { Virtualizer } from 'virtua/solid';
 import type { ChannelsGroup } from '../../types';
 import { channelMentionsUser, isDirectMessage } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
@@ -29,11 +29,16 @@ import {
 import {
   CollapsibleSection,
   CreateRailAction,
+  RailListError,
+  RailListLoading,
+  RailListLoadingMore,
   RailModeButton,
 } from './ChannelsRailSection';
 import {
   useChannelRailItemState,
+  useChannelRailScopeState,
   useChannelRailSectionState,
+  useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
 
 const CHANNEL_TABS = [
@@ -152,11 +157,15 @@ function ExpandedHeader() {
 
 function ExpandedGroupSection(props: { config: GroupConfig }) {
   const rail = useChannelsRail();
+  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const { state: section, clearVisibleActivity } = useChannelRailSectionState(
     () => props.config.group
   );
-  const registerScrollRef = (element: HTMLDivElement) =>
+  const pagination = useChannelRailVirtualizer(() => props.config.group);
+  const registerScrollRef = (element: HTMLDivElement) => {
+    setScrollRoot(element);
     rail.registerScrollRef(props.config.group, element);
+  };
 
   return (
     <CollapsibleSection.Root
@@ -206,10 +215,42 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
         onActivityVisible={clearVisibleActivity}
       >
         <Switch>
+          <Match
+            when={section().source.isLoading() && section().items.length === 0}
+          >
+            <RailListLoading />
+          </Match>
+          <Match
+            when={section().source.error() && section().items.length === 0}
+          >
+            <RailListError retry={section().source.refresh} />
+          </Match>
           <Match when={section().items.length > 0}>
-            <Key each={section().items} by={(channel) => channel.id}>
-              {(channel) => <ChannelOption channel={channel()} />}
-            </Key>
+            <Virtualizer
+              ref={pagination.registerVirtualizer}
+              data={section().items}
+              scrollRef={scrollRoot()}
+              itemSize={props.config.group === 'channels' ? 34 : 42}
+              bufferSize={240}
+              keepMounted={section().keepMounted}
+              onScroll={pagination.loadMoreNearEnd}
+            >
+              {(channel) => (
+                <div class="pb-0.5">
+                  <ChannelOption channel={channel} />
+                </div>
+              )}
+            </Virtualizer>
+            <Show when={section().source.isLoadingMore()}>
+              <RailListLoadingMore variant="channel" />
+            </Show>
+            <Show
+              when={
+                section().source.error() && !section().source.isLoadingMore()
+              }
+            >
+              <RailListError retry={section().source.refresh} compact />
+            </Show>
           </Match>
           <Match when={true}>
             <div class="px-2 py-2 text-xs text-ink-extra-muted">
@@ -228,11 +269,17 @@ function ExpandedBrowse() {
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
   const hasItems = () =>
-    rail.teamChannels().length > 0 || rail.directMessages().length > 0;
+    rail.sources.channels.items().length > 0 ||
+    rail.sources.direct_messages.items().length > 0;
+  const sourcesSettled = () =>
+    !rail.sources.channels.isLoading() &&
+    !rail.sources.direct_messages.isLoading() &&
+    !rail.sources.channels.error() &&
+    !rail.sources.direct_messages.error();
 
   return (
     <Switch>
-      <Match when={forceEmptyState() || !hasItems()}>
+      <Match when={forceEmptyState() || (sourcesSettled() && !hasItems())}>
         <ChannelsEmptyState scope="channels" topAligned />
       </Match>
       <Match when={true}>
@@ -255,6 +302,7 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
     <ChannelRailItemContextMenu channel={props.channel} class="block w-full">
       <ConversationCard
         id={item().domId}
+        class="border-b border-edge-muted"
         channel={props.channel}
         senderId={props.channel.latestRootMessage?.senderId}
         mentionedCurrentUser={channelMentionsUser(
@@ -274,23 +322,61 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
 }
 
 function ExpandedRecents() {
-  const rail = useChannelsRail();
+  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  const scope = useChannelRailScopeState(() => 'recents');
+  const pagination = useChannelRailVirtualizer(() => 'recents');
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
-  const hasItems = () =>
-    !forceEmptyState() && rail.recentConversations().length > 0;
 
   return (
     <Switch>
-      <Match when={!hasItems()}>
+      <Match
+        when={
+          !forceEmptyState() &&
+          scope().source.isLoading() &&
+          scope().items.length === 0
+        }
+      >
+        <RailListLoading />
+      </Match>
+      <Match
+        when={
+          !forceEmptyState() &&
+          scope().source.error() &&
+          scope().items.length === 0
+        }
+      >
+        <RailListError retry={scope().source.refresh} />
+      </Match>
+      <Match when={forceEmptyState() || scope().items.length === 0}>
         <ChannelsEmptyState scope="recents" topAligned />
       </Match>
       <Match when={true}>
-        <div class="flex w-full flex-col divide-y divide-edge-muted">
-          <Key each={rail.recentConversations()} by={(channel) => channel.id}>
-            {(channel) => <RecentConversationCard channel={channel()} />}
-          </Key>
+        <div
+          ref={setScrollRoot}
+          class="scrollbar-hidden size-full min-h-0 overflow-y-auto"
+          aria-busy={scope().source.isLoadingMore()}
+        >
+          <Virtualizer
+            ref={pagination.registerVirtualizer}
+            data={scope().items}
+            scrollRef={scrollRoot()}
+            itemSize={72}
+            bufferSize={360}
+            keepMounted={scope().keepMounted}
+            onScroll={pagination.loadMoreNearEnd}
+          >
+            {(channel) => <RecentConversationCard channel={channel} />}
+          </Virtualizer>
+          <Show when={scope().source.isLoadingMore()}>
+            <RailListLoadingMore variant="recent" />
+          </Show>
+          <Show
+            when={scope().source.error() && !scope().source.isLoadingMore()}
+          >
+            <RailListError retry={scope().source.refresh} compact />
+          </Show>
         </div>
       </Match>
     </Switch>
@@ -313,10 +399,7 @@ export function ExpandedChannelsRail() {
           role="tree"
           tabIndex={-1}
           aria-activedescendant={activeDescendant()}
-          class={cn(
-            'scrollbar-hidden min-h-0 flex-1 outline-none',
-            rail.tab() === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
-          )}
+          class="min-h-0 flex-1 overflow-hidden outline-none"
         >
           <Switch>
             <Match when={rail.tab() === 'browse'}>

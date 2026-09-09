@@ -86,6 +86,22 @@ A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
 keyed by message ID; offscreen rows are normally absent from the DOM.
 
+## Chat navigation rail
+
+On desktop, the Chat rail has `Browse` and `Recents` tabs. Browse contains
+independently paginated `Channels` and `DMs` sections; collapsing a section
+does not discard its loaded pages. Recents has its own pagination cursor.
+Each list is virtualized, so offscreen conversations may not exist in the DOM.
+
+Arrow Down / `j` at the last loaded conversation holds focus while that
+section loads its next page. Once loading finishes, the next press advances
+into the appended rows. If the section has no next page, navigation proceeds
+to the next section. `[` and `]` jump between the Channels and DMs section
+headers.
+
+On touch layouts, the `Recents`, `Channels`, and `DMs` pill tabs each retain
+their own loaded pages and load more as their active list approaches the end.
+
 ## Channel tabs
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,

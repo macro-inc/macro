@@ -53,6 +53,8 @@ body and its attachments.
 Replies appear inline on desktop and in a composer drawer on touch devices.
 `R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
 or the latest message when none is selected. `F` opens a forward and focuses To.
+While an editable field is focused, Escape is handled by that field before the
+close-reply shortcut.
 An edited reply remains a draft when navigating away and returning. Standalone
 compose also flushes pending edits when leaving through app navigation. During
 send or discard, its sender and scheduling controls cannot change the operation.
@@ -81,6 +83,15 @@ sending, or discarding. A failed schedule or unschedule keeps the last confirmed
 If scheduling succeeds but marking the thread done fails, the email remains
 scheduled and a notice explains the separate failure. Check the confirmed time
 before retrying; do not treat that notice as a failed schedule.
+
+With the new app views enabled, mobile and tablet Email use a floating, horizontally
+scrolling row of those tabs, with `Open email filters` at the left. The rest of the
+view is the email list, which scrolls beneath the header and supports pull to refresh
+and swiping left to mark emails done in Signal and Noise. The filter button opens a
+bottom drawer for status, done, attachment and calendar filters, plus the inbox
+selector when available. `Clear all`
+resets those filters and the inbox selection. Desktop keeps its sidebar, search field,
+filter menu and preview control.
 
 ## Search
 
@@ -169,6 +180,16 @@ are in the DOM, and scrolling near the bottom fetches the next page automaticall
 `Loading…` tail appears while it lands). If a page fails, the tail reads `Couldn't load more.`
 with a `Retry` button and automatic paging stops until it is pressed. There is no `Show more`
 button.
+Once the heatmap card scrolls away, the day header for the topmost visible row stays pinned at
+the top of the list (`[data-activity-pinned-day]`, a non-interactive copy), so a snapshot taken
+mid-scroll shows that label twice at most. The heatmap always shows the whole year, including
+the partial first and current weeks, and spans the card at every width: in a wide pane the
+space between week columns opens up, its cells shrink from 14px to 8px as the pane narrows, and
+below that (a phone) the week area scrolls sideways with the month letters, opened on the newest
+week and with no visible scrollbar. Under ~672px the four stats read as a two-column grid; under
+~448px (a phone) the legend drops its `Fewer`/`More` words, each stat stacks its label over its
+value, and chips shorten. Rows stay on one line at every width. On touch devices the list rests
+below the floating page title and above the bottom toolbar.
 
 ## Home — `/app/component/home`
 
@@ -200,3 +221,8 @@ but unconnected app gets a tool result saying so, and the agent's reply renders 
 
 Toast regions are labeled `Notifications (alt+T)`; five empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).
+
+Staff Noise emails still create in-app notification rows, but do not send a new-notification
+event over GraphQL or the legacy WebSocket gateway, so they do not trigger browser popups.
+Those rows are available on the next fetch/refetch. Signal delivery and the existing
+staff/customer eligibility rules are unchanged; no browser eligibility request is needed.

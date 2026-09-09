@@ -3,9 +3,12 @@ import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
-import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { useOffscreenActivity } from './hooks/useOffscreenActivity';
+
+const LOADING_SKELETON_ROWS = [0, 1, 2];
 
 function SectionScrollArea(props: {
   contentRef: (element: HTMLDivElement) => void;
@@ -154,6 +157,79 @@ export const CollapsibleSection = {
   Header: CollapsibleSectionHeader,
   Content: CollapsibleSectionContent,
 };
+
+export function RailListLoading() {
+  return (
+    <div class="grid min-h-20 place-items-center text-ink-muted">
+      <SpinnerIcon
+        aria-label="Loading conversations"
+        class="size-4 animate-spin"
+      />
+    </div>
+  );
+}
+
+export function RailListLoadingMore(props: {
+  variant: 'channel' | 'recent' | 'slim';
+}) {
+  return (
+    <div role="status" aria-label="Loading more conversations">
+      <For each={LOADING_SKELETON_ROWS}>
+        {(row) => (
+          <div
+            aria-hidden="true"
+            class={cn(
+              'flex items-center',
+              props.variant === 'slim' && 'h-10 justify-center',
+              props.variant === 'channel' && 'h-10 gap-2 px-2',
+              props.variant === 'recent' && 'h-18 items-start gap-3 px-2 py-2'
+            )}
+          >
+            <div
+              class={cn(
+                'skeleton-shimmer shrink-0 rounded-full bg-skeleton',
+                props.variant === 'channel' && 'size-6',
+                props.variant !== 'channel' && 'size-8'
+              )}
+            />
+            <Show when={props.variant !== 'slim'}>
+              <div class="flex min-w-0 flex-1 flex-col gap-2">
+                <div
+                  class={cn(
+                    'skeleton-shimmer h-2.5 rounded-full bg-skeleton',
+                    row % 2 === 0 ? 'w-1/2' : 'w-2/3'
+                  )}
+                />
+                <Show when={props.variant === 'recent'}>
+                  <div class="skeleton-shimmer h-2 w-4/5 rounded-full bg-skeleton" />
+                </Show>
+              </div>
+            </Show>
+          </div>
+        )}
+      </For>
+    </div>
+  );
+}
+
+export function RailListError(props: {
+  retry: () => Promise<void>;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      class={cn(
+        'flex items-center justify-center gap-2 px-2 text-xs text-ink-muted',
+        props.compact ? 'py-2' : 'min-h-20 flex-col'
+      )}
+    >
+      <span>Couldn’t load conversations.</span>
+      <Button variant="outline" size="xs" onClick={() => void props.retry()}>
+        Try again
+      </Button>
+    </div>
+  );
+}
 
 export function CreateRailAction(props: {
   label: string;

@@ -162,6 +162,82 @@ fn agent_harness_service_url_has_no_trailing_slash() {
 }
 
 #[test]
+fn agent_harness_egress_url_parses() {
+    assert_parses_for_all_environments(AgentHarnessEgressUrl::default_for_environment);
+}
+
+#[test]
+fn agent_harness_egress_url_selects_defaults_without_a_required_config_value() {
+    with_mock_override_env(missing_override, || {
+        for (environment, expected) in [
+            (Environment::Local, "http://localhost:8102"),
+            (
+                Environment::Develop,
+                "https://dev-gateway.macro.com/agent-harness-egress",
+            ),
+            (
+                Environment::Production,
+                "https://gateway.macro.com/agent-harness-egress",
+            ),
+        ] {
+            let url = AgentHarnessEgressUrl::new_for_environment(environment).unwrap();
+            assert_eq!(url.as_str(), expected);
+            assert!(!url.as_str().ends_with('/'));
+        }
+    });
+}
+
+#[test]
+fn agent_harness_egress_url_honors_the_standard_override_for_tunnels() {
+    with_mock_override_env(
+        |name| {
+            assert_eq!(name, "OVERRIDE_AGENT_HARNESS_EGRESS_URL");
+            Ok("https://egress-test.trycloudflare.com".to_owned())
+        },
+        || {
+            for environment in ENVS {
+                let url = AgentHarnessEgressUrl::new_for_environment(environment).unwrap();
+                assert_eq!(url.as_str(), "https://egress-test.trycloudflare.com");
+            }
+        },
+    );
+}
+
+#[test]
+fn mcp_service_url_parses() {
+    assert_parses_for_all_environments(McpServiceUrl::default_for_environment);
+}
+
+#[test]
+fn mcp_service_url_defaults_are_bases_without_a_trailing_slash() {
+    with_mock_override_env(missing_override, || {
+        for (environment, expected) in [
+            (Environment::Local, "http://localhost:8080"),
+            (Environment::Develop, "https://dev-gateway.macro.com/mcp"),
+            (Environment::Production, "https://gateway.macro.com/mcp"),
+        ] {
+            let url = McpServiceUrl::new_for_environment(environment).unwrap();
+            assert_eq!(url.as_str(), expected);
+            assert!(!url.as_str().ends_with('/'));
+        }
+    });
+}
+
+#[test]
+fn mcp_service_url_honors_the_standard_override() {
+    with_mock_override_env(
+        |name| {
+            assert_eq!(name, "OVERRIDE_MCP_SERVICE_URL");
+            Ok("http://mcp-service:8080".to_owned())
+        },
+        || {
+            let url = McpServiceUrl::new_for_environment(Environment::Local).unwrap();
+            assert_eq!(url.as_str(), "http://mcp-service:8080");
+        },
+    );
+}
+
+#[test]
 fn unfurl_service_url_parses() {
     assert_parses_for_all_environments(UnfurlServiceUrl::default_for_environment);
 }
@@ -414,6 +490,14 @@ fn exported_service_urls_match_local_values() {
         "http://localhost:8100",
     );
     assert_eq!(
+        service_urls.agent_harness_egress_url.as_ref(),
+        "http://localhost:8102",
+    );
+    assert_eq!(
+        service_urls.mcp_service_url.as_ref(),
+        "http://localhost:8080"
+    );
+    assert_eq!(
         service_urls.unfurl_service_url.as_ref(),
         "http://localhost:8095"
     );
@@ -488,6 +572,14 @@ fn exported_service_urls_match_dev_values() {
         "https://dev-gateway.macro.com/agent-harness",
     );
     assert_eq!(
+        service_urls.agent_harness_egress_url.as_ref(),
+        "https://dev-gateway.macro.com/agent-harness-egress",
+    );
+    assert_eq!(
+        service_urls.mcp_service_url.as_ref(),
+        "https://dev-gateway.macro.com/mcp",
+    );
+    assert_eq!(
         service_urls.unfurl_service_url.as_ref(),
         "https://dev-gateway.macro.com/unfurl",
     );
@@ -559,6 +651,14 @@ fn exported_service_urls_match_prod_values() {
         "https://gateway.macro.com/agent-harness",
     );
     assert_eq!(
+        service_urls.agent_harness_egress_url.as_ref(),
+        "https://gateway.macro.com/agent-harness-egress",
+    );
+    assert_eq!(
+        service_urls.mcp_service_url.as_ref(),
+        "https://gateway.macro.com/mcp",
+    );
+    assert_eq!(
         service_urls.unfurl_service_url.as_ref(),
         "https://gateway.macro.com/unfurl",
     );
@@ -625,6 +725,14 @@ fn exported_service_url_override_names_are_derived_from_env_var_names() {
     assert_eq!(
         StaticFileServiceUrl::local().override_env_var_name(),
         "OVERRIDE_STATIC_FILE_SERVICE_URL",
+    );
+    assert_eq!(
+        AgentHarnessEgressUrl::local().override_env_var_name(),
+        "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
+    );
+    assert_eq!(
+        McpServiceUrl::local().override_env_var_name(),
+        "OVERRIDE_MCP_SERVICE_URL",
     );
     assert_eq!(
         UnfurlServiceUrl::local().override_env_var_name(),

@@ -258,9 +258,28 @@ export function InboxList() {
   };
 
   let listRoot: HTMLDivElement | undefined;
+  const [collapseRow, setCollapseRow] =
+    createSignal<(rowId: string) => Promise<void>>();
+
   const actionState = toEntityActionListState({
     controller: list,
     getEntity: (row) => (row.kind === 'entity' ? row.entity : undefined),
+    collapse: {
+      enabled: isTouchDevice,
+      run: async (entityId) => {
+        const collapse = collapseRow();
+        if (!collapse) return;
+
+        // Actions target entities; swipe rows are keyed by notification occurrence.
+        await Promise.all(
+          rows().flatMap((row) =>
+            row.kind === 'entity' && row.entity.id === entityId
+              ? [collapse(row.id)]
+              : []
+          )
+        );
+      },
+    },
     onFocus: (target) => {
       if (target) {
         virtualizer()?.scrollToIndex(target.index, { align: 'nearest' });
@@ -428,6 +447,7 @@ export function InboxList() {
 
         <SwipableRowProvider
           container={viewport}
+          setCollapseEntity={setCollapseRow}
           canSwipeLeft={(rowId) => {
             const row = swipeRowsById().get(rowId);
             return row ? markDoneActionFor(row) !== undefined : false;

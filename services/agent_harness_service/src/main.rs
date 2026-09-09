@@ -16,6 +16,9 @@ mod harness_bindings;
 mod runtime_commands;
 mod trigger;
 
+#[cfg(test)]
+mod test;
+
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use agent_egress::domain::service::EgressServiceImpl;
@@ -98,7 +101,9 @@ use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBrokerService,
     MacroEventCollection as _, MacroEventConsumerService,
 };
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
+use macro_service_urls::{
+    AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
+};
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
 use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
@@ -150,6 +155,11 @@ async fn main() -> anyhow::Result<()> {
     let result = run().await;
     entrypoint.shutdown();
     result
+}
+
+fn macro_mcp_endpoint(base_url: &McpServiceUrl) -> Result<url::Url, url::ParseError> {
+    // Append rather than Url::join("/mcp"), which would discard the gateway prefix.
+    url::Url::parse(&format!("{}/mcp", base_url.trim_end_matches('/')))
 }
 
 async fn run() -> anyhow::Result<()> {
@@ -302,7 +312,7 @@ async fn run() -> anyhow::Result<()> {
             config.macro_api_token_issuer.as_ref(),
             config.macro_api_token_private_secret_key.as_ref(),
         ),
-        url::Url::parse(&config.macro_mcp_url).context("MACRO_MCP_URL is not a url")?,
+        macro_mcp_endpoint(&McpServiceUrl::new()?).context("MCP service endpoint is not a URL")?,
         // The one gate on cleartext: a local stack's mcp-service is dialed
         // across the compose bridge, where TLS would be theater. Everywhere
         // else, an http URL refuses to boot.
@@ -513,7 +523,10 @@ async fn run() -> anyhow::Result<()> {
         HarnessKeyedConnections::new(PgHarnessBindings::new(pool.clone()), Arc::clone(&runtimes)),
         prompt_context,
         prompt_composer,
-        EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
+        EgressProvisioner::new(
+            Arc::clone(&mcp_connections),
+            AgentHarnessEgressUrl::new()?.to_string(),
+        ),
         RedisCommandForwarder::new(redis.clone()),
         defaults,
     ));

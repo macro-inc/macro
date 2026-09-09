@@ -42,8 +42,8 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
+import { useTagSets } from '@property/tags/tag-sets-context';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { useTagsQuery } from '@queries/properties/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button, cn, Surface } from '@ui';
 import {
@@ -99,7 +99,12 @@ type TasksListActivationMetadata = {
   newSplit?: boolean;
 };
 
-export function TaskList() {
+export type TaskListProps = {
+  /** The focusable list root, for callers that hand keyboard focus back. */
+  ref?: (element: HTMLDivElement) => void;
+};
+
+export function TaskList(props: TaskListProps) {
   const panel = useSplitPanelOrThrow();
   const { state, setState } = useTasksView();
   const userId = useUserId();
@@ -116,15 +121,14 @@ export function TaskList() {
   const toggleGroup = (groupId: string) =>
     setState('collapsedGroupIds', toggleValue(groupId));
 
-  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () => {
-    const tagsQuery = useTagsQuery();
-
-    return useTasksDataSource(state, {
+  const tagSets = useTagSets();
+  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
+    useTasksDataSource(state, {
       userId,
-      tagSets: () => tagsQuery.data ?? [],
+      tagSets,
       isGroupExpanded,
-    });
-  });
+    })
+  );
 
   function openEntity(
     entity: EntityData,
@@ -426,7 +430,10 @@ export function TaskList() {
       <Surface
         depth={isTouchDevice() ? 0 : 2}
         hideBorder={isTouchDevice()}
-        ref={setGrid}
+        ref={(element: HTMLDivElement) => {
+          setGrid(element);
+          props.ref?.(element);
+        }}
         role="grid"
         aria-label="Tasks"
         aria-multiselectable="true"

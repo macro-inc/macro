@@ -5,7 +5,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { cn, Surface } from '@ui';
-import { onMount, Suspense } from 'solid-js';
+import { createSignal, onMount, Suspense } from 'solid-js';
 import { TasksHeader } from './components/TasksHeader';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
@@ -34,6 +34,7 @@ function TasksListFallback() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
+  const [listElement, setListElement] = createSignal<HTMLDivElement>();
 
   onMount(() => panel.handle.setDisplayName('Tasks'));
 
@@ -51,11 +52,11 @@ function TasksViewRoot() {
             </ViewShell.Aside>
             <ViewShell.Main>
               <ViewShell.Header>
-                <TasksHeader />
+                <TasksHeader onSearchEscape={() => listElement()?.focus()} />
               </ViewShell.Header>
               <ViewShell.Content>
                 <Suspense fallback={<TasksListFallback />}>
-                  <TaskList />
+                  <TaskList ref={setListElement} />
                 </Suspense>
               </ViewShell.Content>
             </ViewShell.Main>

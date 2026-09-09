@@ -8,7 +8,6 @@ import { useUserId } from '@core/context/user';
 import type { ChannelEntity } from '@entity';
 import { isMutedItem } from '@entity/utils/notification';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import type { SoupAstItemsQuery } from '@queries/soup/items';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
 import {
@@ -21,7 +20,7 @@ import {
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../channels-view-context';
-import { filterChannelsForScope } from '../queries';
+import type { ChannelsDataSource } from '../queries';
 import type { ChannelsQueryScope } from '../types';
 import { channelMentionsUser } from '../utils';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
@@ -42,8 +41,7 @@ const MOBILE_CHANNEL_BUFFER_SIZE = MOBILE_CHANNEL_ITEM_SIZE * 6;
 const LOAD_MORE_THRESHOLD = 300;
 
 export function ChannelsMobileView(props: {
-  channels: ChannelEntity[];
-  source: SoupAstItemsQuery;
+  source: ChannelsDataSource;
   tab: ChannelsQueryScope;
   onTabChange: (tab: ChannelsQueryScope) => void;
 }) {
@@ -60,14 +58,8 @@ export function ChannelsMobileView(props: {
   );
   const listId = createUniqueId();
   const channelCalls = useChannelCalls();
-  const channelActivity = useChannelRailActivity(
-    () => props.channels,
-    channelCalls
-  );
-
-  const visibleChannels = createMemo(() =>
-    filterChannelsForScope(props.tab, props.channels)
-  );
+  const visibleChannels = createMemo(() => props.source.items());
+  const channelActivity = useChannelRailActivity(visibleChannels, channelCalls);
 
   const selectTab = (tab: ChannelsQueryScope) => {
     props.onTabChange(tab);
@@ -78,14 +70,14 @@ export function ChannelsMobileView(props: {
 
   function loadNextPage() {
     if (
-      props.source.isFetching ||
-      props.source.isFetchingNextPage ||
-      !props.source.hasNextPage
+      props.source.isFetching() ||
+      props.source.isLoadingMore() ||
+      !props.source.hasMore()
     ) {
       return;
     }
 
-    void props.source.fetchNextPage();
+    void props.source.loadMore();
   }
 
   function checkNearEnd(offset?: number) {
@@ -126,7 +118,7 @@ export function ChannelsMobileView(props: {
       <div
         role="tree"
         aria-label={`${MOBILE_CHANNEL_TABS.find((tab) => tab.value === props.tab)?.label ?? 'Channels'} conversations`}
-        aria-busy={props.source.isFetchingNextPage}
+        aria-busy={props.source.isLoadingMore()}
         class="size-full min-h-0 overflow-hidden"
       >
         <div
@@ -139,7 +131,7 @@ export function ChannelsMobileView(props: {
             class="h-[calc(var(--mobile-content-inset-top,0px)+0.75rem)]"
           />
           <Switch>
-            <Match when={!forceEmptyState() && props.source.isLoading}>
+            <Match when={!forceEmptyState() && props.source.isLoading()}>
               <div class="grid min-h-32 place-items-center text-ink-muted">
                 <SpinnerIcon
                   aria-label="Loading conversations"
@@ -147,7 +139,13 @@ export function ChannelsMobileView(props: {
                 />
               </div>
             </Match>
-            <Match when={!forceEmptyState() && props.source.error}>
+            <Match
+              when={
+                !forceEmptyState() &&
+                props.source.error() &&
+                visibleChannels().length === 0
+              }
+            >
               <div class="flex min-h-32 flex-col items-center justify-center gap-3 px-(--mobile-chrome-gutter) text-sm text-ink-muted">
                 <span>Conversations couldn’t be loaded.</span>
                 <Button
@@ -198,12 +196,30 @@ export function ChannelsMobileView(props: {
                   />
                 )}
               </Virtualizer>
-              <Show when={props.source.isFetchingNextPage}>
+              <Show when={props.source.isLoadingMore()}>
                 <div class="flex h-12 items-center justify-center text-ink-muted">
                   <SpinnerIcon
                     aria-label="Loading more conversations"
                     class="size-4 animate-spin"
                   />
+                </div>
+              </Show>
+              <Show
+                when={
+                  props.source.error() &&
+                  !props.source.isLoadingMore() &&
+                  visibleChannels().length > 0
+                }
+              >
+                <div class="flex items-center justify-center gap-2 py-3 text-xs text-ink-muted">
+                  <span>Couldn’t load more conversations.</span>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => void props.source.refresh()}
+                  >
+                    Try again
+                  </Button>
                 </div>
               </Show>
             </Match>

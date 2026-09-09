@@ -6,7 +6,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isChannelEntity, ListEntityMetadataQueryProvider } from '@entity';
+import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createMemo, createSignal, onMount, Show, Suspense } from 'solid-js';
@@ -18,7 +18,12 @@ import {
   CHANNELS_MIN_RAIL_WIDTH,
   CHANNELS_NARROW_RAIL_WIDTH,
 } from './constants';
-import { useChannelsQuery } from './queries';
+import {
+  deduplicateChannels,
+  resolveSelectedChannel,
+  useChannelByIdQuery,
+  useChannelsSources,
+} from './queries';
 import type { ChannelsViewStateOptions } from './types';
 
 export type ChannelsViewProps = {
@@ -55,15 +60,43 @@ function ChannelsViewRoot() {
           max: CHANNELS_MAX_RAIL_WIDTH,
         };
 
-  const channelsQuery = useChannelsQuery(() =>
-    isTouchDevice() ? state.mobileTab : 'recents'
+  const sources = useChannelsSources((scope) =>
+    isTouchDevice()
+      ? state.mobileTab === scope
+      : scope === 'recents'
+        ? state.tab === 'recents'
+        : state.tab === 'browse'
   );
-  const channels = createMemo(() =>
-    (channelsQuery.data?.entities ?? []).filter(isChannelEntity)
+  const loadedChannels = createMemo(() =>
+    deduplicateChannels([
+      sources.channels.items(),
+      sources.direct_messages.items(),
+      sources.recents.items(),
+    ])
   );
-  const selectedChannel = createMemo(() =>
-    channels().find((channel) => channel.id === state.selectedChannelId)
+  const loadedSelectedChannel = createMemo(() =>
+    resolveSelectedChannel(state.selectedChannelId, loadedChannels())
   );
+  const selectedChannelQuery = useChannelByIdQuery(
+    () => state.selectedChannelId,
+    () =>
+      !isTouchDevice() &&
+      state.selectedChannelId !== undefined &&
+      loadedSelectedChannel() === undefined
+  );
+  const selectedChannel = createMemo(() => {
+    const loaded = loadedSelectedChannel();
+    if (loaded) return loaded;
+    if (!selectedChannelQuery.isEnabled || selectedChannelQuery.isLoading) {
+      return;
+    }
+
+    return resolveSelectedChannel(
+      state.selectedChannelId,
+      loadedChannels(),
+      selectedChannelQuery.data?.entities
+    );
+  });
 
   onMount(() => panel.handle.setDisplayName('Channels'));
 
@@ -89,7 +122,7 @@ function ChannelsViewRoot() {
                       }}
                     >
                       <ChannelsRail
-                        channels={channels()}
+                        sources={sources}
                         mode={railMode()}
                         onModeChange={setRailMode}
                       />
@@ -145,8 +178,7 @@ function ChannelsViewRoot() {
                 }
               >
                 <ChannelsMobileView
-                  channels={channels()}
-                  source={channelsQuery}
+                  source={sources[state.mobileTab]}
                   tab={state.mobileTab}
                   onTabChange={setMobileTab}
                 />

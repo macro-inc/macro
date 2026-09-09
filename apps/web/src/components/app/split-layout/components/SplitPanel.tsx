@@ -18,7 +18,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  on,
   onCleanup,
   onMount,
   Show,
@@ -37,6 +36,7 @@ import type { SplitHandle, SplitState } from '../layoutManager';
 import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
+import { createSplitAutofocus } from '../utils/createSplitAutofocus';
 import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
@@ -115,16 +115,10 @@ export function SplitPanel(props: SplitPanelProps) {
     initialPredicates: { and: ['explicit-noise'] },
   });
 
-  createEffect(
-    on([panelRef], () => {
-      if (isTouchDevice()) return;
-      // Only the active split may claim focus on mount. A Preview Pair's Viewer
-      // is created with activate:false while its controller stays active, and
-      // must not steal the keyboard from it.
-      if (!props.active) return;
-      panelRef()?.focus();
-    })
-  );
+  createSplitAutofocus({
+    element: panelRef,
+    enabled: () => props.active && !isTouchDevice(),
+  });
 
   const [toolbarRef, setToolbarRef] = createSignal<HTMLDivElement | null>(null);
   const [headerRef, setHeaderRef] = createSignal<HTMLDivElement | null>(null);
@@ -363,85 +357,77 @@ export function SplitPanel(props: SplitPanelProps) {
               )}
               depth={isTouchDevice() ? 0 : 1}
             >
-              <Show
-                when={usesComposableLayout()}
-                fallback={
-                  <>
-                    <Panel.Header
-                      class={cn(
-                        'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
-                        'z-split-panel-chrome',
-                        // On mobile/tablet the header collapses to a zero-height grid row;
-                        // SplitHeader overlays the body as floating islands.
-                        'touch:min-h-0 touch:border-b-0',
-                        shouldHideSplitHeader() && 'hidden'
-                      )}
-                    >
-                      <SplitHeader
-                        ref={setHeaderRef}
-                        collapseController={headerCollapseController}
-                      />
-                    </Panel.Header>
-
-                    <Panel.Toolbar
-                      class={cn(
-                        'items-start overflow-visible',
-                        !hasToolbarContent() && 'hidden',
-                        isTouchDevice() && 'hidden',
-                        'border-b-0'
-                      )}
-                    >
-                      <SplitToolbar
-                        ref={setToolbarRef}
-                        collapseController={toolbarCollapseController}
-                      />
-                    </Panel.Toolbar>
-
-                    <Panel.Body>
-                      <div class="@container/split size-full min-h-0 overflow-hidden relative flex flex-col">
-                        <div
-                          class={cn(
-                            'min-h-0 min-w-0 overflow-hidden relative',
-                            bottomPanel() ? 'h-1/2' : 'h-full'
-                          )}
-                        >
-                          <MountedContent />
-                        </div>
-                        <Show when={bottomPanel()}>
-                          {(panel) => (
-                            <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-muted bg-surface flex flex-col">
-                              <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-muted px-2">
-                                <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-ink-muted">
-                                  {panel().title}
-                                </h3>
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  label="Close"
-                                  onClick={() => panel().onClose?.()}
-                                >
-                                  <CloseIcon />
-                                </Button>
-                              </div>
-                              <div class="min-h-0 flex-1 overflow-hidden">
-                                {panel().content()}
-                              </div>
-                            </div>
-                          )}
-                        </Show>
-                      </div>
-                      <MobileTopEdgeFade />
-                    </Panel.Body>
-                  </>
-                }
-              >
-                <div
-                  class="size-full min-h-0 min-w-0 overflow-hidden"
-                  style={{ 'grid-area': '1 / 1 / -1 / -1' }}
+              <Show when={!usesComposableLayout()}>
+                <Panel.Header
+                  class={cn(
+                    'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
+                    'z-split-panel-chrome',
+                    // On mobile/tablet the header collapses to a zero-height grid row;
+                    // SplitHeader overlays the body as floating islands.
+                    'touch:min-h-0 touch:border-b-0',
+                    shouldHideSplitHeader() && 'hidden'
+                  )}
                 >
-                  <MountedContent />
-                </div>
+                  <SplitHeader
+                    ref={setHeaderRef}
+                    collapseController={headerCollapseController}
+                  />
+                </Panel.Header>
+
+                <Panel.Toolbar
+                  class={cn(
+                    'items-start overflow-visible',
+                    !hasToolbarContent() && 'hidden',
+                    isTouchDevice() && 'hidden',
+                    'border-b-0'
+                  )}
+                >
+                  <SplitToolbar
+                    ref={setToolbarRef}
+                    collapseController={toolbarCollapseController}
+                  />
+                </Panel.Toolbar>
               </Show>
+              {/* Changing chrome must preserve the mounted view and its split-owned resources. */}
+              <Panel.Body>
+                <div class="@container/split size-full min-h-0 overflow-hidden relative flex flex-col">
+                  <div
+                    class={cn(
+                      'min-h-0 min-w-0 overflow-hidden relative',
+                      !usesComposableLayout() && bottomPanel()
+                        ? 'h-1/2'
+                        : 'h-full'
+                    )}
+                  >
+                    <MountedContent />
+                  </div>
+                  <Show when={!usesComposableLayout() && bottomPanel()}>
+                    {(panel) => (
+                      <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-muted bg-surface flex flex-col">
+                        <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-muted px-2">
+                          <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-ink-muted">
+                            {panel().title}
+                          </h3>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            label="Close"
+                            onClick={() => panel().onClose?.()}
+                          >
+                            <CloseIcon />
+                          </Button>
+                        </div>
+                        <div class="min-h-0 flex-1 overflow-hidden">
+                          {panel().content()}
+                        </div>
+                      </div>
+                    )}
+                  </Show>
+                </div>
+                <Show when={!usesComposableLayout()}>
+                  <MobileTopEdgeFade />
+                </Show>
+              </Panel.Body>
             </Panel>
           </div>
         </SplitDrawerGroup>
