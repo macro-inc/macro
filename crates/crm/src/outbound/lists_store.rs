@@ -8,6 +8,9 @@ use crate::domain::{
     model::CrmError,
 };
 
+#[cfg(test)]
+mod test;
+
 /// Postgres-backed [`ListStore`].
 #[derive(Debug, Clone)]
 pub struct PgListStore {
