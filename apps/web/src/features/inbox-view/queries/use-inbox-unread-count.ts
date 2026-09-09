@@ -12,7 +12,10 @@ import {
   useInboxQueryCapabilities,
 } from './inbox-eligibility';
 import { soupItemMatchesInboxTab } from './inbox-item-filter';
-import { buildInboxQuery, type InboxViewContext } from './inbox-query';
+import {
+  buildInboxUnreadCountQuery,
+  type InboxViewContext,
+} from './inbox-query';
 
 export function useInboxUnreadCount() {
   const notificationSource = useGlobalNotificationSource();
@@ -27,7 +30,7 @@ export function useInboxUnreadCount() {
       userId: userId(),
     })
   );
-  const args = createMemo(() => buildInboxQuery(context()));
+  const args = createMemo(() => buildInboxUnreadCountQuery(context()));
   const query = useSoupAstItemsQuery(args, () => ({
     showSupportedForeignEntities: capabilities().foreignEntities,
     meta: { insertFilter: (item) => soupItemMatchesInboxTab(item, 'signal') },

@@ -3,9 +3,14 @@ import { notificationIsRead } from '@entity/utils/notification';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
 import { compositeEntity } from '@notifications/types';
 import { boundedCount } from '@queries/soup/bounded-count';
+import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import { describe, expect, it, vi } from 'vitest';
 import { INBOX_FACETS } from '../inbox-view/inbox-facets';
 import { selectInboxEntities } from '../inbox-view/queries/inbox-eligibility';
+import {
+  buildInboxQuery,
+  buildInboxUnreadCountQuery,
+} from '../inbox-view/queries/inbox-query';
 import { withEntityNotifications } from './entity-notifications';
 import { testFacets } from './filters/facets';
 import { hasNotificationCoverage } from './notification-coverage';
@@ -145,6 +150,16 @@ describe('sidebar count row identities', () => {
 });
 
 describe('count completeness', () => {
+  it('counts attached unread rows outside the global GraphQL source coverage', () => {
+    const entities = rows([
+      notification('send'),
+      notification('reply', 'thread-1'),
+    ]);
+    const partialSource = source([], false);
+    expect(hasNotificationCoverage(entities, partialSource)).toBe(true);
+    expect(inboxCount(entities, partialSource)).toBe(2);
+  });
+
   it('does not use the global GraphQL page size as a limit on attached edges', () => {
     expect(hasNotificationCoverage(rows([]), source([], false))).toBe(true);
   });
@@ -167,4 +182,39 @@ describe('count completeness', () => {
       )
     ).toBe('99+');
   });
+});
+
+describe('Inbox badge transport compatibility', () => {
+  it.each([false, true])(
+    'translates the real unread Signal filters with optional types enabled=%s',
+    (enabled) => {
+      const queryContext = {
+        ...context,
+        capabilities: {
+          ...context.capabilities,
+          calendar: enabled,
+          foreignEntities: enabled,
+          reminders: enabled,
+          snippets: enabled,
+        },
+        facets: { read: ['unread'] },
+        facetContext: {},
+        userId: 'macro|viewer@example.com',
+      };
+      const options = { now: new Date('2026-09-09T12:00:00Z') };
+      const list = buildInboxQuery(queryContext, options);
+      const badge = buildInboxUnreadCountQuery(queryContext, options);
+
+      // This was the mixed-transport failure: REST rows need global
+      // notifications, but that source no longer eagerly paginates in GQL mode.
+      expect(list.params.sort_method).toBe('notified_at');
+      expect(() => makeGraphqlSoupInput(list)).toThrow('notified_at');
+      expect(badge.body).toEqual(list.body);
+      expect(badge.transport).toBeUndefined();
+      const input = makeGraphqlSoupInput(badge);
+      expect(input.initial?.sortMethod).toBe('UPDATED_AT');
+      expect(input.initial?.emailView).toBe('INBOX');
+      expect(input.initial?.limit).toBe(100);
+    }
+  );
 });

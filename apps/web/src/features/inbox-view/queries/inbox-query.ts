@@ -182,3 +182,22 @@ export function buildInboxQuery(
     body,
   };
 }
+
+/**
+ * The badge counts matching rows; it does not display their notification order.
+ * `notified_at` forces a REST fallback today, whose rows have no notification
+ * edges. With the global source on GraphQL those rows may never gain coverage.
+ *
+ * Preserve the list's filters and let the shared client eligibility selector
+ * enforce notification membership/scoping, using a sort both transports support.
+ */
+export function buildInboxUnreadCountQuery(
+  context: InboxViewContext,
+  options: { now?: Date } = {}
+): SoupAstItemsQueryArgs {
+  const query = buildInboxQuery(context, options);
+  return {
+    ...query,
+    params: { ...query.params, sort_method: 'updated_at' },
+  };
+}
