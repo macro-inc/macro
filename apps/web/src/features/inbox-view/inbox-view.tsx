@@ -1,11 +1,13 @@
 import { ViewShell } from '@app/components/view-shell';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { ListEntityMetadataQueryProvider } from '@entity';
+import { type EntityData, ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createEffect, onMount, Suspense } from 'solid-js';
+import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { InboxHeader } from './components/InboxHeader';
 import { InboxList } from './components/InboxList';
 import { InboxTabs } from './components/InboxTabs';
@@ -20,14 +22,43 @@ export type InboxViewProps = {
 function InboxFallback() {
   return (
     <div class="grid min-h-0 min-w-0 flex-1 place-items-center text-ink-muted">
-      <SpinnerIcon aria-label="Loading inbox" class="size-5 animate-spin" />
+      <SpinnerIcon
+        aria-label="Loading notifications"
+        class="size-5 animate-spin"
+      />
     </div>
+  );
+}
+
+function NotificationsListPane(props: {
+  onPreviewEntityChange: (entity: EntityData | undefined) => void;
+}) {
+  return (
+    <>
+      <InboxHeader>
+        <InboxTabs />
+      </InboxHeader>
+      <Suspense fallback={<InboxFallback />}>
+        <InboxList onPreviewEntityChange={props.onPreviewEntityChange} />
+      </Suspense>
+    </>
   );
 }
 
 function InboxViewRoot() {
   const panel = useSplitPanelOrThrow();
+  const orchestrator = useGlobalBlockOrchestrator();
   const { state, setTab } = useInboxView();
+  const [previewEntity, setPreviewEntity] = createSignal<EntityData>();
+
+  let activeTab = state.tab;
+  createEffect(() => {
+    const nextTab = state.tab;
+    if (nextTab === activeTab) return;
+
+    activeTab = nextTab;
+    setPreviewEntity(undefined);
+  });
 
   createEffect(() => {
     if (state.tab !== 'reminders') return;
@@ -35,27 +66,74 @@ function InboxViewRoot() {
     setTab('signal');
   });
 
-  onMount(() => panel.handle.setDisplayName('Inbox'));
+  onMount(() => panel.handle.setDisplayName('Notifications'));
 
   return (
     <ListEntityMetadataQueryProvider>
       <StaticMarkdownContext>
         <SplitPanel.Root>
           <SplitPanel.Body>
-            <ViewShell.Root
-              aside={false}
-              main={{ min: 224 }}
-              class={isTouchDevice() ? undefined : 'bg-inset'}
+            <Show
+              when={isTouchDevice()}
+              fallback={
+                <div class="size-full min-h-0 bg-panel">
+                  <ViewShell.Root
+                    aside={{
+                      width: 360,
+                      min: 300,
+                      max: 420,
+                      preserveDuringResize: false,
+                    }}
+                    breakpoints={{ collapsed: 0 }}
+                    layoutBreakpoint="collapsed"
+                    main={{ min: 224, preferredWidth: 640 }}
+                    resizable
+                  >
+                    <ViewShell.Aside class="flex flex-col border-r border-edge bg-panel">
+                      <NotificationsListPane
+                        onPreviewEntityChange={setPreviewEntity}
+                      />
+                    </ViewShell.Aside>
+                    <ViewShell.Main class="overflow-hidden">
+                      <Show
+                        when={previewEntity()}
+                        fallback={
+                          <div class="flex size-full items-center justify-center px-6 text-center">
+                            <div class="flex max-w-sm flex-col gap-2">
+                              <h2 class="text-base font-semibold text-ink">
+                                Select a notification
+                              </h2>
+                              <p class="text-sm leading-5 text-ink-muted">
+                                Choose an item from the sidebar to preview it
+                                here.
+                              </p>
+                            </div>
+                          </div>
+                        }
+                      >
+                        {(entity) => (
+                          <Suspense>
+                            <PreviewPanel
+                              selectedEntity={entity()}
+                              orchestrator={orchestrator}
+                              splitPanelContext={panel}
+                            />
+                          </Suspense>
+                        )}
+                      </Show>
+                    </ViewShell.Main>
+                  </ViewShell.Root>
+                </div>
+              }
             >
-              <ViewShell.Main>
-                <InboxHeader>
-                  <InboxTabs />
-                </InboxHeader>
-                <Suspense fallback={<InboxFallback />}>
-                  <InboxList />
-                </Suspense>
-              </ViewShell.Main>
-            </ViewShell.Root>
+              <ViewShell.Root aside={false} main={{ min: 224 }}>
+                <ViewShell.Main>
+                  <NotificationsListPane
+                    onPreviewEntityChange={setPreviewEntity}
+                  />
+                </ViewShell.Main>
+              </ViewShell.Root>
+            </Show>
           </SplitPanel.Body>
         </SplitPanel.Root>
       </StaticMarkdownContext>
