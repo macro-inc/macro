@@ -160,9 +160,6 @@ export const listTypedNotificationsResponse = zod
                 .datetime({})
                 .nullish()
                 .describe('When the notification was deleted.'),
-              done: zod
-                .boolean()
-                .describe('Whether the notification is marked as done.'),
               id: zod.uuid().describe('The notification ID.'),
               notification_event_type: zod
                 .string()
@@ -1410,6 +1407,11 @@ export const listTypedNotificationsResponse = zod
               sent: zod
                 .boolean()
                 .describe('Whether the notification has been sent.'),
+              state: zod
+                .enum(['unseen', 'seen', 'done'])
+                .describe(
+                  "The mutually exclusive lifecycle states of a user's notification."
+                ),
               updated_at: zod.iso
                 .datetime({})
                 .describe('When the notification was last updated.'),
@@ -1516,9 +1518,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 .datetime({})
                 .nullish()
                 .describe('When the notification was deleted.'),
-              done: zod
-                .boolean()
-                .describe('Whether the notification is marked as done.'),
               id: zod.uuid().describe('The notification ID.'),
               notification_event_type: zod
                 .string()
@@ -2766,6 +2765,11 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
               sent: zod
                 .boolean()
                 .describe('Whether the notification has been sent.'),
+              state: zod
+                .enum(['unseen', 'seen', 'done'])
+                .describe(
+                  "The mutually exclusive lifecycle states of a user's notification."
+                ),
               updated_at: zod.iso
                 .datetime({})
                 .describe('When the notification was last updated.'),
@@ -2866,9 +2870,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 .datetime({})
                 .nullish()
                 .describe('When the notification was deleted.'),
-              done: zod
-                .boolean()
-                .describe('Whether the notification is marked as done.'),
               id: zod.uuid().describe('The notification ID.'),
               notification_event_type: zod
                 .string()
@@ -4116,6 +4117,11 @@ export const getTypedNotificationsByEventItemIdResponse = zod
               sent: zod
                 .boolean()
                 .describe('Whether the notification has been sent.'),
+              state: zod
+                .enum(['unseen', 'seen', 'done'])
+                .describe(
+                  "The mutually exclusive lifecycle states of a user's notification."
+                ),
               updated_at: zod.iso
                 .datetime({})
                 .describe('When the notification was last updated.'),
@@ -4227,9 +4233,6 @@ export const getTypedNotificationByIdResponse = zod
         .datetime({})
         .nullish()
         .describe('When the notification was deleted.'),
-      done: zod
-        .boolean()
-        .describe('Whether the notification is marked as done.'),
       id: zod.uuid().describe('The notification ID.'),
       notification_event_type: zod
         .string()
@@ -5378,6 +5381,11 @@ export const getTypedNotificationByIdResponse = zod
         .nullish()
         .describe('The user who triggered the notification.'),
       sent: zod.boolean().describe('Whether the notification has been sent.'),
+      state: zod
+        .enum(['unseen', 'seen', 'done'])
+        .describe(
+          "The mutually exclusive lifecycle states of a user's notification."
+        ),
       updated_at: zod.iso
         .datetime({})
         .describe('When the notification was last updated.'),
