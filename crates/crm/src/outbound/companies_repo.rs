@@ -18,7 +18,7 @@ use crate::domain::{
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::PgPool;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 /// PostgreSQL-backed [`CompaniesRepository`].
@@ -2291,7 +2291,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                    move_closed_deals_role AS "move_closed_deals_role: CrmPermissionRole",
                    delete_records_role AS "delete_records_role: CrmPermissionRole",
                    closed_stage_ids,
-                   legacy_stage_ids,
+                   legacy_stage_ids AS "legacy_stage_ids: sqlx::types::Json<BTreeMap<Uuid, Uuid>>",
                    team_views,
                    default_team_view_id
             FROM team_crm_settings
@@ -2303,18 +2303,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        row.map(|r| {
-            Ok(CrmTeamSettings {
+        Ok(row
+            .map(|r| CrmTeamSettings {
                 edit_stages_role: r.edit_stages_role,
                 move_closed_deals_role: r.move_closed_deals_role,
                 delete_records_role: r.delete_records_role,
                 closed_stage_ids: r.closed_stage_ids,
-                legacy_stage_ids: legacy_stage_ids_from_json(r.legacy_stage_ids)?,
+                legacy_stage_ids: r.legacy_stage_ids.0,
                 team_views: r.team_views,
                 default_team_view_id: r.default_team_view_id,
             })
-        })
-        .unwrap_or_else(|| Ok(CrmTeamSettings::default()))
+            .unwrap_or_default())
     }
 
     #[tracing::instrument(skip(self, patch), err)]
@@ -2333,12 +2332,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let closed_value: Option<Vec<Uuid>> = patch.closed_stage_ids.clone().flatten();
         let default_provided = patch.default_team_view_id.is_some();
         let default_value: Option<String> = patch.default_team_view_id.clone().flatten();
-        let legacy_value: Option<serde_json::Value> = patch
-            .legacy_stage_ids
-            .as_ref()
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let legacy_value = patch.legacy_stage_ids.as_ref().map(sqlx::types::Json);
 
         let row = sqlx::query!(
             r#"
@@ -2372,7 +2366,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 closed_stage_ids,
                 team_views AS "team_views!",
                 default_team_view_id,
-                legacy_stage_ids AS "legacy_stage_ids!"
+                legacy_stage_ids AS "legacy_stage_ids!: sqlx::types::Json<BTreeMap<Uuid, Uuid>>"
             "#,
             team_id,
             edit_stages as Option<&str>,
@@ -2383,7 +2377,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             patch.team_views.as_ref(),
             default_provided,
             default_value.as_deref(),
-            legacy_value,
+            legacy_value as Option<sqlx::types::Json<&BTreeMap<Uuid, Uuid>>>,
         )
         .fetch_one(&self.pool)
         .await
@@ -2394,17 +2388,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             move_closed_deals_role: row.move_closed_deals_role,
             delete_records_role: row.delete_records_role,
             closed_stage_ids: row.closed_stage_ids,
-            legacy_stage_ids: legacy_stage_ids_from_json(row.legacy_stage_ids)?,
+            legacy_stage_ids: row.legacy_stage_ids.0,
             team_views: row.team_views,
             default_team_view_id: row.default_team_view_id,
         })
     }
-}
-
-fn legacy_stage_ids_from_json(
-    value: serde_json::Value,
-) -> Result<std::collections::BTreeMap<Uuid, Uuid>, CrmError> {
-    serde_json::from_value(value).map_err(|e| CrmError::StorageLayerError(e.into()))
 }
 
 /// Maps a CRM entity type to the team-scoped not-found error used when the
