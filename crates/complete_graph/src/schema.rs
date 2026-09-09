@@ -27,8 +27,8 @@ use graphql_email::{
 };
 use graphql_entity_mutation::EntityMutationRoot;
 use graphql_favorite::{
-    EntityFavoriteEdgeReader, FavoriteMutationRoot, FavoriteQueryReader, GraphqlFavorite,
-    NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
+    EntityFavoriteEdgeReader, FavoriteMutationRoot, FavoriteQueryReader, FavoritesFilterInput,
+    GraphqlFavorite, NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
 };
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
@@ -562,9 +562,14 @@ where
         async_graphql::ID(self.user_id.to_string())
     }
 
-    /// The authenticated user's favorites in manual order.
-    async fn favorites(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlFavorite>> {
-        resolve_favorites::<FR>(ctx, &self.user_id).await
+    /// The authenticated user's favorites in manual order, optionally
+    /// restricted by entity type and entity id.
+    async fn favorites(
+        &self,
+        ctx: &Context<'_>,
+        filter: Option<FavoritesFilterInput>,
+    ) -> async_graphql::Result<Vec<GraphqlFavorite>> {
+        resolve_favorites::<FR>(ctx, &self.user_id, filter.unwrap_or_default().into_model()).await
     }
 
     /// A page of the authenticated user's own activity, newest first.

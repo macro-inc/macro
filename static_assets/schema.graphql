@@ -229,6 +229,24 @@ input EntitySharePolicyInput {
 }
 
 """
+Which of the authenticated user's favorites to return.
+
+The two dimensions are independent. Values of one are alternatives, and
+both must hold. An omitted or empty list constrains nothing, so the whole
+collection is the default.
+"""
+input FavoritesFilterInput {
+	"""
+	Restrict to favorites of these entity types.
+	"""
+	entityTypes: [GraphqlEntityType!]! = []
+	"""
+	Restrict to favorites with these entity ids.
+	"""
+	entityIds: [ID!]! = []
+}
+
+"""
 Item-style permission represented by the viewer's effective access level.
 """
 type GraphqlAccessLevelPermission {
@@ -5392,9 +5410,10 @@ type GraphqlUser {
 	"""
 	id: ID!
 	"""
-	The authenticated user's favorites in manual order.
+	The authenticated user's favorites in manual order, optionally
+	restricted by entity type and entity id.
 	"""
-	favorites: [GraphqlFavorite!]!
+	favorites(filter: FavoritesFilterInput): [GraphqlFavorite!]!
 	"""
 	A page of the authenticated user's own activity, newest first.
 	Delegated actions performed on the user's behalf are included.

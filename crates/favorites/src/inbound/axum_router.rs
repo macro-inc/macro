@@ -1,5 +1,8 @@
 //! Axum router for favorites endpoints.
 
+#[cfg(test)]
+mod test;
+
 use std::sync::Arc;
 
 use axum::{
@@ -9,6 +12,7 @@ use axum::{
     response::IntoResponse,
     routing::{delete, get, patch, post},
 };
+use axum_extra::extract::Query;
 use entity_access::{
     domain::{models::ViewAccessLevel, ports::EntityAccessService},
     inbound::axum_extractors::EntityBodyAccessLevelExtractor,
@@ -21,7 +25,7 @@ use model_error_response::ErrorResponse;
 use serde::Deserialize;
 
 use crate::domain::{
-    models::{Favorite, FavoritesError, FavoritesList},
+    models::{Favorite, FavoriteFilter, FavoritesError, FavoritesList},
     ports::FavoritesService,
 };
 
@@ -118,6 +122,29 @@ pub struct AddFavoriteRequest {
     pub entity_id: String,
 }
 
+/// Query params for listing favorites.
+///
+/// Both keys repeat, as in
+/// `?entityType=document&entityType=channel&entityId=abc`. Values of one key
+/// are alternatives, and the two keys are combined, so that example lists the
+/// favorite for `abc` only if it is a document or a channel. Omitting a key
+/// leaves its dimension unconstrained.
+#[derive(Debug, Default, Deserialize, utoipa::IntoParams)]
+#[serde(rename_all = "camelCase")]
+#[into_params(parameter_in = Query)]
+pub struct ListFavoritesParams {
+    /// Restrict to favorites of these entity types.
+    // Inlined to avoid claiming the shared `EntityType` component name (see
+    // `Favorite::entity_type`).
+    #[param(inline, style = Form, explode)]
+    #[serde(default)]
+    pub entity_type: Vec<EntityType>,
+    /// Restrict to favorites with these entity ids.
+    #[param(style = Form, explode)]
+    #[serde(default)]
+    pub entity_id: Vec<String>,
+}
+
 /// Path params for removing a favorite by entity.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Path)]
@@ -156,6 +183,7 @@ pub struct ReorderFavoritesRequest {
     tag = "favorites",
     operation_id = "list_favorites",
     path = "/favorites",
+    params(ListFavoritesParams),
     responses(
         (status = 200, body = FavoritesList),
         (status = 401, body = ErrorResponse),
@@ -166,15 +194,20 @@ pub struct ReorderFavoritesRequest {
 pub async fn list_favorites_handler<S, AccessSvc, Auth>(
     State(state): State<FavoritesRouterState<S, AccessSvc, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(params): Query<ListFavoritesParams>,
 ) -> Result<Json<FavoritesList>, FavoritesError>
 where
     S: FavoritesService,
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    let filter = FavoriteFilter {
+        entity_types: params.entity_type,
+        entity_ids: params.entity_id,
+    };
     let favorites = state
         .service
-        .list_favorites(&user.authorization.user.macro_user_id)
+        .list_favorites(&user.authorization.user.macro_user_id, &filter)
         .await?;
     Ok(Json(FavoritesList { favorites }))
 }

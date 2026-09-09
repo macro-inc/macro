@@ -9,7 +9,7 @@ use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
-use crate::domain::models::{Favorite, FavoritesError};
+use crate::domain::models::{Favorite, FavoriteFilter, FavoritesError};
 use crate::domain::ports::{FavoritesRepo, FavoritesService};
 
 /// Upper bound on favorites per user; keeps reorder payloads and sidebar
@@ -103,10 +103,11 @@ where
     async fn list_favorites(
         &self,
         user_id: &MacroUserIdStr<'_>,
+        filter: &FavoriteFilter,
     ) -> Result<Vec<Favorite>, FavoritesError> {
         Ok(self
             .repo
-            .list_favorites(user_id)
+            .list_favorites(user_id, filter)
             .await
             .map_err(anyhow::Error::from)?)
     }

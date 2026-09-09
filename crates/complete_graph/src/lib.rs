@@ -44,8 +44,8 @@ pub use graphql_entity_mutation::{
 };
 pub use graphql_favorite::{
     EntityFavoriteEdgeReader, EntityFavoriteLoader, FavoriteMutationRoot, FavoriteQueryReader,
-    GraphqlFavorite, NoOpFavoriteMutationService, ReorderFavoritesInput, entity_favorite_loader,
-    resolve_favorites,
+    FavoritesFilterInput, GraphqlFavorite, NoOpFavoriteMutationService, ReorderFavoritesInput,
+    entity_favorite_loader, resolve_favorites,
 };
 pub use graphql_notification::{
     EntityNotificationsLoader, GraphqlNotificationUpdateOperation, NoOpNotificationMutationService,

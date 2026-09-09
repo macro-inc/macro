@@ -7,7 +7,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 
 use super::{FavoritesServiceImpl, MAX_FAVORITES_PER_COLLECTION};
-use crate::domain::models::{Favorite, FavoritesError};
+use crate::domain::models::{Favorite, FavoriteFilter, FavoritesError};
 use crate::domain::ports::{FavoritesRepo, FavoritesService};
 
 const USER_ID: &str = "macro|favorites-user@macro.com";
@@ -87,6 +87,7 @@ impl FavoritesRepo for FakeFavoritesRepo {
     async fn list_favorites(
         &self,
         _user_id: &MacroUserIdStr<'_>,
+        _filter: &FavoriteFilter,
     ) -> Result<Vec<Favorite>, Self::Err> {
         Ok(Vec::new())
     }
