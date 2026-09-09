@@ -1,7 +1,6 @@
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { CollabProvider } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
-import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
 import { blockSourceSignal, blockSyncSourceSignal } from '@core/signal/load';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { isSourceSyncService } from '@core/util/source';
@@ -22,7 +21,6 @@ export {
 
 export type MarkdownCollabProviderProps = {
   editor: LexicalEditor;
-  pluginManager: PluginManager;
   editorContainerRef: HTMLDivElement;
   highlighLayerRef: HTMLDivElement;
   mappings: NodeIdMappings;
@@ -47,7 +45,6 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   return (
     <CollabProvider
       editor={props.editor}
-      pluginManager={props.pluginManager}
       editorContainerRef={props.editorContainerRef}
       highlightLayerRef={props.highlighLayerRef}
       mappings={props.mappings}

@@ -11,6 +11,7 @@ import {
   useBlockId,
   useMaybeBlockAliasedName,
 } from '@core/block';
+import { registerLoroHistory } from '@core/component/LexicalMarkdown/collaboration/undo';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -43,7 +44,9 @@ import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/Float
 import {
   createLexicalWrapper,
   LexicalWrapperContext,
+  type LexicalWrapperWithMapping,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { pluginExtension } from '@core/component/LexicalMarkdown/extensions/pluginExtension';
 import {
   awaitPlugin,
   CLOSE_INLINE_SEARCH_COMMAND,
@@ -51,6 +54,7 @@ import {
   createDragInsertStore,
   createProgressStatsStore,
   createWordcountStatsStore,
+  customDeletePlugin,
   DefaultShortcuts,
   diffPlugin,
   documentMetadataPlugin,
@@ -102,6 +106,7 @@ import {
   type PersistentLocation,
   parsePersistentLocation,
 } from '@core/component/LexicalMarkdown/plugins/location';
+import { markdownShortcutsPlugin } from '@core/component/LexicalMarkdown/plugins/markdown-shortcuts';
 import {
   INSERT_MEDIA_COMMAND,
   mediaPlugin,
@@ -117,6 +122,7 @@ import {
 import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
+  bindStateAs,
   editorFocusSignal,
   editorIsEmpty,
   getSaveState,
@@ -162,9 +168,13 @@ import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
+import { CheckListExtension } from '@lexical/list';
+import { CODE } from '@lexical/markdown';
+import { RichTextExtension } from '@lexical/rich-text';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   $isInlineSearchNode,
+  ALL_TRANSFORMERS,
   AwaitNode,
   CommentNode,
   createPeerIdValidator,
@@ -172,6 +182,7 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@macro-inc/lexical-core';
+import { HR } from '@macro-inc/lexical-core/transformers/transformers';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { onElementConnect } from '@solid-primitives/lifecycle';
@@ -179,7 +190,12 @@ import { isIOS } from '@solid-primitives/platform';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { $getRoot, $isElementNode, type EditorState } from 'lexical';
+import {
+  $getRoot,
+  $isElementNode,
+  type AnyLexicalExtensionArgument,
+  type EditorState,
+} from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -187,6 +203,7 @@ import {
   createSignal,
   on,
   onCleanup,
+  type Setter,
   Show,
   Suspense,
   untrack,
@@ -305,36 +322,282 @@ export function MarkdownEditor(props: {
     );
   });
 
-  const lexicalWrapper = createLexicalWrapper({
-    type: 'markdown-sync',
-    namespace: 'block-md-main',
-    isInteractable: isContentEditable,
-    withIds: true,
-  });
-
-  const { editor, plugins, cleanup: cleanupPlugins } = lexicalWrapper;
-
-  const [state, setState] = createSignal<EditorState>(editor.getEditorState());
-
-  setMdStore('editor', editor);
-  setMdStore('mapping', lexicalWrapper.mapping);
-  setMdStore('plugins', plugins);
-
-  const [editorFocus, setEditorFocus] = createSignal(false);
-  autoRegister(editorFocusSignal(editor, setEditorFocus));
-
+  let state!: Accessor<EditorState>;
+  let setState!: Setter<EditorState>;
   const mentionsMenuOperations = createMenuOperations();
   const tagsMenuOperations = createMenuOperations();
   const emojiMenuOperations = createMenuOperations();
   const actionsMenuOperations = createMenuOperations();
   const snippetsMenuOperations = createMenuOperations();
 
-  // store for the drag insert pluign.
+  // Stores shared by editor plugins and their Solid UI.
   const [dragInsertStore, setDragInsertStore] = createDragInsertStore();
-
-  // store for the draggable block (drag-to-rearrange) plugin.
   const [draggableBlockStore, setDraggableBlockStore] =
     createDraggableBlockStore();
+  const [accessoryStore, setAccessoryStore] = createAccessoryStore();
+  const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
+  const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
+  const [progressStats, setProgressStats] = createProgressStatsStore();
+
+  const onSetListOffset = (listOffset: NodekeyOffset[]) => {
+    setFindAndReplaceStore('listOffset', listOffset);
+    if (findAndReplaceStore.currentMatch >= listOffset.length) {
+      setFindAndReplaceStore('currentMatch', 0);
+    }
+  };
+
+  const [highlightNodeId, setHighlightNodeId] = createSignal<string>();
+  const [activeCommentIdParam, setActiveCommentIdParam] = createSignal<
+    string | undefined
+  >(undefined, { equals: false });
+  const [activeLocation, setActiveLocation] =
+    createSignal<PersistentLocation>();
+  const [locationReady, setLocationReady] = createSignal(false);
+
+  const peerIdValidator: Accessor<PeerIdValidator> = () => {
+    if (!IS_SYNC()) {
+      return createPeerIdValidator(() => undefined, false);
+    }
+    const peerId = () => props.loroManager.peerIdStr;
+    return createPeerIdValidator(peerId, true);
+  };
+
+  const editorExtensions = (wrapper: LexicalWrapperWithMapping) => {
+    const result: AnyLexicalExtensionArgument[] = [
+      RichTextExtension,
+      CheckListExtension,
+    ];
+    const use = (
+      name: string,
+      plugin: (editor: typeof wrapper.editor) => () => void
+    ) => {
+      result.push(pluginExtension(`markdown-editor/${name}`, plugin));
+    };
+
+    use('state', (editor) => {
+      [state, setState] = createSignal(editor.getEditorState());
+      return bindStateAs(editor, setState, 'json');
+    });
+    use(
+      'location',
+      locationPlugin({
+        mapping: wrapper.mapping,
+        revokeOptions: {
+          onRevokeLocation: () => {
+            setActiveLocation();
+          },
+          selectionChange: () => locationReady(),
+          mutation: () => locationReady(),
+        },
+      })
+    );
+    use(
+      'markdown-shortcuts',
+      markdownShortcutsPlugin({
+        transformers: ALL_TRANSFORMERS,
+        triggerOnEnterTransformers: [HR, CODE],
+      })
+    );
+    use('delete', customDeletePlugin());
+    use('history', (editor) =>
+      registerLoroHistory(editor, props.loroManager.doc, 400)
+    );
+    use('tab-indentation', tabIndentationPlugin());
+    use('selection-data', selectionDataPlugin(wrapper));
+    use('horizontal-rule', horizontalRulePlugin());
+    use(
+      'emojis',
+      emojisPlugin({
+        menu: emojiMenuOperations,
+        peerIdValidator: peerIdValidator(),
+      })
+    );
+    use(
+      'mentions',
+      mentionsPlugin({
+        menu: mentionsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+        sourceDocumentId: blockId,
+      })
+    );
+    use(
+      'tags',
+      tagsPlugin({
+        menu: tagsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+      })
+    );
+    use(
+      'snippets',
+      snippetsPlugin({
+        menu: snippetsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+        sourceDocumentId: blockId,
+      })
+    );
+    use(
+      'actions',
+      actionsPlugin({
+        menu: actionsMenuOperations,
+        peerIdValidator: peerIdValidator(),
+      })
+    );
+    use('media', mediaPlugin());
+    use(
+      'tables',
+      tablePlugin({
+        hasCellMerge: true,
+        hasCellBackgroundColor: true,
+        hasTabHandler: true,
+        hasHorizontalScroll: true,
+      })
+    );
+    use('table-cell-resizer', tableCellResizerPlugin());
+    use('table-touch-selection', tableTouchSelectionPlugin());
+    use('file-paste', (editor) =>
+      filePastePlugin({
+        onPasteFilesAndDirs: (fileEntries, directories) =>
+          handleFileFolderDrop(
+            fileEntries,
+            directories,
+            createFilesReadyHandler(editor, blockId)
+          ),
+      })(editor)
+    );
+    use(
+      'find-and-replace',
+      findAndReplacePlugin({
+        getListOffset: () => findAndReplaceStore.listOffset,
+        setListOffset: onSetListOffset,
+      })
+    );
+    use('text-paste', textPastePlugin());
+    use('restore-focus', restoreFocusPlugin());
+    use('markdown-paste', markdownPastePlugin());
+    use('normalize-enter', normalizeEnterPlugin());
+    use('trailing-paragraph', trailingParagraphPlugin());
+    use(
+      'checkbox-to-task',
+      checkboxToTaskPlugin({
+        currentUserId: userId(),
+        parentTaskId: blockName === 'task' ? blockId : undefined,
+      })
+    );
+    use(
+      'keyboard-shortcuts',
+      keyboardShortcutsPlugin({
+        shortcuts: [
+          ...DefaultShortcuts,
+          {
+            label: `${IS_MAC ? 'meta' : 'ctrl'}+shift+o`,
+            test: (e) =>
+              e.code === 'KeyO' &&
+              e.shiftKey &&
+              (IS_MAC ? e.metaKey : e.ctrlKey),
+            handler: (editor) => {
+              const userId = useUserId()();
+              if (!userId) return;
+              editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {});
+            },
+            priority: 0,
+          },
+        ],
+      })
+    );
+    use(
+      'document-metadata',
+      documentMetadataPlugin({
+        onVersionError: (error) => setEditorError(error),
+      })
+    );
+    use('pinned-properties', pinnedPropertiesPlugin());
+    use('await', awaitPlugin());
+
+    if (isIOS || isNativeMobilePlatform()) {
+      use(
+        'ios-cursor-scroll',
+        iosCursorScrollPlugin({ scrollContainer: () => md.scrollContainer })
+      );
+    }
+
+    if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
+      const peerId = () => props.loroManager.peerIdStr;
+      use(
+        'peer-id',
+        peerIdPlugin({
+          peerId,
+          nodes: [InlineSearchNode, CommentNode, AwaitNode],
+        })
+      );
+    }
+
+    if (ENABLE_MARKDOWN_DIFF) {
+      use(
+        'diff',
+        diffPlugin({
+          revisionsSignal: revisionsSignal,
+          nodeIdMap: wrapper.mapping,
+        })
+      );
+    }
+
+    if (ENABLE_MARKDOWN_AI_GENERATE) {
+      use(
+        'generate',
+        generatePlugin({
+          completionSignal: completionSignal,
+          isGeneratingSignal,
+          generatedAndWaitingSignal,
+          menuSignal: generateMenuSignal,
+          setContext: generateContextSignal[1],
+          accessories: accessoryStore,
+          setAccessories: setAccessoryStore,
+        })
+      );
+    }
+
+    use(
+      'code',
+      codePlugin({
+        accessories: accessoryStore,
+        setAccessories: setAccessoryStore,
+      })
+    );
+    use('list-to-table', listToTablePlugin());
+
+    if (isFeatureEnabled(enableGitBlame)) {
+      use(
+        'blame-tooltip',
+        blameTooltipPlugin({ setState: (state) => setBlameTooltipStore(state) })
+      );
+    }
+    use(
+      'wordcount',
+      wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
+    );
+    use('progress', progressPlugin({ setStore: setProgressStats }));
+
+    return result;
+  };
+
+  const lexicalWrapper = createLexicalWrapper({
+    type: 'markdown-sync',
+    namespace: 'block-md-main',
+    isInteractable: isContentEditable,
+    withIds: true,
+    extensions: (wrapper) =>
+      editorExtensions(wrapper as LexicalWrapperWithMapping),
+  });
+
+  const { editor, cleanup: cleanupEditor } = lexicalWrapper;
+
+  setMdStore('editor', editor);
+  setMdStore('mapping', lexicalWrapper.mapping);
+  setMdStore('wordcountStats', wordcountStats);
+  setMdStore('progressStats', progressStats);
+
+  const [editorFocus, setEditorFocus] = createSignal(false);
+  autoRegister(editorFocusSignal(editor, setEditorFocus));
 
   // set up the solid-dnd stuff
   const droppable = createDroppable(editor._config.namespace, {
@@ -446,22 +709,6 @@ export function MarkdownEditor(props: {
     dndDragMove(event);
   });
 
-  const onSetListOffset = (listOffset: NodekeyOffset[]) => {
-    setFindAndReplaceStore('listOffset', listOffset);
-    if (findAndReplaceStore.currentMatch >= listOffset.length) {
-      setFindAndReplaceStore('currentMatch', 0);
-    }
-  };
-
-  const [highlightNodeId, setHighlightNodeId] = createSignal<string>();
-  const [activeCommentIdParam, setActiveCommentIdParam] = createSignal<
-    string | undefined
-  >(undefined, { equals: false });
-
-  const [activeLocation, setActiveLocation] =
-    createSignal<PersistentLocation>();
-  const [locationReady, setLocationReady] = createSignal(false);
-
   createEffect(() => {
     setMdStore({ locationReady: locationReady() });
   });
@@ -484,19 +731,6 @@ export function MarkdownEditor(props: {
           setActiveLocation(locationObj);
         }
       }
-    })
-  );
-
-  plugins.use(
-    locationPlugin({
-      mapping: lexicalWrapper.mapping,
-      revokeOptions: {
-        onRevokeLocation: () => {
-          setActiveLocation();
-        },
-        selectionChange: () => locationReady(),
-        mutation: () => locationReady(),
-      },
     })
   );
 
@@ -528,176 +762,6 @@ export function MarkdownEditor(props: {
     }
   });
 
-  const peerIdValidator: Accessor<PeerIdValidator> = () => {
-    if (!IS_SYNC()) {
-      return createPeerIdValidator(() => undefined, false);
-    }
-    const peerId = () => props.loroManager.peerIdStr;
-    return createPeerIdValidator(peerId, true);
-  };
-
-  // plugins
-  plugins
-    .richText()
-    .list()
-    .markdownShortcuts()
-    .delete()
-    .state<EditorState>(setState, 'json')
-    .history(400, props.loroManager)
-    .use(tabIndentationPlugin())
-    .use(selectionDataPlugin(lexicalWrapper))
-    .use(horizontalRulePlugin())
-    .use(
-      emojisPlugin({
-        menu: emojiMenuOperations,
-        peerIdValidator: peerIdValidator(),
-      })
-    )
-    .use(
-      mentionsPlugin({
-        menu: mentionsMenuOperations,
-        peerIdValidator: peerIdValidator(),
-        sourceDocumentId: blockId,
-      })
-    )
-    .use(
-      tagsPlugin({
-        menu: tagsMenuOperations,
-        peerIdValidator: peerIdValidator(),
-      })
-    )
-    .use(
-      snippetsPlugin({
-        menu: snippetsMenuOperations,
-        peerIdValidator: peerIdValidator(),
-        sourceDocumentId: blockId,
-      })
-    )
-    .use(
-      actionsPlugin({
-        menu: actionsMenuOperations,
-        peerIdValidator: peerIdValidator(),
-      })
-    )
-    .use(mediaPlugin())
-    .use(
-      tablePlugin({
-        hasCellMerge: true,
-        hasCellBackgroundColor: true,
-        hasTabHandler: true,
-        hasHorizontalScroll: true,
-      })
-    )
-    .use(tableCellResizerPlugin())
-    .use(tableTouchSelectionPlugin())
-    .use(
-      filePastePlugin({
-        onPasteFilesAndDirs: (fileEntries, directories) =>
-          handleFileFolderDrop(
-            fileEntries,
-            directories,
-            createFilesReadyHandler(editor, blockId)
-          ),
-      })
-    )
-    .use(
-      findAndReplacePlugin({
-        getListOffset: () => findAndReplaceStore.listOffset,
-        setListOffset: onSetListOffset,
-      })
-    )
-    .use(
-      dragInsertPlugin({
-        setState: setDragInsertStore,
-        dragListenerRef: editorContainerRef,
-      })
-    )
-    .use(textPastePlugin())
-    .use(restoreFocusPlugin())
-    .use(markdownPastePlugin())
-    .use(normalizeEnterPlugin())
-    .use(trailingParagraphPlugin())
-    .use(
-      checkboxToTaskPlugin({
-        currentUserId: userId(),
-        parentTaskId: blockName === 'task' ? blockId : undefined,
-      })
-    )
-    .use(
-      keyboardShortcutsPlugin({
-        shortcuts: [
-          ...DefaultShortcuts,
-          {
-            label: `${IS_MAC ? 'meta' : 'ctrl'}+shift+o`,
-            test: (e) =>
-              e.code === 'KeyO' &&
-              e.shiftKey &&
-              (IS_MAC ? e.metaKey : e.ctrlKey),
-            handler: (editor) => {
-              const userId = useUserId()();
-              if (!userId) return;
-              editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {});
-            },
-            priority: 0,
-          },
-        ],
-      })
-    )
-    .use(
-      documentMetadataPlugin({
-        onVersionError: (error) => setEditorError(error),
-      })
-    )
-    .use(pinnedPropertiesPlugin())
-    .use(awaitPlugin());
-
-  if (isIOS || isNativeMobilePlatform()) {
-    plugins.use(
-      iosCursorScrollPlugin({ scrollContainer: () => md.scrollContainer })
-    );
-  }
-
-  if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const peerId = () => props.loroManager.peerIdStr;
-    plugins.use(
-      peerIdPlugin({
-        peerId,
-        nodes: [InlineSearchNode, CommentNode, AwaitNode],
-      })
-    );
-  }
-
-  if (ENABLE_MARKDOWN_DIFF) {
-    plugins.use(
-      diffPlugin({
-        revisionsSignal: revisionsSignal,
-        nodeIdMap: lexicalWrapper.mapping!,
-      })
-    );
-  }
-
-  const [accessoryStore, setAccessoryStore] = createAccessoryStore();
-  if (ENABLE_MARKDOWN_AI_GENERATE) {
-    plugins.use(
-      generatePlugin({
-        completionSignal: completionSignal,
-        isGeneratingSignal,
-        generatedAndWaitingSignal,
-        menuSignal: generateMenuSignal,
-        setContext: generateContextSignal[1],
-        accessories: accessoryStore,
-        setAccessories: setAccessoryStore,
-      })
-    );
-  }
-  plugins.use(
-    codePlugin({
-      accessories: accessoryStore,
-      setAccessories: setAccessoryStore,
-    })
-  );
-  plugins.use(listToTablePlugin());
-
   const [editorHasNoContent, setEditorHasNoContent] = createSignal(false);
 
   const observeClickTargetHeight = () => {
@@ -716,24 +780,23 @@ export function MarkdownEditor(props: {
     setMdStore('selection', lexicalWrapper.selection);
     editor.setRootElement(el);
 
-    // Register plugins that require the container ref.
-    plugins.use(
-      dragInsertPlugin({
-        setState: setDragInsertStore,
-        dragListenerRef: editorContainerRef,
-      })
-    );
-    plugins.use(
-      draggableBlockPlugin({
-        setState: setDraggableBlockStore,
-        anchorElem: editorContainerRef,
-      })
-    );
+    // These registrations depend on the connected container and are owned by
+    // the Solid root lifecycle rather than being added to the extension graph late.
+    const cleanupDragInsert = dragInsertPlugin({
+      setState: setDragInsertStore,
+      dragListenerRef: editorContainerRef,
+    })(editor);
+    const cleanupDraggableBlocks = draggableBlockPlugin({
+      setState: setDraggableBlockStore,
+      anchorElem: editorContainerRef,
+    })(editor);
 
     const editorRefObserver = new ResizeObserver(observeClickTargetHeight);
 
     editorRefObserver.observe(el);
     onCleanup(() => {
+      cleanupDragInsert();
+      cleanupDraggableBlocks();
       editorRefObserver.disconnect();
     });
   };
@@ -742,7 +805,7 @@ export function MarkdownEditor(props: {
 
   onCleanup(() => {
     additionalCleanups.forEach((cleanup) => cleanup());
-    cleanupPlugins();
+    cleanupEditor();
   });
 
   const [titleEditorMenuOpen, setTitleEditorMenuOpen] = createSignal(false);
@@ -780,12 +843,9 @@ export function MarkdownEditor(props: {
     editor.setEditable(editorReady() && (canEdit() ?? false));
   });
 
-  plugins.useReactive(
+  lazyRegister(
     () => md.titleEditor,
-    () => {
-      if (md.titleEditor)
-        return keyNavigationPlugin(md.titleEditor, isInlineMenuOpen);
-    }
+    (titleEditor) => keyNavigationPlugin(titleEditor, isInlineMenuOpen)(editor)
   );
 
   const isBlankMarkdown = createMemo(() => {
@@ -957,23 +1017,6 @@ export function MarkdownEditor(props: {
     },
   });
 
-  const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
-  if (isFeatureEnabled(enableGitBlame)) {
-    plugins.use(
-      blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) })
-    );
-  }
-
-  const [wordcountStats, setWordcountStats] = createWordcountStatsStore();
-  plugins.use(
-    wordcountPlugin({ setStore: setWordcountStats, debounceTime: 200 })
-  );
-  setMdStore('wordcountStats', wordcountStats);
-
-  const [progressStats, setProgressStats] = createProgressStatsStore();
-  plugins.use(progressPlugin({ setStore: setProgressStats }));
-  setMdStore('progressStats', progressStats);
-
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <Show when={editorError()}>
@@ -1018,7 +1061,6 @@ export function MarkdownEditor(props: {
         <Show when={IS_SYNC()}>
           <MarkdownCollabProvider
             editor={editor}
-            pluginManager={plugins}
             editorContainerRef={editorContainerRef}
             highlighLayerRef={highlightLayerRef() ?? editorContainerRef}
             mappings={lexicalWrapper.mapping!}

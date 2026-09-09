@@ -93,7 +93,7 @@ function TextBoxEditor(props: {
     );
 
   const handle = config.buildHandle();
-  const { lexical: editor, plugins } = handle;
+  const { lexical: editor } = handle;
   const state = handle._internal;
   props.setter(editor);
 
@@ -140,19 +140,17 @@ function TextBoxEditor(props: {
     };
   };
 
-  plugins.useReactive(
-    () => props.focusOnMount,
-    () => {
-      if (props.focusOnMount) {
-        return (editor) => {
-          return editor.registerRootListener((root) => {
-            if (root === null) return;
-            Object.assign(root.style, textwrapStyles());
-          });
-        };
-      }
-    }
-  );
+  let cleanupTextWrap = () => {};
+  createEffect(() => {
+    cleanupTextWrap();
+    cleanupTextWrap = props.focusOnMount
+      ? editor.registerRootListener((root) => {
+          if (root === null) return;
+          Object.assign(root.style, textwrapStyles());
+        })
+      : () => {};
+  });
+  onCleanup(() => cleanupTextWrap());
 
   createEffect(() => {
     const val = state.markdownState();

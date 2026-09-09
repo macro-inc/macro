@@ -8,7 +8,7 @@ import {
   type MarkdownEditorErrors,
 } from '@core/component/LexicalMarkdown/constants';
 import {
-  createLexicalWrapper,
+  createLegacyLexicalWrapper,
   LexicalWrapperContext,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
@@ -138,7 +138,7 @@ export function CollabMdSurface(props: CollabMdSurfaceProps) {
 
   const isContentEditable = () => canEdit() && !editorError();
 
-  const lexicalWrapper = createLexicalWrapper({
+  const lexicalWrapper = createLegacyLexicalWrapper({
     type: 'markdown-sync',
     namespace: props.namespace ?? 'collab-surface',
     isInteractable: isContentEditable,
@@ -290,7 +290,6 @@ export function CollabMdSurface(props: CollabMdSurfaceProps) {
           <Show when={session.syncSource()}>
             <CollabProvider
               editor={editor}
-              pluginManager={plugins}
               editorContainerRef={editorContainerRef}
               highlightLayerRef={editorContainerRef}
               mappings={lexicalWrapper.mapping!}

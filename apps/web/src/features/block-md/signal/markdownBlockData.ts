@@ -17,7 +17,7 @@ export const blockDataSignal = blockDataSignalAs<MarkdownData>('md');
  * Store for the data and helpful ui refs for the Notebook/MD block
  * @property editor The Editor instance
  * @property titleEditor The Editor instance for the title
- * @property plugins The plugin manager for the main editor
+ * @property plugins The plugin manager for legacy editor surfaces
  * @property selection A store with the processed selection data
  * @property notebook The notbook ref which is the direct containing parent of the two editors and is
  *     clamped to a max width.

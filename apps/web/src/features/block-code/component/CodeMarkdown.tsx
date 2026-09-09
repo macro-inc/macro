@@ -1,7 +1,7 @@
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
 import {
-  createLexicalWrapper,
+  createLegacyLexicalWrapper,
   LexicalWrapperContext,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
@@ -19,7 +19,7 @@ export function CodeMarkdown() {
   const blockText = blockTextSignal.get;
   const blockMetadata = blockMetadataSignal.get;
 
-  const lexicalWrapper = createLexicalWrapper({
+  const lexicalWrapper = createLegacyLexicalWrapper({
     type: 'markdown',
     namespace: 'code-markdown',
     isInteractable: () => false,

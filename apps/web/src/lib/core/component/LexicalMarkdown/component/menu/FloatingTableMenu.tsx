@@ -8,6 +8,7 @@ import {
   createEffect,
   createSignal,
   Index,
+  onCleanup,
   Show,
   untrack,
   useContext,
@@ -39,7 +40,6 @@ const MAX_GRID_SIZE = 12;
 export function FloatingTableMenu() {
   const canEdit = useCanEdit();
   const lexicalWrapper = useContext(LexicalWrapperContext);
-  const plugins = () => lexicalWrapper?.plugins;
   const editor = () => lexicalWrapper?.editor;
 
   const [menuOpen, setMenuOpen] = createMenuOpenSignal(
@@ -79,15 +79,16 @@ export function FloatingTableMenu() {
     resetMenu();
   };
 
+  let cleanupTablePicker = () => {};
   createEffect(() => {
-    const currentPlugins = plugins();
-    if (!currentPlugins) return;
-
-    currentPlugins.useReactive(canEdit, () => {
-      if (!canEdit()) return;
-      return tablePickerPlugin({ onCreateTable: handleCreateTable });
-    });
+    cleanupTablePicker();
+    const currentEditor = editor();
+    cleanupTablePicker =
+      currentEditor && canEdit()
+        ? tablePickerPlugin({ onCreateTable: handleCreateTable })(currentEditor)
+        : () => {};
   });
+  onCleanup(() => cleanupTablePicker());
 
   const visibleRows = () =>
     Math.max(MIN_GRID_SIZE, Math.min(MAX_GRID_SIZE, rows() + 1));

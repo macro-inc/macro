@@ -35,7 +35,6 @@ false && clickOutside;
 export function FloatingEquationMenu() {
   const canEdit = useCanEdit();
   const lexicalWrapper = useContext(LexicalWrapperContext);
-  const plugins = () => lexicalWrapper?.plugins;
   const editor = () => lexicalWrapper?.editor;
 
   const [menuOpen, setMenuOpen] = createMenuOpenSignal(
@@ -167,19 +166,19 @@ export function FloatingEquationMenu() {
     resetMenu();
   });
 
+  let cleanupKatex = () => {};
   createEffect(() => {
-    const currentPlugins = plugins();
-    if (!currentPlugins) return;
-
-    if (!canEdit()) return;
-
-    currentPlugins.use(
-      katexPlugin({
-        onClickEquation: handleClickEquation,
-        onCreateEquation: handleCreateEquation,
-      })
-    );
+    cleanupKatex();
+    const currentEditor = editor();
+    cleanupKatex =
+      currentEditor && canEdit()
+        ? katexPlugin({
+            onClickEquation: handleClickEquation,
+            onCreateEquation: handleCreateEquation,
+          })(currentEditor)
+        : () => {};
   });
+  onCleanup(() => cleanupKatex());
 
   const keydown = (e: KeyboardEvent) => {
     if (!menuOpen()) {

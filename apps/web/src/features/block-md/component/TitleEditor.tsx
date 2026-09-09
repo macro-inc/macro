@@ -5,7 +5,7 @@ import {
 } from '@core/block';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
-import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { createLegacyLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
   autoRegister,
   emojisPlugin,
@@ -192,7 +192,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const [state, setState] = createSignal('');
   const [initialized, setInitialized] = createSignal(false);
 
-  const { editor, plugins, cleanup } = createLexicalWrapper({
+  const { editor, plugins, cleanup } = createLegacyLexicalWrapper({
     namespace: 'block-md-title',
     type: 'title',
     isInteractable: createMemo(() => {

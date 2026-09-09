@@ -1,6 +1,7 @@
 /**
  * @file Wrap the Lexical Editor in some helpful utilities.
  */
+import { buildEditorFromExtensions } from '@lexical/extension';
 import {
   type EditorType,
   type NodeIdMappings,
@@ -9,21 +10,22 @@ import {
   RegisteredNodesByType,
   SupportedNodeTypes,
 } from '@macro-inc/lexical-core';
-import type { NodeKey } from 'lexical';
+import type { AnyLexicalExtensionArgument, NodeKey } from 'lexical';
 import {
-  createEditor,
+  defineExtension,
   type EditorThemeClasses,
   type LexicalEditor,
 } from 'lexical';
 import { createContext } from 'solid-js';
 import type { Store } from 'solid-js/store';
+import { pluginExtension } from '../extensions/pluginExtension';
+import { insertTextPlugin } from '../plugins/insert-text';
+import { nodeTransformPlugin } from '../plugins/node-transform';
 import {
   createPluginManager,
-  insertTextPlugin,
-  nodeTransformPlugin,
   type PluginManager,
-  type SelectionData,
-} from '../plugins';
+} from '../plugins/pluginManager';
+import type { SelectionData } from '../plugins/selection-data';
 import { theme as baseTheme } from '../theme';
 
 type LexicalWrapperProps = {
@@ -32,11 +34,15 @@ type LexicalWrapperProps = {
   isInteractable: () => boolean;
   withIds?: boolean;
   theme?: EditorThemeClasses;
+  skipPreviewFetch?: boolean;
+  /** Additional behavior composed into the editor's extension graph. */
+  extensions?:
+    | AnyLexicalExtensionArgument[]
+    | ((wrapper: LexicalWrapper) => AnyLexicalExtensionArgument[]);
 };
 
 export type LexicalWrapperBase = {
   type: EditorType;
-  plugins: PluginManager;
   editor: LexicalEditor;
   cleanup: () => void;
   isInteractable: () => boolean;
@@ -50,6 +56,11 @@ export type LexicalWrapperWithMapping = LexicalWrapperBase & {
 };
 
 export type LexicalWrapper = LexicalWrapperBase | LexicalWrapperWithMapping;
+
+/** Wrapper retained for editor surfaces that have not migrated to extensions. */
+export type LegacyLexicalWrapper = LexicalWrapper & {
+  plugins: PluginManager;
+};
 
 export const LexicalWrapperContext = createContext<LexicalWrapper>();
 
@@ -82,6 +93,8 @@ export function createLexicalWrapper({
   isInteractable,
   withIds,
   theme,
+  skipPreviewFetch,
+  extensions,
 }: LexicalWrapperProps): LexicalWrapper {
   _id++;
 
@@ -94,44 +107,84 @@ export function createLexicalWrapper({
     return true;
   });
 
-  const editor = createEditor({
-    theme: theme ?? baseTheme,
-    namespace: namespace + '_' + _id,
-    nodes: [...nodes, ...replacements],
-    onError: console.error,
-  });
-
-  const plugins = createPluginManager(editor, type);
-
-  let mapping: NodeIdMappings | undefined;
-
-  // Default plugins here.
-  plugins.use(insertTextPlugin());
-  plugins.use(nodeTransformPlugin());
-
-  if (withIds) {
-    mapping = createMapping();
-    plugins.use(
-      nodeIdPlugin({
-        nodes: SupportedNodeTypes,
-        idLength: 8,
-        mappings: mapping,
-      })
-    );
-  }
-
-  const cleanup = () => {
-    plugins.cleanup();
-  };
-
-  return {
-    plugins,
-    editor,
-    cleanup,
+  const mapping = withIds ? createMapping() : undefined;
+  let disposeEditor = () => {};
+  const wrapper: LexicalWrapper = {
+    editor: undefined as unknown as LexicalEditor,
+    cleanup: () => disposeEditor(),
     type,
     isInteractable,
     mapping,
+    skipPreviewFetch,
   };
+  const configuredExtensions =
+    typeof extensions === 'function' ? extensions(wrapper) : (extensions ?? []);
+  const editorWithDispose = buildEditorFromExtensions(
+    defineExtension({
+      name: '@macro-inc/lexical/editor-config',
+      theme: theme ?? baseTheme,
+      namespace: namespace + '_' + _id,
+      nodes: () => [...nodes, ...replacements],
+      onError: console.error,
+      register: (editor) => {
+        wrapper.editor = editor;
+        return () => {};
+      },
+    }),
+    pluginExtension('insert-text', insertTextPlugin()),
+    pluginExtension('node-transform', nodeTransformPlugin()),
+    ...(mapping
+      ? [
+          pluginExtension(
+            'node-id',
+            nodeIdPlugin({
+              nodes: SupportedNodeTypes,
+              idLength: 8,
+              mappings: mapping,
+            })
+          ),
+        ]
+      : []),
+    ...configuredExtensions
+  );
+  disposeEditor = editorWithDispose.dispose;
+  wrapper.editor = editorWithDispose;
+
+  return wrapper;
+}
+
+/**
+ * Compatibility constructor for editor surfaces that still register through
+ * PluginManager. New editor configurations should use `extensions` instead.
+ */
+export function createLegacyLexicalWrapper(
+  props: LexicalWrapperProps & { withIds: true }
+): LexicalWrapperWithMapping & { plugins: PluginManager };
+export function createLegacyLexicalWrapper(
+  props: LexicalWrapperProps & { withIds?: false | undefined }
+): LexicalWrapperBase & { plugins: PluginManager };
+export function createLegacyLexicalWrapper(
+  props: LexicalWrapperProps
+): LegacyLexicalWrapper {
+  let plugins!: PluginManager;
+  const legacyManagerExtension = pluginExtension(
+    'legacy-plugin-manager',
+    (editor) => {
+      plugins = createPluginManager(editor, props.type);
+      return plugins.cleanup;
+    }
+  );
+  const configuredExtensions = props.extensions;
+  const extensions = (wrapper: LexicalWrapper) => [
+    legacyManagerExtension,
+    ...(typeof configuredExtensions === 'function'
+      ? configuredExtensions(wrapper)
+      : (configuredExtensions ?? [])),
+  ];
+  const wrapper = props.withIds
+    ? createLexicalWrapper({ ...props, withIds: true, extensions })
+    : createLexicalWrapper({ ...props, withIds: false, extensions });
+  return Object.assign(wrapper, { plugins });
 }
 
 export function isWrapperWithIds(
