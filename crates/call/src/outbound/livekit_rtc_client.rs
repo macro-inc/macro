@@ -8,10 +8,10 @@ mod test;
 
 use futures::future;
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
-use livekit_api::services::ServiceError;
 use livekit_api::services::agent_dispatch::AgentDispatchClient;
 use livekit_api::services::egress::{EgressClient, EgressOutput, RoomCompositeOptions, encoding};
 use livekit_api::services::room::{CreateRoomOptions, RoomClient};
+use livekit_api::services::{ServiceError, TwirpError, TwirpErrorCode};
 use livekit_api::webhooks::WebhookReceiver;
 use livekit_protocol::{
     AudioCodec, CreateAgentDispatchRequest, EncodedFileOutput, EncodedFileType, S3Upload,
@@ -336,5 +336,16 @@ impl CallRtcClient for LivekitRtcClient {
 }
 
 fn interpret_remove_participant_result(result: Result<(), ServiceError>) -> anyhow::Result<()> {
-    result.map_err(Into::into)
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) if is_participant_already_absent(&error) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn is_participant_already_absent(error: &ServiceError) -> bool {
+    matches!(
+        error,
+        ServiceError::Twirp(TwirpError::Twirp(code)) if code.code == TwirpErrorCode::NOT_FOUND
+    )
 }

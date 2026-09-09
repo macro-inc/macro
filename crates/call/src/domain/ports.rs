@@ -493,7 +493,7 @@ pub trait CallRtcClient: Send + Sync + 'static {
         request: VoipPushPayloadRequest<'a>,
     ) -> impl Future<Output = Vec<(MacroUserIdStr<'static>, VoipPushPayload)>> + Send;
 
-    /// Remove a participant from a room.
+    /// Remove a participant from a room. Already-absent identities succeed.
     fn remove_participant<'a>(
         &self,
         room_name: &str,
