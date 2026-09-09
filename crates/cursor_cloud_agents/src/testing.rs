@@ -6,10 +6,11 @@ use crate::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunListing,
     RunOutcome,
 };
-use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
+use crate::domain::ports::{
+    CursorAgents, RepositoryChooser, RunStream, SessionIntent, SessionNotifier,
+};
 use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
@@ -535,13 +536,17 @@ impl SessionNotifier for RecordingNotifier {
     }
 }
 
-/// Resolves every session to the same repository — or none.
+/// Answers every prompt with the same repository — or none — and the same
+/// pull-request decision.
 #[derive(Debug, Clone, Default)]
-pub struct FixedRepos(pub Option<RepoUrl>);
+pub struct FixedChooser(pub Option<RepoUrl>, pub bool);
 
-impl RepoResolver for FixedRepos {
-    fn resolve(&self, _cwd: &Path) -> Option<RepoUrl> {
-        self.0.clone()
+impl RepositoryChooser for FixedChooser {
+    async fn choose(&self, _prompt: &str) -> Result<SessionIntent, rootcause::Report> {
+        Ok(SessionIntent {
+            repository: self.0.clone(),
+            open_pull_request: self.1,
+        })
     }
 }
 

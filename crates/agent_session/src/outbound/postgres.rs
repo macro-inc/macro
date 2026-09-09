@@ -658,6 +658,25 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(())
     }
 
+    async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET repo_url = $2,
+                modified_at = NOW()
+            WHERE id = $1
+              AND repo_url IS DISTINCT FROM $2
+            "#,
+            id.as_uuid(),
+            repo_url,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist agent session repository")?;
+        tracing::debug!(%id, changed = result.rows_affected() > 0, "agent session repository set");
+        Ok(())
+    }
+
     async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
         sqlx::query!(
             r#"

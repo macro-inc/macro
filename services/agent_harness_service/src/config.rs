@@ -120,12 +120,6 @@ pub struct Config {
     /// Repository sessions run against, until it becomes per-request data.
     #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
     pub harness_repo_url: String,
-    /// Repository `@cursor` sessions work on. Temporary hardcoding, same as
-    /// `harness_repo_url` — and one repository for everyone is a real limit
-    /// here, since each session runs on its own owner's Cursor account and
-    /// only works if *their* GitHub App installation can see this repo.
-    #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
-    pub cursor_repo_url: String,
     /// Model id stamped onto sessions the in-memory bot opens. Unknown ids
     /// fall back to the agent loop's default model.
     #[macro_config_default(String::from("claude-sonnet-5"))]

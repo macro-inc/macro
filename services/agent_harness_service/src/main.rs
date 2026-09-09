@@ -51,6 +51,7 @@ use agent_harness::outbound::daytona::{
 };
 use agent_harness::outbound::egress::EgressProvisioner;
 use agent_harness::outbound::forward::RedisCommandForwarder;
+use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
 use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
@@ -90,8 +91,9 @@ use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
 use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
 use cursor_cloud_agents::api::CURSOR_API_BASE_URL;
-use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
-use github::domain::service::{InstallationTokenConfig, InstallationTokenService};
+use github::domain::service::{
+    InstallationTokenConfig, InstallationTokenService, ReachableRepositoriesService,
+};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use harness_bindings::{PgHarnessBindings, PgHarnessPresence};
@@ -413,12 +415,25 @@ async fn run() -> anyhow::Result<()> {
             &aws_config,
         ))),
     );
+    // Which repositories a session may work on is the owner's question, not
+    // the deployment's: the same App credentials the egress proxy mints tokens
+    // with, read in the other direction - from the user to their installations.
+    let reachable_repositories = Arc::new(GithubReachableRepositories::new(
+        ReachableRepositoriesService::new(
+            InstallationTokenConfig {
+                client_id: config.github_sync_app_client_id.clone(),
+                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
+            },
+            PgGithubSyncRepo::new(pool.clone()),
+            GithubSyncClientImpl::default(),
+        ),
+    ));
     let cursor_manager = CursorContainerManager::new(
         cursor_keys.clone(),
         CURSOR_API_BASE_URL.to_owned(),
-        CursorRepoUrl::parse(&config.cursor_repo_url)
-            .context("CURSOR_REPO_URL is not a valid repository url")?,
         session_repo.clone(),
+        reachable_repositories,
+        ai_usage::pg_recorder(pool.clone()),
         pool.clone(),
         replica,
         pending_commands.clone(),

@@ -338,6 +338,20 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         acp_session_id: SessionId,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Persist the repository the session works on, or clear it. Idempotent.
+    ///
+    /// Written after the session is open, because for some runtimes the
+    /// repository is not known at creation: a Cursor session's repository
+    /// follows from what its first prompt asks for. The row is authoritative
+    /// once written - the egress proxy pins the sandbox's git traffic to it -
+    /// so `None` is a real answer meaning "this session works on no
+    /// repository", not "leave whatever is there".
+    fn set_repo_url(
+        &self,
+        id: AgentSessionId,
+        repo_url: Option<String>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Persist the model the session is running on. Idempotent.
     fn set_model(&self, id: AgentSessionId, model: &str)
     -> impl Future<Output = Result<()>> + Send;

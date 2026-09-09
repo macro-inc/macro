@@ -1216,6 +1216,10 @@ where
         self.repo.set_acp_session_id(id, acp_session_id).await
     }
 
+    async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
+        self.repo.set_repo_url(id, repo_url).await
+    }
+
     async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
         self.repo.set_model(id, model).await
     }

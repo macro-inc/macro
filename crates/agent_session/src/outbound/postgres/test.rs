@@ -352,6 +352,54 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_repo_url_replaces_and_clears_the_repository(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    repo.set_repo_url(id, Some("https://github.com/macro-inc/macro".to_owned()))
+        .await
+        .expect("persist repository");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .repo_url
+            .as_deref(),
+        Some("https://github.com/macro-inc/macro")
+    );
+
+    // Clearing is a real answer, not a no-op: a session that chose no
+    // repository must not keep the one it was stamped with at open.
+    repo.set_repo_url(id, None).await.expect("clear repository");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .repo_url,
+        None
+    );
+
+    // Idempotent: restating the same absence changes nothing.
+    let modified_at = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get session")
+        .modified_at;
+    repo.set_repo_url(id, None)
+        .await
+        .expect("restate repository");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .modified_at,
+        modified_at
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_name_updates_only_the_name(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
