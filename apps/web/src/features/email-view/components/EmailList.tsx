@@ -236,9 +236,20 @@ export function EmailList(props: EmailListProps) {
     return row?.kind === 'entity' ? row.entity : undefined;
   };
 
+  const [collapseEntity, setCollapseEntity] =
+    createSignal<(entityId: string) => Promise<void>>();
+
   const actionState = toEntityActionListState({
     controller: list,
     getEntity: (row) => (row.kind === 'entity' ? row.entity : undefined),
+    collapse: {
+      // Signal and Noise remove archived threads; finish the row animation first.
+      enabled: () =>
+        isTouchDevice() && (state.tab === 'important' || state.tab === 'noise'),
+      run: async (entityId) => {
+        await collapseEntity()?.(entityId);
+      },
+    },
     onFocus: (target) => {
       if (target) {
         virtualizer()?.scrollToIndex(target.index, { align: 'nearest' });
@@ -424,6 +435,7 @@ export function EmailList(props: EmailListProps) {
         <ListLayoutProvider ref={grid}>
           <SwipableRowProvider
             container={viewport}
+            setCollapseEntity={setCollapseEntity}
             canSwipeLeft={(entityId) => {
               const row = swipeRowsByEntityId().get(entityId);
               return row ? markDoneActionFor(row) !== undefined : false;
