@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivityContextProvider } from '../context/activity-context';
 import { placeholderOverview } from '../core/placeholder-overview';
 import {
@@ -34,30 +34,16 @@ const virtual = vi.hoisted(() => {
   };
 });
 
-// jsdom has neither ResizeObserver nor layout. The graph measures its week
-// area to decide how many columns fit, so give it a desktop-width answer.
-const WEEK_AREA_PX = 900;
-beforeEach(() => {
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    }
-  );
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-    width: WEEK_AREA_PX,
-    height: 0,
-    top: 0,
-    left: 0,
-    right: WEEK_AREA_PX,
-    bottom: 0,
-    x: 0,
-    y: 0,
-    toJSON: () => ({}),
-  });
-});
+// jsdom has no ResizeObserver; the graph and the mobile insets measure
+// themselves with one.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
 
 vi.mock('virtua/solid', async () => {
   const { For } = await import('solid-js');
@@ -98,11 +84,7 @@ vi.mock('@service-storage/websocket', () => ({
   createWebSocketJob: () => Promise.reject(new Error('no websocket in tests')),
 }));
 
-afterEach(() => {
-  cleanup();
-  vi.restoreAllMocks();
-  vi.unstubAllGlobals();
-});
+afterEach(cleanup);
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -127,7 +109,6 @@ describe('MyActivityView', () => {
     const skeletonDays = skeleton.querySelectorAll(
       '[data-activity-day]'
     ).length;
-    // 900px of week area fits 60 columns, more than the placeholder year has.
     expect(skeletonDays).toBeGreaterThan(300);
     expect(container.textContent).not.toContain('Loading activity overview');
     expect(container.textContent).toContain('Loading…');

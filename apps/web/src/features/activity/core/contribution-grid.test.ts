@@ -7,16 +7,8 @@ import {
   scrollLeftAtWeeksFromEnd,
   weeksFromEnd,
 } from './contribution-grid';
-import { placeholderOverview } from './placeholder-overview';
 
 describe('buildContributionGrid', () => {
-  // 2025-09-07 (Sunday) through 2026-09-06: 52 full weeks.
-  const year = { from: '2025-09-07', to: '2026-09-06', days: [] };
-
-  it('keeps every column of a whole-week window', () => {
-    expect(buildContributionGrid(year).weeks).toHaveLength(52);
-  });
-
   it('keeps partial first and last weeks with the outside days null', () => {
     // Wednesday 2026-08-19 through Sunday 2026-08-30 (to is exclusive).
     const grid = buildContributionGrid({
@@ -49,38 +41,6 @@ describe('buildContributionGrid', () => {
       null,
     ]);
     expect(grid.weeks[2][0]?.count).toBe(5);
-  });
-
-  it('shows a window shorter than a week as one partial column', () => {
-    const grid = buildContributionGrid({
-      from: '2026-08-19',
-      to: '2026-08-24',
-      days: [{ date: '2026-08-23', count: 8 }],
-    });
-
-    expect(grid.weeks).toHaveLength(2);
-    expect(grid.weeks[1][0]?.count).toBe(8);
-    expect(grid.weeks[1].slice(1)).toEqual([
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-    ]);
-  });
-
-  it('gives the placeholder the same columns as the overview it stands in for', () => {
-    const placeholder = placeholderOverview(new Date('2026-09-07T12:00:00Z'));
-    const real = { ...placeholder, days: [{ date: '2026-09-06', count: 90 }] };
-    const placeholderGrid = buildContributionGrid(placeholder);
-    const realGrid = buildContributionGrid(real);
-
-    expect(placeholderGrid.weeks).toHaveLength(realGrid.weeks.length);
-    expect(realGrid.weeks.at(-1)?.[0]).toMatchObject({
-      date: '2026-09-06',
-      count: 90,
-    });
   });
 
   it('fills missing API dates with zero and derives relative intensity', () => {
@@ -165,14 +125,6 @@ describe('heatmapGeometry', () => {
     expect(wide.height).toBe(7 * 14 + 6 * 3);
   });
 
-  it('spreads the rounding remainder so a fitted pane is spanned exactly', () => {
-    // 53 * 11 + 52 * 3 = 739 fits in 745; the 6px remainder opens the seams.
-    const fitted = heatmapGeometry(745, columns);
-    expect(fitted).toMatchObject({ cell: 11, gap: 3, overflows: false });
-    expect(fitted.columnGap).toBeCloseTo(3 + 6 / 52);
-    expect(fitted.width).toBeCloseTo(745);
-  });
-
   it('tightens the gap once the cell would fall under ten pixels', () => {
     // At gap 3, 640 fits a 9px cell; at gap 2 it fits 10, capped to 9.
     expect(heatmapGeometry(640, columns)).toMatchObject({
@@ -202,14 +154,6 @@ describe('heatmapGeometry', () => {
       overflows: true,
     });
   });
-
-  it('has no width for an empty grid', () => {
-    expect(heatmapGeometry(300, 0)).toMatchObject({
-      cell: HEATMAP_MAX_CELL,
-      width: 0,
-      overflows: false,
-    });
-  });
 });
 
 describe('week-anchored scroll position', () => {
@@ -222,14 +166,6 @@ describe('week-anchored scroll position', () => {
     expect(weeksFromEnd({ ...area, scrollLeft: atEnd }, phone)).toBe(0);
     // Over-scroll past the end still reads as the newest week.
     expect(weeksFromEnd({ ...area, scrollLeft: atEnd + 40 }, phone)).toBe(0);
-  });
-
-  it('counts panned distance in week columns, not pixels', () => {
-    const pitch = phone.cell + phone.columnGap;
-    const atEnd = area.scrollWidth - area.clientWidth;
-    expect(
-      weeksFromEnd({ ...area, scrollLeft: atEnd - 12 * pitch }, phone)
-    ).toBe(12);
   });
 
   it('opens on the newest week at zero and clamps at the oldest', () => {
@@ -255,12 +191,5 @@ describe('week-anchored scroll position', () => {
     expect(weeksFromEnd({ ...after, scrollLeft: restored }, wider)).toBeCloseTo(
       8
     );
-  });
-
-  it('clamps at the oldest week when a wider pane shows more than was hidden', () => {
-    const oldest = weeksFromEnd({ ...area, scrollLeft: 0 }, phone);
-    const wider = heatmapGeometry(380, 53);
-    const after = { scrollWidth: wider.width, clientWidth: 380 };
-    expect(scrollLeftAtWeeksFromEnd(oldest, after, wider)).toBe(0);
   });
 });

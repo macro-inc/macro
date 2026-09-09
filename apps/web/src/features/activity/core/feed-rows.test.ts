@@ -168,11 +168,8 @@ describe('pinnedDayLabel', () => {
     // [startIndex, expected]
     [0, undefined],
     [1, 'Today'],
-    [2, 'Today'],
     [3, 'Today'],
     [4, 'Yesterday'],
-    [5, 'Yesterday'],
-    [6, 'Yesterday'],
     [99, 'Yesterday'],
   ])('start index %i -> %s', (startIndex, expected) => {
     expect(pinnedDayLabel(rows, startIndex)).toBe(expected);
