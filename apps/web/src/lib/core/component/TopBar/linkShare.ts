@@ -10,6 +10,16 @@ export type LinkSharePayload = Required<
   Pick<UpdateSharePermissionRequestV2, 'linkShare' | 'linkShareAccessLevel'>
 >;
 
+export const NO_TEAM_SHARE = 'NONE' as const;
+
+export type TeamShareLevel = Exclude<AccessLevel, 'owner'>;
+
+export type TeamShareScope = TeamShareLevel | typeof NO_TEAM_SHARE;
+
+export type TeamSharePayload = Required<
+  Pick<UpdateSharePermissionRequestV2, 'teamShareAccessLevel'>
+>;
+
 type LinkShareScopeCopy = {
   label: string;
   title: string;
@@ -17,7 +27,7 @@ type LinkShareScopeCopy = {
 };
 
 export type ShareStatus = {
-  label: 'Public' | 'Team' | 'Shared' | 'Link off';
+  label: 'Public' | 'Team' | 'Shared' | 'Just me';
   tooltip: string;
 };
 
@@ -26,7 +36,7 @@ const LINK_SHARE_SCOPE_COPY: Record<LinkShareScope, LinkShareScopeCopy> = {
     label: 'None',
     title: 'Link sharing off',
     description:
-      'Link access is disabled. Existing team, people, channel, and inherited access is unchanged.',
+      'Only people and channels you explicitly share with can access this item.',
   },
   PUBLIC: {
     label: 'Public',
@@ -41,11 +51,25 @@ const LINK_SHARE_SCOPE_COPY: Record<LinkShareScope, LinkShareScopeCopy> = {
   },
 };
 
+const TEAM_SHARE_COPY: Record<TeamShareScope, string> = {
+  NONE: 'None',
+  view: 'View',
+  comment: 'Comment',
+  edit: 'Edit',
+};
+
 export const LINK_SHARE_SCOPE_OPTIONS = (
   ['NONE', 'PUBLIC', 'TEAM'] as const
 ).map((scope) => ({
   value: scope,
   label: LINK_SHARE_SCOPE_COPY[scope].label,
+}));
+
+export const TEAM_SHARE_SCOPE_OPTIONS = (
+  ['NONE', 'view', 'comment', 'edit'] as const
+).map((scope) => ({
+  value: scope,
+  label: TEAM_SHARE_COPY[scope],
 }));
 
 export function getLinkShareScope(
@@ -87,41 +111,56 @@ export function getLinkShareScopeCopy(
   return LINK_SHARE_SCOPE_COPY[scope];
 }
 
-export function getShareStatus({
-  linkShare,
-  teamShareAccessLevel,
-  hasPeopleOrChannelShares,
-}: {
-  linkShare: LinkShare | null | undefined;
-  teamShareAccessLevel?: AccessLevel | null;
-  hasPeopleOrChannelShares: boolean;
-}): ShareStatus {
-  const hasTeamShare = teamShareAccessLevel != null;
-  const descriptions: string[] = [];
+export function getTeamShareScope(
+  teamShareAccessLevel: AccessLevel | null | undefined
+): TeamShareScope {
+  if (
+    teamShareAccessLevel === 'view' ||
+    teamShareAccessLevel === 'comment' ||
+    teamShareAccessLevel === 'edit'
+  ) {
+    return teamShareAccessLevel;
+  }
+  return NO_TEAM_SHARE;
+}
 
-  if (linkShare != null) {
-    descriptions.push(LINK_SHARE_SCOPE_COPY[linkShare].description);
-  }
-  if (hasTeamShare) {
-    descriptions.push("Shared directly with the owner's team.");
-  }
-  if (hasPeopleOrChannelShares) {
-    descriptions.push('Shared with specific people or channels.');
-  }
+export function buildTeamSharePayload(scope: TeamShareScope): TeamSharePayload {
+  return {
+    teamShareAccessLevel: scope === NO_TEAM_SHARE ? null : scope,
+  };
+}
 
-  let label: ShareStatus['label'] = 'Link off';
+export function getTeamShareScopeCopy(scope: TeamShareScope): string {
+  return TEAM_SHARE_COPY[scope];
+}
+
+export function getShareStatus(
+  linkShare: LinkShare | null | undefined,
+  hasExplicitShares: boolean
+): ShareStatus {
   if (linkShare === 'PUBLIC') {
-    label = 'Public';
-  } else if (linkShare === 'TEAM' || hasTeamShare) {
-    label = 'Team';
-  } else if (hasPeopleOrChannelShares) {
-    label = 'Shared';
+    return {
+      label: 'Public',
+      tooltip: LINK_SHARE_SCOPE_COPY.PUBLIC.description,
+    };
+  }
+
+  if (linkShare === 'TEAM') {
+    return {
+      label: 'Team',
+      tooltip: LINK_SHARE_SCOPE_COPY.TEAM.description,
+    };
+  }
+
+  if (hasExplicitShares) {
+    return {
+      label: 'Shared',
+      tooltip: 'Shared with specific people or channels.',
+    };
   }
 
   return {
-    label,
-    tooltip:
-      descriptions.join(' ') ||
-      'Link sharing is off. Access through teams, people, channels, or parent folders may still apply.',
+    label: 'Just me',
+    tooltip: 'Only you can access this item.',
   };
 }
