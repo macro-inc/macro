@@ -349,6 +349,7 @@ use utoipa::OpenApi;
 
         // foreign_entity
         foreign_entity::inbound::axum_router::get_foreign_entity_handler,
+        foreign_entity::inbound::axum_router::get_foreign_entity_by_source_handler,
 
         // threads
         threads::edit_thread::edit_thread_handler,
