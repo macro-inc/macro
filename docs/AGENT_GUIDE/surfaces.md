@@ -172,3 +172,8 @@ but unconnected app gets a tool result saying so, and the agent's reply renders 
 
 Toast regions are labeled `Notifications (alt+T)`; five empty live regions always exist in
 the a11y tree (ignore them when parsing snapshots).
+
+Email browser/system popups are Signal-only on both GraphQL and legacy notification
+transports. Staff accounts still receive Noise email notifications in-app, without a
+popup. Popup eligibility is checked fresh against the server's inbox, importance, and
+shared-email filters; a failed lookup suppresses the popup, not the in-app update.
