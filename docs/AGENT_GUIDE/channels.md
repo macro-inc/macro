@@ -107,6 +107,8 @@ On desktop, the Chat rail has `Browse` and `Recents` tabs. Browse contains
 independently paginated `Channels` and `DMs` sections; collapsing a section
 does not discard its loaded pages. Recents has its own pagination cursor.
 Each list is virtualized, so offscreen conversations may not exist in the DOM.
+Rows and section headers act on primary-button mousedown, so the selection
+and highlight change before the click completes; a normal click still works.
 
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances

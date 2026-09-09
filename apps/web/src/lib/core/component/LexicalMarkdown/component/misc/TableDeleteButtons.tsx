@@ -1,17 +1,24 @@
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
-  $deleteTableColumnAtSelection,
-  $deleteTableRowAtSelection,
-  $getTableNodeFromLexicalNodeOrThrow,
+  $computeTableMap,
   $isTableCellNode,
+  $isTableRowNode,
   getDOMCellFromTarget,
 } from '@lexical/table';
 import TrashIcon from '@phosphor/trash-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
-import { $getNearestNodeFromDOMNode, isHTMLElement } from 'lexical';
+import {
+  $getNearestNodeFromDOMNode,
+  isHTMLElement,
+  type LexicalEditor,
+} from 'lexical';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import {
+  $deleteTableAtHover,
+  $selectionDeleteExtent,
+} from '../../plugins/tables/tableDelete';
 import { tableColumnResizeEdge } from './TableCellResizer';
 
 type DeleteTarget = {
@@ -28,6 +35,13 @@ type DeleteTarget = {
   // Pointer proximity to the border each button sits on.
   nearTop: boolean;
   nearLeft: boolean;
+  // Expanded to the table selection when it covers the hovered row/column.
+  deleteRowTop: number;
+  deleteRowBottom: number;
+  deleteColLeft: number;
+  deleteColRight: number;
+  selectedRowCount: number;
+  selectedColumnCount: number;
 };
 
 // How far (px) inside the table's top/left border the pointer still counts
@@ -36,6 +50,71 @@ const EDGE_PROXIMITY_PX = 20;
 
 const BUTTON_CLASS =
   'fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-failure hover:bg-failure hover:text-surface';
+
+function readSelectionDeletePixels(
+  editor: LexicalEditor,
+  cellElem: HTMLElement,
+  cellRect: DOMRect
+): Pick<
+  DeleteTarget,
+  | 'deleteRowTop'
+  | 'deleteRowBottom'
+  | 'deleteColLeft'
+  | 'deleteColRight'
+  | 'selectedRowCount'
+  | 'selectedColumnCount'
+> {
+  const fallback = {
+    deleteRowTop: cellRect.top,
+    deleteRowBottom: cellRect.bottom,
+    deleteColLeft: cellRect.left,
+    deleteColRight: cellRect.right,
+    selectedRowCount: 1,
+    selectedColumnCount: 1,
+  };
+  return editor.read(() => {
+    const cellNode = $getNearestNodeFromDOMNode(cellElem);
+    if (!$isTableCellNode(cellNode) || !cellNode.isAttached()) return fallback;
+    const extent = $selectionDeleteExtent(cellNode);
+    if (!extent) return fallback;
+
+    const next = { ...fallback };
+    if (extent.expandRows) {
+      const minRowNode = extent.table.getChildAtIndex(extent.minRow);
+      const maxRowNode = extent.table.getChildAtIndex(extent.maxRow);
+      const minEl =
+        minRowNode && $isTableRowNode(minRowNode)
+          ? editor.getElementByKey(minRowNode.getKey())
+          : null;
+      const maxEl =
+        maxRowNode && $isTableRowNode(maxRowNode)
+          ? editor.getElementByKey(maxRowNode.getKey())
+          : null;
+      if (minEl && maxEl) {
+        const minR = minEl.getBoundingClientRect();
+        const maxR = maxEl.getBoundingClientRect();
+        next.deleteRowTop = Math.min(minR.top, maxR.top);
+        next.deleteRowBottom = Math.max(minR.bottom, maxR.bottom);
+        next.selectedRowCount = extent.maxRow - extent.minRow + 1;
+      }
+    }
+    if (extent.expandColumns) {
+      const [map, pos] = $computeTableMap(extent.table, cellNode, cellNode);
+      const minCell = map[pos.startRow]?.[extent.minColumn]?.cell;
+      const maxCell = map[pos.startRow]?.[extent.maxColumn]?.cell;
+      const minEl = minCell ? editor.getElementByKey(minCell.getKey()) : null;
+      const maxEl = maxCell ? editor.getElementByKey(maxCell.getKey()) : null;
+      if (minEl && maxEl) {
+        const minR = minEl.getBoundingClientRect();
+        const maxR = maxEl.getBoundingClientRect();
+        next.deleteColLeft = Math.min(minR.left, maxR.left);
+        next.deleteColRight = Math.max(minR.right, maxR.right);
+        next.selectedColumnCount = extent.maxColumn - extent.minColumn + 1;
+      }
+    }
+    return next;
+  });
+}
 
 export function TableDeleteButtons() {
   const mdData = mdStore.get;
@@ -79,6 +158,18 @@ export function TableDeleteButtons() {
     const nearLeft = event.clientX - tableLeft <= EDGE_PROXIMITY_PX;
     if (!nearTop && !nearLeft) return clear();
 
+    const currentEditor = editor();
+    const selectionPixels = currentEditor
+      ? readSelectionDeletePixels(currentEditor, domCell.elem, rect)
+      : {
+          deleteRowTop: rect.top,
+          deleteRowBottom: rect.bottom,
+          deleteColLeft: rect.left,
+          deleteColRight: rect.right,
+          selectedRowCount: 1,
+          selectedColumnCount: 1,
+        };
+
     setTarget({
       cellElem: domCell.elem,
       cellLeft: rect.left,
@@ -91,6 +182,7 @@ export function TableDeleteButtons() {
       tableRight: Math.min(tableRect.right, wrapperRect?.right ?? Infinity),
       nearTop,
       nearLeft,
+      ...selectionPixels,
     });
   });
 
@@ -102,18 +194,7 @@ export function TableDeleteButtons() {
     currentEditor.update(() => {
       const cellNode = $getNearestNodeFromDOMNode(currentTarget.cellElem);
       if (!$isTableCellNode(cellNode) || !cellNode.isAttached()) return;
-
-      if (type === 'table') {
-        const tableNode = $getTableNodeFromLexicalNodeOrThrow(cellNode);
-        tableNode.remove();
-        return;
-      }
-
-      // The delete helpers operate on the selection, so anchor it in the
-      // hovered cell.
-      cellNode.selectStart();
-      if (type === 'row') $deleteTableRowAtSelection();
-      else $deleteTableColumnAtSelection();
+      $deleteTableAtHover(cellNode, type);
     });
 
     setHovered(undefined);
@@ -161,17 +242,19 @@ export function TableDeleteButtons() {
                   style={{
                     left:
                       h() === 'column'
-                        ? `${t().cellLeft}px`
+                        ? `${t().deleteColLeft}px`
                         : `${t().tableLeft}px`,
                     width:
                       h() === 'column'
-                        ? `${t().cellRight - t().cellLeft}px`
+                        ? `${t().deleteColRight - t().deleteColLeft}px`
                         : `${t().tableRight - t().tableLeft}px`,
                     top:
-                      h() === 'row' ? `${t().cellTop}px` : `${t().tableTop}px`,
+                      h() === 'row'
+                        ? `${t().deleteRowTop}px`
+                        : `${t().tableTop}px`,
                     height:
                       h() === 'row'
-                        ? `${t().cellBottom - t().cellTop}px`
+                        ? `${t().deleteRowBottom - t().deleteRowTop}px`
                         : `${t().tableBottom - t().tableTop}px`,
                   }}
                 />
@@ -180,7 +263,11 @@ export function TableDeleteButtons() {
             <Show when={t().nearTop}>
               <button
                 type="button"
-                aria-label="Delete column"
+                aria-label={
+                  t().selectedColumnCount > 1
+                    ? 'Delete selected columns'
+                    : 'Delete column'
+                }
                 class={BUTTON_CLASS}
                 style={{
                   left: `${(t().cellLeft + t().cellRight) / 2}px`,
@@ -197,7 +284,11 @@ export function TableDeleteButtons() {
             <Show when={t().nearLeft}>
               <button
                 type="button"
-                aria-label="Delete row"
+                aria-label={
+                  t().selectedRowCount > 1
+                    ? 'Delete selected rows'
+                    : 'Delete row'
+                }
                 class={BUTTON_CLASS}
                 style={{
                   left: `${t().tableLeft}px`,

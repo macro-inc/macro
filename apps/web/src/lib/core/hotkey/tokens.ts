@@ -77,6 +77,7 @@ export const TOKENS = {
   code: {
     toggleComment: 'code.toggleComment',
     escape: 'code.escape',
+    find: 'code.find',
   },
 
   // calendar

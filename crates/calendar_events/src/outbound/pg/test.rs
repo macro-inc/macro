@@ -2725,6 +2725,129 @@ async fn creation_target_prefers_the_requesters_own_primary_inbox(pool: PgPool) 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_persistently_failing_calendar_badges_then_clears_on_recovery(pool: PgPool) {
+    let owner_id = "macro|calendar-sync-error@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let google_job = enabled
+        .jobs
+        .iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let account_id = google_job.account_id.unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    let primary = ProviderCalendar {
+        provider_calendar_id: "primary".to_string(),
+        name: "Primary".to_string(),
+        description: None,
+        time_zone: Some("UTC".to_string()),
+        color: None,
+        access_role: Some("owner".to_string()),
+        is_primary: true,
+        is_selected: true,
+        default_reminders: Vec::new(),
+    };
+    let calendar_id = repo
+        .upsert_google_calendar(key, lease_token, account_id, primary.clone())
+        .await
+        .unwrap()
+        .id;
+
+    let message = "Precondition check failed. (reasons: conditionNotMet)";
+    let sync_error = || async {
+        repo.list_visible_calendars(owner_id).await.unwrap()[0]
+            .sync_error
+            .clone()
+    };
+
+    // A couple of isolated failures stay below the badge threshold.
+    for _ in 0..2 {
+        repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+            .await
+            .unwrap();
+    }
+    assert_eq!(sync_error().await, None);
+
+    // A third failure crosses the threshold and surfaces to the user.
+    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+        .await
+        .unwrap();
+    assert_eq!(sync_error().await.as_deref(), Some(message));
+
+    // A successful sync clears the badge and resets the failure counter.
+    repo.commit_google_calendar_sync(
+        key,
+        lease_token,
+        account_id,
+        GoogleCalendarSyncSnapshot {
+            calendar_id,
+            next_sync_token: "recovered".to_string(),
+            observed_provider_event_ids: Some(Vec::new()),
+            materialized_range: Some(OccurrenceRange::historical_sync(
+                Utc::now().trunc_subsecs(6),
+            )),
+            cancelled_provider_event_ids: Vec::new(),
+        },
+        0,
+    )
+    .await
+    .unwrap();
+    assert_eq!(sync_error().await, None);
+
+    // A fresh failure after recovery starts the count over, so one blip does
+    // not immediately re-badge.
+    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+        .await
+        .unwrap();
+    assert_eq!(sync_error().await, None);
+
+    // A badged calendar that drops off the provider list and later returns
+    // starts clean rather than resurrecting its old badge.
+    for _ in 0..2 {
+        repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+            .await
+            .unwrap();
+    }
+    assert_eq!(sync_error().await.as_deref(), Some(message));
+    repo.reconcile_google_calendar_list(key, lease_token, account_id, Vec::new())
+        .await
+        .unwrap();
+    assert!(
+        repo.list_visible_calendars(owner_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let resurrected_id = repo
+        .upsert_google_calendar(key, lease_token, account_id, primary)
+        .await
+        .unwrap()
+        .id;
+    assert_eq!(resurrected_id, calendar_id);
+    assert_eq!(sync_error().await, None);
+    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+        .await
+        .unwrap();
+    assert_eq!(sync_error().await, None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgPool) {
     let owner_id = "macro|calendar-remove-source@example.com";
     let link_id = insert_link(&pool, owner_id).await;

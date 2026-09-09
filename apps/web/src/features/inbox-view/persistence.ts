@@ -14,7 +14,7 @@ export const INBOX_LIST_ENTRY_STATE_KEY = 'inbox.listState';
 
 const inboxEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
-  tab: z.enum(['signal', 'noise', 'all']).default('signal'),
+  tab: z.enum(['signal', 'noise']).default('signal'),
 });
 
 type InboxEntryState = z.infer<typeof inboxEntryStateSchemaWithDefaults>;

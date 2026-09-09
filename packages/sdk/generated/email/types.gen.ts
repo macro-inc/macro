@@ -1718,6 +1718,12 @@ export type VisibleCalendar = {
      * Provider display name.
      */
     name: string;
+    /**
+     * A persistent sync failure isolated to this calendar, surfaced so the
+     * settings row can badge it. `None` while the calendar is syncing
+     * normally or a failure has not yet crossed the persistence threshold.
+     */
+    syncError?: string | null;
 };
 
 export type ListCalendarsData = {

@@ -344,11 +344,16 @@ async fn run() -> anyhow::Result<()> {
         ReqwestForwarder::new()?,
     ));
 
+    // The proxy's public address, read once: the provisioner builds the
+    // advertised server URLs from it and the in-memory client reads them back
+    // against it, so the two must be the same string.
+    let egress_base_url = AgentHarnessEgressUrl::new()?.to_string();
+
     // Every session's MCP tools, listed for its telemetry the way the harness
     // itself lists them: through the egress proxy, in process.
     let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
         Arc::new(McpToolCatalog::new(Arc::new(AcpMcpConnector::new(
-            EgressMcpClient::new(Arc::clone(&egress)),
+            EgressMcpClient::new(Arc::clone(&egress), &egress_base_url),
         ))));
     let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
 
@@ -370,9 +375,10 @@ async fn run() -> anyhow::Result<()> {
                 manager: InMemAgentManager::new(
                     engine,
                     frames,
-                    Arc::new(AcpMcpConnector::new(EgressMcpClient::new(Arc::clone(
-                        &egress,
-                    )))),
+                    Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
+                        Arc::clone(&egress),
+                        &egress_base_url,
+                    ))),
                 )
                 .with_dev_commands(enable_dev_commands),
             })
@@ -542,10 +548,7 @@ async fn run() -> anyhow::Result<()> {
         HarnessKeyedConnections::new(PgHarnessBindings::new(pool.clone()), Arc::clone(&runtimes)),
         prompt_context,
         prompt_composer,
-        EgressProvisioner::new(
-            Arc::clone(&mcp_connections),
-            AgentHarnessEgressUrl::new()?.to_string(),
-        ),
+        EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url),
         RedisCommandForwarder::new(redis.clone()),
         defaults,
     ));

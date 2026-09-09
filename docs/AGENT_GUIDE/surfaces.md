@@ -27,16 +27,15 @@ that entity's last operation in the batch. Emitted `SoupUpdated` items are non-n
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
 
-## Inbox — `/app/component/inbox`
+## Notifications — `/app/component/inbox`
 
 Unified triage list (emails, channel messages, task assignments, doc mentions, agent
-results). Filter radios: `Signal` (default, AI-filtered "needs attention") / `Noise` / `All`
-/ `Reminders`; plus `Filter` menu and `Preview` toggle (split list + preview pane; the empty
-preview shows "No content selected"). With the `enable-inbox-notified-sort` flag on, `Signal`
-and `Noise` order rows (and their date headers) by when you were last notified about the
-item, so a fresh comment on an old task sits under "Today"; with it off they order by
-recency like `All` and `Reminders`. Keyboard: `j`/`k` move, `space` preview, `enter` open, `e` mark done.
-Rows are buttons named `<channel> <sender>:<snippet> <time>`.
+results). Tabs are `Signal` (default, AI-filtered "needs attention") and `Noise`, with a
+Filter menu. On desktop, selecting a row renders its block in the inline preview beside
+the notification sidebar. With the `enable-inbox-notified-sort` flag on, both tabs order
+rows and date headers by when you were last notified about the item, so a fresh comment
+on an old task sits under "Today"; with it off they order by content recency. Keyboard:
+`j`/`k` move between rows and update the preview; alternate activation opens a new split.
 
 ## Email — `/app/component/mail`
 
@@ -117,7 +116,9 @@ The side panel's `Calendars` section folds each connected account into a collaps
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Subscribed system calendars (Google holidays, birthdays)
-carry a small RSS icon.
+carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
+warning icon whose tooltip shows the provider error; the account keeps syncing its other
+calendars and the badge clears on its own once that calendar syncs again.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,

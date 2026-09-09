@@ -55,6 +55,15 @@ const CHANNEL_RAIL_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   senderBucket: undefined,
 };
 
+/**
+ * Rail rows activate on mousedown rather than click so the selection lands
+ * the instant the button goes down. Only the primary button counts: the
+ * context menu owns the secondary button and middle-click stays inert.
+ */
+export function isPrimaryMouseDown(event: MouseEvent) {
+  return event.button === 0;
+}
+
 export function ChannelRailItemContextMenu(
   props: ParentProps<{
     channel: ChannelEntity;
@@ -172,6 +181,7 @@ export function IncomingCallActions(props: {
             class="rounded-md"
             label="Accept incoming call"
             onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -189,6 +199,7 @@ export function IncomingCallActions(props: {
             class="rounded-md"
             label="Decline incoming call"
             onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -287,7 +298,7 @@ export function ConversationCard(props: ConversationCardProps) {
       role="treeitem"
       tabIndex={-1}
       class={cn(
-        'relative w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors',
+        'relative w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none',
         props.selected && !isTouchDevice() && 'bg-active',
         !props.selected && !isTouchDevice() && props.focused && 'bg-hover',
         (!props.selected || isTouchDevice()) && 'bg-transparent',
@@ -298,7 +309,9 @@ export function ConversationCard(props: ConversationCardProps) {
         props.class
       )}
       aria-current={props.selected ? 'page' : undefined}
-      onClick={props.onActivate}
+      onMouseDown={(event) => {
+        if (isPrimaryMouseDown(event)) props.onActivate();
+      }}
     >
       <div
         class={cn(
