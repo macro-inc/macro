@@ -38,7 +38,7 @@ use schemas::read;
 use search_tools::{LoadTools, SearchTools};
 use self_knowledge::SelfKnowledge;
 use skills::inbound::toolset::skill_toolset;
-use soup::inbound::toolset::{ListEntities, SoupToolContext};
+use soup::inbound::toolset::{ListEntities, ListTasks, SoupToolContext};
 use std::sync::Arc;
 use subagent::Subagent;
 use teams::inbound::toolset::team_toolset;
@@ -95,6 +95,7 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_toolset(search_toolset())
         .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<ListEntities, SoupToolContext<ToolSoupService, ToolEmailService>>()
+        .add_tool::<ListTasks, SoupToolContext<ToolSoupService, ToolEmailService>>()
         .add_subtoolset::<ToolActivityToolContext>(activity_toolset())
         .add_subtoolset::<ToolDocumentToolContext>(document_toolset())
         .add_subtoolset::<ToolProjectToolContext>(project_toolset())

@@ -109,6 +109,7 @@
               "AI/mcp/tools/list-reminders",
               "AI/mcp/tools/list-skills",
               "AI/mcp/tools/list-tags",
+              "AI/mcp/tools/list-tasks",
               "AI/mcp/tools/list-team-members",
               "AI/mcp/tools/load-tools",
               "AI/mcp/tools/manage-bot-channel-access",

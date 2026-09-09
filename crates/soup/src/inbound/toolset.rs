@@ -1,6 +1,7 @@
 //! Toolset inbound adapter for the Soup service.
 
 mod list_entities;
+mod list_tasks;
 
 #[cfg(test)]
 mod test;
@@ -12,6 +13,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 pub use list_entities::{EntityItem, ItemType, ListEntities, ListEntitiesResponse, SortBy};
+pub use list_tasks::{ListTasks, ListTasksResponse};
 
 /// Service context for soup AI tools
 pub struct SoupToolContext<T: SoupService, E: EmailService> {
@@ -52,5 +54,7 @@ where
     T: SoupService,
     E: EmailService,
 {
-    AsyncToolCollection::new().add_tool::<ListEntities, SoupToolContext<T, E>>()
+    AsyncToolCollection::new()
+        .add_tool::<ListEntities, SoupToolContext<T, E>>()
+        .add_tool::<ListTasks, SoupToolContext<T, E>>()
 }
