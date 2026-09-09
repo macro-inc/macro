@@ -5951,6 +5951,9 @@
       "crates/workspace-hack",
       "services/notification_service"
     ],
+    "notification_state": [
+      "crates/notification_state"
+    ],
     "onboarding": [
       "crates/activity",
       "crates/agent",

@@ -11308,6 +11308,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "notification_state"
+version = "0.1.0"
+dependencies = [
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "utoipa",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
