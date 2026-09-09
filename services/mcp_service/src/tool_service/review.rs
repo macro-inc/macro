@@ -79,12 +79,6 @@ pub(super) fn email_form(draft: &Value) -> Result<ElicitationSchema, String> {
     for (name, title, description, kind) in [
         ("subject", "Subject", "Email subject.", "string"),
         (
-            "body",
-            "Body",
-            "Email message (Markdown supported).",
-            "string",
-        ),
-        (
             "replyingToId",
             "Reply to message",
             "Message ID this email replies to.",
@@ -98,7 +92,7 @@ pub(super) fn email_form(draft: &Value) -> Result<ElicitationSchema, String> {
         ),
     ] {
         let value = draft.get(name).filter(|value| !value.is_null());
-        if value.is_none() && !["subject", "body"].contains(&name) {
+        if value.is_none() && name != "subject" {
             continue;
         }
         let mut field = json!({"type":kind,"title":title,"description":description});
@@ -107,8 +101,38 @@ pub(super) fn email_form(draft: &Value) -> Result<ElicitationSchema, String> {
         }
         properties.insert(name.into(), field);
     }
+    properties.insert("replacementBody".into(), json!({
+        "type":"string", "title":"Replacement body",
+        "description":"Optional. Leave blank to keep the message above; enter text to replace it (Markdown supported)."
+    }));
     serde_json::from_value(json!({"type":"object","properties":properties}))
         .map_err(|error| error.to_string())
+}
+
+/// Multiline previews belong in the message: terminal clients often render
+/// prepopulated string inputs on a single line.
+pub(super) fn email_message(draft: &Value) -> String {
+    let mut lines = vec!["Send this email?".to_owned(), String::new()];
+    for (name, title) in [("to", "To"), ("cc", "Cc"), ("bcc", "Bcc")] {
+        let addresses = draft
+            .get(name)
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|recipient| recipient.get("email").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if !addresses.is_empty() {
+            lines.push(format!("{title}: {addresses}"));
+        }
+    }
+    lines.push(format!(
+        "Subject: {}",
+        draft["subject"].as_str().unwrap_or_default()
+    ));
+    lines.push(String::new());
+    lines.push(draft["body"].as_str().unwrap_or_default().to_owned());
+    lines.join("\n")
 }
 
 /// Turn plain address edits back into tool recipients. Keep display names for
@@ -291,6 +315,14 @@ pub(super) fn reviewed_arguments(
         .cloned()
         .ok_or("the accepted form must contain an object")?;
     let format = content.remove("bodyFormat").unwrap_or(json!("markdown"));
+    if let Some(replacement) = content.remove("replacementBody") {
+        let text = replacement
+            .as_str()
+            .ok_or("the replacement body must be text")?;
+        if !text.trim().is_empty() {
+            content.insert("body".into(), replacement);
+        }
+    }
     // A complete composer draft takes precedence over any prepopulated fields.
     if content
         .get(DRAFT_FIELD)

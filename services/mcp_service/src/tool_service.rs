@@ -198,7 +198,11 @@ where
                     }))
                     .map_err(|error| rmcp::ErrorData::internal_error(error.to_string(), None))?,
                 )),
-                message: format!("{}?", tool.annotations.title),
+                message: if request.name == "SendEmail" && !composer {
+                    review::email_message(&arguments)
+                } else {
+                    format!("{}?", tool.annotations.title)
+                },
                 requested_schema: schema,
             };
             let mut pending = context

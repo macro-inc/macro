@@ -78,11 +78,15 @@ fn email_form_is_readable_and_only_shows_relevant_fields() {
     let fields = form["properties"].as_object().unwrap();
     assert_eq!(
         fields.keys().map(String::as_str).collect::<Vec<_>>(),
-        ["body", "subject", "to"]
+        ["replacementBody", "subject", "to"]
     );
     assert_eq!(fields["to"]["default"], "wolf@example.com");
-    assert_eq!(fields["body"]["title"], "Body");
-    assert_eq!(fields["body"]["default"], "Hello\n\nFrogs!");
+    assert!(fields["replacementBody"].get("default").is_none());
+    assert!(!fields.contains_key("body"));
+    assert_eq!(
+        email_message(&draft),
+        "Send this email?\n\nTo: wolf@example.com\nSubject: Frogs\n\nHello\n\nFrogs!"
+    );
     let form = serde_json::to_value(
         email_form(&json!({
             "to":[],"bcc":[{"email":"private@example.com"}],
@@ -126,4 +130,29 @@ fn email_address_edits_preserve_names_clear_cc_and_reject_invalid_input() {
         "to":"not-an-address", "draft":json!({"body":"Edited","to":[{"email":"composer@example.com"}]}).to_string()
     })).unwrap();
     assert_eq!(edited["to"], json!([{"email":"composer@example.com"}]));
+}
+
+#[test]
+fn optional_replacement_body_keeps_or_replaces_the_previewed_message() {
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    let draft = json!({"body":"Original\n\nmessage"});
+    for (content, expected) in [
+        (json!({}), "<p>Original</p>\n<p>message</p>\n"),
+        (
+            json!({"replacementBody":"  "}),
+            "<p>Original</p>\n<p>message</p>\n",
+        ),
+        (
+            json!({"replacementBody":"**Edited**"}),
+            "<p><strong>Edited</strong></p>\n",
+        ),
+    ] {
+        let result = reviewed_arguments("SendEmail", &draft, &content).unwrap();
+        let body = URL_SAFE_NO_PAD
+            .decode(result["body"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(String::from_utf8(body).unwrap(), expected);
+        assert!(result.get("replacementBody").is_none());
+    }
+    assert!(reviewed_arguments("SendEmail", &draft, &json!({"replacementBody":42})).is_err());
 }
