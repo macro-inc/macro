@@ -28,6 +28,7 @@ import {
   Switch,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { match } from 'ts-pattern';
 import {
   type FieldValue,
   type FormValues,
@@ -87,14 +88,20 @@ function createFormDraft(schema: ElicitationSchema): FormDraft {
 
 /** The question's state; call it once per request, under a reactive owner. */
 export function createLiveQuestion(request: LiveQuestionRequest): LiveQuestion {
-  switch (request.kind) {
-    case 'form':
-      return { kind: 'form', draft: createFormDraft(request.schema) };
-    case 'url':
-      return { kind: 'url', url: request.url };
-    case 'unrecognized':
-      return { kind: 'unrecognized', mode: request.mode };
-  }
+  return match(request)
+    .with(
+      { kind: 'form' },
+      ({ schema }): LiveQuestion => ({
+        kind: 'form',
+        draft: createFormDraft(schema),
+      })
+    )
+    .with({ kind: 'url' }, ({ url }): LiveQuestion => ({ kind: 'url', url }))
+    .with(
+      { kind: 'unrecognized' },
+      ({ mode }): LiveQuestion => ({ kind: 'unrecognized', mode })
+    )
+    .exhaustive();
 }
 
 function form(question: LiveQuestion) {

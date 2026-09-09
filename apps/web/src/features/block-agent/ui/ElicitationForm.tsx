@@ -39,14 +39,29 @@ function textOf(value: FieldValue | undefined): string {
   return value?.kind === 'text' ? value.text : '';
 }
 
-const INPUT_CLASS =
-  'h-8 w-full rounded-md border border-edge-muted bg-transparent px-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-placeholder hover:border-edge focus:border-accent disabled:opacity-50';
-
-const ROW_CLASS =
-  'group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink outline-none';
-
-const ROW_INTERACTIVE_CLASS =
-  'not-disabled:hover:bg-ink/5 focus-visible:bg-ink/5 disabled:opacity-50';
+/** A typed answer: free text, or a number while it is being typed. */
+function TextInput(props: {
+  type: 'text' | 'email' | 'url' | 'number';
+  value: string;
+  disabled?: boolean;
+  step?: number | 'any';
+  min?: number;
+  max?: number;
+  onInput: (text: string) => void;
+}) {
+  return (
+    <input
+      type={props.type}
+      class="h-8 w-full rounded-md border border-edge-muted bg-transparent px-2 text-sm text-ink outline-none transition-colors placeholder:text-ink-placeholder hover:border-edge focus:border-accent disabled:opacity-50"
+      disabled={props.disabled}
+      step={props.step}
+      min={props.min}
+      max={props.max}
+      value={props.value}
+      onInput={(event) => props.onInput(event.currentTarget.value)}
+    />
+  );
+}
 
 type SingleSelect = Extract<ElicitationPropertySchema, { type: 'string' }>;
 type MultiSelect = Extract<ElicitationPropertySchema, { type: 'multi_select' }>;
@@ -95,7 +110,7 @@ function ChoiceRow(props: {
       type="button"
       role={props.role}
       aria-checked={props.checked}
-      class={cn(ROW_CLASS, ROW_INTERACTIVE_CLASS)}
+      class="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink outline-none not-disabled:hover:bg-ink/5 focus-visible:bg-ink/5 disabled:opacity-50"
       disabled={props.disabled}
       onClick={props.onSelect}
     >
@@ -119,8 +134,11 @@ function OtherRow(props: {
 }) {
   return (
     <div
-      class={cn(ROW_CLASS, 'items-center', props.disabled && 'opacity-50')}
-      classList={{ 'hover:bg-ink/5': !props.disabled }}
+      class="group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink outline-none"
+      classList={{
+        'hover:bg-ink/5': !props.disabled,
+        'opacity-50': props.disabled,
+      }}
     >
       <button
         type="button"
@@ -285,7 +303,7 @@ function FieldControl(props: {
           )
         )
         .with({ type: 'string' }, (field) => (
-          <input
+          <TextInput
             type={
               field.format === 'email'
                 ? 'email'
@@ -293,26 +311,20 @@ function FieldControl(props: {
                   ? 'url'
                   : 'text'
             }
-            class={INPUT_CLASS}
             disabled={props.disabled}
             value={textOf(props.value)}
-            onInput={(event) =>
-              props.onChange({ kind: 'text', text: event.currentTarget.value })
-            }
+            onInput={(text) => props.onChange({ kind: 'text', text })}
           />
         ))
         .with({ type: 'number' }, { type: 'integer' }, (field) => (
-          <input
+          <TextInput
             type="number"
-            class={INPUT_CLASS}
             disabled={props.disabled}
             step={field.type === 'integer' ? 1 : 'any'}
             min={field.minimum ?? undefined}
             max={field.maximum ?? undefined}
             value={textOf(props.value)}
-            onInput={(event) =>
-              props.onChange({ kind: 'text', text: event.currentTarget.value })
-            }
+            onInput={(text) => props.onChange({ kind: 'text', text })}
           />
         ))
         .with({ type: 'boolean' }, () => {
