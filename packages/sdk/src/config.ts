@@ -71,8 +71,8 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
   },
 };
 
-/** A bearer token, or a (possibly async) function that returns one — the
- * function form lets you refresh tokens without reconfiguring. */
+/** A bearer token, or a (possibly async) function that returns one. The
+ * function form exists for refresh, which is a bearer concept. */
 export type TokenSource = string | (() => string | Promise<string>);
 
 /** Access scope for bot-authenticated requests. `user` acts with the
@@ -80,24 +80,44 @@ export type TokenSource = string | (() => string | Promise<string>);
  * bot's owning team's access (team-owned bots only). */
 export type BotScope = 'user' | 'team';
 
-/** How the SDK authenticates with Macro.
+/**
+ * How the SDK authenticates with Macro.
  *
- * - `user`: a human's Macro API token, sent as `Authorization: Bearer`.
- * - `bot`: an `mbot_` API key, sent as `x-macro-bot-token` together with
- *   `x-macro-bot-scope`. When `scope` is omitted it defaults to `user` when
- *   `requestedAs` is set (user scope requires an acting user) and `team`
- *   otherwise.
+ * `type` names the principal the backend sees. Internal code branches on it
+ * for acting-user, `requestedAs`, and bot-identity decisions, and none of
+ * those care which header carried the credential.
+ *
+ * A user has exactly one of two credential fields.
+ *
+ * - `token`: a bearer token, or a `mak_` API key. The SDK picks the header
+ *   from the prefix at send time. This is what `MACRO_API_KEY` and the
+ *   `token` shorthand produce, so a Settings API key in either place works.
+ * - `apiKey`: a Settings → API Keys key, always sent as
+ *   `x-macro-user-api-key`. Not prefix-checked, so keys that predate the
+ *   `mak_` prefix work here. A plain string, because API keys do not rotate
+ *   in-process.
+ *
+ * A bot is unchanged. `mbot_` token as `x-macro-bot-token` plus
+ * `x-macro-bot-scope`, defaulting to `user` when `requestedAs` is set and
+ * `team` otherwise.
+ *
+ * The `never` fields make `{ type: 'user', token, apiKey }` a compile error.
+ * Two credentials on one request is `400 ambiguous credentials`, so the
+ * illegal state is unrepresentable rather than resolved by match order.
  */
 export type MacroAuth =
-  | { type: 'user'; token: TokenSource }
+  | { type: 'user'; token: TokenSource; apiKey?: never }
+  | { type: 'user'; apiKey: string; token?: never }
   | { type: 'bot'; token: TokenSource; scope?: BotScope };
 
 /** Options passed to `new Macro(opts)` and stored on `MacroClient`. */
 export interface MacroOpts {
-  /** How to authenticate. Takes precedence over `token`. Falls back to the
-   * MACRO_API_KEY (user auth) or MACRO_BOT_TOKEN (bot auth) env var. */
+  /** How to authenticate. Takes precedence over `token`. Falls back to
+   * `MACRO_API_KEY` (a user API key or bearer token) or `MACRO_BOT_TOKEN`
+   * (bot). */
   auth?: MacroAuth;
-  /** Shorthand for `auth: { type: 'user', token }`. */
+  /** Shorthand for `auth: { type: 'user', token }`. Accepts a Settings API
+   * key (`mak_…`) or a bearer token. */
   token?: TokenSource;
   /** Which Macro environment to talk to. Falls back to the MACRO_ENV env
    * var, then `'dev'`. */
