@@ -1,11 +1,14 @@
 import { runCreateAction } from '@app/features/command/Launcher';
+import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { useFavoriteDisplayName } from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { cn, Hotkey, Tabs } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { Virtualizer } from 'virtua/solid';
@@ -23,6 +26,7 @@ import {
 import {
   domIdForRow,
   rowKeyForChannel,
+  rowKeyForFavorite,
   rowKeyForSection,
   useChannelsRail,
 } from './ChannelsRailContext';
@@ -35,6 +39,8 @@ import {
   RailModeButton,
 } from './ChannelsRailSection';
 import {
+  useChannelRailFavoriteItemState,
+  useChannelRailFavoritesState,
   useChannelRailItemState,
   useChannelRailScopeState,
   useChannelRailSectionState,
@@ -70,6 +76,43 @@ const GROUPS: GroupConfig[] = [
     onCreate: () => runCreateAction('channel'),
   },
 ];
+
+function FavoriteOption(props: { favorite: Favorite }) {
+  const rail = useChannelsRail();
+  const displayName = useFavoriteDisplayName(props.favorite);
+  const item = useChannelRailFavoriteItemState(() => props.favorite);
+
+  return (
+    <button
+      id={item().domId}
+      type="button"
+      role="treeitem"
+      tabIndex={-1}
+      class={cn(
+        'flex h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors',
+        item().selected && !isTouchDevice() && 'bg-active text-ink',
+        (!item().selected || isTouchDevice()) && 'text-ink-muted',
+        !item().selected &&
+          !isTouchDevice() &&
+          item().focused &&
+          'bg-hover text-ink',
+        !item().selected &&
+          !isTouchDevice() &&
+          !item().focused &&
+          'hover:bg-hover hover:text-ink'
+      )}
+      aria-current={item().selected ? 'page' : undefined}
+      onClick={() => rail.activateRow(rowKeyForFavorite(props.favorite))}
+    >
+      <span class="flex size-6 shrink-0 items-center justify-center">
+        <FavoriteIcon favorite={props.favorite} class="size-4" />
+      </span>
+      <span class="min-w-0 flex-1 truncate text-sm font-medium">
+        {displayName()}
+      </span>
+    </button>
+  );
+}
 
 function ChannelOption(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
@@ -118,6 +161,50 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         </Show>
       </div>
     </ChannelRailItemContextMenu>
+  );
+}
+
+function ExpandedFavoritesSection() {
+  const rail = useChannelsRail();
+  const section = useChannelRailFavoritesState();
+
+  return (
+    <Show when={section().items.length > 0}>
+      <CollapsibleSection.Root open={section().open}>
+        <CollapsibleSection.Header
+          focused={section().focused}
+          focusWithin={section().containsFocus}
+          class="h-9"
+        >
+          <button
+            id={section().domId}
+            type="button"
+            role="treeitem"
+            tabIndex={-1}
+            class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none"
+            aria-expanded={section().open}
+            onClick={() => rail.activateRow(rowKeyForSection('favorites'))}
+          >
+            <CaretDownIcon
+              class={cn(
+                'size-3 shrink-0 transition-transform',
+                !section().open && '-rotate-90'
+              )}
+            />
+            <span class="min-w-0 truncate">Favorites</span>
+          </button>
+        </CollapsibleSection.Header>
+        <CollapsibleSection.Content
+          open={section().open}
+          contentRef={(element) => rail.registerScrollRef('favorites', element)}
+          class="flex min-h-0 flex-col gap-0.5"
+        >
+          <For each={section().items}>
+            {(favorite) => <FavoriteOption favorite={favorite} />}
+          </For>
+        </CollapsibleSection.Content>
+      </CollapsibleSection.Root>
+    </Show>
   );
 }
 
@@ -269,6 +356,7 @@ function ExpandedBrowse() {
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
   const hasItems = () =>
+    rail.favorites().length > 0 ||
     rail.sources.channels.items().length > 0 ||
     rail.sources.direct_messages.items().length > 0;
   const sourcesSettled = () =>
@@ -284,6 +372,7 @@ function ExpandedBrowse() {
       </Match>
       <Match when={true}>
         <div class="flex h-full min-h-0 flex-col gap-3 px-4">
+          <ExpandedFavoritesSection />
           <For each={GROUPS}>
             {(config) => <ExpandedGroupSection config={config} />}
           </For>

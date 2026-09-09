@@ -5,12 +5,16 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import { useViewTabHotkeys } from '@app/components/view-shell';
+import { favoriteSplitContent } from '@app/util/favorites';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ChannelEntity } from '@entity';
+import { useFavoritesData } from '@queries/favorites/favorites';
+import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import {
   createEffect,
   createMemo,
@@ -23,8 +27,8 @@ import type { VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../../channels-view-context';
 import { type ChannelsSources, deduplicateChannels } from '../../queries';
 import type {
-  ChannelsGroup,
   ChannelsQueryScope,
+  ChannelsRailSection,
   ChannelsTab,
 } from '../../types';
 import {
@@ -33,6 +37,7 @@ import {
   ChannelsRailProvider,
   domIdForRow,
   rowKeyForChannel,
+  rowKeyForFavorite,
   rowKeyForSection,
 } from './ChannelsRailContext';
 import { ExpandedChannelsRail } from './ExpandedChannelsRail';
@@ -40,7 +45,11 @@ import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
 import { SlimChannelsRail } from './SlimChannelsRail';
 
-const CHANNEL_GROUPS: ChannelsGroup[] = ['channels', 'direct_messages'];
+const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
+  'favorites',
+  'channels',
+  'direct_messages',
+];
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
 const DM_LOADING_PREVIEW_OFFSET = 80;
 
@@ -53,11 +62,13 @@ export type ChannelsRailProps = {
 type ChannelRailItemsByScope = Record<
   ChannelsQueryScope,
   readonly ChannelEntity[]
->;
+> & {
+  favorites: readonly Favorite[];
+};
 
 export function buildChannelRailRows(
   tab: ChannelsTab,
-  expandedGroups: Record<ChannelsGroup, boolean>,
+  expandedGroups: Record<ChannelsRailSection, boolean>,
   items: ChannelRailItemsByScope
 ): ChannelRailRow[] {
   if (tab === 'recents') {
@@ -70,13 +81,32 @@ export function buildChannelRailRows(
     }));
   }
 
-  const rows: ChannelRailRow[] = [
-    {
+  const rows: ChannelRailRow[] = [];
+  if (items.favorites.length > 0) {
+    rows.push({
       kind: 'section',
-      id: 'section:channels',
-      group: 'channels',
-    },
-  ];
+      id: 'section:favorites',
+      group: 'favorites',
+    });
+    if (expandedGroups.favorites) {
+      rows.push(
+        ...items.favorites.map(
+          (favorite): ChannelRailRow => ({
+            kind: 'favorite',
+            id: rowKeyForFavorite(favorite),
+            group: 'favorites',
+            favorite,
+          })
+        )
+      );
+    }
+  }
+
+  rows.push({
+    kind: 'section',
+    id: 'section:channels',
+    group: 'channels',
+  });
   if (expandedGroups.channels) {
     rows.push(
       ...items.channels.map(
@@ -119,9 +149,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const { state, setGroupOpen, setSelectedChannelId, setTab } =
     useChannelsView();
   const panel = useSplitPanelOrThrow();
+  const layout = useSplitLayout();
+  const favoritesData = useFavoritesData();
   const listDomId = createUniqueId();
   const [sectionScrollRoots, setSectionScrollRoots] = createSignal<
-    Partial<Record<ChannelsGroup, HTMLDivElement>>
+    Partial<Record<ChannelsRailSection, HTMLDivElement>>
   >({});
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
   const [virtualizers, setVirtualizers] = createSignal<
@@ -137,9 +169,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
     ])
   );
   const channelActivity = useChannelRailActivity(channels, channelCalls);
+  const favorites = createMemo(() => favoritesData()?.favorites ?? []);
 
   const visibleRows = createMemo(() =>
     buildChannelRailRows(state.tab, state.expandedGroups, {
+      favorites: favorites(),
       channels: props.sources.channels.items(),
       direct_messages: props.sources.direct_messages.items(),
       recents: props.sources.recents.items(),
@@ -158,6 +192,18 @@ export function ChannelsRail(props: ChannelsRailProps) {
       onActivate: ({ item }) => {
         if (item.kind === 'section') {
           setGroupOpen(item.group, !state.expandedGroups[item.group]);
+          return;
+        }
+
+        if (item.kind === 'favorite') {
+          if (item.favorite.entityType === 'channel') {
+            setSelectedChannelId(item.favorite.entityId);
+            return;
+          }
+
+          layout.openWithSplit(favoriteSplitContent(item.favorite), {
+            referredFrom: 'channels',
+          });
           return;
         }
 
@@ -257,28 +303,35 @@ export function ChannelsRail(props: ChannelsRailProps) {
           const row = event.result?.item;
           if (row?.kind === 'conversation') {
             setSelectedChannelId(row.channel.id);
+          } else if (
+            row?.kind === 'favorite' &&
+            row.favorite.entityType === 'channel'
+          ) {
+            setSelectedChannelId(row.favorite.entityId);
           }
         },
       },
       disclosure: {
         getKey: (row) => row.group,
-        isExpanded: (group) => state.expandedGroups[group as ChannelsGroup],
+        isExpanded: (group) =>
+          state.expandedGroups[group as ChannelsRailSection],
         setExpanded: (group, expanded) =>
-          setGroupOpen(group as ChannelsGroup, expanded),
-        getFocusKey: (group) => rowKeyForSection(group as ChannelsGroup),
+          setGroupOpen(group as ChannelsRailSection, expanded),
+        getFocusKey: (group) => rowKeyForSection(group as ChannelsRailSection),
       },
     })
   );
 
   const jumpToSection = (offset: 1 | -1) => {
     const currentGroup = list.focus.item()?.group;
-    const currentIndex = currentGroup
-      ? CHANNEL_GROUPS.indexOf(currentGroup)
-      : -1;
+    const sections =
+      favorites().length > 0
+        ? CHANNEL_RAIL_SECTIONS
+        : CHANNEL_RAIL_SECTIONS.filter((section) => section !== 'favorites');
+    const currentIndex = currentGroup ? sections.indexOf(currentGroup) : -1;
     const origin = currentIndex === -1 ? (offset === 1 ? -1 : 0) : currentIndex;
-    const nextIndex =
-      (origin + offset + CHANNEL_GROUPS.length) % CHANNEL_GROUPS.length;
-    const nextGroup = CHANNEL_GROUPS[nextIndex];
+    const nextIndex = (origin + offset + sections.length) % sections.length;
+    const nextGroup = sections[nextIndex];
     if (!nextGroup) return false;
 
     const result = list.focus.set(rowKeyForSection(nextGroup), {
@@ -355,6 +408,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     selectTab: setTab,
     setMode: (mode) => props.onModeChange(mode),
     sources: props.sources,
+    favorites,
     selectedChannelId: () => state.selectedChannelId,
     isGroupOpen: (group) => state.expandedGroups[group],
     registerRootRef: setListRoot,
