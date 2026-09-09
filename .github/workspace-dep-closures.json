@@ -2115,6 +2115,7 @@
       "crates/models_pagination",
       "crates/models_permissions",
       "crates/non_empty",
+      "crates/notification_state",
       "crates/prompt",
       "crates/remote_env_var",
       "crates/secretsmanager_client",
@@ -2961,6 +2962,7 @@
       "crates/models_permissions",
       "crates/models_properties",
       "crates/non_empty",
+      "crates/notification_state",
       "crates/prompt",
       "crates/remote_env_var",
       "crates/s3_key",
@@ -3027,6 +3029,7 @@
       "crates/models_permissions",
       "crates/models_properties",
       "crates/non_empty",
+      "crates/notification_state",
       "crates/prompt",
       "crates/remote_env_var",
       "crates/s3_key",
@@ -3826,6 +3829,7 @@
       "crates/models_pagination",
       "crates/models_permissions",
       "crates/non_empty",
+      "crates/notification_state",
       "crates/prompt",
       "crates/remote_env_var",
       "crates/workspace-hack"
@@ -3840,6 +3844,7 @@
       "crates/model-entity",
       "crates/model_file_type",
       "crates/non_empty",
+      "crates/notification_state",
       "crates/workspace-hack"
     ],
     "fusionauth": [
@@ -3964,6 +3969,7 @@
       "crates/models_pagination",
       "crates/models_properties",
       "crates/non_empty",
+      "crates/notification_state",
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
@@ -4049,6 +4055,7 @@
       "crates/model_user",
       "crates/models_properties",
       "crates/non_empty",
+      "crates/notification_state",
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
@@ -4588,6 +4595,7 @@
       "crates/model_user",
       "crates/models_properties",
       "crates/non_empty",
+      "crates/notification_state",
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
@@ -4773,6 +4781,7 @@
       "crates/macro_user_id",
       "crates/model_file_type",
       "crates/non_empty",
+      "crates/notification_state",
       "crates/predicate_index"
     ],
     "item_filters": [
@@ -4782,7 +4791,8 @@
       "crates/item_filters",
       "crates/macro_user_id",
       "crates/model_file_type",
-      "crates/non_empty"
+      "crates/non_empty",
+      "crates/notification_state"
     ],
     "kafka_util": [
       "crates/kafka_util",
