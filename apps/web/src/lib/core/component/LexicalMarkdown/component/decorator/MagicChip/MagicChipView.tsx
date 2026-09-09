@@ -1,4 +1,9 @@
 import {
+  EmailDraft,
+  EventDraft,
+} from '@app/features/block-agent/component/parts/UserToolCall';
+import { DRAFT_FIELD } from '@app/features/block-agent/state/elicitation-review-sink';
+import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -6,22 +11,174 @@ import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
 import CaretRight from '@phosphor/caret-right.svg';
-import { Layer } from '@ui';
-import { type Component, createSignal, Show } from 'solid-js';
-import type { MagicChipActivity, MagicChipPresentation } from './presentation';
+import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
+import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
+import type {
+  CreateCalendarEvent,
+  SendEmail,
+} from '@service-cognition/generated/tools/types';
+import { Button, Layer } from '@ui';
+import {
+  type Component,
+  createMemo,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
+import { match } from 'ts-pattern';
+import type {
+  MagicChipActivity,
+  MagicChipPresentation,
+  MagicChipQuestion,
+} from './presentation';
 
 function answerMarkdown(presentation: MagicChipPresentation) {
   return presentation.kind === 'working' ? undefined : presentation.markdown;
 }
 
 function currentActivity(presentation: MagicChipPresentation) {
-  return presentation.kind === 'settled' ? undefined : presentation.activity;
+  return presentation.kind === 'working' || presentation.kind === 'answering'
+    ? presentation.activity
+    : undefined;
 }
 
 function replyPreview(activity: MagicChipActivity | undefined) {
   if (!activity) return 'Open session';
   return `${activity.label}${activity.detail ? ` ${activity.detail}` : ''}`;
 }
+
+/** What the chip's answer to a question does. */
+export type MagicChipAnswer = {
+  /** An answer is on the wire; the buttons wait. */
+  answering: boolean;
+  respond: (answer: ElicitationAnswer) => Promise<boolean>;
+};
+
+/**
+ * A question the agent stopped to ask, kept small for a channel thread: what
+ * is being asked, a read-only summary of a user tool's draft, and the two
+ * decisions. Editing the draft, or answering a form field by field, happens
+ * in the session - "Edit in session" opens it. Anyone but the session's
+ * owner sees the summary and who is being waited on.
+ */
+const AskingCard: Component<{
+  agentSessionId: string;
+  asking: MagicChipQuestion;
+  answer?: MagicChipAnswer;
+  onOpen?: () => void;
+}> = (props) => {
+  const request = () => props.asking.question.request;
+  const userTool = createMemo(() => {
+    const current = request();
+    if (current.kind !== 'user_tool') return undefined;
+    const call = deserializeToolCall({
+      id:
+        props.asking.question.toolCall ??
+        String(props.asking.question.requestId),
+      name: current.tool,
+      json: current.draft,
+    });
+    return call.isOk() ? { tool: call.value, draft: current.draft } : undefined;
+  });
+  const locked = () =>
+    !props.asking.canAnswer || props.answer?.answering === true;
+  const waitingFor = () =>
+    props.asking.canAnswer
+      ? 'Waiting for you'
+      : `Waiting for ${props.asking.ownerName}`;
+  const confirmLabel = () =>
+    match(userTool()?.tool.name)
+      .with('CreateCalendarEvent', () => 'Create event')
+      .with('SendEmail', () => 'Send email')
+      .otherwise(() => 'Confirm');
+  const respond = (answer: ElicitationAnswer) => {
+    if (locked()) return;
+    void props.answer?.respond(answer);
+  };
+  // The chip sends the draft as the agent wrote it; edits need the session's
+  // composer.
+  const accept = () =>
+    respond({
+      action: 'accept',
+      content:
+        request().kind === 'user_tool'
+          ? { [DRAFT_FIELD]: JSON.stringify(userTool()?.draft ?? {}) }
+          : {},
+    });
+
+  return (
+    <div
+      class="flex w-full min-w-0 flex-col gap-2 rounded-lg border border-edge-muted bg-surface p-3"
+      data-magic-chip={props.agentSessionId}
+      data-magic-chip-asking
+      data-message-reply-preview={`${waitingFor()} · ${props.asking.question.message}`}
+    >
+      <div class="flex items-center gap-2 text-xs">
+        <span class="shrink-0 font-semibold text-ink-muted" aria-live="polite">
+          {waitingFor()}
+        </span>
+        <span class="min-w-0 truncate text-ink">
+          {props.asking.question.message}
+        </span>
+      </div>
+      <Switch>
+        <Match
+          when={userTool()?.tool.name === 'CreateCalendarEvent' && userTool()}
+        >
+          {(reviewed) => (
+            <EventDraft event={reviewed().tool.data as CreateCalendarEvent} />
+          )}
+        </Match>
+        <Match when={userTool()?.tool.name === 'SendEmail' && userTool()}>
+          {(reviewed) => (
+            <EmailDraft
+              email={reviewed().tool.data as SendEmail}
+              inFlight={false}
+            />
+          )}
+        </Match>
+      </Switch>
+      <div class="flex flex-wrap items-center gap-2">
+        <Show when={props.asking.canAnswer}>
+          <Show when={userTool()}>
+            <Button
+              variant="cta"
+              size="xs"
+              disabled={locked()}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={accept}
+            >
+              {confirmLabel()}
+            </Button>
+          </Show>
+          <Button
+            variant="outline"
+            size="xs"
+            disabled={locked()}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => respond({ action: 'decline' })}
+          >
+            {userTool() ? 'Cancel' : 'Decline'}
+          </Button>
+        </Show>
+        <Button
+          variant="ghost"
+          size="xs"
+          disabled={!props.onOpen}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={props.onOpen}
+        >
+          {props.asking.canAnswer
+            ? userTool()
+              ? 'Edit in session'
+              : 'Answer in session'
+            : 'Open session'}
+        </Button>
+      </div>
+    </div>
+  );
+};
 
 /** The shimmering label plus its muted detail. */
 const ActivityText: Component<{ activity: MagicChipActivity }> = (props) => (
@@ -139,8 +296,14 @@ const ExpandHint: Component<{ expanded: boolean }> = (props) => (
 export const MagicChipView: Component<{
   agentSessionId: string;
   presentation: MagicChipPresentation;
+  /** How the chip answers a question; absent renders it read-only. */
+  answer?: MagicChipAnswer;
   onOpen?: () => void;
 }> = (props) => {
+  const asking = () =>
+    props.presentation.kind === 'asking'
+      ? props.presentation.asking
+      : undefined;
   const markdown = () => answerMarkdown(props.presentation);
   const activity = () => currentActivity(props.presentation);
   const [expanded, setExpanded] = createSignal(false);
@@ -183,25 +346,39 @@ export const MagicChipView: Component<{
             )}
           </Show>
         </div>
-        <button
-          type="button"
-          class="flex min-h-9 w-full items-center gap-1.5 border-t border-edge-muted px-3 py-2 text-left text-xs leading-5 text-ink-extra-muted hover:bg-hover"
-          data-message-reply-preview={
-            markdown() ? undefined : replyPreview(activity())
-          }
-          disabled={!props.onOpen}
-          onClick={props.onOpen}
-        >
-          <span class="flex min-w-0 flex-1 items-center gap-1.5">
-            <Show
-              when={activity()}
-              fallback={<span class="text-ink-muted">Open session</span>}
+        <Show
+          when={asking()}
+          fallback={
+            <button
+              type="button"
+              class="flex min-h-9 w-full items-center gap-1.5 border-t border-edge-muted px-3 py-2 text-left text-xs leading-5 text-ink-extra-muted hover:bg-hover"
+              data-message-reply-preview={
+                markdown() ? undefined : replyPreview(activity())
+              }
+              disabled={!props.onOpen}
+              onClick={props.onOpen}
             >
-              {(current) => <ActivityText activity={current()} />}
-            </Show>
-          </span>
-          <ArrowUpRight aria-hidden="true" class="size-3 shrink-0" />
-        </button>
+              <span class="flex min-w-0 flex-1 items-center gap-1.5">
+                <Show
+                  when={activity()}
+                  fallback={<span class="text-ink-muted">Open session</span>}
+                >
+                  {(current) => <ActivityText activity={current()} />}
+                </Show>
+              </span>
+              <ArrowUpRight aria-hidden="true" class="size-3 shrink-0" />
+            </button>
+          }
+        >
+          {(question) => (
+            <AskingCard
+              agentSessionId={props.agentSessionId}
+              asking={question()}
+              answer={props.answer}
+              onOpen={props.onOpen}
+            />
+          )}
+        </Show>
       </div>
     </Layer>
   );

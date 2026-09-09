@@ -73,3 +73,7 @@ category, Esc closes.
 - Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
+
+Settings → Agents and Settings → Harness render while their requests are pending.
+A pending Cursor model catalog shows `Loading models…` beside a disabled model
+picker; a failed catalog shows an inline error. The rest of settings stays usable.

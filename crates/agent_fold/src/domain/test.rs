@@ -1,6 +1,7 @@
 //! Unit tests for the domain layer, one file per module under test, plus
 //! [`util`] for what they share.
 
+mod elicitation;
 mod fold;
 mod harness;
 mod harness_readers;

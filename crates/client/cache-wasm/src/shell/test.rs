@@ -184,6 +184,7 @@ async fn resolved(promise: js_sys::Promise) -> JsValue {
 fn empty_js_write_result() -> JsWriteResult {
     JsWriteResult {
         revision: "0".to_string(),
+        revision_advanced: false,
         changed: Vec::new(),
         affected_ops: Vec::new(),
         reset: false,
@@ -904,6 +905,59 @@ async fn soup_updated_v3_supplements_advance_revision_and_recompute_documents_pr
     assert_eq!(selected["revision"], "2");
     assert_eq!(selected["records"][0]["record"]["id"], ORDINARY);
 
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn server_baseline_reconciliation_survives_notification_stubs_and_deletions() {
+    const SCOPE: &str = "cache-wasm-server-baseline-reconciliation";
+    const A: &str = "00000000-0000-0000-0000-000000000001";
+    const B: &str = "00000000-0000-0000-0000-000000000002";
+    const STUB: &str = "00000000-0000-0000-0000-000000000003";
+    let key = |id| format!("GraphqlSoupDocument:{id}");
+    let engine = fresh_engine(SCOPE).await;
+    resolved(engine.write_query(
+        write_context(None),
+        QUERY.into(),
+        Some("Soup".into()),
+        js(serde_json::json!({"input": {"initial": {"limit": 100}}})),
+        js(
+            serde_json::json!({"user": {"id": "macro|user@example.com", "soup": {
+                "nextCursor": null, "items": [{"__typename": "GraphqlSoupDocument", "id": STUB}]
+            }}}),
+        ),
+        None,
+    ))
+    .await;
+    resolved(engine.write_query(
+        write_context(None), SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION.into(),
+        Some("SoupUpdatesWithProjection".into()), js(serde_json::json!({})),
+        js(serde_json::json!({"soupUpdates": [
+            {"__typename": "SoupUpdated", "item": projected_document_item(A, "macro|user@example.com", false, None, 10)},
+            {"__typename": "SoupUpdated", "item": projected_document_item(B, "macro|user@example.com", false, None, 30)}
+        ]})), None,
+    )).await;
+    let mut request = documents_preset_filter(
+        serde_json::json!({"literal": {"owner": "macro|user@example.com"}}),
+    );
+    request["limit"] = serde_json::json!(1);
+    let exact: serde_json::Value =
+        from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+    assert_eq!(exact["kind"], "incomplete");
+    request["baseline"] = serde_json::json!([
+        {"key": key(A), "sortTimestamp": "2025-01-01T00:00:00.000010Z"},
+        {"key": key(STUB), "sortTimestamp": "2025-01-01T00:00:00.000020Z"}
+    ]);
+    let result: serde_json::Value =
+        from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+    assert_eq!(
+        result,
+        serde_json::json!({"kind": "reconciled", "revision": "2", "keys": [key(B), key(STUB), key(A)], "retainedKeys": [key(STUB)], "optimistic": false})
+    );
+    resolved(engine.delete_keys(vec![key(A), key(STUB)])).await;
+    let deleted: serde_json::Value = from_js(resolved(engine.entity_filter(js(request))).await);
+    assert_eq!(deleted["keys"], serde_json::json!([key(B)]));
+    assert_eq!(deleted["retainedKeys"], serde_json::json!([]));
     close_and_destroy(&engine, SCOPE).await;
 }
 

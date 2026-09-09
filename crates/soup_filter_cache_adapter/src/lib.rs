@@ -76,6 +76,27 @@ pub fn compile_filter_request(
     })
 }
 
+/// Convert server-page sort evidence without losing sub-millisecond precision.
+/// The caller scopes the baseline to the same filter and sort as the request.
+pub fn reconciliation_baseline_entry(
+    record_key: String,
+    sort_timestamp: &str,
+) -> Result<
+    cache_core::predicate::reconciliation::PredicateBaselineEntry,
+    SoupFilterCacheAdapterError,
+> {
+    let record_key = RecordKey::new(record_key)
+        .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
+    let timestamp = chrono::DateTime::parse_from_rfc3339(sort_timestamp)
+        .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
+    Ok(
+        cache_core::predicate::reconciliation::PredicateBaselineEntry {
+            record_key,
+            sort_value: predicate_index::utc_timestamp_micros(timestamp.to_utc()),
+        },
+    )
+}
+
 /// Derive authoritative generic projection mutations from a selected GraphQL response.
 ///
 /// Document supplements are decoded only where `cacheProjection` is selected

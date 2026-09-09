@@ -1,5 +1,6 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PreviewItem } from '../types';
 
 const useQueryMock = vi.hoisted(() => vi.fn());
 const useQueryOptions = vi.hoisted(() => [] as Array<() => unknown>);
@@ -62,6 +63,7 @@ const {
   setPreviewName,
   setPreviewOnCreate,
   useItemPreview,
+  useItemRawName,
 } = await import('../preview');
 
 const preview = {
@@ -108,6 +110,50 @@ describe('preview transport facade', () => {
       expect(item()).toEqual(preview);
       const regularOptions = useQueryOptions[0]?.();
       expect(regularOptions).toMatchObject({ enabled: false });
+      dispose();
+    });
+  });
+
+  it('keeps pending GraphQL metadata distinct from REST and loaded-empty properties', () => {
+    createRoot((dispose) => {
+      const [data, setData] = createSignal<PreviewItem>(preview);
+      const [fallback, setFallback] = createSignal(false);
+      createGraphqlItemPreviewQueryMock.mockReturnValue({
+        data,
+        shouldFallback: fallback,
+        refetch: vi.fn(),
+      });
+      const [, controls] = useItemPreview(() => ({
+        id: 'doc-1',
+        type: 'document',
+      }));
+      expect(controls.documentProperties()).toMatchObject({
+        properties: undefined,
+        canEdit: false,
+      });
+      setData({
+        ...preview,
+        documentMetadata: { properties: [], canEdit: true },
+      });
+      expect(controls.documentProperties()).toMatchObject({
+        properties: [],
+        canEdit: true,
+      });
+      setFallback(true);
+      expect(controls.documentProperties()).toBeUndefined();
+      dispose();
+    });
+  });
+
+  it('keeps raw-name reads on the lightweight selection', () => {
+    createRoot((dispose) => {
+      const name = useItemRawName(() => ({ id: 'doc-1', type: 'document' }));
+      expect(name()).toBe('Document');
+      expect(createGraphqlItemPreviewQueryMock).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        false
+      );
       dispose();
     });
   });

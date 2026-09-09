@@ -15,6 +15,8 @@ use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityReference, EntityType, PropertyOwner};
 use uuid::Uuid;
 
+pub use system_properties::CRM_TEAM_STAGE_DEFINITION_NAME;
+
 /// Map an internal properties storage type to its canonical entity type.
 pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
     match entity_type {

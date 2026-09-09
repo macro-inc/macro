@@ -93,10 +93,12 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const { item, ItemEntityIcon } = useItemPreviewData(() => ({
-    id: props.documentId,
-    type: previewType(),
-  }));
+  const { item, ItemEntityIcon, documentProperties } = useItemPreviewData(
+    () => ({
+      id: props.documentId,
+      type: previewType(),
+    })
+  );
 
   const channelMessageId = () => {
     if (previewType() !== 'channel') return undefined;
@@ -447,7 +449,10 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 <DocumentInfo item={item()} blockName={props.blockName} />
                 <Show when={props.blockName === 'task'}>
                   <Suspense fallback={<div class="w-full bg-active h-4 m-2" />}>
-                    <TaskPropertiesPreview taskId={item().id} />
+                    <TaskPropertiesPreview
+                      taskId={item().id}
+                      previewProperties={documentProperties()}
+                    />
                   </Suspense>
                 </Show>
                 <Show when={previewComponent()}>

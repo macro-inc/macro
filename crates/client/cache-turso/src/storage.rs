@@ -4,6 +4,10 @@ use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
     cache_namespace, decode_record, decode_record_updates, encode_record, encode_record_updates,
 };
+use cache_core::predicate::reconciliation::{
+    PredicateBaselineEntry, PredicateReconciliation, predicate_membership,
+    reconcile_predicate_baseline,
+};
 use cache_core::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionIncompleteKind, ProjectionMutation, ProjectionState,
@@ -1414,6 +1418,62 @@ impl Storage for TursoStorage {
 }
 
 impl PredicateIndexStorage for TursoStorage {
+    async fn reconcile_predicate_index(
+        &self,
+        query: &ValidatedIndexQuery,
+        baseline: &[PredicateBaselineEntry],
+    ) -> Result<PredicateReconciliation, Self::Error> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        let result = driver::read_transaction(&connection, || {
+            let optimistic = optimistic_query_status(&connection, query)?;
+            // Incomplete authority and unknown shadows are not candidates, but
+            // they must not prevent unrelated known-good rows from updating.
+            let (sql, parameters) =
+                compile_predicate_selection(query, &optimistic.uncertain_ids, true);
+            let candidates = driver::query(&connection, &sql, parameters)?
+                .into_iter()
+                .map(|row| {
+                    if row.len() != 2 {
+                        return Err(invariant());
+                    }
+                    Ok(predicate_index::ReferenceHit {
+                        record_key: PredicateRecordKey::new(required_text(&row, 0)?)
+                            .map_err(|_| invariant())?,
+                        sort_value: required_i64(&row, 1)?,
+                    })
+                })
+                .collect::<Result<Vec<_>, TursoStorageError>>()?;
+            let keys: Vec<_> = baseline
+                .iter()
+                .map(|entry| entry.record_key.clone())
+                .collect();
+            let authority = load_projection_states(&connection, &keys)?;
+            let shadows = load_optimistic_projections(&connection, &keys)?;
+            let present = present_predicate_records(&connection, &keys)?;
+            let membership =
+                keys.iter()
+                    .zip(&authority)
+                    .zip(&shadows)
+                    .map(|((key, authority), shadow)| {
+                        predicate_membership(
+                            query,
+                            authority.as_ref(),
+                            shadow.as_ref(),
+                            present.contains(key),
+                        )
+                    });
+            Ok(reconcile_predicate_baseline(
+                query,
+                baseline,
+                membership,
+                candidates,
+                optimistic.has_shadow,
+            ))
+        });
+        self.latch_result(result)
+    }
+
     async fn delete_batch_with_projections(
         &mut self,
         keys: &[EntityKey<'static>],
@@ -2270,6 +2330,40 @@ fn load_index_documents(
     Ok(keys.iter().map(|key| documents.get(key).cloned()).collect())
 }
 
+fn present_predicate_records(
+    connection: &Arc<Connection>,
+    keys: &[PredicateRecordKey],
+) -> Result<BTreeSet<PredicateRecordKey>, TursoStorageError> {
+    let mut present = BTreeSet::new();
+    // Point lookups through records' composite primary key; never scan/decode
+    // normalized blobs just to distinguish an unknown baseline from a deletion.
+    for batch in keys.chunks(500) {
+        let mut parameters = Vec::with_capacity(batch.len() * 2);
+        for key in batch {
+            let parsed = RecordKey::from_entity(&EntityKey(key.as_str().into()))?;
+            parameters.extend([text(&parsed.typename), text(&parsed.id)]);
+        }
+        let values = vec!["(?, ?)"; batch.len()].join(", ");
+        let sql = format!(
+            "WITH requested(typename, id) AS (VALUES {values}) SELECT r.__typename, r.id FROM requested AS q JOIN records AS r ON r.__typename = q.typename AND r.id = q.id"
+        );
+        for row in driver::query(connection, &sql, parameters)? {
+            if row.len() != 2 {
+                return Err(invariant());
+            }
+            present.insert(
+                PredicateRecordKey::new(format!(
+                    "{}:{}",
+                    required_text(&row, 0)?,
+                    required_text(&row, 1)?
+                ))
+                .map_err(|_| invariant())?,
+            );
+        }
+    }
+    Ok(present)
+}
+
 fn predicate_scope_is_incomplete(
     connection: &Arc<Connection>,
     query: &ValidatedIndexQuery,
@@ -2292,10 +2386,11 @@ fn predicate_scope_is_incomplete(
     Ok(!driver::query(connection, &sql, parameters)?.is_empty())
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct OptimisticQueryStatus {
     has_shadow: bool,
     incomplete: bool,
+    uncertain_ids: Vec<i64>,
 }
 
 fn optimistic_query_status(
@@ -2329,6 +2424,7 @@ fn optimistic_query_status(
     let mut status = OptimisticQueryStatus {
         has_shadow: !rows.is_empty(),
         incomplete: false,
+        uncertain_ids: Vec::new(),
     };
     let mut uncertainty: HashMap<(i64, Token), Vec<String>> = HashMap::new();
     for row in rows {
@@ -2341,7 +2437,6 @@ fn optimistic_query_status(
         let state = OptimisticIndexDocumentState::try_from(required_i64(&row, 3)?)?;
         if current_scope && state == OptimisticIndexDocumentState::Incomplete {
             status.incomplete = true;
-            return Ok(status);
         }
         if current_scope && let Some(attribute) = nullable_text(&row, 4)? {
             uncertainty
@@ -2350,7 +2445,7 @@ fn optimistic_query_status(
                 .push(attribute);
         }
     }
-    for ((_, partition), attributes) in uncertainty {
+    for ((id, partition), attributes) in uncertainty {
         let uncertainty = parse_optimistic_uncertainty(attributes)?;
         if query
             .dependent_attributes(&partition)
@@ -2358,15 +2453,24 @@ fn optimistic_query_status(
             .any(|attribute| uncertainty.affects(attribute))
         {
             status.incomplete = true;
-            break;
+            status.uncertain_ids.push(id);
         }
     }
+    status.uncertain_ids.sort_unstable();
     Ok(status)
 }
 
 fn compile_predicate_sql(query: &ValidatedIndexQuery) -> (String, Vec<Value>) {
+    compile_predicate_selection(query, &[], false)
+}
+
+fn compile_predicate_selection(
+    query: &ValidatedIndexQuery,
+    excluded_optimistic: &[i64],
+    include_sort: bool,
+) -> (String, Vec<Value>) {
     let descriptor = query.as_query();
-    let mut compiler = SqlPredicateCompiler::new();
+    let mut compiler = SqlPredicateCompiler::new(excluded_optimistic);
     let roots = descriptor
         .partitions
         .iter()
@@ -2408,8 +2512,9 @@ fn compile_predicate_sql(query: &ValidatedIndexQuery) -> (String, Vec<Value>) {
         SortDirection::Asc => "ASC",
         SortDirection::Desc => "DESC",
     };
+    let sort_selection = if include_sort { ", s.value" } else { "" };
     let sql = format!(
-        "WITH {} SELECT d.record_key FROM {matches} AS m JOIN effective_documents AS d ON d.source = m.source AND d.document_id = m.document_id JOIN {effective_sort} AS s ON s.source = m.source AND s.document_id = m.document_id ORDER BY s.value {sort_direction}, d.record_key {tie_direction} LIMIT ?",
+        "WITH {} SELECT d.record_key{sort_selection} FROM {matches} AS m JOIN effective_documents AS d ON d.source = m.source AND d.document_id = m.document_id JOIN {effective_sort} AS s ON s.source = m.source AND s.document_id = m.document_id ORDER BY s.value {sort_direction}, d.record_key {tie_direction} LIMIT ?",
         compiler.ctes.join(", ")
     );
     (sql, compiler.parameters)
@@ -2422,12 +2527,24 @@ struct SqlPredicateCompiler {
 }
 
 impl SqlPredicateCompiler {
-    fn new() -> Self {
+    fn new(excluded_optimistic: &[i64]) -> Self {
+        let exclusion = if excluded_optimistic.is_empty() {
+            String::new()
+        } else {
+            format!(
+                " AND o.id NOT IN ({})",
+                sql_placeholders(excluded_optimistic.len())
+            )
+        };
         Self {
-            ctes: vec![
-                "effective_documents(source, document_id, record_key, profile, partition) AS (SELECT 0, d.id, d.record_key, d.profile, d.partition FROM index_documents AS d WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) UNION ALL SELECT 1, o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0)".to_owned(),
-            ],
-            parameters: Vec::new(),
+            ctes: vec![format!(
+                "effective_documents(source, document_id, record_key, profile, partition) AS (SELECT 0, d.id, d.record_key, d.profile, d.partition FROM index_documents AS d WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) UNION ALL SELECT 1, o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})"
+            )],
+            parameters: excluded_optimistic
+                .iter()
+                .copied()
+                .map(Value::from_i64)
+                .collect(),
             next_id: 0,
         }
     }

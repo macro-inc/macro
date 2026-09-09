@@ -3,6 +3,8 @@
  */
 
 import { Model } from '@core/component/AI/constant/model';
+import { useCursorModelsQuery } from '@queries/auth/cursor-api-key';
+import type { CursorModelsResponse } from '@service-auth/generated/schemas';
 import {
   fireEvent,
   render,
@@ -10,17 +12,28 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/solid-query';
+import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
 
 const cursorMocks = vi.hoisted(() => ({
   status: {
+    isSuccess: true,
+    isError: false,
     data: {
       registered: false,
       updatedAt: null as string | null,
     },
   },
   models: {
+    isSuccess: true,
+    isPending: false,
+    isError: false,
     data: {
       models: [
         { id: 'cursor-small', displayName: 'Cursor Small' },
@@ -32,6 +45,8 @@ const cursorMocks = vi.hoisted(() => ({
 
 const agentMocks = vi.hoisted(() => ({
   query: {
+    isSuccess: true,
+    isPending: false,
     data: [] as unknown[],
     isError: false,
   },
@@ -47,11 +62,13 @@ const agentMocks = vi.hoisted(() => ({
 
 vi.mock('@queries/auth/cursor-api-key', () => ({
   useCursorApiKeyStatusQuery: () => cursorMocks.status,
-  useCursorModelsQuery: () => cursorMocks.models,
+  useCursorModelsQuery: vi.fn(() => cursorMocks.models),
 }));
 
 const harnessMocks = vi.hoisted(() => ({
   query: {
+    isSuccess: true,
+    isPending: false,
     data: [] as unknown[],
   },
 }));
@@ -77,7 +94,10 @@ vi.mock('@queries/agents/agents', () => ({
 }));
 
 vi.mock('@queries/team/teams', () => ({
-  useCurrentTeamQuery: () => ({ data: agentMocks.currentTeam }),
+  useCurrentTeamQuery: () => ({
+    data: agentMocks.currentTeam,
+    isSuccess: true,
+  }),
   useIsTeamOwner: () => () => agentMocks.isTeamOwner,
 }));
 
@@ -201,6 +221,88 @@ const MACROD_HARNESS = {
 };
 
 describe('Agents', () => {
+  it.each(['success', 'error'] as const)(
+    'keeps settings visible while Cursor models load and after %s',
+    async (outcome) => {
+      cursorMocks.status.data.registered = true;
+      let resolveModels!: (models: CursorModelsResponse) => void;
+      let rejectModels!: (error: Error) => void;
+      const response = new Promise<CursorModelsResponse>((resolve, reject) => {
+        resolveModels = resolve;
+        rejectModels = reject;
+      });
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      vi.mocked(useCursorModelsQuery).mockImplementationOnce(() =>
+        useQuery(() => ({
+          queryKey: ['pending-cursor-models'],
+          queryFn: () => response,
+        }))
+      );
+      const view = render(() => (
+        <QueryClientProvider client={client}>
+          <Suspense fallback={<p>Settings suspended</p>}>
+            <Agents />
+          </Suspense>
+        </QueryClientProvider>
+      ));
+      fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Harness' }), {
+        target: { value: 'cursor' },
+      });
+      expect(screen.queryByText('Settings suspended')).toBeNull();
+      expect(screen.getByText('Loading models…')).toBeTruthy();
+      expect(
+        (
+          screen.getByRole('combobox', {
+            name: 'Default model',
+          }) as HTMLSelectElement
+        ).disabled
+      ).toBe(true);
+
+      if (outcome === 'error') {
+        rejectModels(new Error('Cursor is unavailable'));
+        await waitFor(() =>
+          expect(screen.getByText(/Could not load Cursor models/)).toBeTruthy()
+        );
+        expect(screen.queryByText('Settings suspended')).toBeNull();
+        expect(
+          (
+            screen.getByRole('combobox', {
+              name: 'Default model',
+            }) as HTMLSelectElement
+          ).disabled
+        ).toBe(true);
+      } else {
+        resolveModels({
+          models: [
+            {
+              id: 'loaded-model',
+              displayName: 'Loaded Model',
+              group: 'Cursor',
+            },
+          ],
+        });
+        await waitFor(() =>
+          expect(
+            screen.getByRole('option', { name: 'Loaded Model' })
+          ).toBeTruthy()
+        );
+        expect(screen.queryByText('Settings suspended')).toBeNull();
+        expect(
+          (
+            screen.getByRole('combobox', {
+              name: 'Default model',
+            }) as HTMLSelectElement
+          ).disabled
+        ).toBe(false);
+      }
+      view.unmount();
+      client.clear();
+    }
+  );
+
   it('lists the built-in global Macro agent as a team agent', () => {
     render(() => <Agents />);
 

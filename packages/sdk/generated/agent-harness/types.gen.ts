@@ -15,7 +15,9 @@ export type AgentAction = (AgentPromptAction & {
     type: 'compact';
 } | {
     type: 'stop';
-};
+} | (AgentRespondElicitationAction & {
+    type: 'respondElicitation';
+});
 
 /**
  * Identifies one accepted [`AgentAction`] end to end: returned by the
@@ -39,6 +41,17 @@ export type AgentPromptAction = {
      * What to tell the agent.
      */
     prompt: string;
+};
+
+/**
+ * Answer an elicitation the agent is waiting on.
+ */
+export type AgentRespondElicitationAction = ElicitationAnswer & {
+    /**
+     * The agent's `elicitation/create` request id - not an
+     * [`AgentActionId`], because the agent minted it.
+     */
+    requestId: ElicitationRequestId;
 };
 
 /**
@@ -242,20 +255,21 @@ export type ControlStatusDto = 'sent' | 'queued';
  * Carries two shapes, told apart by `workspace`. Naming one asks for an
  * external session: the runtime is the bot operator's, so the caller has to
  * say which bot and which directory, and must own that bot. Omitting it asks
- * for a managed session, whose sandbox this deployment provisions from its
- * own configuration - which is why the fields describing someone else's
- * runtime must be omitted along with it rather than quietly ignored. Mixing
- * the two is refused rather than guessed at, so that no request can reach the
- * managed path carrying a bot the caller was never entitled to name.
+ * for a managed session, whose runtime this deployment provisions. A managed
+ * request may select an authorized persisted persona with `botId`; omitting
+ * it uses the deployment's default coding persona. Fields describing someone
+ * else's runtime must still be omitted rather than quietly ignored. Mixing
+ * the two shapes is refused rather than guessed at.
  *
  * Clients serialize this, so both derives are used.
  */
 export type CreateAgentSessionRequest = {
     /**
-     * Bot the session runs for. Bot callers may omit it (their own identity
-     * is used) and must not name another bot; user callers must supply a
-     * bot they own. External sessions only: a managed session runs as the
-     * bot its deployment is configured for.
+     * Bot the session runs for. On a managed request this optionally selects
+     * a persisted persona the user owns or may use through team membership;
+     * omitting it uses the deployment's default coding persona. On an
+     * external request, bot callers may omit it (their own identity is used)
+     * and must not name another bot; user callers must supply a bot they own.
      */
     botId?: string | null;
     /**
@@ -345,6 +359,46 @@ export type EditQueuedActionRequest = {
      */
     prompt: string;
 };
+
+/**
+ * What the user decided about an elicitation. Mirrors ACP's three actions;
+ * there is no `Other` because we never originate an action we do not know.
+ */
+export type ElicitationAnswer = {
+    action: 'accept';
+    /**
+     * Form: the submitted values keyed by property. URL: omitted.
+     */
+    content?: {
+        [key: string]: ElicitationContentValue;
+    } | null;
+} | {
+    action: 'decline';
+} | {
+    action: 'cancel';
+};
+
+/**
+ * A value ACP accepts in an elicitation answer.
+ *
+ * Mirrors ACP's `ElicitationContentValue` so that the contract a caller
+ * answers against is the closed union ACP will accept, rather than arbitrary
+ * JSON narrowed on the way out. An object, a null, or a mixed array is
+ * refused when the request is deserialized - where the caller learns of it -
+ * instead of at send time, when the elicitation slot has already been
+ * released.
+ */
+export type ElicitationContentValue = string | boolean | number | number | Array<string>;
+
+/**
+ * The JSON-RPC id of an agent's `elicitation/create` request, carried whole
+ * so the answer echoes exactly what the agent sent.
+ *
+ * Agents pick these, not us: Claude Code counts from `0`, others use
+ * strings. `null` is not a legal id for a request that expects a response,
+ * so it is not representable here.
+ */
+export type ElicitationRequestId = number | string;
 
 /**
  * The provider-side identity of an externally-served session.

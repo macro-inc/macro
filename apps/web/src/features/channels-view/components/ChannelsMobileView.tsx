@@ -6,6 +6,7 @@ import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHe
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
 import type { ChannelEntity } from '@entity';
+import { isMutedItem } from '@entity/utils/notification';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
@@ -181,6 +182,10 @@ export function ChannelsMobileView(props: {
                       currentUserId()
                     )}
                     unread={channelActivity.unreadChannelIds().has(channel.id)}
+                    muted={isMutedItem(notificationSource.mutedEntities(), {
+                      item_id: channel.id,
+                      item_type: 'channel',
+                    })}
                     callStatus={channelActivity.callStatuses().get(channel.id)}
                     incomingCallId={channelActivity
                       .incomingCallIds()

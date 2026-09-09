@@ -1,5 +1,6 @@
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
-import { createMemo, createRoot } from 'solid-js';
+import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
+import { createMemo, createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNotificationSource } from '../notification-source';
 import type { UnifiedNotification } from '../types';
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   graphqlPatchCallback: undefined as
     | ((patch: Record<string, unknown>) => void)
     | undefined,
+  mutedEntitiesQuery: {} as Record<string, unknown>,
   notificationsQuery: {} as Record<string, unknown>,
   optimisticInsertNotification: vi.fn(),
   socketCallback: undefined as
@@ -71,12 +73,7 @@ vi.mock('@service-storage/graphql-soup-websocket', () => ({
 }));
 
 vi.mock('../queries/muted-entities-query', () => ({
-  createMutedEntitiesQuery: () => ({
-    data: undefined,
-    isLoading: false,
-    isSuccess: false,
-    refetch: vi.fn(),
-  }),
+  createMutedEntitiesQuery: () => mocks.mutedEntitiesQuery,
 }));
 
 function notification(
@@ -107,6 +104,51 @@ describe('createNotificationSource', () => {
     mocks.optimisticInsertNotification.mockReset();
     mocks.seenMutation.mutateAsync.mockReset().mockResolvedValue(undefined);
     mocks.doneMutation.mutateAsync.mockReset().mockResolvedValue(undefined);
+    mocks.mutedEntitiesQuery = {
+      data: undefined,
+      isLoading: false,
+      refetch: vi.fn(),
+    };
+  });
+
+  it('reactively exposes muted entity cache updates', async () => {
+    const [mutedEntities, setMutedEntities] = createSignal<
+      UserUnsubscribe[] | undefined
+    >([]);
+    mocks.mutedEntitiesQuery = {
+      get data() {
+        return mutedEntities();
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    };
+
+    let dispose = () => {};
+    let memoRuns = 0;
+    const mutedEntitiesValue = createRoot((rootDispose) => {
+      dispose = rootDispose;
+      const source = createNotificationSource({} as ConnectionGatewayWebsocket);
+      return createMemo(() => {
+        memoRuns += 1;
+        return source.mutedEntities();
+      });
+    });
+
+    try {
+      await Promise.resolve();
+      const initialMutedEntities = mutedEntitiesValue();
+      expect(initialMutedEntities).toHaveLength(0);
+      const runsBeforeUpdate = memoRuns;
+
+      setMutedEntities([{ item_id: 'channel-1', item_type: 'channel' }]);
+      await Promise.resolve();
+
+      expect(mutedEntitiesValue()).toHaveLength(1);
+      expect(mutedEntitiesValue()).not.toBe(initialMutedEntities);
+      expect(memoRuns).toBeGreaterThan(runsBeforeUpdate);
+    } finally {
+      dispose();
+    }
   });
 
   it('coalesces uncached GraphQL patches and ignores connection gateway notifications when enabled', async () => {

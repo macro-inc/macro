@@ -869,6 +869,25 @@
                 "enum": ["stop"]
               }
             }
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentRespondElicitationAction",
+                "description": "Answer an `elicitation/create` the agent sent.\n\nThe one action whose wire form is a JSON-RPC *response* rather than a\nrequest or notification: the agent asked, we answer on its id. The\nminted [`AgentActionId`] therefore never reaches the wire for this\naction; the fold correlates on the agent's id instead."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["respondElicitation"]
+                  }
+                }
+              }
+            ],
+            "description": "Answer an `elicitation/create` the agent sent.\n\nThe one action whose wire form is a JSON-RPC *response* rather than a\nrequest or notification: the agent asked, we answer on its id. The\nminted [`AgentActionId`] therefore never reaches the wire for this\naction; the fold correlates on the agent's id instead."
           }
         ],
         "description": "One thing a caller wants an agent to do."
@@ -888,6 +907,25 @@
             "description": "What to tell the agent."
           }
         }
+      },
+      "AgentRespondElicitationAction": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ElicitationAnswer",
+            "description": "The decision."
+          },
+          {
+            "type": "object",
+            "required": ["requestId"],
+            "properties": {
+              "requestId": {
+                "$ref": "#/components/schemas/ElicitationRequestId",
+                "description": "The agent's `elicitation/create` request id - not an\n[`AgentActionId`], because the agent minted it."
+              }
+            }
+          }
+        ],
+        "description": "Answer an elicitation the agent is waiting on."
       },
       "AgentSessionLogEntryDto": {
         "allOf": [
@@ -1100,12 +1138,12 @@
       },
       "CreateAgentSessionRequest": {
         "type": "object",
-        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose sandbox this deployment provisions from its\nown configuration - which is why the fields describing someone else's\nruntime must be omitted along with it rather than quietly ignored. Mixing\nthe two is refused rather than guessed at, so that no request can reach the\nmanaged path carrying a bot the caller was never entitled to name.\n\nClients serialize this, so both derives are used.",
+        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose runtime this deployment provisions. A managed\nrequest may select an authorized persisted persona with `botId`; omitting\nit uses the deployment's default coding persona. Fields describing someone\nelse's runtime must still be omitted rather than quietly ignored. Mixing\nthe two shapes is refused rather than guessed at.\n\nClients serialize this, so both derives are used.",
         "properties": {
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. Bot callers may omit it (their own identity\nis used) and must not name another bot; user callers must supply a\nbot they own. External sessions only: a managed session runs as the\nbot its deployment is configured for."
+            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns or may use through team membership;\nomitting it uses the deployment's default coding persona. On an\nexternal request, bot callers may omit it (their own identity is used)\nand must not name another bot; user callers must supply a bot they own."
           },
           "instructions": {
             "type": ["string", "null"],
@@ -1188,6 +1226,98 @@
             "minLength": 1
           }
         }
+      },
+      "ElicitationAnswer": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The user submitted the form, or consented to open the URL.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["accept"]
+              },
+              "content": {
+                "type": ["object", "null"],
+                "description": "Form: the submitted values keyed by property. URL: omitted.",
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ElicitationContentValue"
+                },
+                "propertyNames": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user explicitly said no.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["decline"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user dismissed the request without choosing.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["cancel"]
+              }
+            }
+          }
+        ],
+        "description": "What the user decided about an elicitation. Mirrors ACP's three actions;\nthere is no `Other` because we never originate an action we do not know."
+      },
+      "ElicitationContentValue": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "A string, and the shape a whole draft rides in as JSON text."
+          },
+          {
+            "type": "boolean",
+            "description": "A yes/no."
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "A whole number."
+          },
+          {
+            "type": "number",
+            "format": "double",
+            "description": "A number that is not whole."
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A multi-select's chosen values."
+          }
+        ],
+        "description": "A value ACP accepts in an elicitation answer.\n\nMirrors ACP's `ElicitationContentValue` so that the contract a caller\nanswers against is the closed union ACP will accept, rather than arbitrary\nJSON narrowed on the way out. An object, a null, or a mixed array is\nrefused when the request is deserialized - where the caller learns of it -\ninstead of at send time, when the elicitation slot has already been\nreleased."
+      },
+      "ElicitationRequestId": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "A numeric JSON-RPC id. Specta refuses `i64` (it does not fit a JS\nnumber); agents count their requests from zero, so `i32` is the\nhonest TypeScript face."
+          },
+          {
+            "type": "string",
+            "description": "A string JSON-RPC id."
+          }
+        ],
+        "description": "The JSON-RPC id of an agent's `elicitation/create` request, carried whole\nso the answer echoes exactly what the agent sent.\n\nAgents pick these, not us: Claude Code counts from `0`, others use\nstrings. `null` is not a legal id for a request that expects a response,\nso it is not representable here."
       },
       "ExternalSessionResponse": {
         "type": "object",

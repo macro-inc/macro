@@ -52,7 +52,12 @@ answer text to expand it in place (`Show less` collapses it again); click the
 bottom row to open the agent session. Before an
 answer exists, clicking the answer area also opens the session.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
-other channel mention.
+other channel mention. With GraphQL enabled, document mentions and preview cards load
+in bounded batches, including task status/priority/assignees and the viewer's edit
+permission. Task badges can appear with the initial preview rather than waiting for
+separate properties/document-metadata requests; cached titles may appear first while
+those edges load. Ordinary document/task mentions do not wait for the built-in skills
+list. Built-in skill mentions retain their non-document behavior.
 The Magic Chip that streams the agent's reply stays inside the message column: long
 thoughts, file paths, and unbreakable tokens wrap or truncate instead of expanding the
 thread past the chat's right edge.

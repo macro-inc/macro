@@ -12,7 +12,6 @@ ai_tools = [
   "dep:models_properties",
   "dep:properties",
   "dep:schemars",
-  "dep:system_properties",
   "entity_access/ports",
   "ports",
 ]
@@ -63,7 +62,7 @@ properties = { path = "../properties", default-features = false, features = [
   "ports",
 ], optional = true }
 schemars = { workspace = true, optional = true }
-system_properties = { path = "../system_properties", optional = true }
+system_properties = { path = "../system_properties" }
 
 # Axum / inbound dependencies
 axum = { workspace = true, optional = true }

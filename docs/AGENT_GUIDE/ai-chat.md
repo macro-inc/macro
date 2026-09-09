@@ -11,8 +11,30 @@
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
-`Create` → `Agent A`, or keyboard `c` then `a`. That create path focuses the
-agent composer so you can type immediately.
+`Create` → `Agent A`, or keyboard `c` then `a`, opens a managed agent session
+directly at `/app/agent/<uuid>` (the runtime starts while the block mounts).
+That create path focuses the agent composer so you can type immediately.
+When the `enable-agent-session-composer` flag is on (default in dev;
+`VITE_ENABLE_AGENT_SESSION_COMPOSER` overrides), the same entry instead opens
+the **New agent session** composer popover. The prompt textarea (`Give your agent a
+prompt...`) is focused on open, so you can `type_text` immediately. Below the prompt a
+**Agent** section (`aria-label` `Agent`) lists the choices in the open, as a
+`radiogroup` of cards (`role="radio"`, `aria-checked`): **Macro** `@macro`
+(the default), **Cursor** `@cursor` (disabled with a `Connect Cursor in
+Settings → Harness` hint until a Cursor API key is stored), then the user's
+own agents, each card showing avatar, name and `@handle · Macro|Cursor` for
+the runtime (a disabled card reads `@cursor · Not connected`). Every agent is
+shown; the cards form an even grid that fills the popover width. Click a card
+or use arrow keys to change agent. The **Model
+override** pill (`aria-label` `Model override`) at the bottom left opens a
+menu whose first row is `Agent default · <model>`, followed by at most five
+featured models; longer catalogs put the rest under a `More models` submenu.
+Changing agent resets the override. Tab order is prompt → selected agent card → Model →
+**Create Session**; the close `X` is skipped. The menu opens on Enter/Space
+and selects with arrow keys + Enter. Escape in the prompt first blurs to the
+dialog, a second Escape closes it. Press **Create Session** or
+`Cmd/Ctrl+Enter`; the composer closes and the new `/app/agent/<uuid>` session
+opens while its runtime starts.
 
 ## Start a doc-scoped chat
 
@@ -39,6 +61,25 @@ The chat auto-titles itself after the first exchange (route stays stable, title 
 The agent has workspace tools (it can list your documents, read channels, create tasks,
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
+
+## Agent sessions asking a question
+
+For manual testing on local or deployed development environments, send
+`/ask <question>` for free text or `/ask <question> | option | option` for a
+single choice. This shortcut bypasses the model. It is disabled in production,
+where the text is an ordinary prompt; the model's `AskUser` tool and user-tool
+review remain independent of this development setting.
+
+An agent session (the `/app/channel/<channel>/agent/<session>` pane) can pause its turn to
+ask you something. A card titled `<bot> is asking` with trailing text `Waiting for you`
+appears in the transcript, and the notice `The agent is waiting for your answer above` sits
+over the composer. Forms have one control per field (radios for a choice, an `Other` text
+box when the agent allows a custom answer, checkboxes for multi-select, text/number inputs)
+plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and URL with an
+`Open` button that only opens a new tab after you click it. Once answered the card collapses
+to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
+continues. Messages typed while a question is open queue behind it; the composer's `Stop`
+square cancels the question and the turn.
 
 ## In channels
 

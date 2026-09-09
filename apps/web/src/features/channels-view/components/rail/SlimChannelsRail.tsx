@@ -23,7 +23,11 @@ import { Dynamic } from 'solid-js/web';
 import { Virtualizer } from 'virtua/solid';
 import type { ChannelsGroup } from '../../types';
 import { channelInitials, isDirectMessage } from '../../utils';
-import { ChannelCallIndicator } from './ChannelRailItems';
+import {
+  ChannelCallIndicator,
+  ChannelMutedIndicator,
+  ChannelRailItemContextMenu,
+} from './ChannelRailItems';
 import {
   domIdForRow,
   rowKeyForChannel,
@@ -127,47 +131,60 @@ function SlimChannelItem(props: { channel: ChannelEntity }) {
   const item = useChannelRailItemState(() => props.channel.id);
 
   return (
-    <Tooltip
-      label={props.channel.name}
-      placement="right"
-      class="size-10 self-center"
+    <ChannelRailItemContextMenu
+      channel={props.channel}
+      class="block size-10 self-center"
     >
-      <button
-        id={item().domId}
-        type="button"
-        role="treeitem"
-        tabIndex={-1}
-        class={cn(
-          'flex size-10 items-center justify-center rounded-full text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent touch:focus-visible:ring-0',
-          item().selected && !isTouchDevice() && 'bg-active text-ink',
-          (!item().selected || isTouchDevice()) && 'text-ink-muted',
-          !item().selected &&
-            !isTouchDevice() &&
-            item().focused &&
-            'bg-hover text-ink',
-          !item().selected &&
-            !isTouchDevice() &&
-            !item().focused &&
-            'hover:bg-hover hover:text-ink'
-        )}
-        aria-current={item().selected ? 'page' : undefined}
-        onClick={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
-      >
-        <span class="relative">
-          <SlimChannelAvatar channel={props.channel} />
-          <ChannelCallIndicator
-            status={item().callStatus}
-            class="absolute -bottom-0.5 -right-0.5 rounded-full bg-inset p-0.5"
-          />
-          <Show when={item().unread}>
-            <span
-              aria-label="Unread"
-              class="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-accent ring-2 ring-surface"
-            />
-          </Show>
-        </span>
-      </button>
-    </Tooltip>
+      <Tooltip label={props.channel.name} placement="right" class="size-10">
+        <button
+          id={item().domId}
+          type="button"
+          role="treeitem"
+          tabIndex={-1}
+          class={cn(
+            'flex size-10 items-center justify-center rounded-full text-left outline-none transition-colors',
+            item().selected && !isTouchDevice() && 'bg-active text-ink',
+            (!item().selected || isTouchDevice()) && 'text-ink-muted',
+            !item().selected &&
+              !isTouchDevice() &&
+              item().focused &&
+              'bg-hover text-ink',
+            !item().selected &&
+              !isTouchDevice() &&
+              !item().focused &&
+              'hover:bg-hover hover:text-ink'
+          )}
+          aria-current={item().selected ? 'page' : undefined}
+          onClick={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
+        >
+          <span class="relative">
+            <SlimChannelAvatar channel={props.channel} />
+            <Show
+              when={item().callStatus}
+              fallback={
+                <ChannelMutedIndicator
+                  muted={item().muted}
+                  class="absolute -bottom-0.5 -right-0.5 rounded-full bg-inset p-0.5"
+                />
+              }
+            >
+              {(callStatus) => (
+                <ChannelCallIndicator
+                  status={callStatus()}
+                  class="absolute -bottom-0.5 -right-0.5 rounded-full bg-inset p-0.5"
+                />
+              )}
+            </Show>
+            <Show when={item().unread}>
+              <span
+                aria-label="Unread"
+                class="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-accent ring-2 ring-surface"
+              />
+            </Show>
+          </span>
+        </button>
+      </Tooltip>
+    </ChannelRailItemContextMenu>
   );
 }
 
@@ -271,7 +288,7 @@ function SlimGroupSection(props: { config: GroupConfig }) {
           type="button"
           role="treeitem"
           tabIndex={-1}
-          class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none"
           aria-expanded={section().open}
           aria-label={props.config.label}
           onClick={() => rail.activateRow(rowKeyForSection(props.config.group))}

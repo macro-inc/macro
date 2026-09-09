@@ -1,5 +1,21 @@
 import { dismissIncomingCallEverywhere } from '@app/features/block-call/sidebar/incoming-calls';
+import {
+  type EntityActionViewContext,
+  toEntityActionListState,
+} from '@app/features/next-soup/actions';
+import {
+  markChannelNotificationsSeenOnOpen,
+  openEntityInNewTab,
+} from '@app/features/next-soup/utils';
+import { SoupEntityActionsMenu } from '@app/features/soup/SoupEntityActionsMenu';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import {
+  ContextMenuContent,
+  MenuGroup,
+  MenuItem,
+  MenuSeparator,
+} from '@core/component/ContextMenu';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
@@ -7,15 +23,18 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { MacroId } from '@core/user/macroId';
 import { type ChannelEntity, Entity } from '@entity';
+import { ContextMenu } from '@kobalte/core/context-menu';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
+import BellSlashIcon from '@phosphor/bell-slash.svg';
 import XIcon from '@phosphor/x.svg';
 import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
 import { getBotDisplayName } from '@queries/channel/message-sender';
 import { Button, cn, Tooltip } from '@ui';
-import { Match, Show, Switch } from 'solid-js';
+import { Match, type ParentProps, Show, Switch } from 'solid-js';
 import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
+import { rowKeyForChannel, useChannelsRail } from './ChannelsRailContext';
 
 export type ChannelCallStatus = 'active' | 'incoming';
 
@@ -23,12 +42,67 @@ export type ChannelRailItemProps = {
   id: string;
   channel: ChannelEntity;
   unread: boolean;
+  muted: boolean;
   callStatus?: ChannelCallStatus;
   incomingCallId?: string;
   selected: boolean;
   focused: boolean;
   onActivate: () => void;
 };
+
+const CHANNEL_RAIL_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
+  supportsMarkDone: false,
+  senderBucket: undefined,
+};
+
+export function ChannelRailItemContextMenu(
+  props: ParentProps<{
+    channel: ChannelEntity;
+    class?: string;
+  }>
+) {
+  const rail = useChannelsRail();
+  const notificationSource = useGlobalNotificationSource();
+  const actionList = toEntityActionListState({
+    controller: rail.list,
+    getEntity: (row) => (row.kind === 'conversation' ? row.channel : undefined),
+  });
+
+  const openInNewTab = () => {
+    markChannelNotificationsSeenOnOpen(props.channel, notificationSource);
+    openEntityInNewTab({ entity: props.channel });
+  };
+
+  return (
+    <ContextMenu
+      onOpenChange={(open) => {
+        if (!open) return;
+
+        rail.list.focus.set(rowKeyForChannel(props.channel.id), {
+          reason: 'pointer',
+          force: true,
+        });
+      }}
+    >
+      <ContextMenu.Trigger class={props.class}>
+        {props.children}
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenuContent class="w-64 text-xs text-ink-muted">
+          <MenuGroup>
+            <MenuItem text="Open in new tab" onClick={openInNewTab} />
+          </MenuGroup>
+          <MenuSeparator />
+          <SoupEntityActionsMenu
+            entities={[props.channel]}
+            list={actionList}
+            viewContext={CHANNEL_RAIL_ACTION_VIEW_CONTEXT}
+          />
+        </ContextMenuContent>
+      </ContextMenu.Portal>
+    </ContextMenu>
+  );
+}
 
 export function ChannelCallIndicator(props: {
   status: ChannelCallStatus | undefined;
@@ -54,6 +128,32 @@ export function ChannelCallIndicator(props: {
           </Switch>
         </span>
       )}
+    </Show>
+  );
+}
+
+export function ChannelMutedIndicator(props: {
+  muted: boolean;
+  class?: string;
+}) {
+  return (
+    <Show when={props.muted}>
+      <Tooltip
+        as="span"
+        label="Notifications are muted"
+        placement="right"
+        class={cn(
+          'size-4 shrink-0 justify-center text-ink-extra-muted',
+          props.class
+        )}
+      >
+        <span
+          aria-label="Notifications muted"
+          class="flex size-full items-center justify-center"
+        >
+          <BellSlashIcon class="size-full" />
+        </span>
+      </Tooltip>
     </Show>
   );
 }
@@ -187,7 +287,7 @@ export function ConversationCard(props: ConversationCardProps) {
       role="treeitem"
       tabIndex={-1}
       class={cn(
-        'relative w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent touch:focus-visible:ring-0',
+        'relative w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors',
         props.selected && !isTouchDevice() && 'bg-active',
         !props.selected && !isTouchDevice() && props.focused && 'bg-hover',
         (!props.selected || isTouchDevice()) && 'bg-transparent',
@@ -218,6 +318,7 @@ export function ConversationCard(props: ConversationCardProps) {
             <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
               {props.channel.name}
             </span>
+            <ChannelMutedIndicator muted={props.muted} />
             <ChannelCallIndicator
               status={props.incomingCallId ? undefined : props.callStatus}
             />

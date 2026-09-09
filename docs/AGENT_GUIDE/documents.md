@@ -17,6 +17,15 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
 
+## Reference hover previews
+
+Hover a document reference chip to open its preview without navigating. With
+`ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
+batch, including task properties and viewer permission, without another fetch.
+Explicit refreshes may revalidate that batch, but requests must settle while the
+pointer stays over the same reference; cache updates must not cause a continuous
+fetch cascade.
+
 ## AI edit
 
 1. Click `Edit with AI` (button directly under the editor body).
