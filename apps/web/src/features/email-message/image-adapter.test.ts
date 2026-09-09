@@ -37,10 +37,7 @@ describe('production image adaptation', () => {
   });
   it('does not create a blob URL when disposed during the platform response body', async () => {
     const { root, img } = imageRoot('https://files.example.com/image');
-    let finish!: (blob: Blob) => void;
-    const blob = new Promise<Blob>((resolve) => {
-      finish = resolve;
-    });
+    const { promise: blob, resolve: finish } = Promise.withResolvers<Blob>();
     fetchImage.mockResolvedValue({
       ok: true,
       headers: new Headers({ 'content-type': 'image/png' }),

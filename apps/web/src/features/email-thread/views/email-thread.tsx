@@ -3,9 +3,9 @@ import { EmailComposeView } from '@app/features/email-compose/views/email-compos
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import type { JSX } from 'solid-js';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
-import type { EmailThreadHost } from '../context/email-thread-dependencies';
+import type { EmailThreadHost } from '../context/email-thread-context';
 import { useEmailThreadState } from '../context/email-thread-state-context';
-import { useEmailThreadEnvironment } from '../context/thread-environment';
+import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 import { createThreadNavigation } from '../primitives/thread-navigation';
 import { createThreadReplyArea } from '../primitives/thread-reply-area';
 import { BottomReplyButtons } from './bottom-reply-buttons';
@@ -20,10 +20,15 @@ export type EmailThreadViewProps = {
 };
 export function EmailThreadView(props: EmailThreadViewProps) {
   const context = useEmailThreadState();
-  const environment = useEmailThreadEnvironment();
-  const deps = environment.dependencies;
-  const isTouchDevice = deps.isTouch;
-  const navigation = createThreadNavigation(props, context, deps, props.host);
+  const viewContext = useEmailThreadViewContext();
+  const threadContext = viewContext.thread;
+  const isTouchDevice = threadContext.isTouch;
+  const navigation = createThreadNavigation(
+    props,
+    context,
+    threadContext,
+    props.host
+  );
   const {
     showMiddleMessages,
     keyboardSelecting,
@@ -37,7 +42,7 @@ export function EmailThreadView(props: EmailThreadViewProps) {
     mobileMessage: mobileBottomReplyMessage,
   } = createThreadReplyArea({
     threadId: props.threadId,
-    isTouch: deps.isTouch,
+    isTouch: threadContext.isTouch,
     messages: context.messages.list,
     allMessages: context.messages.unfiltered,
     canCompose: () => context.permissions().isOwner,
@@ -49,7 +54,7 @@ export function EmailThreadView(props: EmailThreadViewProps) {
     mobileReply: context.mobileReplyComposer,
   });
   return (
-    <Show when={!deps.viewerLoading()}>
+    <Show when={!threadContext.viewerLoading()}>
       <Switch>
         <Match
           when={
@@ -63,8 +68,8 @@ export function EmailThreadView(props: EmailThreadViewProps) {
             // so the compose branch pads around the chrome itself.
             <div class="size-full touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
               <EmailComposeView
-                services={environment.compose}
-                host={environment.composeHost}
+                context={viewContext.compose}
+                host={viewContext.composeHost}
                 draft={draft()}
                 recipientOptions={context.recipientOptions}
                 onRecipientsChange={context.onRecipientsChange}
@@ -75,9 +80,9 @@ export function EmailThreadView(props: EmailThreadViewProps) {
 
         <Match when={true}>
           <EmailFormContextProvider
-            dependencies={{
-              viewerEmail: environment.compose.viewerEmail,
-              inboxes: environment.compose.accounts.inboxes,
+            context={{
+              viewerEmail: viewContext.compose.viewerEmail,
+              inboxes: viewContext.compose.accounts.inboxes,
             }}
             formOptions={{
               getMessageById: (id) =>

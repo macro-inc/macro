@@ -1,7 +1,7 @@
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiThread } from '@service-email/generated/schemas';
 import { type Accessor, createMemo } from 'solid-js';
-import type { EmailThreadSource } from '../context/email-thread-dependencies';
+import type { EmailThreadSource } from '../context/email-thread-context';
 import type { EmailThread } from '../core/email-thread';
 
 /** Project transport data onto feature-owned values; this is not runtime validation. */

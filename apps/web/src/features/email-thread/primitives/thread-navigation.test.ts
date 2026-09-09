@@ -1,7 +1,7 @@
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { EmailThreadKeyboardHandlers } from '../core/thread-keyboard';
-import { dependencies, message, thread } from '../tests/fixtures';
+import { createThreadContext, message, thread } from '../tests/fixtures';
 import { createEmailThreadState } from './email-thread-state';
 import { createThreadNavigation } from './thread-navigation';
 
@@ -12,28 +12,8 @@ afterEach(() => {
 });
 
 it('registers reply-all for the latest or selected message and ignores an empty thread', () => {
-  let handlers: EmailThreadKeyboardHandlers | undefined;
-  const state = createRoot((dispose) => {
-    const [snapshot, setSnapshot] = createSignal(
-      thread([message('first'), message('last')])
-    );
-    const deps = dependencies({
-      thread: snapshot,
-      isLoading: () => false,
-      isFetching: () => false,
-      isFetchingOlder: () => false,
-      hasMore: () => false,
-      async fetchOlder() {},
-      async refresh() {},
-    });
-    const context = createEmailThreadState(deps);
-    createThreadNavigation({ threadId: () => 'thread' }, context, deps, {
-      registerKeyboard: (registered) => {
-        handlers = registered;
-      },
-    });
-    return { context, setSnapshot, dispose };
-  });
+  const state = navigationWithList(['first', 'last']);
+  const handlers = state.handlers();
   try {
     expect(handlers?.replyAllToFocusedMessage?.()).toBe(true);
     expect(state.context.replyRequest.messageId()).toBe('last');
@@ -50,31 +30,12 @@ it('registers reply-all for the latest or selected message and ignores an empty 
 });
 
 it('leaves Enter to a focused button and still activates the thread container', () => {
-  let handlers: EmailThreadKeyboardHandlers | undefined;
-  const state = createRoot((dispose) => {
-    const deps = dependencies({
-      thread: () => thread([message('last')]),
-      isLoading: () => false,
-      isFetching: () => false,
-      isFetchingOlder: () => false,
-      hasMore: () => false,
-      async fetchOlder() {},
-      async refresh() {},
-    });
-    const context = createEmailThreadState(deps);
-    createThreadNavigation({ threadId: () => 'thread' }, context, deps, {
-      registerKeyboard: (registered) => {
-        handlers = registered;
-      },
-    });
-    return { context, dispose };
-  });
-  const container = document.createElement('div');
-  container.tabIndex = 0;
+  const state = navigationWithList(['last']);
+  const handlers = state.handlers();
+  const container = state.container;
   const button = document.createElement('button');
   button.textContent = 'Remove attachment';
   container.append(button);
-  document.body.append(container);
 
   try {
     button.focus();
@@ -87,7 +48,6 @@ it('leaves Enter to a focused button and still activates the thread container', 
     expect(state.context.replyRequest.messageId()).toBe('last');
     expect(state.context.replyRequest.replyType()).toBe('reply-all');
   } finally {
-    container.remove();
     state.dispose();
   }
 });
@@ -106,30 +66,25 @@ function navigationWithList(ids: string[]) {
   document.body.append(container);
   let handlers: EmailThreadKeyboardHandlers | undefined;
   const state = createRoot((dispose) => {
-    const deps = dependencies({
-      thread: () => thread(ids.map((id) => message(id))),
-      isLoading: () => false,
-      isFetching: () => false,
-      isFetchingOlder: () => false,
-      hasMore: () => false,
-      async fetchOlder() {},
-      async refresh() {},
-    });
+    const [snapshot, setSnapshot] = createSignal(
+      thread(ids.map((id) => message(id)))
+    );
+    const threadContext = createThreadContext({ thread: snapshot });
     const host = {
       focusContainer: () => container.focus({ preventScroll: true }),
       registerKeyboard: (registered: EmailThreadKeyboardHandlers) => {
         handlers = registered;
       },
     };
-    const context = createEmailThreadState(deps, host);
+    const context = createEmailThreadState(threadContext, host);
     const navigation = createThreadNavigation(
       { threadId: () => 'thread' },
       context,
-      deps,
+      threadContext,
       host
     );
     context.registerMessagesList(container);
-    return { context, navigation, dispose };
+    return { context, navigation, setSnapshot, dispose };
   });
   return {
     ...state,

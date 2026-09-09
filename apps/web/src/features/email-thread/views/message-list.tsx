@@ -10,7 +10,7 @@ import {
 } from 'solid-js';
 import { EmailThreadTitle } from '../components/email-thread-title';
 import { useEmailThreadState } from '../context/email-thread-state-context';
-import { useEmailThreadEnvironment } from '../context/thread-environment';
+import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 import {
   fetchOlderMessages,
   isTruncatedMiddleMessage,
@@ -42,7 +42,7 @@ interface MessageListProps {
 export function MessageList(props: MessageListProps) {
   const getIsScrollingToMessage = () => context.isScrollingToMessage();
   const context = useEmailThreadState();
-  const environment = useEmailThreadEnvironment();
+  const viewContext = useEmailThreadViewContext();
   // One selected message at a time, whether it was reached by click, tab, or
   // arrow keys — they all write the same focused id.
   const isSelectedSelector = createSelector(
@@ -117,22 +117,20 @@ export function MessageList(props: MessageListProps) {
           <div
             class={cn(
               'macro-message-width macro-message-padding w-full',
-              environment.dependencies.isTouch() ? 'pt-6 pb-3' : 'pt-12 pb-2.5'
+              viewContext.thread.isTouch() ? 'pt-6 pb-3' : 'pt-12 pb-2.5'
             )}
           >
             <EmailThreadTitle
-              onCopy={environment.copySubject}
+              onCopy={viewContext.copySubject}
               title={props.title ?? ''}
-              copyReveal={
-                environment.dependencies.isTouch() ? 'always' : 'hover'
-              }
+              copyReveal={viewContext.thread.isTouch() ? 'always' : 'hover'}
               class={
-                environment.dependencies.isTouch()
+                viewContext.thread.isTouch()
                   ? 'text-xl pt-1 pb-0'
                   : 'text-2xl pb-1.5'
               }
             />
-            <Show when={!environment.dependencies.isTouch()}>
+            <Show when={!viewContext.thread.isTouch()}>
               <EmailParticipants />
             </Show>
           </div>
@@ -181,8 +179,7 @@ export function MessageList(props: MessageListProps) {
               // Gmail/Superhuman). Desktop only: mobile edits drafts in a drawer.
               const hasDraft = createMemo(() => {
                 const messageId = message().db_id;
-                if (!messageId || environment.dependencies.isTouch())
-                  return false;
+                if (!messageId || viewContext.thread.isTouch()) return false;
                 return !!context.drafts.getDraftForMessage(messageId);
               });
 

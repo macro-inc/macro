@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   adjacentStop,
-  enterListStop,
   nextThreadStop,
   shownStops,
   type ThreadStop,
@@ -78,14 +77,6 @@ describe('adjacentStop', () => {
     expect(adjacentStop(opened, message(0), 'next')).toEqual(message(1));
     expect(adjacentStop(opened, message(1), 'prev')).toEqual(message(0));
     expect(adjacentStop(opened, message(5), 'prev')).toEqual(message(4));
-  });
-});
-
-describe('enterListStop', () => {
-  it('enters at the oldest or newest shown card', () => {
-    const collapsed = shownStops({ length: 6, showMiddle: false });
-    expect(enterListStop(collapsed, 'next')).toEqual(message(0));
-    expect(enterListStop(collapsed, 'prev')).toEqual(message(5));
   });
 });
 

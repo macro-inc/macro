@@ -1,72 +1,44 @@
 // @vitest-environment jsdom
-import type { EmailMessage } from '@app/features/email-message/core/email-message';
+
 import { $generateNodesFromDOM } from '@lexical/html';
-import {
-  $isClassedBlockNode,
-  SupportedNodeTypes,
-} from '@macro-inc/lexical-core';
-import {
-  $createParagraphNode,
-  $createTextNode,
-  $getRoot,
-  createEditor,
-  type LexicalNode,
-} from 'lexical';
+import { ClassedBlockNode } from '@macro-inc/lexical-core';
+import { $getRoot, $nodesOfType } from 'lexical';
 import { describe, expect, it } from 'vitest';
+import { message } from '../../email-message/tests/messages';
+import { decodeBase64Utf8 } from '../core/decode-base64';
+import { createEmailEditor } from '../tests/editor';
 import {
   prepareEmailBody,
   registerToggleAppendedThread,
   TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
 } from './prepare-email-body';
 
-function decodeBodyHtml(encoded: string) {
-  const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-  return decodeURIComponent(escape(atob(base64)));
-}
-
-const replyingTo = {
+const replyingTo = message('original', {
   replying_to_id: 'parent-message-id',
   from: { name: 'Ada Lovelace', email: 'ada@example.com' },
   to: [],
   cc: [],
   bcc: [],
   subject: 'Numbers',
+  body_html_sanitized: null,
   body_text: 'original message text',
   internal_date_ts: '2026-08-01T12:00:00Z',
   attachments: [],
-} as unknown as EmailMessage;
+});
 
 function makeEditor() {
-  const editor = createEditor({
-    nodes: SupportedNodeTypes,
-    onError: (e) => {
-      throw e;
-    },
-  });
+  const editor = createEmailEditor('my reply');
   registerToggleAppendedThread(editor);
   return editor;
 }
 
-function $collectMacroQuotes(): LexicalNode[] {
-  const found: LexicalNode[] = [];
-  const visit = (node: LexicalNode) => {
-    if ($isClassedBlockNode(node) && node.__classes.includes('macro_quote')) {
-      found.push(node);
-    }
-    if ('getChildren' in node) {
-      for (const child of (node as any).getChildren()) visit(child);
-    }
-  };
-  for (const child of $getRoot().getChildren()) visit(child);
-  return found;
+function $collectMacroQuotes() {
+  return $nodesOfType(ClassedBlockNode).filter((node) =>
+    node.exportJSON().classes.includes('macro_quote')
+  );
 }
 
 function appendQuote(editor: ReturnType<typeof makeEditor>) {
-  editor.update(() => {
-    const p = $createParagraphNode();
-    p.append($createTextNode('my reply'));
-    $getRoot().append(p);
-  });
   editor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
     replyingTo,
     replyType: 'reply',
@@ -83,39 +55,15 @@ function hideQuote(editor: ReturnType<typeof makeEditor>) {
 }
 
 describe('appended reply draft round trip', () => {
-  it('hide removes a live-appended quote (control)', () => {
-    const editor = makeEditor();
-    appendQuote(editor);
-    editor.read(() => {
-      expect($collectMacroQuotes()).toHaveLength(1);
-    });
-    hideQuote(editor);
-    editor.read(() => {
-      expect($collectMacroQuotes()).toHaveLength(0);
-    });
-  });
-
-  it('the draft-save export keeps the classed-block marker', () => {
-    const editor = makeEditor();
-    appendQuote(editor);
-    // Draft saves run prepareEmailBody without appendReply (collectDraft).
-    const prepared = prepareEmailBody(editor);
-    expect(prepared).not.toBeNull();
-    const html = decodeBodyHtml(prepared!.bodyHtml);
-    const body = new DOMParser().parseFromString(html, 'text/html').body;
-    const quote = body.querySelector('.macro_quote');
-    expect(quote).not.toBeNull();
-    // ClassedBlockNode.importDOM only claims elements carrying this marker;
-    // the authored sanitizer keeps data-* attributes, so if it's present here
-    // it survives to body_html_sanitized.
-    expect(quote!.getAttribute('data-classed-block')).toBe('true');
-  });
-
-  it('reloading and showing a saved quote again keeps one removable quote', () => {
+  it('keeps one removable quote before and after saving and reloading a draft', () => {
     const editorA = makeEditor();
     appendQuote(editorA);
+    editorA.read(() => expect($collectMacroQuotes()).toHaveLength(1));
+    hideQuote(editorA);
+    editorA.read(() => expect($collectMacroQuotes()).toHaveLength(0));
+    appendQuote(editorA);
     const prepared = prepareEmailBody(editorA);
-    const html = decodeBodyHtml(prepared!.bodyHtml);
+    const html = decodeBase64Utf8(prepared!.bodyHtml);
 
     // Reload path: setEditorStateFromHtml -> $generateNodesFromDOM.
     const editorB = makeEditor();
@@ -127,6 +75,10 @@ describe('appended reply draft round trip', () => {
       root.append(...nodes);
     });
 
+    editorB.read(() => {
+      expect($collectMacroQuotes()).toHaveLength(1);
+      expect($getRoot().getTextContent()).toContain('original message text');
+    });
     editorB.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
       replyingTo,
       replyType: 'forward',
@@ -138,6 +90,7 @@ describe('appended reply draft round trip', () => {
     hideQuote(editorB);
     editorB.read(() => {
       expect($collectMacroQuotes()).toHaveLength(0);
+      expect($getRoot().getTextContent().trim()).toBe('my reply');
     });
   });
 });

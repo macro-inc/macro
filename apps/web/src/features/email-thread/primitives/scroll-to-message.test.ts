@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   adjustScrollAfterPrepend,
   alignmentDelta,
   fetchOlderMessages,
-  hiddenMessagesControl,
   isTruncatedMiddleMessage,
   keyboardRevealDelta,
   leadingThrottle,
@@ -35,6 +34,40 @@ function box(element: HTMLElement, top: number, bottom: number): void {
   });
 }
 
+function cardInList(
+  top: number,
+  bottom: number,
+  list: { top?: number; bottom?: number; paddingTop?: number } = {}
+) {
+  const container = document.createElement('div');
+  const element = document.createElement('div');
+  if (list.paddingTop)
+    container.style.scrollPaddingTop = `${list.paddingTop}px`;
+  box(container, list.top ?? 0, list.bottom ?? 800);
+  box(element, top, bottom);
+  return { container, element };
+}
+
+function scrollList(height: number, viewport: number, top = 0) {
+  const container = document.createElement('div');
+  Object.defineProperties(container, {
+    scrollHeight: { get: () => height },
+    clientHeight: { get: () => viewport },
+  });
+  container.scrollTop = top;
+  return {
+    container,
+    resize: (value: number) => {
+      height = value;
+    },
+  };
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
 describe('isTruncatedMiddleMessage', () => {
   it('hides only the middle when there are more than three messages', () => {
     expect(truncatedMiddleCount(3)).toBe(0);
@@ -47,152 +80,100 @@ describe('isTruncatedMiddleMessage', () => {
   });
 });
 
-describe('hiddenMessagesControl', () => {
-  it('finds the expand control in the list', () => {
-    const list = document.createElement('div');
-    const button = document.createElement('button');
-    button.setAttribute('data-hidden-messages', '');
-    list.append(button);
-    expect(hiddenMessagesControl(list)).toBe(button);
-  });
-});
-
 describe('threadMessageIsExpanded', () => {
-  it('opens the newest message and unread, draft, or manual cards', () => {
-    expect(
-      threadMessageIsExpanded({
-        chronologicalIndex: 2,
-        listLength: 3,
-        isUnread: false,
-        hasDraft: false,
-      })
-    ).toBe(true);
-    expect(
-      threadMessageIsExpanded({
-        chronologicalIndex: 0,
-        listLength: 3,
-        isUnread: true,
-        hasDraft: false,
-      })
-    ).toBe(true);
-    expect(
-      threadMessageIsExpanded({
-        chronologicalIndex: 1,
-        listLength: 3,
-        isUnread: false,
-        hasDraft: false,
-      })
-    ).toBe(false);
+  const readMessage = {
+    chronologicalIndex: 1,
+    listLength: 3,
+    isUnread: false,
+    hasDraft: false,
+  };
+  const reasonsToOpen = [
+    { chronologicalIndex: 2 },
+    { isUnread: true },
+    { hasDraft: true },
+    { expansionOverride: true },
+  ];
+
+  it('opens the newest message and unread, draft, or manually expanded cards', () => {
+    expect(threadMessageIsExpanded(readMessage)).toBe(false);
+    for (const reason of reasonsToOpen) {
+      expect(
+        threadMessageIsExpanded({ ...readMessage, ...reason }),
+        JSON.stringify(reason)
+      ).toBe(true);
+    }
   });
 
-  it('lets an explicit collapse win over newest or unread', () => {
-    expect(
-      threadMessageIsExpanded({
-        chronologicalIndex: 2,
-        listLength: 3,
-        expansionOverride: false,
-        isUnread: false,
-        hasDraft: false,
-      })
-    ).toBe(false);
-    expect(
-      threadMessageIsExpanded({
-        chronologicalIndex: 0,
-        listLength: 3,
-        expansionOverride: false,
-        isUnread: true,
-        hasDraft: false,
-      })
-    ).toBe(false);
+  it('lets an explicit collapse take precedence over automatic expansion', () => {
+    for (const reason of reasonsToOpen) {
+      expect(
+        threadMessageIsExpanded({
+          ...readMessage,
+          ...reason,
+          expansionOverride: false,
+        }),
+        JSON.stringify(reason)
+      ).toBe(false);
+    }
   });
 });
 
 describe('alignmentDelta', () => {
   it('start-aligns the card to the list top', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 175, 800);
-    box(element, 175, 400);
+    const { container, element } = cardInList(175, 400, { top: 175 });
     expect(alignmentDelta(container, element, 'start')).toBe(0);
     box(element, 200, 400);
     expect(alignmentDelta(container, element, 'start')).toBe(25);
   });
 
   it('respects scroll-padding on the list container', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    container.style.scrollPaddingTop = '8px';
-    box(container, 0, 800);
-    box(element, 0, 200);
+    const { container, element } = cardInList(0, 200, { paddingTop: 8 });
     expect(alignmentDelta(container, element, 'start')).toBe(-8);
   });
 
   it('end-aligns the card to the list bottom', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, 600, 800);
+    const { container, element } = cardInList(600, 800);
     expect(alignmentDelta(container, element, 'end')).toBe(0);
+    box(element, 600, 950);
+    expect(alignmentDelta(container, element, 'end')).toBe(150);
   });
 });
 
 describe('revealDelta', () => {
   it('does nothing when the card already fits', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, 200, 400);
+    const { container, element } = cardInList(200, 400);
     expect(revealDelta(container, element)).toBe(0);
   });
 
   it('scrolls down when the card grows past the bottom', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, 600, 950);
+    const { container, element } = cardInList(600, 950);
     expect(revealDelta(container, element)).toBe(150);
   });
 
   it('start-aligns a card taller than the list', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, 200, 1200);
+    const { container, element } = cardInList(200, 1200);
     expect(revealDelta(container, element)).toBe(200);
   });
 });
 
 describe('nearestDelta', () => {
   it('does nothing when the card sits inside the scrollport', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, 200, 400);
+    const { container, element } = cardInList(200, 400);
     expect(nearestDelta(container, element)).toBe(0);
   });
 
   it('start-aligns when the card top sits above the scroll-padding inset', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    container.style.scrollPaddingTop = '8px';
-    box(container, 0, 800);
-    box(element, 4, 200);
+    const { container, element } = cardInList(4, 200, { paddingTop: 8 });
     expect(nearestDelta(container, element)).toBe(-4);
   });
 
   it('start-aligns when the card sits entirely above the list', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, -200, -50);
+    const { container, element } = cardInList(-200, -50);
     expect(nearestDelta(container, element)).toBe(-200);
   });
 
   it('end-aligns a card that sits entirely below the list', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, 900, 1100);
+    const { container, element } = cardInList(900, 1100);
     expect(nearestDelta(container, element)).toBe(300);
   });
 });
@@ -223,41 +204,28 @@ describe('leadingThrottle', () => {
     expect(throttle()).toBe(false);
     vi.setSystemTime(300);
     expect(throttle()).toBe(true);
-    vi.useRealTimers();
   });
 });
 
 describe('keyboardRevealDelta', () => {
   it('end-aligns a short card whose bottom is clipped when moving down', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, 720, 820);
+    const { container, element } = cardInList(720, 820);
     expect(keyboardRevealDelta(container, element, 'next')).toBe(20);
   });
 
   it('start-aligns a short card whose top is clipped when moving up', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, -20, 80);
+    const { container, element } = cardInList(-20, 80);
     expect(keyboardRevealDelta(container, element, 'prev')).toBe(-20);
   });
 
   it('does nothing when the card already fits in the scrollport', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, 200, 400);
+    const { container, element } = cardInList(200, 400);
     expect(keyboardRevealDelta(container, element, 'next')).toBe(0);
     expect(keyboardRevealDelta(container, element, 'prev')).toBe(0);
   });
 
   it('does nothing for a tall card at the bottom so the next message can load', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, -800, 800);
+    const { container, element } = cardInList(-800, 800);
     expect(keyboardRevealDelta(container, element, 'next')).toBe(0);
     expect(pageThenAdvanceDelta(container, element, 'next')).toBe(0);
   });
@@ -265,35 +233,23 @@ describe('keyboardRevealDelta', () => {
 
 describe('pageThenAdvanceDelta', () => {
   it('advances when the card already fits', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, 200, 400);
+    const { container, element } = cardInList(200, 400);
     expect(pageThenAdvanceDelta(container, element, 'next')).toBe(0);
     expect(pageThenAdvanceDelta(container, element, 'prev')).toBe(0);
   });
 
   it('pages down by the remaining overflow when it is less than a viewport', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, 100, 950);
+    const { container, element } = cardInList(100, 950);
     expect(pageThenAdvanceDelta(container, element, 'next')).toBe(150);
   });
 
   it('pages down by one viewport when overflow is larger', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, 0, 2400);
+    const { container, element } = cardInList(0, 2400);
     expect(pageThenAdvanceDelta(container, element, 'next')).toBe(800);
   });
 
   it('pages up when the card top is above the list', () => {
-    const container = document.createElement('div');
-    const element = document.createElement('div');
-    box(container, 0, 800);
-    box(element, -400, 600);
+    const { container, element } = cardInList(-400, 600);
     expect(pageThenAdvanceDelta(container, element, 'prev')).toBe(-400);
   });
 });
@@ -314,66 +270,31 @@ describe('scrollToListStartDelta', () => {
 
 describe('scrollToListEndDelta', () => {
   it('scrolls the leftover distance to the bottom', () => {
-    const container = document.createElement('div');
-    Object.defineProperty(container, 'scrollHeight', {
-      value: 1200,
-      writable: true,
-    });
-    Object.defineProperty(container, 'clientHeight', {
-      value: 800,
-      writable: true,
-    });
-    container.scrollTop = 200;
+    const { container } = scrollList(1200, 800, 200);
     expect(scrollToListEndDelta(container)).toBe(200);
   });
 
   it('is zero when the list is already at the bottom', () => {
-    const container = document.createElement('div');
-    Object.defineProperty(container, 'scrollHeight', {
-      value: 1200,
-      writable: true,
-    });
-    Object.defineProperty(container, 'clientHeight', {
-      value: 800,
-      writable: true,
-    });
-    container.scrollTop = 400;
+    const { container } = scrollList(1200, 800, 400);
     expect(scrollToListEndDelta(container)).toBe(0);
   });
 });
 
 describe('adjustScrollAfterPrepend', () => {
   it('keeps the same card on screen when height grows above', () => {
-    const container = document.createElement('div');
-    let scrollHeight = 200;
-    Object.defineProperty(container, 'scrollHeight', {
-      get: () => scrollHeight,
-    });
-    Object.defineProperty(container, 'clientHeight', { get: () => 150 });
-    container.scrollTop = 50;
-    scrollHeight = 400;
+    const { container } = scrollList(400, 150, 50);
     adjustScrollAfterPrepend(container, 200, 50);
     expect(container.scrollTop).toBe(250);
   });
 
   it('leaves the title pinned when you were already at the top', () => {
-    const container = document.createElement('div');
-    Object.defineProperty(container, 'scrollHeight', { get: () => 400 });
-    Object.defineProperty(container, 'clientHeight', { get: () => 150 });
-    container.scrollTop = 0;
+    const { container } = scrollList(400, 150);
     adjustScrollAfterPrepend(container, 200, 0);
     expect(container.scrollTop).toBe(0);
   });
 
   it('leaves the title pinned when the first page did not overflow', () => {
-    const container = document.createElement('div');
-    let scrollHeight = 200;
-    Object.defineProperty(container, 'scrollHeight', {
-      get: () => scrollHeight,
-    });
-    Object.defineProperty(container, 'clientHeight', { get: () => 400 });
-    container.scrollTop = 0;
-    scrollHeight = 500;
+    const { container } = scrollList(500, 400, 0);
     adjustScrollAfterPrepend(container, 200, 0);
     expect(container.scrollTop).toBe(0);
   });
@@ -414,15 +335,11 @@ describe('listNeedsOlderPage', () => {
 describe('fetchOlderMessages', () => {
   it('uses live scrollTop after the fetch completes', async () => {
     vi.useFakeTimers();
-    const list = document.createElement('div');
-    let scrollHeight = 200;
-    Object.defineProperty(list, 'scrollHeight', { get: () => scrollHeight });
-    Object.defineProperty(list, 'clientHeight', { get: () => 150 });
-    list.scrollTop = 10;
+    const { container: list, resize } = scrollList(200, 150, 10);
 
     const fetchNextPage = vi.fn(async () => {
       list.scrollTop = 40;
-      scrollHeight = 400;
+      resize(400);
     });
 
     const pending = fetchOlderMessages(list, fetchNextPage);
@@ -430,6 +347,5 @@ describe('fetchOlderMessages', () => {
     await pending;
 
     expect(list.scrollTop).toBe(240);
-    vi.useRealTimers();
   });
 });

@@ -4,7 +4,7 @@ import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { isPersonalMessage } from '../../email-message/core/is-personal-message';
 import { EmailMessageView } from '../../email-message/views/email-message';
 import { useEmailThreadState } from '../context/email-thread-state-context';
-import { useEmailThreadEnvironment } from '../context/thread-environment';
+import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
 import {
   revealMessageAfterLayout,
@@ -24,8 +24,8 @@ interface MessageContainerProps {
 }
 
 export function MessageContainer(props: MessageContainerProps) {
-  const { dependencies: deps, rendering } = useEmailThreadEnvironment();
-  const isTouchDevice = deps.isTouch;
+  const { thread: threadContext, rendering } = useEmailThreadViewContext();
+  const isTouchDevice = threadContext.isTouch;
   const context = useEmailThreadState();
   const draftChild = createMemo(() => {
     if (!props.message.db_id) return undefined;
@@ -94,11 +94,11 @@ export function MessageContainer(props: MessageContainerProps) {
     <EmailMessageView
       message={props.message}
       renderAvatar={rendering.renderAvatar}
-      viewerEmail={deps.viewerEmail()}
-      isTouch={deps.isTouch()}
+      viewerEmail={threadContext.viewerEmail()}
+      isTouch={threadContext.isTouch()}
       isPersonal={isPersonalMessage(
         props.message,
-        deps.viewerEmail(),
+        threadContext.viewerEmail(),
         context.messages.personalSenders()
       )}
       showFullContent={props.isFirstMessage}
@@ -132,7 +132,7 @@ export function MessageContainer(props: MessageContainerProps) {
                 replyType,
                 isLastMessage: props.isLastMessage,
                 setShowReply,
-                isMobile: deps.isMobile(),
+                isMobile: threadContext.isMobile(),
               })
           : undefined
       }

@@ -2,7 +2,7 @@ import type { Accessor } from 'solid-js';
 import type { EmailRecipient } from '../core/email-recipient';
 import type { ReplyType } from '../core/reply-type';
 
-export interface EmailFormDependencies {
+export interface EmailFormContextInputs {
   viewerEmail: Accessor<string | undefined>;
   inboxes: Accessor<{ id: string; email_address: string }[]>;
 }

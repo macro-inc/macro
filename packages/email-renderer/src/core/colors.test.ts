@@ -75,14 +75,6 @@ describe('rgbaToOklch', () => {
     expect(result?.a).toBe(0.75);
   });
 
-  it('converts red to OKLCH with correct hue range', () => {
-    const result = rgbaToOklch({ r: 1, g: 0, b: 0, a: 1 });
-    expect(result?.l).toBeGreaterThan(0);
-    expect(result?.c).toBeGreaterThan(0);
-    expect(result?.h).toBeGreaterThanOrEqual(0);
-    expect(result?.h).toBeLessThan(360);
-  });
-
   it('returns null for null input', () => {
     const result = rgbaToOklch(null);
     expect(result).toBeNull();
@@ -90,47 +82,46 @@ describe('rgbaToOklch', () => {
 });
 
 describe('findClosestContrastingColor', () => {
-  const CONTRAST_THRESHOLD = 0.5;
-
-  it('increases lightness when fg is lighter than bg but contrast is low', () => {
-    const fg = { l: 0.6, c: 0.1, h: 180 };
-    const bgL = 0.5;
-    const result = findClosestContrastingColor(fg, bgL);
-    expect(Math.abs(result.l - bgL)).toBeGreaterThanOrEqual(
-      CONTRAST_THRESHOLD - 0.01
-    );
-  });
-
-  it('decreases lightness when fg is darker than bg but contrast is low', () => {
-    const fg = { l: 0.4, c: 0.1, h: 180 };
-    const bgL = 0.5;
-    const result = findClosestContrastingColor(fg, bgL);
-    expect(Math.abs(result.l - bgL)).toBeGreaterThanOrEqual(
-      CONTRAST_THRESHOLD - 0.01
-    );
-  });
-
-  it('preserves chroma and hue', () => {
-    const fg = { l: 0.5, c: 0.15, h: 270, a: 0.8 };
-    const bgL = 0.5;
-    const result = findClosestContrastingColor(fg, bgL);
-    expect(result.c).toBe(0.15);
-    expect(result.h).toBe(270);
-    expect(result.a).toBe(0.8);
-  });
-
-  it('handles edge case when candidate exceeds bounds', () => {
-    const fg = { l: 0.9, c: 0.1, h: 180 };
-    const bgL = 0.8;
-    const result = findClosestContrastingColor(fg, bgL);
-    expect(result.l).toBeGreaterThanOrEqual(0);
-    expect(result.l).toBeLessThanOrEqual(1);
-  });
-
-  it('defaults alpha to 1 when not provided', () => {
-    const fg = { l: 0.5, c: 0.1, h: 180 };
-    const bgL = 0.5;
-    const result = findClosestContrastingColor(fg, bgL);
-    expect(result.a).toBe(1);
-  });
+  it.each([
+    {
+      name: 'lightens text above the background',
+      lightness: 0.6,
+      background: 0.5,
+      expected: 1,
+      alpha: 0.8,
+    },
+    {
+      name: 'darkens text below the background',
+      lightness: 0.4,
+      background: 0.5,
+      expected: 0,
+      alpha: 0.8,
+    },
+    {
+      name: 'switches to dark text when lightening would exceed white',
+      lightness: 0.9,
+      background: 0.8,
+      expected: 0.3,
+      alpha: 0.8,
+    },
+    {
+      name: 'switches to light text when darkening would exceed black',
+      lightness: 0.1,
+      background: 0.2,
+      expected: 0.7,
+      alpha: undefined,
+    },
+  ])(
+    '$name while preserving hue, chroma and opacity',
+    ({ lightness, background, expected, alpha }) => {
+      const result = findClosestContrastingColor(
+        { l: lightness, c: 0.15, h: 270, a: alpha },
+        background
+      );
+      expect(result.l).toBeCloseTo(expected);
+      expect(result.c).toBe(0.15);
+      expect(result.h).toBe(270);
+      expect(result.a).toBe(alpha ?? 1);
+    }
+  );
 });

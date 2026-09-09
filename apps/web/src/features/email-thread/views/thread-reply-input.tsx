@@ -12,7 +12,7 @@ import {
 } from 'solid-js';
 import { isPersonalMessage } from '../../email-message/core/is-personal-message';
 import { useEmailThreadState } from '../context/email-thread-state-context';
-import { useEmailThreadEnvironment } from '../context/thread-environment';
+import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 import { revealMessageAfterLayout } from '../primitives/scroll-to-message';
 
 interface ThreadReplyInputProps {
@@ -37,7 +37,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
 
 function ThreadReplyInputSession(props: ThreadReplyInputProps) {
   const ctx = useEmailThreadState();
-  const environment = useEmailThreadEnvironment();
+  const viewContext = useEmailThreadViewContext();
 
   // The seed identity of this composer: which version of which draft it
   // mounts from. When the server sends a newer save of that draft (a thread
@@ -88,7 +88,7 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
         {(seed) => (
           <Layer depth={props.mobileDrawer ? 0 : 2}>
             <ReplyInputView
-              services={environment.compose}
+              context={viewContext.compose}
               session={{
                 thread: ctx.thread,
                 recipientOptions: ctx.recipientOptions,
@@ -98,7 +98,7 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
                     !!message &&
                     isPersonalMessage(
                       message,
-                      environment.dependencies.viewerEmail(),
+                      viewContext.thread.viewerEmail(),
                       ctx.messages.personalSenders()
                     )
                   );

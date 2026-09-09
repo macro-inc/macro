@@ -1,8 +1,8 @@
 # Frontend feature architecture
 
 New frontend features use the layered structure established by
-`apps/web/src/features/activity` in commit `f598574d7` (PR #6176,
-“layered feature layout with injected deps”). Use the same structure when
+`apps/web/src/features/activity` in commit `f598574d7` (PR #6176).
+Use the same structure when
 restructuring an existing feature, with the stronger production-composition and
 feature-contract boundaries defined here. Activity is a worked example with
 documented migration gaps, not a complete implementation of every rule below.
@@ -273,11 +273,18 @@ that wiring, and the component when they already have resolved values.
 ### `context/`: the feature's capability contract
 
 Define the ambient capabilities each consumer needs. A production entry point may
-group them into an environment for views to wire, but reusable controllers receive
-only their named contracts. Do not pass a complete screen environment into every
+group them into a context for views to wire, but reusable controllers receive
+only their named contracts. Do not pass a complete screen context into every
 helper or controller. Keep provider/consumer modules under `context/`. Keep the contracts and provider/consumer free
 of production imports. The provider transports capabilities; production composition
 constructs them. Direct arguments also work when context adds no value.
+
+Name a feature context for what it is: `EmailComposeContext`, `composeContext`,
+and `createEmailComposeContext`. Use `context` for its component prop and
+`use…Context` for its context consumer. Avoid `deps` and `environment` aliases for
+these objects. A source, storage operation, or command should retain its specific
+name; calling the containing object a context does not require passing all of it
+to every consumer or adding another provider.
 
 Use accessors and resolver functions to preserve reactivity. Activity's
 `currentUserId`, `displayName`, `entityDisplay`, and `propertyDefinition` illustrate
@@ -301,29 +308,29 @@ implementation. Imports and unrelated display capabilities are omitted for focus
 
 ```tsx
 // context/activity-context.tsx
-const Context = createContext<ActivityDependencies>();
+const Context = createContext<ActivityContext>();
 export const ActivityProvider = Context.Provider;
 
-export function useActivityDependencies(): ActivityDependencies {
-  const dependencies = useContext(Context);
-  if (!dependencies) throw new Error('ActivityProvider is required');
-  return dependencies;
+export function useActivityContext(): ActivityContext {
+  const context = useContext(Context);
+  if (!context) throw new Error('ActivityProvider is required');
+  return context;
 }
 ```
 
 ```tsx
 // activity.tsx — production entry point
 export function Activity() {
-  const dependencies = createAppActivityDependencies();
+  const context = createAppActivityContext();
   return (
-    <ActivityProvider value={dependencies}>
+    <ActivityProvider value={context}>
       <MyActivityView onOpen={openEntityInSplit} />
     </ActivityProvider>
   );
 }
 ```
 
-`createAppActivityDependencies` is production wiring: it connects query adapters
+`createAppActivityContext` is production wiring: it connects query adapters
 to the real client and display capabilities to the app's resolvers. It may live
 in the entry-point module or a separate production module as its size warrants.
 The context, views, and primitives must not import it. Production callers mount
@@ -361,7 +368,7 @@ export type ActivityFeedSource = {
   loadMore(): void;
 };
 
-export type ActivityDependencies = {
+export type ActivityContext = {
   createFeed(): ActivityFeedSource;
 };
 ```
@@ -376,8 +383,8 @@ The primitive receives a source and owns presentation decisions. The view connec
 the source factory to the primitive:
 
 ```tsx
-const dependencies = useActivityDependencies();
-const state = createMyActivityState(dependencies.createFeed());
+const context = useActivityContext();
+const state = createMyActivityState(context.createFeed());
 ```
 
 Here `createMyActivityState(feed: ActivityFeedSource)` groups events and decides

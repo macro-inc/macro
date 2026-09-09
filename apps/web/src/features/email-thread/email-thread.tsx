@@ -7,14 +7,14 @@ import { createEffectOnEntityTypeNotification } from '@notifications';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
 import { useThreadQuery } from '@queries/email/thread';
 import { createEffect, createMemo, onCleanup } from 'solid-js';
-import { createEmailComposeEnvironment } from '../email-compose/compose-adapter';
+import { createEmailComposeContext } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
 import { convertContactInfoToEmailRecipient } from '../email-compose/core/recipient-conversion';
 import { createEmailAttachmentOpener } from '../email-message/attachment-action-adapter';
 import type { EmailMessage } from '../email-message/core/email-message';
-import { createEmailRenderingDependencies } from '../email-message/rendering-adapter';
+import { createEmailRenderingContext } from '../email-message/rendering-adapter';
 import { EmailSenderIcon } from '../email-message/sender-icon-adapter';
-import type { EmailThreadDependencies } from './context/email-thread-dependencies';
+import type { EmailThreadContext } from './context/email-thread-context';
 import { createEmailThreadSource } from './queries/thread-source';
 import { createThreadActionAdapter } from './thread-action-adapter';
 import {
@@ -24,7 +24,7 @@ import {
 
 export type EmailThreadProps = Omit<
   EmailThreadSurfaceProps,
-  'environment' | 'emailRendering'
+  'context' | 'emailRendering'
 >;
 
 /** App-facing composition. Import the surface or primitives for isolated tests. */
@@ -36,8 +36,8 @@ export function EmailThread(props: EmailThreadProps) {
   const contacts = useContacts();
   const viewerEmail = useEmail();
   const user = useUserContext();
-  const compose = createEmailComposeEnvironment();
-  const dependencies: EmailThreadDependencies = {
+  const compose = createEmailComposeContext();
+  const threadContext: EmailThreadContext = {
     source,
     viewerEmail,
     viewerLoading: user.isLoading,
@@ -49,7 +49,7 @@ export function EmailThread(props: EmailThreadProps) {
     createCommands: (snapshot) =>
       createThreadActionAdapter(props.threadId, snapshot),
   };
-  const environment = {
+  const viewContext = {
     copySubject: (subject: string) => {
       void navigator.clipboard
         .writeText(subject)
@@ -58,7 +58,7 @@ export function EmailThread(props: EmailThreadProps) {
           compose.notices.feedback.failure('Unable to copy subject')
         );
     },
-    dependencies,
+    thread: threadContext,
     compose,
     composeHost: createEmailComposeHost(),
     rendering: {
@@ -68,7 +68,7 @@ export function EmailThread(props: EmailThreadProps) {
       ),
     },
   };
-  const rendering = createEmailRenderingDependencies();
+  const rendering = createEmailRenderingContext();
   createEffectOnEntityTypeNotification(
     useGlobalNotificationSource(),
     'email',
@@ -88,7 +88,7 @@ export function EmailThread(props: EmailThreadProps) {
   return (
     <EmailThreadSurface
       {...props}
-      environment={environment}
+      context={viewContext}
       emailRendering={rendering}
     />
   );

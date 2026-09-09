@@ -8,7 +8,7 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
-import type { EmailRenderingDependencies } from '../context/email-rendering-context';
+import type { EmailRenderingContextValue } from '../context/email-rendering-context';
 import type { EmailMessage } from '../core/email-message';
 
 export interface EmailMessageBodyProps {
@@ -24,7 +24,7 @@ export interface EmailMessageBodyProps {
 /** Solid only translates reactive inputs and owns the renderer's lifetime. */
 export function createEmailMessageBody(
   props: EmailMessageBodyProps,
-  dependencies: EmailRenderingDependencies
+  renderingContext: EmailRenderingContextValue
 ) {
   const [showFullHTML, setShowFullHTML] = createSignal(false);
   const prepared = createMemo(() =>
@@ -37,7 +37,7 @@ export function createEmailMessageBody(
       {
         showQuotedContent: showFullHTML(),
         showFullContent: props.showFullContent,
-        images: dependencies.images,
+        images: renderingContext.images,
       }
     )
   );
@@ -53,15 +53,15 @@ export function createEmailMessageBody(
     const attachments = props.message.attachments;
     const host = document.createElement('div');
     const renderer = mountEmailBody(host, body, {
-      theme: dependencies.theme(),
+      theme: renderingContext.theme(),
       adaptColors: props.isPersonal || !body.hasTable,
       normalizeFonts:
         props.isPersonal &&
         !props.message.from?.email?.toLowerCase().endsWith('@macro.com'),
       expanded: untrack(props.isBodyExpanded),
-      prepareLinks: dependencies.prepareLinks,
+      prepareLinks: renderingContext.prepareLinks,
       resolveImages: (root, lifetime) =>
-        dependencies.resolveImages(root, attachments, lifetime),
+        renderingContext.resolveImages(root, attachments, lifetime),
     });
     onCleanup(() => renderer.dispose());
     return { host, renderer };

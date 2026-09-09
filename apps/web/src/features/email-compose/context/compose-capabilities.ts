@@ -139,7 +139,7 @@ export interface EmailEditorFiles {
 }
 
 /** Production composition groups capabilities for views to wire into their consumers. */
-export interface EmailComposeEnvironment {
+export interface EmailComposeContext {
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
   delivery: EmailDelivery;

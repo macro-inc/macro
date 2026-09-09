@@ -2,7 +2,10 @@ import type { ResourceLifetime } from '@macro-inc/email-renderer/browser';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../tests/messages';
-import { createEmailMessageBody } from './email-message-body';
+import {
+  createEmailMessageBody,
+  type EmailMessageBodyProps,
+} from './email-message-body';
 
 const theme = {
   inkL: 0.2,
@@ -12,6 +15,13 @@ const theme = {
   accentL: 0.6,
   accentC: 0.1,
   accentH: 50,
+};
+const bodyOptions: Omit<EmailMessageBodyProps, 'message'> = {
+  isPersonal: true,
+  isBodyExpanded: () => true,
+  setExpandedMessageBody() {},
+  setFocusedMessageId() {},
+  isFocused: false,
 };
 describe('independent email body', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -45,11 +55,7 @@ describe('independent email body', () => {
           get message() {
             return value();
           },
-          isPersonal: true,
-          isBodyExpanded: () => true,
-          setExpandedMessageBody() {},
-          setFocusedMessageId() {},
-          isFocused: false,
+          ...bodyOptions,
         },
         { theme: () => theme, resolveImages, prepareLinks }
       );
@@ -101,11 +107,7 @@ describe('independent email body', () => {
         const body = createEmailMessageBody(
           {
             message: message('markdown', content),
-            isPersonal: true,
-            isBodyExpanded: () => true,
-            setExpandedMessageBody() {},
-            setFocusedMessageId() {},
-            isFocused: false,
+            ...bodyOptions,
           },
           { theme: () => theme, resolveImages }
         );

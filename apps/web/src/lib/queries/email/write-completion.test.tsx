@@ -1,8 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
-import { render } from 'solid-js/web';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { useSaveDraftMutation } from './draft';
+import { mountEmailMutation } from './tests/mutation';
 import { useSendMessageMutation, useUnscheduleMessageMutation } from './thread';
 
 const mocks = vi.hoisted(() => ({
@@ -47,38 +46,10 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
 
-const disposers: (() => void)[] = [];
-function mount<T>(factory: () => T): T {
-  const client = new QueryClient({
-    defaultOptions: { mutations: { retry: false } },
-  });
-  let result!: T;
-  function Probe() {
-    result = factory();
-    return null;
-  }
-  const container = document.createElement('div');
-  const dispose = render(
-    () => (
-      <QueryClientProvider client={client}>
-        <Probe />
-      </QueryClientProvider>
-    ),
-    container
-  );
-  disposers.push(() => {
-    dispose();
-    client.clear();
-  });
-  return result;
-}
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.invalidate.mockResolvedValue(undefined);
   mocks.refetch.mockResolvedValue(undefined);
-});
-afterEach(() => {
-  disposers.splice(0).forEach((dispose) => dispose());
 });
 
 it('returns the saved identity when a subsequent cache refresh rejects', async () => {
@@ -88,7 +59,7 @@ it('returns the saved identity when a subsequent cache refresh rejects', async (
   const failure = new Error('Refresh failed');
   mocks.save.mockResolvedValue(ok(response));
   mocks.refetch.mockRejectedValue(failure);
-  const mutation = mount(useSaveDraftMutation);
+  const mutation = mountEmailMutation(useSaveDraftMutation);
   await expect(
     mutation.mutateAsync({ draft: { subject: 'Saved' } })
   ).resolves.toEqual(response);
@@ -106,7 +77,7 @@ it('keeps send successful and reconciles caches when analytics throws', async ()
   mocks.track.mockImplementation(() => {
     throw failure;
   });
-  const mutation = mount(useSendMessageMutation);
+  const mutation = mountEmailMutation(useSendMessageMutation);
   await expect(
     mutation.mutateAsync({ message: { subject: 'Sent' } })
   ).resolves.toEqual(response);
@@ -121,18 +92,18 @@ it('keeps unschedule successful when invalidation throws synchronously', async (
   mocks.invalidate.mockImplementation(() => {
     throw failure;
   });
-  const mutation = mount(useUnscheduleMessageMutation);
+  const mutation = mountEmailMutation(useUnscheduleMessageMutation);
   await expect(
     mutation.mutateAsync({ draftID: 'draft' })
   ).resolves.toBeUndefined();
   expect(mocks.report).toHaveBeenCalledWith(failure);
 });
 
-it('rejects a failed send without running success effects or retrying delivery', async () => {
+it('rejects a failed send without running success effects', async () => {
   mocks.send.mockResolvedValue(
     err([{ code: 'SERVER_ERROR', message: 'Offline' }])
   );
-  const mutation = mount(useSendMessageMutation);
+  const mutation = mountEmailMutation(useSendMessageMutation);
   await expect(
     mutation.mutateAsync({ message: { subject: 'Unsent' } })
   ).rejects.toThrow();

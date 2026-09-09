@@ -3,7 +3,7 @@ import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { emailToMacroId } from '@core/user/macroId';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { useEmailThreadState } from '../context/email-thread-state-context';
-import { useEmailThreadEnvironment } from '../context/thread-environment';
+import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 
 interface Participant {
   email: string;
@@ -15,7 +15,7 @@ const DEFAULT_VISIBLE_COUNT = 5;
 
 export function EmailParticipants() {
   const context = useEmailThreadState();
-  const currentUserEmail = useEmailThreadEnvironment().dependencies.viewerEmail;
+  const currentUserEmail = useEmailThreadViewContext().thread.viewerEmail;
   const [expanded, setExpanded] = createSignal(false);
 
   const participants = createMemo(() => {

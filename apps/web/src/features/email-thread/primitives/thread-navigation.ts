@@ -13,9 +13,9 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
-  EmailThreadDependencies,
+  EmailThreadContext,
   EmailThreadHost,
-} from '../context/email-thread-dependencies';
+} from '../context/email-thread-context';
 import {
   adjacentStop,
   nextThreadStop,
@@ -51,10 +51,10 @@ const KEYBOARD_SCROLL_MS = 250;
 export function createThreadNavigation(
   props: { threadId: Accessor<string> },
   context: EmailThreadState,
-  deps: EmailThreadDependencies,
+  threadContext: EmailThreadContext,
   host: EmailThreadHost = {}
 ) {
-  const isTouchDevice = deps.isTouch;
+  const isTouchDevice = threadContext.isTouch;
   const setIsScrollingToMessage = context.setIsScrollingToMessage;
   let disposed = false;
   const pendingWaits = new Set<() => void>();
@@ -478,7 +478,7 @@ export function createThreadNavigation(
 
     return openEmailReplyComposerForMessage({
       ctx: context,
-      isMobile: deps.isMobile(),
+      isMobile: threadContext.isMobile(),
       message: target.message,
       replyType,
       isLastMessage: target.isLastMessage,
@@ -542,7 +542,7 @@ export function createThreadNavigation(
 
       return openEmailReplyComposerForMessage({
         ctx: context,
-        isMobile: deps.isMobile(),
+        isMobile: threadContext.isMobile(),
         message: target.message,
         replyType: 'reply-all',
         isLastMessage: target.isLastMessage,

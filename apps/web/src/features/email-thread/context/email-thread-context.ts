@@ -47,7 +47,7 @@ export interface EmailThreadCommands {
   markSenderNoise(): boolean;
 }
 
-export interface EmailThreadDependencies {
+export interface EmailThreadContext {
   source: EmailThreadSource;
   recipients: Accessor<EmailRecipient[]>;
   viewerEmail: Accessor<string | undefined>;

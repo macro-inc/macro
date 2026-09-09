@@ -211,7 +211,8 @@ describe('content and resource policy', () => {
     '<form action="https://example.com"><input autofocus><button>send</button></form>',
     '<template><img src=x onerror="alert(1)"></template>',
   ])('removes active markup before insertion: %s', (html) => {
-    const result = sanitizeEmailHtml(html);
+    const result = sanitizeEmailHtml('<p>Safe content</p>' + html);
+    expect(result).toContain('<p>Safe content</p>');
     expect(result).not.toMatch(
       /onerror|alert\(|<script|<iframe|<svg|<math|<form|<input|<template|ping=/
     );
@@ -235,6 +236,7 @@ describe('content and resource policy', () => {
     );
     expect(result.html).not.toContain('evil.test');
     expect(result.html).not.toContain('srcset');
+    expect(result.html).toContain('Text');
   });
   it('proxies img sources while retaining direct background URLs for native compatibility', () => {
     const result = prepareEmailBody(

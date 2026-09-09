@@ -32,7 +32,7 @@ import type { Accessor } from 'solid-js';
 import type {
   ArchiveThreadOptions,
   EmailThreadCommands,
-} from './context/email-thread-dependencies';
+} from './context/email-thread-context';
 export function createThreadCompletionAdapter(
   threadSource: Accessor<EmailThread | undefined>,
   toHeaderLinkId: (linkId: string | null | undefined) => string | undefined

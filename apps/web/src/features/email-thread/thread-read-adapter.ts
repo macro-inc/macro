@@ -6,7 +6,7 @@ import {
 import { refetchSoupEntity } from '@queries/soup/cache';
 import type { Accessor } from 'solid-js';
 import { createEffect, createSignal } from 'solid-js';
-import type { EmailThreadCommands } from './context/email-thread-dependencies';
+import type { EmailThreadCommands } from './context/email-thread-context';
 import type { EmailThread } from './core/email-thread';
 
 export function createThreadReadAdapter(

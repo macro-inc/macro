@@ -1,63 +1,40 @@
-import { SupportedNodeTypes } from '@macro-inc/lexical-core';
-import {
-  $createParagraphNode,
-  $createTextNode,
-  $getRoot,
-  createEditor,
-} from 'lexical';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import type {
-  EmailComposeEnvironment,
+  EmailComposeContext,
   PersistedEmailIdentity,
 } from '../context/compose-capabilities';
 import { decodeBase64Utf8 } from '../core/decode-base64';
-import { composeEnvironment } from '../tests/capabilities';
-import { createEmailComposer } from './email-composer';
+import { createComposeContext } from '../tests/capabilities';
+import { mountEmailComposer } from '../tests/composer';
+import { createEmailEditor, setEmailEditorText } from '../tests/editor';
 import { createEmailFormState } from './email-form-state';
 import {
   createReplyComposer,
   type ReplyComposerOptions,
 } from './reply-composer';
 
-function emailEditor() {
-  const editor = createEditor({
-    nodes: SupportedNodeTypes,
-    onError: (error) => {
-      throw error;
-    },
-  });
-  const edit = (text: string) =>
-    editor.update(
-      () => {
-        $getRoot()
-          .clear()
-          .append($createParagraphNode().append($createTextNode(text)));
-      },
-      { discrete: true }
-    );
-  edit('Ready to send');
-  return { editor, edit };
-}
-
 function replyComposer(
-  services: EmailComposeEnvironment,
+  composeContext: EmailComposeContext,
   replyingTo = () => message('parent'),
   callbacks: Pick<ReplyComposerOptions, 'sideEffectOnSend' | 'onMarkDone'> = {}
 ) {
   return createRoot((dispose) => {
-    const { editor, edit } = emailEditor();
+    const editor = createEmailEditor('Ready to send');
     const parent = replyingTo();
     const form = createEmailFormState(
-      { viewerEmail: services.viewerEmail, inboxes: services.accounts.inboxes },
+      {
+        viewerEmail: composeContext.viewerEmail,
+        inboxes: composeContext.accounts.inboxes,
+      },
       { type: 'replying_to', messageId: parent.db_id },
       { getMessageById: () => parent, getDraftForMessageReply: () => undefined }
     );
     const state = createReplyComposer(
       {
         ...callbacks,
-        ...services,
+        ...composeContext,
         focusAfterReplyRequest: () => true,
         sourceEntityId: 'thread',
         replyingTo,
@@ -84,7 +61,7 @@ function replyComposer(
       ...state,
       dispose,
       edit(text: string) {
-        edit(text);
+        setEmailEditorText(editor, text);
         state.onContentChange(text);
       },
     };
@@ -93,50 +70,39 @@ function replyComposer(
 
 function composer(
   kind: 'standalone' | 'reply',
-  services: EmailComposeEnvironment
+  composeContext: EmailComposeContext
 ) {
   if (kind === 'reply') {
-    const state = replyComposer(services);
+    const state = replyComposer(composeContext);
     return {
       dispose: state.dispose,
       send: () => state.sendEmail(),
       schedule: state.handleSendTimeChange,
     };
   }
-  return createRoot((dispose) => {
-    const { editor } = emailEditor();
-    const { context } = createEmailComposer({
-      ...services,
-      initialTo: ['colleague@example.com'],
-    });
-    context.captureEditor(editor);
-    context.setSubject('Review');
-    context.onContentChange('Ready to send');
-    return {
-      dispose,
-      send: context.onSend,
-      schedule: context.onSendTimeChange!,
-    };
-  });
+  const root = mountEmailComposer(composeContext);
+  root.edit('Ready to send');
+  return {
+    dispose: root.dispose,
+    send: root.state.context.onSend,
+    schedule: root.state.context.onSendTimeChange!,
+  };
 }
 
 describe('send and schedule ordering', () => {
   it('undoes mark-done while the post-send refresh is still pending', async () => {
-    const services = composeEnvironment();
-    let finish!: () => void;
-    const refresh = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
+    const composeContext = createComposeContext();
+    const { promise: refresh, resolve: finish } = Promise.withResolvers<void>();
     const undo = vi.fn(async () => {});
     const onMarkDone = vi.fn((options) =>
       options.onUndoHandle({ id: 'done', undo, dispose() {} })
     );
-    vi.mocked(services.delivery.undoSend).mockImplementation(
+    vi.mocked(composeContext.delivery.undoSend).mockImplementation(
       async ({ onUndone }) => {
         await onUndone();
       }
     );
-    const state = replyComposer(services, undefined, {
+    const state = replyComposer(composeContext, undefined, {
       sideEffectOnSend: () => refresh,
       onMarkDone,
     });
@@ -144,7 +110,7 @@ describe('send and schedule ordering', () => {
       const send = state.sendEmail(true);
       await vi.advanceTimersByTimeAsync(0);
       const sentNotice = vi
-        .mocked(services.notices.feedback.success)
+        .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email sent');
       expect(onMarkDone).toHaveBeenCalledOnce();
       sentNotice?.[1]?.actions?.[0].onClick();
@@ -155,7 +121,7 @@ describe('send and schedule ordering', () => {
       await vi.advanceTimersByTimeAsync(600);
       expect(
         decodeBase64Utf8(
-          vi.mocked(services.drafts.saveDraft).mock.lastCall?.[0].draft
+          vi.mocked(composeContext.drafts.saveDraft).mock.lastCall?.[0].draft
             .body_html ?? ''
         )
       ).toContain('Restored reply edited before refresh');
@@ -169,39 +135,38 @@ describe('send and schedule ordering', () => {
   });
 
   it('does not add a scheduling notice after persistence already failed', async () => {
-    const services = composeEnvironment();
+    const composeContext = createComposeContext();
     const failure = new Error('Draft save failed');
-    vi.mocked(services.drafts.saveDraft).mockImplementationOnce(async () => {
-      services.notices.feedback.failure('Failed to save draft');
-      throw failure;
-    });
-    const state = replyComposer(services);
+    vi.mocked(composeContext.drafts.saveDraft).mockImplementationOnce(
+      async () => {
+        composeContext.notices.feedback.failure('Failed to save draft');
+        throw failure;
+      }
+    );
+    const state = replyComposer(composeContext);
     try {
       await state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
-      expect(services.delivery.schedule).not.toHaveBeenCalled();
-      expect(services.notices.feedback.failure).toHaveBeenCalledExactlyOnceWith(
-        'Failed to save draft'
-      );
-      expect(services.notices.reportError).toHaveBeenCalledWith(failure);
+      expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
+      expect(
+        composeContext.notices.feedback.failure
+      ).toHaveBeenCalledExactlyOnceWith('Failed to save draft');
+      expect(composeContext.notices.reportError).toHaveBeenCalledWith(failure);
     } finally {
       state.dispose();
     }
   });
 
   it('does not overwrite a newly edited reply when an older unmounted send fails', async () => {
-    const services = composeEnvironment();
-    let reject!: (error: Error) => void;
-    vi.mocked(services.delivery.sendMessage).mockReturnValueOnce(
-      new Promise((_, fail) => {
-        reject = fail;
-      })
-    );
-    const first = replyComposer(services);
+    const composeContext = createComposeContext();
+    const { promise: sending, reject } =
+      Promise.withResolvers<PersistedEmailIdentity>();
+    vi.mocked(composeContext.delivery.sendMessage).mockReturnValueOnce(sending);
+    const first = replyComposer(composeContext);
     first.edit('Older reply');
     const send = first.sendEmail();
     await vi.advanceTimersByTimeAsync(0);
     first.dispose();
-    const newer = replyComposer(services);
+    const newer = replyComposer(composeContext);
     try {
       newer.form().setSubject('New subject');
       newer.edit('Newer reply');
@@ -216,10 +181,10 @@ describe('send and schedule ordering', () => {
     }
   });
   it('completes reply mark-done when the post-send refresh fails', async () => {
-    const services = composeEnvironment();
+    const composeContext = createComposeContext();
     const failure = new Error('Refresh failed');
     const onMarkDone = vi.fn();
-    const state = replyComposer(services, undefined, {
+    const state = replyComposer(composeContext, undefined, {
       sideEffectOnSend: async () => {
         throw failure;
       },
@@ -227,10 +192,10 @@ describe('send and schedule ordering', () => {
     });
     try {
       await state.sendEmail(true);
-      expect(services.delivery.sendMessage).toHaveBeenCalledOnce();
+      expect(composeContext.delivery.sendMessage).toHaveBeenCalledOnce();
       expect(onMarkDone).toHaveBeenCalledOnce();
-      expect(services.notices.reportError).toHaveBeenCalledWith(failure);
-      expect(services.notices.feedback.failure).not.toHaveBeenCalled();
+      expect(composeContext.notices.reportError).toHaveBeenCalledWith(failure);
+      expect(composeContext.notices.feedback.failure).not.toHaveBeenCalled();
       expect(state.isSending()).toBe(false);
     } finally {
       state.dispose();
@@ -238,18 +203,18 @@ describe('send and schedule ordering', () => {
   });
 
   it('restores a failed reply after optimistic reset without marking it done', async () => {
-    const services = composeEnvironment();
-    vi.mocked(services.delivery.sendMessage).mockRejectedValueOnce(
+    const composeContext = createComposeContext();
+    vi.mocked(composeContext.delivery.sendMessage).mockRejectedValueOnce(
       new Error('Offline')
     );
     const onMarkDone = vi.fn();
-    const state = replyComposer(services, undefined, { onMarkDone });
+    const state = replyComposer(composeContext, undefined, { onMarkDone });
     try {
       state.edit('Keep my reply');
       await state.sendEmail(true);
-      expect(services.notices.feedback.failure).toHaveBeenCalledExactlyOnceWith(
-        'Failed to send email'
-      );
+      expect(
+        composeContext.notices.feedback.failure
+      ).toHaveBeenCalledExactlyOnceWith('Failed to send email');
       expect(onMarkDone).not.toHaveBeenCalled();
       expect(state.savedDraftId()).toBe('draft');
       expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
@@ -264,24 +229,22 @@ describe('send and schedule ordering', () => {
   afterEach(() => vi.useRealTimers());
 
   it('serializes the last reply edit on disposal and reuses the ID from its first save', async () => {
-    let finish!: (value: PersistedEmailIdentity) => void;
-    const services = composeEnvironment();
-    vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(
-      new Promise((resolve) => {
-        finish = resolve;
-      })
-    );
-    const state = replyComposer(services);
+    const { promise: saving, resolve: finish } =
+      Promise.withResolvers<PersistedEmailIdentity>();
+    const composeContext = createComposeContext();
+    vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(saving);
+    const state = replyComposer(composeContext);
     state.edit('First version');
     await vi.advanceTimersByTimeAsync(500);
     state.edit('Final version');
     state.dispose();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
     finish({ draftId: 'saved-reply', threadId: 'thread', inboxId: 'inbox' });
     await vi.advanceTimersByTimeAsync(0);
-    expect(services.drafts.saveDraft).toHaveBeenCalledTimes(2);
-    const latest = vi.mocked(services.drafts.saveDraft).mock.calls[1][0].draft;
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(2);
+    const latest = vi.mocked(composeContext.drafts.saveDraft).mock.calls[1][0]
+      .draft;
     expect(latest.db_id).toBe('saved-reply');
     expect(latest.replying_to_id).toBe('parent');
     expect(decodeBase64Utf8(latest.body_html!)).toContain('Final version');
@@ -289,30 +252,29 @@ describe('send and schedule ordering', () => {
 
   it('flushes an unmounted editor only to its original reply target', async () => {
     const [target, setTarget] = createSignal(message('original'));
-    const services = composeEnvironment();
-    const state = replyComposer(services, target);
+    const composeContext = createComposeContext();
+    const state = replyComposer(composeContext, target);
     state.edit('Belongs to the original message');
     // Solid updates keyed parent props before disposing the previous child.
     setTarget(message('next'));
     state.dispose();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
     expect(
-      vi.mocked(services.drafts.saveDraft).mock.calls[0][0].draft
+      vi.mocked(composeContext.drafts.saveDraft).mock.calls[0][0].draft
     ).toMatchObject({
       replying_to_id: 'original',
     });
   });
 
   it('waits for attachment persistence before scheduling and retains the selected inbox', async () => {
-    let finish!: () => void;
-    const services = composeEnvironment();
-    vi.mocked(services.attachmentStorage.uploadAttachments).mockReturnValueOnce(
-      new Promise((resolve) => {
-        finish = resolve;
-      })
-    );
-    const state = replyComposer(services);
+    const { promise: uploading, resolve: finish } =
+      Promise.withResolvers<void>();
+    const composeContext = createComposeContext();
+    vi.mocked(
+      composeContext.attachmentStorage.uploadAttachments
+    ).mockReturnValueOnce(uploading);
+    const state = replyComposer(composeContext);
     try {
       state.form().setSelectedInbox('secondary');
       state.handleAddAttachments([new File(['attachment'], 'review.txt')]);
@@ -322,10 +284,10 @@ describe('send and schedule ordering', () => {
       );
       await vi.advanceTimersByTimeAsync(0);
       state.form().setSelectedInbox('inbox');
-      expect(services.delivery.schedule).not.toHaveBeenCalled();
+      expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
       finish();
       await scheduling;
-      expect(services.delivery.schedule).toHaveBeenCalledExactlyOnceWith(
+      expect(composeContext.delivery.schedule).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ draftId: 'draft' }),
         'secondary'
       );
@@ -335,27 +297,25 @@ describe('send and schedule ordering', () => {
   });
 
   it('discards an in-flight first reply save after an upload failure without leaving a draft', async () => {
-    let fail!: (error: Error) => void;
-    const services = composeEnvironment();
-    vi.mocked(services.attachmentStorage.uploadAttachments).mockReturnValueOnce(
-      new Promise((_resolve, reject) => {
-        fail = reject;
-      })
-    );
-    const state = replyComposer(services);
+    const { promise: uploading, reject: fail } = Promise.withResolvers<void>();
+    const composeContext = createComposeContext();
+    vi.mocked(
+      composeContext.attachmentStorage.uploadAttachments
+    ).mockReturnValueOnce(uploading);
+    const state = replyComposer(composeContext);
     try {
       state.handleAddAttachments([new File(['attachment'], 'review.txt')]);
       await vi.advanceTimersByTimeAsync(500);
       expect(state.savedDraftId()).toBe('draft');
       const discarded = state.deleteDraftAndReset();
-      expect(services.drafts.deleteDraft).not.toHaveBeenCalled();
+      expect(composeContext.drafts.deleteDraft).not.toHaveBeenCalled();
       fail(new Error('Upload failed'));
       await discarded;
       await vi.advanceTimersByTimeAsync(1000);
-      expect(services.drafts.deleteDraft).toHaveBeenCalledExactlyOnceWith(
+      expect(composeContext.drafts.deleteDraft).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ draftId: 'draft' })
       );
-      expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
+      expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
       expect(state.savedDraftId()).toBeUndefined();
     } finally {
       state.dispose();
@@ -365,20 +325,21 @@ describe('send and schedule ordering', () => {
   it.each(['send', 'discard'] as const)(
     'blocks scheduling and inbox changes during a pending reply %s',
     async (operation) => {
-      let finish!: () => void;
-      const pending = new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-      const services = composeEnvironment();
+      const { promise: pending, resolve: finish } =
+        Promise.withResolvers<void>();
+      const composeContext = createComposeContext();
       if (operation === 'send')
-        vi.mocked(services.delivery.sendMessage).mockImplementationOnce(
+        vi.mocked(composeContext.delivery.sendMessage).mockImplementationOnce(
           async () => {
             await pending;
             return { draftId: 'sent', threadId: 'thread', inboxId: 'inbox' };
           }
         );
-      else vi.mocked(services.drafts.deleteDraft).mockReturnValueOnce(pending);
-      const state = replyComposer(services);
+      else
+        vi.mocked(composeContext.drafts.deleteDraft).mockReturnValueOnce(
+          pending
+        );
+      const state = replyComposer(composeContext);
       try {
         state.edit('Ready');
         await vi.advanceTimersByTimeAsync(500);
@@ -387,17 +348,18 @@ describe('send and schedule ordering', () => {
             ? state.sendEmail()
             : state.deleteDraftAndReset();
         await vi.advanceTimersByTimeAsync(0);
-        const saves = vi.mocked(services.drafts.saveDraft).mock.calls.length;
+        const saves = vi.mocked(composeContext.drafts.saveDraft).mock.calls
+          .length;
         await state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'));
         state.persistDraftOnSenderSwitch('secondary');
         await vi.advanceTimersByTimeAsync(500);
-        expect(services.delivery.schedule).not.toHaveBeenCalled();
-        expect(services.drafts.saveDraft).toHaveBeenCalledTimes(saves);
+        expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
+        expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(saves);
         expect(state.activeInboxId()).toBe('inbox');
         finish();
         await completing;
         await vi.advanceTimersByTimeAsync(1000);
-        expect(services.drafts.saveDraft).toHaveBeenCalledTimes(saves);
+        expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(saves);
       } finally {
         finish();
         state.dispose();
@@ -406,14 +368,11 @@ describe('send and schedule ordering', () => {
   );
 
   it('does not attach a forwarded file removed while the first draft save is pending', async () => {
-    let finish!: (value: PersistedEmailIdentity) => void;
-    const services = composeEnvironment();
-    vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(
-      new Promise((resolve) => {
-        finish = resolve;
-      })
-    );
-    const state = replyComposer(services);
+    const { promise: saving, resolve: finish } =
+      Promise.withResolvers<PersistedEmailIdentity>();
+    const composeContext = createComposeContext();
+    vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(saving);
+    const state = replyComposer(composeContext);
     try {
       const attachment = {
         type: 'forwarded' as const,
@@ -429,32 +388,35 @@ describe('send and schedule ordering', () => {
       finish({ draftId: 'draft', threadId: 'thread', inboxId: 'inbox' });
       await vi.advanceTimersByTimeAsync(0);
       expect(
-        services.attachmentStorage.addForwardedAttachments
+        composeContext.attachmentStorage.addForwardedAttachments
       ).not.toHaveBeenCalled();
     } finally {
       state.dispose();
     }
   });
 
-  it('does not submit a second reply while its first send is still saving', async () => {
-    let finish!: (value: PersistedEmailIdentity) => void;
-    const services = composeEnvironment();
-    vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(
-      new Promise((resolve) => {
-        finish = resolve;
-      })
-    );
-    const state = replyComposer(services);
+  it('waits for the first save, sends its returned draft ID once, and does not recreate the sent reply', async () => {
+    const { promise: saving, resolve: finish } =
+      Promise.withResolvers<PersistedEmailIdentity>();
+    const composeContext = createComposeContext();
+    vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(saving);
+    const state = replyComposer(composeContext);
     try {
       const sending = state.sendEmail();
       await vi.advanceTimersByTimeAsync(0);
       await state.sendEmail();
-      expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
+      expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
+      expect(composeContext.delivery.sendMessage).not.toHaveBeenCalled();
       finish({ draftId: 'saved-reply', threadId: 'thread', inboxId: 'inbox' });
       await sending;
+      expect(
+        vi.mocked(composeContext.delivery.sendMessage).mock.calls[0][0].message
+          .db_id
+      ).toBe('saved-reply');
+      state.dispose();
       await vi.advanceTimersByTimeAsync(1000);
-      expect(services.delivery.sendMessage).toHaveBeenCalledOnce();
-      expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
+      expect(composeContext.delivery.sendMessage).toHaveBeenCalledOnce();
+      expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
     } finally {
       state.dispose();
     }
@@ -463,21 +425,23 @@ describe('send and schedule ordering', () => {
   it.each([false, true])(
     'restores a cross-inbox reply and its envelope after undo (remount: %s)',
     async (remount) => {
-      const services = composeEnvironment();
+      const composeContext = createComposeContext();
       const persisted = {
         draftId: 'cross-inbox-draft',
         threadId: 'secondary-thread',
         inboxId: 'secondary',
       };
-      vi.mocked(services.drafts.saveDraft).mockResolvedValue(persisted);
-      vi.mocked(services.delivery.sendMessage).mockResolvedValue(persisted);
-      vi.mocked(services.delivery.undoSend).mockImplementation(
+      vi.mocked(composeContext.drafts.saveDraft).mockResolvedValue(persisted);
+      vi.mocked(composeContext.delivery.sendMessage).mockResolvedValue(
+        persisted
+      );
+      vi.mocked(composeContext.delivery.undoSend).mockImplementation(
         async ({ onUndone }) => {
           await onUndone();
         }
       );
       const target = () => message(`cross-inbox-${remount}`);
-      let state = replyComposer(services, target);
+      let state = replyComposer(composeContext, target);
       try {
         state.form().setSelectedInbox('secondary');
         state.form().setSubject('Custom reply subject');
@@ -494,16 +458,16 @@ describe('send and schedule ordering', () => {
         ]);
         await state.sendEmail();
         await vi.advanceTimersByTimeAsync(0);
-        expect(services.delivery.sendMessage).toHaveBeenCalledWith(
+        expect(composeContext.delivery.sendMessage).toHaveBeenCalledWith(
           expect.objectContaining({ inboxId: 'secondary' })
         );
         const notice = vi
-          .mocked(services.notices.feedback.success)
+          .mocked(composeContext.notices.feedback.success)
           .mock.calls.find(([text]) => text === 'Email sent');
         if (remount) state.dispose();
         notice?.[1]?.actions?.[0].onClick();
         await vi.advanceTimersByTimeAsync(0);
-        expect(services.drafts.restoreDraft).toHaveBeenCalledWith(
+        expect(composeContext.drafts.restoreDraft).toHaveBeenCalledWith(
           expect.objectContaining({
             inboxId: 'secondary',
             threadId: 'secondary-thread',
@@ -512,12 +476,12 @@ describe('send and schedule ordering', () => {
             }),
           })
         );
-        if (remount) state = replyComposer(services, target);
+        if (remount) state = replyComposer(composeContext, target);
         await vi.advanceTimersByTimeAsync(0);
         expect(state.activeInboxId()).toBe('secondary');
         state.edit('Continued after undo');
         await vi.advanceTimersByTimeAsync(500);
-        expect(services.drafts.saveDraft).toHaveBeenLastCalledWith(
+        expect(composeContext.drafts.saveDraft).toHaveBeenLastCalledWith(
           expect.objectContaining({
             inboxId: 'secondary',
             previousThreadId: 'secondary-thread',
@@ -529,7 +493,7 @@ describe('send and schedule ordering', () => {
           })
         );
         await state.deleteDraftAndReset();
-        expect(services.drafts.deleteDraft).toHaveBeenLastCalledWith(
+        expect(composeContext.drafts.deleteDraft).toHaveBeenLastCalledWith(
           expect.objectContaining({
             threadId: 'secondary-thread',
             inboxId: 'secondary',
@@ -542,19 +506,16 @@ describe('send and schedule ordering', () => {
   );
 
   it('reconciles each previous persisted thread when a reply moves between inboxes', async () => {
-    const services = composeEnvironment();
-    let finish!: (value: PersistedEmailIdentity) => void;
-    vi.mocked(services.drafts.saveDraft)
+    const composeContext = createComposeContext();
+    const { promise: saving, resolve: finish } =
+      Promise.withResolvers<PersistedEmailIdentity>();
+    vi.mocked(composeContext.drafts.saveDraft)
       .mockResolvedValue({
         draftId: 'draft-c',
         threadId: 'thread-c',
         inboxId: 'c',
       })
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          finish = resolve;
-        })
-      )
+      .mockReturnValueOnce(saving)
       .mockResolvedValueOnce({
         draftId: 'draft-b',
         threadId: 'thread-b',
@@ -565,7 +526,7 @@ describe('send and schedule ordering', () => {
         threadId: 'thread-c',
         inboxId: 'c',
       });
-    const state = replyComposer(services);
+    const state = replyComposer(composeContext);
     try {
       state.edit('Moving between inboxes');
       await vi.advanceTimersByTimeAsync(500);
@@ -574,7 +535,7 @@ describe('send and schedule ordering', () => {
       finish({ draftId: 'draft-a', threadId: 'thread-a', inboxId: 'inbox' });
       await vi.advanceTimersByTimeAsync(0);
       const inputs = vi
-        .mocked(services.drafts.saveDraft)
+        .mocked(composeContext.drafts.saveDraft)
         .mock.calls.map(([input]) => input);
       expect(inputs.map((input) => input.previousThreadId)).toEqual([
         undefined,
@@ -587,7 +548,7 @@ describe('send and schedule ordering', () => {
         'draft-b',
       ]);
       await state.handleSendTimeChange(new Date('2026-10-01T12:00:00Z'));
-      expect(services.delivery.archive).toHaveBeenLastCalledWith(
+      expect(composeContext.delivery.archive).toHaveBeenLastCalledWith(
         { threadId: 'thread-c', value: true },
         'c'
       );
@@ -596,61 +557,26 @@ describe('send and schedule ordering', () => {
     }
   });
 
-  it('waits for a saved reply and dispatches with its returned draft ID', async () => {
-    let finishSaving!: (value: PersistedEmailIdentity) => void;
-    const services = composeEnvironment();
-    vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(
-      new Promise((resolve) => {
-        finishSaving = resolve;
-      })
-    );
-    const state = composer('reply', services);
-    try {
-      state.send();
-      await vi.advanceTimersByTimeAsync(0);
-      expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
-      expect(services.delivery.sendMessage).not.toHaveBeenCalled();
-      finishSaving({
-        draftId: 'saved-reply',
-        threadId: 'thread',
-        inboxId: 'inbox',
-      });
-      await vi.advanceTimersByTimeAsync(0);
-      expect(services.delivery.sendMessage).toHaveBeenCalledOnce();
-      expect(
-        vi.mocked(services.delivery.sendMessage).mock.calls[0][0].message.db_id
-      ).toBe('saved-reply');
-    } finally {
-      state.dispose();
-    }
-  });
-
   it.each(['standalone', 'reply'] as const)(
     '%s does not dispatch when scheduling starts during the pending draft save',
     async (kind) => {
-      let finishSaving!: (value: PersistedEmailIdentity) => void;
-      let finishScheduling!: () => void;
-      const services = composeEnvironment({
+      const { promise: saving, resolve: finishSaving } =
+        Promise.withResolvers<PersistedEmailIdentity>();
+      const { promise: scheduled, resolve: finishScheduling } =
+        Promise.withResolvers<void>();
+      const composeContext = createComposeContext({
         delivery: {
-          schedule: vi.fn(
-            () =>
-              new Promise<void>((resolve) => {
-                finishScheduling = resolve;
-              })
-          ),
+          schedule: vi.fn(() => scheduled),
         },
       });
-      vi.mocked(services.drafts.saveDraft).mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            finishSaving = resolve;
-          })
+      vi.mocked(composeContext.drafts.saveDraft).mockImplementationOnce(
+        () => saving
       );
-      const state = composer(kind, services);
+      const state = composer(kind, composeContext);
       try {
         state.send();
         await vi.advanceTimersByTimeAsync(0);
-        expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
+        expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
         const scheduling = state.schedule(new Date('2026-10-01T12:00:00Z'));
         await vi.advanceTimersByTimeAsync(0);
         finishSaving({
@@ -659,8 +585,8 @@ describe('send and schedule ordering', () => {
           inboxId: 'inbox',
         });
         await vi.advanceTimersByTimeAsync(0);
-        expect(services.delivery.sendMessage).not.toHaveBeenCalled();
-        expect(services.delivery.schedule).toHaveBeenCalledOnce();
+        expect(composeContext.delivery.sendMessage).not.toHaveBeenCalled();
+        expect(composeContext.delivery.schedule).toHaveBeenCalledOnce();
         finishScheduling();
         await scheduling;
       } finally {

@@ -4,7 +4,7 @@ import DotsThree from '@phosphor/dots-three.svg';
 import { Button, cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 
-import { useEmailRendering } from '../context/email-rendering-context';
+import { useEmailRenderingContext } from '../context/email-rendering-context';
 import {
   createEmailMessageBody,
   type EmailMessageBodyProps,
@@ -16,7 +16,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     setShowFullHTML,
     host,
     hasHiddenReplyStructure,
-  } = createEmailMessageBody(props, useEmailRendering());
+  } = createEmailMessageBody(props, useEmailRenderingContext());
   return (
     <div
       class="ph-no-capture flex flex-col [&_.md-p:first-child]:mt-0 [&_.md-p:last-child]:mb-0"

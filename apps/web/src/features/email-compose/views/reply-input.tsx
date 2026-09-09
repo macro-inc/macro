@@ -22,7 +22,7 @@ import { type Accessor, createSignal, For, onMount, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { SignaturePreview } from '../components/signature-preview';
-import type { EmailComposeEnvironment } from '../context/compose-capabilities';
+import type { EmailComposeContext } from '../context/compose-capabilities';
 import { getOrInitEmailFormContext } from '../context/email-form-context';
 import { registerToggleAppendedThread } from '../primitives/prepare-email-body';
 import { ReplyEnvelope } from './reply-envelope';
@@ -92,13 +92,13 @@ type ReplyInputViewProps = Omit<
   | 'recordMention'
   | 'focusAfterReplyRequest'
 > & {
-  services: EmailComposeEnvironment;
+  context: EmailComposeContext;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
   unframed?: boolean;
   mobileDrawer?: { onClose: () => void };
 };
 export function ReplyInputView(props: ReplyInputViewProps) {
-  const services = props.services;
+  const composeContext = props.context;
   const ctx = props.session;
   const [isDragging, setIsDragging] = createSignal<boolean>();
   let composeContainerRef: HTMLDivElement | undefined;
@@ -106,15 +106,15 @@ export function ReplyInputView(props: ReplyInputViewProps) {
   const [editor, setEditor] = createSignal<LexicalEditor>();
   const state = createReplyComposer(
     {
-      drafts: services.drafts,
-      attachmentStorage: services.attachmentStorage,
-      delivery: services.delivery,
-      notices: services.notices,
-      accounts: services.accounts,
-      viewerEmail: services.viewerEmail,
-      hasPaidAccess: services.hasPaidAccess,
-      recordMention: services.recordMention,
-      focusAfterReplyRequest: () => !services.presentation.isTouch(),
+      drafts: composeContext.drafts,
+      attachmentStorage: composeContext.attachmentStorage,
+      delivery: composeContext.delivery,
+      notices: composeContext.notices,
+      accounts: composeContext.accounts,
+      viewerEmail: composeContext.viewerEmail,
+      hasPaidAccess: composeContext.hasPaidAccess,
+      recordMention: composeContext.recordMention,
+      focusAfterReplyRequest: () => !composeContext.presentation.isTouch(),
       newMessage: props.newMessage,
       session: props.session,
       sourceEntityId: props.sourceEntityId,
@@ -162,11 +162,11 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     toggleQuotedText,
   } = state;
   const sendActionHidden = () =>
-    services.presentation.isTouch() &&
+    composeContext.presentation.isTouch() &&
     !state.hasBodyText() &&
     state.replyType() !== 'forward';
   const signatureHtml = () =>
-    services.presentation.signaturesEnabled()
+    composeContext.presentation.signaturesEnabled()
       ? state.signatureHtml()
       : undefined;
   const isMobileDrawer = () => props.mobileDrawer !== undefined;
@@ -184,17 +184,17 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     onChange: state.onContentChange,
     onUserMention: state.handleUserMention,
     onDocumentMention: (item) => {
-      services.editorFiles.makePublic(item.id);
+      composeContext.editorFiles.makePublic(item.id);
       scheduleDraftSave();
     },
     onPasteFilesAndDirs: (files, directories) => {
-      services.editorFiles.uploadEditorFiles({
+      composeContext.editorFiles.uploadEditorFiles({
         editor: editor(),
         sourceId: props.sourceEntityId,
         files,
         directories,
         onUploaded: (ids) => {
-          ids.forEach(services.editorFiles.makePublic);
+          ids.forEach(composeContext.editorFiles.makePublic);
           scheduleDraftSave();
         },
       });
@@ -386,7 +386,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         fields={state.recipients}
         values={() => form().recipients()}
         options={props.session.recipientOptions}
-        inboxes={services.accounts.inboxes}
+        inboxes={composeContext.accounts.inboxes}
         activeInboxId={activeInboxId}
         senderEmail={activeInboxEmail}
         onSenderChange={persistDraftOnSenderSwitch}
@@ -440,7 +440,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
             onDrop: (files, directories, event) => {
               const currentEditor = editor();
               if (!currentEditor || !event) return;
-              services.editorFiles.uploadEditorFiles({
+              composeContext.editorFiles.uploadEditorFiles({
                 editor: currentEditor,
                 sourceId: props.sourceEntityId,
                 files,
@@ -448,7 +448,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                 dropEvent: event,
                 onUploaded: (ids) => {
                   setIsDragging(false);
-                  ids.forEach(services.editorFiles.makePublic);
+                  ids.forEach(composeContext.editorFiles.makePublic);
                   scheduleDraftSave();
                 },
               });
@@ -486,10 +486,10 @@ export function ReplyInputView(props: ReplyInputViewProps) {
             <div class="text-ink/50 mt-[1lh]" data-watermark>
               <MacroSignatureButton
                 visible={
-                  !services.presentation.viewerLoading() &&
-                  !services.hasPaidAccess()
+                  !composeContext.presentation.viewerLoading() &&
+                  !composeContext.hasPaidAccess()
                 }
-                onUpgrade={services.presentation.onUpgrade}
+                onUpgrade={composeContext.presentation.onUpgrade}
               />
             </div>
           </Show>
@@ -499,8 +499,8 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           <Show when={scrollAreaSignatureHtml()}>
             {(html) => (
               <SignaturePreview
-                mobile={services.presentation.isMobile()}
-                prepareLinks={services.presentation.prepareSignatureLinks}
+                mobile={composeContext.presentation.isMobile()}
+                prepareLinks={composeContext.presentation.prepareSignatureLinks}
                 html={html()}
                 onDismiss={() => {
                   // Dismissal is composer-local state worth keeping — latch
@@ -568,8 +568,8 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           <Show when={footerSignatureHtml()}>
             {(html) => (
               <SignaturePreview
-                mobile={services.presentation.isMobile()}
-                prepareLinks={services.presentation.prepareSignatureLinks}
+                mobile={composeContext.presentation.isMobile()}
+                prepareLinks={composeContext.presentation.prepareSignatureLinks}
                 html={html()}
                 onDismiss={() => {
                   // Dismissal is composer-local state worth keeping — latch
@@ -604,15 +604,16 @@ export function ReplyInputView(props: ReplyInputViewProps) {
             <div class="flex flex-row items-center gap-1">
               <Show
                 when={
-                  services.presentation.scheduleEnabled && !sendActionHidden()
+                  composeContext.presentation.scheduleEnabled &&
+                  !sendActionHidden()
                 }
               >
                 <EmailDateSelector
-                  mobile={services.presentation.isMobile()}
+                  mobile={composeContext.presentation.isMobile()}
                   sendTime={form().sendTime() ?? null}
                   onSendTimeChange={handleSendTimeChange}
                   disabled={scheduleSendDisabled()}
-                  disablePortal={services.presentation.isTouch()}
+                  disablePortal={composeContext.presentation.isTouch()}
                 />
               </Show>
               <SendButton

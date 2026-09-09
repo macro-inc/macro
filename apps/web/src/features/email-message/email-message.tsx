@@ -1,5 +1,5 @@
 import { EmailRenderingProvider } from './context/email-rendering-context';
-import { createEmailRenderingDependencies } from './rendering-adapter';
+import { createEmailRenderingContext } from './rendering-adapter';
 import { EmailSenderIcon } from './sender-icon-adapter';
 import {
   EmailMessageView,
@@ -8,9 +8,9 @@ import {
 
 /** Production composition for rendering a single email on any surface. */
 export function EmailMessage(props: EmailMessageViewProps) {
-  const dependencies = createEmailRenderingDependencies();
+  const renderingContext = createEmailRenderingContext();
   return (
-    <EmailRenderingProvider value={dependencies}>
+    <EmailRenderingProvider value={renderingContext}>
       <EmailMessageView
         renderAvatar={(message) => <EmailSenderIcon message={message} />}
         {...props}

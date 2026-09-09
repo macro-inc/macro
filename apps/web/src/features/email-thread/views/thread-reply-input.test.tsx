@@ -1,12 +1,16 @@
 import { render } from '@solidjs/testing-library';
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
-import type { EmailReplySession } from '../../email-compose/context/email-form-dependencies';
-import { composeEnvironment } from '../../email-compose/tests/capabilities';
+import type { EmailReplySession } from '../../email-compose/context/email-form-inputs';
+import { createComposeContext } from '../../email-compose/tests/capabilities';
+import type { EmailMessage } from '../../email-message/core/email-message';
 import { EmailThreadStateProvider } from '../context/email-thread-state-context';
-import { ThreadEnvironmentProvider } from '../context/thread-environment';
-import { createEmailThreadState } from '../primitives/email-thread-state';
-import { dependencies, message, thread } from '../tests/fixtures';
+import { EmailThreadViewProvider } from '../context/email-thread-view-context';
+import {
+  createEmailThreadState,
+  type EmailThreadState,
+} from '../primitives/email-thread-state';
+import { createThreadContext, message, thread } from '../tests/fixtures';
 import { ThreadReplyInput } from './thread-reply-input';
 
 vi.mock('@ui', () => ({
@@ -41,35 +45,36 @@ vi.mock('../../email-compose/views/reply-input', () => ({
   },
 }));
 
+function ThreadTestProvider(props: {
+  messages: EmailMessage[];
+  children: (state: EmailThreadState) => JSX.Element;
+}) {
+  const context = createThreadContext({ thread: () => thread(props.messages) });
+  const state = createEmailThreadState(context);
+  return (
+    <EmailThreadViewProvider
+      value={{
+        thread: context,
+        compose: createComposeContext(),
+        rendering: {},
+      }}
+    >
+      <EmailThreadStateProvider value={state}>
+        {props.children(state)}
+      </EmailThreadStateProvider>
+    </EmailThreadViewProvider>
+  );
+}
+
 it('preserves an engaged composer through a same-message update but resets it for a different reply target', () => {
   const first = message('first');
   const second = message('second');
-  const deps = dependencies({
-    thread: () => thread([first, second]),
-    isLoading: () => false,
-    isFetching: () => false,
-    isFetchingOlder: () => false,
-    hasMore: () => false,
-    async fetchOlder() {},
-    async refresh() {},
-  });
   const [target, setTarget] = createSignal(first);
-  const view = render(() => {
-    const state = createEmailThreadState(deps);
-    return (
-      <ThreadEnvironmentProvider
-        value={{
-          dependencies: deps,
-          compose: composeEnvironment(),
-          rendering: {},
-        }}
-      >
-        <EmailThreadStateProvider value={state}>
-          <ThreadReplyInput replyingTo={target} />
-        </EmailThreadStateProvider>
-      </ThreadEnvironmentProvider>
-    );
-  });
+  const view = render(() => (
+    <ThreadTestProvider messages={[first, second]}>
+      {() => <ThreadReplyInput replyingTo={target} />}
+    </ThreadTestProvider>
+  ));
   try {
     view.getByText('first').click();
     setTarget({ ...first, updated_at: '2026-09-05T00:00:00Z' });
@@ -85,36 +90,18 @@ it('preserves an engaged composer through a same-message update but resets it fo
 it('returns focus to the owning thread when split panes contain the same message', () => {
   vi.stubGlobal('CSS', { escape: (value: string) => value });
   const parent = message('shared-message');
-  const Pane = () => {
-    const deps = dependencies({
-      thread: () => thread([parent]),
-      isLoading: () => false,
-      isFetching: () => false,
-      isFetchingOlder: () => false,
-      hasMore: () => false,
-      async fetchOlder() {},
-      async refresh() {},
-    });
-    const state = createEmailThreadState(deps);
-    return (
-      <ThreadEnvironmentProvider
-        value={{
-          dependencies: deps,
-          compose: composeEnvironment(),
-          rendering: {},
-        }}
-      >
-        <EmailThreadStateProvider value={state}>
-          <div ref={state.registerMessagesContainer}>
-            <div tabIndex={0} data-testid="card">
-              <div data-message-body-id={parent.db_id} />
-            </div>
-            <ThreadReplyInput replyingTo={() => parent} />
+  const Pane = () => (
+    <ThreadTestProvider messages={[parent]}>
+      {(state) => (
+        <div ref={state.registerMessagesContainer}>
+          <div tabIndex={0} data-testid="card">
+            <div data-message-body-id={parent.db_id} />
           </div>
-        </EmailThreadStateProvider>
-      </ThreadEnvironmentProvider>
-    );
-  };
+          <ThreadReplyInput replyingTo={() => parent} />
+        </div>
+      )}
+    </ThreadTestProvider>
+  );
   const view = render(() => (
     <>
       <Pane />

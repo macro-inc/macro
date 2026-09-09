@@ -7,7 +7,7 @@ import type {
   EmailFormContextValue,
   FormAccessKey,
 } from '../primitives/email-form-types';
-import type { EmailFormDependencies } from './email-form-dependencies';
+import type { EmailFormContextInputs } from './email-form-inputs';
 
 // `seed` identifies the draft version the form seeds from (see ThreadReplyInput's
 // seed key), so a composer remounting on a newer draft version gets a
@@ -24,7 +24,7 @@ const EmailFormRegistryCtx = createContext<RegistryApi>();
 
 export function EmailFormContextProvider(
   props: ParentProps<{
-    dependencies: EmailFormDependencies;
+    context: EmailFormContextInputs;
     formOptions: EmailFormStateOptions;
   }>
 ) {
@@ -32,16 +32,12 @@ export function EmailFormContextProvider(
 
   const getOrInit: RegistryApi['getOrInit'] = (key) => {
     if (!key) {
-      return createEmailFormState(props.dependencies);
+      return createEmailFormState(props.context);
     }
     const stringifiedKey = stringifyKey(key);
     let existing = map.get(stringifiedKey);
     if (!existing) {
-      existing = createEmailFormState(
-        props.dependencies,
-        key,
-        props.formOptions
-      );
+      existing = createEmailFormState(props.context, key, props.formOptions);
       map.set(stringifiedKey, existing);
     }
     return existing;

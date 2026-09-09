@@ -47,8 +47,6 @@ describe('thread query adaptation', () => {
         const [id, setId] = createSignal('thread');
         const [status, setStatus] = createSignal('pending');
         const [data, setData] = createSignal<ThreadQueryData | undefined>();
-        const fetchNextPage = vi.fn();
-        const refetch = vi.fn();
         const read = vi.fn(() => {
           if (status() === 'pending')
             throw new Error('suspending resource read');
@@ -70,8 +68,6 @@ describe('thread query adaptation', () => {
           get data() {
             return read();
           },
-          fetchNextPage,
-          refetch,
         } as unknown as ThreadQueryResult<ThreadQueryData>;
         const source = createEmailThreadSource(id, query);
         expect(source.thread()).toBeUndefined();
@@ -85,10 +81,6 @@ describe('thread query adaptation', () => {
         expect(source.thread()).not.toBe(original);
         setStatus('error');
         expect(source.thread()?.db_id).toBe('thread');
-        source.fetchOlder();
-        source.refresh();
-        expect(fetchNextPage).toHaveBeenCalledOnce();
-        expect(refetch).toHaveBeenCalledOnce();
         setId('other');
         expect(source.thread()).toBeUndefined();
         batch(() => {
@@ -134,17 +126,15 @@ it('exposes cached data when the first observed query result is an error', () =>
 it.each(['fetchOlder', 'refresh'] as const)(
   '%s remains pending until the query request finishes',
   async (operation) => {
-    let finish!: () => void;
-    const request = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
+    const { promise: request, resolve: finish } = Promise.withResolvers<void>();
     const { source, dispose } = createRoot((dispose) => ({
       dispose,
       source: createEmailThreadSource(() => 'thread', {
         isSuccess: false,
         isError: false,
-        fetchNextPage: () => request,
-        refetch: () => request,
+        fetchNextPage: () =>
+          operation === 'fetchOlder' ? request : Promise.resolve(),
+        refetch: () => (operation === 'refresh' ? request : Promise.resolve()),
       } as unknown as ThreadQueryResult<ThreadQueryData>),
     }));
     try {

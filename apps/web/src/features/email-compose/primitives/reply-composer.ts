@@ -12,7 +12,7 @@ import type {
   EmailUndoHandle,
   PersistedEmailIdentity,
 } from '../context/compose-capabilities';
-import type { EmailReplySession } from '../context/email-form-dependencies';
+import type { EmailReplySession } from '../context/email-form-inputs';
 import type { EmailDraft } from '../core/email-draft';
 import { createAttachmentPersistence } from './attachment-persistence';
 import { createDraftAutosave } from './draft-autosave';

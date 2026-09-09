@@ -4,10 +4,10 @@ import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { createMemo } from 'solid-js';
 import { themeReactive } from '../theme/signals/themeReactive';
 import { themeUpdate } from '../theme/signals/themeSignals';
-import type { EmailRenderingDependencies } from './context/email-rendering-context';
+import type { EmailRenderingContextValue } from './context/email-rendering-context';
 import { fetchImagesViaPlatform, resolveCidImages } from './image-adapter';
 
-export function createEmailRenderingDependencies(): EmailRenderingDependencies {
+export function createEmailRenderingContext(): EmailRenderingContextValue {
   const theme = createMemo(() => {
     themeUpdate();
     return {

@@ -9,7 +9,7 @@ import type { EmailRecipient } from '@app/features/email-compose/core/email-reci
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { createSignal, type Setter } from 'solid-js';
 import { createStore, reconcile, unwrap } from 'solid-js/store';
-import type { EmailFormDependencies } from '../context/email-form-dependencies';
+import type { EmailFormContextInputs } from '../context/email-form-inputs';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import {
   convertContactInfoToEmailRecipient,
@@ -79,14 +79,14 @@ const EMPTY_FORM_STATE: EmailFormState = {
  * @returns A state object for the email form.
  */
 export function createEmailFormState(
-  dependencies: EmailFormDependencies,
+  context: EmailFormContextInputs,
   purpose?:
     | { type: 'replying_to'; messageId: string }
     | { type: 'draft'; messageId: string },
 
   options?: EmailFormStateOptions
 ) {
-  const userEmail = dependencies.viewerEmail;
+  const userEmail = context.viewerEmail;
 
   let replyingTo: EmailMessage | undefined;
 
@@ -114,7 +114,7 @@ export function createEmailFormState(
   const inboxEmail = () => {
     const inboxId = selectedInboxId() ?? (draft ?? replyingTo)?.link_id;
     const ownerEmail = inboxId
-      ? dependencies.inboxes().find((l) => l.id === inboxId)?.email_address
+      ? context.inboxes().find((l) => l.id === inboxId)?.email_address
       : undefined;
     return ownerEmail ?? userEmail() ?? '';
   };

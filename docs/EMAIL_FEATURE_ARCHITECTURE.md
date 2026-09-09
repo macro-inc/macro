@@ -55,9 +55,9 @@ may import a block package, `@core/block`, or block-related signal modules.
   source adapter, viewer/contact capabilities, thread commands, composer capabilities,
   notification subscription, rendering adapters, and host-independent cache
   cleanup. `views/email-thread-surface.tsx` builds thread state and providers from
-  supplied dependencies. It imports no production entry point for a nested
+  supplied contexts. It imports no production entry point for a nested
   message or composer.
-- `email-compose/email-compose.tsx` supplies the production compose environment and split-host
+- `email-compose/email-compose.tsx` supplies the production compose context and split-host
   callbacks to `views/email-compose.tsx`. Inline replies use
   `views/reply-input.tsx` with explicit capabilities and a reply session.
   `email-thread/views/thread-reply-input.tsx` owns the keyed reply lifetime;
@@ -85,9 +85,11 @@ test exercises this ordering.
 | --- | --- |
 | `EmailThreadSource` | Requested identity, available domain thread, request status, pagination availability, and refresh/page completion |
 | `EmailThreadCommands` | Thread actions and their availability; no soup collection or mutation objects |
+| `EmailThreadContext` | Thread source, viewer and device state, recipients, and the command factory used by thread state and navigation |
+| `EmailThreadViewContext` | Thread and compose contexts, plus view callbacks and optional compose host behavior |
 | `EmailThreadHost` | Optional location target, focus, activation status, and keyboard registration |
-| `EmailRenderingDependencies` | Theme values, explicit image policy, link preparation, and image resolution with an abortable resource lifetime |
-| `EmailFormDependencies` | Viewer address and available inbox identities for recipient selection |
+| `EmailRenderingContextValue` | Theme values, explicit image policy, link preparation, and image resolution with an abortable resource lifetime |
+| `EmailFormContextInputs` | Viewer address and available inbox identities for recipient selection |
 | `EmailReplySession` | Thread identity, recipient options, personal-reply classification, a targeted reply request, and host intents for leaving the composer or removing its draft |
 | `EmailDraftStorage` | Save/delete and restore an undone draft; inputs use domain inbox IDs and completion intent |
 | `EmailAttachmentStorage` | Upload, forward, and remove draft attachments |
@@ -96,7 +98,7 @@ test exercises this ordering.
 | `EmailComposeAccounts` | Inbox identities, availability, and the primary inbox |
 | `EmailComposePresentation` | View-only device state, signature visibility, upgrade action, and link preparation |
 | `EmailEditorFiles` | View-owned editor file upload and sharing integration |
-| `EmailComposeEnvironment` | Production composition groups; consumed by views, never by a reusable controller |
+| `EmailComposeContext` | Compose capabilities supplied to views, which pass the narrow inputs each controller needs |
 | `PersistedEmailIdentity` | Successful save/send result: draft, thread, and inbox identity without a transport envelope |
 | `EmailComposeHost` | Optional navigation, back handling, and focus movement supplied by the host |
 
@@ -114,7 +116,7 @@ projects linked-account metadata. Actual service-client operations remain in
 
 Compose controllers receive named `drafts`, `attachmentStorage`, `delivery`,
 `notices`, and `accounts` capabilities plus the values their workflow needs. They
-do not receive `EmailComposeEnvironment`, `presentation`, or `editorFiles`. The
+do not receive `EmailComposeContext`, `presentation`, or `editorFiles`. The
 view wires file-paste/drop plugins, document sharing, upgrade actions, device
 layout, and signature-link preparation. The reply controller receives a focus
 policy accessor and reports content edits; it does not choose a device layout.
@@ -219,8 +221,9 @@ stops, focus and scrolling; `thread-reply-area.ts` owns bottom/drawer reply
 placement. Thread reset and cached-draft auto-open remain in one effect so reset
 cannot overwrite an immediately available draft. Production read/unread and
 completion/undo wiring live in separate adapters, with one shared link-header
-converter created by `thread-action-adapter.tsx`. `ThreadViewEnvironment` is the
-single source of thread dependencies. State creates one retained thread snapshot
+converter created by `thread-action-adapter.tsx`. `EmailThreadViewContext` supplies
+the `EmailThreadContext` consumed by state and navigation, alongside the compose
+context and view callbacks. State creates one retained thread snapshot
 and passes that accessor to the injected command factory, so commands and reading
 state cannot disagree because they retained separate snapshots.
 

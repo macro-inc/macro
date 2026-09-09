@@ -54,7 +54,7 @@ import type { ApiThread } from '@service-email/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import type {
   ComposeNoticeOptions,
-  EmailComposeEnvironment,
+  EmailComposeContext,
 } from './context/compose-capabilities';
 import { readDroppedEmailFiles } from './editor-adapter';
 import { makeAttachmentPublic } from './make-attachment-public';
@@ -62,7 +62,7 @@ import { createEmailInboxSource } from './queries/inbox-source';
 import { restoreDraftBodyAfterUndo, runUndoSend } from './undo-send';
 
 /** Construct under the composing surface's Solid owner to scope request progress. */
-export function createEmailComposeEnvironment(): EmailComposeEnvironment {
+export function createEmailComposeContext(): EmailComposeContext {
   const accounts = useEmailLinksQuery();
   const headerId = useNonPrimaryEmailLinkIdHeader();
   const user = useUserContext();

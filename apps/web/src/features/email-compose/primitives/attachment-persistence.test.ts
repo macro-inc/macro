@@ -33,10 +33,8 @@ function setup(
 
 describe('draft attachment persistence', () => {
   it('waits for earlier content uploads even after their attachment IDs are assigned', async () => {
-    let finish!: () => void;
-    const uploadFinished = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
+    const { promise: uploadFinished, resolve: finish } =
+      Promise.withResolvers<void>();
     const file = new File(['content'], 'notes.txt');
     const state = setup(async (input) => {
       input.onAttachmentAdded?.(file, 'attachment');

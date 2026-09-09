@@ -6,9 +6,9 @@ import type { ReplyType } from '../../email-compose/core/reply-type';
 import type { EmailMessage } from '../../email-message/core/email-message';
 import type {
   ArchiveThreadOptions,
-  EmailThreadDependencies,
+  EmailThreadContext,
   EmailThreadHost,
-} from '../context/email-thread-dependencies';
+} from '../context/email-thread-context';
 import type { EmailThread } from '../core/email-thread';
 import { selectThreadMessages } from '../core/thread-messages';
 import type { HoveredThreadStop } from '../core/thread-stops';
@@ -103,10 +103,10 @@ export type EmailThreadState = {
 };
 
 export function createEmailThreadState(
-  deps: EmailThreadDependencies,
+  threadContext: EmailThreadContext,
   host: EmailThreadHost = {}
 ): EmailThreadState {
-  const threadSnapshot = createThreadSnapshot(deps.source);
+  const threadSnapshot = createThreadSnapshot(threadContext.source);
   const selected = createMemo(() => {
     const thread = threadSnapshot();
     return thread ? selectThreadMessages(thread) : undefined;
@@ -138,7 +138,7 @@ export function createEmailThreadState(
   const drafts = createThreadDrafts(selected);
 
   const recipients = createThreadRecipients(
-    deps.recipients,
+    threadContext.recipients,
     () => selected()?.messages
   );
 
@@ -171,7 +171,7 @@ export function createEmailThreadState(
       !messageList ||
       !containerRef ||
       !untrack(() => selected())?.db_id ||
-      deps.source.isFetching()
+      threadContext.source.isFetching()
     ) {
       return false;
     }
@@ -184,12 +184,12 @@ export function createEmailThreadState(
   const onInitialDataLoad = (callback: () => boolean) => {
     createEffect(() => {
       if (hasHandledTarget()) return;
-      const fetching = deps.source.isFetching();
+      const fetching = threadContext.source.isFetching();
       if (fetching) return;
       // Check if initial loading is complete
       const isInitialLoadComplete =
-        (isContainerFilled() || deps.source.hasMore() === false) &&
-        !deps.source.isFetching();
+        (isContainerFilled() || threadContext.source.hasMore() === false) &&
+        !threadContext.source.isFetching();
 
       if (!isInitialLoadComplete) return;
 
@@ -212,15 +212,16 @@ export function createEmailThreadState(
     thread: createMemo(() => selected()),
     recipientOptions: recipients.options,
     onRecipientsChange: recipients.add,
-    ...deps.createCommands(threadSnapshot),
+    ...threadContext.createCommands(threadSnapshot),
     messagesContainerRef,
     messagesListRef,
     query: {
-      hasMore: () => deps.source.hasMore() ?? false,
-      fetchNextPage: deps.source.fetchOlder,
+      hasMore: () => threadContext.source.hasMore() ?? false,
+      fetchNextPage: threadContext.source.fetchOlder,
       isFetching: () =>
-        deps.source.isLoading() || deps.source.isFetchingOlder(),
-      refetch: deps.source.refresh,
+        threadContext.source.isLoading() ||
+        threadContext.source.isFetchingOlder(),
+      refetch: threadContext.source.refresh,
     },
     drafts,
     messages: {

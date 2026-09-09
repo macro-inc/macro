@@ -1,7 +1,7 @@
 import { createRoot, createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { EmailThread } from '../core/email-thread';
-import { dependencies, message, thread } from '../tests/fixtures';
+import { createThreadContext, message, thread } from '../tests/fixtures';
 import { createEmailThreadState } from './email-thread-state';
 
 describe('thread state with an injected source', () => {
@@ -22,14 +22,8 @@ describe('thread state with an injected source', () => {
           thread([message('parent'), old])
         );
         const state = createEmailThreadState(
-          dependencies({
+          createThreadContext({
             thread: snapshot,
-            isLoading: () => false,
-            isFetching: () => false,
-            isFetchingOlder: () => false,
-            hasMore: () => false,
-            async fetchOlder() {},
-            async refresh() {},
           })
         );
         expect(state.drafts.initialDraftsSettled()).toBe(true);
@@ -57,23 +51,15 @@ describe('thread state with an injected source', () => {
       try {
         const source = {
           thread: () => thread([message('one')]),
-          isLoading: () => false,
-          isFetching: () => false,
-          isFetchingOlder: () => false,
-          hasMore: () => false,
-          fetchOlder: vi.fn(async () => {}),
-          refresh: vi.fn(async () => {}),
         };
-        const first = createEmailThreadState(dependencies(source));
-        const second = createEmailThreadState(dependencies(source));
+        const first = createEmailThreadState(createThreadContext(source));
+        const second = createEmailThreadState(createThreadContext(source));
         first.messages.setFocused('one');
         first.setIsScrollingToMessage(true);
         expect(first.messages.focusedId()).toBe('one');
         expect(first.isScrollingToMessage()).toBe(true);
         expect(second.messages.focusedId()).toBeUndefined();
         expect(second.isScrollingToMessage()).toBe(false);
-        first.query.fetchNextPage();
-        expect(source.fetchOlder).toHaveBeenCalledOnce();
       } finally {
         dispose();
       }

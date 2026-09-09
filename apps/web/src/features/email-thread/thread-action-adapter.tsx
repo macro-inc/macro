@@ -6,7 +6,7 @@ import {
   markSenderSignalWithToast,
 } from '@queries/email/thread';
 import type { Accessor } from 'solid-js';
-import type { EmailThreadCommands } from './context/email-thread-dependencies';
+import type { EmailThreadCommands } from './context/email-thread-context';
 import type { EmailThread } from './core/email-thread';
 import { selectThreadSender } from './core/thread-messages';
 import { createThreadCompletionAdapter } from './thread-completion-adapter';

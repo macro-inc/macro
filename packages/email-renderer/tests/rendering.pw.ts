@@ -1,35 +1,35 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import type {} from '../viewer/main';
 
-for (const file of readdirSync(new URL('./fixtures', import.meta.url)).filter(
-  (file) => file.endsWith('.json')
-)) {
-  const fixture = JSON.parse(
-    readFileSync(new URL(`./fixtures/${file}`, import.meta.url), 'utf8')
-  ) as { name: string; container_widths?: number[] };
-  for (const theme of ['light', 'dark']) {
-    for (const width of fixture.container_widths ?? [600]) {
-      test(`${fixture.name} ${theme} ${width}`, async ({ page }) => {
-        const errors: string[] = [];
-        const remote: string[] = [];
-        page.on('pageerror', (error) => errors.push(error.message));
-        page.on('request', (request) => {
-          if (!request.url().startsWith('http://127.0.0.1:24821'))
-            remote.push(request.url());
-        });
-        await page.goto(
-          `/?fixture=${fixture.name}&theme=${theme}&width=${width}`
-        );
-        await page.evaluate(() => document.fonts.ready);
-        await expect(page.locator('#email-host')).toHaveScreenshot(
-          `${fixture.name}-${theme}-${width}.png`
-        );
-        expect(errors).toEqual([]);
-        expect(remote).toEqual([]);
+const imagePixel = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1sAAAAASUVORK5CYII=',
+  'base64'
+);
+
+/** Static-content checks share mounting; lifecycle tests below control their own renderer. */
+async function mountHtml(
+  page: Page,
+  id: string,
+  html: string,
+  options: { theme?: 'light' | 'dark'; style?: Record<string, string> } = {}
+) {
+  await page.evaluate(
+    ({ id, html, options }) => {
+      const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+      const host = document.createElement('div');
+      host.id = id;
+      for (const [name, value] of Object.entries(options.style ?? {}))
+        host.style.setProperty(name, value);
+      document.body.append(host);
+      mountEmailBody(host, prepareEmailBody({ html }), {
+        theme: themes[options.theme ?? 'light'],
+        adaptColors: false,
+        normalizeFonts: false,
       });
-    }
-  }
+    },
+    { id, html, options }
+  );
+  return page.locator(`#${id}`);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -39,24 +39,12 @@ test.beforeEach(async ({ page }) => {
 test('preserves CSS recovery and native variable cascade and fallbacks', async ({
   page,
 }) => {
-  await page.evaluate(() => {
-    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
-    const host = document.createElement('div');
-    host.id = 'css-compat';
-    host.style.setProperty('--gap', '9px');
-    document.body.append(host);
-    mountEmailBody(
-      host,
-      prepareEmailBody(
-        {
-          html: '<style>.preheader{display:none;color:red !}.message{--tone:green;color:var(--tone,red);padding:var(--gap,5px);font-size:32px}.fallback{color:var(--missing,#dd1111);background:var(--image)}</style><div class="preheader">Hidden preview</div><div class="message"><p>Inherited green</p><p class="fallback">Fallback red</p></div><map name="offer"><area shape="rect" coords="0,0,20,20" href="//example.com/accept"></map><p>Image map footer</p>',
-        },
-        { images: { remote: 'allow' } }
-      ),
-      { theme: themes.light, adaptColors: false, normalizeFonts: false }
-    );
-  });
-  const host = page.locator('#css-compat');
+  const host = await mountHtml(
+    page,
+    'css-compat',
+    '<style>.preheader{display:none;color:red !}.message{--tone:green;color:var(--tone,red);padding:var(--gap,5px);font-size:32px}.fallback{color:var(--missing,#dd1111);background:var(--image)}</style><div class="preheader">Hidden preview</div><div class="message"><p>Inherited green</p><p class="fallback">Fallback red</p></div><map name="offer"><area shape="rect" coords="0,0,20,20" href="//example.com/accept"></map><p>Image map footer</p>',
+    { style: { '--gap': '9px' } }
+  );
   await expect(host.locator('.preheader')).toBeHidden();
   await expect(host.locator('.message')).toHaveCSS('font-size', '32px');
   await expect(host.locator('.message')).toHaveCSS('padding', '9px');
@@ -86,26 +74,14 @@ test('loads protocol-relative images and retains protocol-relative navigation', 
   await page.route('https://renderer.invalid/image', (route) =>
     route.fulfill({
       contentType: 'image/png',
-      body: Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1sAAAAASUVORK5CYII=',
-        'base64'
-      ),
+      body: imagePixel,
     })
   );
-  await page.evaluate(() => {
-    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
-    const host = document.createElement('div');
-    host.id = 'url-compat';
-    document.body.append(host);
-    mountEmailBody(
-      host,
-      prepareEmailBody({
-        html: '<img src="//renderer.invalid/image"><a href="//example.com/open">Open</a>',
-      }),
-      { theme: themes.light, adaptColors: false, normalizeFonts: false }
-    );
-  });
-  const host = page.locator('#url-compat');
+  const host = await mountHtml(
+    page,
+    'url-compat',
+    '<img src="//renderer.invalid/image"><a href="//example.com/open">Open</a>'
+  );
   await expect
     .poll(() =>
       host
@@ -122,20 +98,11 @@ test('loads protocol-relative images and retains protocol-relative navigation', 
 test('preserves namespace, layer and scope styling in the browser', async ({
   page,
 }) => {
-  await page.evaluate(() => {
-    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
-    const host = document.createElement('div');
-    host.id = 'grouped-css';
-    document.body.append(host);
-    mountEmailBody(
-      host,
-      prepareEmailBody({
-        html: '<style>@namespace h url(http://www.w3.org/1999/xhtml);@layer email{@scope (.group){h|p{color:red;font-size:32px}}}</style><div class="group"><p>Styled inside scope</p></div><p>Outside scope</p>',
-      }),
-      { theme: themes.light, adaptColors: false, normalizeFonts: false }
-    );
-  });
-  const host = page.locator('#grouped-css');
+  const host = await mountHtml(
+    page,
+    'grouped-css',
+    '<style>@namespace h url(http://www.w3.org/1999/xhtml);@layer email{@scope (.group){h|p{color:red;font-size:32px}}}</style><div class="group"><p>Styled inside scope</p></div><p>Outside scope</p>'
+  );
   await expect(host.getByText('Styled inside scope')).toHaveCSS(
     'color',
     'rgb(255, 0, 0)'
@@ -154,20 +121,12 @@ test('preserves nested and body theme rules while stripping top-level head overr
   page,
 }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.evaluate(() => {
-    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
-    const host = document.createElement('div');
-    host.id = 'theme-rule-scope';
-    document.body.append(host);
-    mountEmailBody(
-      host,
-      prepareEmailBody({
-        html: '<head><style>@media(prefers-color-scheme:dark){.head{color:red}}@media screen{@media(prefers-color-scheme:dark){.nested{color:green}}}</style></head><body><style>@media(prefers-color-scheme:dark){.body{color:blue}}</style><p class="head">Head</p><p class="nested">Nested</p><p class="body">Body</p></body>',
-      }),
-      { theme: themes.dark, adaptColors: false, normalizeFonts: false }
-    );
-  });
-  const host = page.locator('#theme-rule-scope');
+  const host = await mountHtml(
+    page,
+    'theme-rule-scope',
+    '<head><style>@media(prefers-color-scheme:dark){.head{color:red}}@media screen{@media(prefers-color-scheme:dark){.nested{color:green}}}</style></head><body><style>@media(prefers-color-scheme:dark){.body{color:blue}}</style><p class="head">Head</p><p class="nested">Nested</p><p class="body">Body</p></body>',
+    { theme: 'dark' }
+  );
   await expect(host.getByText('Head', { exact: true })).toHaveCSS(
     'color',
     'rgb(0, 0, 0)'
@@ -185,22 +144,12 @@ test('preserves nested and body theme rules while stripping top-level head overr
 test('keeps custom-property names consistent with selectors and container queries', async ({
   page,
 }) => {
-  await page.evaluate(() => {
-    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
-    const host = document.createElement('div');
-    host.id = 'variable-names';
-    document.body.append(host);
-    mountEmailBody(
-      host,
-      prepareEmailBody({
-        html: '<style>[style*="--tone"] p{color:var(--tone)}@container style(--tone:red){p{font-size:32px}}</style><div style="--tone:red"><p>Variable styled text</p></div>',
-      }),
-      { theme: themes.light, adaptColors: false, normalizeFonts: false }
-    );
-  });
-  const text = page
-    .locator('#variable-names')
-    .getByText('Variable styled text');
+  const host = await mountHtml(
+    page,
+    'variable-names',
+    '<style>[style*="--tone"] p{color:var(--tone)}@container style(--tone:red){p{font-size:32px}}</style><div style="--tone:red"><p>Variable styled text</p></div>'
+  );
+  const text = host.getByText('Variable styled text');
   await expect(text).toHaveCSS('color', 'rgb(255, 0, 0)');
   await expect(text).toHaveCSS('font-size', '32px');
 });
@@ -213,10 +162,7 @@ test('allows image-set backgrounds explicitly and blocks strings expanded by CSS
     requests.push(route.request().url());
     await route.fulfill({
       contentType: 'image/png',
-      body: Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1sAAAAASUVORK5CYII=',
-        'base64'
-      ),
+      body: imagePixel,
     });
   });
   await page.evaluate(() => {

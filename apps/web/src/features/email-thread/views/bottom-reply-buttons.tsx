@@ -11,7 +11,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
 import { type Component, Show } from 'solid-js';
 import { useEmailThreadState } from '../context/email-thread-state-context';
-import { useEmailThreadEnvironment } from '../context/thread-environment';
+import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
 
 function ReplyActionButton(props: {
@@ -20,14 +20,14 @@ function ReplyActionButton(props: {
   ariaLabel?: string;
   onClick: () => void;
 }) {
-  const environment = useEmailThreadEnvironment();
+  const viewContext = useEmailThreadViewContext();
   return (
     <Button
       // Button wraps itself in Layer depth={0} by default; in the floating
       // accessory region, match the chrome's depth so the island surface
       // matches the dock buttons. (The region host's Layer can't help —
       // Button's own Layer would reset it.)
-      depth={environment.dependencies.isTouch() ? 3 : undefined}
+      depth={viewContext.thread.isTouch() ? 3 : undefined}
       variant="outline"
       aria-label={props.ariaLabel}
       class={cn(
@@ -46,15 +46,15 @@ function ReplyActionButton(props: {
 
 export function BottomReplyButtons(props: { lastMessage: EmailMessage }) {
   const ctx = useEmailThreadState();
-  const environment = useEmailThreadEnvironment();
-  const currentUserEmail = environment.dependencies.viewerEmail;
+  const viewContext = useEmailThreadViewContext();
+  const currentUserEmail = viewContext.thread.viewerEmail;
 
   const open = (type: ReplyType) =>
     createCallback(() => {
       const messageId = props.lastMessage.db_id;
       if (!messageId) return;
       openEmailReplyComposerForMessage({
-        isMobile: environment.dependencies.isMobile(),
+        isMobile: viewContext.thread.isMobile(),
         ctx,
         message: props.lastMessage,
         replyType: type,
@@ -83,7 +83,7 @@ export function BottomReplyButtons(props: { lastMessage: EmailMessage }) {
 
   return (
     <Show
-      when={environment.dependencies.isTouch()}
+      when={viewContext.thread.isTouch()}
       fallback={
         <div class="flex w-full items-center pt-4">
           <button

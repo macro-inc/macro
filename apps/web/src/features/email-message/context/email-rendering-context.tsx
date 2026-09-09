@@ -9,7 +9,7 @@ import type { EmailAttachment } from '../core/email-message';
 export type EmailRenderingTheme = ThemeColorParams;
 
 /** Rendering capabilities shared by email surfaces; no thread or block state. */
-export interface EmailRenderingDependencies {
+export interface EmailRenderingContextValue {
   theme: Accessor<EmailRenderingTheme>;
   images?: ImagePolicy;
   prepareLinks?: (container: HTMLElement) => void;
@@ -20,10 +20,10 @@ export interface EmailRenderingDependencies {
   ): Promise<void>;
 }
 
-const EmailRenderingContext = createContext<EmailRenderingDependencies>();
+const EmailRenderingContext = createContext<EmailRenderingContextValue>();
 export const EmailRenderingProvider = EmailRenderingContext.Provider;
 
-export function useEmailRendering(): EmailRenderingDependencies {
+export function useEmailRenderingContext(): EmailRenderingContextValue {
   const value = useContext(EmailRenderingContext);
   if (!value)
     throw new Error('Email rendering requires an EmailRenderingProvider');

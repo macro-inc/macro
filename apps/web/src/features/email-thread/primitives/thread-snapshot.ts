@@ -1,5 +1,5 @@
 import { createMemo } from 'solid-js';
-import type { EmailThreadSource } from '../context/email-thread-dependencies';
+import type { EmailThreadSource } from '../context/email-thread-context';
 import type { EmailThread } from '../core/email-thread';
 
 /** Keep the current thread readable during transient reloads; never show a previous thread. */
