@@ -16,6 +16,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_pagination::{CreatedAt, Query};
+use notification_state::NotificationState;
 use rootcause::Report;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -31,7 +32,7 @@ type UserNotificationListRow = (
     String,
     String,
     bool,
-    bool,
+    NotificationState,
     DateTime<Utc>,
     Option<DateTime<Utc>>,
     DateTime<Utc>,
@@ -50,7 +51,7 @@ struct EntityNotificationListRow {
     secondary_event_item_id: Option<String>,
     secondary_event_item_type: Option<String>,
     sent: bool,
-    done: bool,
+    state: NotificationState,
     created_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
     updated_at: DateTime<Utc>,
@@ -66,7 +67,7 @@ struct UpdatedUserNotificationRow {
     event_item_id: String,
     event_item_type: String,
     sent: bool,
-    done: bool,
+    state: NotificationState,
     created_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
     updated_at: DateTime<Utc>,
@@ -97,7 +98,7 @@ impl UpdatedUserNotificationRow {
             notification_event_type: self.notification_event_type,
             entity,
             sent: self.sent,
-            done: self.done,
+            state: self.state,
             created_at: self.created_at,
             viewed_at: self.viewed_at,
             updated_at: self.updated_at,
@@ -137,7 +138,7 @@ fn build_user_notifications_query<'a>(
                 n.event_item_id,
                 n.event_item_type,
                 un.sent,
-                un.done,
+                un.state,
                 un.created_at::timestamptz as created_at,
                 un.seen_at::timestamptz as viewed_at,
                 un.created_at::timestamptz as updated_at,
@@ -181,12 +182,12 @@ fn push_notification_status_filters(
     builder.push(" AND un.deleted_at IS NULL");
 
     if let Some(done) = filters.done {
-        builder.push(" AND un.done = ");
+        builder.push(" AND (un.state = 'done') = ");
         builder.push_bind(done);
     }
 
     if let Some(seen) = filters.seen {
-        builder.push(" AND (un.seen_at IS NOT NULL) = ");
+        builder.push(" AND (un.state <> 'unseen') = ");
         builder.push_bind(seen);
     }
 }
@@ -755,7 +756,7 @@ impl NotificationDbOps for PgPool {
                 notification_event_type: typename.to_string(),
                 entity: entity.clone(),
                 sent: false,
-                done: false,
+                state: NotificationState::Unseen,
                 created_at,
                 viewed_at: None,
                 updated_at: created_at,
@@ -800,13 +801,14 @@ impl NotificationDbOps for PgPool {
             r#"
             WITH updated AS (
                 UPDATE user_notification
-                SET seen_at = NOW()
+                SET state = CASE WHEN state = 'unseen' THEN 'seen'::notification_state ELSE state END,
+                    seen_at = COALESCE(seen_at, NOW())
                 WHERE user_id = $1 AND notification_id = ANY($2) AND deleted_at IS NULL
                 RETURNING
                     user_id,
                     notification_id,
                     sent,
-                    done,
+                    state,
                     created_at,
                     seen_at,
                     deleted_at
@@ -817,7 +819,7 @@ impl NotificationDbOps for PgPool {
                 n.event_item_id,
                 n.event_item_type,
                 updated.sent,
-                updated.done,
+                updated.state as "state!: NotificationState",
                 updated.created_at::timestamptz as "created_at!",
                 updated.seen_at::timestamptz as viewed_at,
                 NOW()::timestamptz as "updated_at!",
@@ -851,13 +853,17 @@ impl NotificationDbOps for PgPool {
             r#"
             WITH updated AS (
                 UPDATE user_notification
-                SET done = $3
+                SET state = CASE
+                    WHEN $3 THEN 'done'::notification_state
+                    WHEN state = 'done' THEN 'seen'::notification_state
+                    ELSE state
+                END
                 WHERE user_id = $1 AND notification_id = ANY($2) AND deleted_at IS NULL
                 RETURNING
                     user_id,
                     notification_id,
                     sent,
-                    done,
+                    state,
                     created_at,
                     seen_at,
                     deleted_at
@@ -868,7 +874,7 @@ impl NotificationDbOps for PgPool {
                 n.event_item_id,
                 n.event_item_type,
                 updated.sent,
-                updated.done,
+                updated.state as "state!: NotificationState",
                 updated.created_at::timestamptz as "created_at!",
                 updated.seen_at::timestamptz as viewed_at,
                 NOW()::timestamptz as "updated_at!",
@@ -983,7 +989,7 @@ impl NotificationDbOps for PgPool {
             WHERE un.user_id = $1
               AND un.notification_id = ANY($2)
               AND un.deleted_at IS NULL
-              AND un.seen_at IS NULL
+              AND un.state = 'unseen'
             "#,
             user_id_str,
             notification_ids
@@ -1024,7 +1030,7 @@ impl NotificationDbOps for PgPool {
                 event_item_id,
                 event_item_type,
                 sent,
-                done,
+                state,
                 created_at,
                 viewed_at,
                 updated_at,
@@ -1073,7 +1079,7 @@ impl NotificationDbOps for PgPool {
                 notification_event_type,
                 entity,
                 sent,
-                done,
+                state,
                 created_at,
                 viewed_at,
                 updated_at,
@@ -1118,7 +1124,7 @@ impl NotificationDbOps for PgPool {
                 event_item_id,
                 event_item_type,
                 sent,
-                done,
+                state,
                 created_at,
                 viewed_at,
                 updated_at,
@@ -1167,7 +1173,7 @@ impl NotificationDbOps for PgPool {
                 notification_event_type,
                 entity,
                 sent,
-                done,
+                state,
                 created_at,
                 viewed_at,
                 updated_at,
@@ -1218,7 +1224,7 @@ impl NotificationDbOps for PgPool {
                 n.secondary_event_item_id,
                 n.secondary_event_item_type,
                 un.sent,
-                un.done,
+                un.state,
                 un.created_at::timestamptz as created_at,
                 un.seen_at::timestamptz as viewed_at,
                 un.created_at::timestamptz as updated_at,
@@ -1249,7 +1255,7 @@ impl NotificationDbOps for PgPool {
                 secondary_event_item_id,
                 secondary_event_item_type,
                 sent,
-                done,
+                state,
                 created_at,
                 viewed_at,
                 updated_at,
@@ -1291,7 +1297,7 @@ impl NotificationDbOps for PgPool {
                 notification_event_type: notification_event_type.clone(),
                 entity,
                 sent,
-                done,
+                state,
                 created_at,
                 viewed_at,
                 updated_at,
@@ -1333,7 +1339,7 @@ impl NotificationDbOps for PgPool {
                 n.event_item_id,
                 n.event_item_type,
                 un.sent,
-                un.done,
+                un.state as "state!: NotificationState",
                 un.created_at::timestamptz as "created_at!",
                 un.seen_at::timestamptz as viewed_at,
                 un.created_at::timestamptz as "updated_at!",
@@ -1382,7 +1388,7 @@ impl NotificationDbOps for PgPool {
             notification_event_type: row.notification_event_type,
             entity,
             sent: row.sent,
-            done: row.done,
+            state: row.state,
             created_at: row.created_at,
             viewed_at: row.viewed_at,
             updated_at: row.updated_at,

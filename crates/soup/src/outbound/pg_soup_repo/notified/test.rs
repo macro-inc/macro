@@ -343,7 +343,7 @@ async fn channel_conjuncts_ignore_thread_scoped_notifications(
 ) -> anyhow::Result<()> {
     use item_filters::ast::channel::ChannelLiteral;
 
-    sqlx::query("UPDATE user_notification SET done = TRUE WHERE notification_id = $1::uuid")
+    sqlx::query("UPDATE user_notification SET state = 'done' WHERE notification_id = $1::uuid")
         .bind(CHANNEL_X_INVITE)
         .execute(&pool)
         .await?;
@@ -378,7 +378,7 @@ async fn thread_and_foreign_entity_conjuncts_prefilter_candidates(
 ) -> anyhow::Result<()> {
     use item_filters::ast::channel::ChannelThreadLiteral;
 
-    sqlx::query("UPDATE user_notification SET done = TRUE WHERE notification_id = ANY($1::uuid[])")
+    sqlx::query("UPDATE user_notification SET state = 'done' WHERE notification_id = ANY($1::uuid[])")
         .bind(vec![
             Uuid::parse_str(THREAD_M_MENTION)?,
             Uuid::parse_str(PR_F1_EVENT)?,
@@ -501,6 +501,6 @@ fn calendar_fold_renders_supported_literals() {
     assert!(sql.starts_with(" AND ("));
     assert!(sql.contains("event.id = '00000000-0000-0000-0000-000000000007'"));
     assert!(sql.contains("NOT (EXISTS ("));
-    assert!(sql.contains("un.done = true"));
+    assert!(sql.contains("un.state = 'done'"));
     assert_eq!(build_calendar_event_filter(None), "");
 }

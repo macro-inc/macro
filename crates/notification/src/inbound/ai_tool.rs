@@ -185,10 +185,8 @@ pub struct NotificationItem {
     pub entity_type: String,
     /// The ID of the entity this notification is about.
     pub entity_id: String,
-    /// Whether the notification has been seen.
-    pub seen: bool,
-    /// Whether the notification is marked as done.
-    pub done: bool,
+    /// The authoritative notification state.
+    pub state: crate::domain::models::NotificationState,
     /// When the notification was created (ISO 8601).
     pub created_at: String,
     /// The notification metadata/payload.
@@ -204,8 +202,7 @@ impl From<UserNotificationRow<serde_json::Value>> for NotificationItem {
             event_type: row.notification_event_type,
             entity_type: row.entity.entity_type.to_string(),
             entity_id: row.entity.entity_id.into_owned(),
-            seen: row.viewed_at.is_some(),
-            done: row.done,
+            state: row.state,
             created_at: row.created_at.to_rfc3339(),
             metadata: row.notification_metadata,
             sender_id: row.sender_id.map(|s| (*s).as_ref().to_owned()),

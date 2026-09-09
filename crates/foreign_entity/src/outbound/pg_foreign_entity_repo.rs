@@ -281,7 +281,7 @@ impl PgForeignEntityRepo {
                           AND un.deleted_at IS NULL
                           AND n.event_item_type = 'foreign_entity'
                           AND n.event_item_id = fe.id::text
-                          AND un.done = $9::bool
+                          AND (un.state = 'done') = $9::bool
                     )
                   )
                   AND (
@@ -294,7 +294,7 @@ impl PgForeignEntityRepo {
                           AND un.deleted_at IS NULL
                           AND n.event_item_type = 'foreign_entity'
                           AND n.event_item_id = fe.id::text
-                          AND (un.seen_at IS NOT NULL) = $10::bool
+                          AND (un.state <> 'unseen') = $10::bool
                     )
                   )
                 ORDER BY fe.foreign_entity_source, fe.foreign_entity_id, sort_at DESC, fe.id DESC

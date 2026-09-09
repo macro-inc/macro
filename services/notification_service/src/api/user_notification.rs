@@ -68,8 +68,8 @@ pub struct ApiUserNotification {
     pub entity: Entity<'static>,
     /// Whether the notification has been sent.
     pub sent: bool,
-    /// Whether the notification is marked as done.
-    pub done: bool,
+    /// The authoritative notification lifecycle state.
+    pub state: notification::domain::models::NotificationState,
     /// When the notification was created.
     pub created_at: DateTime<Utc>,
     /// When the notification was viewed/seen.
@@ -93,7 +93,7 @@ impl ApiUserNotification {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,
@@ -107,7 +107,7 @@ impl ApiUserNotification {
             notification_event_type,
             entity,
             sent,
-            done,
+            state,
             created_at,
             viewed_at,
             updated_at,

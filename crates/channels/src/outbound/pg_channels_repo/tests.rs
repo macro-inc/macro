@@ -1129,13 +1129,14 @@ async fn insert_user_notification(
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
-        INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, done)
+        INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, state)
         VALUES (
             $1,
             $2,
             '2024-01-02 00:00:00'::timestamp,
             CASE WHEN $3::bool THEN '2024-01-02 00:00:00'::timestamp ELSE NULL END,
-            $4
+            CASE WHEN $4::bool THEN 'done'::notification_state
+                 WHEN $3 THEN 'seen'::notification_state ELSE 'unseen'::notification_state END
         )
         "#,
         user_id,

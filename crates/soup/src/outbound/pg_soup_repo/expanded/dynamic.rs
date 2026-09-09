@@ -555,9 +555,9 @@ pub(in crate::outbound::pg_soup_repo) fn build_notification_done_clause(
         entity_id_sql,
         entity_type,
         if done {
-            "un.done = true"
+            "un.state = 'done'"
         } else {
-            "un.done = false"
+            "un.state <> 'done'"
         },
     )
 }
@@ -571,9 +571,9 @@ pub(in crate::outbound::pg_soup_repo) fn build_notification_seen_clause(
         entity_id_sql,
         entity_type,
         if seen {
-            "un.seen_at IS NOT NULL"
+            "un.state <> 'unseen'"
         } else {
-            "un.seen_at IS NULL"
+            "un.state = 'unseen'"
         },
     )
 }
@@ -587,10 +587,10 @@ pub(in crate::outbound::pg_soup_repo) enum NotificationPredicate {
 impl NotificationPredicate {
     pub(in crate::outbound::pg_soup_repo) fn sql(self) -> &'static str {
         match self {
-            NotificationPredicate::Done(true) => "un.done = true",
-            NotificationPredicate::Done(false) => "un.done = false",
-            NotificationPredicate::Seen(true) => "un.seen_at IS NOT NULL",
-            NotificationPredicate::Seen(false) => "un.seen_at IS NULL",
+            NotificationPredicate::Done(true) => "un.state = 'done'",
+            NotificationPredicate::Done(false) => "un.state <> 'done'",
+            NotificationPredicate::Seen(true) => "un.state <> 'unseen'",
+            NotificationPredicate::Seen(false) => "un.state = 'unseen'",
         }
     }
 }

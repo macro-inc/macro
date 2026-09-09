@@ -3,7 +3,29 @@ use std::sync::Arc;
 use async_graphql::{Context, ID, Object, dataloader::DataLoader};
 use graphql_common::GraphqlSoupEntityType;
 use model_notifications::NotifEvent;
-use notification::domain::models::UserNotificationRow;
+use notification::domain::models::{NotificationState, UserNotificationRow};
+
+/// The mutually exclusive lifecycle state of a notification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, async_graphql::Enum)]
+#[graphql(name = "NotificationState")]
+pub enum GraphqlNotificationState {
+    /// Not yet acknowledged.
+    Unseen,
+    /// Acknowledged but not completed.
+    Seen,
+    /// Completed.
+    Done,
+}
+
+impl From<NotificationState> for GraphqlNotificationState {
+    fn from(state: NotificationState) -> Self {
+        match state {
+            NotificationState::Unseen => Self::Unseen,
+            NotificationState::Seen => Self::Seen,
+            NotificationState::Done => Self::Done,
+        }
+    }
+}
 
 #[cfg(test)]
 mod test;
@@ -82,14 +104,9 @@ impl GraphqlNotification {
         self.as_ref().sent
     }
 
-    /// Whether notification processing is complete.
-    async fn done(&self) -> bool {
-        self.as_ref().done
-    }
-
-    /// Whether the recipient has seen the notification.
-    async fn seen(&self) -> bool {
-        self.as_ref().viewed_at.is_some()
+    /// The authoritative lifecycle state, independent of viewing timestamps.
+    async fn state(&self) -> GraphqlNotificationState {
+        self.as_ref().state.into()
     }
 
     /// The notification creation time in RFC 3339 format.

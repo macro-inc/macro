@@ -6543,11 +6543,13 @@ async fn insert_notification(
         INSERT INTO user_notification (
             user_id,
             notification_id,
-            done,
+            state,
             seen_at,
             deleted_at
         )
-        VALUES ($1, $2::uuid, $3, CASE WHEN $4 THEN NOW() ELSE NULL END, NULL)
+        VALUES ($1, $2::uuid, CASE WHEN $3::bool THEN 'done'::notification_state
+            WHEN $4::bool THEN 'seen'::notification_state ELSE 'unseen'::notification_state END,
+            CASE WHEN $4 THEN NOW() ELSE NULL END, NULL)
         "#,
     )
     .bind(user_id)

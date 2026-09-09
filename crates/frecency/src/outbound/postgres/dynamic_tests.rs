@@ -641,8 +641,8 @@ async fn test_dynamic_filter_document_notification_done(pool: PgPool) {
 
     sqlx::query(
         r#"
-        INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, done)
-        VALUES ($1, $2, NOW(), NULL, false), ($1, $3, NOW(), NOW(), true)
+        INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, state)
+        VALUES ($1, $2, NOW(), NULL, 'unseen'), ($1, $3, NOW(), NOW(), 'done')
         "#,
     )
     .bind(test_user_id.as_ref())

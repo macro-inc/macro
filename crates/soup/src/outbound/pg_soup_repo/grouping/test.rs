@@ -814,8 +814,8 @@ async fn grouped_soup_filters_calendar_events_by_notification_done(
         .await?;
         sqlx::query!(
             r#"
-            INSERT INTO user_notification (user_id, notification_id, done)
-            VALUES ($1, $2, $3)
+            INSERT INTO user_notification (user_id, notification_id, state)
+            VALUES ($1, $2, CASE WHEN $3::bool THEN 'done'::notification_state ELSE 'unseen'::notification_state END)
             "#,
             OWNER_ID,
             notification_id,

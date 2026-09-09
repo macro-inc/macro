@@ -1,3 +1,5 @@
+mod state;
+
 use crate::domain::models::{Notification, request::NotificationCategory};
 
 use super::*;
@@ -630,7 +632,10 @@ async fn test_mark_notifications_done_returns_owned_rows_in_requested_order(pool
         rows.iter()
             .all(|notification| notification.owner_id == user)
     );
-    assert!(rows.iter().all(|notification| notification.done));
+    assert!(
+        rows.iter()
+            .all(|notification| notification.state == NotificationState::Done)
+    );
 }
 
 #[sqlx::test(
@@ -775,7 +780,7 @@ async fn test_get_user_notifications(pool: Pool<Postgres>) {
     );
     assert_eq!(row.entity.entity_type, EntityType::Document);
     assert!(!row.sent);
-    assert!(!row.done);
+    assert_eq!(row.state, NotificationState::Unseen);
     assert_eq!(row.notification_metadata.message, "hello");
 }
 

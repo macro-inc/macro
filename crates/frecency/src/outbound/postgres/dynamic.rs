@@ -88,9 +88,9 @@ fn build_notification_done_clause(entity_id_sql: &str, entity_type: &str, done: 
         entity_id_sql,
         entity_type,
         if done {
-            "un.done = true"
+            "un.state = 'done'"
         } else {
-            "un.done = false"
+            "un.state <> 'done'"
         },
     )
 }
@@ -100,9 +100,9 @@ fn build_notification_seen_clause(entity_id_sql: &str, entity_type: &str, seen: 
         entity_id_sql,
         entity_type,
         if seen {
-            "un.seen_at IS NOT NULL"
+            "un.state <> 'unseen'"
         } else {
-            "un.seen_at IS NULL"
+            "un.state = 'unseen'"
         },
     )
 }
