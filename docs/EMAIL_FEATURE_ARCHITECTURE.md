@@ -348,24 +348,32 @@ shared rich editor, recipient selector, and mobile chrome. Their application
 integration remains outside the controllers. Sender avatars are slots in both
 expanded and collapsed message presentation. `sender-icon-adapter.tsx` supplies
 the app's profile lookup and user card through `UserIcon`; the reusable message
-view does not import that navigation/DM integration. Tests of a feature provider or
-lifetime may replace the large rendering subtree while exercising the real state
-and provider composition.
+view does not import that navigation/DM integration. Some other shared widgets
+still import app services: thread participants use `UserIcon`, which creates a
+direct-message mutation, and `EntityIcon` imports the block registry. Removing
+the UI test mocks exposes missing app providers and WebSocket initialization.
+Consequently, the contexts isolate controller behavior, but the complete thread
+and composer UI still require additional application providers.
+
+Controller tests supply fake capabilities through their contexts. Their `vi.fn`
+spies and `vi.mocked` type helpers do not substitute imported modules. The view
+tests still use module mocks for the thread view, reply editor, and attachment
+icon; they verify provider ordering, reply lifetime/focus handoff, and keyboard
+behavior respectively, not complete view isolation. The native image adapter
+test substitutes platform detection and transport to exercise Tauri behavior.
 
 Two narrow shared pure utilities are allowed: `@core/util/base64` for the existing
 codec semantics and `@core/user/macroId` for validated identity formatting. The
-attachment pill also reuses the static MIME/file-type map and the shared
-`EntityIcon` display type. None of these is a transport or app-context lookup.
-Do not generalize these exceptions to the corresponding barrels.
+attachment pill also reuses the static MIME/file-type map; its shared
+`EntityIcon` component has the app coupling described above. Do not generalize
+the pure utility exceptions to the corresponding barrels.
 
 ## Enforcement and verification
 
 The three features are registered in both TypeScript and TSX versions of all four
 `feature-*` ast-grep families. Additional error-level `email-no-block-dependencies`
-rules reject block imports. `email-thread/tests/architecture.test.ts` resolves
-aliases and re-exports to verify cross-feature direction and layer boundaries,
-then traverses runtime controller/contract dependencies to reject indirect
-production-service and rendering imports. Type-only edges are treated separately.
+rules reject block imports. Review cross-feature imports and transitive
+dependencies when changing feature boundaries.
 
 Run from `apps/web`:
 

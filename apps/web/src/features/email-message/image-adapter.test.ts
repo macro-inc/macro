@@ -1,13 +1,13 @@
+import { SERVER_HOSTS } from '@core/constant/servers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { EmailAttachment } from './core/email-message';
 import { fetchImagesViaPlatform, resolveCidImages } from './image-adapter';
 
 const { fetchImage } = vi.hoisted(() => ({ fetchImage: vi.fn() }));
+// Exercise the production adapter's native path without invoking Tauri IPC.
+// Feature logic tests inject resolveImages through EmailRenderingProvider.
 vi.mock('@core/util/platform', () => ({ isTauri: () => true }));
 vi.mock('@core/util/platformFetch', () => ({ platformFetch: fetchImage }));
-vi.mock('@core/constant/servers', () => ({
-  SERVER_HOSTS: { 'static-file': 'https://files.example.com' },
-}));
 
 function imageRoot(src: string) {
   const host = document.createElement('div');
@@ -32,7 +32,7 @@ describe('production image adaptation', () => {
     resolveCidImages(root, [
       { content_id: '<part>', sfs_id: 'file-id' } as EmailAttachment,
     ]);
-    expect(img.src).toBe('https://files.example.com/file/file-id');
+    expect(img.src).toBe(`${SERVER_HOSTS['static-file']}/file/file-id`);
     expect(unknown.getAttribute('src')).toBe('cid:unknown');
   });
   it('does not create a blob URL when disposed during the platform response body', async () => {

@@ -7,7 +7,8 @@ import { useEmailThreadState } from '../context/email-thread-state-context';
 import { createThreadContext, message, thread } from '../tests/fixtures';
 import { EmailThreadSurface } from './email-thread-surface';
 
-// Replace only the large UI subtree; exercise real providers, state, and host frame ordering.
+// This verifies provider/frame ordering only. The full view still imports app
+// services through shared UI, including UserIcon's direct-message mutation.
 vi.mock('./email-thread', () => ({
   EmailThreadView: (props: { header?: unknown }) => <>{props.header}</>,
 }));

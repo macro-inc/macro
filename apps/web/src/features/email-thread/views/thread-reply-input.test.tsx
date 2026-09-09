@@ -13,10 +13,6 @@ import {
 import { createThreadContext, message, thread } from '../tests/fixtures';
 import { ThreadReplyInput } from './thread-reply-input';
 
-vi.mock('@ui', () => ({
-  Layer: (props: { children: unknown }) => props.children,
-}));
-
 const lifecycle = vi.hoisted(() => ({
   mounted: [] as string[],
   disposed: [] as string[],
@@ -25,6 +21,8 @@ beforeEach(() => {
   lifecycle.mounted.length = 0;
   lifecycle.disposed.length = 0;
 });
+// Probe the wrapper's editor lifetime and focus handoff. This does not verify
+// the real rich editor, which still depends on shared application providers.
 vi.mock('../../email-compose/views/reply-input', () => ({
   ReplyInputView: (props: {
     replyingTo: () => { db_id: string };
