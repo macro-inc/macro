@@ -364,10 +364,12 @@ returns the existing `UserToolResponse` envelope; chat still receives
 `PendingUserExecution` and finishes through its composer endpoint. The agent-loop
 finisher and neutral `UserToolReviewer` abstraction have been removed.
 
-MCP's `SendEmail` description asks external harnesses to display recipients,
-subject, and the full body before calling the tool. Macro's internal chat and
-session prompts explicitly exempt the built-in composers from that display
-requirement; user approval is still required before execution.
+MCP appends a preview instruction to every tool registered for user review,
+currently `SendEmail` and `CreateCalendarEvent`. External harnesses display the
+proposed content and key details before calling the tool. Macro's internal chat
+and session prompts exempt the built-in composers from that display requirement;
+user approval is still required before execution. Shared tool descriptions do
+not impose the host's inline-preview behavior.
 
 External email reviews show the full multiline message above editable To/Subject
 fields and an optional Replacement body. Leaving the replacement blank keeps the

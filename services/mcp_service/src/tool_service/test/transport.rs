@@ -350,3 +350,32 @@ async fn sessionless_tool_calls_are_rejected_without_allocating_workers() {
     shutdown.cancel();
     task.await.unwrap();
 }
+
+#[test]
+fn preview_instructions_follow_review_registration_not_tool_names() {
+    for reviewed in [false, true] {
+        let toolset = if reviewed {
+            AsyncToolCollection::new().add_user_tool::<ReviewedNote, TestContext>()
+        } else {
+            AsyncToolCollection::new().add_tool::<ReviewedNote, TestContext>()
+        };
+        let original = toolset.tools["ReviewedNote"].description.clone();
+        let service = AuthenticatedToolService::new(
+            Arc::new(toolset),
+            TestContext::default(),
+            "https://macro.com".into(),
+        );
+        let tools = service.tool_definitions();
+        let description = tools[0].description.as_deref().unwrap();
+        assert_eq!(
+            description.contains("Before calling this tool, display"),
+            reviewed
+        );
+        if reviewed {
+            assert!(description.contains("explicit user approval"));
+        } else {
+            assert_eq!(description, original);
+        }
+        assert_eq!(service.toolset.tools["ReviewedNote"].description, original);
+    }
+}

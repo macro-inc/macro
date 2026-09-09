@@ -79,10 +79,10 @@ impl<Context> AuthenticatedToolService<Context> {
             .map(|(key, value)| {
                 Tool::new(
                     key.to_owned(),
-                    if key == "SendEmail" {
+                    if self.toolset.user_tools.contains_key(key) {
                         format!(
-                            "{} Before calling this tool, display the proposed recipients, subject, and full email body in your response so the user can read it. Then call this tool to request review. Displaying the draft does not authorize sending; explicit user approval through the tool's review is still required.",
-                            value.description.replace(" — never write the email as plain text in the chat", "")
+                            "{} Before calling this tool, display the proposed content in full and the key details in your response so the user can review them. For an email, include recipients, subject, and the full body. For a calendar event, include title, date and time with timezone, attendees, location, and description. Then call the tool to request approval. Displaying a preview does not authorize execution; explicit user approval through the tool's review is still required.",
+                            value.description
                         )
                     } else {
                         value.description.to_owned()
