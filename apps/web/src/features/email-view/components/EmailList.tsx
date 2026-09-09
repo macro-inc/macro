@@ -485,9 +485,13 @@ export function EmailList(props: EmailListProps) {
               </Match>
 
               <Match when={forceEmptyState() || rows().length === 0}>
+                {/* No top inset on the wrapper: each EmptyStatePanel pads itself
+                    below the floating chrome (centered ones by default, the
+                    left-aligned ones in EmailEmptyState), so padding here too
+                    would double it. */}
                 <div
                   ref={setEmptyViewport}
-                  class="min-h-0 flex-1 overflow-y-auto touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+                  class="min-h-0 flex-1 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
                 >
                   <EmailEmptyState />
                 </div>
