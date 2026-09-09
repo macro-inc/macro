@@ -43,6 +43,11 @@ export interface QueuedPromptsProps {
   onEdit: (actionId: string, prompt: string) => void;
   /** Remove a queued action before it dispatches. */
   onRemove: (actionId: string) => void;
+  /**
+   * Enter in a queue row — the same stop-and-dispatch as the composer's
+   * "Send next queued message" button. Shift+Enter still inserts a newline.
+   */
+  onSendNext?: () => void;
   /** Down past the bottom (next-to-send) row — focus returns to the composer. */
   onNavigateBelow?: () => void;
   /**
@@ -105,6 +110,7 @@ export function QueuedPrompts(props: QueuedPromptsProps) {
                 onMoveDown={() => moveFocus(id, 1)}
                 onEdit={(prompt) => props.onEdit(id, prompt)}
                 onRemove={() => props.onRemove(id)}
+                onSendNext={props.onSendNext}
               />
             )}
           </Show>
@@ -122,6 +128,7 @@ type QueuedRowProps = {
   onMoveDown: () => void;
   onEdit: (prompt: string) => void;
   onRemove: () => void;
+  onSendNext?: () => void;
 };
 
 function QueuedRow(props: QueuedRowProps) {
@@ -195,6 +202,14 @@ function PromptBody(props: QueuedRowProps) {
     .namespace('agent-queued-prompt')
     .withHistory({ timeGap: 400 })
     .onChange(scheduleSave)
+    .onEnter(() => {
+      // Flush first so an in-progress edit is what dispatches, not the
+      // last autosaved snapshot. Then stop the current turn so this
+      // waiting prompt starts now — same as the composer's send-next button.
+      flush();
+      props.onSendNext?.();
+      return true;
+    })
     .onFocusLeave({
       onStart: (event) => {
         event.preventDefault();
@@ -250,6 +265,11 @@ function CompactBody(props: QueuedRowProps) {
       tabindex="-1"
       class="text-sm text-ink outline-none"
       onKeyDown={(event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          props.onSendNext?.();
+          return;
+        }
         if (event.key === 'ArrowUp') {
           event.preventDefault();
           props.onMoveUp();

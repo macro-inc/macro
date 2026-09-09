@@ -94,15 +94,16 @@ export function AgentInput(props: AgentInputProps) {
     props.onSend(content);
   };
 
-  const canSendNext = () =>
-    markdown().trim().length === 0 &&
+  const canSendNext = (liveMarkdown?: string) =>
+    (typeof liveMarkdown === 'string' ? liveMarkdown : markdown()).trim()
+      .length === 0 &&
     props.busy &&
     props.hasQueuedMessages &&
     !props.disabled &&
     props.onStop !== undefined;
 
-  const sendNext = () => {
-    if (!canSendNext()) return;
+  const sendNext = (liveMarkdown?: string) => {
+    if (!canSendNext(liveMarkdown)) return;
     // Stop bypasses the server queue. The cancelled turn ending immediately
     // dispatches its oldest waiting action, so the queue remains FIFO.
     props.onStop?.();
@@ -120,9 +121,16 @@ export function AgentInput(props: AgentInputProps) {
     .withCode()
     .withRestoreFocus()
     .withAgentCommands({ commands: () => props.commands?.() ?? [] })
-    .onEnter(() => {
-      if (canSend()) send();
-      else sendNext();
+    .onEnter((_event, currentMarkdown) => {
+      // Prefer the editor's live markdown over the onChange signal so a
+      // just-cleared draft cannot look sendable and skip send-next.
+      const text = (currentMarkdown ?? markdown()).trim();
+      if (text.length > 0 && !props.disabled) {
+        editor.controls.clear();
+        props.onSend(text);
+        return true;
+      }
+      sendNext(currentMarkdown ?? markdown());
       return true;
     })
     .onFocusLeave({
@@ -236,7 +244,7 @@ export function AgentInput(props: AgentInputProps) {
                     aria-label="Send next queued message"
                     tooltip="Send next queued message"
                     shortcut="Enter"
-                    onClick={sendNext}
+                    onClick={() => sendNext()}
                   >
                     <EnterIcon />
                   </SendButton>

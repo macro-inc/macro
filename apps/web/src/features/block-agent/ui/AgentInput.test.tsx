@@ -8,7 +8,9 @@ import { AgentInput } from './AgentInput';
 
 const editor = vi.hoisted(() => ({
   clear: vi.fn(),
-  enter: undefined as (() => boolean) | undefined,
+  enter: undefined as
+    | ((event?: KeyboardEvent, markdown?: string) => boolean)
+    | undefined,
   change: undefined as ((markdown: string) => void) | undefined,
 }));
 
@@ -25,7 +27,9 @@ vi.mock(
         withCode: () => builder,
         withRestoreFocus: () => builder,
         withAgentCommands: () => builder,
-        onEnter: (callback: () => boolean) => {
+        onEnter: (
+          callback: (event?: KeyboardEvent, markdown?: string) => boolean
+        ) => {
           editor.enter = callback;
           return builder;
         },
@@ -90,6 +94,18 @@ describe('queued message advancement', () => {
 
     editor.enter?.();
     expect(onStop).toHaveBeenCalledTimes(2);
+  });
+
+  it('advances the queue when Enter reports empty live markdown', () => {
+    const onStop = vi.fn();
+
+    render(() => (
+      <AgentInput busy hasQueuedMessages onSend={vi.fn()} onStop={onStop} />
+    ));
+
+    editor.change?.('stale draft');
+    editor.enter?.(new KeyboardEvent('keydown', { key: 'Enter' }), '   ');
+    expect(onStop).toHaveBeenCalledTimes(1);
   });
 
   it('sends typed text instead of advancing past it', () => {

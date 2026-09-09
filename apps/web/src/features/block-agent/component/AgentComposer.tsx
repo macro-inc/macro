@@ -6,9 +6,10 @@
 
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
-import { Show } from 'solid-js';
+import { onCleanup, onMount, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import {
+  AGENT_INPUT_TEXT_AREA_ID,
   AgentInput,
   AgentModelSelector,
   ComposerNotice,
@@ -41,6 +42,7 @@ export function AgentComposer(props: {
   // Down past that row comes back. Plain variables, read only at call time.
   let focusQueueBottom: (() => void) | undefined;
   let focusInput: (() => void) | undefined;
+  let regionRef: HTMLDivElement | undefined;
 
   // The server queue's entries, shaped for display: prompt text as-is, and
   // attribution only when somebody other than the current user queued it —
@@ -57,14 +59,49 @@ export function AgentComposer(props: {
       };
     });
 
+  // Stop the running turn so the oldest queued prompt dispatches now. Same
+  // path as the composer's "Send next queued message" button.
+  const canAdvanceQueue = () =>
+    queuedItems().length > 0 && composer.busy() && !loadFailed() && !pending();
+
+  const advanceQueue = () => {
+    if (!canAdvanceQueue()) return;
+    composer.stop();
+  };
+
+  // Backup for the empty composer: Lexical can swallow Enter before
+  // `onEnter` runs. Queue rows handle Enter themselves so they can flush.
+  onMount(() => {
+    const region = regionRef;
+    if (!region) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.isComposing) {
+        return;
+      }
+      if (!canAdvanceQueue()) return;
+      const target = event.target as Node | null;
+      const composerBox = document.getElementById(AGENT_INPUT_TEXT_AREA_ID);
+      // Queue rows handle Enter themselves so they can flush in-progress
+      // edits before the stop. This backup is only for the empty composer.
+      if (!target || !composerBox?.contains(target)) return;
+      if ((composerBox.innerText ?? '').trim().length > 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      advanceQueue();
+    };
+    region.addEventListener('keydown', onKeyDown, true);
+    onCleanup(() => region.removeEventListener('keydown', onKeyDown, true));
+  });
+
   return (
-    <>
+    <div ref={regionRef}>
       <Show when={queuedItems().length > 0}>
         <div class="pb-1.5">
           <QueuedPrompts
             items={queuedItems()}
             onEdit={(actionId, prompt) => void queue.edit(actionId, prompt)}
             onRemove={(actionId) => void queue.remove(actionId)}
+            onSendNext={advanceQueue}
             onNavigateBelow={() => focusInput?.()}
             registerFocusFromBelow={(focus) => {
               focusQueueBottom = focus;
@@ -117,6 +154,6 @@ export function AgentComposer(props: {
           />
         }
       />
-    </>
+    </div>
   );
 }
