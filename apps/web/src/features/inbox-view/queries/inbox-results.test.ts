@@ -68,15 +68,13 @@ describe('inbox sort method per tab', () => {
   });
 
   it('keeps recency ordering on the other tabs', () => {
-    for (const tab of ['all', 'reminders'] as const) {
-      expect(buildInboxQuery({ ...context, tab }).params.sort_method).toBe(
-        'updated_at'
-      );
-    }
+    expect(
+      buildInboxQuery({ ...context, tab: 'reminders' }).params.sort_method
+    ).toBe('updated_at');
   });
 
   it('keeps recency ordering everywhere while the notified sort is off', () => {
-    for (const tab of ['signal', 'noise', 'all', 'reminders'] as const) {
+    for (const tab of ['signal', 'noise', 'reminders'] as const) {
       expect(
         buildInboxQuery({ ...withoutNotifiedSort, tab }).params.sort_method
       ).toBe('updated_at');
@@ -103,13 +101,13 @@ describe('inbox date buckets', () => {
     expect(
       inboxGroupTimestamp(freshEmail, { tab: 'signal', capabilities })
     ).toBe('2026-09-02T16:00:00Z');
-    const all = { tab: 'all' as const, capabilities };
-    expect(inboxGroupTimestamp(staleTaskFreshComment, all)).toBe(
+    const reminders = { tab: 'reminders' as const, capabilities };
+    expect(inboxGroupTimestamp(staleTaskFreshComment, reminders)).toBe(
       '2026-08-31T19:00:00Z'
     );
     const groups = groupInboxEntitiesByDate(
       [freshEmail, staleTaskFreshComment],
-      all,
+      reminders,
       now
     );
     expect(groups.map((group) => group.label)).toEqual([

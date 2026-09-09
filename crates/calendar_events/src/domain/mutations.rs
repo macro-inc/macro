@@ -14,18 +14,18 @@ use uuid::Uuid;
 use super::{
     models::{
         ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
-        CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget, CalendarEventPatch,
-        CalendarEventUpsert, DisconnectedGoogleCalendar, EventReminders, EventTime,
-        OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX,
-        REMINDER_OVERRIDES_MAX,
+        CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
+        CalendarEventPatch, CalendarEventUpsert, DisconnectedGoogleCalendar, EventReminders,
+        EventTime, OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
+        REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventChange,
         CalendarEventWrite, CalendarEventWriteOutcome, CalendarMutationError,
-        CalendarMutationService, CalendarRepository, CalendarRsvpScope, CalendarTokenError,
-        CalendarUpdateScope, GoogleCalendarMutationProvider, GoogleInstanceUpdateOutcome,
-        GoogleProviderError, GoogleProviderErrorKind, GoogleRsvpOutcome,
-        GoogleSeriesMutationOutcome, RetiredCalendarEvent,
+        CalendarMutationService, CalendarRefreshNotifier, CalendarRepository, CalendarRsvpScope,
+        CalendarTokenError, CalendarUpdateScope, GoogleCalendarMutationProvider,
+        GoogleInstanceUpdateOutcome, GoogleProviderError, GoogleProviderErrorKind,
+        GoogleRsvpOutcome, GoogleSeriesMutationOutcome, RetiredCalendarEvent,
     },
 };
 use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarTopicEvent};
@@ -33,27 +33,30 @@ use macro_event_broker::MacroEventBroker;
 
 /// Calendar mutation use cases with provider, token, and persistence
 /// details behind ports.
-pub struct CalendarMutationServiceImpl<R, G, T, B> {
+pub struct CalendarMutationServiceImpl<R, G, T, B, N> {
     repository: R,
     provider: G,
     tokens: T,
     macro_event_broker: B,
+    refresh: N,
 }
 
-impl<R, G, T, B> CalendarMutationServiceImpl<R, G, T, B>
+impl<R, G, T, B, N> CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository,
     G: GoogleCalendarMutationProvider,
     T: CalendarAccessTokenProvider,
     B: MacroEventBroker,
+    N: CalendarRefreshNotifier,
 {
     /// Construct the service from its ports.
-    pub fn new(repository: R, provider: G, tokens: T, macro_event_broker: B) -> Self {
+    pub fn new(repository: R, provider: G, tokens: T, macro_event_broker: B, refresh: N) -> Self {
         Self {
             repository,
             provider,
             tokens,
             macro_event_broker,
+            refresh,
         }
     }
 
@@ -88,6 +91,21 @@ where
         }
     }
 
+    /// Announce retired events and, when anything was actually retired, nudge
+    /// the link's calendar viewers to refetch their projections.
+    async fn announce_retirements(
+        &self,
+        owner_id: &str,
+        email_link_id: Uuid,
+        retired: Vec<RetiredCalendarEvent>,
+    ) {
+        if retired.is_empty() {
+            return;
+        }
+        self.publish_retirements(retired);
+        self.refresh.calendar_changed(owner_id, email_link_id).await;
+    }
+
     /// Announce what a write did to the canonical row. A write that changed
     /// nothing publishes nothing, so an idempotent replay stays quiet.
     fn publish_write_outcome(&self, outcome: &CalendarEventWriteOutcome) {
@@ -110,9 +128,10 @@ where
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
     ) -> Result<CalendarEventMutationTarget, CalendarMutationError> {
         self.repository
-            .get_event_mutation_target(requester_id, event_id)
+            .get_event_mutation_target(requester_id, event_id, calendar_id)
             .await
             .map_err(internal)?
             .ok_or(CalendarMutationError::NotFound)
@@ -141,6 +160,8 @@ where
         upsert: CalendarEventUpsert,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         let mut event = upsert.event.clone();
+        let super::models::CalendarEventSource::Google(source) = &upsert.source;
+        let email_link_id = source.email_link_id;
         let outcome = self
             .repository
             .upsert_event(CalendarEventWrite::UserMutation(upsert))
@@ -148,6 +169,11 @@ where
             .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
         event.id = outcome.event_id;
         self.publish_write_outcome(&outcome);
+        if outcome.change != CalendarEventChange::Unchanged {
+            self.refresh
+                .calendar_changed(&outcome.owner_id, email_link_id)
+                .await;
+        }
         if let Some(viewer) = viewer {
             viewer.mark_attendees(&mut event.attendees);
         }
@@ -155,12 +181,13 @@ where
     }
 }
 
-impl<R, G, T, B> CalendarMutationService for CalendarMutationServiceImpl<R, G, T, B>
+impl<R, G, T, B, N> CalendarMutationService for CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository,
     G: GoogleCalendarMutationProvider,
     T: CalendarAccessTokenProvider,
     B: MacroEventBroker,
+    N: CalendarRefreshNotifier,
 {
     #[tracing::instrument(skip(self, requester_id, draft), err)]
     async fn create_event(
@@ -184,7 +211,13 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
-        ensure_organizer_attendee(&mut draft.attendees, &target.token_identity.email_address);
+        // An out-of-office event carries no attendees and Google auto-declines
+        // on the owner's behalf, so it must not gain an organizer guest.
+        if draft.out_of_office.is_some() {
+            validate_out_of_office_create(&draft, &target)?;
+        } else {
+            ensure_organizer_attendee(&mut draft.attendees, &target.token_identity.email_address);
+        }
         let access_token = self.fetch_token(&target.token_identity).await?;
         let upsert = self
             .provider
@@ -203,6 +236,7 @@ where
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         mut patch: CalendarEventPatch,
         scope: CalendarUpdateScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
@@ -229,7 +263,9 @@ where
                     .to_string(),
             ));
         }
-        let target = self.resolve_mutation_target(requester_id, event_id).await?;
+        let target = self
+            .resolve_mutation_target(requester_id, event_id, calendar_id)
+            .await?;
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
@@ -321,9 +357,12 @@ where
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         scope: CalendarDeletionScope,
     ) -> Result<(), CalendarMutationError> {
-        let target = self.resolve_mutation_target(requester_id, event_id).await?;
+        let target = self
+            .resolve_mutation_target(requester_id, event_id, calendar_id)
+            .await?;
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
@@ -382,7 +421,8 @@ where
                     )
                     .await
                     .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
-                self.publish_retirements(retired);
+                self.announce_retirements(&target.owner_id, target.email_link_id, retired)
+                    .await;
                 Ok(())
             }
         }
@@ -393,10 +433,13 @@ where
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
-        let target = self.resolve_mutation_target(requester_id, event_id).await?;
+        let target = self
+            .resolve_mutation_target(requester_id, event_id, calendar_id)
+            .await?;
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
@@ -453,16 +496,22 @@ where
             .ok_or(CalendarMutationError::NotFound)?;
         self.release_watch_channels(email_link_id, &disconnected)
             .await;
+        // The purge removed whole calendars, and no sync echo will ever
+        // arrive for a disconnected link, so viewers have to be nudged here.
+        self.refresh
+            .calendar_changed(requester_id, email_link_id)
+            .await;
         Ok(())
     }
 }
 
-impl<R, G, T, B> CalendarMutationServiceImpl<R, G, T, B>
+impl<R, G, T, B, N> CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository,
     G: GoogleCalendarMutationProvider,
     T: CalendarAccessTokenProvider,
     B: MacroEventBroker,
+    N: CalendarRefreshNotifier,
 {
     /// Close the push channels a disconnected calendar left open. Best-effort:
     /// the local calendars are already gone, so a notification that still
@@ -533,7 +582,8 @@ where
             .unwrap_or_default();
         // The row may be gone now, so search cannot rediscover this by
         // re-reading Postgres — the retirement has to be announced.
-        self.publish_retirements(retired);
+        self.announce_retirements(&target.owner_id, target.email_link_id, retired)
+            .await;
     }
 }
 
@@ -541,6 +591,42 @@ fn validate_time(time: &EventTime) -> Result<(), CalendarMutationError> {
     if !time.is_valid() {
         return Err(CalendarMutationError::InvalidInput(
             "event end must be after its start".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Enforce Google's rules for creating an out-of-office event so the provider
+/// never rejects a write we already accepted: primary calendar only, a timed
+/// span rather than whole days, and no attendees, conference, or description.
+fn validate_out_of_office_create(
+    draft: &CalendarEventDraft,
+    target: &CalendarCreationTarget,
+) -> Result<(), CalendarMutationError> {
+    if !target.is_primary {
+        return Err(CalendarMutationError::InvalidInput(
+            "out-of-office events can only be created on your primary calendar".to_string(),
+        ));
+    }
+    if !matches!(draft.time, EventTime::Timed { .. }) {
+        return Err(CalendarMutationError::InvalidInput(
+            "out-of-office events must have specific start and end times, not span whole days"
+                .to_string(),
+        ));
+    }
+    if !draft.attendees.is_empty() {
+        return Err(CalendarMutationError::InvalidInput(
+            "out-of-office events cannot have attendees".to_string(),
+        ));
+    }
+    if draft.conference.is_some() {
+        return Err(CalendarMutationError::InvalidInput(
+            "out-of-office events cannot have a video conference".to_string(),
+        ));
+    }
+    if draft.description.as_deref().is_some_and(|d| !d.is_empty()) {
+        return Err(CalendarMutationError::InvalidInput(
+            "out-of-office events cannot have a description".to_string(),
         ));
     }
     Ok(())

@@ -32,7 +32,11 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+#[cfg(test)]
+mod test;
+
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
 
 #[tokio::main]
 #[tracing::instrument(err)]
@@ -132,9 +136,12 @@ async fn main() -> Result<()> {
     let authed_routes = scheduled_action_router::<_, _, ()>(state);
 
     let router = Router::new()
-        .route("/health", axum::routing::get(health))
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", ApiDoc::openapi()))
-        .merge(authed_routes)
+        .merge(mount_at_root_and_prefix(
+            Router::new()
+                .route("/health", axum::routing::get(health))
+                .merge(authed_routes),
+        ))
+        .merge(mount_docs_at_root_and_prefix())
         .layer(macro_cors::cors_layer());
 
     let port = config.port;
@@ -170,4 +177,19 @@ async fn main() -> Result<()> {
     }
 
     server_result
+}
+
+fn mount_at_root_and_prefix(inner: Router) -> Router {
+    Router::new()
+        .merge(inner.clone())
+        .nest(GATEWAY_PATH_PREFIX, inner)
+}
+
+fn mount_docs_at_root_and_prefix() -> Router {
+    Router::new()
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", ApiDoc::openapi()))
+        .merge(SwaggerUi::new(format!("{GATEWAY_PATH_PREFIX}/docs")).url(
+            format!("{GATEWAY_PATH_PREFIX}/api-doc/openapi.json"),
+            ApiDoc::openapi(),
+        ))
 }

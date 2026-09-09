@@ -171,6 +171,12 @@ where
             .await
     }
 
+    /// The IANA time zone of the requester's primary calendar.
+    #[tracing::instrument(skip(self, requester_id), err)]
+    pub async fn primary_time_zone(&self, requester_id: &str) -> Result<Option<String>, Report> {
+        self.repository.primary_time_zone(requester_id).await
+    }
+
     /// Re-arm the watched inbox's sync job for a push notification whose
     /// channel token the adapter already verified. Returns whether the
     /// notification matched an active channel.
@@ -240,6 +246,13 @@ where
     ) -> impl Future<Output = Result<Vec<super::models::TeamOutOfOffice>, Report>> + Send {
         CalendarService::list_team_out_of_office(self, requester_id, range, limit)
     }
+
+    fn primary_time_zone(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, Report>> + Send {
+        CalendarService::primary_time_zone(self, requester_id)
+    }
 }
 
 /// Orchestrates a Google account backfill while keeping HTTP and SQL behind ports.
@@ -259,6 +272,12 @@ pub struct GoogleCalendarSyncScheduler<R> {
     repository: R,
 }
 
+/// How long a backfill job may sit off the queue — pending after a delivery
+/// dead-lettered, or running behind a dead worker's lease — before the reaper
+/// republishes it. Comfortably past the SQS retry budget so an actively
+/// retrying delivery is never duplicated.
+const WEDGED_SYNC_STALL_THRESHOLD: chrono::Duration = chrono::Duration::minutes(15);
+
 impl<R> GoogleCalendarSyncScheduler<R>
 where
     R: GoogleCalendarSyncRepository,
@@ -273,6 +292,15 @@ where
     pub async fn run_once(&self, now: chrono::DateTime<Utc>) -> Result<usize, Report> {
         self.repository
             .schedule_due_google_syncs(now - chrono::Duration::minutes(5))
+            .await
+    }
+
+    /// Re-arm jobs stranded off the queue by a dead-lettered delivery or a
+    /// dead worker's lease, so they recover without a grant change.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn reap_once(&self, now: chrono::DateTime<Utc>) -> Result<usize, Report> {
+        self.repository
+            .reap_wedged_google_syncs(now - WEDGED_SYNC_STALL_THRESHOLD)
             .await
     }
 }
@@ -613,6 +641,12 @@ where
             .await
             .map_err(|error| -> Report { rootcause::report!(error).into() })?;
         let mut calendar_ids = Vec::with_capacity(calendars.len());
+        // One calendar's provider failure is recorded and skipped rather than
+        // failing the account. The run fails only when no calendar is healthy,
+        // so the coordinator can still classify a wholesale outage.
+        let mut any_calendar_healthy = false;
+        let mut isolated_failures: Vec<(Uuid, String)> = Vec::new();
+        let mut last_isolated_error: Option<GoogleProviderError> = None;
 
         for provider_calendar in calendars {
             let provider_calendar_id = provider_calendar.provider_calendar_id.clone();
@@ -632,10 +666,11 @@ where
                     synced_at > Utc::now() - super::models::SYSTEM_CALENDAR_SYNC_INTERVAL
                 })
             {
+                any_calendar_healthy = true;
                 continue;
             }
             let plan = stored_calendar.sync_plan(&range);
-            let batch = self
+            let batch = match self
                 .provider
                 .sync_events(
                     access_token,
@@ -654,7 +689,34 @@ where
                     },
                 )
                 .await
-                .map_err(|error| -> Report { rootcause::report!(error).into() })?;
+            {
+                Ok(batch) => batch,
+                Err(error) => {
+                    // A bad or insufficient grant is account-wide, not
+                    // calendar-local: surface it immediately so the coordinator
+                    // prompts reauthorization rather than marking the account
+                    // ready off the calendars that happened to sync.
+                    if error.kind() == GoogleProviderErrorKind::ReauthRequired {
+                        return Err(rootcause::report!(error).into());
+                    }
+                    tracing::warn!(
+                        error=?error,
+                        calendar_id=%calendar_id,
+                        "isolating a failed Google Calendar and continuing the account sync"
+                    );
+                    isolated_failures.push((calendar_id, error.message().to_owned()));
+                    // A retryable failure outranks a permanent one so a total
+                    // failure still surfaces as retryable.
+                    last_isolated_error = Some(match last_isolated_error {
+                        Some(previous) if previous.kind() != GoogleProviderErrorKind::Permanent => {
+                            previous
+                        }
+                        _ => error,
+                    });
+                    continue;
+                }
+            };
+            any_calendar_healthy = true;
             let mut calendar_count = 0;
             for upsert in batch.upserts {
                 if let Err(error) = validate_upsert(&upsert) {
@@ -758,6 +820,35 @@ where
                     }
                 }
             }
+        }
+
+        // No calendar is healthy: a wholesale outage the coordinator classifies
+        // for retry. The account-level failure carries it, so no calendar is
+        // badged for it.
+        if !any_calendar_healthy && let Some(error) = last_isolated_error {
+            return Err(rootcause::report!(error).into());
+        }
+
+        // Record each isolated failure for the settings badge, leaving the
+        // calendar's sync state untouched so the next poll retries it.
+        for (calendar_id, message) in isolated_failures {
+            self.repository
+                .record_google_calendar_sync_error(
+                    key,
+                    lease_token,
+                    account_id,
+                    calendar_id,
+                    &message,
+                )
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        error=?error,
+                        calendar_id=%calendar_id,
+                        "failed to record isolated Google Calendar sync error"
+                    );
+                })
+                .ok();
         }
 
         // A calendar dropped from the provider's list retires its sources, so

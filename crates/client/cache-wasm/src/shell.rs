@@ -303,11 +303,26 @@ struct JsEntityFilterRequest {
     sort_method: String,
     sort_direction: String,
     limit: u16,
+    baseline: Option<Vec<JsPredicateBaselineEntry>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct JsPredicateBaselineEntry {
+    key: String,
+    sort_timestamp: String,
 }
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 enum JsEntityFilterResult {
+    Reconciled {
+        revision: String,
+        keys: Vec<String>,
+        #[serde(rename = "retainedKeys")]
+        retained_keys: Vec<String>,
+        optimistic: bool,
+    },
     Complete {
         revision: String,
         keys: Vec<String>,
@@ -991,6 +1006,45 @@ impl CacheEngine {
             .map_err(err_js)?;
             let result = match outcome {
                 SoupFilterCompileOutcome::Unsupported => JsEntityFilterResult::Unsupported,
+                SoupFilterCompileOutcome::Supported(query) if request.baseline.is_some() => {
+                    let baseline = request.baseline.unwrap();
+                    if baseline.len()
+                        > cache_core::predicate::reconciliation::MAX_RECONCILIATION_BASELINE
+                    {
+                        return Err(err_js("reconciliation baseline is too large"));
+                    }
+                    let baseline = baseline
+                        .into_iter()
+                        .map(|entry| {
+                            soup_filter_cache_adapter::reconciliation_baseline_entry(
+                                entry.key,
+                                &entry.sort_timestamp,
+                            )
+                        })
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(err_js)?;
+                    let result = state
+                        .engine_mut()?
+                        .reconcile_predicate_index(&query, &baseline)
+                        .await;
+                    let result = state.engine_result(result)?;
+                    JsEntityFilterResult::Reconciled {
+                        revision: result.revision.to_string(),
+                        keys: result
+                            .value
+                            .keys
+                            .into_iter()
+                            .map(|key| key.as_str().to_owned())
+                            .collect(),
+                        retained_keys: result
+                            .value
+                            .retained_keys
+                            .into_iter()
+                            .map(|key| key.as_str().to_owned())
+                            .collect(),
+                        optimistic: result.value.optimistic,
+                    }
+                }
                 SoupFilterCompileOutcome::Supported(query) => {
                     let result = state.engine_mut()?.query_predicate_index(&query).await;
                     let result = state.engine_result(result)?;

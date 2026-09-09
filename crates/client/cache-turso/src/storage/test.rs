@@ -21,6 +21,23 @@ fn record(value: &str) -> Record {
     record
 }
 
+fn quick_access_document(name: &str, timestamp: u64) -> Record {
+    let mut document = Record::default();
+    document.fields.insert(
+        "__typename".into(),
+        cache_core::value::CacheValue::String("GraphqlSoupDocument".into()),
+    );
+    document.fields.insert(
+        "name".into(),
+        cache_core::value::CacheValue::String(name.into()),
+    );
+    document.fields.insert(
+        "updatedAt".into(),
+        cache_core::value::CacheValue::Number(cache_core::value::CacheNumber::PosInt(timestamp)),
+    );
+    document
+}
+
 fn queued(label: &str) -> NewQueuedMutation {
     NewQueuedMutation {
         uuid: uuid::Uuid::new_v4(),
@@ -156,22 +173,10 @@ async fn expect_every_storage_method_latched(
 }
 
 #[test]
-fn search_projection_is_write_through_and_recent_query_uses_projection_index() {
+fn search_projection_is_write_through_and_queries_use_projection_indexes() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("search-projection").unwrap();
-        let mut document = Record::default();
-        document.fields.insert(
-            "__typename".into(),
-            cache_core::value::CacheValue::String("GraphqlSoupDocument".into()),
-        );
-        document.fields.insert(
-            "name".into(),
-            cache_core::value::CacheValue::String("Quarterly Plan".into()),
-        );
-        document.fields.insert(
-            "updatedAt".into(),
-            cache_core::value::CacheValue::Number(cache_core::value::CacheNumber::PosInt(123)),
-        );
+        let document = quick_access_document("Quarterly Plan", 123);
         storage
             .put_batch(vec![
                 (key("GraphqlSoupDocument:d1"), document.clone()),
@@ -248,12 +253,107 @@ fn search_projection_is_write_through_and_recent_query_uses_projection_index() {
         );
         assert!(!details.contains("records"));
 
+        let rowid_plan = driver::query(
+            &storage.connection(),
+            &format!("EXPLAIN QUERY PLAN {SEARCH_ROWID}"),
+            vec![
+                text(SearchProfile::QuickAccessV1.as_str()),
+                text("GraphqlSoupDocument"),
+                text("d1"),
+            ],
+        )
+        .unwrap();
+        let rowid_details = rowid_plan
+            .iter()
+            .filter_map(|row| required_text(row, 3).ok())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            rowid_details.contains("sqlite_autoindex_search_documents_1")
+                && rowid_details.contains("profile=? AND __typename=? AND id=?"),
+            "rowid lookup did not use the complete primary-key index: {rowid_details}"
+        );
+        assert!(
+            !rowid_details.contains("SCAN search_documents"),
+            "rowid lookup scanned the projection table: {rowid_details}"
+        );
+
+        raw_execute(
+            &storage,
+            SEARCH_UPSERT,
+            vec![
+                text("future-profile"),
+                text("GraphqlSoupDocument"),
+                text("d1"),
+                text("document"),
+                text("future profile row"),
+                Value::from_i64(123),
+                text("future-profile-hash"),
+            ],
+        );
         storage
             .delete_batch(&[key("GraphqlSoupDocument:d2")])
             .await
             .unwrap();
         storage
             .put_batch(vec![(key("GraphqlSoupDocument:d1"), record("internal"))])
+            .await
+            .unwrap();
+        assert!(
+            storage
+                .load_search_documents(SearchProfile::QuickAccessV1)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            raw_scalar(
+                &storage,
+                "SELECT COUNT(*) FROM search_documents WHERE profile = 'future-profile' AND __typename = 'GraphqlSoupDocument' AND id = 'd1'",
+            ),
+            1
+        );
+    });
+}
+
+#[test]
+fn search_projection_batches_large_writes_and_keeps_the_last_duplicate() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("search-projection-batches").unwrap();
+        let record_count = SEARCH_WRITE_BATCH_SIZE + 2;
+        let mut entries = (0..record_count)
+            .map(|index| {
+                (
+                    key(&format!("GraphqlSoupDocument:d{index}")),
+                    quick_access_document(&format!("Document {index}"), index as u64),
+                )
+            })
+            .collect::<Vec<_>>();
+        entries.push((key("GraphqlSoupDocument:d0"), record("internal")));
+
+        storage.put_batch(entries).await.unwrap();
+        let loaded = storage
+            .load_search_documents(SearchProfile::QuickAccessV1)
+            .await
+            .unwrap();
+        assert_eq!(loaded.len(), record_count - 1);
+        assert!(
+            loaded
+                .iter()
+                .all(|document| document.record_key.as_ref() != "GraphqlSoupDocument:d0")
+        );
+
+        storage
+            .put_batch(
+                (1..record_count)
+                    .map(|index| {
+                        (
+                            key(&format!("GraphqlSoupDocument:d{index}")),
+                            record("internal"),
+                        )
+                    })
+                    .collect(),
+            )
             .await
             .unwrap();
         assert!(

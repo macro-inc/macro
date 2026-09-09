@@ -1,9 +1,9 @@
 use super::LexicalClient;
 use crate::types::{CognitionResponseData, CognitionV2ResponseData};
 
+use crate::types::MarkdownParseResult;
 use agent_fold::domain::model::MessageId;
 use anyhow::{Context, Result};
-use models_search::document::MarkdownParseResult;
 use serde::de::DeserializeOwned;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -32,6 +32,20 @@ struct MarkdownResponse {
 #[derive(Debug, serde::Serialize)]
 struct MentionsRequest<'a> {
     markdown: &'a str,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct HtmlRequest<'a> {
+    markdown: &'a str,
+}
+
+/// An email body rendered from markdown: the two parts a MIME message carries.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RenderedBody {
+    /// The HTML body, exported the way the draft composer exports it.
+    pub html: String,
+    /// The plain-text alternative.
+    pub text: String,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -312,6 +326,24 @@ impl LexicalClient {
 
         let bytes = response.bytes().await?;
         Ok(bytes.to_vec())
+    }
+
+    /// Renders `markdown` to an email-ready HTML body via the lexical
+    /// service, so a caller with no browser composer — the `SendEmail` tool,
+    /// whose body the model writes as markdown — produces the same HTML the
+    /// composer would have exported.
+    #[tracing::instrument(skip(self, markdown), err)]
+    pub async fn markdown_to_html(&self, markdown: &str) -> Result<RenderedBody> {
+        let url = format!("{}/html", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&HtmlRequest { markdown })
+                .send()
+                .await?,
+        )
+        .await?;
+        response.json().await.context("unexpected response")
     }
 
     /// Parses `markdown` via the lexical service and returns the entity

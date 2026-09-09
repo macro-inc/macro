@@ -29,6 +29,10 @@ export interface SoupEmailThreadPreview {
   isImportant: boolean;
   /** Whether the thread has been read. */
   isRead: boolean;
+  /** The denormalized `email_threads.is_signal` importance classification —
+the same flag the soup Importance filter evaluates, distinct from
+`is_important` (Gmail's IMPORTANT label). */
+  isSignal: boolean;
   /** Thread display name or subject. */
   name?: SoupEmailThreadPreviewName;
   /** Owner user id. */

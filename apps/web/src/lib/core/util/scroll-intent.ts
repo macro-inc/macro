@@ -4,6 +4,7 @@ import type { JSX } from 'solid-js';
  *  300 ms gives async virtualizer scrolls (e.g. from hotkey-driven `scrollToId`)
  *  enough time to fire, even on slower devices or busy main threads. */
 const INTERACTION_TIMEOUT_MS = 300;
+const TOUCH_DRAG_THRESHOLD_PX = 6;
 
 export type ScrollDirection = 'up' | 'down';
 
@@ -29,6 +30,9 @@ type ScrollIntentHandlers = {
   onPointerDown: JSX.EventHandlerUnion<HTMLElement, PointerEvent>;
   onPointerUp: JSX.EventHandlerUnion<HTMLElement, PointerEvent>;
   onPointerCancel: JSX.EventHandlerUnion<HTMLElement, PointerEvent>;
+  onTouchMove: JSX.EventHandlerUnion<HTMLElement, TouchEvent>;
+  onTouchEnd: JSX.EventHandlerUnion<HTMLElement, TouchEvent>;
+  onTouchCancel: JSX.EventHandlerUnion<HTMLElement, TouchEvent>;
   onWheel: JSX.EventHandlerUnion<HTMLElement, WheelEvent>;
   onKeyDown: JSX.EventHandlerUnion<HTMLElement, KeyboardEvent>;
 };
@@ -41,7 +45,8 @@ const SCROLL_DOWN_KEYS = new Set(['ArrowDown', 'PageDown', 'End', ' ']);
  * events from programmatic / virtualizer-driven ones.
  *
  * User interaction is detected via:
- * - `pointerdown` / `pointerup` — covers scrollbar drag and touch drag
+ * - Pointer events — covers scrollbar drag
+ * - Touch movement — covers finger drag without treating taps as navigation
  * - `wheel` — covers mouse wheel / trackpad
  * - `keydown` — covers native browser keyboard scrolling (Arrow, Page, Home/End, Space)
  * - `markUserIntent()` — for external callers (e.g. hotkey-driven `scrollToId`)
@@ -61,14 +66,18 @@ const SCROLL_DOWN_KEYS = new Set(['ArrowDown', 'PageDown', 'End', ' ']);
  * }
  * ```
  */
-export function createScrollIntentTracker(): ScrollIntentTracker {
+export function createScrollIntentTracker(
+  onUserIntent?: () => void
+): ScrollIntentTracker {
   let isPointerDown = false;
+  let touchY: number | undefined;
   let activeUntil = 0;
   let direction: ScrollDirection | undefined;
 
   const markUserIntent = (dir: ScrollDirection) => {
     direction = dir;
     activeUntil = Math.max(activeUntil, Date.now() + INTERACTION_TIMEOUT_MS);
+    onUserIntent?.();
   };
 
   const isUserInteracting = (now = Date.now()) =>
@@ -78,6 +87,7 @@ export function createScrollIntentTracker(): ScrollIntentTracker {
     isUserInteracting(now) ? direction : undefined;
 
   const endPointer = () => {
+    touchY = undefined;
     if (!isPointerDown) return;
     isPointerDown = false;
     activeUntil = Math.max(activeUntil, Date.now() + INTERACTION_TIMEOUT_MS);
@@ -85,9 +95,9 @@ export function createScrollIntentTracker(): ScrollIntentTracker {
 
   const handlers: ScrollIntentHandlers = {
     onPointerDown: (event) => {
-      // Touch interactions always indicate scroll intent (finger drag)
       if (event.pointerType === 'touch') {
         isPointerDown = true;
+        touchY = event.clientY;
         return;
       }
       // For mouse/pen, only track scrollbar drags. Scrollbar clicks
@@ -97,10 +107,24 @@ export function createScrollIntentTracker(): ScrollIntentTracker {
       // interactions within the scroll container.
       if (event.target === event.currentTarget) {
         isPointerDown = true;
+        onUserIntent?.();
       }
     },
     onPointerUp: endPointer,
-    onPointerCancel: endPointer,
+    onPointerCancel: (event) => {
+      // Native touch scrolling cancels pointer events before the drag ends.
+      if (event.pointerType !== 'touch') endPointer();
+    },
+    onTouchMove: (event) => {
+      const touch = event.touches[0];
+      if (touchY === undefined || !touch) return;
+      const delta = touchY - touch.clientY;
+      if (Math.abs(delta) < TOUCH_DRAG_THRESHOLD_PX) return;
+      touchY = touch.clientY;
+      markUserIntent(delta > 0 ? 'down' : 'up');
+    },
+    onTouchEnd: endPointer,
+    onTouchCancel: endPointer,
     onWheel: (event) => {
       if (event.deltaY === 0) return;
       markUserIntent(event.deltaY > 0 ? 'down' : 'up');

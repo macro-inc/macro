@@ -115,12 +115,50 @@ export type Agent = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp: AgentMcpServers;
 };
 
 /**
  * Whether an agent is available everywhere or only in selected channels.
  */
 export type AgentChannelScope = 'all' | 'selected';
+
+/**
+ * One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+ *
+ * Only the catalog identity is stored. Whether a given person has connected
+ * the app is theirs, resolved at call time by the egress proxy, never here.
+ */
+export type AgentMcpServer = {
+    /**
+     * Pipedream app slug, e.g. `linear`.
+     */
+    app_slug: string;
+    /**
+     * Display name, e.g. `Linear`.
+     */
+    server_name: string;
+};
+
+/**
+ * Which Pipedream MCP servers an agent's sessions are handed.
+ *
+ * One value for the whole choice, so a selection can never travel without
+ * its scope or a scope without its selection. Serialized with a `scope` tag,
+ * which the generated TypeScript sees as a discriminated union.
+ */
+export type AgentMcpServers = {
+    scope: 'owner_connections';
+} | {
+    scope: 'selected';
+    /**
+     * The apps, in the order the agent's author picked them.
+     */
+    servers: Array<AgentMcpServer>;
+};
 
 export type Anchor = PdfAnchor;
 
@@ -1285,6 +1323,9 @@ export type CalendarAttendee = {
 
 /**
  * A stable, first-class Macro calendar event entity.
+ *
+ * Content fields hold the canonical source's values: the account's primary
+ * calendar copy when one is synced, else the freshest remaining copy.
  */
 export type CalendarEvent = {
     /**
@@ -1335,7 +1376,7 @@ export type CalendarEvent = {
      */
     id: string;
     /**
-     * Whether the current user can edit the canonical source.
+     * Whether the canonical source's calendar prohibits editing it.
      */
     isReadOnly: boolean;
     /**
@@ -1368,6 +1409,13 @@ export type CalendarEvent = {
      * Provider/iCalendar sequence number.
      */
     sequence: number;
+    /**
+     * Content of every active copy of this event, canonical first: the
+     * primary calendar's copy, then the freshest. A client picks the copy
+     * whose calendar it is showing and falls back to the first. Populated
+     * only on the read path, so stored projections omit it.
+     */
+    sources?: Array<CalendarEventSourceContent>;
     /**
      * Event status.
      */
@@ -1422,6 +1470,62 @@ export type CalendarEventFilters = {
      * Event statuses such as `confirmed`, `tentative`, or `cancelled`.
      */
     statuses?: Array<string>;
+};
+
+/**
+ * The content one provider copy of an event carries.
+ *
+ * Google keeps these fields per calendar copy: a shared calendar's copy of a
+ * member's event can have its own title, type, reminders, and access role.
+ * The entity holds its canonical source's values. Every other copy's values
+ * are read from here so a client can show the copy that belongs to the
+ * calendar being viewed.
+ */
+export type CalendarEventSourceContent = {
+    /**
+     * Calendar this copy lives on.
+     */
+    calendarId: string;
+    /**
+     * Provider-reported creator email.
+     */
+    creatorEmail?: string | null;
+    /**
+     * Provider-reported creator display name.
+     */
+    creatorName?: string | null;
+    /**
+     * Optional event body.
+     */
+    description?: string | null;
+    /**
+     * Provider event type.
+     */
+    eventType: EventType;
+    /**
+     * Whether the calendar's access role prohibits editing this copy.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional physical or virtual location label.
+     */
+    location?: string | null;
+    /**
+     * Reminder configuration of this copy.
+     */
+    reminders: EventReminders;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability behavior.
+     */
+    transparency: EventTransparency;
+    /**
+     * Event visibility.
+     */
+    visibility: EventVisibility;
 };
 
 /**
@@ -1905,6 +2009,7 @@ export type ChannelCreatedMetadata = {
      * Type of channel that was created.
      */
     channel_type: ChannelType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * Active participants after creation (including the owner).
      */
@@ -2784,6 +2889,10 @@ export type CreateAgentRequest = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp?: AgentMcpServers;
     /**
      * Display name.
      */
@@ -3760,6 +3869,48 @@ export type CrmDomainResponse = {
 export type CrmPermissionRole = 'admin' | 'owner';
 
 /**
+ * One stage in a `PUT /crm/stages` body.
+ */
+export type CrmStageInput = {
+    /**
+     * Existing stage to keep; omit to add one.
+     */
+    id?: string | null;
+    /**
+     * Label after the update; non-blank and unique within the set.
+     */
+    label: string;
+};
+
+/**
+ * One stage of the team's custom pipeline.
+ */
+export type CrmStageResponse = {
+    /**
+     * Property option id companies carry as their stage value.
+     */
+    id: string;
+    /**
+     * Label.
+     */
+    label: string;
+};
+
+/**
+ * The team's custom stage set.
+ */
+export type CrmStagesResponse = {
+    /**
+     * Team-scoped stage definition id.
+     */
+    definition_id: string;
+    /**
+     * Stages in pipeline order.
+     */
+    stages: Array<CrmStageResponse>;
+};
+
+/**
  * The team's CRM configuration (everything on `team_crm_settings`
  * except the `crm_enabled` killswitch, which is managed via
  * `PATCH /team/crm` on the auth service).
@@ -3782,6 +3933,12 @@ export type CrmTeamSettingsResponse = {
      * Who can change the deal stage set in CRM settings.
      */
     edit_stages_role: CrmPermissionRole;
+    /**
+     * System stage option id to team stage option id for seeded stages.
+     */
+    legacy_stage_ids: {
+        [key: string]: string;
+    };
     /**
      * Who can move deals out of a closed stage.
      */
@@ -4063,11 +4220,18 @@ export type DocumentCreatedMetadata = {
  * Metadata for [`DocumentTopicEvent::Deleted`].
  */
 export type DocumentDeletedMetadata = {
+    /**
+     * Who mechanically deleted the document. Absent on events published
+     * before attribution, and on user-receipt writes (ingest then uses
+     * [`Self::actor_user_id`]).
+     */
+    actor?: string | null;
     actor_user_id?: null | MacroUserIdStr;
     /**
      * The id of the deleted document.
      */
     document_id: string;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * Project the document belonged to, when any.
      */
@@ -4515,6 +4679,12 @@ export type DocumentTopicEvent = {
  * Metadata for [`DocumentTopicEvent::Updated`].
  */
 export type DocumentUpdatedMetadata = {
+    /**
+     * Who mechanically updated the document. Absent on events published
+     * before attribution, and on user-receipt writes (ingest then uses
+     * [`Self::actor_user_id`]).
+     */
+    actor?: string | null;
     actor_user_id?: null | MacroUserIdStr;
     /**
      * The id of the updated document.
@@ -4525,6 +4695,7 @@ export type DocumentUpdatedMetadata = {
      */
     document_name?: string | null;
     file_type?: null | FileTypeUpdate;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * The owner of the document.
      */
@@ -6990,6 +7161,16 @@ export type ReorderPinRequest = {
 };
 
 /**
+ * Request body for `PUT /crm/stages`: the whole stage set in order.
+ */
+export type ReplaceCrmStagesRequest = {
+    /**
+     * Stages first to last.
+     */
+    stages: Array<CrmStageInput>;
+};
+
+/**
  * The ownership scope a daemon's config asks for.
  *
  * Advisory, not binding: the approving user confirms it in the dialog, which
@@ -7862,6 +8043,12 @@ export type SoupEmailThreadPreview = {
      */
     isRead: boolean;
     /**
+     * The denormalized `email_threads.is_signal` importance classification —
+     * the same flag the soup Importance filter evaluates, distinct from
+     * `is_important` (Gmail's IMPORTANT label).
+     */
+    isSignal: boolean;
+    /**
      * Thread display name or subject.
      */
     name?: string | null;
@@ -8655,6 +8842,10 @@ export type UpdateAgentRequest = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp?: AgentMcpServers;
     /**
      * Display name.
      */
@@ -11436,6 +11627,49 @@ export type PutCrmTeamSettingsResponses = {
 };
 
 export type PutCrmTeamSettingsResponse = PutCrmTeamSettingsResponses[keyof PutCrmTeamSettingsResponses];
+
+export type ResetCrmTeamStagesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/stages';
+};
+
+export type ResetCrmTeamStagesErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ResetCrmTeamStagesError = ResetCrmTeamStagesErrors[keyof ResetCrmTeamStagesErrors];
+
+export type ResetCrmTeamStagesResponses = {
+    204: void;
+};
+
+export type ResetCrmTeamStagesResponse = ResetCrmTeamStagesResponses[keyof ResetCrmTeamStagesResponses];
+
+export type PutCrmTeamStagesData = {
+    body: ReplaceCrmStagesRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/stages';
+};
+
+export type PutCrmTeamStagesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutCrmTeamStagesError = PutCrmTeamStagesErrors[keyof PutCrmTeamStagesErrors];
+
+export type PutCrmTeamStagesResponses = {
+    200: CrmStagesResponse;
+};
+
+export type PutCrmTeamStagesResponse = PutCrmTeamStagesResponses[keyof PutCrmTeamStagesResponses];
 
 export type GetUserDocumentsHandlerData = {
     body?: never;

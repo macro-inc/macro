@@ -14,6 +14,7 @@ import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
 import { ActionLine, Thought } from '../ui';
 import { ControlPart } from './parts/ControlPart';
+import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
 import { TextPart } from './parts/TextPart';
@@ -50,6 +51,7 @@ function AgentMessagePart(props: {
     .with({ kind: 'permission' }, (part) => <PermissionPart part={part} />)
     .with({ kind: 'plan' }, (part) => <PlanPart part={part} />)
     .with({ kind: 'control' }, (part) => <ControlPart part={part} />)
+    .with({ kind: 'elicitation' }, (part) => <ElicitationPart part={part} />)
     .exhaustive();
 }
 
@@ -61,7 +63,8 @@ function AgentMessagePart(props: {
 function UserMessage(props: { message: FoldedMessage }) {
   return (
     <div class="flex w-full">
-      <div class="relative ml-auto max-w-[calc(100%-8rem)] overflow-hidden rounded-lg border border-edge-muted bg-hover px-3 py-2 text-ink">
+      {/* Phone: a full-width card. Desktop: hugs the text, right-aligned. */}
+      <div class="relative w-full overflow-hidden rounded-lg border border-edge-muted bg-hover px-3 py-2 text-ink md:ml-auto md:w-auto md:max-w-[calc(100%-8rem)]">
         <For each={props.message.parts}>
           {(part, index) => (
             <AgentMessagePart

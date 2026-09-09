@@ -2,9 +2,9 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
 
 import { localE2ESeed } from './fixtures/local-e2e-seed';
 import {
-  fillEditable,
   gotoApp,
   LOCAL_E2E,
+  sendChannelMessage,
   uniqueE2EText,
 } from './helpers/local-app';
 
@@ -72,26 +72,6 @@ async function openSeededChannel(
   });
 }
 
-async function sendChannelMessage(
-  page: Page,
-  channelId: string,
-  text: string
-): Promise<Locator> {
-  const input = page.locator(`[data-input-id="channel-input-${channelId}"]`);
-  await fillEditable(input.locator('[contenteditable="true"]').first(), text);
-  await clickSend(input);
-
-  const message = messageByText(page, text);
-  await expect(message).toBeVisible({ timeout: 30_000 });
-  return message;
-}
-
-async function clickSend(input: Locator) {
-  const sendButton = input.locator('[data-input-action="send"]');
-  await expect(sendButton).toBeEnabled({ timeout: 10_000 });
-  await sendButton.click();
-}
-
 async function reactToMessage(message: Locator, emoji: string) {
   await message.hover();
   const reaction = message.locator(
@@ -106,8 +86,4 @@ async function openReplyInput(message: Locator) {
   const reply = message.locator('[data-message-action="reply"]');
   await expect(reply).toBeVisible({ timeout: 10_000 });
   await reply.click();
-}
-
-function messageByText(page: Page, text: string) {
-  return page.locator('[data-message]').filter({ hasText: text }).last();
 }

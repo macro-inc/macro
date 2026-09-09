@@ -15,7 +15,8 @@ use crate::domain::ports::{CalendarMutationService, CalendarOccurrenceService};
 #[serde(rename_all = "camelCase")]
 pub struct ToolCalendar {
     /// Calendar id; pass as `calendarId` to CreateCalendarEvent to target
-    /// this calendar.
+    /// this calendar. Not a mentionable entity: never put it in a mention
+    /// tag — only individual calendar events can be mentioned.
     pub calendar_id: uuid::Uuid,
     /// Provider display name.
     pub name: String,

@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use agent_session::domain::connection::RuntimeAttachment;
-use agent_session::domain::model::{AgentSessionId, ReplicaAddress, SandboxSize};
+use agent_session::domain::model::{AgentMcpServers, AgentSessionId, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
 use harness_id::HarnessId;
@@ -19,22 +19,23 @@ use super::model::{
 };
 use super::sandbox::SandboxResizeEffect;
 
-/// Delivers a session's command to the replica that manages its live actor.
-///
-/// The receiving side executes without re-resolving management (a forward is
-/// single-hop by contract, so two replicas with momentarily different views
-/// cannot bounce a command between each other). Success means the peer ran
-/// the command to completion - the response is the acknowledgment - so a
-/// caller that awaited a forward has the same guarantee as one that executed
-/// locally.
+/// The distributed destination for a forwarded command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandTarget {
+    /// The replica that owns the session actor.
+    Replica(agent_session::domain::model::ReplicaId),
+    /// The replica holding a registered harness's runtime socket.
+    Harness(HarnessId),
+}
+
+/// Forwards commands to the replica currently responsible for execution.
 pub trait CommandForwarder: Send + Sync + 'static {
-    /// Run `command` for `session` on the replica at `target`, reporting
-    /// what that replica's execution did with it.
+    /// Run `command` at `target`.
     fn forward(
         &self,
-        target: &ReplicaAddress,
         session: AgentSessionId,
         command: HarnessCommand,
+        target: CommandTarget,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send;
 }
 
@@ -47,13 +48,11 @@ pub struct NoPeers;
 impl CommandForwarder for NoPeers {
     async fn forward(
         &self,
-        target: &ReplicaAddress,
         session: AgentSessionId,
         _command: HarnessCommand,
+        _target: CommandTarget,
     ) -> Result<CommandOutcome> {
-        Err(HarnessError::Forward(rootcause::report!(
-            "this deployment has no command forwarding, yet {target} manages session {session}"
-        )))
+        Err(HarnessError::Disconnected(session))
     }
 }
 
@@ -170,6 +169,9 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         &self,
         bot: BotId,
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
+
+    /// Whether this process currently holds `harness`'s physical runtime socket.
+    fn is_connected(&self, harness: HarnessId) -> bool;
 }
 
 /// Mints the one secret a sandbox is given, and the config that points it at
@@ -182,23 +184,30 @@ pub trait RuntimeConnections: Send + Sync + 'static {
 pub trait SandboxEgressProvisioner: Send + Sync + 'static {
     /// The egress environment for one session, on behalf of `owner`, and the
     /// hash its session row must carry for that environment to mean anything.
+    ///
+    /// `selection` is the session's MCP policy: under
+    /// [`AgentMcpServers::OwnerConnections`] the owner's enabled apps are
+    /// advertised; under [`AgentMcpServers::Selected`] exactly the listed
+    /// apps are, connected or not.
     fn provision(
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
         repo_url: &str,
+        selection: &AgentMcpServers,
     ) -> impl Future<Output = Result<ProvisionedEgress>> + Send;
 
     /// The egress environment rebuilt around a token that already exists.
     ///
     /// For reattaching to a sandbox that was spawned earlier: the sandbox
     /// still holds its raw token (the row holds only the hash), so nothing is
-    /// minted - but the owner's connected servers are listed fresh, so an app
+    /// minted - but the servers are listed fresh, so an app the owner
     /// connected since the spawn is advertised on the next attach.
     fn restore(
         &self,
         owner: &MacroUserIdStr<'static>,
         session_token: String,
+        selection: &AgentMcpServers,
     ) -> impl Future<Output = Result<SandboxEgress>> + Send;
 }
 
@@ -211,7 +220,9 @@ pub trait ContainerManager: Send + Sync + 'static {
     fn spawn(
         &self,
         command: SpawnContainer,
-    ) -> impl Future<Output = Result<Self::Transport>> + Send;
+    ) -> impl Future<
+        Output = Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>>,
+    > + Send;
 
     /// How this manager applies a change from `from` to `to`.
     ///
@@ -236,7 +247,9 @@ pub trait ContainerManager: Send + Sync + 'static {
     fn resume(
         &self,
         session: AgentSessionId,
-    ) -> impl Future<Output = Result<Self::Transport>> + Send;
+    ) -> impl Future<
+        Output = Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>>,
+    > + Send;
 
     /// The raw egress session token the session's container holds, if this
     /// provider's containers hold one.

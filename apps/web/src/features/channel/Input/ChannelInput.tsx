@@ -210,6 +210,7 @@ export function ChannelInput(props: ChannelInputProps) {
   const isCollapsed = () => !!props.collapsible && collapsedInput.isCollapsed();
 
   let isEditorConnected = false;
+  let acceptTyping = false;
   let pendingRestore:
     | {
         snapshot: InputSnapshot;
@@ -225,11 +226,15 @@ export function ChannelInput(props: ChannelInputProps) {
     snapshot: InputSnapshot,
     options?: RestoreSnapshotOptions
   ) => {
+    acceptTyping = false;
     markdownEditor.controls.setMarkdown(snapshot.value);
     pendingCursor = options?.cursor;
     attachmentTracker.setAttachments(snapshot.attachments);
     mentionsTracker.setMentions(snapshot.mentions);
     if (options?.focus !== false) focusEditorNow();
+    queueMicrotask(() => {
+      acceptTyping = true;
+    });
   };
 
   const flushPendingRestore = () => {
@@ -313,7 +318,10 @@ export function ChannelInput(props: ChannelInputProps) {
       mentionsTracker.onMentionRemove(mention);
     },
     onChange: (markdown) => {
+      const previous = inputState.view().value ?? '';
       inputState.setValue(markdown);
+      if (!acceptTyping) return;
+      if (markdown.trim() === previous.trim()) return;
       typingTracker.keystroke();
     },
     onEnter: () => {
@@ -484,6 +492,9 @@ export function ChannelInput(props: ChannelInputProps) {
                   isEditorConnected = true;
                   flushPendingRestore();
                   flushPendingFocus();
+                  queueMicrotask(() => {
+                    acceptTyping = true;
+                  });
                 }}
               />
               <DragInsertIndicator

@@ -10,7 +10,7 @@ use entity_mutation::{
 };
 use graphql_common::GraphqlEntityType;
 use graphql_permission::GraphqlEntityAccessLevel;
-use graphql_soup::{SoupEntityEdges, SoupPatch};
+use graphql_soup::{SoupEntityEdges, SoupItemDataLoader, SoupPatch};
 use model_entity::Entity;
 use models_permissions::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
@@ -358,15 +358,23 @@ impl<E: SoupEntityEdges> GraphqlMutationSuccess<E> {
     /// Ordered normalized-cache effects produced by the mutation.
     async fn effects(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<SoupPatch<E>>> {
         let user_id = mutation_actor(ctx)?.user_id;
-        self.effects
-            .iter()
-            .map(|effect| match effect {
-                EntityMutationEffect::Updated(entity) => {
-                    Ok(SoupPatch::updated(user_id.clone(), entity.clone()))
+        let loader = ctx.data_opt::<SoupItemDataLoader>();
+        let patches =
+            async_graphql::futures_util::future::try_join_all(self.effects.iter().map(|effect| {
+                let user_id = user_id.clone();
+                async move {
+                    match effect {
+                        EntityMutationEffect::Updated(entity) => {
+                            SoupPatch::hydrate_updated(user_id, entity.clone(), loader).await
+                        }
+                        EntityMutationEffect::Deleted(entity) => {
+                            SoupPatch::deleted(entity.clone()).map(Some)
+                        }
+                    }
                 }
-                EntityMutationEffect::Deleted(entity) => SoupPatch::deleted(entity.clone()),
-            })
-            .collect()
+            }))
+            .await?;
+        Ok(patches.into_iter().flatten().collect())
     }
 }
 
@@ -411,6 +419,19 @@ pub enum GraphqlEntityMutationResult<E: SoupEntityEdges> {
 }
 
 impl<E: SoupEntityEdges> GraphqlEntityMutationResult<E> {
+    /// Construct a successful result that refreshes one entity's Soup record.
+    pub fn from_updated_entity(entity: Entity<'static>) -> Self {
+        Self::Success(GraphqlMutationSuccess {
+            effects: vec![EntityMutationEffect::updated(entity)],
+            edges: PhantomData,
+        })
+    }
+
+    /// Construct a failed result from a domain-classified error.
+    pub fn from_error_code(error: EntityMutationErrorCode) -> Self {
+        Self::Error(GraphqlMutationError(error))
+    }
+
     /// Convert a borrowed domain mutation outcome into its GraphQL union variant.
     fn new(x: Result<&EntityMutationSuccess, &EntityMutationErrorCode>) -> Self {
         match x {
@@ -419,17 +440,6 @@ impl<E: SoupEntityEdges> GraphqlEntityMutationResult<E> {
                 edges: PhantomData,
             }),
             Err(error) => Self::Error(GraphqlMutationError(*error)),
-        }
-    }
-
-    /// Convert an owned domain mutation outcome into its GraphQL union variant.
-    fn new_owned(x: MutateEntitiesResult) -> Self {
-        match x {
-            Ok(result) => Self::Success(GraphqlMutationSuccess {
-                effects: result.effects,
-                edges: PhantomData,
-            }),
-            Err(error) => Self::Error(GraphqlMutationError(error)),
         }
     }
 }
@@ -634,19 +644,5 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                 )
                 .await,
         ))
-    }
-
-    /// Add or remove an entity from the actor's favorites.
-    async fn set_entity_favorite(
-        &self,
-        ctx: &Context<'_>,
-        entity: EntityRefInput,
-        favorite: bool,
-    ) -> async_graphql::Result<GraphqlEntityMutationResult<E>> {
-        let res = mutation_service::<S>(ctx)?
-            .set_favorite(mutation_actor(ctx)?, entity.into_model(), favorite)
-            .await;
-
-        Ok(GraphqlEntityMutationResult::new_owned(res))
     }
 }

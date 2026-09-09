@@ -3,14 +3,15 @@ use super::*;
 #[test]
 fn local_binaries_are_unique_and_complete() {
     let bins = local_binaries();
-    // 16 distinct binaries (the bundled set, including the local-only
+    // 17 distinct binaries (the bundled set, including scheduled_action, the local-only
     // search_processing_service, agent harness, mcp_service, and the seed_cli
     // shipped for the gmail_forwarder sidecar).
-    assert_eq!(bins.len(), 16, "{bins:?}");
+    assert_eq!(bins.len(), 17, "{bins:?}");
     assert!(bins.contains(&"pubsub_workers"));
     assert!(bins.contains(&"seed_cli"));
     assert!(bins.contains(&"document_upload_finalizer_local_worker"));
     assert!(bins.contains(&"search_processing_service"));
+    assert!(bins.contains(&"service"));
     assert!(bins.contains(&"agent_harness_service"));
     assert!(bins.contains(&"mcp_service"));
     let mut sorted = bins.clone();
@@ -55,5 +56,15 @@ fn dev_mode_excludes_workers_and_optin() {
         .collect();
     assert!(!dev.contains(&"email_pubsub_workers"));
     assert!(!dev.contains(&"search_processing_service"));
+    assert!(!dev.contains(&"scheduled_action_service"));
     assert!(dev.contains(&"authentication-service"));
+}
+
+#[test]
+fn scheduled_action_is_local_only() {
+    let svc = RUST_SERVICES
+        .iter()
+        .find(|s| s.compose_name == "scheduled_action_service")
+        .unwrap();
+    assert_eq!(svc.modes, &[Mode::Local]);
 }

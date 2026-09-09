@@ -7,6 +7,7 @@
 
 import type { EventReminderOverride } from './eventReminderOverride';
 import type { VisibleCalendarColor } from './visibleCalendarColor';
+import type { VisibleCalendarSyncError } from './visibleCalendarSyncError';
 
 /**
  * A calendar visible to a requester, listed for pickers and filters.
@@ -24,8 +25,15 @@ export interface VisibleCalendar {
   id: string;
   /** Whether this is its account's primary calendar. */
   isPrimary: boolean;
+  /** Whether this is one of Google's shared system calendars (holidays,
+birthdays) the account subscribes to rather than one a person maintains. */
+  isSubscription: boolean;
   /** Whether the grant can create and modify events on this calendar. */
   isWritable: boolean;
   /** Provider display name. */
   name: string;
+  /** A persistent sync failure isolated to this calendar, surfaced so the
+settings row can badge it. `None` while the calendar is syncing
+normally or a failure has not yet crossed the persistence threshold. */
+  syncError?: VisibleCalendarSyncError;
 }

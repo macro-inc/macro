@@ -12,6 +12,7 @@ import {
   isValidCacheSearchQuery,
   isValidNormalizedRecordKey,
   isWorkerMessage,
+  MAX_RECONCILIATION_BASELINE,
   MAX_RECORD_SELECTION_PAGE_SIZE,
   type WorkerMessage,
 } from '../protocol';
@@ -127,6 +128,11 @@ export type CoordinatorToTabEnvelope =
   | {
       coordinatorVersion: 2;
       kind: 'protocol-error';
+      error: string;
+    }
+  | {
+      coordinatorVersion: 2;
+      kind: 'terminal-error';
       error: string;
     };
 
@@ -552,13 +558,25 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'sortMethod',
           'sortDirection',
           'limit',
+          'baseline',
         ]) &&
         isRecord(request.filters) &&
         ['CREATED_AT', 'UPDATED_AT', 'VIEWED_AT', 'VIEWED_UPDATED'].includes(
           request.sortMethod as string
         ) &&
         (request.sortDirection === 'ASC' || request.sortDirection === 'DESC') &&
-        isValidCacheSearchLimit(request.limit)
+        isValidCacheSearchLimit(request.limit) &&
+        (request.baseline === undefined ||
+          (Array.isArray(request.baseline) &&
+            request.baseline.length <= MAX_RECONCILIATION_BASELINE &&
+            request.baseline.every(
+              (entry) =>
+                isRecord(entry) &&
+                hasOnlyKeys(entry, ['key', 'sortTimestamp']) &&
+                isValidNormalizedRecordKey(entry.key) &&
+                typeof entry.sortTimestamp === 'string' &&
+                entry.sortTimestamp.length <= 64
+            )))
       );
     }
     case 'inspect-query':
@@ -797,6 +815,7 @@ export function validateCoordinatorToTabEnvelope(
       }
       break;
     case 'protocol-error':
+    case 'terminal-error':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'error']) &&
         isNonEmptyString(value.error)

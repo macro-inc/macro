@@ -64,8 +64,11 @@ fn task_property_update_maps_to_property_changed_on_the_document() {
     let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
         panic!("expected activities");
     };
-    // Tasks are documents in the soup vocabulary.
+    // Tasks are documents in the soup vocabulary. A user-only
+    // `actor_user_id` (main's TaskPropertiesAdapter receipt) is Direct(user):
+    // the feed renders "You" for that owner.
     assert_eq!(activities[0].entity_type, ActivityEntityType::Document);
+    assert_eq!(activities[0].actor.as_ref(), "macro|seamus@example.com");
     assert_eq!(activities[0].subject_id, "macro|seamus@example.com");
     match &activities[0].action {
         Action::PropertyChanged(change) => {

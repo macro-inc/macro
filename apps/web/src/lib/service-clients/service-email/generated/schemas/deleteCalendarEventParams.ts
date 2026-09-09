@@ -8,6 +8,11 @@ import type { CalendarDeletionScopeParam } from './calendarDeletionScopeParam';
 
 export type DeleteCalendarEventParams = {
   /**
+ * Calendar whose copy of the event is deleted, for an event synced from
+more than one calendar. Omit to delete the canonical copy.
+ */
+  calendarId?: string;
+  /**
    * Deletion scope; defaults to the entire event or series.
    */
   scope?: CalendarDeletionScopeParam;

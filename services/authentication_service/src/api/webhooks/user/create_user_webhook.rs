@@ -24,7 +24,7 @@ use crate::{
 use authentication_service::service::user::create_user::create_user;
 use authentication_service::service::user::support_channel_welcome::post_support_channel_welcome;
 use channels::domain::{
-    models::{ChannelType, CreateChannelRequest, Sender},
+    models::{ChannelType, CreateChannelRequest},
     ports::ChannelService,
 };
 use favorites::domain::ports::FavoritesService;
@@ -38,7 +38,13 @@ use model_entity::EntityType;
 use teams::domain::team_repo::TeamService;
 
 /// Macro support team members added to every new user's support channel.
-const MACRO_SUPPORT_EMAILS: [&str; 3] = ["jacob@macro.com", "julia@macro.com", "teo@macro.com"];
+const MACRO_SUPPORT_EMAILS: [&str; 5] = [
+    "jacob@macro.com",
+    "julia@macro.com",
+    "teo@macro.com",
+    "valentina@macro.com",
+    "chaitanya@macro.com",
+];
 
 fn support_channel_name<T: AsRef<str>>(email: &Email<T>) -> String {
     format!("Macro Support x {}", email.local_part())
@@ -441,9 +447,8 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
             };
 
             let channel = match channel_service
-                .create_channel(
-                    Sender::new_from_user(owner_id.clone()),
-                    None,
+                .create_system_channel(
+                    owner_id.clone(),
                     CreateChannelRequest {
                         name: Some(support_channel_name),
                         channel_type: ChannelType::Private,

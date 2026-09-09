@@ -89,7 +89,6 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
   serviceContainerPort: 8101,
   egressContainerPort: 8102,
   healthCheckPath: '/health',
-  isPrivate: false,
   ecsClusterArn: cloudStorageClusterArn,
   cloudStorageClusterName,
   secretKeyArns: [

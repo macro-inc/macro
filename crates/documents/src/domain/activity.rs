@@ -13,6 +13,21 @@ use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use super::events::DocumentTopicEvent;
+use macro_user_id::user_id::MacroUserIdStr;
+
+/// Attribution for `updated` / `deleted` events. Bot receipts publish `actor`;
+/// user receipts (and events from before attribution) only `actor_user_id`.
+/// `None` when neither is set, e.g. internal callers.
+fn mutation_attribution(
+    actor: &Option<Actor<'static>>,
+    actor_user_id: &Option<MacroUserIdStr<'static>>,
+    on_behalf_of: &Option<MacroUserIdStr<'static>>,
+) -> Option<Attribution> {
+    let actor = actor
+        .clone()
+        .or_else(|| actor_user_id.clone().map(Actor::new_from_user))?;
+    Some(Attribution::new(actor, on_behalf_of.clone()))
+}
 
 impl ActivitySource for DocumentTopicEvent {
     /// Maps one `macro.documents` event to its ingest outcome.
@@ -48,24 +63,36 @@ impl ActivitySource for DocumentTopicEvent {
                     metadata.created_at.unwrap_or_else(|| event_time(event_id)),
                 )
             }
-            DocumentTopicEvent::Updated(metadata) => match &metadata.actor_user_id {
-                Some(actor) => single(
-                    Attribution::direct(Actor::new_from_user(actor.clone())),
-                    CommonAction::Edited,
-                    &metadata.document_id,
-                    event_time(event_id),
-                ),
-                None => Ingest::Ignore,
-            },
-            DocumentTopicEvent::Deleted(metadata) => match &metadata.actor_user_id {
-                Some(actor) => single(
-                    Attribution::direct(Actor::new_from_user(actor.clone())),
-                    CommonAction::Deleted,
-                    &metadata.document_id,
-                    event_time(event_id),
-                ),
-                None => Ingest::Ignore,
-            },
+            DocumentTopicEvent::Updated(metadata) => {
+                match mutation_attribution(
+                    &metadata.actor,
+                    &metadata.actor_user_id,
+                    &metadata.on_behalf_of,
+                ) {
+                    Some(attribution) => single(
+                        attribution,
+                        CommonAction::Edited,
+                        &metadata.document_id,
+                        event_time(event_id),
+                    ),
+                    None => Ingest::Ignore,
+                }
+            }
+            DocumentTopicEvent::Deleted(metadata) => {
+                match mutation_attribution(
+                    &metadata.actor,
+                    &metadata.actor_user_id,
+                    &metadata.on_behalf_of,
+                ) {
+                    Some(attribution) => single(
+                        attribution,
+                        CommonAction::Deleted,
+                        &metadata.document_id,
+                        event_time(event_id),
+                    ),
+                    None => Ingest::Ignore,
+                }
+            }
             // The copy is a new document; its creation is the activity.
             DocumentTopicEvent::Copied(metadata) => single(
                 Attribution::direct(Actor::new_from_user(metadata.owner.clone())),

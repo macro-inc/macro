@@ -27,30 +27,30 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
   dev: {
     'agent-harness': 'https://dev-gateway.macro.com/agent-harness',
     storage: 'https://dev-gateway.macro.com/dss',
-    auth: 'https://auth-service-dev.macro.com',
-    email: 'https://email-service-dev.macro.com',
-    cognition: 'https://document-cognition-dev.macro.com',
+    auth: 'https://dev-gateway.macro.com/auth',
+    email: 'https://dev-gateway.macro.com/email',
+    cognition: 'https://dev-gateway.macro.com/cognition',
     notification: 'https://dev-gateway.macro.com/notification',
     properties: 'https://dev-gateway.macro.com/dss',
     search: 'https://dev-gateway.macro.com/dss',
-    'scheduled-action': 'https://agent-schedule-dev.macro.com',
+    'scheduled-action': 'https://dev-gateway.macro.com/scheduled-action',
     'static-files': 'https://static-file-service-dev.macro.com',
-    connection: 'https://connection-gateway-dev.macro.com',
+    connection: 'https://dev-gateway.macro.com/connection-gateway',
     contacts: 'https://dev-gateway.macro.com/contacts',
     unfurl: 'https://dev-gateway.macro.com/unfurl',
   },
   prod: {
     'agent-harness': 'https://gateway.macro.com/agent-harness',
     storage: 'https://gateway.macro.com/dss',
-    auth: 'https://auth-service.macro.com',
-    email: 'https://email-service.macro.com',
-    cognition: 'https://document-cognition.macro.com',
+    auth: 'https://gateway.macro.com/auth',
+    email: 'https://gateway.macro.com/email',
+    cognition: 'https://gateway.macro.com/cognition',
     notification: 'https://gateway.macro.com/notification',
     properties: 'https://gateway.macro.com/dss',
     search: 'https://gateway.macro.com/dss',
-    'scheduled-action': 'https://agent-schedule.macro.com',
+    'scheduled-action': 'https://gateway.macro.com/scheduled-action',
     'static-files': 'https://static-file-service.macro.com',
-    connection: 'https://connection-gateway.macro.com',
+    connection: 'https://gateway.macro.com/connection-gateway',
     contacts: 'https://gateway.macro.com/contacts',
     unfurl: 'https://gateway.macro.com/unfurl',
   },
@@ -63,7 +63,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     notification: 'http://localhost:8089',
     properties: 'http://localhost:8086',
     search: 'http://localhost:8086',
-    'scheduled-action': 'http://localhost:8098',
+    'scheduled-action': 'http://localhost:8099',
     'static-files': 'http://localhost:8100',
     connection: 'http://localhost:8082',
     contacts: 'http://localhost:8083',
@@ -71,8 +71,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
   },
 };
 
-/** A bearer token, or a (possibly async) function that returns one — the
- * function form lets you refresh tokens without reconfiguring. */
+/** A credential string, or a (possibly async) function that returns one. */
 export type TokenSource = string | (() => string | Promise<string>);
 
 /** Access scope for bot-authenticated requests. `user` acts with the
@@ -80,24 +79,34 @@ export type TokenSource = string | (() => string | Promise<string>);
  * bot's owning team's access (team-owned bots only). */
 export type BotScope = 'user' | 'team';
 
-/** How the SDK authenticates with Macro.
+/**
+ * How the SDK authenticates with Macro.
  *
- * - `user`: a human's Macro API token, sent as `Authorization: Bearer`.
- * - `bot`: an `mbot_` API key, sent as `x-macro-bot-token` together with
- *   `x-macro-bot-scope`. When `scope` is omitted it defaults to `user` when
- *   `requestedAs` is set (user scope requires an acting user) and `team`
- *   otherwise.
+ * A user has exactly one of two credential fields.
+ *
+ * - `token`: a bearer token, or a `mak_` API key. The SDK picks the header
+ *   from the prefix at send time.
+ * - `apiKey`: a Settings → API Keys key, always sent as
+ *   `x-macro-user-api-key`. Not prefix-checked, so keys that predate the
+ *   `mak_` prefix work here.
+ *
+ * A bot uses an `mbot_` token as `x-macro-bot-token` plus
+ * `x-macro-bot-scope`, defaulting to `user` when `requestedAs` is set and
+ * `team` otherwise.
  */
 export type MacroAuth =
-  | { type: 'user'; token: TokenSource }
+  | { type: 'user'; token: TokenSource; apiKey?: never }
+  | { type: 'user'; apiKey: string; token?: never }
   | { type: 'bot'; token: TokenSource; scope?: BotScope };
 
 /** Options passed to `new Macro(opts)` and stored on `MacroClient`. */
 export interface MacroOpts {
-  /** How to authenticate. Takes precedence over `token`. Falls back to the
-   * MACRO_API_KEY (user auth) or MACRO_BOT_TOKEN (bot auth) env var. */
+  /** How to authenticate. Takes precedence over `token`. Falls back to
+   * `MACRO_API_KEY` (a user API key or bearer token) or `MACRO_BOT_TOKEN`
+   * (bot). */
   auth?: MacroAuth;
-  /** Shorthand for `auth: { type: 'user', token }`. */
+  /** Shorthand for `auth: { type: 'user', token }`. Accepts a Settings API
+   * key (`mak_…`) or a bearer token. */
   token?: TokenSource;
   /** Which Macro environment to talk to. Falls back to the MACRO_ENV env
    * var, then `'dev'`. */

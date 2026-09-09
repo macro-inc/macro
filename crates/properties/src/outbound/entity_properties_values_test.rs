@@ -579,3 +579,96 @@ async fn get_property_options_batch(pool: Pool<Postgres>) -> anyhow::Result<()> 
 
     Ok(())
 }
+
+/// Definition ids returned for company1 for the given ids and viewer.
+async fn company1_definition_ids(
+    pool: &Pool<Postgres>,
+    property_ids: &[Uuid],
+    viewer: Option<&macro_user_id::user_id::MacroUserIdStr<'_>>,
+) -> anyhow::Result<Vec<Uuid>> {
+    let entity_refs = vec![EntityReference {
+        entity_id: "company1".to_string(),
+        entity_type: EntityType::Company,
+        specific_message_id: None,
+    }];
+    let map = entity_properties_get_query::get_bulk_entity_properties_values_filtered(
+        pool,
+        &entity_refs,
+        property_ids,
+        viewer,
+    )
+    .await?;
+    let mut ids: Vec<Uuid> = map["company1"].iter().map(|p| p.definition.id).collect();
+    ids.sort();
+    Ok(ids)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties", "team_stage"))
+)]
+async fn get_bulk_filtered_includes_viewer_team_deal_stage(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team1_stage = Uuid::parse_str("dd111111-1111-1111-1111-111111111111")?;
+    let team2_stage = Uuid::parse_str("dd222222-2222-2222-2222-222222222222")?;
+    let team1_region = Uuid::parse_str("dd333333-3333-3333-3333-333333333333")?;
+    let customer_option = Uuid::parse_str("0dd11111-1111-1111-1111-111111111112")?;
+    let user1 =
+        macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap();
+    let user2 =
+        macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user2@test.com").unwrap();
+    let user3 =
+        macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user3@test.com").unwrap();
+
+    // Each viewer sees only their own team's Deal Stage.
+    assert_eq!(
+        company1_definition_ids(&pool, &[], Some(&user1)).await?,
+        vec![team1_stage]
+    );
+    assert_eq!(
+        company1_definition_ids(&pool, &[], Some(&user3)).await?,
+        vec![team1_stage]
+    );
+    assert_eq!(
+        company1_definition_ids(&pool, &[], Some(&user2)).await?,
+        vec![team2_stage]
+    );
+
+    // Options come with it.
+    let entity_refs = vec![EntityReference {
+        entity_id: "company1".to_string(),
+        entity_type: EntityType::Company,
+        specific_message_id: None,
+    }];
+    let map = entity_properties_get_query::get_bulk_entity_properties_values_filtered(
+        &pool,
+        &entity_refs,
+        &[],
+        Some(&user1),
+    )
+    .await?;
+    let stage = &map["company1"][0];
+    assert_eq!(stage.definition.display_name, "Deal Stage");
+    assert!(
+        stage
+            .options
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .any(|option| option.id == customer_option)
+    );
+
+    // Requested ids still come back too.
+    let mut expected = vec![team1_stage, team1_region];
+    expected.sort();
+    assert_eq!(
+        company1_definition_ids(&pool, &[team1_region], Some(&user1)).await?,
+        expected
+    );
+
+    // No viewer, nothing extra.
+    assert!(company1_definition_ids(&pool, &[], None).await?.is_empty());
+
+    Ok(())
+}

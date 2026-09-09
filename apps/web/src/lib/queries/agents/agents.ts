@@ -5,6 +5,7 @@ import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { AgentChannelScope } from '@service-storage/generated/schemas/agentChannelScope';
+import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { agentKeys } from './keys';
 
@@ -26,6 +27,8 @@ export type CreateAgentParams = {
   harnessId?: string;
   name: string;
   instructions: string;
+  /** Which Pipedream MCP servers the agent's sessions are handed. */
+  mcp: AgentMcpServers;
   teamId?: string;
 };
 
@@ -76,6 +79,7 @@ export function useCreateAgentMutation() {
           harness_id: vars.harnessId,
           name: vars.name,
           instructions: vars.instructions,
+          mcp: vars.mcp,
           team_id: vars.teamId,
         })
       ),
@@ -107,6 +111,7 @@ export function useUpdateAgentMutation() {
           harness_id: vars.harnessId,
           name: vars.name,
           instructions: vars.instructions,
+          mcp: vars.mcp,
           team_id: vars.teamId,
         })
       ),

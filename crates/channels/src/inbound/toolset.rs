@@ -20,6 +20,7 @@ use crate::{
     },
 };
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
+use bot_id::BotId;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, AdminParticipantRole, EntityAccessReceipt, EntityType,
@@ -47,6 +48,9 @@ where
     pub service: Arc<Svc>,
     /// Entity access service used to ensure the caller is a channel member.
     pub entity_access_service: Arc<AccessSvc>,
+    /// The bot these tools act as, on behalf of the requesting user. Defaults
+    /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
+    pub actor: BotId,
 }
 
 impl<Svc, AccessSvc> Clone for ChannelToolContext<Svc, AccessSvc>
@@ -58,6 +62,7 @@ where
         Self {
             service: self.service.clone(),
             entity_access_service: self.entity_access_service.clone(),
+            actor: self.actor,
         }
     }
 }
@@ -72,7 +77,14 @@ where
         Self {
             service: Arc::new(service),
             entity_access_service: Arc::new(entity_access_service),
+            actor: bot_id::MACRO_AI_BOT_ID,
         }
+    }
+
+    /// Set the bot these tools act as.
+    pub fn with_actor(mut self, actor: BotId) -> Self {
+        self.actor = actor;
+        self
     }
 
     /// Require that the request user is an active member of the channel before reading it.

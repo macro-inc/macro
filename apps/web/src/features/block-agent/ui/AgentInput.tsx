@@ -10,9 +10,19 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
+import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
+import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
 import { Button, SendButton, Surface } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+
+/**
+ * Id of the agent input's text-area wrapper. Exposed so callers (e.g. the
+ * mobile Create menu) can arm focus on the contenteditable before it mounts.
+ */
+export const AGENT_INPUT_TEXT_AREA_ID = 'agent-input-text-area';
 
 /** Quote text into the composer as a referenced paste chip. */
 export type QuoteInsert = (text: string) => void;
@@ -21,6 +31,11 @@ export interface AgentInputProps {
   placeholder?: string;
   /** The agent is working: the send button becomes a stop square. */
   busy?: boolean;
+  /**
+   * A waiting action can be advanced by ending the current turn. While the
+   * input is empty, Enter and the matching button do exactly that.
+   */
+  hasQueuedMessages?: boolean;
   disabled?: boolean;
   autofocus?: boolean;
   /**
@@ -31,7 +46,7 @@ export interface AgentInputProps {
   /** Receives the composed markdown, including any `<m-document-mention>` tags. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
-  /** Sits as a pill above the input box, e.g. the session's model selector. */
+  /** Model control: a pill above the box on desktop, footer-left on touch. */
   modelControl?: JSX.Element;
   /**
    * Ref-style: receives the quote-insert function once the editor mounts
@@ -51,19 +66,21 @@ export interface AgentInputProps {
   registerFocus?: (focus: (() => void) | undefined) => void;
 }
 
-/** Past this height the controls drop below the text instead of overlaying it. */
+/** Past this height a phone draft is scroll-capped so it cannot eat the dock. */
 const SINGLE_LINE_HEIGHT = 40;
 
 export function AgentInput(props: AgentInputProps) {
   const [markdown, setMarkdown] = createSignal('');
+  let containerRef: HTMLDivElement | undefined;
   let bodyRef: HTMLDivElement | undefined;
+  useTouchOutsideToDismissKeyboard(() => containerRef);
 
   // Sending while busy is allowed — the service queues prompts behind the
   // running turn.
   const canSend = () => markdown().trim().length > 0 && !props.disabled;
 
-  // Same content-driven switch as ChatInput: once the editor body wraps past
-  // one line, the send button stops overlaying the text and sits below it.
+  // Caps tall drafts on a phone so the editor cannot eat the viewport
+  // above the dock. Controls live in a footer row, not over the text.
   const isMultiline = () => {
     if (markdown().trim().length === 0) return false;
     if (!bodyRef) return false;
@@ -75,6 +92,20 @@ export function AgentInput(props: AgentInputProps) {
     const content = markdown().trim();
     editor.controls.clear();
     props.onSend(content);
+  };
+
+  const canSendNext = () =>
+    markdown().trim().length === 0 &&
+    props.busy &&
+    props.hasQueuedMessages &&
+    !props.disabled &&
+    props.onStop !== undefined;
+
+  const sendNext = () => {
+    if (!canSendNext()) return;
+    // Stop bypasses the server queue. The cancelled turn ending immediately
+    // dispatches its oldest waiting action, so the queue remains FIFO.
+    props.onStop?.();
   };
 
   const editor = buildConfig('chat')
@@ -90,7 +121,8 @@ export function AgentInput(props: AgentInputProps) {
     .withRestoreFocus()
     .withAgentCommands({ commands: () => props.commands?.() ?? [] })
     .onEnter(() => {
-      send();
+      if (canSend()) send();
+      else sendNext();
       return true;
     })
     .onFocusLeave({
@@ -117,29 +149,52 @@ export function AgentInput(props: AgentInputProps) {
     onCleanup(() => props.registerQuoteInsert?.(undefined));
   });
 
+  // MarkdownShell only focuses on click when !isMobile(), so padding taps
+  // on a phone miss the empty contenteditable. Focus from this gesture
+  // (channel EditorShell / chat surface) so the whole box is tappable,
+  // including on touch — pointerdown stays inside the user gesture that
+  // iOS needs to raise the keyboard.
+  const focusEditor = (event: Event) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button')) return;
+    editor.controls.focus();
+  };
+
   return (
-    <div class="flex flex-col gap-1.5">
-      {/* Above the surface rather than inside it: the pill belongs to the
-          composer, not to the outlined field, so it must not eat into the
-          editor's frame or sit within its border. */}
-      <Show when={props.modelControl}>
+    <div ref={containerRef} data-keep-keyboard class="flex flex-col gap-1.5">
+      {/* Desktop: the model pill sits above the box, as it always has. */}
+      <Show when={!isTouchDevice() && props.modelControl}>
         <div class="flex items-center px-0.5">{props.modelControl}</div>
       </Show>
-      <Surface class="rounded-xl bg-menu-glass glass-input" depth={2} solid>
-        <div class="relative px-2 py-1.5">
+      {/* h-auto beats Surface's size-full so the in-flow controls are not
+          clipped over the editor (that was Auto sitting on the placeholder). */}
+      <Surface
+        class="rounded-xl touch:rounded-2xl h-auto bg-menu-glass glass-input"
+        depth={2}
+        solid
+      >
+        {/* Desktop: one row, send right of the text. Touch: the text gets
+            the whole width and the controls drop to a footer row (model
+            left, send right) — the chat-tall / channel footer shape. */}
+        <div
+          class="flex items-end gap-1 px-2 py-1.5 touch:flex-col touch:items-stretch touch:gap-1.5 touch:px-3 touch:pt-2.5 touch:pb-2"
+          onPointerDown={focusEditor}
+        >
           {/* No vertical padding of its own: the shell is min-h-8 and editor
             paragraphs carry my-1.5, so the row's py-1.5 is the whole frame —
             the same 44px single-line height as ChatInput. */}
           <div
+            id={AGENT_INPUT_TEXT_AREA_ID}
             ref={bodyRef}
-            class="pl-1 text-sm text-ink"
+            class="min-w-0 flex-1 pl-1 text-sm text-ink touch:pl-0 touch:text-base"
             classList={{
-              'pr-10': !isMultiline(),
-              'pb-8': isMultiline(),
               // While empty only the placeholder renders; keep it to one clipped
               // line so it doesn't wrap into the single-line height.
               'overflow-hidden whitespace-nowrap':
                 markdown().trim().length === 0,
+              // Long drafts must not eat the mobile viewport above the dock.
+              'max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto':
+                isMultiline() && isMobile(),
             }}
           >
             <MarkdownShell
@@ -147,31 +202,51 @@ export function AgentInput(props: AgentInputProps) {
               placeholder={
                 props.placeholder ?? 'Message the agent, @mention anything'
               }
-              autofocus={props.autofocus}
+              autofocus={!isMobile() && !isTouchDevice() && props.autofocus}
             />
           </div>
 
-          <div class="absolute right-1.5 bottom-1.5">
-            <Show
-              when={props.busy && props.onStop}
-              fallback={
-                <SendButton
-                  tooltip="Send"
-                  disabled={!canSend()}
-                  onClick={send}
-                />
-              }
-            >
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                label="Stop"
-                onClick={() => props.onStop?.()}
-                class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
-              >
-                <div class="size-3.5 rounded-sm bg-current" />
-              </Button>
+          {/* In-flow — never absolute over the text. */}
+          <div class="flex shrink-0 items-center gap-1 pb-0.5 touch:pb-0">
+            <Show when={isTouchDevice() && props.modelControl}>
+              <div class="min-w-0">{props.modelControl}</div>
             </Show>
+            <div class="ml-auto shrink-0">
+              <Show
+                when={props.busy && props.onStop}
+                fallback={
+                  <SendButton
+                    tooltip="Send"
+                    disabled={!canSend()}
+                    onClick={send}
+                  />
+                }
+              >
+                <Show
+                  when={canSendNext()}
+                  fallback={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      label="Stop"
+                      onClick={() => props.onStop?.()}
+                      class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
+                    >
+                      <div class="size-3.5 rounded-sm bg-current" />
+                    </Button>
+                  }
+                >
+                  <SendButton
+                    aria-label="Send next queued message"
+                    tooltip="Send next queued message"
+                    shortcut="Enter"
+                    onClick={sendNext}
+                  >
+                    <EnterIcon />
+                  </SendButton>
+                </Show>
+              </Show>
+            </div>
           </div>
         </div>
       </Surface>

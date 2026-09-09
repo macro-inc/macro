@@ -1,0 +1,190 @@
+import { createRoot } from 'solid-js';
+import { afterEach, describe, expect, it } from 'vitest';
+import { entryHead } from '../core/collapse-runs';
+import { createdEvent, editedEvent } from '../queries/fixtures';
+import { createMockActivityContext } from '../tests/mock-context';
+import { feedPage, overviewPage } from '../tests/wire';
+import { createMyActivityState, type MyActivityState } from './my-activity';
+
+const disposals: Array<() => void> = [];
+afterEach(() => {
+  for (const dispose of disposals.splice(0)) dispose();
+});
+
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+function setup() {
+  const context = createMockActivityContext();
+  let state!: MyActivityState;
+  const dispose = createRoot((rootDispose) => {
+    state = createMyActivityState(context);
+    return rootDispose;
+  });
+  disposals.push(dispose);
+  return { context, state, graphql: context.graphqlMock };
+}
+
+describe('createMyActivityState', () => {
+  it('starts loading and issues both queries', () => {
+    const { state, graphql } = setup();
+
+    expect(state.feed().t).toBe('loading');
+    expect(state.overview().t).toBe('loading');
+    expect(graphql.pending.map((op) => op.name).sort()).toEqual([
+      'MyActivity',
+      'MyActivityOverview',
+    ]);
+    expect(graphql.latest('MyActivity').variables).toEqual({
+      input: { limit: 50, cursor: null },
+    });
+    expect(graphql.latest('MyActivityOverview').variables).toEqual({
+      input: { timeZone: expect.any(String) },
+    });
+  });
+
+  it('groups a page into a ready feed and exposes the next cursor', () => {
+    const { state, graphql } = setup();
+
+    graphql.latest('MyActivity').resolve(feedPage([createdEvent], 'c2'));
+
+    const feed = state.feed();
+    expect(feed.t).toBe('ready');
+    if (feed.t !== 'ready') return;
+    expect(feed.hasMore).toBe(true);
+    expect(feed.loadingMore).toBe(false);
+    expect(
+      feed.groups.flatMap((g) => g.entries.map((e) => entryHead(e).id))
+    ).toEqual(['evt-1']);
+  });
+
+  it('appends the next page on loadMore', () => {
+    const { state, graphql } = setup();
+    graphql.latest('MyActivity').resolve(feedPage([createdEvent], 'c2'));
+
+    state.loadMore();
+    const next = graphql.latest('MyActivity');
+    expect(next.variables).toEqual({ input: { limit: 50, cursor: 'c2' } });
+    next.resolve(feedPage([editedEvent], null));
+
+    const feed = state.feed();
+    if (feed.t !== 'ready') throw new Error(feed.t);
+    expect(
+      feed.groups.flatMap((g) => g.entries.map((e) => entryHead(e).id))
+    ).toEqual(['evt-1', 'evt-2']);
+    expect(feed.hasMore).toBe(false);
+  });
+
+  it('exposes the overview as row zero and the flattened feed after it', () => {
+    const { state, graphql } = setup();
+    expect(state.rows().map((row) => row.kind)).toEqual(['overview', 'status']);
+
+    graphql.latest('MyActivity').resolve(feedPage([createdEvent], 'c2'));
+    const ready = state.rows();
+    expect(ready.map((row) => row.kind)).toEqual([
+      'overview',
+      'day',
+      'entry',
+      'tail',
+    ]);
+
+    state.loadMore();
+    // The in-flight flag flips but the mounted rows keep their identity.
+    expect(state.rows()[1]).toBe(ready[1]);
+    expect(state.rows()[2]).toBe(ready[2]);
+
+    graphql.latest('MyActivity').resolve(feedPage([editedEvent], null));
+    expect(state.rows().map((row) => row.kind)).toEqual([
+      'overview',
+      'day',
+      'entry',
+      'entry',
+    ]);
+    // The same day grew, so the first entry now draws a rail below it and
+    // is a new row; the header keeps its identity.
+    expect(state.rows()[1]).toBe(ready[1]);
+    expect(state.rows()[2]).not.toBe(ready[2]);
+    expect(state.rows()[2]).toEqual(
+      expect.objectContaining({ rail: { above: false, below: true } })
+    );
+  });
+
+  it('ignores loadMore while a page is in flight or none remain', () => {
+    const { state, graphql } = setup();
+    graphql.latest('MyActivity').resolve(feedPage([createdEvent], 'c2'));
+    const requests = () =>
+      graphql.pending.filter((op) => op.name === 'MyActivity').length;
+
+    state.loadMore();
+    state.loadMore();
+    expect(requests()).toBe(2);
+
+    graphql.latest('MyActivity').resolve(feedPage([editedEvent], null));
+    state.loadMore();
+    expect(requests()).toBe(2);
+  });
+
+  it('stops auto-paging after a failed page until retryMore', async () => {
+    const { state, graphql } = setup();
+    graphql.latest('MyActivity').resolve(feedPage([createdEvent], 'c2'));
+    const requests = () =>
+      graphql.pending.filter((op) => op.name === 'MyActivity').length;
+
+    state.loadMore();
+    expect(requests()).toBe(2);
+    graphql.latest('MyActivity').fail('boom');
+    // The page observer settles its failure a few microtasks after the result.
+    await settle();
+
+    const feed = state.feed();
+    expect(feed.t).toBe('ready');
+    if (feed.t !== 'ready') return;
+    expect(feed.moreFailed).toBe(true);
+    expect(feed.loadingMore).toBe(false);
+    expect(feed.hasMore).toBe(true);
+
+    // The near-end check keeps firing while the user rests at the bottom;
+    // none of those turn into another request.
+    state.loadMore();
+    state.loadMore();
+    expect(requests()).toBe(2);
+
+    state.retryMore();
+    await settle();
+    expect(requests()).toBe(3);
+    expect(graphql.latest('MyActivity').variables).toEqual({
+      input: { limit: 50, cursor: 'c2' },
+    });
+
+    graphql.latest('MyActivity').resolve(feedPage([editedEvent], null));
+    const after = state.feed();
+    if (after.t !== 'ready') throw new Error('feed should stay ready');
+    expect(after.moreFailed).toBe(false);
+    expect(after.hasMore).toBe(false);
+    expect(after.groups.flatMap((g) => g.entries)).toHaveLength(2);
+  });
+
+  it('is empty when the first page has no rows', () => {
+    const { state, graphql } = setup();
+    graphql.latest('MyActivity').resolve(feedPage([]));
+    expect(state.feed()).toEqual({ t: 'empty' });
+  });
+
+  it('reports an error when the feed fails before any data', () => {
+    const { state, graphql } = setup();
+    graphql.latest('MyActivity').fail('boom');
+    expect(state.feed()).toEqual({ t: 'error' });
+  });
+
+  it('decodes the overview and keeps it over a later error', () => {
+    const { state, graphql } = setup();
+    const op = graphql.latest('MyActivityOverview');
+
+    op.fail('boom');
+    expect(state.overview()).toEqual({ t: 'error' });
+
+    op.resolve(overviewPage({ total: 3 }));
+    const overview = state.overview();
+    if (overview.t !== 'ready') throw new Error(overview.t);
+    expect(overview.overview.total).toBe(3);
+  });
+});

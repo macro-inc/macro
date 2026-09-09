@@ -353,12 +353,39 @@ fn mcp_public_url_uses_the_proxy_cognition_route() {
 /// matching `credential.<url>.helper`, so the compose service name would leave
 /// the scoped helper silently unfired.
 #[test]
-fn the_egress_base_url_is_the_hyphenated_in_network_alias() {
+fn the_egress_url_override_is_the_hyphenated_in_network_alias() {
     let named = Instance::derive(Some("2508"), None).unwrap();
     let named_env = LocalEnv::for_instance(Mode::Local, &named, true, None).to_env();
 
     assert_eq!(
-        named_env.get("EGRESS_BASE_URL").map(String::as_str),
+        named_env
+            .get("OVERRIDE_AGENT_HARNESS_EGRESS_URL")
+            .map(String::as_str),
         Some("http://agent-harness-service:8102")
     );
+    assert!(!named_env.contains_key("EGRESS_BASE_URL"));
+}
+
+#[test]
+fn the_mcp_service_override_is_an_in_network_base_url() {
+    let env = local_env();
+    assert_eq!(
+        env.get("OVERRIDE_MCP_SERVICE_URL").map(String::as_str),
+        Some("http://mcp-service:8080")
+    );
+    assert!(!env.contains_key("MACRO_MCP_URL"));
+}
+
+#[test]
+fn the_public_tunnel_overrides_the_egress_service_url() {
+    let instance = Instance::derive(Some("2508"), None).unwrap();
+    let url = "https://egress-test.trycloudflare.com";
+    let env = LocalEnv::for_instance(Mode::Local, &instance, true, Some(url)).to_env();
+
+    assert_eq!(
+        env.get("OVERRIDE_AGENT_HARNESS_EGRESS_URL")
+            .map(String::as_str),
+        Some(url)
+    );
+    assert!(!env.contains_key("EGRESS_BASE_URL"));
 }

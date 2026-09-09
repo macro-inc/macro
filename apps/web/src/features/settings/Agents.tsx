@@ -1,8 +1,11 @@
+import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
+import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import MacroLogo from '@icon/macro-logo.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -19,16 +22,22 @@ import {
   useUpdateAgentMutation,
 } from '@queries/agents/agents';
 import {
-  useCursorApiKeyStatusQuery,
-  useCursorModelsQuery,
-} from '@queries/auth/cursor-api-key';
+  type AgentModelTarget,
+  buildAgentModelTargets,
+  useAgentModelsQueries,
+} from '@queries/agents/models';
+import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
+import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
+import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { Avatar, Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
+import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
   SettingsCard,
@@ -56,14 +65,9 @@ type AgentSummary = {
 type ConnectedHarness = {
   id: string;
   name: string;
-  models: readonly HarnessModel[];
   kind: 'builtin' | 'macrod';
+  target: AgentModelTarget;
   connected?: boolean;
-};
-
-type HarnessModel = {
-  id: string;
-  name: string;
 };
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
@@ -71,10 +75,8 @@ type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
 const IN_MEMORY_HARNESS: ConnectedHarness = {
   id: 'in-memory',
   name: 'In-memory',
-  models: [Model.sonnet5, Model.opus5, Model.haiku45, Model.gpt56].map(
-    (model) => ({ id: model, name: MODEL_PRETTYNAME[model] })
-  ),
   kind: 'builtin',
+  target: { harness: 'in-memory' },
 };
 
 const MACRO_AGENT: AgentSummary = {
@@ -102,37 +104,44 @@ export function Agents() {
   const currentTeamQuery = useCurrentTeamQuery();
   const isTeamOwner = useIsTeamOwner();
   const cursorStatus = useCursorApiKeyStatusQuery();
-  const cursorConnected = () => cursorStatus.data?.registered ?? false;
-  const cursorModels = useCursorModelsQuery(cursorConnected);
+  const cursorConnected = () =>
+    cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const harnessesQuery = useHarnessesQuery();
-  const connectedHarnesses = (): readonly ConnectedHarness[] => [
-    IN_MEMORY_HARNESS,
-    ...(cursorConnected()
-      ? [
-          {
+  const connectedHarnesses = (): readonly ConnectedHarness[] => {
+    const harnesses = harnessesQuery.isSuccess ? harnessesQuery.data : [];
+    return buildAgentModelTargets(cursorConnected(), harnesses).map(
+      (target) => {
+        if (target.harness === 'in-memory') return IN_MEMORY_HARNESS;
+        if (target.harness === 'cursor') {
+          return {
             id: 'cursor',
             name: 'Cursor',
-            models: (cursorModels.data?.models ?? []).map((model) => ({
-              id: model.id,
-              name: model.displayName,
-            })),
-            kind: 'builtin' as const,
-          },
-        ]
-      : []),
-    ...(harnessesQuery.data ?? []).map((harness) => ({
-      id: harness.id,
-      name:
-        harness.owner.type === 'team' ? `${harness.name} · Team` : harness.name,
-      models: [],
-      kind: 'macrod' as const,
-      connected: harness.connected,
-    })),
-  ];
+            kind: 'builtin',
+            target,
+          };
+        }
+
+        const harness = harnesses.find(
+          (candidate) => candidate.id === target.harnessId
+        );
+        return {
+          id: target.harnessId ?? '',
+          name:
+            harness?.owner.type === 'team'
+              ? `${harness.name} · Team`
+              : (harness?.name ?? 'macrod'),
+          kind: 'macrod',
+          target,
+          connected: harness?.connected,
+        };
+      }
+    );
+  };
   const channelOptions = createMemo(() =>
     botAssignableChannelOptions(channelsContext.channels())
   );
-  const currentTeamId = () => currentTeamQuery.data?.team.id;
+  const currentTeamId = () =>
+    currentTeamQuery.isSuccess ? currentTeamQuery.data?.team.id : undefined;
   const canShareWithTeam = () => currentTeamId() !== undefined;
   const isAgentCreator = (agent: AgentWithHarnessId) =>
     agent.bot.created_by === currentUserId();
@@ -141,7 +150,7 @@ export function Agents() {
   const canDeleteAgent = (agent: AgentWithHarnessId) =>
     canDeleteBot(agent.bot, currentUserId(), currentTeamId(), isTeamOwner());
   const agents = createMemo(() =>
-    (agentsQuery.data ?? []).map((agent) =>
+    (agentsQuery.isSuccess ? agentsQuery.data : []).map((agent) =>
       summarizeAgent(agent, connectedHarnesses(), channelOptions())
     )
   );
@@ -246,7 +255,11 @@ export function Agents() {
               when={privateAgents().length > 0}
               fallback={
                 <p class="px-6 py-4 text-sm text-ink-muted">
-                  No private agents yet.
+                  {agentsQuery.isPending
+                    ? 'Loading agents…'
+                    : agentsQuery.isError
+                      ? 'Your agents are unavailable.'
+                      : 'No private agents yet.'}
                 </p>
               }
             >
@@ -324,9 +337,6 @@ function summarizeAgent(
 ): AgentSummary {
   const harnessKey = agent.harness_id ?? agent.harness;
   const harness = harnesses.find((option) => option.id === harnessKey);
-  const model = harness?.models.find(
-    (option) => option.id === agent.default_model
-  );
   const selectedChannelNames = channels
     .filter((channel) => agent.channel_ids.includes(channel.id))
     .map((channel) => `#${channel.name}`);
@@ -344,7 +354,8 @@ function summarizeAgent(
     avatarUrl: agent.bot.avatar_url ?? undefined,
     instructions: agent.instructions,
     harness: harness?.name ?? harnessName(harnessKey),
-    defaultModel: model?.name ?? agent.default_model,
+    defaultModel:
+      MODEL_PRETTYNAME[agent.default_model as Model] ?? agent.default_model,
     channelSummary,
     share: agent.bot.owner?.type === 'team' ? 'Team' : 'Private',
     persistedAgent: agent,
@@ -519,13 +530,75 @@ function AgentDialog(props: {
       props.connectedHarnesses[0]?.id ??
       ''
   );
+  const modelQueries = useAgentModelsQueries(() =>
+    props.connectedHarnesses.map((harness) => harness.target)
+  );
   const selectedHarness = () =>
     props.connectedHarnesses.find((harness) => harness.id === harnessId());
+  const modelQueryForHarness = (id: string) => {
+    const index = props.connectedHarnesses.findIndex(
+      (harness) => harness.id === id
+    );
+    return index >= 0 ? modelQueries[index] : undefined;
+  };
+  const modelDataForHarness = (id: string) => {
+    const query = modelQueryForHarness(id);
+    return query?.isSuccess ? query.data : undefined;
+  };
+  const preferredModelId = (id: string) => {
+    const data = modelDataForHarness(id);
+    if (data?.status === 'unsupported') return 'default';
+    if (data?.status !== 'available') return '';
+    const current = data.currentModel;
+    if (
+      current &&
+      (data.models.length === 0 ||
+        data.models.some((model) => model.id === current))
+    ) {
+      return current;
+    }
+    return data.models[0]?.id ?? '';
+  };
   const [defaultModelId, setDefaultModelId] = createSignal(
     props.agent?.default_model ?? ''
   );
   const selectedDefaultModelId = () =>
-    defaultModelId() || selectedHarness()?.models[0]?.id || '';
+    defaultModelId() || preferredModelId(harnessId());
+  const selectedModelQuery = () => modelQueryForHarness(harnessId());
+  const selectedModelData = () => modelDataForHarness(harnessId());
+  const selectedModelOptions = () => {
+    const data = selectedModelData();
+    if (data?.status !== 'available') return [];
+
+    const selected = selectedDefaultModelId();
+    const savedModel =
+      props.agent?.default_model === selected &&
+      (props.agent.harness_id ?? props.agent.harness) === harnessId();
+    if (
+      selected.length === 0 ||
+      data.models.some((model) => model.id === selected)
+    ) {
+      return data.models;
+    }
+    return [
+      ...data.models,
+      {
+        id: selected,
+        name: `${selected} (${savedModel ? 'saved, ' : ''}unavailable)`,
+        description: undefined,
+        group: undefined,
+      },
+    ];
+  };
+  const selectedCatalogOptions = () =>
+    selectedModelOptions().map((model) => ({
+      id: model.id,
+      label: model.name,
+      description: model.description ?? undefined,
+      group: model.group ?? undefined,
+    }));
+  const selectedHarnessUsesCatalog = () =>
+    isLargeModelCatalog(selectedCatalogOptions());
   const [channelMode, setChannelMode] = createSignal<ChannelMode>(
     props.agent?.channel_scope ?? 'all'
   );
@@ -535,7 +608,32 @@ function AgentDialog(props: {
   const [share, setShare] = createSignal<AgentShare>(
     props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private'
   );
+  const pipedreamMcp = usePipedreamMcpFlag();
+  const connections = usePipedreamConnectedSlugs();
+  const [mcp, setMcp] = createSignal<AgentMcpServers>(
+    props.agent?.mcp ?? { scope: 'owner_connections' }
+  );
+  const selectedMcpServers = (): AgentMcpServer[] => {
+    const current = mcp();
+    return current.scope === 'selected' ? current.servers : [];
+  };
+  // Picks survive a round trip through "Use my connected apps", so toggling
+  // the radio to compare does not throw the list away.
+  let rememberedMcpServers: AgentMcpServer[] = selectedMcpServers();
+  const setMcpScope = (scope: AgentMcpServers['scope']) => {
+    if (scope === 'selected') {
+      setMcp({ scope: 'selected', servers: rememberedMcpServers });
+    } else {
+      rememberedMcpServers = selectedMcpServers();
+      setMcp({ scope: 'owner_connections' });
+    }
+  };
+  const setSelectedMcpServers = (servers: AgentMcpServer[]) => {
+    rememberedMcpServers = servers;
+    setMcp({ scope: 'selected', servers });
+  };
   let avatarInputRef: HTMLInputElement | undefined;
+  let dialogContentRef: HTMLDivElement | undefined;
 
   const close = () => props.onClose();
 
@@ -546,11 +644,7 @@ function AgentDialog(props: {
 
   const handleHarnessChange = (id: string) => {
     setHarnessId(id);
-    const harness = props.connectedHarnesses.find((option) => option.id === id);
-    // macrod treats 'default' as "use the harness's own configured model".
-    setDefaultModelId(
-      harness?.kind === 'macrod' ? 'default' : (harness?.models[0]?.id ?? '')
-    );
+    setDefaultModelId(preferredModelId(id));
   };
 
   const handleAvatarInput = (file: File | undefined) => {
@@ -569,6 +663,7 @@ function AgentDialog(props: {
     selectedHarness() !== undefined &&
     selectedDefaultModelId().length > 0 &&
     (channelMode() === 'all' || selectedChannelIds().length > 0) &&
+    (mcp().scope === 'owner_connections' || selectedMcpServers().length > 0) &&
     (share() === 'Private' ? props.canMakePrivate : props.canShareWithTeam);
 
   const selectedTeamId = () => {
@@ -595,6 +690,9 @@ function AgentDialog(props: {
       harnessId: harness?.kind === 'macrod' ? harness.id : undefined,
       name: name().trim(),
       instructions: instructions().trim(),
+      // Always sent, flag or no flag, so an editor without the Connections
+      // section never wipes a selection somebody else made.
+      mcp: mcp(),
       teamId: selectedTeamId(),
     });
     if (saved) close();
@@ -607,6 +705,9 @@ function AgentDialog(props: {
       position="center"
       visibleScrim
       class="w-[min(720px,calc(100vw-16px))]"
+      contentRef={(element) => {
+        dialogContentRef = element;
+      }}
     >
       <Panel depth={2} class="max-h-[88vh] rounded-xl text-ink">
         <Panel.Header class="justify-between px-3">
@@ -755,40 +856,151 @@ function AgentDialog(props: {
                     Default model
                   </span>
                   <Show
-                    when={selectedHarness()?.kind === 'macrod'}
+                    when={selectedModelQuery()}
                     fallback={
-                      <select
-                        class="settings-input w-full"
-                        value={selectedDefaultModelId()}
-                        onChange={(event) =>
-                          setDefaultModelId(event.currentTarget.value)
+                      <p class="settings-input text-ink-muted">
+                        Model discovery unavailable
+                      </p>
+                    }
+                    keyed
+                  >
+                    {(query) => (
+                      <Show
+                        when={!query.isPending}
+                        fallback={
+                          <select
+                            aria-label="Default model"
+                            class="settings-input w-full"
+                            disabled
+                          >
+                            <option>Loading models…</option>
+                          </select>
                         }
                       >
-                        <For each={selectedHarness()?.models ?? []}>
-                          {(model) => (
-                            <option
-                              value={model.id}
-                              selected={model.id === selectedDefaultModelId()}
+                        <Show
+                          when={!query.isError}
+                          fallback={
+                            <div class="flex items-center gap-2">
+                              <p class="min-w-0 flex-1 text-xs text-negative">
+                                Could not load models for{' '}
+                                {selectedHarness()?.name ?? 'this harness'}.
+                              </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                aria-label={`Retry models for ${selectedHarness()?.name ?? 'this harness'}`}
+                                onClick={() => void query.refetch()}
+                              >
+                                Retry
+                              </Button>
+                            </div>
+                          }
+                        >
+                          <Show
+                            when={selectedModelData()?.status === 'available'}
+                            fallback={
+                              <p class="settings-input text-ink-muted">
+                                Model selection is unsupported by this harness.
+                              </p>
+                            }
+                          >
+                            <Show
+                              when={selectedModelOptions().length > 0}
+                              fallback={
+                                <p class="settings-input text-ink-muted">
+                                  This harness did not return any models.
+                                </p>
+                              }
                             >
-                              {model.name}
-                            </option>
-                          )}
-                        </For>
-                      </select>
-                    }
-                  >
-                    <input
-                      class="settings-input w-full"
-                      placeholder="default"
-                      value={defaultModelId()}
-                      onInput={(event) =>
-                        setDefaultModelId(event.currentTarget.value)
-                      }
-                    />
+                              <Show
+                                when={selectedHarnessUsesCatalog()}
+                                fallback={
+                                  <select
+                                    aria-label="Default model"
+                                    class="settings-input w-full"
+                                    value={selectedDefaultModelId()}
+                                    onChange={(event) =>
+                                      setDefaultModelId(
+                                        event.currentTarget.value
+                                      )
+                                    }
+                                  >
+                                    <For each={selectedModelOptions()}>
+                                      {(model) => (
+                                        <option value={model.id}>
+                                          {model.name}
+                                        </option>
+                                      )}
+                                    </For>
+                                  </select>
+                                }
+                              >
+                                <ModelCatalogPicker
+                                  value={selectedDefaultModelId()}
+                                  options={selectedCatalogOptions()}
+                                  onSelect={setDefaultModelId}
+                                  ariaLabel="Default model"
+                                  triggerClass="w-full justify-between"
+                                  contentClass="overflow-hidden"
+                                />
+                              </Show>
+                            </Show>
+                          </Show>
+                        </Show>
+                      </Show>
+                    )}
                   </Show>
                 </label>
               </div>
             </AgentFormSection>
+
+            <Show when={pipedreamMcp()}>
+              <AgentFormSection
+                title="Connections"
+                description="Which connected apps (MCP tools) this agent can use."
+              >
+                <fieldset class="flex flex-col gap-2">
+                  <legend class="sr-only">Connections</legend>
+                  <ChoiceRow
+                    name="agent-mcp-mode"
+                    value="owner_connections"
+                    checked={mcp().scope === 'owner_connections'}
+                    title="Use my connected apps"
+                    description="The agent uses whatever apps the person running it has connected."
+                    onChange={() => setMcpScope('owner_connections')}
+                  />
+                  <ChoiceRow
+                    name="agent-mcp-mode"
+                    value="selected"
+                    checked={mcp().scope === 'selected'}
+                    title="Specific apps"
+                    description="Pick apps from the catalog. Each person connects their own account."
+                    onChange={() => setMcpScope('selected')}
+                  />
+                </fieldset>
+
+                <Show when={mcp().scope === 'selected'}>
+                  <div class="mt-3 border-t border-edge-muted pt-3">
+                    <PipedreamAppPicker
+                      selected={selectedMcpServers()}
+                      onChange={setSelectedMcpServers}
+                      connectedSlugs={connections.slugs}
+                      connectionsReady={connections.ready}
+                      connectContainer={() => dialogContentRef}
+                    />
+                  </div>
+                </Show>
+
+                <Show when={share() === 'Team'}>
+                  <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
+                    Connections are personal. Teammates who use this agent
+                    connect these apps under Settings → Connections; the
+                    indicators here show only your own.
+                  </p>
+                </Show>
+              </AgentFormSection>
+            </Show>
 
             <AgentFormSection
               title="Channels"

@@ -17,7 +17,6 @@
 		"check": "tsc --noEmit --project tsconfig.check.json"
 	},
 	"dependencies": {
-		"@macro-inc/lexical-core": "workspace:*",
 		"@ai-sdk/anthropic": "^3.0.85",
 		"@ai-sdk/cerebras": "^2.0.57",
 		"@ai-sdk/google": "^3.0.83",
@@ -35,6 +34,7 @@
 		"@lexical/selection": "0.45.0",
 		"@lexical/table": "0.45.0",
 		"@lexical/utils": "0.45.0",
+		"@macro-inc/lexical-core": "workspace:*",
 		"ai": "^6.0.207",
 		"bitf": "^1.0.2",
 		"chanfana": "^3.3.0",
@@ -45,6 +45,7 @@
 		"hono": "^4.6.20",
 		"immer": "^10.0.3",
 		"lexical": "0.45.0",
+		"linkedom": "^0.18.13",
 		"loro-crdt": "catalog:",
 		"nanoid": "^5.1.5",
 		"p-queue": "^9.3.0",

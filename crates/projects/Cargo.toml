@@ -54,6 +54,7 @@ unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
 
 # Domain models (always included)
+bot_id = { path = "../bot_id" }
 entity_access = { path = "../entity_access" }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
   "outbound",

@@ -21,7 +21,9 @@ use pipedream_mcp::outbound::api::McpUpstream;
 use std::sync::Arc;
 
 use crate::domain::error::EgressError;
-use crate::domain::model::{BearerToken, McpDestination, McpServerSlug, UpstreamCall};
+use crate::domain::model::{
+    BearerToken, McpDestination, McpResolution, McpServerSlug, UpstreamCall,
+};
 use crate::domain::ports::McpCredentials;
 
 #[cfg(test)]
@@ -47,7 +49,8 @@ where
         }
     }
 
-    /// The owner's enabled connection whose `app_slug` is exactly `slug`.
+    /// The owner's enabled connection whose `app_slug` is exactly `slug`, if
+    /// they hold one.
     ///
     /// Scoped to the owner by the store call itself, and filtered to `enabled`
     /// here because the store does not: a disabled connector is one the owner
@@ -56,8 +59,9 @@ where
         &self,
         owner: &MacroUserIdStr<'static>,
         slug: &McpServerSlug,
-    ) -> Result<PipedreamConnection, EgressError> {
-        self.connections
+    ) -> Result<Option<PipedreamConnection>, EgressError> {
+        Ok(self
+            .connections
             .list(owner)
             .await
             .map_err(|error| {
@@ -71,8 +75,7 @@ where
             // stable identifier, and the display name is the user's to
             // rename. The provisioner advertises the same value, and equality
             // is the whole match - nothing is derived at either end.
-            .find(|record| record.app_slug == slug.as_str())
-            .ok_or_else(|| EgressError::UnknownServer(slug.clone()))
+            .find(|record| record.app_slug == slug.as_str()))
     }
 }
 
@@ -86,7 +89,7 @@ where
         &self,
         owner: &MacroUserIdStr<'static>,
         destination: &McpDestination,
-    ) -> Result<UpstreamCall, EgressError> {
+    ) -> Result<McpResolution, EgressError> {
         // Macro's own server is the composition root's to layer on with
         // [`crate::outbound::macro_mcp::WithMacroMcp`]; these rows can never
         // answer for it.
@@ -96,7 +99,24 @@ where
                  the composition root did not layer WithMacroMcp"
             )));
         };
-        let record = self.connection(owner, slug).await?;
+        // Pipedream addresses a call by user id and app slug alone (see
+        // `McpUpstream::upstream`), so an app the owner never connected is
+        // still addressable for them: the handshake and tool listing work,
+        // and only a call needs the grant. Reported as such, and the service
+        // decides what the session's policy makes of it.
+        let (record, connected) = match self.connection(owner, slug).await? {
+            Some(record) => (record, true),
+            None => (
+                PipedreamConnection {
+                    user_id: owner.clone(),
+                    app_slug: slug.as_str().to_owned(),
+                    server_name: slug.as_str().to_owned(),
+                    account_id: String::new(),
+                    enabled: false,
+                },
+                false,
+            ),
+        };
 
         // A dead grant is Pipedream's to notice, not ours: we hold no
         // refresh token to fail on. If the account behind this connection has
@@ -111,9 +131,12 @@ where
         // Typed at the source, but not yet vetted: `UpstreamCall`'s
         // constructor is what refuses a non-https endpoint, and it is the
         // only way to pair this URL with a credential.
-        Ok(
-            UpstreamCall::bearer(call.url, BearerToken::new(call.bearer_token))?
-                .scoped_by(call.headers),
-        )
+        let call = UpstreamCall::bearer(call.url, BearerToken::new(call.bearer_token))?
+            .scoped_by(call.headers);
+        Ok(if connected {
+            McpResolution::Connected(call)
+        } else {
+            McpResolution::Unconnected(call)
+        })
     }
 }

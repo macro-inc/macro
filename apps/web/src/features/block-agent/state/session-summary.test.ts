@@ -27,11 +27,9 @@ function edit(
   return {
     kind: 'tool_use',
     id: `edit-${diffs[0]?.path}`,
-    label: 'Edit',
+    name: { kind: 'native', name: 'Edit' },
     status: 'completed',
     detail: { kind: 'edit', diffs },
-    rawInput: null,
-    rawOutput: null,
   };
 }
 
@@ -39,11 +37,9 @@ function tool(detail: Extract<MessagePart, { kind: 'tool_use' }>['detail']) {
   return {
     kind: 'tool_use' as const,
     id: 'tool',
-    label: 'Tool',
+    name: { kind: 'native' as const, name: 'Tool' },
     status: 'completed' as const,
     detail,
-    rawInput: null,
-    rawOutput: null,
   };
 }
 
@@ -97,6 +93,35 @@ describe('changedFiles', () => {
   it('ignores non-edit tools', () => {
     const messages = [message(0, [tool({ kind: 'read', paths: ['a.ts'] })])];
     expect(changedFiles(messages)).toEqual([]);
+  });
+});
+
+describe('subagent descent', () => {
+  it("counts a subagent's edits and tool calls as the session's", () => {
+    const nested = edit([{ path: 'b.rs', oldText: 'x\n', newText: 'y\n' }]);
+    const subagent: MessagePart = {
+      kind: 'tool_use',
+      id: 'agent',
+      name: { kind: 'native', name: 'Agent' },
+      status: 'completed',
+      detail: {
+        kind: 'subagent',
+        title: 'Fix b',
+        agentType: 'general-purpose',
+        description: 'Fix b',
+        prompt: 'Fix b.rs',
+        background: false,
+        children: [nested, tool({ kind: 'read', paths: ['b.rs'] })],
+        result: null,
+      },
+    };
+    const messages = [message(0, [subagent])];
+    expect(changedFiles(messages).map((file) => file.path)).toEqual(['b.rs']);
+    const counts = Object.fromEntries(
+      activityCounts(messages).map((item) => [item.key, item.count])
+    );
+    expect(counts.edit).toBe(1);
+    expect(counts.read).toBe(1);
   });
 });
 

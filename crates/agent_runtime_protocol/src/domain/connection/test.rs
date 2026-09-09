@@ -192,3 +192,88 @@ async fn official_acp_client_and_agent_connect_directly_to_exposed_channels() {
         "the long-lived agent driver should only be stopped explicitly"
     );
 }
+
+struct ProbeHandler;
+
+impl ModelProbeHandler for ProbeHandler {
+    async fn probe(
+        &self,
+    ) -> Result<Vec<agent_client_protocol::schema::v1::SessionConfigOption>, String> {
+        Ok(Vec::new())
+    }
+}
+
+#[tokio::test]
+async fn runtime_answers_a_model_probe_with_the_agent_options() {
+    let (mut service, runtime_channel) = Channel::duplex();
+    let (_runtime, _runtime_acp) =
+        RuntimeConnection::connect_with_model_probe_handler(runtime_channel, ProbeHandler);
+
+    service
+        .tx
+        .send(ToRuntimeMessage::ModelProbeRequest)
+        .expect("request should send");
+    let response = timeout(Duration::from_secs(1), service.rx.recv())
+        .await
+        .expect("probe response should not hang")
+        .expect("runtime should remain connected");
+
+    assert!(matches!(
+        response,
+        ToServerMessage::ModelProbeResponse {
+            result: crate::domain::schema::v0::ModelProbeResult::Available { config_options },
+        } if config_options.is_empty()
+    ));
+}
+
+struct ConcurrentProbeHandler {
+    started: tokio::sync::mpsc::UnboundedSender<()>,
+    release: Arc<tokio::sync::Notify>,
+}
+
+impl ModelProbeHandler for ConcurrentProbeHandler {
+    async fn probe(
+        &self,
+    ) -> Result<Vec<agent_client_protocol::schema::v1::SessionConfigOption>, String> {
+        let _ = self.started.send(());
+        self.release.notified().await;
+        Ok(Vec::new())
+    }
+}
+
+#[tokio::test]
+async fn runtime_model_probes_fan_out_without_serializing() {
+    let (mut service, runtime_channel) = Channel::duplex();
+    let (started, mut starts) = tokio::sync::mpsc::unbounded_channel();
+    let release = Arc::new(tokio::sync::Notify::new());
+    let (_runtime, _runtime_acp) = RuntimeConnection::connect_with_model_probe_handler(
+        runtime_channel,
+        ConcurrentProbeHandler {
+            started,
+            release: Arc::clone(&release),
+        },
+    );
+
+    for _ in 0..2 {
+        service
+            .tx
+            .send(ToRuntimeMessage::ModelProbeRequest)
+            .expect("request should send");
+    }
+    for _ in 0..2 {
+        timeout(Duration::from_secs(1), starts.recv())
+            .await
+            .expect("both probes should start while neither can finish")
+            .expect("the handler should outlive the test");
+    }
+    release.notify_waiters();
+
+    for _ in 0..2 {
+        assert!(matches!(
+            timeout(Duration::from_secs(1), service.rx.recv())
+                .await
+                .expect("response should not hang"),
+            Some(ToServerMessage::ModelProbeResponse { .. })
+        ));
+    }
+}

@@ -3,9 +3,12 @@
 //! An action can be accepted and queued before there is any way to express it
 //! as ACP, since that needs the [`SessionId`] the handshake produces.
 
+use std::collections::BTreeMap;
+
 use agent_client_protocol::schema::v1::{
-    CancelNotification, ClientRequest, PromptRequest, RequestId, SessionId,
-    SetSessionConfigOptionRequest,
+    CancelNotification, ClientRequest, CreateElicitationResponse, ElicitationAcceptAction,
+    ElicitationAction, ElicitationContentValue as AcpContentValue, PromptRequest, RequestId,
+    SessionId, SetSessionConfigOptionRequest,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use macro_uuid::Uuid;
@@ -144,8 +147,124 @@ impl AgentSetModelAction {
     }
 }
 
+/// The JSON-RPC id of an agent's `elicitation/create` request, carried whole
+/// so the answer echoes exactly what the agent sent.
+///
+/// Agents pick these, not us: Claude Code counts from `0`, others use
+/// strings. `null` is not a legal id for a request that expects a response,
+/// so it is not representable here.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(untagged)]
+pub enum ElicitationRequestId {
+    /// A numeric JSON-RPC id. Specta refuses `i64` (it does not fit a JS
+    /// number); agents count their requests from zero, so `i32` is the
+    /// honest TypeScript face.
+    Number(#[specta(type = i32)] i64),
+    /// A string JSON-RPC id.
+    Str(String),
+}
+
+impl ElicitationRequestId {
+    /// The id as the agent sent it. `None` for `null`, which cannot be
+    /// answered.
+    #[must_use]
+    pub fn from_request_id(id: &RequestId) -> Option<Self> {
+        match id {
+            RequestId::Number(number) => Some(Self::Number(*number)),
+            RequestId::Str(id) => Some(Self::Str(id.clone())),
+            RequestId::Null => None,
+        }
+    }
+
+    /// The same id as the transport's request id type.
+    #[must_use]
+    pub fn to_request_id(&self) -> RequestId {
+        match self {
+            Self::Number(number) => RequestId::Number(*number),
+            Self::Str(id) => RequestId::Str(id.clone()),
+        }
+    }
+}
+
+impl std::fmt::Display for ElicitationRequestId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Number(number) => write!(f, "{number}"),
+            Self::Str(id) => f.write_str(id),
+        }
+    }
+}
+
+/// A value ACP accepts in an elicitation answer.
+///
+/// Mirrors ACP's `ElicitationContentValue` so that the contract a caller
+/// answers against is the closed union ACP will accept, rather than arbitrary
+/// JSON narrowed on the way out. An object, a null, or a mixed array is
+/// refused when the request is deserialized - where the caller learns of it -
+/// instead of at send time, when the elicitation slot has already been
+/// released.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(untagged)]
+pub enum ElicitationContentValue {
+    /// A string, and the shape a whole draft rides in as JSON text.
+    Text(String),
+    /// A yes/no.
+    Boolean(bool),
+    /// A whole number.
+    Integer(i64),
+    /// A number that is not whole.
+    Number(f64),
+    /// A multi-select's chosen values.
+    Strings(Vec<String>),
+}
+
+impl From<&ElicitationContentValue> for AcpContentValue {
+    fn from(value: &ElicitationContentValue) -> Self {
+        match value {
+            ElicitationContentValue::Text(text) => Self::String(text.clone()),
+            ElicitationContentValue::Boolean(flag) => Self::Boolean(*flag),
+            ElicitationContentValue::Integer(number) => Self::Integer(*number),
+            ElicitationContentValue::Number(number) => Self::Number(*number),
+            ElicitationContentValue::Strings(values) => Self::StringArray(values.clone()),
+        }
+    }
+}
+
+/// What the user decided about an elicitation. Mirrors ACP's three actions;
+/// there is no `Other` because we never originate an action we do not know.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(tag = "action", rename_all = "snake_case")]
+pub enum ElicitationAnswer {
+    /// The user submitted the form, or consented to open the URL.
+    Accept {
+        /// Form: the submitted values keyed by property. URL: omitted.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        content: Option<BTreeMap<String, ElicitationContentValue>>,
+    },
+    /// The user explicitly said no.
+    Decline,
+    /// The user dismissed the request without choosing.
+    Cancel,
+}
+
+/// Answer an elicitation the agent is waiting on.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct AgentRespondElicitationAction {
+    /// The agent's `elicitation/create` request id - not an
+    /// [`AgentActionId`], because the agent minted it.
+    pub request_id: ElicitationRequestId,
+    /// The decision.
+    #[serde(flatten)]
+    pub answer: ElicitationAnswer,
+}
+
 /// One thing a caller wants an agent to do.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, strum::AsRefStr)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[strum(serialize_all = "snake_case")]
@@ -158,6 +277,13 @@ pub enum AgentAction {
     Compact,
     /// Interrupt whatever the agent is doing.
     Stop,
+    /// Answer an `elicitation/create` the agent sent.
+    ///
+    /// The one action whose wire form is a JSON-RPC *response* rather than a
+    /// request or notification: the agent asked, we answer on its id. The
+    /// minted [`AgentActionId`] therefore never reaches the wire for this
+    /// action; the fold correlates on the agent's id instead.
+    RespondElicitation(AgentRespondElicitationAction),
 }
 
 impl AgentAction {
@@ -176,6 +302,14 @@ impl AgentAction {
         })
     }
 
+    /// Answer the elicitation the agent asked with `request_id`.
+    pub fn respond_elicitation(
+        request_id: ElicitationRequestId,
+        answer: ElicitationAnswer,
+    ) -> Self {
+        Self::RespondElicitation(AgentRespondElicitationAction { request_id, answer })
+    }
+
     /// Recognize a control action from its translated runtime frame.
     ///
     /// Ordinary prompts are deliberately excluded: callers need their full
@@ -186,7 +320,9 @@ impl AgentAction {
             return Some(Self::SetModel(action));
         }
 
-        let ToRuntimeMessage::Acp(AcpMessage(frame)) = message;
+        let ToRuntimeMessage::Acp(AcpMessage(frame)) = message else {
+            return None;
+        };
         match frame {
             RawJsonRpcMessage::Request(request)
                 if PromptRequest::matches_method(&request.method) =>
@@ -223,7 +359,9 @@ impl AgentAction {
     pub fn occupies_turn(&self) -> bool {
         match self {
             Self::Prompt(_) | Self::Compact => true,
-            Self::SetModel(_) | Self::Stop => false,
+            // An elicitation answer is the running turn's own business: the
+            // agent is blocked on it mid-turn, so it must ride alongside.
+            Self::SetModel(_) | Self::Stop | Self::RespondElicitation(_) => false,
         }
     }
 
@@ -279,6 +417,43 @@ impl AgentAction {
                     .map_err(|error| ActionError::Acp(error.to_string()))?;
                 Ok(ToRuntimeMessage::Acp(AcpMessage(frame)))
             }
+            // A response to the agent's own request: `request_id` is the
+            // minted action id and is deliberately unused - the frame must
+            // carry the id the agent asked with, or nothing answers it.
+            Self::RespondElicitation(action) => {
+                let response = action.to_acp_response();
+                let result = serde_json::to_value(&response)
+                    .map_err(|error| ActionError::Acp(error.to_string()))?;
+                let frame =
+                    RawJsonRpcMessage::response(action.request_id.to_request_id(), Ok(result));
+                Ok(ToRuntimeMessage::Acp(AcpMessage(frame)))
+            }
         }
+    }
+}
+
+impl AgentRespondElicitationAction {
+    /// The ACP response body for this answer.
+    ///
+    /// Total: every value the type can hold is one ACP accepts, so answering
+    /// cannot fail here. That matters because the session machine releases the
+    /// elicitation slot before this runs - a failure would leave the agent
+    /// blocked on a request nothing can answer any more.
+    #[must_use]
+    pub fn to_acp_response(&self) -> CreateElicitationResponse {
+        let action = match &self.answer {
+            ElicitationAnswer::Accept { content } => {
+                let content = content.as_ref().map(|content| {
+                    content
+                        .iter()
+                        .map(|(key, value)| (key.clone(), AcpContentValue::from(value)))
+                        .collect::<BTreeMap<_, _>>()
+                });
+                ElicitationAction::Accept(ElicitationAcceptAction::new().content(content))
+            }
+            ElicitationAnswer::Decline => ElicitationAction::Decline,
+            ElicitationAnswer::Cancel => ElicitationAction::Cancel,
+        };
+        CreateElicitationResponse::new(action)
     }
 }

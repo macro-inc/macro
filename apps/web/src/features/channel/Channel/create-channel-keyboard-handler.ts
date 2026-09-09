@@ -1,18 +1,11 @@
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { virtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
 import { isPlatform } from '@core/util/platform';
-import {
-  type Accessor,
-  createEffect,
-  createSignal,
-  on,
-  onCleanup,
-} from 'solid-js';
+import { type Accessor, createMemo, onCleanup, onMount } from 'solid-js';
 import { scrollMessageAboveKeyboard } from '../scroll-utils';
-import type { ThreadListNavigation } from './ThreadList';
 
 type CreateChannelKeyboardHandlerOptions = {
-  navigation: Accessor<ThreadListNavigation | undefined>;
+  scrollToLatest: () => void;
   /**
    * Whether the user is near the bottom of the message list. ThreadList
    * re-emits this on viewport resizes, so it stays fresh across keyboard
@@ -49,23 +42,20 @@ export function createChannelKeyboardHandler(
 ): void {
   if (!isPlatform('ios')) return;
 
-  // The pending reveal mirrors the binding (rather than being requested by
-  // each bind site): new bind flows get the reveal for free, an unbind
-  // clears any not-yet-consumed request, and — because the mirror is
-  // synchronous — a consumed request is always the current binding.
-  const [pendingTargetReveal, setPendingTargetReveal] = createSignal<string>();
-  createEffect(
-    on(options.boundMessageId, (messageId) => setPendingTargetReveal(messageId))
-  );
+  // Each binding gets one keyboard reveal. The memo provides identity for a
+  // new binding, including unbind/rebind, without an effect mirroring its ID.
+  const binding = createMemo(() => ({ messageId: options.boundMessageId() }));
+  let revealedBinding: ReturnType<typeof binding> | undefined;
 
   /**
    * Consume a pending reveal. Returns whether the reveal owned this keyboard
    * appearance (even if the bound message was already fully visible).
    */
   const revealPendingTarget = (): boolean => {
-    const messageId = pendingTargetReveal();
-    if (!messageId) return false;
-    setPendingTargetReveal(undefined);
+    const current = binding();
+    const messageId = current.messageId;
+    if (!messageId || current === revealedBinding) return false;
+    revealedBinding = current;
     scrollMessageAboveKeyboard(
       messageId,
       virtualKeyboardHeight() + FloatRegions.hostHeight()
@@ -73,11 +63,11 @@ export function createChannelKeyboardHandler(
     return true;
   };
 
-  createEffect(() => {
+  onMount(() => {
     const handleKeyboardWillShow = () => {
       // A bound-target reveal owns the scroll for this keyboard appearance.
       if (revealPendingTarget()) return;
-      if (options.isNearBottom()) options.navigation()?.scrollToBottom();
+      if (options.isNearBottom()) options.scrollToLatest();
     };
     window.addEventListener('keyboardWillShow', handleKeyboardWillShow);
     onCleanup(() => {

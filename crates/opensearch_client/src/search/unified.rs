@@ -819,6 +819,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         .field("content", em_field().number_of_fragments(1))
         .field("document_name", em_field().number_of_fragments(0))
         .field("name", em_field().number_of_fragments(0))
+        .field("source_names", em_field().number_of_fragments(0))
         .field("subject", em_field().number_of_fragments(0))
         .field("sender", em_field().number_of_fragments(0))
         .field("sender_name", em_field().number_of_fragments(0))

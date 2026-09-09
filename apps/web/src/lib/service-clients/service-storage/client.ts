@@ -85,6 +85,7 @@ import type { CrmCommentEntityType } from './generated/schemas/crmCommentEntityT
 import type { CrmCommentThread } from './generated/schemas/crmCommentThread';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
+import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
 import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
 import type { DeleteCrmCommentResult } from './generated/schemas/deleteCrmCommentResult';
@@ -130,6 +131,7 @@ import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesP
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
+import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
@@ -149,6 +151,7 @@ import type { RemindersList } from './generated/schemas/remindersList';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
+import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
@@ -308,15 +311,7 @@ export type Harness = {
 };
 
 /** A pending macrod pairing request, looked up by its printed code. */
-export type HarnessPairing = {
-  code: string;
-  requested_name: string;
-  host: string | null;
-  /** The scope the daemon's config asked for; preselects the dialog. */
-  requested_scope: 'private' | 'team' | null;
-  created_at: string;
-  expires_at: string;
-};
+export type HarnessPairing = PairingDetails;
 
 type ApproveHarnessPairingRequest = {
   name?: string;
@@ -2680,6 +2675,15 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify(body),
     });
+  },
+  async replaceCrmTeamStages(body: ReplaceCrmStagesRequest) {
+    return await dssFetch<CrmStagesResponse>('/crm/stages', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  },
+  async resetCrmTeamStages() {
+    return await dssFetch('/crm/stages', { method: 'DELETE' });
   },
   crmComments: {
     async list({

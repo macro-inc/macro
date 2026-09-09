@@ -252,4 +252,34 @@ describe('layout URL synchronization', () => {
 
     harness.dispose();
   });
+
+  it('preserves a macrod pairing code while settings canonicalizes its tab', async () => {
+    const harness = createHarness({
+      managerContent: [{ type: 'component', id: 'settings' }],
+      urlSegments: ['settings', 'harness'],
+      search: '?pair=3GTM-FNJ9&discard=value',
+    });
+
+    await flushUrlSync();
+
+    expect(harness.navigate).not.toHaveBeenCalled();
+
+    harness.dispose();
+  });
+
+  it('does not stall settings URL synchronization for an empty pairing code', async () => {
+    const harness = createHarness({
+      managerContent: [{ type: 'component', id: 'settings' }],
+      urlSegments: ['settings', 'harness'],
+      search: '?pair=',
+    });
+
+    await flushUrlSync();
+
+    expect(harness.navigate).toHaveBeenCalledWith('/settings/account', {
+      replace: true,
+    });
+
+    harness.dispose();
+  });
 });

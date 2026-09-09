@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE property_options\n            SET string_value = chr(31) || id::text, number_value = NULL, updated_at = NOW()\n            WHERE property_definition_id = $1 AND id = ANY($2)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5dfd371c2fd5f4355fefbbb5e105c55e35ef9da6b0bbc04f67f8e1ef73675d52"
+}

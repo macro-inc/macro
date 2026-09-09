@@ -503,8 +503,8 @@ service_url! {
         /// Authentication service API URL.
         pub AuthServiceUrl {
             local: "http://localhost:8080",
-            dev: "https://auth-service-dev.macro.com",
-            prod: "https://auth-service.macro.com",
+            dev: "https://dev-gateway.macro.com/auth",
+            prod: "https://gateway.macro.com/auth",
         },
         /// Document storage service API URL.
         pub DocumentStorageServiceUrl {
@@ -527,14 +527,20 @@ service_url! {
         /// Connection gateway HTTP API URL.
         pub ConnectionGatewayUrl {
             local: "http://localhost:8082",
-            dev: "https://connection-gateway-dev.macro.com",
-            prod: "https://connection-gateway.macro.com",
+            dev: "https://dev-gateway.macro.com/connection-gateway",
+            prod: "https://gateway.macro.com/connection-gateway",
+        },
+        /// Connection gateway WebSocket URL.
+        pub ConnectionGatewayWebsocketUrl {
+            local: "ws://localhost:8082",
+            dev: "wss://dev-gateway.macro.com/connection-gateway",
+            prod: "wss://gateway.macro.com/connection-gateway",
         },
         /// Document cognition service API URL.
         pub DocumentCognitionServiceUrl {
             local: "http://localhost:8085",
-            dev: "https://document-cognition-dev.macro.com",
-            prod: "https://document-cognition.macro.com",
+            dev: "https://dev-gateway.macro.com/cognition",
+            prod: "https://gateway.macro.com/cognition",
         },
         /// Notification service API URL.
         pub NotificationServiceUrl {
@@ -555,6 +561,20 @@ service_url! {
             dev: "https://dev-gateway.macro.com/agent-harness",
             prod: "https://gateway.macro.com/agent-harness",
         },
+        /// Sandbox-facing agent harness egress proxy URL.
+        /// Override the local default when sandbox clients need a Docker-network
+        /// address or a public tunnel rather than the host's loopback address.
+        pub AgentHarnessEgressUrl {
+            local: "http://localhost:8102",
+            dev: "https://dev-gateway.macro.com/agent-harness-egress",
+            prod: "https://gateway.macro.com/agent-harness-egress",
+        },
+        /// Macro MCP service base URL. Append `/mcp` for its transport endpoint.
+        pub McpServiceUrl {
+            local: "http://localhost:8080",
+            dev: "https://dev-gateway.macro.com/mcp",
+            prod: "https://gateway.macro.com/mcp",
+        },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
             local: "http://localhost:8095",
@@ -570,8 +590,8 @@ service_url! {
         /// Email service API URL.
         pub EmailServiceUrl {
             local: "http://localhost:8087",
-            dev: "https://email-service-dev.macro.com",
-            prod: "https://email-service.macro.com",
+            dev: "https://dev-gateway.macro.com/email",
+            prod: "https://gateway.macro.com/email",
         },
         /// Image proxy service API URL.
         pub ImageProxyServiceUrl {

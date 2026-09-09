@@ -12,8 +12,10 @@
 use agent_fold::domain::fold::FoldMachineImpl;
 use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use agent_fold::domain::model::{
-    Author, Control, ControlOutcome, FoldedMessage, MessagePart, PermissionOption,
-    PermissionOutcome, PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUseId,
+    AnsweredField, AnsweredValue, Author, Control, ControlOutcome, ElicitationOutcome,
+    ElicitationPropertySchema, ElicitationRequest, ElicitationSchema, FoldedMessage, MessagePart,
+    PermissionOption, PermissionOutcome, PlanEntryStatus, StopReason, ToolDetail, ToolStatus,
+    ToolUseId,
 };
 use agent_fold::domain::ports::FoldMachine;
 use agent_fold::domain::ports::LogRepo;
@@ -173,6 +175,7 @@ async fn main() -> ExitCode {
         print!("{}", render_message(message));
     }
     println!("── metadata ──");
+    println!("harness:  {:?}", metadata.harness);
     println!("model:    {}", metadata.model.as_deref().unwrap_or("-"));
     println!("title:    {}", metadata.title.as_deref().unwrap_or("-"));
     println!(
@@ -219,6 +222,16 @@ fn render_message(message: &FoldedMessage) -> String {
         .unwrap_or_default();
     let _ = writeln!(out, "── turn {} · {author}{stop} ──", message.id.0);
     for part in message.parts.iter() {
+        out.push_str(&render_part(part));
+        out.push('\n');
+    }
+    out
+}
+
+/// One part as terminal text.
+fn render_part(part: &MessagePart) -> String {
+    let mut out = String::new();
+    {
         match part {
             MessagePart::Text { text } => {
                 let _ = writeln!(out, "{}", text.trim_end());
@@ -227,11 +240,11 @@ fn render_message(message: &FoldedMessage) -> String {
                 let _ = writeln!(out, "[thought]\n{}", indent(text.trim_end()));
             }
             MessagePart::ToolUse {
-                label,
+                name,
                 status,
                 detail,
                 ..
-            } => out.push_str(&render_tool(label, *status, detail)),
+            } => out.push_str(&render_tool(name.display(), *status, detail)),
             MessagePart::Permission {
                 tool_call,
                 options,
@@ -261,10 +274,145 @@ fn render_message(message: &FoldedMessage) -> String {
                     let _ = writeln!(out, "{}", indent(&format!("[{mark}] {}", entry.content)));
                 }
             }
+            MessagePart::Elicitation {
+                message: question,
+                request,
+                outcome,
+                reported,
+                ..
+            } => out.push_str(&render_elicitation(
+                question,
+                request,
+                outcome,
+                reported.as_deref(),
+            )),
         }
-        out.push('\n');
     }
     out
+}
+
+/// A question: `[question · outcome]`, the message, then each field or the URL.
+fn render_elicitation(
+    question: &str,
+    request: &ElicitationRequest,
+    outcome: &ElicitationOutcome,
+    reported: Option<&[AnsweredField]>,
+) -> String {
+    let mut out = String::new();
+    let state = match outcome {
+        ElicitationOutcome::Pending => "pending".to_owned(),
+        ElicitationOutcome::Accepted { answers } if answers.is_empty() => "accepted".to_owned(),
+        ElicitationOutcome::Accepted { answers } => format!("accepted {}", render_answers(answers)),
+        ElicitationOutcome::Declined => "declined".to_owned(),
+        ElicitationOutcome::Cancelled => "cancelled".to_owned(),
+        ElicitationOutcome::Completed => "completed".to_owned(),
+        ElicitationOutcome::Errored { message } => format!("error: {message}"),
+        ElicitationOutcome::Unrecognized => "unrecognized".to_owned(),
+    };
+    let _ = writeln!(out, "[question · {state}]");
+    let _ = writeln!(out, "{}", indent(question.trim_end()));
+    match request {
+        ElicitationRequest::UserTool {
+            tool,
+            draft,
+            schema,
+        } => {
+            let _ = writeln!(out, "{}", indent(&format!("review {tool}: {draft}")));
+            render_form_fields(&mut out, schema);
+        }
+        ElicitationRequest::Form { schema } => render_form_fields(&mut out, schema),
+        ElicitationRequest::Url { url, .. } => {
+            let _ = writeln!(out, "{}", indent(&format!("open {url}")));
+        }
+        ElicitationRequest::Unrecognized { mode, .. } => {
+            let _ = writeln!(out, "{}", indent(&format!("unrecognized mode {mode}")));
+        }
+    }
+    if let Some(reported) = reported {
+        let _ = writeln!(
+            out,
+            "{}",
+            indent(&format!("agent read: {}", render_answers(reported)))
+        );
+    }
+    out
+}
+
+/// Answers as `label=value`, comma separated.
+fn render_answers(answers: &[AnsweredField]) -> String {
+    answers
+        .iter()
+        .map(|answer| {
+            let value = match &answer.value {
+                AnsweredValue::Text { text } | AnsweredValue::Custom { text } => text.clone(),
+                AnsweredValue::Number { text } => text.clone(),
+                AnsweredValue::Boolean { checked } => checked.to_string(),
+                AnsweredValue::Choice { choice } => choice.value.clone(),
+                AnsweredValue::Choices { choices } => choices
+                    .iter()
+                    .map(|choice| choice.value.as_str())
+                    .collect::<Vec<_>>()
+                    .join("+"),
+                AnsweredValue::Unrecognized { raw } => raw.to_string(),
+            };
+            format!("{}={value}", answer.label)
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// One line per form field: `label* (shape)`.
+fn render_form_fields(out: &mut String, schema: &ElicitationSchema) {
+    for property in &schema.properties {
+        let label = property.title.as_deref().unwrap_or(&property.name);
+        let required = if schema.required.contains(&property.name) {
+            "*"
+        } else {
+            ""
+        };
+        let shape = match &property.schema {
+            ElicitationPropertySchema::String {
+                options,
+                custom_field,
+                ..
+            } if !options.is_empty() => {
+                let choices: Vec<&str> = options
+                    .iter()
+                    .map(|option| option.title.as_deref().unwrap_or(&option.value))
+                    .collect();
+                let other = if custom_field.is_some() {
+                    " | other…"
+                } else {
+                    ""
+                };
+                format!("select: {}{other}", choices.join(" | "))
+            }
+            ElicitationPropertySchema::String { .. } => "text".to_owned(),
+            ElicitationPropertySchema::Number { .. } => "number".to_owned(),
+            ElicitationPropertySchema::Integer { .. } => "integer".to_owned(),
+            ElicitationPropertySchema::Boolean { .. } => "boolean".to_owned(),
+            ElicitationPropertySchema::MultiSelect {
+                options,
+                custom_field,
+                ..
+            } => {
+                let choices: Vec<&str> = options
+                    .iter()
+                    .map(|option| option.title.as_deref().unwrap_or(&option.value))
+                    .collect();
+                let other = if custom_field.is_some() {
+                    " | other…"
+                } else {
+                    ""
+                };
+                format!("multi-select: {}{other}", choices.join(" | "))
+            }
+            ElicitationPropertySchema::Unrecognized { type_name, .. } => {
+                format!("unrecognized type {type_name}")
+            }
+        };
+        let _ = writeln!(out, "{}", indent(&format!("{label}{required} ({shape})")));
+    }
 }
 
 /// A tool call: `[label · status]` then whatever detail the fold recovered.
@@ -331,13 +479,86 @@ fn render_tool(label: &str, status: ToolStatus, detail: &ToolDetail) -> String {
                 let _ = writeln!(out, "{}", indent(output.trim_end()));
             }
             if let Some(input) = input {
-                let json =
-                    serde_json::to_string_pretty(input).unwrap_or_else(|_| input.to_string());
-                let _ = writeln!(out, "{}", indent(&json));
+                let _ = writeln!(out, "{}", indent(&pretty(input)));
+            }
+        }
+        ToolDetail::Macro {
+            input,
+            output,
+            error,
+        } => {
+            let _ = writeln!(out, "{}", indent(&format!("input: {}", pretty(input))));
+            if let Some(output) = output {
+                let _ = writeln!(out, "{}", indent(&format!("output: {}", pretty(output))));
+            }
+            if let Some(error) = error {
+                let _ = writeln!(out, "{}", indent(&format!("error: {error}")));
+            }
+        }
+        ToolDetail::UserTool { input, outcome } => {
+            let _ = writeln!(out, "{}", indent(&format!("draft: {}", pretty(input))));
+            let _ = writeln!(out, "{}", indent(&format!("outcome: {outcome:?}")));
+        }
+        ToolDetail::Subagent {
+            title,
+            agent_type,
+            description,
+            prompt,
+            background,
+            children,
+            result,
+        } => {
+            let mut head = vec![format!("title: {title}")];
+            if let Some(agent_type) = agent_type {
+                head.push(format!("type: {agent_type}"));
+            }
+            if let Some(description) = description {
+                head.push(format!("description: {description}"));
+            }
+            if *background {
+                head.push("background".to_owned());
+            }
+            if !head.is_empty() {
+                let _ = writeln!(out, "{}", indent(&head.join(" · ")));
+            }
+            if let Some(prompt) = prompt {
+                let _ = writeln!(out, "{}", indent(&format!("> {}", prompt.trim_end())));
+            }
+            for child in children {
+                let _ = writeln!(out, "{}", indent(render_part(child).trim_end()));
+            }
+            if let Some(result) = result {
+                if let Some(text) = &result.text {
+                    let _ = writeln!(out, "{}", indent(&format!("result: {}", text.trim_end())));
+                }
+                if let Some(error) = &result.error {
+                    let _ = writeln!(out, "{}", indent(&format!("error: {error}")));
+                }
+                let mut facts = Vec::new();
+                if let Some(model) = &result.model {
+                    facts.push(model.clone());
+                }
+                if let Some(tool_uses) = result.tool_uses {
+                    facts.push(format!("{tool_uses} tool uses"));
+                }
+                if let Some(ms) = result.duration_ms {
+                    facts.push(format!("{ms}ms"));
+                }
+                if let Some(tokens) = result.tokens {
+                    facts.push(format!("{tokens} tokens"));
+                }
+                if !facts.is_empty() {
+                    let _ = writeln!(out, "{}", indent(&facts.join(" · ")));
+                }
             }
         }
     }
     out
+}
+
+/// JSON, pretty-printed, or its compact form if that somehow fails.
+fn pretty(value: &serde_json::Value) -> String {
+    serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
 }
 
 /// A permission request: what was asked, what was offered, what was chosen.

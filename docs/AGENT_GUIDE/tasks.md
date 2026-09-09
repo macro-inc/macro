@@ -2,11 +2,11 @@
 
 ## Surface
 
-`Go to Tasks` → `/app/component/tasks`. Tabs `My tasks` / `All`. Table columns: Task, Status,
-Priority, Assignees, Created By, Updated; grouped by priority by default (`Group` menu to
-change). Toolbar: `Task` (create), search (`Ctrl+F`), `Sort`, `Group`, `Filter`, `Preview`,
-and an active filter row (`Status: In Progress +2`, `Add filters`, `Clear all` — note the
-default filter hides Done tasks).
+`Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, and `Team tasks`.
+The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, `Filter`, and `Preview`;
+task creation is available from the `New` button in the Tasks sidebar. On mobile, the tabs
+are pills and the leading sliders button opens one drawer containing Sort, Group, and
+Filters. Mobile intentionally omits the search and create controls.
 
 New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced task features`,
 `How we use tasks at Macro`).
@@ -24,6 +24,14 @@ New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced tas
 
 Tasks are documents under the hood (creation hits `POST /dss/documents/create_task`), so they
 also show up in Files/`All` and in AI-chat document listings.
+
+## View and edit task properties
+
+An open task shows Status, Priority, and Assignees as property pills below its title. Task
+mentions and document references also show the same three pills in their hover-card preview,
+including properties that do not have a value yet. Click a preview pill to edit it without
+opening the task; the property picker keeps the preview open while you make a selection.
+Users with view or comment access see the same pills read-only.
 
 ## Messages as tasks
 

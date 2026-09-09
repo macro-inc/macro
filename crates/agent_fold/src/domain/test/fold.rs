@@ -57,7 +57,7 @@ fn folds_a_complete_turn() {
 
     let MessagePart::ToolUse {
         id: run_id,
-        label: run_label,
+        name: run_name,
         status: run_status,
         detail: run_detail,
         ..
@@ -65,7 +65,11 @@ fn folds_a_complete_turn() {
     else {
         panic!("second part is the terminal call: {:?}", parts[1]);
     };
-    assert_eq!(run_label, "Bash", "harness tool name outranks ACP title");
+    assert_eq!(
+        run_name.display(),
+        "Bash",
+        "harness tool name outranks ACP title"
+    );
     assert_eq!(*run_status, ToolStatus::Completed);
     let ToolDetail::Terminal {
         command,
@@ -106,7 +110,7 @@ fn folds_a_complete_turn() {
     );
 
     let MessagePart::ToolUse {
-        label,
+        name,
         status,
         detail,
         ..
@@ -114,7 +118,7 @@ fn folds_a_complete_turn() {
     else {
         panic!("fourth part is the edit: {:?}", parts[3]);
     };
-    assert_eq!(label, "Write");
+    assert_eq!(name.display(), "Write");
     assert_eq!(*status, ToolStatus::Completed);
     let ToolDetail::Edit { diffs } = detail else {
         panic!("edit folds to diffs: {detail:?}");
@@ -467,6 +471,15 @@ fn folds_nothing() {
     let (messages, warnings) = fold_capturing_warnings(Vec::new());
     assert_eq!(messages, vec![]);
     assert_eq!(warnings, vec![]);
+}
+
+#[test]
+fn an_empty_agent_chunk_does_not_create_a_message() {
+    let log = parse_log(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":""}}}}}"#,
+    );
+
+    assert_eq!(fold(log), vec![]);
 }
 
 /// How many `session/update` notifications a log carries - the frames that

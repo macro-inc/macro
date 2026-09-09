@@ -10,13 +10,15 @@ use std::time::Duration;
 use rootcause::prelude::ResultExt as _;
 use tokio_util::sync::CancellationToken;
 
-use crate::config::Config;
+use crate::config::{Config, HarnessCredentials};
 use crate::dispatch::Dispatcher;
 use crate::outbound::agent_session::HarnessApi;
-use crate::outbound::credentials::HarnessCredentials;
 use crate::outbound::stream::EventStreamClient;
 use crate::runtime::Runtime;
 use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
+
+#[cfg(test)]
+mod test;
 
 /// How often the bound-agent set is re-read so a newly bound agent starts
 /// triggering without a restart. Short on purpose: a mention sent before the
@@ -51,7 +53,12 @@ impl Daemon {
         let cancel = CancellationToken::new();
         let client = EventStreamClient::new(&config.macro_api, &credentials);
         let api = HarnessApi::new(&config.macro_api, &credentials);
-        let runtime = Runtime::new(&config.macro_api, &credentials, config.harness.clone());
+        let runtime = Runtime::new(
+            &config.macro_api,
+            &credentials,
+            config.harness.clone(),
+            &config.workspace.path,
+        );
         let executor = Dispatcher::new(api, runtime, config.workspace.clone());
 
         tracing::info!(
@@ -96,20 +103,21 @@ impl Daemon {
         !self.task.is_finished()
     }
 
-    /// Stop serving: drop the stream and end the reconnect loop.
+    /// Stop serving without waiting for an in-flight network request or trigger.
     ///
     /// A live harness bridge (the WebSocket + spawned harness process) is not
     /// torn down here; it dies with the process, and a restarted daemon's
     /// fresh dial displaces it at the gateway.
     pub async fn stop(self) {
         self.cancel.cancel();
+        self.task.abort();
         let _ = self.task.await;
         tracing::info!("daemon stopped");
     }
 }
 
 /// Absolute form of the config path, so a `chdir` into the workspace never
-/// re-points relative reads and writes of the config and its state files.
+/// re-points relative reads and writes of the config.
 pub fn absolute_config_path(config_path: &Path) -> PathBuf {
     std::path::absolute(config_path).unwrap_or_else(|_| config_path.to_owned())
 }

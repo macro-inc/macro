@@ -173,8 +173,17 @@ describe('runSoupBackfills', () => {
         filters: {
           emailFilter: {
             tree: {
-              literal: {
-                updatedAt: { gte: '2026-09-02T12:00:00.000Z' },
+              or: {
+                left: {
+                  literal: {
+                    updatedAt: { gte: '2026-09-02T12:00:00.000Z' },
+                  },
+                },
+                right: {
+                  literal: {
+                    viewedAt: { gte: '2026-09-02T12:00:00.000Z' },
+                  },
+                },
               },
             },
           },
@@ -255,8 +264,17 @@ describe('runSoupBackfills', () => {
         filters: {
           emailFilter: {
             tree: {
-              literal: {
-                updatedAt: { gte: '2026-09-02T12:00:00.000Z' },
+              or: {
+                left: {
+                  literal: {
+                    updatedAt: { gte: '2026-09-02T12:00:00.000Z' },
+                  },
+                },
+                right: {
+                  literal: {
+                    viewedAt: { gte: '2026-09-02T12:00:00.000Z' },
+                  },
+                },
               },
             },
           },
@@ -375,7 +393,7 @@ describe('runSoupBackfills', () => {
 
   it('restarts from the beginning when the cache generation is replaced', async () => {
     localStorage.setItem(
-      'graphql-soup-backfill:v7:user-1:core-entities',
+      'graphql-soup-backfill:v8:user-1:core-entities',
       JSON.stringify({
         userId: 'user-1',
         nextCursor: 'stale-cursor',

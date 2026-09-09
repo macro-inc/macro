@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
 import { emailClient } from '@service-email/client';
 import type {
@@ -46,19 +47,29 @@ export function useSaveDraftMutation(
           toast.failure('Failed to save draft');
         },
         onSuccess(data, vars) {
-          queryClient.invalidateQueries({
-            queryKey: emailKeys.previews._def,
-          });
-          const threadId = data.draft.thread_db_id;
-          if (!threadId) return;
-          if (!vars.skipSoupRefetch) {
-            refetchSoupEntity(threadId, 'emailThread');
+          try {
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.previews._def,
+              })
+              .catch(Telemetry.error);
+            const threadId = data.draft.thread_db_id;
+            if (!threadId) return;
+            if (!vars.skipSoupRefetch) {
+              void refetchSoupEntity(threadId, 'emailThread').catch(
+                Telemetry.error
+              );
+            }
+            // Reopening the thread reads the messages cache; drop it so the
+            // saved draft body isn't served stale.
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.threadMessages(threadId).queryKey,
+              })
+              .catch(Telemetry.error);
+          } catch (error) {
+            Telemetry.error(error);
           }
-          // Reopening the thread reads the messages cache; drop it so the
-          // saved draft body isn't served stale.
-          queryClient.invalidateQueries({
-            queryKey: emailKeys.threadMessages(threadId).queryKey,
-          });
         },
       },
       callbacks
@@ -96,21 +107,29 @@ export function useDeleteDraftMutation(
           toast.failure('Failed to delete draft');
         },
         onSuccess(_data, vars) {
-          queryClient.invalidateQueries({
-            queryKey: emailKeys.previews._def,
-          });
-          if (vars.skipSoupRefetch) return;
-          // Refetch the thread (not the deleted draft) so its draft-derived
-          // fields settle. No-op for compose drafts, whose thread is deleted
-          // along with the draft, so the refetch finds nothing to update.
-          if (vars.threadId) {
-            refetchSoupEntity(vars.threadId, 'emailThread');
+          try {
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.previews._def,
+              })
+              .catch(Telemetry.error);
+            if (vars.skipSoupRefetch) return;
+            // Refetch the thread (not the deleted draft) so its draft-derived
+            // fields settle. No-op for compose drafts, whose thread is deleted
+            // along with the draft, so the refetch finds nothing to update.
+            if (vars.threadId) {
+              void refetchSoupEntity(vars.threadId, 'emailThread').catch(
+                Telemetry.error
+              );
+            }
+            // Discarding a draft changes view membership — the thread leaves
+            // Signal/Drafts and a noise thread re-enters Noise — which a
+            // single-entity patch can't express, so the soup list queries must
+            // refetch. Mirrors the archive flow in EmailContext.
+            invalidateAllSoup();
+          } catch (error) {
+            Telemetry.error(error);
           }
-          // Discarding a draft changes view membership — the thread leaves
-          // Signal/Drafts and a noise thread re-enters Noise — which a
-          // single-entity patch can't express, so the soup list queries must
-          // refetch. Mirrors the archive flow in EmailContext.
-          invalidateAllSoup();
         },
       },
       callbacks

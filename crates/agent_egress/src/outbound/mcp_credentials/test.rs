@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::model::McpDestination;
+use crate::domain::model::{McpDestination, McpResolution};
 use http::header::{HeaderMap, HeaderValue};
 use pipedream_mcp::outbound::api::McpUpstreamCall;
 use std::sync::Mutex;
@@ -107,10 +107,13 @@ async fn resolves_an_app_slug_verbatim() {
         upstream.clone(),
     );
 
-    let call = credentials
+    let McpResolution::Connected(call) = credentials
         .resolve(&owner(), &connected("google_sheets"))
         .await
-        .expect("resolved");
+        .expect("resolved")
+    else {
+        panic!("a connected app resolves as connected");
+    };
 
     assert_eq!(call.url().as_str(), "https://remote.mcp.pipedream.net/");
     let asked = upstream.asked_for.lock().expect("spy lock");
@@ -126,10 +129,13 @@ async fn carries_the_scoping_headers_next_to_the_bearer() {
         upstream.clone(),
     );
 
-    let call = credentials
+    let McpResolution::Connected(call) = credentials
         .resolve(&owner(), &connected("linear"))
         .await
-        .expect("resolved");
+        .expect("resolved")
+    else {
+        panic!("a connected app resolves as connected");
+    };
 
     let scope: Vec<(&str, &str)> = call
         .scope_headers()
@@ -145,43 +151,62 @@ async fn carries_the_scoping_headers_next_to_the_bearer() {
     );
 }
 
+/// A disabled connection resolves like no connection: the owner turned the
+/// app off, and that takes the grant away from the sandbox. What remains is
+/// an addressable upstream with no grant behind it, which the service treats
+/// according to the session's policy.
 #[tokio::test]
-async fn a_disabled_connection_is_an_unknown_server() {
+async fn a_disabled_connection_resolves_as_unconnected() {
     let upstream = SpyUpstream::at("https://remote.mcp.pipedream.net");
     let credentials = PipedreamMcpCredentials::new(
         Arc::new(FixedConnections(vec![connection("linear", false)])),
         upstream.clone(),
     );
 
-    let refusal = credentials
+    let resolution = credentials
         .resolve(&owner(), &connected("linear"))
         .await
-        .expect_err("refused");
+        .expect("resolved");
 
     assert!(
-        matches!(refusal, EgressError::UnknownServer(_)),
-        "{refusal}"
+        matches!(resolution, McpResolution::Unconnected(_)),
+        "{resolution:?}"
     );
+    let asked = upstream.asked_for.lock().expect("spy lock");
+    assert_eq!(asked.len(), 1);
     assert!(
-        upstream.asked_for.lock().expect("spy lock").is_empty(),
-        "a disabled connection must never reach Pipedream"
+        asked[0].account_id.is_empty(),
+        "the disabled row's account is not what gets addressed"
     );
 }
 
+/// An app nobody connected is still addressable for the owner - Pipedream
+/// scopes by user id and app slug alone - so it resolves as unconnected with
+/// exactly the owner's scoping, and no grant.
 #[tokio::test]
-async fn a_slug_nobody_connected_is_an_unknown_server() {
+async fn a_slug_nobody_connected_resolves_as_unconnected_for_the_owner() {
     let upstream = SpyUpstream::at("https://remote.mcp.pipedream.net");
     let credentials =
         PipedreamMcpCredentials::new(Arc::new(FixedConnections(Vec::new())), upstream.clone());
 
-    let refusal = credentials
+    let McpResolution::Unconnected(call) = credentials
         .resolve(&owner(), &connected("linear"))
         .await
-        .expect_err("refused");
+        .expect("resolved")
+    else {
+        panic!("an unconnected app resolves as unconnected");
+    };
 
+    let scope: Vec<(&str, &str)> = call
+        .scope_headers()
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.to_str().expect("ascii")))
+        .collect();
+    assert!(scope.contains(&("x-pd-app-slug", "linear")), "{scope:?}");
+    let owner_id = owner().to_string();
     assert!(
-        matches!(refusal, EgressError::UnknownServer(_)),
-        "{refusal}"
+        scope.contains(&("x-pd-external-user-id", owner_id.as_str())),
+        "{scope:?}"
     );
 }
 

@@ -12,7 +12,7 @@ const serverHostLocal: Servers = {
   contacts: 'http://localhost:8083',
   'email-service': 'http://localhost:8087',
   'image-proxy-service': 'http://localhost:8097',
-  'scheduled-action': 'http://localhost:8098',
+  'scheduled-action': 'http://localhost:8099',
   'agent-harness': 'http://localhost:8101',
 } as const;
 
@@ -29,20 +29,20 @@ const authLogoutUrl =
     : 'https://auth.macro.com/oauth2/logout?client_id=75409999-7dc4-4241-b73b-a51818c3a71c&tenantId=a3e53c3d-8d6a-3e92-d64c-fa3bf30a60be';
 
 const serverHostRemote = {
-  'auth-service': `https://auth-service${devServerSuffix}.macro.com`,
+  'auth-service': `${gatewayHost}/auth`,
   'auth-logout': authLogoutUrl,
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
   'document-storage-service': `${gatewayHost}/dss`,
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,
-  'cognition-service': `https://document-cognition${devServerSuffix}.macro.com`,
-  'connection-gateway': `wss://connection-gateway${devServerSuffix}.macro.com`,
+  'cognition-service': `${gatewayHost}/cognition`,
+  'connection-gateway': `${gatewayHost.replace(/^http/, 'ws')}/connection-gateway`,
   'notification-service': `${gatewayHost}/notification`,
   'static-file': `https://static-file-service${devServerSuffix}.macro.com`,
   'unfurl-service': `${gatewayHost}/unfurl`,
   contacts: `${gatewayHost}/contacts`,
-  'email-service': `https://email-service${devServerSuffix}.macro.com`,
+  'email-service': `${gatewayHost}/email`,
   'image-proxy-service': `${gatewayHost}/image-proxy`,
-  'scheduled-action': `https://agent-schedule${devServerSuffix}.macro.com`,
+  'scheduled-action': `${gatewayHost}/scheduled-action`,
   'agent-harness': `${gatewayHost}/agent-harness`,
 } as const;
 
@@ -105,7 +105,7 @@ function proxyServers(): Servers | undefined {
     contacts: `${proxyOrigin}/contacts`,
     'email-service': `${proxyOrigin}/email`,
     'image-proxy-service': `${proxyOrigin}/image-proxy`,
-    'scheduled-action': serverHostLocal['scheduled-action'], // no local container
+    'scheduled-action': `${proxyOrigin}/scheduled-action`,
   };
 }
 

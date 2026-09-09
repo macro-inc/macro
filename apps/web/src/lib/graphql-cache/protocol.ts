@@ -77,15 +77,28 @@ export type SearchCachePage = {
   nextCursor: SearchCursor | null;
 };
 
-/** Exact initial-page request over the canonical GraphQL Soup filter input. */
+/** Maximum server-page membership evidence in one reconciliation request. */
+export const MAX_RECONCILIATION_BASELINE = 5_000;
+
+/** Initial-page candidates, optionally reconciled with same-query server pages. */
 export type EntityFilterCacheArgs = {
   filters: Record<string, unknown>;
   sortMethod: 'CREATED_AT' | 'UPDATED_AT' | 'VIEWED_AT' | 'VIEWED_UPDATED';
   sortDirection: 'ASC' | 'DESC';
   limit: number;
+  /** Omit for exact evaluation; even an empty array requests reconciliation. */
+  baseline?: Array<{ key: string; sortTimestamp: string }>;
 };
 
 export type EntityFilterCacheResult =
+  | {
+      kind: 'reconciled';
+      revision: CacheRevision;
+      keys: string[];
+      /** Survivors backed only by previous server membership evidence. */
+      retainedKeys: string[];
+      optimistic: boolean;
+    }
   | {
       kind: 'complete';
       revision: CacheRevision;

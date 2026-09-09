@@ -1,3 +1,4 @@
+import { executeGraphqlSetFavoriteMutation } from '@service-storage/graphql-favorites';
 import {
   type Client,
   CombinedError,
@@ -35,7 +36,10 @@ import {
   normalizedCacheExchange,
   normalizedCacheResultMetadata,
 } from './normalized-cache-exchange';
-import { optimisticMutationDispositionOf } from './optimistic';
+import {
+  optimisticContextOf,
+  optimisticMutationDispositionOf,
+} from './optimistic';
 
 const QUERY = gql`
   query Soup($input: SoupInput!) {
@@ -1554,6 +1558,73 @@ describe('normalizedCacheExchange', () => {
 
   describe('mutations', () => {
     const optimistic = { setEntityProperty: { id: 'prop-1' } };
+
+    it.each([false, true])(
+      'rolls back rejected favorites rather than committing list patches (replay=%s)',
+      async (replay) => {
+        let submitted: Operation | undefined;
+        const capturingClient = {
+          mutation: (
+            query: Operation['query'],
+            variables: Operation['variables'],
+            context: Operation['context']
+          ) => {
+            submitted = makeOperation(
+              'mutation',
+              createRequest(query, variables),
+              {
+                ...context,
+                url: 'http://test',
+                requestPolicy: 'network-only',
+              }
+            );
+            return { toPromise: async () => ({}) };
+          },
+        } as unknown as Client;
+        await executeGraphqlSetFavoriteMutation(
+          capturingClient,
+          {
+            entityType: 'document',
+            entityId: 'document-1',
+          },
+          true,
+          0
+        );
+        if (!submitted) throw new Error('expected favorite submission');
+        const context = optimisticContextOf(submitted)!;
+        expect(context.linkPatches).toHaveLength(1);
+        if (replay) {
+          host.seedQueued({
+            uuid: context.uuid,
+            query: stringifyDocument(submitted.query),
+            operationName: 'SetFavorite',
+            variables: submitted.variables ?? undefined,
+            data: context.optimisticResponse,
+            linkPatches: context.linkPatches,
+            revalidations: context.revalidations,
+          });
+        }
+        // setFavorite emits GraphQL errors at the transport level, not an error
+        // union nested inside data. Replay needs no mounted mutation hook.
+        const error = new CombinedError({
+          graphQLErrors: [new Error('not authorized to update favorites')],
+        });
+        const { ops, client } = harness(host, () => ({
+          data: undefined,
+          error,
+        }));
+        if (replay) {
+          vi.mocked(client.mutation).mockReturnValue({
+            toPromise: async () => ({ error }),
+          } as never);
+        } else {
+          ops.next(submitted);
+        }
+        await tick();
+        expect(host.commits).toEqual([]);
+        expect(host.rollbacks).toEqual([replay ? 'restored-1' : 'txn-1']);
+      }
+    );
 
     it('replays a persisted mutation when the exchange starts', async () => {
       host.seedQueued({

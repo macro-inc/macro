@@ -738,15 +738,13 @@ async fn send_notifications(
         EntityType::EmailThread.with_entity_string(message.thread_db_id.to_string());
 
     if !staff_recipients.is_empty() {
-        let request = SendNotificationRequestBuilder {
+        let request = tier.notification_request(SendNotificationRequestBuilder {
             notification_entity: notification_entity.clone(),
             secondary_notification_entity: None,
             notification: notification.clone(),
             sender_id: sender_id.clone(),
             recipient_ids: staff_recipients,
-        }
-        .into_request()
-        .with_conn_gateway();
+        });
         match tier {
             NewEmailTier::Signal => publish_new_email_notification(ctx, request.with_apns()).await,
             NewEmailTier::StaffInbox => publish_new_email_notification(ctx, request).await,
@@ -754,15 +752,13 @@ async fn send_notifications(
     }
 
     if !customer_recipients.is_empty() {
-        let request = SendNotificationRequestBuilder {
+        let request = tier.notification_request(SendNotificationRequestBuilder {
             notification_entity,
             secondary_notification_entity: None,
             notification,
             sender_id,
             recipient_ids: customer_recipients,
-        }
-        .into_request()
-        .with_conn_gateway();
+        });
         publish_new_email_notification(ctx, request).await;
     }
 
@@ -800,6 +796,21 @@ enum NewEmailTier {
     Signal,
     /// Staff dogfood: in-app row only.
     StaffInbox,
+}
+
+impl NewEmailTier {
+    fn notification_request<'a>(
+        self,
+        builder: SendNotificationRequestBuilder<'a, NewEmailMetadata>,
+    ) -> SendNotificationRequest<'a, NewEmailMetadata, ()> {
+        let request = builder.into_request();
+        match self {
+            Self::Signal => request.with_conn_gateway(),
+            // Persist the same row, but do not deliver a new-notification event
+            // over either GraphQL or the legacy gateway (both produce popups).
+            Self::StaffInbox => request,
+        }
+    }
 }
 
 fn signal_filter(thread_id: Uuid) -> Expr<EmailLiteral> {

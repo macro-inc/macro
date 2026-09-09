@@ -1,8 +1,12 @@
 //! Configuration for the agent harness service, loaded via the standard
-//! `macro_config` pattern.
+//! `macro_config` pattern so it gets a `doppler_config` validation binary.
+//!
+//! Required env vars are declared here as typed fields. The `doppler_config`
+//! binary loads this `Config` from Doppler for both the dev and prod
+//! environments, surfacing any missing or mistyped values at CI time.
 
 use anyhow::Context;
-use database_env_vars::DatabaseUrl;
+use database_env_vars::{DatabaseUrl, RedisUri};
 pub use macro_env::Environment;
 use macro_uuid::Uuid;
 
@@ -51,6 +55,8 @@ pub struct Config {
     pub kafka_brokers: KafkaBrokers,
     /// MacroDB connection string; `agent_sessions` lives here.
     pub database_url: DatabaseUrl,
+    /// Shared Redis used for cross-replica command forwarding.
+    pub redis_uri: RedisUri,
     /// Base URL of the Daytona REST API.
     #[macro_config_default(String::from("https://app.daytona.io/api"))]
     pub daytona_api_url: String,
@@ -134,18 +140,10 @@ pub struct Config {
     pub port: u16,
     /// Port the sandbox-facing egress proxy is served on.
     ///
-    /// A second listener rather than more routes on `port`: the control routes
-    /// are authenticated as Macro users and reached from inside the platform,
-    /// and the egress routes are authenticated by session token and reached
-    /// from a sandbox running model-authored code. Separate ports keep the two
-    /// separable at the network as well as in the code.
+    /// The shared gateway forwards `/agent-harness-egress/*` to this listener.
+    /// The egress router reads sandbox session tokens from `Authorization`.
     #[macro_config_default(8102)]
     pub egress_port: u16,
-    /// Where a sandbox should dial the egress proxy.
-    ///
-    /// Not derivable from `egress_port`: the sandbox reaches this through
-    /// whatever ingress fronts the deployment, not on the container's own port.
-    pub egress_base_url: String,
     /// OAuth client ID for the Pipedream API.
     pub pipedream_client_id: PipedreamClientId,
     /// OAuth client secret for the Pipedream API.
@@ -161,11 +159,6 @@ pub struct Config {
     /// URL of Pipedream's remote MCP server.
     #[macro_config_default(String::from(pipedream_mcp::outbound::api::DEFAULT_MCP_URL))]
     pub pipedream_mcp_url: String,
-    /// Where the egress proxy reaches Macro's own MCP server (`mcp_service`),
-    /// endpoint path included - e.g. `https://mcp.macro.com/mcp`, or the
-    /// in-network `http://mcp-service:8080/mcp` on a local stack. Cleartext is
-    /// refused at boot unless `ENVIRONMENT=local`.
-    pub macro_mcp_url: String,
     /// RSA key Macro API tokens are signed with.
     pub macro_api_token_private_secret_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
     /// Issuer stamped into minted Macro API tokens.

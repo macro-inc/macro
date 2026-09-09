@@ -12,6 +12,7 @@ import { MarkdownSnapshotEndpoint } from "./endpoints/markdown-snapshot";
 import { MentionsEndpoint } from "./endpoints/mentions";
 import { PlaintextEndpoint } from "./endpoints/plaintext";
 import { ExtractReplyEndpoint } from "./endpoints/extract-reply";
+import { HtmlEndpoint } from "./endpoints/html";
 import { SearchTextEndpoint } from "./endpoints/search-text";
 import { XmlEndpoint } from "./endpoints/xml";
 
@@ -69,6 +70,7 @@ openapi.get("/search/:docId", SearchTextEndpoint);
 openapi.get("/markdown/:docId", MarkdownEndpoint);
 openapi.get("/xml/:docId", XmlEndpoint);
 openapi.post("/snapshot/markdown", MarkdownSnapshotEndpoint);
+openapi.post("/html", HtmlEndpoint);
 openapi.post("/mentions", MentionsEndpoint);
 openapi.post("/extract-reply", ExtractReplyEndpoint);
 openapi.post("/agent-announcement", AgentAnnouncementEndpoint);

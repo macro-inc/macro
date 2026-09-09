@@ -5942,6 +5942,115 @@
         }
       }
     },
+    "/crm/stages": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::stages"],
+        "summary": "Replace the team's deal stages; requires `edit_stages_role` (403 otherwise).",
+        "operationId": "put_crm_team_stages",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceCrmStagesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmStagesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::stages"],
+        "summary": "Reset the team's deal stages to the defaults; gated like `PUT /crm/stages`.",
+        "operationId": "reset_crm_team_stages",
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents": {
       "get": {
         "tags": ["document"],
@@ -12656,7 +12765,8 @@
           "harness",
           "default_model",
           "channel_scope",
-          "channel_ids"
+          "channel_ids",
+          "mcp"
         ],
         "properties": {
           "bot": {
@@ -12697,6 +12807,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "mcp": {
+            "$ref": "#/components/schemas/AgentMcpServers",
+            "description": "Which MCP servers sessions of this agent are handed."
           }
         }
       },
@@ -12704,6 +12818,55 @@
         "type": "string",
         "description": "Whether an agent is available everywhere or only in selected channels.",
         "enum": ["all", "selected"]
+      },
+      "AgentMcpServer": {
+        "type": "object",
+        "description": "One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.",
+        "required": ["app_slug", "server_name"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "Pipedream app slug, e.g. `linear`."
+          },
+          "server_name": {
+            "type": "string",
+            "description": "Display name, e.g. `Linear`."
+          }
+        }
+      },
+      "AgentMcpServers": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Whatever apps the person running the session has connected.",
+            "required": ["scope"],
+            "properties": {
+              "scope": {
+                "type": "string",
+                "enum": ["owner_connections"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Exactly these apps, connected or not.",
+            "required": ["servers", "scope"],
+            "properties": {
+              "scope": {
+                "type": "string",
+                "enum": ["selected"]
+              },
+              "servers": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AgentMcpServer"
+                },
+                "description": "The apps, in the order the agent's author picked them."
+              }
+            }
+          }
+        ],
+        "description": "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       },
       "Anchor": {
         "oneOf": [
@@ -14424,7 +14587,7 @@
       },
       "CalendarEvent": {
         "type": "object",
-        "description": "A stable, first-class Macro calendar event entity.",
+        "description": "A stable, first-class Macro calendar event entity.\n\nContent fields hold the canonical source's values: the account's primary\ncalendar copy when one is synced, else the freshest remaining copy.",
         "required": [
           "id",
           "ownerId",
@@ -14501,7 +14664,7 @@
           },
           "isReadOnly": {
             "type": "boolean",
-            "description": "Whether the current user can edit the canonical source."
+            "description": "Whether the canonical source's calendar prohibits editing it."
           },
           "location": {
             "type": ["string", "null"],
@@ -14535,6 +14698,13 @@
             "format": "int32",
             "description": "Provider/iCalendar sequence number.",
             "minimum": 0
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarEventSourceContent"
+            },
+            "description": "Content of every active copy of this event, canonical first: the\nprimary calendar's copy, then the freshest. A client picks the copy\nwhose calendar it is showing and falls back to the first. Populated\nonly on the read path, so stored projections omit it."
           },
           "status": {
             "$ref": "#/components/schemas/EventStatus",
@@ -14604,6 +14774,66 @@
               "type": "string"
             },
             "description": "Event statuses such as `confirmed`, `tentative`, or `cancelled`."
+          }
+        }
+      },
+      "CalendarEventSourceContent": {
+        "type": "object",
+        "description": "The content one provider copy of an event carries.\n\nGoogle keeps these fields per calendar copy: a shared calendar's copy of a\nmember's event can have its own title, type, reminders, and access role.\nThe entity holds its canonical source's values. Every other copy's values\nare read from here so a client can show the copy that belongs to the\ncalendar being viewed.",
+        "required": [
+          "calendarId",
+          "title",
+          "eventType",
+          "visibility",
+          "transparency",
+          "isReadOnly",
+          "reminders"
+        ],
+        "properties": {
+          "calendarId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Calendar this copy lives on."
+          },
+          "creatorEmail": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator email."
+          },
+          "creatorName": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator display name."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional event body."
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/EventType",
+            "description": "Provider event type."
+          },
+          "isReadOnly": {
+            "type": "boolean",
+            "description": "Whether the calendar's access role prohibits editing this copy."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Optional physical or virtual location label."
+          },
+          "reminders": {
+            "$ref": "#/components/schemas/EventReminders",
+            "description": "Reminder configuration of this copy."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "transparency": {
+            "$ref": "#/components/schemas/EventTransparency",
+            "description": "Availability behavior."
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/EventVisibility",
+            "description": "Event visibility."
           }
         }
       },
@@ -15258,6 +15488,17 @@
           "channel_type": {
             "$ref": "#/components/schemas/ChannelType",
             "description": "Type of channel that was created."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User the actor created the channel for, when the actor is a bot."
+              }
+            ]
           },
           "participant_user_ids": {
             "type": "array",
@@ -16541,6 +16782,10 @@
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
           },
+          "mcp": {
+            "$ref": "#/components/schemas/AgentMcpServers",
+            "description": "Which MCP servers sessions of this agent are handed."
+          },
           "name": {
             "type": "string",
             "description": "Display name."
@@ -17819,6 +18064,57 @@
         "description": "Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.",
         "enum": ["admin", "owner"]
       },
+      "CrmStageInput": {
+        "type": "object",
+        "description": "One stage in a `PUT /crm/stages` body.",
+        "required": ["label"],
+        "properties": {
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Existing stage to keep; omit to add one."
+          },
+          "label": {
+            "type": "string",
+            "description": "Label after the update; non-blank and unique within the set."
+          }
+        }
+      },
+      "CrmStageResponse": {
+        "type": "object",
+        "description": "One stage of the team's custom pipeline.",
+        "required": ["id", "label"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Property option id companies carry as their stage value."
+          },
+          "label": {
+            "type": "string",
+            "description": "Label."
+          }
+        }
+      },
+      "CrmStagesResponse": {
+        "type": "object",
+        "description": "The team's custom stage set.",
+        "required": ["definition_id", "stages"],
+        "properties": {
+          "definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team-scoped stage definition id."
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmStageResponse"
+            },
+            "description": "Stages in pipeline order."
+          }
+        }
+      },
       "CrmTeamSettingsResponse": {
         "type": "object",
         "description": "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH /team/crm` on the auth service).",
@@ -17826,6 +18122,7 @@
           "edit_stages_role",
           "move_closed_deals_role",
           "delete_records_role",
+          "legacy_stage_ids",
           "team_views"
         ],
         "properties": {
@@ -17848,6 +18145,18 @@
           "edit_stages_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
             "description": "Who can change the deal stage set in CRM settings."
+          },
+          "legacy_stage_ids": {
+            "type": "object",
+            "description": "System stage option id to team stage option id for seeded stages.",
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           "move_closed_deals_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
@@ -18345,6 +18654,10 @@
         "description": "Metadata for [`DocumentTopicEvent::Deleted`].",
         "required": ["document_id"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically deleted the document. Absent on events published\nbefore attribution, and on user-receipt writes (ingest then uses\n[`Self::actor_user_id`])."
+          },
           "actor_user_id": {
             "oneOf": [
               {
@@ -18359,6 +18672,17 @@
           "document_id": {
             "type": "string",
             "description": "The id of the deleted document."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this delete belongs on, when different from\n[`Self::actor`]."
+              }
+            ]
           },
           "project_id": {
             "type": ["string", "null"],
@@ -19075,6 +19399,10 @@
         "description": "Metadata for [`DocumentTopicEvent::Updated`].",
         "required": ["document_id", "owner", "share_permission_updated"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically updated the document. Absent on events published\nbefore attribution, and on user-receipt writes (ingest then uses\n[`Self::actor_user_id`])."
+          },
           "actor_user_id": {
             "oneOf": [
               {
@@ -19102,6 +19430,17 @@
               {
                 "$ref": "#/components/schemas/FileTypeUpdate",
                 "description": "Requested file type change; `None` when unchanged."
+              }
+            ]
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this update belongs on, when different from\n[`Self::actor`]."
               }
             ]
           },
@@ -23721,6 +24060,20 @@
           }
         }
       },
+      "ReplaceCrmStagesRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /crm/stages`: the whole stage set in order.",
+        "required": ["stages"],
+        "properties": {
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmStageInput"
+            },
+            "description": "Stages first to last."
+          }
+        }
+      },
       "RequestedHarnessScope": {
         "type": "string",
         "description": "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership.",
@@ -24977,6 +25330,7 @@
           "isRead",
           "isDraft",
           "isImportant",
+          "isSignal",
           "sortTs",
           "createdAt",
           "updatedAt"
@@ -25007,6 +25361,10 @@
           "isRead": {
             "type": "boolean",
             "description": "Whether the thread has been read."
+          },
+          "isSignal": {
+            "type": "boolean",
+            "description": "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
           },
           "name": {
             "type": ["string", "null"],
@@ -26200,6 +26558,10 @@
           "instructions": {
             "type": "string",
             "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "mcp": {
+            "$ref": "#/components/schemas/AgentMcpServers",
+            "description": "Which MCP servers sessions of this agent are handed."
           },
           "name": {
             "type": "string",
