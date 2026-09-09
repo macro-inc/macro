@@ -1,0 +1,49 @@
+[package]
+edition = "2024"
+name = "agent_egress_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "agent_egress_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "agent_egress_service_doppler_config"
+path = "src/doppler_config.rs"
+
+[dependencies]
+agent_egress = { path = "../../crates/agent_egress" }
+# The session rows the proxy verifies a sandbox's token against.
+agent_session = { path = "../../crates/agent_session" }
+anyhow = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+axum = { workspace = true }
+database_env_vars = { path = "../../crates/database_env_vars" }
+doppler-config = { workspace = true }
+# App installation tokens for the git side of the proxy.
+github = { path = "../../crates/github", default-features = false, features = [
+  "outbound",
+  "ports",
+  "sync",
+] }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+macro_tower_layers = { path = "../../crates/macro_tower_layers" }
+# The owner's connected apps, and the client that turns one into Pipedream's
+# MCP endpoint.
+pipedream_mcp = { path = "../../crates/pipedream_mcp" }
+rustls = { workspace = true }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tracing = { workspace = true }
+url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+tower = { workspace = true }

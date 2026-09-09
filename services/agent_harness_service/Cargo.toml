@@ -17,7 +17,6 @@ name = "agent_harness_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
-agent_egress = { path = "../../crates/agent_egress" }
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_inmem = { path = "../../crates/agent_inmem" }
@@ -26,6 +25,7 @@ agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", feature
 agent_session = { path = "../../crates/agent_session" }
 agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 ai_usage = { path = "../../crates/ai_usage" }
+aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots" }
@@ -38,11 +38,6 @@ cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
 futures = { workspace = true }
-github = { path = "../../crates/github", default-features = false, features = [
-  "outbound",
-  "ports",
-  "sync",
-] }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 url = { workspace = true }
 contacts = { path = "../../crates/contacts" }
@@ -55,11 +50,11 @@ macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 notification = { path = "../../crates/notification" }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id" }
 axum = { workspace = true }
-aws-sdk-secretsmanager = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util" }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", default-features = false, features = [
@@ -68,7 +63,6 @@ macro_authorization = { path = "../../crates/macro_authorization", default-featu
   "postgres",
 ] }
 macro_cors = { path = "../../crates/macro_cors" }
-secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }

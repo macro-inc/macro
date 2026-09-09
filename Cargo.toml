@@ -80,6 +80,7 @@ members = [
   "crates/webhook_signature",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
+  "services/agent_egress_service",
   "services/agent_harness_service",
   "services/agent_trigger_service",
   "services/ai_projections_refresh_handler",

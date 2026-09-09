@@ -5,8 +5,6 @@
 
 use std::time::Duration;
 
-use agent_egress::domain::service::EgressService;
-use agent_egress::inbound::axum_router::{EgressRouterState, egress_router};
 use agent_harness::domain::model_load::AgentModelsService;
 use agent_harness::inbound::model_load::{AgentModelsRouterState, agent_models_router};
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
@@ -35,20 +33,12 @@ pub mod swagger;
 #[cfg(test)]
 mod test;
 
-/// Path prefixes the shared gateway ALB forwards unmodified.
+/// Path prefix the shared gateway ALB forwards unmodified.
 const GATEWAY_PATH_PREFIX: &str = "/agent-harness";
-const EGRESS_GATEWAY_PATH_PREFIX: &str = "/agent-harness-egress";
 
 // Keep root mounts for direct health checks, local ingress, and cutover.
 fn mount_at_root_and_prefix(inner: Router, prefix: &str) -> Router {
     Router::new().merge(inner.clone()).nest(prefix, inner)
-}
-
-fn egress_app<Service>(state: EgressRouterState<Service>) -> Router
-where
-    Service: EgressService + 'static,
-{
-    mount_at_root_and_prefix(egress_router(state), EGRESS_GATEWAY_PATH_PREFIX)
 }
 
 fn health_router(ready: tokio::sync::watch::Receiver<bool>) -> Router {
@@ -81,32 +71,6 @@ impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Acc
             models,
         }
     }
-}
-
-/// Serve the sandbox-facing egress proxy on its own listener.
-///
-/// No CORS layer and no Swagger: nothing browses this. Its only client is a
-/// sandbox, and its only credential is a session token.
-pub async fn serve_egress<Service>(
-    service: std::sync::Arc<Service>,
-    port: u16,
-    shutdown: impl Future<Output = ()> + Send + 'static,
-) -> anyhow::Result<()>
-where
-    Service: EgressService + 'static,
-{
-    let app = egress_app(EgressRouterState::new(service));
-
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
-        .await
-        .with_context(|| format!("failed to bind agent harness egress to port {port}"))?;
-
-    tracing::info!(port, "agent harness egress listening");
-
-    axum::serve(listener, app.into_make_service())
-        .with_graceful_shutdown(shutdown)
-        .await
-        .context("agent harness egress http failed")
 }
 
 /// Build the router and serve it until the process is asked to stop.
