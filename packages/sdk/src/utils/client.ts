@@ -50,6 +50,43 @@ async function resolveToken(source: TokenSource): Promise<string> {
   return typeof source === 'function' ? await source() : source;
 }
 
+export async function requestAuthHeaders(
+  auth: MacroAuth,
+  requestedAs?: string,
+  existing?: { hasBotScope?: boolean },
+): Promise<ReadonlyArray<readonly [string, string]>> {
+  return match(auth)
+    .with({ type: 'bot' }, async (botAuth) => {
+      const tok = await resolveToken(botAuth.token);
+      if (tok.startsWith(USER_API_KEY_PREFIX)) {
+        throw new Error(
+          "user API key passed as a bot token. Use auth: { type: 'user', apiKey } or MACRO_API_KEY.",
+        );
+      }
+      const headers: Array<readonly [string, string]> = [
+        ['x-macro-bot-token', tok],
+      ];
+      if (!existing?.hasBotScope) {
+        headers.push([
+          'x-macro-bot-scope',
+          botAuth.scope ?? (requestedAs ? 'user' : 'team'),
+        ]);
+      }
+      if (requestedAs) {
+        headers.push(['x-macro-bot-for-macro-user-id', requestedAs]);
+      }
+      return headers;
+    })
+    .with({ type: 'user', apiKey: P.string }, ({ apiKey }) => [
+      [USER_API_KEY_HEADER, apiKey] as const,
+    ])
+    .with({ type: 'user' }, async ({ token }) => {
+      const pair = userCredentialHeader(await resolveToken(token));
+      return [pair];
+    })
+    .exhaustive();
+}
+
 export class MacroClient {
   readonly agentHarness: AgentHarnessSdk;
   readonly auth: AuthSdk;
@@ -161,36 +198,14 @@ export class MacroClient {
   private makeClient(baseUrl: string) {
     const c = createClient({ baseUrl });
     c.interceptors.request.use(async (request) => {
-      await match(this.authConfig)
-        .with({ type: 'bot' }, async (auth) => {
-          const tok = await resolveToken(auth.token);
-          if (tok.startsWith(USER_API_KEY_PREFIX)) {
-            throw new Error(
-              "user API key passed as a bot token. Use auth: { type: 'user', apiKey } or MACRO_API_KEY.",
-            );
-          }
-          request.headers.set('x-macro-bot-token', tok);
-          if (!request.headers.has('x-macro-bot-scope')) {
-            request.headers.set(
-              'x-macro-bot-scope',
-              auth.scope ?? (this.requestedAs ? 'user' : 'team'),
-            );
-          }
-          if (this.requestedAs) {
-            request.headers.set(
-              'x-macro-bot-for-macro-user-id',
-              this.requestedAs,
-            );
-          }
-        })
-        .with({ type: 'user', apiKey: P.string }, ({ apiKey }) => {
-          request.headers.set(USER_API_KEY_HEADER, apiKey);
-        })
-        .with({ type: 'user' }, async ({ token }) => {
-          const [name, value] = userCredentialHeader(await resolveToken(token));
-          request.headers.set(name, value);
-        })
-        .exhaustive();
+      const headers = await requestAuthHeaders(
+        this.authConfig,
+        this.requestedAs,
+        { hasBotScope: request.headers.has('x-macro-bot-scope') },
+      );
+      for (const [name, value] of headers) {
+        request.headers.set(name, value);
+      }
       return request;
     });
     return c;
