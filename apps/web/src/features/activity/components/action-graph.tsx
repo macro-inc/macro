@@ -33,14 +33,6 @@ import type { ActivityIntensity } from '../core/intensity';
 
 const WEEKDAY_LABELS = ['', 'M', '', 'W', '', 'F', ''];
 
-// Cell geometry arrives as CSS variables from `heatmapGeometry`, in px rather
-// than rem so the fit holds when Dynamic Type scales the root font size.
-const CELL_CLASS = 'size-(--heatmap-cell)';
-const COLUMN_CLASS = 'w-(--heatmap-cell)';
-const GAP_CLASS = 'gap-(--heatmap-gap)';
-const COLUMN_GAP_CLASS = 'gap-(--heatmap-column-gap)';
-const MONTH_ROW_CLASS = 'mb-1 h-3';
-
 function dateLabel(date: string): string {
   return format(parseOverviewDate(date), 'EEE, MMM d, yyyy', {
     in: OVERVIEW_TZ,
@@ -226,6 +218,8 @@ function ContributionHeatmap(props: {
   return (
     <div
       class="flex items-stretch px-4 py-3"
+      // In px rather than rem so the fit holds when Dynamic Type scales the
+      // root font size.
       style={{
         '--heatmap-cell': `${props.geometry.cell}px`,
         '--heatmap-gap': `${props.geometry.gap}px`,
@@ -243,7 +237,7 @@ function ContributionHeatmap(props: {
         onScroll={rememberPan}
         data-activity-heatmap-weeks
       >
-        <div class={cn('flex w-max', COLUMN_GAP_CLASS)}>
+        <div class="flex w-max gap-(--heatmap-column-gap)">
           <For each={props.weeks}>
             {(week, index) => (
               <HeatmapWeek
@@ -261,18 +255,11 @@ function ContributionHeatmap(props: {
 
 function WeekdayGutter() {
   return (
-    <div
-      class={cn(
-        'mr-1.5 flex w-3.5 shrink-0 flex-col text-ink-extra-muted text-xs',
-        GAP_CLASS
-      )}
-    >
-      <span aria-hidden class={cn('shrink-0', MONTH_ROW_CLASS)} />
+    <div class="mr-1.5 flex w-3.5 shrink-0 flex-col gap-(--heatmap-gap) text-ink-extra-muted text-xs">
+      <span aria-hidden class="mb-1 h-3 shrink-0" />
       <For each={WEEKDAY_LABELS}>
         {(label) => (
-          <span
-            class={cn('flex items-center leading-none', 'h-(--heatmap-cell)')}
-          >
+          <span class="flex h-(--heatmap-cell) items-center leading-none">
             {label}
           </span>
         )}
@@ -287,13 +274,8 @@ function HeatmapWeek(props: {
   skeleton: boolean;
 }) {
   return (
-    <div class={cn('flex shrink-0 flex-col', COLUMN_CLASS, GAP_CLASS)}>
-      <span
-        class={cn(
-          'shrink-0 overflow-visible text-center text-ink-extra-muted text-xs leading-none',
-          MONTH_ROW_CLASS
-        )}
-      >
+    <div class="flex w-(--heatmap-cell) shrink-0 flex-col gap-(--heatmap-gap)">
+      <span class="mb-1 h-3 shrink-0 overflow-visible text-center text-ink-extra-muted text-xs leading-none">
         {props.monthLabel}
       </span>
       <For each={props.week}>
@@ -306,7 +288,7 @@ function HeatmapWeek(props: {
 function DaySquare(props: { day: ContributionDay | null; skeleton: boolean }) {
   const day = props.day;
   if (!day) {
-    return <span class={cn('shrink-0', CELL_CLASS)} />;
+    return <span class="size-(--heatmap-cell) shrink-0" />;
   }
 
   const label = actionLabel(day);
@@ -317,17 +299,14 @@ function DaySquare(props: { day: ContributionDay | null; skeleton: boolean }) {
         <span
           aria-hidden
           data-activity-day
-          class={cn(
-            'skeleton-shimmer block shrink-0 rounded-[3px] bg-skeleton',
-            CELL_CLASS
-          )}
+          class="skeleton-shimmer block size-(--heatmap-cell) shrink-0 rounded-[3px] bg-skeleton"
         />
       }
     >
       <Tooltip
         as="span"
         placement="top"
-        class={cn('block shrink-0', CELL_CLASS)}
+        class="block size-(--heatmap-cell) shrink-0"
         label={label}
       >
         <IntensitySwatch
