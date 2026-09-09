@@ -79,7 +79,14 @@ impl<Context> AuthenticatedToolService<Context> {
             .map(|(key, value)| {
                 Tool::new(
                     key.to_owned(),
-                    value.description.to_owned(),
+                    if key == "SendEmail" {
+                        format!(
+                            "{} Before calling this tool, display the proposed recipients, subject, and full email body in your response so the user can read it. Then call this tool to request review. Displaying the draft does not authorize sending; explicit user approval through the tool's review is still required.",
+                            value.description.replace(" — never write the email as plain text in the chat", "")
+                        )
+                    } else {
+                        value.description.to_owned()
+                    },
                     Arc::new(value.input_schema.clone()),
                 )
                 .with_title(value.annotations.title)

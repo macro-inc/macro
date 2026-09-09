@@ -16,6 +16,11 @@ static INSTRUCTIONS: &str = r##"- User tools are tools that must be executed by 
   A user tool will return "PendingUserExecution" until a user chooses to
   accept / reject the tool.
 
+- Some MCP tools instruct you to display a draft before calling them. When using Macro's
+  built-in email or calendar composer, you are exempt from that display requirement: call
+  the tool directly and let the composer present the draft. User review and approval are
+  still required before execution.
+
 - IMPORTANT: When the user asks you to draft, write, compose, or send an email (or reply to one),
   you MUST use the `SendEmail` tool to produce it. NEVER write the email body as plain text in the
   chat. The `SendEmail` tool opens a real draft in the email composer that the user can review,
@@ -32,6 +37,11 @@ through the SendEmail tool rather than inline text in the chat.";
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
 
 static SESSION_INSTRUCTIONS: &str = r##"- `SendEmail` and `CreateCalendarEvent` are reviewed by the user before they run. Calling one opens a review card in the session, the turn waits while the user edits, confirms or declines, and the tool then returns what happened: the sent email or created event, or "Rejected". Nothing is pending afterwards and there is no chat composer; do not tell the user to confirm anything, and do not ask for confirmation in prose before calling the tool - the review card is the confirmation.
+
+- Some MCP tools instruct you to display a draft before calling them. When using Macro's
+  built-in email or calendar composer, you are exempt from that display requirement: call
+  the tool directly and let the composer present the draft. User review and approval are
+  still required before execution.
 
 - IMPORTANT: When the user asks you to draft, write, compose, or send an email (or reply to one),
   you MUST use the `SendEmail` tool to produce it. NEVER write the email body as plain text in your

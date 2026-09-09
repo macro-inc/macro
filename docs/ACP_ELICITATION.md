@@ -364,6 +364,11 @@ returns the existing `UserToolResponse` envelope; chat still receives
 `PendingUserExecution` and finishes through its composer endpoint. The agent-loop
 finisher and neutral `UserToolReviewer` abstraction have been removed.
 
+MCP's `SendEmail` description asks external harnesses to display recipients,
+subject, and the full body before calling the tool. Macro's internal chat and
+session prompts explicitly exempt the built-in composers from that display
+requirement; user approval is still required before execution.
+
 External email reviews show the full multiline message above editable To/Subject
 fields and an optional Replacement body. Leaving the replacement blank keeps the
 previewed body. Populated Cc/Bcc and explicit reply/signature settings remain visible. Addresses are edited as comma-separated text. Inmem
