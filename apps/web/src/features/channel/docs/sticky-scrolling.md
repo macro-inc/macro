@@ -48,9 +48,13 @@ insets. Short conversations are bottom aligned. Before TanStack writes a scroll
 correction, `scrollToFn` synchronously commits the current total to the sizer;
 otherwise a growing last row can clamp the scroll against the old DOM extent.
 Viewport and inset changes explicitly scroll to the end only if previously pinned.
-The offset observer distinguishes instant programmatic scrolls from user scrolling,
-so iOS does not replay deferred momentum adjustments after a navigation has already
-accounted for those measurements. Actual touch/momentum deferral remains in the core.
+The offset observer (`create-scroll-source.ts`) reports a scroll event as user
+scrolling only during a gesture and its momentum, never for an instant programmatic
+scroll or for the browser clamping `scrollTop` after content shrank. Anything reported
+as scrolling makes iOS defer size compensation until `scrollend`, and a clamp fires no
+`scrollend`: a card row measured small, the clamp was misreported, and the card's
+growth once its preview resolved stayed deferred until the next real scroll.
+Actual touch/momentum deferral remains in the core.
 That deferral holds while a finger is on the list. iOS ends a touch that turns into
 a scroll, or that the OS takes over, with `touchcancel` rather than `touchend`;
 `@tanstack/virtual-core` only released on `touchend`, so one such touch left every
