@@ -1,16 +1,22 @@
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { createCalendarBlockRange } from '@block-calendar/calendar-range';
 import {
   type CalendarMentionTarget,
   copyCalendarEventMentionTarget,
 } from '@block-calendar/copy-event-mention';
-import { openCalendarEventSplit } from '@block-calendar/open-calendar-event';
+import {
+  eventTimeFromOccurrenceKey,
+  openCalendarEventSplit,
+} from '@block-calendar/open-calendar-event';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
 import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/constants';
+import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { useRightPanel } from '@components/app/right-panel-context';
 import {
   type BlockAlias,
   type BlockName,
@@ -231,6 +237,7 @@ function PopupIconButton(props: {
   return (
     <Tooltip label={props.tooltip}>
       <button
+        aria-label={props.tooltip}
         onClick={(e) => {
           e.stopPropagation();
           props.onClick();
@@ -501,6 +508,8 @@ export type DocumentPreviewContentProps = {
 export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   // Hooks
   const navigate = useNavigate();
+  const rightPanel = useRightPanel();
+  const orchestrator = useGlobalBlockOrchestrator();
 
   const blockName = useMaybeBlockName();
   const itemPreviewEntity = () => {
@@ -574,7 +583,46 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     return undefined;
   };
 
+  const openInReferencePanel = async () => {
+    if (!rightPanel) return false;
+    const calendarTarget = calendarOpenTarget();
+    if (calendarTarget) {
+      const time =
+        calendarTarget.time ??
+        (calendarTarget.occurrenceKey
+          ? eventTimeFromOccurrenceKey(calendarTarget.occurrenceKey)
+          : undefined);
+      const params = {
+        eventId: calendarTarget.eventId,
+        occurrenceKey: calendarTarget.occurrenceKey,
+        range: time ? createCalendarBlockRange(time) : undefined,
+      };
+      rightPanel.open({ type: 'calendar', id: CALENDAR_BLOCK_ID, params });
+      const handle = await orchestrator.getBlockHandle(
+        CALENDAR_BLOCK_ID,
+        'calendar'
+      );
+      await handle?.goToLocationFromParams(params);
+      return true;
+    }
+    const type = targetBlockType();
+    rightPanel.open({
+      type,
+      id: props.documentInfo.id,
+      params: props.documentInfo.params,
+    });
+    if (isBlockNameWithLocation(type)) {
+      const handle = await orchestrator.getBlockHandle(
+        props.documentInfo.id,
+        resolveBlockAlias(type)
+      );
+      await handle?.goToLocationFromParams(props.documentInfo.params);
+    }
+    return true;
+  };
+
   const openDocument = createCallback(async () => {
+    if (await openInReferencePanel()) return;
     const calendarTarget = calendarOpenTarget();
     if (calendarTarget) {
       await openCalendarEventSplit(calendarTarget);
@@ -681,6 +729,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   };
 
   const openInNewSplit = createCallback(async () => {
+    if (await openInReferencePanel()) return;
     const calendarTarget = calendarOpenTarget();
     if (calendarTarget) {
       await openCalendarEventSplit({ ...calendarTarget, openInNewSplit: true });
@@ -794,13 +843,13 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     if (props.documentInfo.isOpenable) {
       buttons.push(
         <PopupIconButton
-          tooltip="Open Fullscreen"
+          tooltip={rightPanel ? 'Open in right panel' : 'Open Fullscreen'}
           onClick={openDocument}
           icon={OpenIcon}
         />
       );
 
-      if (!isSplitAlreadyOpen()) {
+      if (!rightPanel && !isSplitAlreadyOpen()) {
         buttons.push(
           <PopupIconButton
             tooltip="Open in New Split"

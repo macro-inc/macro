@@ -11,7 +11,6 @@ import { InboxFilterDrawer, InboxFilterDropdown } from './InboxFilters';
 const INBOX_TABS: { value: InboxTab; label: string }[] = [
   { value: 'signal', label: 'Signal' },
   { value: 'noise', label: 'Noise' },
-  { value: 'all', label: 'All' },
 ];
 const INBOX_TAB_IDS = INBOX_TABS.map((tab) => tab.value);
 
@@ -41,7 +40,7 @@ export function InboxTabs() {
       fallback={
         <div class="flex h-8 min-w-0 flex-1 items-center gap-3">
           <Tabs
-            aria-label="Inbox views"
+            aria-label="Notification views"
             list={INBOX_TABS}
             value={state.tab}
             onChange={handleTabChange}

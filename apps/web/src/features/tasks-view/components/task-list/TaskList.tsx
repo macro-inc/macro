@@ -45,7 +45,7 @@ import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button, cn, Surface } from '@ui';
+import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -423,22 +423,14 @@ export function TaskList() {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      <Surface
-        depth={isTouchDevice() ? 0 : 2}
-        hideBorder={isTouchDevice()}
+      <div
         ref={setGrid}
         role="grid"
         aria-label="Tasks"
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class={cn(
-          '@container/u-list flex min-h-0 min-w-0 flex-col outline-none',
-          {
-            'rounded-2xl p-2': !isTouchDevice(),
-            'rounded-none bg-transparent p-0': isTouchDevice(),
-          }
-        )}
+        class="@container/u-list flex h-full min-h-0 min-w-0 flex-col outline-none"
       >
         <ListLayoutProvider ref={grid}>
           <ResponsiveTaskListHeader />
@@ -715,7 +707,7 @@ export function TaskList() {
             />
           </Show>
         </ListLayoutProvider>
-      </Surface>
+      </div>
     </MaybeSoupEntityActionDrawerManager>
   );
 }

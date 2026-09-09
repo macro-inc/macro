@@ -1,3 +1,4 @@
+import ToolIcon from '@phosphor/pencil-simple.svg';
 /** File modifications: +/− badge in the row, Pierre-rendered diffs in the body. */
 
 import type { ToolDetail } from '@service-agent-fold/generated/types';
@@ -14,6 +15,7 @@ export function EditToolCall(props: {
 
   return (
     <ToolCard
+      icon={<ToolIcon class="size-4" />}
       title={props.common.label}
       subtitle={pathsSubtitle(props.detail.diffs.map((diff) => diff.path))}
       trailing={props.common.trailing ?? <DiffChanges {...changes()} />}
@@ -21,7 +23,9 @@ export function EditToolCall(props: {
       muted={props.common.muted}
     >
       <Show when={props.detail.diffs.length > 0}>
-        <PierreDiff diffs={props.detail.diffs} />
+        <div class="p-3">
+          <PierreDiff diffs={props.detail.diffs} />
+        </div>
       </Show>
     </ToolCard>
   );

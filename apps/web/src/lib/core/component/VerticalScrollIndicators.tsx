@@ -6,6 +6,7 @@ const SCROLL_THRESHOLD = 20;
 const GRADIENT_COLOR = {
   surface: 'var(--color-surface)',
   panel: 'var(--color-panel)',
+  sidebar: 'var(--color-sidebar)',
   page: 'var(--color-page)',
   inset: 'var(--color-inset)',
   dialog: 'var(--color-dialog)',
@@ -75,11 +76,21 @@ export const ScrollIndicators = (props: {
     };
     observeScrollContent();
 
+    const mutationObserver = new MutationObserver(() => {
+      observeScrollContent();
+      updateIndicators();
+    });
+    mutationObserver.observe(ref, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
     updateIndicators();
 
     onCleanup(() => {
       ref.removeEventListener('scroll', updateIndicators);
       resizeObserver.disconnect();
+      mutationObserver.disconnect();
     });
   });
 

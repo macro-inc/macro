@@ -1,39 +1,32 @@
 import { sidebarContent } from '@components/app/app-sidebar/sidebar';
 import { isTauri } from '@core/util/platform';
 import { openExternalUrl } from '@core/util/url';
-import SquaresFourIcon from '@phosphor/squares-four.svg';
+import DotsThreeIcon from '@phosphor/dots-three.svg';
 import { Button, Dropdown } from '@ui';
-import { createSignal, For } from 'solid-js';
+import { For } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 import { type SidebarNextNavItem, visibleNavItems } from './nav-items';
 import { splitContentUrl } from './urls';
 import { useNavItemGates } from './use-nav-item-gates';
 
-/**
- * One cell of the grid. A real `<a href>` so cmd-click, middle-click and the
- * browser's own "open in new tab" work — the point of the grid. Plain
- * left-click still routes through `openExternalUrl`, because Tauri needs a
- * `_self` navigation to hand the URL to the system browser.
- *
- * The only surface in the rail that isn't a `Button`: it stacks a label under
- * the glyph, and has no active state of its own — every entry opens a new tab —
- * so the outline-to-fill swap runs off hover instead.
- */
-const AppTile = (props: { item: SidebarNextNavItem }) => {
-  const [hovering, setHovering] = createSignal(false);
+/** An app link in the overflow menu, opening in a new browser tab. */
+const AppItem = (props: { item: SidebarNextNavItem }) => {
   const url = () =>
     splitContentUrl(sidebarContent(props.item.id, props.item.params));
 
   return (
-    <a
-      href={url()}
-      target="_blank"
-      rel="noopener noreferrer"
+    <Dropdown.Item
+      as={(linkProps) => (
+        <a
+          {...linkProps}
+          href={url()}
+          target="_blank"
+          rel="noopener noreferrer"
+        />
+      )}
       draggable={false}
       data-sidebar-next-tile={props.item.id}
-      class="flex aspect-square cursor-default select-none flex-col items-center justify-center gap-2 rounded-xl text-[12px] text-ink outline-none transition-colors duration-150 ease-out hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent/40 motion-reduce:transition-none"
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
+      class="gap-3 rounded-lg px-3 py-2"
       onClick={(event) => {
         // Let the browser handle the modified clicks it already does better
         // than we can.
@@ -51,25 +44,24 @@ const AppTile = (props: { item: SidebarNextNavItem }) => {
         openExternalUrl(new URL(url(), window.location.origin).href);
       }}
     >
-      <NavGlyph
-        icon={props.item.icon}
-        iconActive={props.item.iconActive}
-        filled={hovering()}
-        class="size-6"
-      />
+      <NavGlyph icon={props.item.icon} class="size-5 text-ink-muted" />
       <span class="max-w-full truncate">{props.item.label}</span>
-    </a>
+    </Dropdown.Item>
   );
 };
 
-/** The grid of every nav, each opening in a new browser tab. */
+/** Overflow dropdown below the main apps, with links to open a new tab. */
 export const MoreAppsPopover = (props: {
   onOpenChange?: (open: boolean) => void;
 }) => {
   const gates = useNavItemGates();
 
   return (
-    <Dropdown onOpenChange={props.onOpenChange} placement="top" gutter={8}>
+    <Dropdown
+      onOpenChange={props.onOpenChange}
+      placement="right-start"
+      gutter={8}
+    >
       <Dropdown.Trigger
         as={Button}
         size="icon-md"
@@ -77,14 +69,12 @@ export const MoreAppsPopover = (props: {
         class="text-ink-subtle hover:text-ink rounded-xl"
         label="More apps"
       >
-        <SquaresFourIcon />
+        <DotsThreeIcon class="size-5" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-72 rounded-2xl">
-        {/* Group rather than a bare div: it paints the `bg-menu` ground that
-            Content's inner `bg-edge-muted` wrapper otherwise shows through. */}
-        <Dropdown.Group class="grid grid-cols-3 gap-2 rounded-2xl p-3">
+      <Dropdown.Content class="w-48 rounded-xl">
+        <Dropdown.Group class="rounded-xl p-1">
           <For each={visibleNavItems(gates())}>
-            {(item) => <AppTile item={item} />}
+            {(item) => <AppItem item={item} />}
           </For>
         </Dropdown.Group>
       </Dropdown.Content>

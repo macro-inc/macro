@@ -14,7 +14,9 @@ import type { SearchableOption } from './searchable-multi-select';
 export function createTagFilter(queryFilters: QueryStore) {
   const tagsQuery = useTagsQuery();
 
-  const tagSets = (): TagSetResponse[] => tagsQuery.data ?? [];
+  // Sidebar/filter metadata must not suspend the surrounding workspace.
+  const tagSets = (): TagSetResponse[] =>
+    tagsQuery.isSuccess ? tagsQuery.data : [];
 
   const defByOption = createMemo(() => {
     const map = new Map<string, string>();

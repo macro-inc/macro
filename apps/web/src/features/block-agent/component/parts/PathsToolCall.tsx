@@ -1,3 +1,4 @@
+import ToolIcon from '@phosphor/file-text.svg';
 /** A read, delete, or move: path (or count) in the row, full list in the body. */
 
 import type { ToolDetail } from '@service-agent-fold/generated/types';
@@ -11,6 +12,7 @@ export function PathsToolCall(props: {
 }) {
   return (
     <ToolCard
+      icon={<ToolIcon class="size-4" />}
       title={props.common.label}
       subtitle={pathsSubtitle(props.detail.paths)}
       status={props.common.status}

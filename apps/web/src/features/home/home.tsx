@@ -159,7 +159,9 @@ function HomeContent() {
   );
 }
 
-const HomeChatInput = () => {
+export const HomeChatInput = (
+  props: { onChatCreated?: (chat: { id: string; name: string }) => void } = {}
+) => {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
 
@@ -251,10 +253,14 @@ const HomeChatInput = () => {
         model: request.model,
       });
 
-      // Replace the soup split with the chat split
-      splitPanelContext.handle.replace({
-        next: { type: 'chat', id: chatId },
-      });
+      if (props.onChatCreated) {
+        invalidateAllSoup();
+        props.onChatCreated({ id: chatId, name: name || 'New chat' });
+      } else {
+        splitPanelContext.handle.replace({
+          next: { type: 'chat', id: chatId },
+        });
+      }
     }
   };
 

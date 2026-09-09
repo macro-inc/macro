@@ -1,6 +1,7 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContext } from 'solid-js';
+import { useRightPanel } from '../right-panel-context';
 import { SplitPanelContext } from './context';
 import type {
   OpenWithSplitOptions,
@@ -11,11 +12,20 @@ import type {
 
 export function useSplitLayout() {
   const splitPanelContext = useContext(SplitPanelContext);
+  const rightPanel = useRightPanel();
 
   function openWithSplit(
     content: SplitContent,
     options?: OpenWithSplitOptions
   ) {
+    if (
+      rightPanel &&
+      content.type !== 'component' &&
+      !options?.replacePreview
+    ) {
+      rightPanel.open(content);
+      return;
+    }
     const splitManager = globalSplitManager();
     const preferNewSplit = isTouchDevice() ? false : options?.preferNewSplit;
 

@@ -1,5 +1,16 @@
+import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import type { JSX } from 'solid-js';
-import { createSignal, onCleanup, onMount, splitProps } from 'solid-js';
+import {
+  createContext,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+  splitProps,
+  useContext,
+} from 'solid-js';
+
+export const ScrollIndicatorsContext = createContext(false);
 
 const THUMB_WIDTH = 2;
 const HIDE_DELAY = 500;
@@ -12,6 +23,7 @@ type ScrollProps = JSX.HTMLAttributes<HTMLDivElement> & {
 };
 
 export function Scroll(props: ScrollProps) {
+  const showIndicators = useContext(ScrollIndicatorsContext);
   const [local, rest] = splitProps(props, ['children', 'scrollRef']);
   const [translateY, setTranslateY] = createSignal(THUMB_INSET);
   const [thumbHeight, setThumbHeight] = createSignal(MIN_THUMB_HEIGHT);
@@ -123,6 +135,13 @@ export function Scroll(props: ScrollProps) {
       >
         <div ref={contentRef}>{local.children}</div>
       </div>
+      <Show when={showIndicators}>
+        <ScrollIndicators
+          scrollRef={() => scrollRef}
+          appearance="gradient"
+          gradientColor="panel"
+        />
+      </Show>
       <div
         ref={gutterRef}
         onPointerDown={handlePointerDown}

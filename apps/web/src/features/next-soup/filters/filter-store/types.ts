@@ -37,6 +37,7 @@ export type ArrayFieldFilters = {
   emailLinkId?: string[];
   emailProjectId?: string[];
   emailSender?: string[];
+  emailRecipient?: string[];
   channelId?: string[];
   channelType?: string[];
   /**

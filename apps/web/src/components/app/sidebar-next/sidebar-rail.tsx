@@ -11,6 +11,7 @@ import { For } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
 import { ListNav } from './list-nav';
+import { MoreAppsPopover } from './more-apps-popover';
 import { visibleNavItems } from './nav-items';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
@@ -80,6 +81,9 @@ export const SidebarRail = (props: SidebarRailProps) => {
               </li>
             )}
           </For>
+          <li class="flex">
+            <MoreAppsPopover />
+          </li>
         </ul>
       </nav>
 

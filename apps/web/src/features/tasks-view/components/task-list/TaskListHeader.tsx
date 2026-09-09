@@ -61,7 +61,7 @@ export function TaskListHeader() {
   return (
     <div
       role="row"
-      class="task-grid-row grid h-10 w-full shrink-0 items-center gap-2 bg-surface px-3 text-xs font-medium text-ink-extra-muted"
+      class="task-grid-row grid h-11 w-full shrink-0 items-center gap-2  px-3 text-xs font-medium text-ink-extra-muted"
       style={{
         'grid-template-columns': TASK_GRID_TEMPLATE_COLUMNS_WIDE,
         'grid-template-areas': TASK_GRID_TEMPLATE_AREAS_WIDE,
@@ -70,14 +70,14 @@ export function TaskListHeader() {
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
       <span
         role="columnheader"
-        class="truncate"
+        class="truncate pl-6"
         style={{ 'grid-area': 'content' }}
       >
         Task
       </span>
-      <SortableHeader label="Status" area="status" />
-      <SortableHeader label="Priority" area="priority" />
-      <SortableHeader label="Assignees" area="assignees" />
+      <SortableHeader label="Status" area="status" class="pl-2" />
+      <SortableHeader label="Priority" area="priority" class="pl-2" />
+      <SortableHeader label="Assignees" area="assignees" class="pl-2" />
       <SortableHeader
         label="Created By"
         area="createdBy"

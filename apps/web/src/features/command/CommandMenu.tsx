@@ -141,7 +141,8 @@ export function CommandMenuInner(props: {
   const { openWithSplit } = useSplitLayout();
 
   const canOpenInNewSplit = () =>
-    globalSplitManager()?.canAppendSplit() ?? false;
+    !CommandState.entityPicker() &&
+    (globalSplitManager()?.canAppendSplit() ?? false);
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
@@ -152,7 +153,17 @@ export function CommandMenuInner(props: {
     : useCommandItems(query, CommandState.categoryFilter, {
         searchActive: CommandState.isOpen,
       });
-  const filteredItems = props.items ?? defaultCommandItems!.items;
+  const sourceItems = props.items ?? defaultCommandItems!.items;
+  const filteredItems = () =>
+    CommandState.entityPicker()
+      ? sourceItems().filter(
+          (item) => isEntityItem(item) && itemToBlockName(item.data)
+        )
+      : sourceItems();
+  const categories = () =>
+    CommandState.entityPicker()
+      ? CATEGORIES.filter((category) => category.id !== 'commands')
+      : CATEGORIES;
   const pagination = defaultCommandItems?.pagination;
   const listController = createCommandListController({
     items: filteredItems,
@@ -223,6 +234,15 @@ export function CommandMenuInner(props: {
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
     if (!item) return;
 
+    const pick = CommandState.entityPicker();
+    if (pick) {
+      if (isEntityItem(item)) {
+        pick(item.data);
+        CommandState.close();
+        CommandState.setQuery('');
+      }
+      return;
+    }
     props.onSelect?.(item);
     if (props.disableDefaultAction) {
       // Close like a normal selection, just without navigating/running.
@@ -487,11 +507,11 @@ export function CommandMenuInner(props: {
     scopeId: hotkeyScope,
     description: 'Next category',
     keyDownHandler: () => {
-      const currentIndex = CATEGORIES.findIndex(
+      const currentIndex = categories().findIndex(
         (c) => c.id === CommandState.categoryFilter()
       );
-      const nextIndex = (currentIndex + 1) % CATEGORIES.length;
-      CommandState.setCategoryFilter(CATEGORIES[nextIndex].id);
+      const nextIndex = (currentIndex + 1) % categories().length;
+      CommandState.setCategoryFilter(categories()[nextIndex].id);
       return true;
     },
     runWithInputFocused: true,
@@ -503,12 +523,12 @@ export function CommandMenuInner(props: {
     scopeId: hotkeyScope,
     description: 'Previous category',
     keyDownHandler: () => {
-      const currentIndex = CATEGORIES.findIndex(
+      const currentIndex = categories().findIndex(
         (c) => c.id === CommandState.categoryFilter()
       );
       const prevIndex =
-        (currentIndex - 1 + CATEGORIES.length) % CATEGORIES.length;
-      CommandState.setCategoryFilter(CATEGORIES[prevIndex].id);
+        (currentIndex - 1 + categories().length) % categories().length;
+      CommandState.setCategoryFilter(categories()[prevIndex].id);
       return true;
     },
     runWithInputFocused: true,
@@ -551,10 +571,11 @@ export function CommandMenuInner(props: {
     );
   };
 
-  const categoryTabs = CATEGORIES.map((c) => ({
-    value: c.id,
-    label: c.label,
-  }));
+  const categoryTabs = () =>
+    categories().map((c) => ({
+      value: c.id,
+      label: c.label,
+    }));
 
   return (
     <CommandMenuShell
@@ -583,7 +604,11 @@ export function CommandMenuInner(props: {
           type="text"
           placeholder={
             CommandState.commandScopePlaceholder() ??
-            (isEntityActionMode() ? 'Search actions...' : 'Search...')
+            (CommandState.entityPicker()
+              ? 'Search for content to add...'
+              : isEntityActionMode()
+                ? 'Search actions...'
+                : 'Search...')
           }
           value={CommandState.query()}
           onInput={(e) => CommandState.setQuery(e.currentTarget.value)}
@@ -603,7 +628,7 @@ export function CommandMenuInner(props: {
             fallback={
               <TabsInset
                 depth={1}
-                list={categoryTabs}
+                list={categoryTabs()}
                 value={CommandState.categoryFilter()}
                 onChange={(value) => {
                   if (value) {
@@ -679,7 +704,10 @@ export function CommandMenuInner(props: {
             <HotkeyHint command={confirmHotkey} label="Ask AI" />
           </Match>
           <Match when={selectedIsEntity()}>
-            <HotkeyHint command={confirmHotkey} label="Open" />
+            <HotkeyHint
+              command={confirmHotkey}
+              label={CommandState.entityPicker() ? 'Add tab' : 'Open'}
+            />
             <Show when={canOpenInNewSplit()}>
               <HotkeyHint
                 command={confirmSplitHotkey}

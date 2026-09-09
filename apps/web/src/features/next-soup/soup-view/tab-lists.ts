@@ -43,6 +43,7 @@ export const VIEW_TAB_LISTS: Record<TabbedListView, TabItem[]> = {
     { value: 'all', label: 'All' },
   ],
   documents: [
+    { value: 'recent', label: 'Recent' },
     { value: 'owned', label: 'Owned' },
     { value: 'shared', label: 'Shared' },
     { value: 'attachments', label: 'Attachments' },

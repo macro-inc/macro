@@ -126,7 +126,7 @@ export function InboxFilterDropdown() {
         isSelected={filters.isSelected}
         onSelectionChange={filters.setSelected}
         onClear={filters.clear}
-        label="Filter Inbox"
+        label="Filter notifications"
       />
 
       <FilterCountBadge count={filters.activeCount()} />
@@ -147,7 +147,7 @@ export function InboxFilterDrawer() {
     >
       <MobileDrawer.Trigger
         as={Button}
-        aria-label="Open Inbox filters"
+        aria-label="Open notification filters"
         variant="ghost"
         size="sm"
         depth={3}
@@ -160,7 +160,10 @@ export function InboxFilterDrawer() {
 
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
-        <MobileDrawer.Content aria-label="Inbox filters" class="h-[80vh]">
+        <MobileDrawer.Content
+          aria-label="Notification filters"
+          class="h-[80vh]"
+        >
           <MobileDrawer.Handle class="pb-1" />
 
           <div class="relative min-h-0 flex-1">

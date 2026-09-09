@@ -165,7 +165,7 @@ function PierreFileView(props: {
     >
       <div
         ref={container}
-        class="overflow-hidden rounded border border-edge-muted"
+        class="overflow-hidden"
         style={DIFF_STYLE_VARIABLES}
       />
     </Show>
@@ -182,8 +182,8 @@ function FileDiffBlock(props: {
   );
 
   return (
-    <div class="flex flex-col gap-1">
-      <span class="truncate font-mono text-xs text-ink-extra-muted">
+    <div class="overflow-hidden rounded-lg border border-edge-muted">
+      <span class="block truncate border-b border-edge-muted bg-ink/3 px-3 py-2.5 font-mono text-xs text-ink-muted">
         {props.diff.path}
       </span>
       <Show

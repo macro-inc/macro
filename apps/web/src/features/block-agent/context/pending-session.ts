@@ -16,6 +16,7 @@
  * they already handle while the GET is in flight.
  */
 
+import { rememberAgentSession } from '@queries/agent-session/recent-sessions';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { CreateAgentSessionRequest } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
@@ -31,6 +32,9 @@ export type PendingSession = {
   sessionId: Accessor<string | undefined>;
   /** The create failed — this block has nothing to become. */
   failed: Accessor<boolean>;
+  initialPrompt?: string;
+  promptFailed: Accessor<boolean>;
+  retryPrompt: () => Promise<void>;
 };
 
 const pending = new Map<string, PendingSession>();
@@ -57,12 +61,34 @@ export type StartPendingSessionOptions = {
  * against right now. The POST runs unattended; nothing awaits it.
  */
 export function startPendingSession(
-  options: StartPendingSessionOptions = {}
+  input: StartPendingSessionOptions | string = {}
 ): string {
+  const options = typeof input === 'string' ? { prompt: input } : input;
+  const initialPrompt = options.prompt?.trim();
+  let createdId: string | undefined;
   const placeholder = `${PLACEHOLDER_PREFIX}${crypto.randomUUID()}`;
   const [sessionId, setSessionId] = createSignal<string>();
   const [failed, setFailed] = createSignal(false);
-  pending.set(placeholder, { sessionId, failed });
+  const [promptFailed, setPromptFailed] = createSignal(false);
+  let sending = false;
+  const retryPrompt = async () => {
+    const id = createdId ?? sessionId();
+    if (!id || !initialPrompt || sending) return;
+    sending = true;
+    setPromptFailed(false);
+    const result = await agentHarnessServiceClient
+      .control(id, { type: 'prompt', prompt: initialPrompt })
+      .catch(() => undefined);
+    sending = false;
+    setPromptFailed(!result || result.isErr());
+  };
+  pending.set(placeholder, {
+    sessionId,
+    failed,
+    initialPrompt,
+    promptFailed,
+    retryPrompt,
+  });
 
   void agentHarnessServiceClient
     .create({
@@ -74,6 +100,8 @@ export function startPendingSession(
         return;
       }
       const id = result.value.session.id;
+      createdId = id;
+      rememberAgentSession(result.value.session.ownerId, result.value.session);
       if (options.modelOverride) {
         const changed = await agentHarnessServiceClient.control(id, {
           type: 'setModel',
@@ -84,17 +112,7 @@ export function startPendingSession(
           return;
         }
       }
-      const prompt = options.prompt?.trim();
-      if (prompt) {
-        const delivered = await agentHarnessServiceClient.control(id, {
-          type: 'prompt',
-          prompt,
-        });
-        if (delivered.isErr()) {
-          setFailed(true);
-          return;
-        }
-      }
+      await retryPrompt();
       setSessionId(id);
     })
     .catch(() => setFailed(true));

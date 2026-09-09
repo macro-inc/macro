@@ -25,6 +25,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { RightContentPanel } from '../../RightContentPanel';
 import { splitBackInterceptor } from '../back-interceptor';
 import {
   type SplitBottomPanelRegistration,
@@ -405,7 +406,9 @@ export function SplitPanel(props: SplitPanelProps) {
                             bottomPanel() ? 'h-1/2' : 'h-full'
                           )}
                         >
-                          <MountedContent />
+                          <RightContentPanel>
+                            <MountedContent />
+                          </RightContentPanel>
                         </div>
                         <Show when={bottomPanel()}>
                           {(panel) => (

@@ -1,15 +1,13 @@
 import { SearchBar, useViewControlHotkeys } from '@app/components/view-shell';
+import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import MenuIcon from '@phosphor/list.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown } from '@ui';
 import { createSignal, Show } from 'solid-js';
-import { TASK_TABS } from '../constants';
 import { useTasksView } from '../tasks-view-context';
-import { TasksControls } from './TasksControls';
 import { TasksMobileTabs } from './TasksMobileTabs';
 import { TasksNavigation } from './TasksSidebar';
 
@@ -22,7 +20,7 @@ export function TasksHeader() {
 
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
-    enabled: () => panel.isPanelActive() && !isTouchDevice(),
+    enabled: panel.isPanelActive,
     search: {
       description: 'Search tasks',
       run: () => {
@@ -37,77 +35,54 @@ export function TasksHeader() {
     layout.popoverSplit({ type: 'component', id: 'task-compose' });
   };
 
-  const selectedTabLabel = () =>
-    TASK_TABS.find((tab) => tab.id === state.tab)?.label;
-
+  const title = () =>
+    state.tab === 'my-tasks'
+      ? 'My Tasks'
+      : state.tab === 'team-tasks'
+        ? 'All Tasks'
+        : 'Created by me';
   return (
-    <div class="flex min-w-0 flex-col @max-[720px]/view-shell:gap-3">
-      <Show
-        when={isTouchDevice()}
-        fallback={
-          <>
-            <div class="hidden items-center @max-[720px]/view-shell:flex">
-              <SplitPanel.ControlGroup>
-                <SplitPanel.CloseButton />
-                <SplitPanel.BackButton />
-                <SplitPanel.ForwardButton />
-              </SplitPanel.ControlGroup>
-            </div>
-
-            <div class="hidden h-8 min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
-              <Dropdown
-                open={navigationOpen()}
-                onOpenChange={setNavigationOpen}
-                placement="bottom-start"
-              >
-                <h1 class="min-w-0">
-                  <Dropdown.Trigger
-                    variant="ghost"
-                    size="sm"
-                    class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
-                    aria-label={`Select task view: ${selectedTabLabel()}`}
-                  >
-                    <span class="truncate">{selectedTabLabel()}</span>
-                    <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
-                  </Dropdown.Trigger>
-                </h1>
-                <Dropdown.Content class="w-72 rounded-2xl p-2">
-                  <div class="rounded-xl bg-menu">
-                    <TasksNavigation
-                      onNavigate={() => setNavigationOpen(false)}
-                    />
-                  </div>
-                </Dropdown.Content>
-              </Dropdown>
-              <Button
-                type="button"
-                variant="cta"
-                size="md"
-                class="ml-auto"
-                onClick={createTask}
-              >
-                <PlusIcon class="size-4 shrink-0" />
-                New
+    <Show when={!isTouchDevice()} fallback={<TasksMobileTabs />}>
+      <header class="flex h-12 shrink-0 items-center gap-3  px-4">
+        <div class="hidden @max-[720px]/view-shell:block">
+          <Dropdown
+            open={navigationOpen()}
+            onOpenChange={setNavigationOpen}
+            placement="bottom-start"
+          >
+            <Dropdown.Trigger
+              variant="ghost"
+              size="sm"
+              square
+              aria-label="Open Tasks navigation"
+            >
+              <MenuIcon class="size-4" />
+            </Dropdown.Trigger>
+            <Dropdown.Content class="w-72 rounded-xl p-2">
+              <TasksNavigation onNavigate={() => setNavigationOpen(false)} />
+              <Button variant="ghost" onClick={createTask}>
+                <PlusIcon class="size-4" />
+                New task
               </Button>
-            </div>
-
-            <div class="flex min-w-0 items-center justify-between gap-3">
-              <SearchBar
-                ref={(element) => (searchInput = element)}
-                label="Search tasks"
-                value={state.search}
-                hotkey="cmd+f"
-                onValueChange={(search) => setState('search', search)}
-                placeholder="Search tasks"
-                class="max-w-md flex-1"
-              />
-              <TasksControls />
-            </div>
-          </>
-        }
-      >
-        <TasksMobileTabs />
-      </Show>
-    </div>
+            </Dropdown.Content>
+          </Dropdown>
+        </div>
+        <h2 class="min-w-0 truncate text-sm font-semibold text-ink">
+          {title()}
+        </h2>
+        <div class="ml-auto min-w-0 max-w-80 flex-1">
+          <SearchBar
+            ref={(element) => (searchInput = element)}
+            label="Search tasks"
+            value={state.search}
+            hotkey="cmd+f"
+            onValueChange={(search) => setState('search', search)}
+            placeholder="Search tasks"
+            class="h-9 rounded-lg border border-edge-muted bg-transparent"
+          />
+        </div>
+        <PreviewButton iconOnly class="size-8 rounded-lg" />
+      </header>
+    </Show>
   );
 }

@@ -90,7 +90,10 @@ export const ListNav = (props: ListNavProps) => {
       <Button
         variant="ghost"
         size="icon-md"
-        class="cursor-default rounded-xl"
+        class={cn(
+          'cursor-default rounded-xl duration-100 motion-reduce:transition-none',
+          isActive() && 'border-ink/10 bg-ink/4 text-ink'
+        )}
         label={props.item.label}
         tooltip={`Go to ${props.item.label}`}
         tooltipPlacement="right"
@@ -104,29 +107,11 @@ export const ListNav = (props: ListNavProps) => {
         data-sidebar-next-item={props.item.id}
         onMouseDown={navigate}
       >
-        {/* Flush to the screen edge: the button sits inside the rail's own
-            `px-3`, so -12px lands the bar's outer edge at x=0. Absolutely
-            positioned, so activating a button never shifts its glyph, and grown
-            on the Y axis only — scaling X too would pull the bar off the edge
-            mid-transition. Faded rather than mounted so it arrives on the same
-            curve as the glyph's outline-to-fill swap. */}
-        <span
-          aria-hidden="true"
-          class={cn(
-            'absolute -left-3 top-1/2 h-3/4 w-1 -translate-y-1/2 rounded-r-full bg-accent',
-            'transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
-            isActive() ? 'scale-y-100 opacity-100' : 'scale-y-90 opacity-0'
-          )}
-        />
-
-        {/* The accent sits on the glyph rather than the button: `ghost`
-            brightens its own text on hover, which would otherwise pull an
-            active button back to `text-ink` under the cursor. */}
         <NavGlyph
           icon={props.item.icon}
           iconActive={props.item.iconActive}
           filled={isActive()}
-          class={cn('size-5.5', isActive() && 'text-accent')}
+          class="size-5"
         />
       </Button>
     </SidebarOpenInSplitMenu>

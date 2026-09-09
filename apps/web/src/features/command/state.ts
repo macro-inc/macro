@@ -51,6 +51,11 @@ interface ICommandState {
   isEntityActionMode: Accessor<boolean>;
   openForEntityAction: (entities: EntityData[]) => void;
 
+  /** Optional destination when choosing content for a reference tab. */
+  entityPicker: Accessor<((entity: EntityData) => void) | undefined>;
+  openEntityPicker: (pick: (entity: EntityData) => void) => void;
+  clearEntityPicker: () => void;
+
   /** lifecycle */
   maybeResetState: () => void;
   forceReset: () => void;
@@ -62,6 +67,14 @@ function createCommandState(): ICommandState {
   const [isOpen, setIsOpen] = createControlledOpenSignal(false, {
     id: 'command',
   });
+  const [entityPicker, setEntityPicker] =
+    createSignal<(entity: EntityData) => void>();
+  const clearEntityPicker = () => setEntityPicker(undefined);
+  const openEntityPicker = (pick: (entity: EntityData) => void) => {
+    forceReset();
+    setEntityPicker(() => pick);
+    setIsOpen(true);
+  };
   const [query, setQuery] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const [categoryFilter, setCategoryFilter] =
@@ -155,6 +168,7 @@ function createCommandState(): ICommandState {
   }
 
   function onMenuClose() {
+    clearEntityPicker();
     setLastClosedTime(Date.now());
     clearCommandScopeCommands();
     clearEntityActionEntities();
@@ -166,6 +180,9 @@ function createCommandState(): ICommandState {
   }
 
   return {
+    entityPicker,
+    openEntityPicker,
+    clearEntityPicker,
     isOpen,
     setIsOpen,
     toggle,

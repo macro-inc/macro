@@ -417,8 +417,10 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
 
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText('Edit agent')).toBeTruthy();
+    const dialog = screen.getByRole('region');
+    expect(
+      within(dialog).getByRole('heading', { name: 'Edit agent' })
+    ).toBeTruthy();
     expect(within(dialog).getByLabelText('Name')).toHaveProperty(
       'value',
       'Bug fixer'
@@ -455,7 +457,7 @@ describe('Agents', () => {
         teamId: undefined,
       });
       expect(agentMocks.toastSuccess).toHaveBeenCalledWith('Agent updated');
-      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.queryByRole('region')).toBeNull();
     });
   });
 
@@ -490,7 +492,7 @@ describe('Agents', () => {
     ).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     expect(within(dialog).getByLabelText('Team')).toHaveProperty(
       'checked',
       true
@@ -530,7 +532,7 @@ describe('Agents', () => {
     const view = render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
     expect(
-      within(screen.getByRole('dialog')).getByLabelText('Private')
+      within(screen.getByRole('region')).getByLabelText('Private')
     ).toHaveProperty('disabled', false);
     view.unmount();
 
@@ -567,8 +569,10 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Delete Bug fixer' }));
 
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText('Delete Bug fixer?')).toBeTruthy();
+    const dialog = screen.getByRole('region');
+    expect(
+      within(dialog).getByRole('heading', { name: 'Delete Bug fixer?' })
+    ).toBeTruthy();
     expect(agentMocks.delete).not.toHaveBeenCalled();
 
     fireEvent.click(
@@ -581,7 +585,7 @@ describe('Agents', () => {
         channelIds: ['channel-engineering'],
       });
       expect(agentMocks.toastSuccess).toHaveBeenCalledWith('Agent deleted');
-      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.queryByRole('region')).toBeNull();
     });
   });
 
@@ -589,7 +593,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     const harness = within(dialog).getByLabelText('Harness');
 
     expect(
@@ -634,7 +638,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     const teamOption = within(dialog).getByLabelText('Team');
     expect(teamOption).toHaveProperty('disabled', true);
     const teamCardClasses = teamOption.closest('label')?.classList;
@@ -651,7 +655,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Bug fixer' },
     });
@@ -677,7 +681,7 @@ describe('Agents', () => {
         teamId: 'team-1',
       });
       expect(agentMocks.toastSuccess).toHaveBeenCalledWith('Agent created');
-      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.queryByRole('region')).toBeNull();
     });
   });
 
@@ -690,7 +694,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     const harness = within(dialog).getByLabelText('Harness');
     expect(within(harness).getAllByRole('option')).toHaveLength(2);
 
@@ -710,7 +714,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     const harness = within(dialog).getByLabelText('Harness');
     expect(within(harness).getAllByRole('option')).toHaveLength(2);
     expect(
@@ -724,7 +728,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     const harness = within(dialog).getByLabelText('Harness');
     fireEvent.change(harness, { target: { value: MACROD_HARNESS.id } });
 
@@ -739,7 +743,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Bug fixer' },
     });
@@ -794,7 +798,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     expect(within(dialog).getByLabelText('Harness')).toHaveProperty(
       'value',
       MACROD_HARNESS.id
@@ -836,7 +840,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Triage bot' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     expect(within(dialog).queryByText('Connections')).toBeNull();
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Save changes' })
@@ -855,7 +859,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     expect(
       within(dialog).getByLabelText('Use my connected apps')
     ).toHaveProperty('checked', true);
@@ -866,7 +870,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Triage bot' },
     });
@@ -928,7 +932,7 @@ describe('Agents', () => {
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Edit Triage bot' }));
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     expect(within(dialog).getByLabelText('Specific apps')).toHaveProperty(
       'checked',
       true

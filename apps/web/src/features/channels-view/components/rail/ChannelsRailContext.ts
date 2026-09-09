@@ -1,4 +1,5 @@
 import type { ListController } from '@app/components/list';
+import type { createSidebarSearch } from '@app/components/view-shell/sidebar-search';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { ChannelEntity } from '@entity';
 import type { ContextProviderProps } from '@solid-primitives/context';
@@ -31,6 +32,8 @@ export const domIdForRow = (railId: string, rowId: string) =>
   `${railId}-${rowId}`;
 
 export type ChannelsRailContext = {
+  search: ReturnType<typeof createSidebarSearch>;
+  searchResults: Accessor<readonly ChannelEntity[]>;
   railId: string;
   list: ListController<ChannelRailRow>;
   tab: Accessor<ChannelsTab>;

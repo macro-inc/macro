@@ -8,32 +8,6 @@ import type { JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { ToolCallPart } from './ToolCallPart';
 
-// The chat block's tool renderer is mocked to a marker: it transitively pulls
-// in every per-tool component (split layout, queries, icon sprites). The layer
-// under test is the dispatcher's routing — chat component vs. generic card —
-// not the chat components themselves, which have their own tests.
-vi.mock('@core/component/AI/component/tool/handler', () => ({
-  RenderTool: (props: {
-    name: string;
-    json: unknown;
-    isComplete: boolean;
-    response?: { json: unknown; name: string };
-  }) => (
-    <div
-      data-complete={String(props.isComplete)}
-      data-has-response={String(props.response !== undefined)}
-      data-response={
-        props.response === undefined
-          ? undefined
-          : JSON.stringify(props.response.json)
-      }
-      data-testid="macro-tool"
-    >
-      {props.name}
-    </div>
-  ),
-}));
-
 // The entity link a finished email's outcome carries needs the query client
 // and the split layout; a marker carrying the id is enough here.
 vi.mock('@core/component/ItemPreview', () => ({
@@ -211,29 +185,43 @@ describe('ToolCallPart Macro tools', () => {
       { name: 'ReadContent', status: 'running', ...overrides }
     );
 
-  it('renders a known Macro tool with the chat component', () => {
+  it('keeps pending Macro tools visible without a legacy nested disclosure', () => {
     const rendered = render(() => <ToolCallPart part={readContent()} />);
-    expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
-    expect(rendered.getByTestId('macro-tool').dataset.complete).toBe('false');
-    expect(rendered.queryByTestId('tool-card')).toBeNull();
+    expect(rendered.getByTestId('title').textContent).toBe('ReadContent');
+    expect(rendered.getByTestId('body').textContent).toContain(
+      'Waiting for the result'
+    );
+    expect(rendered.getAllByTestId('tool-card')).toHaveLength(1);
   });
 
-  it('passes the unwrapped output as the chat response once complete', () => {
+  it('renders structured Macro results and retains the full response for inspection', () => {
     const rendered = render(() => (
       <ToolCallPart
-        part={readContent({
-          status: 'completed',
-          detail: {
+        part={toolUse(
+          {
             kind: 'macro',
-            input: { documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46' },
-            output: { content: { text: 'hi' }, comments: [] },
+            input: {},
+            output: {
+              bots: [
+                {
+                  name: 'Research assistant',
+                  username: 'research',
+                  id: 'bot-1',
+                },
+              ],
+              summary: 'One available bot',
+            },
             error: null,
           },
-        })}
+          { name: 'ListBots' }
+        )}
       />
     ));
-    expect(rendered.getByTestId('macro-tool').dataset.complete).toBe('true');
-    expect(rendered.getByTestId('macro-tool').dataset.hasResponse).toBe('true');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('1 bot');
+    expect(rendered.getByTitle('Research assistant')).toBeTruthy();
+    expect(rendered.getByText('One available bot')).toBeTruthy();
+    expect(rendered.getAllByTestId('tool-card')).toHaveLength(1);
+    expect(rendered.getByText(/Request & response/)).toBeTruthy();
   });
 
   it('keeps a Macro tool the chat has no component for on a labelled card', () => {

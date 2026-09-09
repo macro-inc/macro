@@ -20,7 +20,17 @@ vi.mock('@service-agent-harness/client', () => ({
       () =>
         new Promise((resolve) => {
           create.resolve = (id: string) =>
-            resolve({ isErr: () => false, value: { session: { id } } });
+            resolve({
+              isErr: () => false,
+              value: {
+                session: {
+                  id,
+                  ownerId: 'viewer',
+                  name: 'Test session',
+                  modifiedAt: '2026-09-08T12:00:00Z',
+                },
+              },
+            });
           create.reject = () => resolve({ isErr: () => true });
         })
     ),

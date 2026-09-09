@@ -1,34 +1,35 @@
-/**
- * Body of a "question" tool call: each question the agent asked, with the
- * answer(s) the user chose underneath. Body-only — the caller supplies the
- * card chrome.
- *
- * Port of the question renderer from opencode's message-part.tsx —
- * github.com/sst/opencode, MIT © 2025 opencode — adapted to Macro tokens.
- */
-
-import { For } from 'solid-js';
+import Check from '@phosphor/check.svg';
+import { For, Show } from 'solid-js';
 import type { AnsweredQuestion } from './types';
 
 export interface QuestionAnswersProps {
   questions: AnsweredQuestion[];
 }
 
+/** Transcript of the user's choices; the controls are intentionally read-only. */
 export function QuestionAnswers(props: QuestionAnswersProps) {
   return (
-    <div class="flex flex-col gap-3 py-1">
+    <div class="space-y-4 p-4">
       <For each={props.questions}>
         {(item) => (
-          <div class="flex min-w-0 flex-col gap-0.5">
-            <div class="text-xs text-ink-muted">{item.question}</div>
-            <div class="text-sm text-ink wrap-break-word">
-              {item.answers.length > 0 ? (
-                item.answers.join(', ')
-              ) : (
-                <span class="text-ink-placeholder">No answer</span>
-              )}
+          <section>
+            <h4 class="mb-3 text-sm font-medium text-ink">{item.question}</h4>
+            <div class="space-y-2">
+              <Show
+                when={item.answers.length}
+                fallback={<p class="text-xs text-ink-extra-muted">No answer</p>}
+              >
+                <For each={item.answers}>
+                  {(answer) => (
+                    <div class="flex items-start gap-3 rounded-xl border border-edge-muted bg-ink/4 px-3 py-2.5 text-sm text-ink">
+                      <Check class="mt-0.5 size-4 shrink-0 text-success" />
+                      <span class="wrap-break-word">{answer}</span>
+                    </div>
+                  )}
+                </For>
+              </Show>
             </div>
-          </div>
+          </section>
         )}
       </For>
     </div>

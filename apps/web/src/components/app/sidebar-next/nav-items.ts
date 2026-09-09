@@ -46,7 +46,7 @@ export type SidebarNextNavItem = SidebarItem & {
 const SIDEBAR_NEXT_NAV_ITEMS = [
   {
     id: 'inbox',
-    label: 'Activity',
+    label: 'Notifications',
     href: LIST_VIEW_PATHS.inbox,
     icon: BellIcon,
     iconActive: BellFillIcon,

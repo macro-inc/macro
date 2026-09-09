@@ -1,96 +1,69 @@
-/**
- * The agent's plan as a checklist: a read-only checkbox visual per item, a
- * pulsing dot while an item is in progress, and content that strikes through
- * and mutes once an item is completed or cancelled.
- *
- * Ported from opencode's inner `TodoList` (`session-todo-dock.tsx`) and its
- * historical `todowrite` card body (`message-part.tsx`)
- * (github.com/sst/opencode, MIT © 2025 opencode). Their kobalte Checkbox is
- * replaced with an inline visual, and their motion-based `TextStrikethrough`
- * with a `text-decoration-color` transition.
- */
+/** A read-only plan: compact task rows with explicit state and overall progress. */
+import Check from '@phosphor/check.svg';
 import { For } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { TodoItem } from './types';
 
-function CheckMark() {
-  return (
-    <svg
-      viewBox="0 0 12 12"
-      width="10"
-      height="10"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="block"
-      aria-hidden="true"
-    >
-      <path d="M2.5 6.5 5 9l4.5-5.5" />
-    </svg>
-  );
-}
-
-function PulsingDot() {
-  return (
-    <svg
-      viewBox="0 0 12 12"
-      width="12"
-      height="12"
-      fill="currentColor"
-      class="block"
-      aria-hidden="true"
-    >
-      <circle
-        cx="6"
-        cy="6"
-        r="3"
-        class="animate-todo-pulse origin-center [transform-box:fill-box] motion-reduce:animate-none"
-      />
-    </svg>
-  );
-}
-
-/** The read-only checkbox stand-in: checked, pulsing, or empty. */
-function TodoBox(props: { status: TodoItem['status'] }) {
-  return (
-    <span
-      class="mt-[3px] flex size-3.5 shrink-0 items-center justify-center rounded border border-edge-muted transition-colors duration-200"
-      classList={{ 'text-ink-muted': props.status === 'completed' }}
-    >
-      {match(props.status)
-        .with('completed', () => <CheckMark />)
-        .with('in_progress', () => <PulsingDot />)
-        .otherwise(() => undefined)}
-    </span>
-  );
-}
-
-/** A read-only rendering of the agent's todo list. */
 export function TodoList(props: { todos: TodoItem[] }) {
+  const done = () =>
+    props.todos.filter((todo) => todo.status === 'completed').length;
   return (
-    <div class="flex flex-col gap-1.5">
-      <For each={props.todos}>
-        {(todo) => {
-          const struck = () =>
-            todo.status === 'completed' || todo.status === 'cancelled';
-          return (
-            <div class="flex items-start gap-2 text-xs leading-5">
-              <TodoBox status={todo.status} />
+    <section
+      aria-label="Plan"
+      class="overflow-hidden rounded-xl border border-edge-muted bg-ink/2"
+    >
+      <header class="flex h-11 items-center justify-between border-b border-edge-muted px-4 text-xs">
+        <span class="font-medium text-ink">Plan</span>
+        <span class="text-ink-extra-muted">
+          {done()} of {props.todos.length} completed
+        </span>
+      </header>
+      <div class="space-y-2 p-3">
+        <For each={props.todos}>
+          {(todo, index) => (
+            <div class="flex min-h-11 items-center gap-3 rounded-xl border border-edge-muted bg-ink/2 px-3 py-2 text-[13px]">
               <span
-                class="min-w-0 wrap-break-word line-through transition-[color,text-decoration-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+                class="flex size-6 shrink-0 items-center justify-center rounded-full border border-edge-muted text-[11px] text-ink-muted"
                 classList={{
-                  'text-ink decoration-transparent': !struck(),
-                  'text-ink-extra-muted decoration-ink-extra-muted': struck(),
+                  'text-success bg-success/10 border-success/20':
+                    todo.status === 'completed',
+                  'text-accent bg-accent/10 border-accent/20':
+                    todo.status === 'in_progress',
+                }}
+              >
+                {todo.status === 'completed' ? (
+                  <Check class="size-3.5" />
+                ) : (
+                  index() + 1
+                )}
+              </span>
+              <span
+                class="min-w-0 flex-1 text-ink wrap-break-word"
+                classList={{
+                  'text-ink-extra-muted line-through':
+                    todo.status === 'cancelled',
                 }}
               >
                 {todo.content}
               </span>
+              <span
+                class="shrink-0 rounded-full bg-ink/5 px-2 py-0.5 text-[11px] text-ink-extra-muted"
+                classList={{
+                  'text-success bg-success/10': todo.status === 'completed',
+                  'text-accent bg-accent/10': todo.status === 'in_progress',
+                }}
+              >
+                {match(todo.status)
+                  .with('completed', () => 'Completed')
+                  .with('in_progress', () => 'In progress')
+                  .with('pending', () => 'Pending')
+                  .with('cancelled', () => 'Cancelled')
+                  .exhaustive()}
+              </span>
             </div>
-          );
-        }}
-      </For>
-    </div>
+          )}
+        </For>
+      </div>
+    </section>
   );
 }

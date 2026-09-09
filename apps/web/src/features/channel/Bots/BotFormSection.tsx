@@ -1,4 +1,3 @@
-import { Surface } from '@ui';
 import type { JSX } from 'solid-js';
 
 export function BotFormSection(props: {
@@ -10,16 +9,16 @@ export function BotFormSection(props: {
 }) {
   return (
     <section class={props.class}>
-      <div class="mb-2 flex items-end justify-between gap-3 px-1">
+      <div class="mb-3 flex items-end justify-between gap-3 px-1">
         <div>
-          <h2 class="text-sm font-semibold">{props.title}</h2>
+          <h2 class="text-sm font-medium">{props.title}</h2>
           <p class="mt-0.5 text-xs text-ink-muted">{props.description}</p>
         </div>
         {props.action}
       </div>
-      <Surface depth={2} class="rounded-xl border border-ink/[0.06] p-4">
+      <div class="rounded-2xl border border-edge-muted bg-ink/2 p-5">
         {props.children}
-      </Surface>
+      </div>
     </section>
   );
 }

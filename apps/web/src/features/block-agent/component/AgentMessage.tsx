@@ -5,11 +5,13 @@
  * shimmer while the turn is in flight.
  */
 
+import { Collapsible } from '@kobalte/core/collapsible';
+import CaretRight from '@phosphor/caret-right.svg';
 import type {
   FoldedMessage,
   MessagePart,
 } from '@service-agent-fold/generated/types';
-import { For, type JSX, Show } from 'solid-js';
+import { createMemo, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
 import { ActionLine, Thought } from '../ui';
@@ -64,7 +66,7 @@ function UserMessage(props: { message: FoldedMessage }) {
   return (
     <div class="flex w-full">
       {/* Phone: a full-width card. Desktop: hugs the text, right-aligned. */}
-      <div class="relative w-full overflow-hidden rounded-lg border border-edge-muted bg-hover px-3 py-2 text-ink md:ml-auto md:w-auto md:max-w-[calc(100%-8rem)]">
+      <div class="relative w-full overflow-hidden rounded-2xl border border-edge-muted bg-ink/5 px-4 py-3 text-ink md:ml-auto md:w-auto md:max-w-[calc(100%-8rem)]">
         <For each={props.message.parts}>
           {(part, index) => (
             <AgentMessagePart
@@ -80,7 +82,34 @@ function UserMessage(props: { message: FoldedMessage }) {
   );
 }
 
+function isActivity(part: MessagePart) {
+  return (
+    part.kind === 'thought' ||
+    (part.kind === 'tool_use' && part.detail.kind !== 'user_tool')
+  );
+}
+
 export function Message(props: { message: FoldedMessage }) {
+  // Stable numeric keys keep disclosures open as streamed parts update.
+  const starts = createMemo(() =>
+    props.message.parts.flatMap((part, index, parts) =>
+      index > 0 && isActivity(part) && isActivity(parts[index - 1])
+        ? []
+        : [index]
+    )
+  );
+  const run = (start: number) => {
+    const indices = [start];
+    if (isActivity(props.message.parts[start])) {
+      for (
+        let i = start + 1;
+        i < props.message.parts.length && isActivity(props.message.parts[i]);
+        i++
+      )
+        indices.push(i);
+    }
+    return indices;
+  };
   const inFlight = () =>
     props.message.author.kind === 'agent' && props.message.stop == null;
   const failure = () =>
@@ -94,16 +123,46 @@ export function Message(props: { message: FoldedMessage }) {
         props.message.author.kind === 'user' && !isControlMessage(props.message)
       }
       fallback={
-        <div class="flex flex-col gap-1 min-w-0">
-          <For each={props.message.parts}>
-            {(part, index) => (
-              <AgentMessagePart
-                part={part}
-                message={props.message}
-                index={index()}
-                inFlight={inFlight()}
-              />
-            )}
+        <div class="flex flex-col gap-5 min-w-0">
+          <For each={starts()}>
+            {(start) => {
+              const indices = () => run(start);
+              const tools = () =>
+                indices().filter(
+                  (index) => props.message.parts[index].kind === 'tool_use'
+                ).length;
+              const parts = () => (
+                <For each={indices()}>
+                  {(index) => (
+                    <AgentMessagePart
+                      part={props.message.parts[index]}
+                      message={props.message}
+                      index={index}
+                      inFlight={inFlight()}
+                    />
+                  )}
+                </For>
+              );
+              return (
+                <Show
+                  when={isActivity(props.message.parts[start]) && tools() > 1}
+                  fallback={parts()}
+                >
+                  <Collapsible
+                    defaultOpen
+                    class="my-1 min-w-0 border-b border-edge-muted pb-3"
+                  >
+                    <Collapsible.Trigger class="group flex min-h-8 items-center gap-1.5 rounded-md px-1 text-xs text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
+                      <CaretRight class="size-3 shrink-0 transition-transform duration-150 group-data-expanded:rotate-90 motion-reduce:transition-none" />
+                      {tools()} tool calls
+                    </Collapsible.Trigger>
+                    <Collapsible.Content class="data-closed:hidden">
+                      <div class="flex min-w-0 flex-col gap-1">{parts()}</div>
+                    </Collapsible.Content>
+                  </Collapsible>
+                </Show>
+              );
+            }}
           </For>
           {/* A turn the runtime errored is something that happened to the
               session, like a model change or a stop — so it reads as one,

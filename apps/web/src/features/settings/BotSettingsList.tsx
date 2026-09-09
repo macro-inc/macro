@@ -6,12 +6,19 @@ import PlusIcon from '@phosphor/plus.svg';
 import { useBotChannelsQuery } from '@queries/bots/bots';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button } from '@ui';
-import { For, Show } from 'solid-js';
-import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
+import { createSignal, For, Show } from 'solid-js';
+import {
+  ManagementSearch,
+  managementPrimary,
+  ManagementCard as SettingsCard,
+  ManagementPage as SettingsPage,
+  ManagementSection as SettingsSection,
+} from './management-primitives';
 
 function BotSettingsRow(props: { bot: Bot; onOpen: (botId: string) => void }) {
   const channelsQuery = useBotChannelsQuery(() => props.bot.id);
-  const channels = () => channelsQuery.data ?? [];
+  const channels = () =>
+    channelsQuery.isSuccess ? (channelsQuery.data ?? []) : [];
   const ownerLabel = () =>
     props.bot.owner?.type === 'team' ? 'Team' : 'Personal';
 
@@ -39,7 +46,7 @@ function BotSettingsRow(props: { bot: Bot; onOpen: (botId: string) => void }) {
           <span class="truncate text-xs text-ink-extra-muted">
             @{props.bot.handle}
           </span>
-          <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 font-mono text-xxs font-medium uppercase text-ink-extra-muted">
+          <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-[11px] text-ink-extra-muted">
             {ownerLabel()}
           </span>
         </div>
@@ -63,18 +70,35 @@ export function BotSettingsList(props: {
   onCreate: () => void;
   onOpen: (botId: string) => void;
 }) {
+  const [search, setSearch] = createSignal('');
+  const visible = () =>
+    props.bots?.filter((bot) =>
+      `${bot.name} ${bot.handle}`.toLowerCase().includes(search().toLowerCase())
+    ) ?? [];
   return (
     <SettingsPage
       title="Bots"
       description="Create webhook-powered teammates and connect them to channels."
       actions={
-        <Button variant="cta" size="sm" onClick={props.onCreate}>
+        <Button
+          variant="cta"
+          class={managementPrimary}
+          size="sm"
+          onClick={props.onCreate}
+        >
           <PlusIcon />
           Create bot
         </Button>
       }
     >
       <SettingsSection
+        actions={
+          <ManagementSearch
+            label="Search bots"
+            value={search()}
+            onInput={setSearch}
+          />
+        }
         title="Your bots"
         description="Each bot can join multiple channels. Webhook URLs are scoped to the channel."
       >
@@ -102,7 +126,7 @@ export function BotSettingsList(props: {
                     mentioned like any other participant.
                   </div>
                   <Button
-                    class="mt-4"
+                    class={`${managementPrimary} mt-4`}
                     variant="cta"
                     size="sm"
                     onClick={props.onCreate}
@@ -113,9 +137,18 @@ export function BotSettingsList(props: {
                 </div>
               }
             >
-              <For each={props.bots}>
-                {(bot) => <BotSettingsRow bot={bot} onOpen={props.onOpen} />}
-              </For>
+              <Show
+                when={visible().length > 0}
+                fallback={
+                  <p class="px-6 py-10 text-sm text-ink-muted">
+                    No bots match your search.
+                  </p>
+                }
+              >
+                <For each={visible()}>
+                  {(bot) => <BotSettingsRow bot={bot} onOpen={props.onOpen} />}
+                </For>
+              </Show>
             </Show>
           </Show>
         </SettingsCard>

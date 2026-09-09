@@ -10,11 +10,8 @@ import {
   sortItems,
   useSearchContext,
 } from '@app/features/soup';
-import {
-  type EntityData,
-  isTaskEntity,
-  type TaskEntityWithProperties,
-} from '@entity';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import type { EntityData, TaskEntityWithProperties } from '@entity';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
@@ -26,6 +23,7 @@ import {
   taskMatchesView,
 } from '../filters/task-predicates';
 import type { TasksViewState } from '../types';
+import { prepareTaskEntities } from './prepare-task-entities';
 import { buildTaskQuery } from './task-query';
 import { buildTaskSearchRequest } from './task-search';
 
@@ -97,17 +95,9 @@ export function useTasksDataSource(
     facetContext: facetContext(),
   });
 
-  const transformEntities = (entities: EntityData[]) => {
-    const selected: TaskEntityWithProperties[] = [];
-    const context = viewContext();
-    for (const entity of entities) {
-      if (!isTaskEntity(entity)) continue;
-      if (!taskMatchesView(entity, context)) continue;
-
-      selected.push(entity);
-    }
-    return selected;
-  };
+  const notificationSource = useGlobalNotificationSource();
+  const transformEntities = (entities: EntityData[]) =>
+    prepareTaskEntities(entities, viewContext(), notificationSource);
 
   const baseTasks = createMemo<TaskEntityWithProperties[]>((previous) => {
     if (query.isLoading) return previous;
@@ -172,9 +162,7 @@ export function useTasksDataSource(
 
   const continuations: TaskGroupContinuationReader = {
     entities: (groupKey) =>
-      (groupQueryFor(groupKey)?.data()?.entities ?? []).flatMap((entity) =>
-        isTaskEntity(entity) ? [entity] : []
-      ),
+      transformEntities(groupQueryFor(groupKey)?.data()?.entities ?? []),
     hasMore: (groupKey) => groupQueryFor(groupKey)?.hasNextPage() ?? false,
     isLoading: (groupKey) =>
       groupQueryFor(groupKey)?.isFetchingNextPage() ?? false,

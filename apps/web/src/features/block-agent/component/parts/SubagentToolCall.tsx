@@ -1,3 +1,4 @@
+import ToolIcon from '@phosphor/robot.svg';
 /**
  * Work the agent delegated to another agent: the brief, whatever of the
  * subagent's own activity the harness attributed to it (nested through the
@@ -105,6 +106,7 @@ export function SubagentToolCall(props: {
 
   return (
     <ToolCard
+      icon={<ToolIcon class="size-4" />}
       title={props.detail.title}
       subtitle={subtitle()}
       status={props.common.status}
@@ -113,7 +115,7 @@ export function SubagentToolCall(props: {
       defaultOpen={props.detail.children.length > 0}
     >
       <Show when={hasBody()}>
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-4 p-4">
           <Show when={props.detail.prompt}>
             {(prompt) => (
               <blockquote class="border-l-2 border-edge-muted pl-2 text-xs text-ink-muted whitespace-pre-wrap wrap-break-word">

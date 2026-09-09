@@ -72,7 +72,7 @@ function createInboxEntryStorage(options: {
 
       return {
         ...current,
-        tab: restored.tab,
+        tab: restored.tab === 'all' ? 'signal' : restored.tab,
       };
     },
     select: selectEntryState,

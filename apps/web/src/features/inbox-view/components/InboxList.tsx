@@ -82,7 +82,9 @@ type InboxListActivationMetadata = {
 };
 
 /** Compact Inbox-card list used by the Activity-layout Inbox workspace. */
-export function InboxList() {
+export function InboxList(props: {
+  onPreview?: (entity: WithNotification<EntityData>) => void;
+}) {
   const { state } = useInboxView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -123,6 +125,7 @@ export function InboxList() {
   const preview = useInboxPreview({
     controller: list,
     handle: panel.handle,
+    embedded: !!props.onPreview,
     onPreview: (entity) => {
       void openEntity(entity, {
         newSplit: false,
@@ -176,6 +179,15 @@ export function InboxList() {
       mergeHistory?: boolean;
     }
   ) {
+    if (props.onPreview && !options.newSplit && !options.replacePair) {
+      props.onPreview(entity);
+      markReminderSeenOnOpen(entity, notificationSource);
+      if (!isNonMemberChannelEntity(entity)) {
+        markChannelNotificationsSeenOnOpen(entity, notificationSource);
+      }
+      return;
+    }
+
     markReminderSeenOnOpen(entity, notificationSource);
     if (!isNonMemberChannelEntity(entity)) {
       markChannelNotificationsSeenOnOpen(entity, notificationSource);
@@ -414,7 +426,7 @@ export function InboxList() {
       <div
         ref={listRoot}
         role="grid"
-        aria-label="Inbox"
+        aria-label="Notifications"
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
@@ -535,7 +547,7 @@ export function InboxList() {
                             >
                               <div role="gridcell">
                                 <InboxListEntity
-                                  class="mx-0 w-full border-b border-edge touch:border-b-0"
+                                  class="mx-0 w-full"
                                   cardClass="rounded-none px-4 py-3 mobile:pl-(--soup-row-padding-l)"
                                   entity={entityRow().entity}
                                   occurrenceKey={entityRow().id}

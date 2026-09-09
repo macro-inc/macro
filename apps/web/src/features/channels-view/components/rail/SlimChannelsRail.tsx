@@ -26,7 +26,7 @@ import {
   rowKeyForSection,
   useChannelsRail,
 } from './ChannelsRailContext';
-import { CollapsibleSection, RailModeButton } from './ChannelsRailSection';
+import { CollapsibleSection } from './ChannelsRailSection';
 import {
   useChannelRailItemState,
   useChannelRailSectionState,
@@ -199,12 +199,7 @@ function SlimHeader() {
           <SplitPanel.CloseButton size="icon-sm" />
         </SplitPanel.ControlGroup>
       </div>
-      <div class="flex h-8 w-full items-center justify-center px-2">
-        <RailModeButton
-          expanded={false}
-          onToggle={() => rail.setMode('full')}
-        />
-      </div>
+      <div class="flex h-8 w-full items-center justify-center px-2"></div>
       <div class="w-full px-3">
         <Tabs
           aria-label="Chat sidebar views"

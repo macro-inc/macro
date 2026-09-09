@@ -40,7 +40,8 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
 >('InboxView', (props) => {
   const panel = useSplitPanelOrThrow();
   const initial = props.initialState ?? {};
-  const initialTab = initial.tab ?? 'signal';
+  const initialTab =
+    initial.tab === 'all' ? 'signal' : (initial.tab ?? 'signal');
   const [state, setState] = makePersistedState(
     createStore<InboxViewState>({
       tab: initialTab,

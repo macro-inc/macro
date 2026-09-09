@@ -1,16 +1,25 @@
+import { ViewSidebar } from '@app/components/view-shell';
+import {
+  SidebarSearchField,
+  SidebarSearchToggle,
+} from '@app/components/view-shell/sidebar-search';
 import { runCreateAction } from '@app/features/command/Launcher';
+import { ViewFavorites } from '@app/features/favorites/view-favorites';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { favoriteSplitContent } from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { Key } from '@solid-primitives/keyed';
-import { cn, Hotkey, Tabs } from '@ui';
+import { cn, Tabs } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
+import { useChannelsView } from '../../channels-view-context';
 import type { ChannelsGroup } from '../../types';
-import { channelMentionsUser, isDirectMessage } from '../../utils';
+import { channelMentionsUser } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import {
   ChannelAvatar,
@@ -26,19 +35,15 @@ import {
   rowKeyForSection,
   useChannelsRail,
 } from './ChannelsRailContext';
-import {
-  CollapsibleSection,
-  CreateRailAction,
-  RailModeButton,
-} from './ChannelsRailSection';
+import { CollapsibleSection, CreateRailAction } from './ChannelsRailSection';
 import {
   useChannelRailItemState,
   useChannelRailSectionState,
 } from './hooks/useChannelRailState';
 
 const CHANNEL_TABS = [
-  { value: 'browse', label: 'Browse' },
-  { value: 'recents', label: 'Recents' },
+  { value: 'browse', label: 'All' },
+  { value: 'recents', label: 'Recent' },
 ];
 
 type GroupConfig = {
@@ -59,7 +64,7 @@ const GROUPS: GroupConfig[] = [
   },
   {
     group: 'direct_messages',
-    label: 'DMs',
+    label: 'Direct messages',
     emptyLabel: 'No direct messages',
     createLabel: 'Start direct message',
     onCreate: () => runCreateAction('channel'),
@@ -77,8 +82,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         role="treeitem"
         tabIndex={-1}
         class={cn(
-          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors',
-          isDirectMessage(props.channel) ? 'min-h-10 py-2' : 'h-8',
+          'relative flex w-full min-w-0 h-9 items-center gap-3 rounded-xl px-2 text-left outline-none transition-colors',
           item().selected && !isTouchDevice() && 'bg-active text-ink',
           (!item().selected || isTouchDevice()) && 'text-ink-muted',
           !item().selected &&
@@ -94,7 +98,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         onClick={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
       >
         <ChannelAvatar channel={props.channel} />
-        <span class="min-w-0 flex-1 truncate text-sm font-medium">
+        <span class="min-w-0 flex-1 truncate text-sm">
           {props.channel.name}
         </span>
         <ChannelMutedIndicator muted={item().muted} />
@@ -125,28 +129,26 @@ function ExpandedHeader() {
   };
 
   return (
-    <div class="flex shrink-0 flex-col gap-3 px-4">
-      <div class="flex items-center">
-        <SplitPanel.ControlGroup>
-          <SplitPanel.CloseButton />
-          <SplitPanel.BackButton />
-          <SplitPanel.ForwardButton />
-        </SplitPanel.ControlGroup>
-      </div>
-      <div class="flex h-8 items-center gap-2">
-        <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
-        <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-          Chat
-        </h1>
-      </div>
-      <Tabs
-        aria-label="Chat sidebar views"
-        fullWidth
-        list={CHANNEL_TABS}
-        value={rail.tab()}
-        onChange={selectTab}
-      />
-    </div>
+    <>
+      <ViewSidebar.Header>
+        <ViewSidebar.Title>Chat</ViewSidebar.Title>
+        <SidebarSearchToggle
+          search={rail.search}
+          label="Search channels and direct messages"
+        />
+        <SplitPanel.CloseButton size="icon-sm" />
+      </ViewSidebar.Header>
+      <Show when={!rail.search.isOpen()}>
+        <div class="flex min-h-12 shrink-0 items-center px-4 py-2">
+          <Tabs
+            aria-label="Chat views"
+            list={CHANNEL_TABS}
+            value={rail.tab()}
+            onChange={selectTab}
+          />
+        </div>
+      </Show>
+    </>
   );
 }
 
@@ -166,7 +168,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
       <CollapsibleSection.Header
         focused={section().focused}
         focusWithin={section().containsFocus}
-        class="h-9 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
+        class="h-7 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
       >
         <button
           id={section().domId}
@@ -236,7 +238,7 @@ function ExpandedBrowse() {
         <ChannelsEmptyState scope="channels" topAligned />
       </Match>
       <Match when={true}>
-        <div class="flex h-full min-h-0 flex-col gap-3 px-4">
+        <div class="flex h-full min-h-0 flex-col gap-6 px-4">
           <For each={GROUPS}>
             {(config) => <ExpandedGroupSection config={config} />}
           </For>
@@ -287,7 +289,7 @@ function ExpandedRecents() {
         <ChannelsEmptyState scope="recents" topAligned />
       </Match>
       <Match when={true}>
-        <div class="flex w-full flex-col divide-y divide-edge-muted">
+        <div class="flex w-full flex-col">
           <Key each={rail.recentConversations()} by={(channel) => channel.id}>
             {(channel) => <RecentConversationCard channel={channel()} />}
           </Key>
@@ -299,6 +301,8 @@ function ExpandedRecents() {
 
 export function ExpandedChannelsRail() {
   const rail = useChannelsRail();
+  const layout = useSplitLayout();
+  const { setSelectedChannelId } = useChannelsView();
   const activeDescendant = () => {
     const rowId = rail.list.focus.key();
     return rowId === undefined ? undefined : domIdForRow(rail.railId, rowId);
@@ -307,6 +311,23 @@ export function ExpandedChannelsRail() {
   return (
     <>
       <ExpandedHeader />
+      <Show when={!rail.search.isOpen() && rail.tab() === 'browse'}>
+        <ViewFavorites
+          view="channels"
+          class="mx-4 mt-4"
+          onOpen={(favorite) => {
+            if (favorite.entityType === 'channel')
+              setSelectedChannelId(favorite.entityId);
+            else layout.openWithSplit(favoriteSplitContent(favorite));
+          }}
+        />
+      </Show>
+      <Show when={rail.search.isOpen()}>
+        <SidebarSearchField
+          search={rail.search}
+          label="Search channels and direct messages"
+        />
+      </Show>
       <div class="flex min-h-0 flex-1 flex-col">
         <div
           ref={rail.registerRootRef}
@@ -315,10 +336,24 @@ export function ExpandedChannelsRail() {
           aria-activedescendant={activeDescendant()}
           class={cn(
             'scrollbar-hidden min-h-0 flex-1 outline-none',
-            rail.tab() === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
+            !rail.search.isOpen() && rail.tab() === 'browse'
+              ? 'overflow-hidden pt-4'
+              : 'overflow-y-auto pt-4'
           )}
         >
           <Switch>
+            <Match when={rail.search.isOpen()}>
+              <div class="px-4">
+                <Key each={rail.searchResults()} by={(channel) => channel.id}>
+                  {(channel) => <ChannelOption channel={channel()} />}
+                </Key>
+                <Show when={rail.searchResults().length === 0}>
+                  <p class="px-4 py-4 text-sm text-ink-muted">
+                    No matching conversations
+                  </p>
+                </Show>
+              </div>
+            </Match>
             <Match when={rail.tab() === 'browse'}>
               <ExpandedBrowse />
             </Match>
@@ -327,14 +362,6 @@ export function ExpandedChannelsRail() {
             </Match>
           </Switch>
         </div>
-        <Show when={rail.tab() === 'browse'}>
-          <footer class="flex h-9 shrink-0 items-center justify-start gap-1 border-t border-edge-muted px-4 text-xxs text-ink-extra-muted">
-            <span>Use</span>
-            <Hotkey shortcut="[" theme="subtle" />
-            <Hotkey shortcut="]" theme="subtle" />
-            <span>to jump sections</span>
-          </footer>
-        </Show>
       </div>
     </>
   );

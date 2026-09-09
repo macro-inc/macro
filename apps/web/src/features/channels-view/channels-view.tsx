@@ -2,6 +2,7 @@ import { ViewShell } from '@app/components/view-shell';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import { RightContentPanel } from '@components/app/RightContentPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -36,12 +37,7 @@ function ChannelsViewRoot() {
     () => workspaceSize.width ?? undefined,
     { narrow: 720 }
   );
-  const railMode = () =>
-    state.railMode === 'auto'
-      ? breakpoints.narrow()
-        ? 'slim'
-        : 'full'
-      : state.railMode;
+  const railMode = () => (breakpoints.narrow() ? 'slim' : 'full');
   const railLayout = () =>
     railMode() === 'slim'
       ? {
@@ -75,7 +71,10 @@ function ChannelsViewRoot() {
             <Show
               when={isTouchDevice()}
               fallback={
-                <div ref={setWorkspace} class="size-full min-h-0 bg-panel">
+                <div
+                  ref={setWorkspace}
+                  class="relative size-full min-h-0 bg-panel"
+                >
                   <ViewShell.Root
                     aside={railLayout()}
                     breakpoints={{ collapsed: 0 }}
@@ -95,41 +94,54 @@ function ChannelsViewRoot() {
                       />
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
-                      <Show
-                        when={selectedChannel()}
-                        fallback={
-                          <div class="flex size-full items-center justify-center px-6 text-center">
-                            <div class="flex max-w-sm flex-col gap-2">
-                              <h2 class="text-base font-semibold text-ink">
-                                Select a conversation
-                              </h2>
-                              <p class="text-sm leading-5 text-ink-muted">
-                                Choose a channel or person from the sidebar to
-                                open the conversation here.
-                              </p>
-                            </div>
-                          </div>
+                      <RightContentPanel
+                        contentKey={
+                          state.selectedChannelId
+                            ? `channel:${state.selectedChannelId}`
+                            : undefined
                         }
                       >
-                        {(channel) => (
-                          <Suspense>
-                            <PreviewPanel
-                              selectedEntity={channel()}
-                              orchestrator={orchestrator}
-                              splitPanelContext={panel}
-                              headerLeading={
-                                <Show when={railMode() === 'slim'}>
-                                  <SplitPanel.ControlGroup class="mr-1">
-                                    <SplitPanel.BackButton />
-                                    <SplitPanel.ForwardButton />
-                                  </SplitPanel.ControlGroup>
-                                </Show>
-                              }
-                            />
-                          </Suspense>
-                        )}
-                      </Show>
+                        <Show
+                          when={selectedChannel()}
+                          fallback={
+                            <div class="flex size-full items-center justify-center px-4 text-center">
+                              <div class="flex max-w-sm flex-col gap-2">
+                                <h2 class="text-base font-semibold text-ink">
+                                  Select a conversation
+                                </h2>
+                                <p class="text-sm leading-5 text-ink-muted">
+                                  Choose a channel or person from the sidebar to
+                                  open the conversation here.
+                                </p>
+                              </div>
+                            </div>
+                          }
+                        >
+                          {(channel) => (
+                            <Suspense>
+                              <PreviewPanel
+                                selectedEntity={channel()}
+                                headerClass="h-12 min-h-12"
+                                orchestrator={orchestrator}
+                                splitPanelContext={panel}
+                                headerLeading={
+                                  <Show when={railMode() === 'slim'}>
+                                    <SplitPanel.ControlGroup class="mr-1">
+                                      <SplitPanel.BackButton />
+                                      <SplitPanel.ForwardButton />
+                                    </SplitPanel.ControlGroup>
+                                  </Show>
+                                }
+                              />
+                            </Suspense>
+                          )}
+                        </Show>
+                      </RightContentPanel>
                     </ViewShell.Main>
+                    <div
+                      aria-hidden="true"
+                      class="pointer-events-none absolute inset-x-0 top-0 z-10 h-12 border-b border-edge-muted"
+                    />
                   </ViewShell.Root>
                 </div>
               }

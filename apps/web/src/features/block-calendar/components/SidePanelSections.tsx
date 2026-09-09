@@ -7,6 +7,7 @@ import {
   useHasTeammates,
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
+import { ViewFavorites } from '@app/features/favorites/view-favorites';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
@@ -221,6 +222,14 @@ export function SidePanelSections() {
     <Show when={!sidePanel?.isNarrow()}>
       <CalendarMiniCalendarSidePanelSection />
       <CalendarSourcesSidePanelSection />
+      <SidePanel.Section
+        id="calendar-favorites"
+        title="Favorites"
+        order={25}
+        defaultOpen
+      >
+        <ViewFavorites view="calendar" hideHeading />
+      </SidePanel.Section>
       <ShowFeatureFlag flag={enableCalendarTeamOoo}>
         <CalendarTeamOooSidePanelSection />
       </ShowFeatureFlag>

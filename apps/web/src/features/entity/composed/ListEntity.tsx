@@ -199,6 +199,8 @@ export function ListEntity(props: ListEntityProps) {
             !isMobile() && !usesCondensedNarrowLayout(),
           'min-h-9 mx-(--soup-row-gutter)':
             !isMobile() && usesCondensedNarrowLayout(),
+          'email-read-row':
+            props.entity.type === 'email' && props.entity.isRead === true,
           'bg-list-selected': props.checked,
           'bg-list-selected-highlighted': props.checked && props.highlighted,
           'bg-list-highlighted':

@@ -5,8 +5,13 @@ import {
   useHarnessPairingQuery,
 } from '@queries/harnesses/harnesses';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { Button, Dialog, Panel } from '@ui';
+import { Button } from '@ui';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
+import {
+  ManagementCard,
+  ManagementEditor,
+  managementPrimary,
+} from './management-primitives';
 import { ChoiceRow } from './primitives';
 
 const PAIRING_ERROR_FALLBACK =
@@ -26,7 +31,7 @@ function expiresInMinutes(expiresAt: string): number {
 }
 
 /**
- * Dialog that walks the user through approving a macrod pairing request:
+ * Nested page that walks the user through approving a macrod pairing request:
  * enter the printed code, review the request, and approve it as a private or
  * team harness.
  */
@@ -48,11 +53,12 @@ export function HarnessPairingDialog(props: {
   const pairingQuery = useHarnessPairingQuery(committedCode);
   const approveMutation = useApproveHarnessPairingMutation();
   const currentTeamQuery = useCurrentTeamQuery();
-  const currentTeamId = () => currentTeamQuery.data?.team.id;
+  const currentTeamId = () =>
+    (currentTeamQuery.isPending ? undefined : currentTeamQuery.data)?.team.id;
   const canShareWithTeam = () => currentTeamId() !== undefined;
 
   createEffect(() => {
-    const pairing = pairingQuery.data;
+    const pairing = pairingQuery.isPending ? undefined : pairingQuery.data;
     if (!pairing) return;
     if (!nameEdited()) setName(pairing.requested_name);
     // The daemon's config may ask for a scope; preselect it, but the person
@@ -94,7 +100,7 @@ export function HarnessPairingDialog(props: {
     (share() === 'Private' || canShareWithTeam());
 
   const approve = async () => {
-    const pairing = pairingQuery.data;
+    const pairing = pairingQuery.isPending ? undefined : pairingQuery.data;
     if (!pairing || !canApprove()) return;
 
     setApproveError(undefined);
@@ -112,165 +118,155 @@ export function HarnessPairingDialog(props: {
   };
 
   return (
-    <Dialog
-      open
-      onOpenChange={(open) =>
-        !open && !approveMutation.isPending && props.onClose()
-      }
-      position="center"
-      visibleScrim
-      class="w-[min(480px,calc(100vw-16px))]"
+    <ManagementEditor
+      parent="Harness"
+      title={approved() ? 'Harness connected' : 'Connect a harness'}
+      onBack={props.onClose}
+      pending={approveMutation.isPending}
     >
-      <Panel depth={2} class="rounded-xl text-ink">
-        <Panel.Header class="px-5 py-3">
-          <Dialog.Title class="text-sm font-semibold">
-            {approved() ? 'Harness connected' : 'Connect a harness'}
-          </Dialog.Title>
-        </Panel.Header>
-        <Panel.Body class="p-5">
-          <Switch>
-            <Match when={approved()}>
-              <p class="text-sm leading-5 text-ink-muted">
-                Harness connected. macrod will finish pairing automatically.
-              </p>
-            </Match>
+      <ManagementCard class="p-6">
+        <Switch>
+          <Match when={approved()}>
+            <p class="text-sm leading-5 text-ink-muted">
+              Harness connected. macrod will finish pairing automatically.
+            </p>
+          </Match>
 
-            <Match when={errorMessage()}>
-              {(message) => (
-                <div class="flex flex-col gap-3">
-                  <p class="text-sm leading-5 text-negative">{message()}</p>
-                  <div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={tryAnotherCode}
-                    >
-                      Try another code
-                    </Button>
-                  </div>
+          <Match when={errorMessage()}>
+            {(message) => (
+              <div class="flex flex-col gap-3">
+                <p class="text-sm leading-5 text-negative">{message()}</p>
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={tryAnotherCode}
+                  >
+                    Try another code
+                  </Button>
                 </div>
-              )}
-            </Match>
+              </div>
+            )}
+          </Match>
 
-            <Match when={pairingQuery.data}>
-              {(pairing) => (
-                <div class="flex flex-col gap-4">
-                  <div class="flex flex-col gap-1.5">
-                    <div class="rounded-lg border border-edge-muted bg-ink/[0.025] px-3 py-3 text-center font-mono text-2xl tracking-[0.2em] text-ink">
-                      {pairing().code}
-                    </div>
-                    <p class="text-xs text-ink-muted">
-                      Confirm this matches the code macrod printed.
-                    </p>
+          <Match when={pairingQuery.isPending ? undefined : pairingQuery.data}>
+            {(pairing) => (
+              <div class="flex flex-col gap-4">
+                <div class="flex flex-col gap-1.5">
+                  <div class="rounded-lg border border-edge-muted bg-ink/[0.025] px-3 py-3 text-center font-mono text-2xl tracking-[0.2em] text-ink">
+                    {pairing().code}
                   </div>
-
-                  <div class="flex flex-col gap-0.5 text-xs text-ink-muted">
-                    <span>
-                      Requested name:{' '}
-                      <span class="text-ink">{pairing().requested_name}</span>
-                    </span>
-                    <Show when={pairing().host}>
-                      {(host) => (
-                        <span>
-                          Host: <span class="text-ink">{host()}</span>
-                        </span>
-                      )}
-                    </Show>
-                    <span>
-                      Expires in {expiresInMinutes(pairing().expires_at)}{' '}
-                      minutes
-                    </span>
-                  </div>
-
-                  <label class="flex flex-col gap-1.5">
-                    <span class="text-xs font-medium text-ink">Name</span>
-                    <input
-                      class="settings-input w-full"
-                      value={name()}
-                      onInput={(event) => {
-                        setNameEdited(true);
-                        setName(event.currentTarget.value);
-                      }}
-                    />
-                  </label>
-
-                  <fieldset class="grid grid-cols-2 gap-2 mobile:grid-cols-1">
-                    <legend class="sr-only">Share</legend>
-                    <ChoiceRow
-                      name="harness-share"
-                      value="private"
-                      checked={share() === 'Private'}
-                      title="Private"
-                      description="Only you can run agents on this harness."
-                      onChange={() => {
-                        setShareEdited(true);
-                        setShare('Private');
-                      }}
-                    />
-                    <ChoiceRow
-                      name="harness-share"
-                      value="team"
-                      checked={share() === 'Team'}
-                      title="Team"
-                      description={
-                        canShareWithTeam()
-                          ? 'Your team can run agents on this harness.'
-                          : 'Create or join a team before sharing harnesses.'
-                      }
-                      disabled={!canShareWithTeam()}
-                      onChange={() => {
-                        setShareEdited(true);
-                        setShare('Team');
-                      }}
-                    />
-                  </fieldset>
+                  <p class="text-xs text-ink-muted">
+                    Confirm this matches the code macrod printed.
+                  </p>
                 </div>
-              )}
-            </Match>
 
-            <Match when={committedCode()}>
-              <p class="text-sm text-ink-muted">Looking up pairing code…</p>
-            </Match>
+                <div class="flex flex-col gap-0.5 text-xs text-ink-muted">
+                  <span>
+                    Requested name:{' '}
+                    <span class="text-ink">{pairing().requested_name}</span>
+                  </span>
+                  <Show when={pairing().host}>
+                    {(host) => (
+                      <span>
+                        Host: <span class="text-ink">{host()}</span>
+                      </span>
+                    )}
+                  </Show>
+                  <span>
+                    Expires in {expiresInMinutes(pairing().expires_at)} minutes
+                  </span>
+                </div>
 
-            <Match when>
-              <div class="flex flex-col gap-1.5">
-                <label
-                  for="harness-pairing-code"
-                  class="text-xs font-medium text-ink"
-                >
-                  Pairing code
-                </label>
-                <div class="flex min-w-0 items-center gap-2 rounded-lg border border-edge-muted bg-ink/[0.025] px-3 py-2">
+                <label class="flex flex-col gap-1.5">
+                  <span class="text-xs font-medium text-ink">Name</span>
                   <input
-                    id="harness-pairing-code"
-                    autofocus
-                    autocomplete="off"
-                    spellcheck={false}
-                    class="min-w-0 flex-1 bg-transparent font-mono text-sm uppercase tracking-widest text-ink outline-none"
-                    placeholder="KX7M-4QHD"
-                    value={codeInput()}
-                    onInput={(event) =>
-                      setCodeInput(event.currentTarget.value.toUpperCase())
-                    }
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') lookUp();
+                    class="settings-input w-full"
+                    value={name()}
+                    onInput={(event) => {
+                      setNameEdited(true);
+                      setName(event.currentTarget.value);
                     }}
                   />
-                </div>
-                <p class="text-xs text-ink-extra-muted">
-                  Run macrod on your computer and enter the code it prints.
-                </p>
+                </label>
+
+                <fieldset class="grid grid-cols-2 gap-2 mobile:grid-cols-1">
+                  <legend class="sr-only">Share</legend>
+                  <ChoiceRow
+                    name="harness-share"
+                    value="private"
+                    checked={share() === 'Private'}
+                    title="Private"
+                    description="Only you can run agents on this harness."
+                    onChange={() => {
+                      setShareEdited(true);
+                      setShare('Private');
+                    }}
+                  />
+                  <ChoiceRow
+                    name="harness-share"
+                    value="team"
+                    checked={share() === 'Team'}
+                    title="Team"
+                    description={
+                      canShareWithTeam()
+                        ? 'Your team can run agents on this harness.'
+                        : 'Create or join a team before sharing harnesses.'
+                    }
+                    disabled={!canShareWithTeam()}
+                    onChange={() => {
+                      setShareEdited(true);
+                      setShare('Team');
+                    }}
+                  />
+                </fieldset>
               </div>
-            </Match>
-          </Switch>
-        </Panel.Body>
-        <Panel.Footer class="justify-end gap-2 px-5 py-3">
+            )}
+          </Match>
+
+          <Match when={committedCode()}>
+            <p class="text-sm text-ink-muted">Looking up pairing code…</p>
+          </Match>
+
+          <Match when>
+            <div class="flex flex-col gap-1.5">
+              <label
+                for="harness-pairing-code"
+                class="text-xs font-medium text-ink"
+              >
+                Pairing code
+              </label>
+              <div class="flex min-w-0 items-center gap-2 rounded-lg border border-edge-muted bg-ink/[0.025] px-3 py-2">
+                <input
+                  id="harness-pairing-code"
+                  autofocus
+                  autocomplete="off"
+                  spellcheck={false}
+                  class="min-w-0 flex-1 bg-transparent font-mono text-sm uppercase tracking-widest text-ink outline-none"
+                  placeholder="KX7M-4QHD"
+                  value={codeInput()}
+                  onInput={(event) =>
+                    setCodeInput(event.currentTarget.value.toUpperCase())
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') lookUp();
+                  }}
+                />
+              </div>
+              <p class="text-xs text-ink-extra-muted">
+                Run macrod on your computer and enter the code it prints.
+              </p>
+            </div>
+          </Match>
+        </Switch>
+        <div class="mt-6 flex justify-end gap-2 border-t border-edge-muted pt-5">
           <Switch>
             <Match when={approved()}>
               <Button
                 type="button"
                 variant="cta"
+                class={managementPrimary}
                 size="sm"
                 onClick={props.onClose}
               >
@@ -287,7 +283,9 @@ export function HarnessPairingDialog(props: {
                 Close
               </Button>
             </Match>
-            <Match when={pairingQuery.data}>
+            <Match
+              when={pairingQuery.isPending ? undefined : pairingQuery.data}
+            >
               <Button
                 type="button"
                 variant="ghost"
@@ -300,6 +298,7 @@ export function HarnessPairingDialog(props: {
               <Button
                 type="button"
                 variant="cta"
+                class={managementPrimary}
                 size="sm"
                 disabled={!canApprove()}
                 onClick={() => void approve()}
@@ -329,6 +328,7 @@ export function HarnessPairingDialog(props: {
               <Button
                 type="button"
                 variant="cta"
+                class={managementPrimary}
                 size="sm"
                 disabled={codeInput().trim().length === 0}
                 onClick={lookUp}
@@ -337,8 +337,8 @@ export function HarnessPairingDialog(props: {
               </Button>
             </Match>
           </Switch>
-        </Panel.Footer>
-      </Panel>
-    </Dialog>
+        </div>
+      </ManagementCard>
+    </ManagementEditor>
   );
 }

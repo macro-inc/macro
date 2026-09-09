@@ -44,7 +44,7 @@ const PREVIEW_CONTROLLER_CONTENT_CONFIG: readonly PreviewControllerContentConfig
     {
       type: 'component',
       id: LIST_VIEW_ID.inbox,
-      redistributionWidth: { preferredPx: 360 },
+      redistributionWidth: { preferredPx: 384 },
     },
     {
       type: 'component',

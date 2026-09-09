@@ -1,114 +1,48 @@
-import {
-  CollapsibleSection,
-  useViewTabHotkeys,
-  ViewSidebar,
-} from '@app/components/view-shell';
-import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
+import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
+import { ViewFavorites } from '@app/features/favorites/view-favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
-import { EntityIcon } from '@core/component/EntityIcon';
+import CheckSquareIcon from '@phosphor/check-square.svg';
+import ListChecksIcon from '@phosphor/list-checks.svg';
 import NoteIcon from '@phosphor/note-pencil.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import UsersIcon from '@phosphor/users-three.svg';
-import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button } from '@ui';
 import { For } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  PERSONAL_TASK_TABS,
-  type TaskTabItem,
-  TEAM_TASK_TABS,
-} from '../constants';
 import { useTasksView } from '../tasks-view-context';
+import type { TaskTab } from '../types';
+import { TasksControls } from './TasksControls';
 
-function TaskIcon(props: { class?: string }) {
-  return (
-    <EntityIcon
-      targetType="task"
-      size="fill"
-      theme="monochrome"
-      class={props.class}
-    />
-  );
-}
-
-const TAB_ICONS = {
-  'my-tasks': TaskIcon,
-  'created-by-me': NoteIcon,
-  'team-tasks': TaskIcon,
-} as const;
-
-function Tab(props: {
-  item: TaskTabItem;
-  onNavigate?: () => void;
-  class?: string;
-}) {
-  const { state, setTab } = useTasksView();
-
-  return (
-    <ViewSidebar.Item
-      active={state.tab === props.item.id}
-      class={props.class}
-      onClick={() => {
-        setTab(props.item.id);
-        props.onNavigate?.();
-      }}
-    >
-      <Dynamic
-        component={TAB_ICONS[props.item.id]}
-        aria-hidden="true"
-        class="size-4 shrink-0"
-      />
-      <span class="truncate">{props.item.label}</span>
-    </ViewSidebar.Item>
-  );
-}
+const TABS = [
+  { id: 'my-tasks', label: 'My Tasks', icon: CheckSquareIcon },
+  { id: 'team-tasks', label: 'All Tasks', icon: ListChecksIcon },
+  { id: 'created-by-me', label: 'Created by me', icon: NoteIcon },
+] satisfies { id: TaskTab; label: string; icon: typeof NoteIcon }[];
 
 export function TasksNavigation(props: { onNavigate?: () => void }) {
-  const { state, setState } = useTasksView();
-  const team = useCurrentTeamQuery();
-  const teamName = () => team.data?.team.name ?? 'Team';
-  const isTeamExpanded = () =>
-    !state.collapsedSidebarSectionIds.includes('team');
-  const setTeamExpanded = (expanded: boolean) =>
-    setState(
-      'collapsedSidebarSectionIds',
-      expanded ? removeValue('team') : addUnique('team')
-    );
-
+  const { state, setTab } = useTasksView();
   return (
-    <div class="flex flex-col gap-3">
-      <ViewSidebar.Nav aria-label="Personal task tabs">
-        <For each={PERSONAL_TASK_TABS}>
-          {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
-        </For>
-      </ViewSidebar.Nav>
-
-      <CollapsibleSection.Root
-        open={isTeamExpanded()}
-        onOpenChange={setTeamExpanded}
-      >
-        <CollapsibleSection.Trigger>
-          <UsersIcon aria-hidden="true" class="size-4 shrink-0" />
-          <span class="truncate">{teamName()}</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
-        <CollapsibleSection.Content>
-          <ViewSidebar.Nav aria-label={`${teamName()} task tabs`}>
-            <For each={TEAM_TASK_TABS}>
-              {(item) => (
-                <Tab
-                  item={item}
-                  onNavigate={props.onNavigate}
-                  class="pl-8 pr-3"
-                />
-              )}
-            </For>
-          </ViewSidebar.Nav>
-        </CollapsibleSection.Content>
-      </CollapsibleSection.Root>
-    </div>
+    <ViewSidebar.Nav aria-label="Task views">
+      <For each={TABS}>
+        {(item) => (
+          <ViewSidebar.Item
+            title={item.label}
+            active={state.tab === item.id}
+            class="h-9 shrink-0 gap-3 rounded-xl px-3 text-sm font-normal"
+            onClick={() => {
+              setTab(item.id);
+              props.onNavigate?.();
+            }}
+          >
+            <Dynamic
+              component={item.icon}
+              class="size-4 shrink-0 text-ink-muted"
+            />
+            <span class="truncate">{item.label}</span>
+          </ViewSidebar.Item>
+        )}
+      </For>
+    </ViewSidebar.Nav>
   );
 }
 
@@ -116,49 +50,34 @@ export function TasksSidebar() {
   const layout = useSplitLayout();
   const panel = useSplitPanelOrThrow();
   const { state, setTab } = useTasksView();
-
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () => [...PERSONAL_TASK_TABS, ...TEAM_TASK_TABS].map((tab) => tab.id),
+    ids: () => TABS.map((tab) => tab.id),
     activeId: () => state.tab,
     setActiveId: setTab,
   });
-
-  const createTask = () => {
-    layout.popoverSplit({ type: 'component', id: 'task-compose' });
-  };
-
   return (
-    <ViewSidebar.Root
-      aria-label="Tasks navigation"
-      class="gap-3 border-r-0 pt-2"
-    >
-      <div class="flex items-center">
-        <SplitPanel.ControlGroup>
-          <SplitPanel.CloseButton />
-          <SplitPanel.BackButton />
-          <SplitPanel.ForwardButton />
-        </SplitPanel.ControlGroup>
-      </div>
-
-      <ViewSidebar.Header class="h-8">
+    <ViewSidebar.Root aria-label="Tasks navigation">
+      <ViewSidebar.Header>
         <ViewSidebar.Title>Tasks</ViewSidebar.Title>
-        <Button
-          type="button"
-          variant="cta"
-          size="md"
-          class="rounded-lg px-3"
-          onClick={createTask}
-        >
-          <PlusIcon class="size-4 shrink-0" />
-          New
-        </Button>
       </ViewSidebar.Header>
-
-      <ViewSidebar.Content>
+      <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
+        <Button
+          variant="ghost"
+          class="mb-6 h-10 shrink-0 justify-start gap-3 rounded-xl border-edge-muted bg-ink/4 px-3 text-ink"
+          onClick={() =>
+            layout.popoverSplit({ type: 'component', id: 'task-compose' })
+          }
+        >
+          <PlusIcon class="size-4" /> New task
+        </Button>
         <TasksNavigation />
-      </ViewSidebar.Content>
+        <ViewFavorites view="tasks" class="mt-6 shrink-0" />
+        <div class="mt-6 flex min-h-0 flex-1 flex-col">
+          <TasksControls tagsOnly />
+        </div>
+      </div>
     </ViewSidebar.Root>
   );
 }

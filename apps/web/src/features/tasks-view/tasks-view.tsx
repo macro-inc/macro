@@ -1,15 +1,18 @@
 import { ViewShell } from '@app/components/view-shell';
+import { ListContentPreview } from '@app/components/view-shell/ListContentPreview';
+import { RightContentPanel } from '@components/app/RightContentPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { cn, Surface } from '@ui';
-import { onMount, Suspense } from 'solid-js';
+import { onMount, Show, Suspense } from 'solid-js';
+import { TasksControls } from './components/TasksControls';
 import { TasksHeader } from './components/TasksHeader';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
-import { TasksViewProvider } from './tasks-view-context';
+import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import type { TasksViewStateOptions } from './types';
 
 export type TasksViewProps = {
@@ -34,6 +37,13 @@ function TasksListFallback() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
+  const { state } = useTasksView();
+  const title = () =>
+    state.tab === 'my-tasks'
+      ? 'My Tasks'
+      : state.tab === 'team-tasks'
+        ? 'All Tasks'
+        : 'Created by me';
 
   onMount(() => panel.handle.setDisplayName('Tasks'));
 
@@ -43,22 +53,38 @@ function TasksViewRoot() {
         <SplitPanel.Body>
           <ViewShell.Root
             resizable
-            aside={{ preserveDuringResize: false }}
+            aside={{ width: 288, min: 224, max: 320 }}
             main={{ preferredWidth: 640 }}
           >
             <ViewShell.Aside>
               <TasksSidebar />
             </ViewShell.Aside>
             <ViewShell.Main>
-              <ViewShell.Header>
-                <TasksHeader />
-              </ViewShell.Header>
-              <ViewShell.Content>
-                <Suspense fallback={<TasksListFallback />}>
-                  <TaskList />
-                </Suspense>
-              </ViewShell.Content>
+              <RightContentPanel>
+                <ListContentPreview
+                  title={title()}
+                  viewKey={JSON.stringify([state.tab, state.facets])}
+                >
+                  {() => (
+                    <>
+                      <TasksHeader />
+                      <Show when={!isTouchDevice()}>
+                        <TasksControls />
+                      </Show>
+                      <div class="min-h-0 min-w-0 flex-1">
+                        <Suspense fallback={<TasksListFallback />}>
+                          <TaskList />
+                        </Suspense>
+                      </div>
+                    </>
+                  )}
+                </ListContentPreview>
+              </RightContentPanel>
             </ViewShell.Main>
+            <div
+              aria-hidden="true"
+              class="pointer-events-none absolute inset-x-0 top-0 z-10 h-12 border-b border-edge-muted"
+            />
           </ViewShell.Root>
         </SplitPanel.Body>
       </SplitPanel.Root>

@@ -1,5 +1,28 @@
 # Channels and Messaging
 
+## Chat workspace
+
+`/app/component/channels` opens Chat with an inner sidebar matching the
+conversation surface. The full sidebar defaults to 320px and its resized width
+persists. Its header contains Chat and `Search channels and direct messages`.
+Search replaces the sidebar navigation with a search field and a flat list of
+matching conversations, keeping the current conversation visible. Escape or
+`Close sidebar search` restores the navigation. There is no manual collapse
+button or separate history toolbar in the full sidebar.
+
+`All` and `Recent` use the same horizontal pill tabs as Notifications. Favorites
+appears only in All, above Channels. All contains collapsible `Channels` and
+`Direct messages` sections with their own create actions. Selected navigation
+rows use a rounded neutral fill. Unread, muted, and call indicators remain visible;
+section scroll indicators reveal activity outside the visible area. Recent uses
+full-width conversation rows without horizontal dividers. The slim sidebar retains
+icon tabs at narrow workspace widths. Selection, section expansion, and list
+keyboard shortcuts persist. Mobile uses dedicated conversation tabs and a preview.
+
+References in a conversation open in its own persistent right-hand tab panel.
+Switching conversations restores that conversation's reference tabs and collapsed
+state; it does not reuse another conversation's open references.
+
 ## Create a channel
 
 1. `Create` → `Channel G`. Dialog `Create a channel` opens with the `Name` textbox focused.

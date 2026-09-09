@@ -47,8 +47,8 @@ export function Bots() {
           when={selectedBotId()}
           fallback={
             <BotSettingsList
-              bots={botsQuery.data}
-              loading={botsQuery.isLoading}
+              bots={botsQuery.isSuccess ? botsQuery.data : undefined}
+              loading={botsQuery.isPending}
               onCreate={() => openCreateBot()}
               onOpen={openBot}
             />

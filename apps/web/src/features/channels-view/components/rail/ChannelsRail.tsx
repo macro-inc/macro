@@ -4,7 +4,8 @@ import {
   listOwnedSlotName,
   useListInteractions,
 } from '@app/components/list';
-import { useViewTabHotkeys } from '@app/components/view-shell';
+import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
+import { createSidebarSearch } from '@app/components/view-shell/sidebar-search';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
@@ -78,7 +79,23 @@ export function ChannelsRail(props: ChannelsRailProps) {
       )
   );
 
+  const search = createSidebarSearch();
+  const searchResults = createMemo(() =>
+    props.channels.filter((channel) =>
+      channel.name
+        .toLocaleLowerCase()
+        .includes(search.query().trim().toLocaleLowerCase())
+    )
+  );
+
   const visibleRows = createMemo<ChannelRailRow[]>(() => {
+    if (search.isOpen()) {
+      return searchResults().map((channel) => ({
+        kind: 'conversation',
+        id: `channel:${channel.id}`,
+        channel,
+      }));
+    }
     if (state.tab === 'recents') {
       return recentConversations().map((channel) => ({
         kind: 'conversation',
@@ -157,7 +174,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       const scrollRoot =
         row.kind === 'conversation' && row.group
           ? sectionScrollRoots()[row.group]
-          : state.tab === 'recents'
+          : search.isOpen() || state.tab === 'recents'
             ? listRoot()
             : undefined;
       if (!element || !scrollRoot) return;
@@ -268,6 +285,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const rail: ChannelsRailContext = {
+    search,
+    searchResults,
     railId: listDomId,
     list,
     tab: () => state.tab,
@@ -291,16 +310,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   return (
     <ChannelsRailProvider value={rail}>
-      <aside
-        aria-label="Chat navigation"
-        class="flex size-full min-h-0 flex-col gap-3 bg-inset pt-2"
-      >
+      <ViewSidebar.Root aria-label="Chat navigation" class="pb-4">
         {props.mode === 'full' ? (
           <ExpandedChannelsRail />
         ) : (
           <SlimChannelsRail />
         )}
-      </aside>
+      </ViewSidebar.Root>
     </ChannelsRailProvider>
   );
 }

@@ -193,6 +193,9 @@ describe('Harness', () => {
         </QueryClientProvider>
       ));
       expect(screen.queryByText('Settings suspended')).toBeNull();
+      fireEvent.click(
+        screen.getByRole('button', { name: /^Cursor Run agent sessions/ })
+      );
       expect(screen.getByText('Loading models…')).toBeTruthy();
       expect(
         (
@@ -248,7 +251,9 @@ describe('Harness', () => {
     render(() => <Harness />);
 
     expect(screen.getByRole('heading', { name: 'In-memory' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /^Cursor Run agent sessions/ })
+    ).toBeTruthy();
     expect(
       screen.getByRole('heading', { name: 'Bring your own agent' })
     ).toBeTruthy();
@@ -257,6 +262,9 @@ describe('Harness', () => {
 
   it('validates and saves a Cursor API key', async () => {
     render(() => <Harness />);
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Cursor Run agent sessions/ })
+    );
 
     const apiKeyInput = screen.getByLabelText('API key');
     const saveButton = screen.getByRole('button', { name: 'Save' });
@@ -290,6 +298,9 @@ describe('Harness', () => {
     };
 
     render(() => <Harness />);
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Cursor Run agent sessions/ })
+    );
 
     expect(screen.getByText('Connected')).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
@@ -315,6 +326,9 @@ describe('Harness', () => {
     mocks.status.isPlaceholderData = true;
 
     render(() => <Harness />);
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Cursor Run agent sessions/ })
+    );
 
     expect(screen.getByText('Loading…')).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
@@ -373,8 +387,10 @@ describe('Harness', () => {
     render(() => <Harness />);
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText('Remove Dev box?')).toBeTruthy();
+    const dialog = screen.getByRole('region');
+    expect(
+      within(dialog).getByRole('heading', { name: 'Remove Dev box?' })
+    ).toBeTruthy();
     expect(
       within(dialog).getByText(/Agents using this harness will stop running/)
     ).toBeTruthy();
@@ -389,7 +405,7 @@ describe('Harness', () => {
         harnessId: REGISTERED_HARNESS.id,
       });
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Harness removed');
-      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(screen.queryByRole('region')).toBeNull();
     });
   });
 
@@ -398,7 +414,7 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region');
     expect(within(dialog).getByText('KX7M-4QHD')).toBeTruthy();
     expect(within(dialog).getByText('Dev laptop')).toBeTruthy();
     expect(harnessMocks.setSearchParams).toHaveBeenCalledWith(

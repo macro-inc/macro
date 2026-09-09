@@ -1,3 +1,4 @@
+import ToolIcon from '@phosphor/hand.svg';
 /**
  * A Macro user tool: the agent drafted it, the user finishes it after the
  * turn - `SendEmail`, `CreateCalendarEvent`.
@@ -83,8 +84,10 @@ export function UserToolCall(props: {
 
   return (
     <ToolCard
+      icon={<ToolIcon class="size-4" />}
       title={props.common.label}
       status={props.common.status}
+      defaultOpen={outcome().kind === 'pending' || outcome().kind === 'edited'}
       subtitle={draft() && draftSubtitle(draft()!)}
       muted={props.common.muted || failure() !== undefined}
       trailing={
@@ -138,7 +141,15 @@ function OutcomeTrailing(props: { outcome: UserToolOutcome }): JSX.Element {
       .otherwise(() => undefined);
   return (
     <span class="flex items-center gap-2">
-      <span class="text-ink">{outcomeLabel(props.outcome)}</span>
+      <span
+        class="text-ink"
+        classList={{
+          'text-accent': props.outcome.kind === 'pending',
+          'text-failure': props.outcome.kind === 'failed',
+        }}
+      >
+        {outcomeLabel(props.outcome)}
+      </span>
       <Show when={threadId()}>
         {(id) => <ItemPreview id={id()} type="email" class="ring-0" />}
       </Show>
@@ -191,8 +202,8 @@ export function EmailDraft(props: { email: SendEmail; inFlight: boolean }) {
       ['Bcc', props.email.bcc ?? []],
     ] as const;
   return (
-    <div class="flex flex-col gap-2">
-      <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+    <div class="flex flex-col gap-4 p-4">
+      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-b border-edge-muted pb-4 text-xs">
         <For each={recipients()}>
           {([field, list]) => (
             <Show when={list.length > 0}>
@@ -272,8 +283,8 @@ export function EventDraft(props: { event: CreateCalendarEvent }) {
       ],
     ] as const;
   return (
-    <div class="flex flex-col gap-2">
-      <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+    <div class="flex flex-col gap-4 p-4">
+      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-b border-edge-muted pb-4 text-xs">
         <For each={rows()}>
           {([field, value]) => (
             <Show when={value}>

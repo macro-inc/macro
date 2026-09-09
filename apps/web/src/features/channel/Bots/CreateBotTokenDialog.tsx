@@ -1,8 +1,12 @@
 import KeyIcon from '@phosphor/key.svg';
-import XIcon from '@phosphor/x.svg';
 import type { Bot } from '@service-storage/generated/schemas/bot';
-import { Button, Dialog, Panel } from '@ui';
+import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import {
+  ManagementCard,
+  ManagementEditor,
+  managementPrimary,
+} from '../../settings/management-primitives';
 import { BotAvatar } from './BotAvatar';
 import { MintCredential, useMintBotToken } from './MintCredential';
 
@@ -26,32 +30,14 @@ export function CreateBotTokenDialog(props: {
   };
 
   return (
-    <Dialog
-      open={props.open}
-      onOpenChange={(open) => (open ? props.onOpenChange(true) : close())}
-      onEscapeKeyDown={(event) => minted.isPending() && event.preventDefault()}
-      position="center"
-      class="w-105"
-    >
-      <Panel depth={2} active class="rounded-xl text-ink">
-        <Panel.Header class="px-5">
-          <Dialog.Title class="text-sm font-semibold">
-            New webhook token
-          </Dialog.Title>
-          <div class="ml-auto">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              label="Close"
-              aria-label="Close"
-              disabled={minted.isPending()}
-              onClick={close}
-            >
-              <XIcon />
-            </Button>
-          </div>
-        </Panel.Header>
-        <Panel.Body class="p-5">
+    <Show when={props.open}>
+      <ManagementEditor
+        parent={props.bot?.name ?? 'Bot'}
+        title="New webhook token"
+        onBack={close}
+        pending={minted.isPending()}
+      >
+        <ManagementCard class="p-6">
           <Show when={props.bot}>
             {(bot) => (
               <div class="flex flex-col gap-5">
@@ -100,6 +86,7 @@ export function CreateBotTokenDialog(props: {
                         </Button>
                         <Button
                           variant="cta"
+                          class={managementPrimary}
                           size="sm"
                           disabled={isPending}
                           onClick={mint}
@@ -115,7 +102,12 @@ export function CreateBotTokenDialog(props: {
                         Store this token somewhere secure before closing.
                       </div>
                       <div class="flex justify-end border-t border-edge-muted pt-4">
-                        <Button variant="cta" size="sm" onClick={close}>
+                        <Button
+                          variant="cta"
+                          class={managementPrimary}
+                          size="sm"
+                          onClick={close}
+                        >
                           Done
                         </Button>
                       </div>
@@ -125,8 +117,8 @@ export function CreateBotTokenDialog(props: {
               </div>
             )}
           </Show>
-        </Panel.Body>
-      </Panel>
-    </Dialog>
+        </ManagementCard>
+      </ManagementEditor>
+    </Show>
   );
 }
