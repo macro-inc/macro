@@ -301,6 +301,56 @@ describe('layoutManager', () => {
       });
     });
 
+    it('returns to the previous document after an in-place mention open', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'md', id: 'doc-1' },
+        ]);
+        const split = manager.getSplit(manager.splits()[0].id)!;
+
+        manager.openWithSplit(
+          { type: 'md', id: 'task-1' },
+          { handle: split, preferNewSplit: false, referredFrom: 'mention' }
+        );
+
+        expect(split.content()).toMatchObject({ type: 'md', id: 'task-1' });
+        expect(split.canGoBack()).toBe(true);
+
+        split.goBack();
+        expect(split.content()).toMatchObject({ type: 'md', id: 'doc-1' });
+
+        dispose();
+      });
+    });
+
+    it('activates the source split when Back would remount content another split already shows', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'md', id: 'doc-1' },
+        ]);
+        manager.setResizeContext({
+          canFit: () => true,
+        } as unknown as ResizeZoneCtx);
+        const source = manager.getSplit(manager.splits()[0].id)!;
+
+        const opened = manager.openWithSplit(
+          { type: 'md', id: 'task-1' },
+          { handle: source, preferNewSplit: true, referredFrom: 'mention' }
+        );
+
+        expect(manager.splits()).toHaveLength(2);
+        expect(opened?.content()).toMatchObject({ type: 'md', id: 'task-1' });
+        expect(opened?.canGoBack()).toBe(true);
+        expect(source.content()).toMatchObject({ type: 'md', id: 'doc-1' });
+
+        opened?.goBack();
+        expect(manager.activeSplitId()).toBe(source.id);
+        expect(source.content()).toMatchObject({ type: 'md', id: 'doc-1' });
+
+        dispose();
+      });
+    });
+
     it('skips history entries another split already displays', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [

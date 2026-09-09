@@ -436,7 +436,7 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
   const open = (e: MouseEvent | KeyboardEvent | null) => {
     openWithSplit(
       { type: 'pr', id: props.id },
-      { preferNewSplit: openInNewSplitForMention(e?.shiftKey, e != null) }
+      { preferNewSplit: openInNewSplitForMention(e) }
     );
   };
 

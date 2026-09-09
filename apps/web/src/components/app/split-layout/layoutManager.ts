@@ -901,13 +901,30 @@ export function createSplitLayout(
     const split = state.splits[i];
     if (!split.history.canGoBack()) return;
 
+    const prev = split.history.items[split.history.index - 1];
+    if (!prev) return;
+
+    // `reattach` refuses content another split already displays. Activate
+    // that copy instead of stranding this split's history index — new-split
+    // opens seed the source document here so Back can return to it.
+    const alreadyOpen = state.splits.find(
+      (candidate) =>
+        candidate.id !== split.id &&
+        !isExcluded(candidate) &&
+        sameNonComponentIdentity(candidate.content, prev)
+    );
+    if (alreadyOpen) {
+      activateSplit(alreadyOpen.id);
+      return;
+    }
+
     batch(() => {
       captureCurrentEntryState(split);
 
-      const prev = split.history.back();
-      if (!prev) return;
+      const next = split.history.back();
+      if (!next) return;
 
-      reattach(split, prev, undefined, 'history-back');
+      reattach(split, next, undefined, 'history-back');
       resetPreviewMode(id);
     });
   }
@@ -2147,12 +2164,17 @@ export function createSplitLayout(
         resetPreviewMode(promotedPreviewPair.controllerId);
       }
 
+      const sourceContent = splitHandle?.content();
       return createNewSplit({
         content,
         activate: options.activate ?? true,
         referredFrom: options.referredFrom ?? null,
         allowDuplicate: options.allowDuplicate,
         insertIndex: options.insertIndex,
+        initialHistory:
+          sourceContent && !sameContent(sourceContent, content)
+            ? [sourceContent]
+            : undefined,
       });
     }
   }

@@ -12,19 +12,29 @@ describe('openInNewSplitForMention', () => {
   });
 
   it('opens in a new split by default for mouse/keyboard interactions', () => {
-    expect(openInNewSplitForMention(false, true)).toBe(true);
+    expect(openInNewSplitForMention({ altKey: false, shiftKey: false })).toBe(
+      true
+    );
+  });
+
+  it('prefers a new split on Shift+click instead of inverting', () => {
+    expect(openInNewSplitForMention({ shiftKey: true })).toBe(true);
   });
 
   it('opens in the current split when Option (alt) is held', () => {
-    expect(openInNewSplitForMention(true, true)).toBe(false);
+    expect(openInNewSplitForMention({ altKey: true })).toBe(false);
   });
 
   it('defaults to current split when there is no event (e.g. touch)', () => {
-    expect(openInNewSplitForMention(undefined, false)).toBe(false);
+    expect(openInNewSplitForMention(undefined)).toBe(false);
+    expect(openInNewSplitForMention(null)).toBe(false);
   });
 
   it('always opens in the current split on touch devices', () => {
     vi.mocked(isTouchDevice).mockReturnValue(true);
-    expect(openInNewSplitForMention(false, true)).toBe(false);
+    expect(openInNewSplitForMention({ shiftKey: true })).toBe(false);
+    expect(openInNewSplitForMention({ altKey: false, shiftKey: false })).toBe(
+      false
+    );
   });
 });
