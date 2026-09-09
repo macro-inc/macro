@@ -6,6 +6,7 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import {
+  type EntityActionNavigationHandler,
   resolveEntityActionViewContext,
   toEntityActionListState,
   useEntityActionHotkeys,
@@ -83,6 +84,7 @@ type InboxListActivationMetadata = {
 };
 
 type InboxListProps = {
+  previewEntity: EntityData | undefined;
   onPreviewEntityChange: (entity: EntityData | undefined) => void;
 };
 
@@ -264,6 +266,17 @@ export function InboxList(props: InboxListProps) {
     return row?.kind === 'entity' ? row.entity : undefined;
   };
 
+  const createActionNavigationHandler = ():
+    | EntityActionNavigationHandler
+    | undefined => {
+    if (props.previewEntity === undefined) return;
+
+    return ({ entity }) => {
+      previewAfterNavigation.clear();
+      props.onPreviewEntityChange(entity);
+    };
+  };
+
   let listRoot: HTMLDivElement | undefined;
   const [collapseRow, setCollapseRow] =
     createSignal<(rowId: string) => Promise<void>>();
@@ -336,6 +349,7 @@ export function InboxList(props: InboxListProps) {
     restoreFocus: () => listRoot?.focus(),
     viewContext: entityActionViewContext,
     splitHandle: panel.handle,
+    createActionNavigationHandler,
     condition: panel.isPanelActive,
   });
 
@@ -346,6 +360,7 @@ export function InboxList(props: InboxListProps) {
       viewContext: entityActionViewContext(),
       viewedProjectId: viewedProjectIdFromContent(content),
       splitHandle: panel.handle,
+      createActionNavigationHandler,
     });
   }
 
