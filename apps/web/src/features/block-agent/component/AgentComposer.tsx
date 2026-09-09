@@ -31,7 +31,6 @@ export function AgentComposer(props: {
     metadata,
     pending,
     queue,
-    resuming,
     registerQuoteInsert,
   } = useAgentSession();
   const userId = useUserId();
@@ -71,9 +70,6 @@ export function AgentComposer(props: {
             }}
           />
         </div>
-      </Show>
-      <Show when={resuming()}>
-        <ComposerNotice text="Waking the agent's sandbox…" active />
       </Show>
       <Show when={blockedOnUser()}>
         <ComposerNotice

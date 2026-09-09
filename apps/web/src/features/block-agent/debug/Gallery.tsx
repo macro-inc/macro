@@ -37,6 +37,7 @@ import {
   ToolCard,
   ToolErrorCard,
   ToolStatusTitle,
+  WorkingIndicator,
 } from '../ui';
 
 /** A Cursor-shaped catalog: long enough to scroll, with one grouped tail. */
@@ -589,8 +590,14 @@ export default function AgentUiGallery() {
             />
           </Item>
 
+          <Item label="WorkingIndicator">
+            <WorkingIndicator label="Starting the agent's sandbox…" />
+            <WorkingIndicator label="Thinking" />
+            <WorkingIndicator label="Waking the agent's sandbox…" />
+          </Item>
+
           <Item label="ComposerNotice">
-            <ComposerNotice text="Waking the agent's sandbox…" active />
+            <ComposerNotice text="The agent is waiting for your answer above. Messages sent now are queued." />
           </Item>
 
           <Item label="ActionLine">

@@ -24,10 +24,12 @@ import {
   type Accessor,
   createContext,
   createEffect,
+  createMemo,
   type ParentProps,
   Suspense,
   useContext,
 } from 'solid-js';
+import { activityLabel } from '../state/agent-activity';
 import { controlOutcome } from '../state/control-message';
 import type { QuoteInsert } from '../ui';
 import { createAgentSessionFeed } from './create-agent-session-feed';
@@ -86,15 +88,12 @@ export type AgentSessionState = {
   /** The runtime's status: the GET snapshot, followed live over the log. */
   status: Accessor<SessionStatus>;
   /**
-   * The runtime is gone and the user has asked it for something anyway, so
-   * the service is bringing its sandbox back before it can deliver.
-   *
-   * There is no signal for this on the wire: the resume happens inside the
-   * service, and the session log stays silent until the container answers.
-   * It is inferred instead, from the one thing the block does know — the
-   * runtime was disconnected, and a request it must wait on is outstanding.
+   * What the harness is doing while the transcript has nothing to show for
+   * it — the working indicator's shimmer label ("Starting the agent's
+   * sandbox…", "Thinking", …). Absent when there is nothing to narrate:
+   * content is streaming, or the session is idle.
    */
-  resuming: Accessor<boolean>;
+  activity: Accessor<string | undefined>;
   /**
    * The agent is mid-turn but waiting on the user, not generating: the
    * fold's metadata names a question to answer. Presentational only -
@@ -182,6 +181,21 @@ export function AgentSessionProvider(
   const awaitingRuntime = () =>
     composer.sending() || composer.changingModel() !== undefined;
   const resuming = () => isDisconnected(status.status()) && awaitingRuntime();
+  const loadFailed = () => feed.loadFailed() || failed();
+
+  // Memoized so the label only propagates on change — the streaming turn
+  // replaces its message hundreds of times while this stays "Thinking".
+  const activity = createMemo(() =>
+    activityLabel({
+      loadFailed: loadFailed(),
+      pending: pending(),
+      resuming: resuming(),
+      sending: composer.sending(),
+      working: working(),
+      status: status.status(),
+      messages: feed.messages(),
+    })
+  );
 
   return (
     <>
@@ -206,12 +220,12 @@ export function AgentSessionProvider(
           messages: feed.messages,
           // A create that failed leaves the block with nothing to load, which
           // is the same dead end for the reader as a load that failed.
-          loadFailed: () => feed.loadFailed() || failed(),
+          loadFailed,
           loadRetryable: feed.loadFailed,
           retryLoad: feed.retry,
           working,
           status: status.status,
-          resuming,
+          activity,
           blockedOnUser,
           composer,
           elicitation,

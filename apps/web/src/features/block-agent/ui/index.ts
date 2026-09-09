@@ -56,3 +56,7 @@ export {
   type TodoItem,
   type ToolStatus,
 } from './types';
+export {
+  WorkingIndicator,
+  type WorkingIndicatorProps,
+} from './WorkingIndicator';

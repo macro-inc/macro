@@ -117,6 +117,12 @@ at the latest message, including when history arrives after the empty view. Shor
 transcripts sit at the bottom, above the composer. Only the visible rows and an
 overscan buffer are mounted: scroll to older turns before searching their DOM text.
 
+Sandbox waits live in the transcript, not above the composer. A create still
+booting shows **Starting the agent's sandbox…**; sending into a reaped session
+shows **Waking the agent's sandbox…**. Both yield to **Thinking** once the
+runtime is ready with nothing streamed yet, then to the turn itself. An
+interrupted turn does not keep shimmering **Thinking** after disconnect.
+
 - New messages and growing streamed replies follow while within 50px of the end.
   Scroll up to read history without being pulled back by subsequent output.
 - Far above the end, scroll downward to reveal **Scroll to bottom**. Clicking it

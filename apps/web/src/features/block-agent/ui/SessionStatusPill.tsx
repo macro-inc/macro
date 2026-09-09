@@ -4,6 +4,7 @@
  */
 
 import { match } from 'ts-pattern';
+import { prettyEventName } from '../state/agent-activity';
 
 export type SessionStatusLike =
   | { kind: 'no_messages' }
@@ -14,12 +15,6 @@ type Presentation = {
   label: string;
   tone: 'positive' | 'neutral' | 'negative';
 };
-
-/** `worktree_ready` → `Worktree ready`. */
-function prettyEventName(event: string): string {
-  const words = event.split(/[_-]/).filter(Boolean).join(' ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
 
 function presentation(status: SessionStatusLike): Presentation {
   return match(status)

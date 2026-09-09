@@ -10,11 +10,15 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { WorkingIndicator } from '../ui';
 import { Message } from './AgentMessage';
 import { ReplyToSelection } from './ReplyToSelection';
 
+/** Sentinel key for the transcript's wait row — not a folded message id. */
+const ACTIVITY_ROW = '__activity';
+
 export function Transcript() {
-  const { messages, quoteSelection } = useAgentSession();
+  const { activity, messages, quoteSelection, working } = useAgentSession();
   const splitPanel = useSplitPanel();
   const [transcriptEl, setTranscriptEl] = createSignal<HTMLDivElement>();
   const [scrollState, setScrollState] = createSignal<ThreadListScrollState>();
@@ -30,7 +34,11 @@ export function Transcript() {
         ])
       )
   );
-  const keys = createMemo(() => [...messageById().keys()]);
+  const keys = createMemo(() => {
+    const ids = [...messageById().keys()];
+    if (activity()) ids.push(ACTIVITY_ROW);
+    return ids;
+  });
   // Insets belong in virtual measurements, not CSS padding outside the sizer.
   // ThreadList preserves the end pin across keyboard/viewport and inset resizes.
   const insets = () =>
@@ -56,12 +64,25 @@ export function Transcript() {
         onScroll={(state) => setScrollState(state)}
       >
         {({ id }) => (
-          <Show when={messageById().get(id)}>
-            {(message) => (
-              <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
-                <Message message={message()} />
-              </div>
-            )}
+          <Show
+            when={id === ACTIVITY_ROW}
+            fallback={
+              <Show when={messageById().get(id)}>
+                {(message) => (
+                  <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
+                    <Message message={message()} turnLive={working()} />
+                  </div>
+                )}
+              </Show>
+            }
+          >
+            <Show when={activity()}>
+              {(label) => (
+                <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
+                  <WorkingIndicator label={label()} />
+                </div>
+              )}
+            </Show>
           </Show>
         )}
       </ThreadList>

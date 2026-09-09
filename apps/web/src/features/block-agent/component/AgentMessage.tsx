@@ -80,9 +80,19 @@ function UserMessage(props: { message: FoldedMessage }) {
   );
 }
 
-export function Message(props: { message: FoldedMessage }) {
+export function Message(props: {
+  message: FoldedMessage;
+  /**
+   * The session's turn is live. Defaults to true so a standalone render still
+   * shimmers an open agent message. Pass the block's `working` so a
+   * disconnected runtime does not keep saying Thinking.
+   */
+  turnLive?: boolean;
+}) {
   const inFlight = () =>
-    props.message.author.kind === 'agent' && props.message.stop == null;
+    (props.turnLive ?? true) &&
+    props.message.author.kind === 'agent' &&
+    props.message.stop == null;
   const failure = () =>
     props.message.stop?.kind === 'failed'
       ? props.message.stop.message

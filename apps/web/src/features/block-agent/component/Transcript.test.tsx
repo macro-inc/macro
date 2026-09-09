@@ -8,12 +8,19 @@ import { Transcript } from './Transcript';
 const session = vi.hoisted(() => ({
   messages: () => [] as FoldedMessage[],
   quoteSelection: vi.fn(),
+  activity: (): string | undefined => undefined,
+  working: () => true,
   touch: false,
   top: () => 40,
   bottom: (): number => 80,
 }));
 vi.mock('../context/AgentSessionContext', () => ({
   useAgentSession: () => session,
+}));
+vi.mock('../ui', () => ({
+  WorkingIndicator: (props: { label: string }) => (
+    <span data-activity={props.label}>{props.label}</span>
+  ),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => ({ contentOffsetTop: session.top }),
@@ -89,6 +96,8 @@ beforeEach(() => {
   rowHeight = 96;
   session.touch = false;
   session.bottom = () => 80;
+  session.activity = () => undefined;
+  session.working = () => true;
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -377,5 +386,19 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     view.setMessages((list) => [...list, message(50)]);
     await settle();
     expect(view.scroller.scrollTop).toBe(view.scroller.scrollHeight - viewport);
+  });
+
+  it('appends the sandbox-wait row after messages and drops it when idle', async () => {
+    const [activity, setActivity] = createSignal<string | undefined>(
+      "Waking the agent's sandbox…"
+    );
+    session.activity = activity;
+    const view = mount([message(0)]);
+    await settle();
+    expect(view.getByText("Waking the agent's sandbox…")).toBeTruthy();
+    expect(view.container.querySelector('[data-activity]')).not.toBeNull();
+    setActivity(undefined);
+    await settle();
+    expect(view.queryByText("Waking the agent's sandbox…")).toBeNull();
   });
 });
