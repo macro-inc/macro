@@ -226,7 +226,7 @@ describe('maybeHandlePlatformNotification', () => {
       const showNotification = vi.fn();
       if (failure === 'result') {
         vi.mocked(checkEmailNotificationSignal).mockResolvedValue(
-          err([{ code: 'UNKNOWN', message: 'Lookup failed' }])
+          err([{ code: 'NETWORK_ERROR', message: 'Lookup failed' }])
         );
       } else {
         vi.mocked(checkEmailNotificationSignal).mockRejectedValue(

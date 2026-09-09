@@ -65,7 +65,9 @@ describe('checkEmailNotificationSignal', () => {
   });
 
   it('preserves lookup failures for the popup handler to suppress', async () => {
-    const error = [{ code: 'UNKNOWN' as const, message: 'Lookup failed' }];
+    const error = [
+      { code: 'NETWORK_ERROR' as const, message: 'Lookup failed' },
+    ];
     getSoupItems.mockResolvedValue(err(error));
 
     expect(await checkEmailNotificationSignal('thread-1')).toEqual(err(error));
