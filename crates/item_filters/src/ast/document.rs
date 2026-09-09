@@ -209,7 +209,7 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
         let importance_node = importance.map(|imp| Expr::Literal(DocumentLiteral::Importance(imp)));
 
         let notification_state_node = notification_filters
-            .states
+            .into_unique_states()
             .into_iter()
             .map(|state| Expr::Literal(DocumentLiteral::NotificationState(state)))
             .reduce(Expr::or);

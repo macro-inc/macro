@@ -97,7 +97,7 @@ impl ExpandFrame<ChatLiteral> for ChatFilters {
 
         let importance_node = importance.map(|imp| Expr::Literal(ChatLiteral::Importance(imp)));
         let notification_state_node = notification_filters
-            .states
+            .into_unique_states()
             .into_iter()
             .map(|state| Expr::Literal(ChatLiteral::NotificationState(state)))
             .reduce(Expr::or);

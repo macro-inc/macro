@@ -153,7 +153,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
 
         let importance_node = importance.map(|imp| Expr::Literal(EmailLiteral::Importance(imp)));
         let notification_state_node = notification_filters
-            .states
+            .into_unique_states()
             .into_iter()
             .map(|state| Expr::Literal(EmailLiteral::NotificationState(state)))
             .reduce(Expr::or);

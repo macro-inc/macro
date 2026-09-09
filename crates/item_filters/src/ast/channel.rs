@@ -123,7 +123,7 @@ impl ExpandFrame<ChannelLiteral> for ChannelFilters {
         let is_participant_node =
             is_participant.map(|val| Expr::Literal(ChannelLiteral::IsParticipant(val)));
         let notification_state_node = notification_filters
-            .states
+            .into_unique_states()
             .into_iter()
             .map(|state| Expr::Literal(ChannelLiteral::NotificationState(state)))
             .reduce(Expr::or);

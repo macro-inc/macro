@@ -54,7 +54,7 @@ impl ExpandFrame<ForeignEntityLiteral> for ForeignEntityFilters {
         let includes_me = includes_me.then_some(Expr::Literal(ForeignEntityLiteral::IncludesMe));
 
         let notification_state_node = notification_filters
-            .states
+            .into_unique_states()
             .into_iter()
             .map(|state| Expr::Literal(ForeignEntityLiteral::NotificationState(state)))
             .reduce(Expr::or);

@@ -39,6 +39,16 @@ impl NotificationFilters {
     pub fn is_empty(&self) -> bool {
         self.states.is_empty()
     }
+
+    pub(crate) fn into_unique_states(self) -> Vec<NotificationState> {
+        let mut unique = Vec::with_capacity(3);
+        for state in self.states {
+            if !unique.contains(&state) {
+                unique.push(state);
+            }
+        }
+        unique
+    }
 }
 
 impl IsEmpty for NotificationFilters {

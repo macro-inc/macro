@@ -462,6 +462,24 @@ fn notification_filter_dto_rejects_legacy_booleans_and_invalid_states() {
 }
 
 #[test]
+fn repeated_notification_states_do_not_build_an_unbounded_ast() {
+    let filter = EntityFilters {
+        document_filters: DocumentFilters {
+            notification_filters: crate::NotificationFilters {
+                states: vec![crate::NotificationState::Unseen; 10_000],
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(filter).unwrap().unwrap();
+    assert_eq!(
+        serde_json::to_value(ast.document_filter.unwrap()).unwrap(),
+        json!({"l": {"ns": "unseen"}})
+    );
+}
+
+#[test]
 fn it_expands_document_notification_filters() {
     let f = EntityFilters {
         document_filters: DocumentFilters {

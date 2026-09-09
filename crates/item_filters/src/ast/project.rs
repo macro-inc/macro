@@ -68,7 +68,7 @@ impl ExpandFrame<ProjectLiteral> for ProjectFilters {
 
         let importance_node = importance.map(|imp| Expr::Literal(ProjectLiteral::Importance(imp)));
         let notification_state_node = notification_filters
-            .states
+            .into_unique_states()
             .into_iter()
             .map(|state| Expr::Literal(ProjectLiteral::NotificationState(state)))
             .reduce(Expr::or);
