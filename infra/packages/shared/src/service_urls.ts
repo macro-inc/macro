@@ -55,7 +55,8 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.UNFURL_SERVICE_URL]: 'https://dev-gateway.macro.com/unfurl',
   [ServiceUrl.AGENT_HARNESS_SERVICE_URL]:
     'https://dev-gateway.macro.com/agent-harness',
-  [ServiceUrl.AGENT_HARNESS_EGRESS_URL]: 'https://agent-egress-service-dev.macro.com',
+  [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
+    'https://agent-egress-service-dev.macro.com',
   [ServiceUrl.MCP_SERVER_URL]: 'https://dev-gateway.macro.com/mcp',
 };
 
@@ -80,7 +81,8 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.UNFURL_SERVICE_URL]: 'https://gateway.macro.com/unfurl',
   [ServiceUrl.AGENT_HARNESS_SERVICE_URL]:
     'https://gateway.macro.com/agent-harness',
-  [ServiceUrl.AGENT_HARNESS_EGRESS_URL]: 'https://agent-egress-service.macro.com',
+  [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
+    'https://agent-egress-service.macro.com',
   [ServiceUrl.MCP_SERVER_URL]: 'https://gateway.macro.com/mcp',
 };
 
