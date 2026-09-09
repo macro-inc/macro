@@ -6,6 +6,7 @@ import {
   createMemo,
   createSignal,
   For,
+  on,
   onCleanup,
   Show,
 } from 'solid-js';
@@ -24,6 +25,8 @@ import {
   type ContributionWeek,
   type HeatmapGeometry,
   heatmapGeometry,
+  scrollLeftAtWeeksFromEnd,
+  weeksFromEnd,
 } from '../core/contribution-grid';
 import type { ActivityOverview } from '../core/event';
 import type { ActivityIntensity } from '../core/intensity';
@@ -180,15 +183,42 @@ function ContributionHeatmap(props: {
   weekAreaRef: (element: HTMLDivElement) => void;
 }) {
   let weekArea: HTMLDivElement | undefined;
+  // Where the user has panned to, in weeks from the newest week; undefined
+  // until the area first overflows. Kept in weeks so a resize that changes
+  // the cell size restores the same weeks rather than the same pixels.
+  let panned: number | undefined;
 
-  createEffect(() => {
-    if (!props.geometry.overflows || !weekArea) return;
-    const element = weekArea;
-    const frame = requestAnimationFrame(() => {
-      element.scrollLeft = element.scrollWidth;
-    });
-    onCleanup(() => cancelAnimationFrame(frame));
-  });
+  const rememberPan = () => {
+    if (weekArea && props.geometry.overflows) {
+      panned = weeksFromEnd(weekArea, props.geometry);
+    }
+  };
+
+  createEffect(
+    on(
+      () => props.geometry,
+      (geometry) => {
+        if (!weekArea) return;
+        if (!geometry.overflows) {
+          panned = undefined;
+          return;
+        }
+        const element = weekArea;
+        // Entering overflow opens on the newest week; later geometry changes
+        // (a pane drag, a rotation) keep the weeks the user was looking at.
+        const target = panned ?? 0;
+        const frame = requestAnimationFrame(() => {
+          element.scrollLeft = scrollLeftAtWeeksFromEnd(
+            target,
+            element,
+            geometry
+          );
+          panned = target;
+        });
+        onCleanup(() => cancelAnimationFrame(frame));
+      }
+    )
+  );
 
   return (
     <div
@@ -206,6 +236,7 @@ function ContributionHeatmap(props: {
           props.weekAreaRef(element);
         }}
         class="min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        onScroll={rememberPan}
         data-activity-heatmap-weeks
       >
         <div class={cn('flex w-max', GAP_CLASS)}>

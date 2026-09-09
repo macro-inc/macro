@@ -111,6 +111,39 @@ export function heatmapGeometry(
   );
 }
 
+/** The scrollable extent of the week area, as the DOM reports it. */
+export type ScrollExtent = {
+  scrollLeft: number;
+  scrollWidth: number;
+  clientWidth: number;
+};
+
+/**
+ * How far the week area is panned from the newest week, in week columns
+ * (0 = the newest week is at the right edge). Measured in weeks rather than
+ * pixels so the position survives the cells changing size.
+ */
+export function weeksFromEnd(
+  area: ScrollExtent,
+  geometry: HeatmapGeometry
+): number {
+  const pitch = geometry.cell + geometry.gap;
+  return Math.max(
+    0,
+    (area.scrollWidth - area.clientWidth - area.scrollLeft) / pitch
+  );
+}
+
+/** The `scrollLeft` that puts the week area `weeks` columns from the newest week. */
+export function scrollLeftAtWeeksFromEnd(
+  weeks: number,
+  area: Pick<ScrollExtent, 'scrollWidth' | 'clientWidth'>,
+  geometry: HeatmapGeometry
+): number {
+  const pitch = geometry.cell + geometry.gap;
+  return Math.max(0, area.scrollWidth - area.clientWidth - weeks * pitch);
+}
+
 function labelMonth(day: ContributionDay): string {
   return format(parseOverviewDate(day.date), 'MMM', { in: OVERVIEW_TZ });
 }

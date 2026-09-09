@@ -4,6 +4,8 @@ import {
   HEATMAP_MAX_CELL,
   HEATMAP_MIN_CELL,
   heatmapGeometry,
+  scrollLeftAtWeeksFromEnd,
+  weeksFromEnd,
 } from './contribution-grid';
 import { placeholderOverview } from './placeholder-overview';
 
@@ -204,5 +206,58 @@ describe('heatmapGeometry', () => {
       width: 0,
       overflows: false,
     });
+  });
+});
+
+describe('week-anchored scroll position', () => {
+  // 53 columns at 8px cells / 2px gaps on a 300px-wide phone area.
+  const phone = heatmapGeometry(300, 53);
+  const area = { scrollWidth: phone.width, clientWidth: 300 };
+
+  it('reads the newest week at the right edge as zero', () => {
+    const atEnd = area.scrollWidth - area.clientWidth;
+    expect(weeksFromEnd({ ...area, scrollLeft: atEnd }, phone)).toBe(0);
+    // Over-scroll past the end still reads as the newest week.
+    expect(weeksFromEnd({ ...area, scrollLeft: atEnd + 40 }, phone)).toBe(0);
+  });
+
+  it('counts panned distance in week columns, not pixels', () => {
+    const pitch = phone.cell + phone.gap;
+    const atEnd = area.scrollWidth - area.clientWidth;
+    expect(
+      weeksFromEnd({ ...area, scrollLeft: atEnd - 12 * pitch }, phone)
+    ).toBe(12);
+  });
+
+  it('opens on the newest week at zero and clamps at the oldest', () => {
+    expect(scrollLeftAtWeeksFromEnd(0, area, phone)).toBe(
+      area.scrollWidth - area.clientWidth
+    );
+    expect(scrollLeftAtWeeksFromEnd(1000, area, phone)).toBe(0);
+  });
+
+  it('lands on the same weeks after the pane changes size', () => {
+    const pitch = phone.cell + phone.gap;
+    const panned = {
+      ...area,
+      scrollLeft: area.scrollWidth - area.clientWidth - 8 * pitch,
+    };
+    const weeks = weeksFromEnd(panned, phone);
+    expect(weeks).toBe(8);
+
+    const wider = heatmapGeometry(380, 53);
+    expect(wider.overflows).toBe(true);
+    const after = { scrollWidth: wider.width, clientWidth: 380 };
+    const restored = scrollLeftAtWeeksFromEnd(weeks, after, wider);
+    expect(weeksFromEnd({ ...after, scrollLeft: restored }, wider)).toBeCloseTo(
+      8
+    );
+  });
+
+  it('clamps at the oldest week when a wider pane shows more than was hidden', () => {
+    const oldest = weeksFromEnd({ ...area, scrollLeft: 0 }, phone);
+    const wider = heatmapGeometry(380, 53);
+    const after = { scrollWidth: wider.width, clientWidth: 380 };
+    expect(scrollLeftAtWeeksFromEnd(oldest, after, wider)).toBe(0);
   });
 });
