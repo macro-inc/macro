@@ -38,8 +38,9 @@ on an old task sits under "Today"; with it off they order by content recency. Ke
 `j`/`k` move between rows and update the preview; alternate activation opens a new split.
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
-unseen or seen. Viewing must not reopen a done notification; undoing done returns it
-to seen, not unseen. Email read/unread is separate from notification lifecycle state.
+unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`
+or `⌘Z`) returns it to seen, not unseen. The row returns to the active inbox without
+an unread badge. Email read/unread is separate from notification lifecycle state.
 
 ## Tasks — `/app/component/tasks`
 

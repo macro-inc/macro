@@ -68,9 +68,7 @@ export class Notification extends MacroEntity<NotificationDetail> {
   readonly state = this.field('state');
 
   /** Whether the notification is completed. */
-  async done(): Promise<boolean> {
-    return (await this.state()) === 'done';
-  }
+  readonly done = this.mappedField('state', (state) => state === 'done');
 
   /** Whether the notification has been sent (delivered out of band). */
   readonly sent = this.field('sent');

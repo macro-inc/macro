@@ -31,7 +31,8 @@ describe('notification lifecycle state', () => {
         };
         const notification = Notification.from(client, record);
         expect(await notification.state()).toBe(state);
-        expect(await notification.done()).toBe(state === 'done');
+        const done = notification.done;
+        expect(await done()).toBe(state === 'done');
         expect(await notification.seen()).toBe(state !== 'unseen');
       }
     });

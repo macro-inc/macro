@@ -1,123 +1,128 @@
 # Notification state cutover
 
-## Approved semantics
+Implementation and local verification are complete. The migration has been applied to
+local development/test databases only; production rollout remains an explicit,
+coordinated operation.
 
-- Canonical state: `Unseen | Seen | Done`, persisted as PostgreSQL `notification_state`.
-- Creation starts unseen. Marking seen must not reopen a done notification.
-- Marking done completes either active state. Reopening done always produces seen.
-- All operations are idempotent; persistence must apply transitions atomically.
-- Retain `seen_at`/`viewed_at` as historical metadata, never infer state from it.
-- Backfill done first, then seen when `seen_at` is present, otherwise unseen.
-- Preserve email read/unread separately from notification state.
-- Coordinated cutover, not rolling compatibility.
+## Model and agreed semantics
 
-## Progress
+`user_notification.state` is a non-null PostgreSQL `notification_state` enum:
+`unseen | seen | done`, defaulting to `unseen`.
 
-- [x] Shared domain state/action model, separate optional PostgreSQL representation.
-- [x] Unit coverage for the complete transition table, idempotence, late seen actions,
-      serialization, defaults, push-clearing policy, and PG type mapping.
-- [x] Generate up/down cutover migration via `cargo sqlx migrate add`.
-- [x] Apply migration to local development/test MacroDB after explicit user approval.
-- [x] Replace notification rows, patches, queue/realtime payloads, SQL reads/writes,
-      digest eligibility, and both notification persistence implementations. Repository
-      commands preserve intent (mark seen, mark done, reopen); returned rows use state.
-- [x] Replace notification-list filter booleans with exact state selections; update
-      HTTP, GraphQL notification objects, and AI notification-tool contracts.
-- [x] Replace item-filter boolean literals with `NotificationState(NotificationState)`
-      across all entity types. DTOs use `notification_filters.states`; duplicates are
-      removed before expansion so the resulting state union has at most three leaves.
-- [x] Update soup candidate gates/notified paths, frecency, channels, foreign entities,
-      email, GraphQL filter inputs, and filter projections. Candidate gates preserve
-      supported OR/NOT subtrees and never partially push down unsupported OR branches.
-- [x] Separate email read/unread into `EmailLiteral::Read(bool)` / `EmailFilters.is_read`.
-      Actual email notification predicates use viewer-scoped notification rows.
-- [x] Update both frontend AST compilers and the REST-to-GraphQL AST mapper. Persisted
-      UI boolean intent is translated into exact state unions, not sent as old literals.
-- [x] Update SDK state accessors and list selections; check SDK TypeScript and state tests.
-- [ ] Finish frontend notification caches, optimistic state, subscriptions, inbox DTO
-      helpers, and read/done UI predicates. Full web TypeScript checking still fails on
-      these intentionally outstanding old-field consumers (see remaining work below).
-- [x] Regenerate backend dependency metadata and production SQLx metadata from root.
-- [x] Verify migration backfill/rollback, constraints, the full persisted transition
-      matrix, concurrent mark-seen/mark-done, exact list filtering, and timestamp retention.
-- [x] Run affected-crate tests: notification, notification_state, notification_db_client,
-      notification_service, graphql_notification, channels, foreign_entity, frecency, soup.
-- [x] Regenerate GraphQL SDL/documents/cache schema and storage, notification, email,
-      and search OpenAPI clients. Sync and regenerate SDK clients.
-- [x] Verify affected backend suites, GraphQL schema composition, projection, and wasm
-      filter materialization. Frontend filter compilation/mapping suites pass (50 tests).
-- [x] Inspect local EXPLAIN plans: foreign-entity source lookup and per-user notification
-      checks use indexes; active notification ordering uses the existing user/created index.
-      These are local planner checks, not a production-volume performance benchmark.
-- [x] Update the agent guide with lifecycle semantics.
-- [ ] Regenerate cognition AI-tool artifacts, finish full frontend checks, and verify
-      notification read/done/undo interactions in a browser against the new local backend.
+| Operation | Unseen | Seen | Done |
+| --- | --- | --- | --- |
+| Mark seen | Seen | Seen | Done |
+| Mark done | Done | Done | Done |
+| Reopen / undo done | Unseen | Seen | Seen |
 
-The implementation is **not cutover-ready** until all application consumers and tests
-have moved to state. Do not deploy the generated migration on its own: it drops `done`
-and immediately breaks old readers/writers. The migration has been applied **locally only**,
-with approval. Backend, SDK, generated contracts, and frontend AST compilation use state.
-The remaining notification UI/cache code is not yet migrated; the full frontend is not
-cutover-ready and has known TypeScript errors in those consumers.
+Transitions are atomic and idempotent. A late mark-seen never reopens done.
+`seen_at` / API `viewed_at` are retained historical metadata, not a second source
+of lifecycle state. Marking seen preserves an existing timestamp. Completing or
+reopening does not fabricate a view timestamp. Sent and deleted status remain separate.
 
-## Notification API contract
+Backfill includes soft-deleted rows and gives done precedence:
 
-- Notification rows and realtime payloads expose `state: "unseen" | "seen" | "done"`.
+1. Legacy `done = true` becomes done, even when `seen_at` is null.
+2. Otherwise, a recorded view becomes seen.
+3. Otherwise, the notification is unseen.
+
+## Contracts and filters
+
+- REST rows, realtime patches, and AI tool results expose lowercase `state`.
 - GraphQL notifications expose `state: NotificationState!` (`UNSEEN`, `SEEN`, `DONE`).
-- HTTP list queries accept comma-separated `states`, e.g. `?states=unseen,seen`.
-  Omission defaults to active `[unseen, seen]`; `?states=` explicitly means all states.
-- The AI list tool takes `states: ["unseen", "seen", "done"]`; omission defaults to
-  active and an empty array means all states. Results expose state rather than booleans.
-- Exact seen excludes done, even if a done notification has a viewing timestamp.
-- Bulk mutation routes retain their intent: seen cannot reopen done; undone yields seen.
+- HTTP list queries accept comma-separated states, e.g. `?states=unseen,seen`.
+  Omission defaults to active; `?states=` explicitly selects all states.
+- AI ListNotifications takes a state array, with the same default and empty semantics.
+- Item ASTs use `NotificationState(NotificationState)` instead of boolean literals.
+  Filter DTOs use `notification_filters: { states: [...] }`. Empty means no restriction.
+  Legacy boolean DTO fields are rejected rather than silently ignored.
+- Exact seen excludes done. Active means **exists unseen OR exists seen**, not
+  **NOT exists done**: entities can have several notifications in different states.
+- Separate AND literals can be witnessed by different notifications. Foreign entities
+  preserve arbitrary pure notification AND/OR/NOT expressions using the eight possible
+  sets of present states. Their pre-existing restriction on mixed metadata/notification
+  OR/NOT subtrees remains fail-closed.
+- Notification state selections are deduplicated before AST expansion, bounding a DTO's
+  state union to three leaves. Candidate gates push OR/NOT only when the complete
+  subtree is supported; unsupported branches are never silently removed.
+- Email read/unread is independent: `EmailLiteral::Read(bool)` / `EmailFilters.is_read`.
+  Email inbox visibility is also independent of user notifications.
 
-## Remaining frontend work
+Both frontend AST compilers translate existing persisted UI `...Seen` / `...Done`
+filter intent into state selections. Normalized caches reset when the GraphQL schema
+hash changes. `cache-wasm` was bumped to 0.6.7 so version-gated dev builds rebuild too.
 
-- `features/notifications/notification-source.ts`, notification/entity helpers, badges,
-  and mark-message behavior: derive lifecycle state from `state`, never `viewed_at`.
-  Optimistic seen must preserve done; undo transitions done to seen only. Keep original
-  timestamps and the granular override protection against stale fetch snapshots.
-- `lib/queries/notification/user-notifications.ts`: update the handwritten realtime patch
-  type/Zod schema, patch application, and optimistic seen mapping. These legacy booleans
-  are not all caught by TypeScript because several payloads are handwritten types.
-- `lib/service-clients/service-notification/client.ts`: its handwritten list requests still
-  send `done`; map list intent to the new `states` query parameter (empty means all).
-- `lib/service-clients/service-storage/graphql-soup.ts` and
-  `lib/queries/notification/graphql/user-notifications.ts`: map/filter GraphQL `state`
-  instead of removed done/seen fields. Normalize GraphQL uppercase to REST lowercase.
-- Inbox/search DTO builders under `features/inbox-view/queries/inbox-search.ts` and
-  `features/next-soup/filters/inbox-query-filters.ts` still build `done`/`seen` fields.
-  Use `states`, retaining independent email read intent as `is_read`. Do not represent
-  an impossible intersection with `states: []` (that means no restriction).
-- `lib/queries/soup/normalized-cache/operations.ts`: restore/invalidation detection still
-  recognizes serialized `NotificationDone` / `nd` literals. Update it for state unions
-  and migrate the corresponding tests; preserve no-notification existential semantics.
-- Migrate notification factories/tests to state, including done rows with null timestamps.
-  Run full web typecheck and targeted cache/source/optimistic tests, not just filter tests.
-- Regenerate local cognition tool schemas for the changed ListNotifications contract.
-- Browser verification must use the new local backend, not deployed dev (old contract).
+## Frontend and SDK behavior
 
-Paths above are relative to `apps/web/src`. SDK TypeScript and SDK state tests already pass.
+- Notification badges, row predicates, and read markers use state, not timestamps.
+- Realtime patch decoding requires a valid state. The metadata fallback cannot admit
+  an invalid or missing lifecycle state.
+- Active/history query partitions remain distinct when applying patches, inserting
+  notifications, or restoring undo snapshots. Undo snapshots restore as seen, including
+  snapshots originally taken while the notification was unseen.
+- Local state overlays protect against stale fetches and late mutation failures.
+  Rollbacks are conditional on the specific overlay they installed; an older failure
+  cannot roll back a newer acknowledgment or done action.
+- The generic GraphQL scalar cache optimistically writes only unconditional Done.
+  Seen/reopen are conditional operations, so their scalar state and historical timestamp
+  await authoritative replies. View-local overlays still provide optimistic feedback;
+  this avoids guessing a Seen patch that could reopen Done on another surface.
+- Soup restoration recognizes state unions and respects the arriving notification's
+  exact state. It does not mistake a negated or mixed-OR constraint for an active-only view.
+- SDK `state()` is authoritative; convenience `seen()` / `done()` are derived from it.
+  SDK list options support exact state selections.
 
-## Integration traps
+## Verification completed
 
-- Exact seen excludes done; active means unseen OR seen, not NOT EXISTS(done).
-- Notification literals describe existence of matching user-owned, non-deleted rows.
-  Multiple literals can match different notifications on the same entity.
-- Foreign entities support arbitrary pure notification AND/OR/NOT subtrees using a truth
-  table over the eight possible sets of present states. Mixed metadata/notification OR/NOT
-  retains the old fail-closed restriction. Tests cover all eight sets, separate witnesses,
-  deleted rows, and missing/other viewers.
-- Email read/unread and actual notification state are independent; do not reintroduce
-  the old overloaded seen literal. Integration tests cover read/unread, exact states,
-  unions, negation, another user's notifications, and mixed address/state predicates.
-- Channel message filter DTOs now reuse the shared `item_filters::NotificationFilters`.
-- Preserve viewing timestamps during backfill, including null timestamps on legacy done
-  notifications. Do not fabricate historic views to make the timestamp agree with state.
-- Stop old services before applying the local cutover migration. SQLx preparation needs
-  the new schema, so run it only after approval, using
-  `nix develop --command just prepare_db` from the repository root.
-- Leave `SQLX_OFFLINE` unset for tests. A DB-backed `cargo test` may itself run migrations;
-  migration permission is required before running those tests too.
-- The down migration reconstructs the old boolean representation using the current
-  state and retained timestamps. It does not recover pre-cutover state/history.
+- Migration up/down round trips for all four legacy combinations, including deleted
+  rows and invalid done/unseen rows, plus defaults and enum/not-null constraints.
+- Complete persisted transition matrix, retries, concurrent seen/done requests,
+  user isolation, digest exclusion, and original-timestamp retention.
+- Exact-state, union, negation, multiple-witness, optimized/fallback, and email
+  read/state independence tests across notification and entity repositories.
+- Affected backend, GraphQL schema-composition, projection, SDK, and cache-core suites.
+- Root SQLx preparation and offline service builds; generated metadata is checked in.
+  Static SQL uses checked macros; dynamic AST SQL binds values and uses trusted fragments.
+- Wasm filter materialization and a rebuilt versioned browser cache.
+- Regenerated GraphQL SDL/documents/cache schema, relevant OpenAPI clients, SDK clients,
+  and cognition AI-tool schemas.
+- Full frontend typecheck and generated-cache-schema check.
+- Full frontend suite: **4,332 passed, one pre-existing todo**, across 468 test files.
+- Biome checks on tracked frontend source. Ignored browser-test build bundles can make
+  an unrestricted local `biome check` report diagnostics on minified generated JS.
+- Local EXPLAIN plans use the foreign-entity source index, per-user notification covering
+  index, and notification ordering index. This is not a production-volume benchmark.
+
+### Browser verification
+
+A dedicated `notifstate` stack (`--port-base 24000`, no Doppler) was used, not hosted dev.
+The static app is at `http://localhost:24009/app/`; a separate local GraphQL-enabled
+Vite session on port 3007 used the same backend.
+
+With a new local account and its onboarding notification, both transports were exercised:
+
+- Opening the unseen notification produced seen and cleared the unread badge.
+- `e` marked it done and removed it from the active inbox.
+- `Ctrl+Z` restored it as seen, without an unread badge.
+- Repeated reads, done, and undo retained the exact original viewing timestamp.
+- A delayed seen request against done left both state and timestamp unchanged.
+- Unread filtering hid the restored seen row; Read filtering showed it.
+
+## Coordinated production rollout
+
+1. Prepare the new backend/frontend artifacts, including a fresh wasm build. Assess
+   production backfill size and index-build time, and take the appropriate backup.
+2. Quiesce old writers and drain old-format queued notification/realtime envelopes.
+   Do not replay old-format envelopes into new consumers without explicit handling.
+   Stop old readers/writers before the migration drops `done`.
+3. Apply the generated `user_notification_state` migration during the cutover window.
+   Do not deploy this migration independently of the corresponding application change.
+4. Start the new services/consumers and require clients to refresh onto the new bundle.
+   This is intentionally not a rolling-compatible protocol change.
+5. Check state counts, unchanged historical timestamps, active/history lists, read/done/
+   undo behavior, and query plans with production statistics.
+
+Rollback is coordinated too: stop state-based code before applying the down migration
+and restoring the old binaries. The down migration derives the old boolean from current
+state and preserves timestamps; it cannot recover pre-cutover state/history. In particular,
+seen rows without a recorded view cannot be represented exactly in the old model.
