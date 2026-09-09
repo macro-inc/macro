@@ -17,6 +17,10 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
 
+`Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
+text and inline mention chips (tasks, docs, channels, skills, …) by the title
+shown on the chip.
+
 ## Reference hover previews
 
 Hover a document reference chip to open its preview without navigating. With
