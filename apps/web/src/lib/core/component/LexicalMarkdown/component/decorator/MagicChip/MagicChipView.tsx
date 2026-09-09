@@ -337,7 +337,8 @@ const Question: Component<ChipAsking> = (props) => {
  * the agent is busy before it writes, the passage as it streams, the final
  * passage once the turn ends - or, while the agent waits on a question, the
  * question itself with its decisions on the row beneath. The area is cropped
- * with a fade; clicking it expands it in place.
+ * with a fade; clicking it expands it in place, never below the cropped
+ * height, so a short passage does not shrink the card.
  */
 export const MagicChipView: Component<{
   agentSessionId: string;
@@ -431,7 +432,7 @@ export const MagicChipView: Component<{
           role="button"
           tabIndex={0}
           aria-expanded={expandable() ? expanded() : undefined}
-          class="flex min-w-0 flex-col text-left"
+          class="flex min-h-41 min-w-0 flex-col text-left"
           classList={{ 'h-41': !expanded() }}
           data-magic-chip-answer
           onClick={onAreaClick}
