@@ -161,6 +161,7 @@ struct FakeCursorState {
     models: Vec<CursorModel>,
     model_gate: Option<tokio::sync::oneshot::Receiver<()>>,
     reject_create: bool,
+    reject_create_for_repository: bool,
 }
 
 impl FakeCursor {
@@ -230,6 +231,12 @@ impl FakeCursor {
     /// Reject the next create with a definite provider rejection.
     pub fn script_rejection(&self) {
         self.inner.lock().unwrap().reject_create = true;
+    }
+
+    /// Reject the next `create_agent` the way Cursor rejects a repository the
+    /// account has never connected.
+    pub fn script_repository_rejection(&self) {
+        self.inner.lock().unwrap().reject_create_for_repository = true;
     }
 
     /// Set the models `list_models` answers with.
@@ -316,6 +323,18 @@ impl CursorAgents for FakeCursor {
         ));
         self.await_create_gate().await;
         let mut state = self.inner.lock().expect("fake cursor poisoned");
+        if std::mem::take(&mut state.reject_create_for_repository)
+            && let Some(repo) = repo
+        {
+            return Err(rootcause::report!(
+                crate::domain::error::RepositoryUnavailable {
+                    repo: repo.clone(),
+                    detail: r#"{"error":{"code":"repository_access","message":"Repository not accessible"}}"#
+                        .into(),
+                }
+            )
+            .into_dynamic());
+        }
         if std::mem::take(&mut state.reject_create) {
             return Err(rootcause::report!(crate::domain::error::PromptRejected(
                 "rejected".into()

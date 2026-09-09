@@ -258,10 +258,12 @@ function turnEndedActivity(
         busy: false,
       }))
       .with({ kind: 'other' }, ({ reason }) => ({ label: reason, busy: false }))
-      // The runtime errored the prompt. The chip has one line, so it says that
-      // much and leaves the runtime's message to the session itself.
-      .with({ kind: 'failed' }, () => ({
+      // The runtime errored the prompt. The label says that much; the
+      // runtime's own message goes in the detail line, because some of these
+      // are the user's to act on — a repository Cursor cannot reach, say.
+      .with({ kind: 'failed' }, ({ message }) => ({
         label: "Agent couldn't answer",
+        detail: message,
         busy: false,
       }))
       .exhaustive()

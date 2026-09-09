@@ -315,3 +315,21 @@ impl CreateRunResponse {
         }
     }
 }
+
+/// The envelope Cursor wraps an error status in: `{"error": {"code", …}}`.
+///
+/// Only `code` is modelled. The human half of the body is Cursor's wording of
+/// the same fact, and this crate has its own wording for the one case it acts
+/// on; everything else keeps the raw body instead.
+#[derive(Debug, Deserialize)]
+pub struct ApiErrorEnvelope {
+    /// The error itself.
+    pub error: ApiErrorCode,
+}
+
+/// The machine-readable half of an error body.
+#[derive(Debug, Deserialize)]
+pub struct ApiErrorCode {
+    /// Cursor's error code, e.g. `repository_access`.
+    pub code: String,
+}

@@ -112,6 +112,43 @@ async fn sleep_unless_cancelled(
     }
 }
 
+/// Restate a repository rejection as something the person who prompted can
+/// act on, leaving every other failure exactly as it arrived.
+///
+/// The result is a [`SessionError::Rejected`], so it takes the same path a
+/// [`PromptRejected`](crate::domain::error::PromptRejected) already takes:
+/// the prompt is journalled as aborted and the message travels to the client
+/// as the `session/prompt` error. Cursor's own body stays in the tracing event —
+/// it names codes and ids that mean nothing to a reader of the chip.
+fn explain_repository_rejection(error: SessionError) -> SessionError {
+    let SessionError::Cursor(report) = &error else {
+        return error;
+    };
+    let Some(unavailable) =
+        report.downcast_current_context::<crate::domain::error::RepositoryUnavailable>()
+    else {
+        return error;
+    };
+    tracing::warn!(
+        repo = %unavailable.repo,
+        detail = %unavailable.detail,
+        "cursor rejected the prompt: the repository is not connected to this cursor account"
+    );
+    SessionError::Rejected(unavailable.user_message())
+}
+
+/// Whether a failed create is a definite refusal — the prompt never ran, so
+/// it is journalled as aborted rather than left as an accepted turn.
+fn is_prompt_rejection(error: &SessionError) -> bool {
+    match error {
+        SessionError::Rejected(_) => true,
+        SessionError::Cursor(report) => report
+            .downcast_current_context::<crate::domain::error::PromptRejected>()
+            .is_some(),
+        _ => false,
+    }
+}
+
 /// One session's mutable state. Guarded by a std mutex: every critical
 /// section is a handful of field reads/writes, never an await.
 #[derive(Debug, Default)]
@@ -628,11 +665,10 @@ where
                     .map_err(SessionError::from)
             }
         };
-        let (agent, run) = match created {
+        let (agent, run) = match created.map_err(explain_repository_rejection) {
             Ok(created) => created,
             Err(error) => {
-                if matches!(&error, SessionError::Cursor(report) if report.downcast_current_context::<crate::domain::error::PromptRejected>().is_some())
-                {
+                if is_prompt_rejection(&error) {
                     self.capture(
                         session_id,
                         &session,
