@@ -1,7 +1,15 @@
+use livekit_api::services::{ServiceError, TwirpError, TwirpErrorCode};
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 use crate::domain::ports::CallRtcClient as _;
+
+fn twirp(code: &str, msg: &str) -> ServiceError {
+    ServiceError::Twirp(TwirpError::Twirp(TwirpErrorCode {
+        code: code.to_string(),
+        msg: msg.to_string(),
+    }))
+}
 
 fn client() -> LivekitRtcClient {
     LivekitRtcClient::new(
@@ -47,4 +55,27 @@ async fn verify_access_token_rejects_token_signed_with_a_different_secret() {
 #[test]
 fn verify_access_token_rejects_garbage() {
     assert!(client().verify_access_token("not-a-jwt").is_err());
+}
+
+#[test]
+fn remove_participant_not_found_is_already_gone() {
+    let error = twirp(TwirpErrorCode::NOT_FOUND, "participant does not exist");
+    interpret_remove_participant_result(Err(error))
+        .expect("leave must succeed when LiveKit already dropped the participant");
+}
+
+#[test]
+fn remove_participant_room_not_found_is_already_gone() {
+    let error = twirp(TwirpErrorCode::NOT_FOUND, "requested room does not exist");
+    interpret_remove_participant_result(Err(error))
+        .expect("leave must succeed when the LiveKit room is already gone");
+}
+
+#[test]
+fn remove_participant_unavailable_still_fails() {
+    let error = twirp(TwirpErrorCode::UNAVAILABLE, "overloaded");
+    let message = interpret_remove_participant_result(Err(error))
+        .expect_err("transient LiveKit failures must still surface")
+        .to_string();
+    assert_eq!(message, "twirp error: twirp error: unavailable: overloaded");
 }

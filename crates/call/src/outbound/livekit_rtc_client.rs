@@ -8,6 +8,7 @@ mod test;
 
 use futures::future;
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
+use livekit_api::services::ServiceError;
 use livekit_api::services::agent_dispatch::AgentDispatchClient;
 use livekit_api::services::egress::{EgressClient, EgressOutput, RoomCompositeOptions, encoding};
 use livekit_api::services::room::{CreateRoomOptions, RoomClient};
@@ -227,10 +228,11 @@ impl CallRtcClient for LivekitRtcClient {
         room_name: &str,
         participant_identity: MacroUserIdStr<'_>,
     ) -> anyhow::Result<()> {
-        self.room_client
-            .remove_participant(room_name, participant_identity.as_ref())
-            .await?;
-        Ok(())
+        interpret_remove_participant_result(
+            self.room_client
+                .remove_participant(room_name, participant_identity.as_ref())
+                .await,
+        )
     }
 
     #[tracing::instrument(err, skip(self, s3_config))]
@@ -331,4 +333,8 @@ impl CallRtcClient for LivekitRtcClient {
             created_at: event.created_at,
         })
     }
+}
+
+fn interpret_remove_participant_result(result: Result<(), ServiceError>) -> anyhow::Result<()> {
+    result.map_err(Into::into)
 }
