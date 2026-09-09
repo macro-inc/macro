@@ -9,7 +9,6 @@ import {
 import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
 import { Collapsible } from '@kobalte/core/collapsible';
-import AirplaneTiltIcon from '@phosphor/airplane-tilt.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
@@ -539,10 +538,16 @@ export function EventDetails(props: {
         aria-hidden="true"
         class="mt-0.5 flex size-5 items-center justify-center sm:size-4"
       >
-        <span
-          class="size-4 rounded-sm sm:size-3"
-          style={{ 'background-color': props.event.calendar.color }}
-        />
+        <span class="flex size-4 gap-px overflow-hidden rounded-sm sm:size-3">
+          <For each={props.event.visibleCalendars}>
+            {(calendar) => (
+              <span
+                class="min-w-0 flex-1"
+                style={{ 'background-color': calendar.color }}
+              />
+            )}
+          </For>
+        </span>
       </span>
       <div class="flex min-w-0 flex-col gap-1">
         <div class="select-text text-lg font-semibold leading-snug text-ink sm:text-base">
@@ -552,8 +557,7 @@ export function EventDetails(props: {
           {formatEventSchedule(props.event, props.timeFormat)}
         </div>
         <Show when={props.event.eventType === 'out_of_office'}>
-          <div class="flex select-text items-center gap-1.5 text-sm text-ink-extra-muted sm:text-xs">
-            <AirplaneTiltIcon aria-hidden="true" class="size-4 sm:size-3.5" />
+          <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
             Out of office
           </div>
         </Show>

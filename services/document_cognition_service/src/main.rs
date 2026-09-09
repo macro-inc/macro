@@ -398,6 +398,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             db.clone(),
         ))),
+        lexical_client.clone(),
     );
 
     tracing::info!("initialized email tool context");

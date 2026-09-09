@@ -185,6 +185,7 @@ pub async fn build_tool_service_context(
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             pool.clone(),
         ))),
+        Arc::new(lexical_client.clone()),
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(

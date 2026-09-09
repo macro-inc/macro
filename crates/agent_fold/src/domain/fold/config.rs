@@ -1,16 +1,15 @@
 //! Config options, available commands, and session info: the metadata.
 
 use crate::domain::harness::ToolFrame;
-use crate::domain::model::{AvailableCommand, Harness, ModelOption};
+use crate::domain::model::{AvailableCommand, Harness};
+use crate::domain::model_selection::model_selection;
 use agent_client_protocol::schema::MaybeUndefined;
 use agent_client_protocol::schema::v1::{
     AvailableCommandInput, AvailableCommandsUpdate as AcpAvailableCommandsUpdate,
     InitializeRequest, InitializeResponse, LoadSessionRequest, NewSessionRequest,
-    ResumeSessionRequest, SessionConfigKind, SessionConfigOption, SessionConfigSelectOption,
-    SessionConfigSelectOptions, SessionInfoUpdate, SetSessionConfigOptionRequest,
+    ResumeSessionRequest, SessionConfigOption, SessionInfoUpdate, SetSessionConfigOptionRequest,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
-use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use serde::Deserialize;
 
 use super::state::FoldState;
@@ -92,45 +91,15 @@ impl FoldState {
 
     /// Update the metadata's model fields from a fresh config-options list.
     pub(super) fn apply_config_options(&mut self, options: Vec<SessionConfigOption>) -> bool {
-        let model = options
-            .into_iter()
-            .find(|option| option.id.to_string() == MODEL_CONFIG_ID);
-        let Some(SessionConfigOption {
-            kind: SessionConfigKind::Select(select),
-            ..
-        }) = model
-        else {
+        let Some(selection) = model_selection(&options) else {
             return false;
         };
 
-        let model = Some(select.current_value.to_string());
-        let to_option = |option: SessionConfigSelectOption, group: Option<&str>| ModelOption {
-            id: option.value.to_string(),
-            name: option.name,
-            description: option.description,
-            group: group.map(str::to_owned),
-        };
-        let supported: Vec<ModelOption> = match select.options {
-            SessionConfigSelectOptions::Ungrouped(options) => options
-                .into_iter()
-                .map(|option| to_option(option, None))
-                .collect(),
-            SessionConfigSelectOptions::Grouped(groups) => groups
-                .into_iter()
-                .flat_map(|group| {
-                    let name = group.name;
-                    group
-                        .options
-                        .into_iter()
-                        .map(move |option| to_option(option, Some(&name)))
-                })
-                .collect(),
-            _ => return false,
-        };
-
-        let changed = self.metadata.model != model || self.metadata.supported_models != supported;
+        let model = Some(selection.current);
+        let changed =
+            self.metadata.model != model || self.metadata.supported_models != selection.options;
         self.metadata.model = model;
-        self.metadata.supported_models = supported;
+        self.metadata.supported_models = selection.options;
         changed
     }
 

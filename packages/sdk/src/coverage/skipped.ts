@@ -23,8 +23,9 @@ import type { Sdk as StaticFilesSdk } from '../../generated/static-files/sdk.gen
 import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
-export const agentHarnessExcluded =
-  [] as const satisfies readonly (keyof AgentHarnessSdk)[];
+export const agentHarnessExcluded = [
+  'loadAgentModelsHandler',
+] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =
   [] as const satisfies readonly (keyof AgentHarnessSdk)[];

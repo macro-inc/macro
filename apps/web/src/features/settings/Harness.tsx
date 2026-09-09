@@ -6,9 +6,9 @@ import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import { useAgentModelsQuery } from '@queries/agents/models';
 import {
   useCursorApiKeyStatusQuery,
-  useCursorModelsQuery,
   useDisconnectCursorApiKey,
   useSaveCursorApiKey,
   useSetCursorDefaultModel,
@@ -44,7 +44,8 @@ export function Harness() {
   const cursorStatus = useCursorApiKeyStatusQuery();
   const saveCursorApiKey = useSaveCursorApiKey();
   const disconnectCursor = useDisconnectCursorApiKey();
-  const cursorRegistered = () => cursorStatus.data?.registered ?? false;
+  const cursorRegistered = () =>
+    cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const harnessesQuery = useHarnessesQuery();
   const deleteHarnessMutation = useDeleteHarnessMutation();
   const [pairingDialog, setPairingDialog] = createSignal<{
@@ -75,17 +76,41 @@ export function Harness() {
     }
   };
 
-  // Only worth fetching once there is a key to ask Cursor through.
-  const cursorModels = useCursorModelsQuery(cursorRegistered);
+  const cursorModels = useAgentModelsQuery(
+    () => ({ harness: 'cursor' }),
+    cursorRegistered
+  );
+  const cursorModelData = () =>
+    cursorModels.isSuccess ? cursorModels.data : undefined;
+  const cursorModelOptions = () => {
+    const data = cursorModelData();
+    if (data?.status !== 'available') return [];
+    const saved = cursorStatus.data?.defaultModelId;
+    if (!saved || data.models.some((model) => model.id === saved)) {
+      return data.models;
+    }
+    return [
+      ...data.models,
+      {
+        id: saved,
+        name: `${saved} (saved, unavailable)`,
+        description: undefined,
+        group: undefined,
+      },
+    ];
+  };
   const setCursorDefaultModel = useSetCursorDefaultModel();
-  const cursorModelOptions = () =>
-    (cursorModels.data?.models ?? []).map((model) => ({
+  const cursorCatalogOptions = () =>
+    cursorModelOptions().map((model) => ({
       id: model.id,
-      label: model.displayName,
-      group: model.group,
+      label: model.name,
+      description: model.description ?? undefined,
+      group: model.group ?? undefined,
     }));
   const selectedCursorModelId = () =>
-    cursorStatus.data?.defaultModelId ?? cursorModelOptions()[0]?.id ?? null;
+    (cursorStatus.isSuccess ? cursorStatus.data.defaultModelId : null) ??
+    cursorModelOptions()[0]?.id ??
+    null;
 
   const handleCursorModelChange = async (modelId: string) => {
     try {
@@ -167,8 +192,14 @@ export function Harness() {
             </p>
 
             <Show
-              when={!cursorStatus.isPlaceholderData}
-              fallback={<p class="mt-4 text-xs text-ink-muted">Loading…</p>}
+              when={cursorStatus.isSuccess && !cursorStatus.isPlaceholderData}
+              fallback={
+                <p class="mt-4 text-xs text-ink-muted">
+                  {cursorStatus.isError
+                    ? 'Could not load your Cursor connection. Try refreshing this page.'
+                    : 'Loading…'}
+                </p>
+              }
             >
               <Show
                 when={cursorRegistered()}
@@ -224,37 +255,81 @@ export function Harness() {
                     Default model
                   </label>
                   <Show
-                    when={isLargeModelCatalog(cursorModelOptions())}
+                    when={!cursorModels.isPending}
                     fallback={
                       <select
                         id="cursor-default-model"
                         class="settings-input w-56"
-                        value={cursorStatus.data?.defaultModelId ?? ''}
-                        disabled={setCursorDefaultModel.isPending}
-                        onChange={(event) =>
-                          void handleCursorModelChange(
-                            event.currentTarget.value
-                          )
-                        }
+                        disabled
                       >
-                        <For each={cursorModels.data?.models ?? []}>
-                          {(model) => (
-                            <option value={model.id}>
-                              {model.displayName}
-                            </option>
-                          )}
-                        </For>
+                        <option>Loading models…</option>
                       </select>
                     }
                   >
-                    <ModelCatalogPicker
-                      value={selectedCursorModelId()}
-                      options={cursorModelOptions()}
-                      onSelect={(id) => void handleCursorModelChange(id)}
-                      disabled={setCursorDefaultModel.isPending}
-                      ariaLabel="Default model"
-                      triggerClass="w-72 max-w-full justify-between"
-                    />
+                    <Show
+                      when={!cursorModels.isError}
+                      fallback={
+                        <div class="flex items-center gap-2">
+                          <p class="text-xs text-negative">
+                            Could not load Cursor models.
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void cursorModels.refetch()}
+                          >
+                            Retry
+                          </Button>
+                        </div>
+                      }
+                    >
+                      <Show
+                        when={cursorModelData()?.status === 'available'}
+                        fallback={
+                          <p class="text-xs text-ink-muted">
+                            Cursor does not support model selection.
+                          </p>
+                        }
+                      >
+                        <Show
+                          when={isLargeModelCatalog(cursorCatalogOptions())}
+                          fallback={
+                            <select
+                              id="cursor-default-model"
+                              class="settings-input w-56"
+                              value={
+                                cursorStatus.data?.defaultModelId ??
+                                cursorModelData()?.currentModel ??
+                                cursorModelOptions()[0]?.id ??
+                                ''
+                              }
+                              disabled={setCursorDefaultModel.isPending}
+                              onChange={(event) =>
+                                void handleCursorModelChange(
+                                  event.currentTarget.value
+                                )
+                              }
+                            >
+                              <For each={cursorModelOptions()}>
+                                {(model) => (
+                                  <option value={model.id}>{model.name}</option>
+                                )}
+                              </For>
+                            </select>
+                          }
+                        >
+                          <ModelCatalogPicker
+                            value={selectedCursorModelId()}
+                            options={cursorCatalogOptions()}
+                            onSelect={(id) => void handleCursorModelChange(id)}
+                            disabled={setCursorDefaultModel.isPending}
+                            ariaLabel="Default model"
+                            triggerClass="w-72 max-w-full justify-between"
+                          />
+                        </Show>
+                      </Show>
+                    </Show>
                   </Show>
                   <p class="text-xs text-ink-extra-muted">
                     The model new `@cursor` sessions start on. Recommended
@@ -322,10 +397,16 @@ export function Harness() {
                 Connected agents
               </div>
               <For
-                each={harnessesQuery.data ?? []}
+                each={harnessesQuery.isSuccess ? harnessesQuery.data : []}
                 fallback={
                   <div class="flex flex-col items-center py-6 text-center">
-                    <p class="text-sm text-ink">No agents connected</p>
+                    <p class="text-sm text-ink">
+                      {harnessesQuery.isPending
+                        ? 'Loading connected agents…'
+                        : harnessesQuery.isError
+                          ? 'Could not load connected agents.'
+                          : 'No agents connected'}
+                    </p>
                     <p class="mt-1 text-xs text-ink-extra-muted">
                       Agents connected through macrod will appear here.
                     </p>

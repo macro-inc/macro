@@ -28,20 +28,19 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::model::{McpHeader, McpServer, McpTransport, ModelFamily};
+use crate::domain::model::{McpHeader, McpServer, McpTransport};
+use crate::domain::model_options::{MODEL_CONFIG_ID, cursor_model_config_options};
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
 use crate::domain::service::CursorSessionService;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AuthenticateRequest, AuthenticateResponse, CancelNotification,
-    CloseSessionRequest, CloseSessionResponse, ContentBlock, Error as AcpError, HttpHeader,
-    Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
-    McpCapabilities, McpServer as AcpMcpServer, NewSessionRequest, NewSessionResponse,
-    PromptCapabilities, PromptRequest, PromptResponse, SessionConfigGroupId, SessionConfigId,
-    SessionConfigKind, SessionConfigOption, SessionConfigSelect, SessionConfigSelectGroup,
-    SessionConfigSelectOption, SessionConfigSelectOptions, SessionConfigValueId, SessionId,
-    SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse,
+    CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk, Error as AcpError,
+    HttpHeader, Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest,
+    LoadSessionResponse, McpCapabilities, McpServer as AcpMcpServer, Meta, NewSessionRequest,
+    NewSessionResponse, PromptCapabilities, PromptRequest, PromptResponse, SessionConfigOption,
+    SessionId, SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, TextContent,
 };
 use agent_client_protocol::{
     Agent, ByteStreams, Client, ConnectTo, ConnectionTo, on_receive_notification,
@@ -49,19 +48,6 @@ use agent_client_protocol::{
 };
 use std::sync::{Arc, OnceLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
-
-/// The ACP config-option id for a session's model.
-///
-/// Defined here rather than shared with the Macro harness: this crate is a
-/// standalone ACP agent (see the `cursor_cloud_agents` binary) and must not
-/// depend on its embedder. `"model"` is the id every ACP client looks for, and
-/// the harness uses the same literal for the same reason.
-const MODEL_CONFIG_ID: &str = "model";
-
-/// Cursor's own "let the server pick" model (`GET /v1/models` lists it as
-/// `default`, displayed "Auto") — the select's resting value when nothing has
-/// been chosen.
-const AUTO_MODEL_ID: &str = "default";
 
 /// Delivers session updates as `session/update` notifications on the ACP
 /// connection.
@@ -81,6 +67,8 @@ pub struct AcpNotifier {
     /// Empty until the connection is up. Write-once: one notifier serves one
     /// connection, exactly as one service does.
     connection: Arc<OnceLock<ConnectionTo<Client>>>,
+    bound: Arc<tokio::sync::Notify>,
+    reload: Option<tokio::sync::mpsc::UnboundedSender<SessionId>>,
 }
 
 impl AcpNotifier {
@@ -90,11 +78,18 @@ impl AcpNotifier {
         Self::default()
     }
 
+    /// Deliver recovery requirements to the embedding ACP client, not the wire.
+    pub fn with_reload(mut self, reload: tokio::sync::mpsc::UnboundedSender<SessionId>) -> Self {
+        self.reload = Some(reload);
+        self
+    }
+
     /// Attach the connection updates will travel over.
     fn bind(&self, connection: ConnectionTo<Client>) {
         // A second bind can only be a bug in `serve`; the first connection
         // stays authoritative and the duplicate is dropped.
         let _ = self.connection.set(connection);
+        self.bound.notify_waiters();
     }
 }
 
@@ -104,15 +99,72 @@ impl SessionNotifier for AcpNotifier {
         session: &SessionId,
         update: SessionUpdate,
     ) -> Result<(), rootcause::Report> {
-        // Unreachable in practice: the binding runner starts with the
-        // connection's event loop, before any handler can run a turn. Failing
-        // loudly beats buffering updates nobody may ever collect.
+        let connection = loop {
+            let bound = self.bound.notified();
+            tokio::pin!(bound);
+            bound.as_mut().enable();
+            if let Some(connection) = self.connection.get() {
+                break connection;
+            }
+            bound.await;
+        };
+        connection
+            .send_notification(SessionNotification::new(session.clone(), update))
+            .map_err(|error| rootcause::report!("{error}"))
+    }
+
+    async fn require_reload(&self, session: &SessionId) -> Result<(), rootcause::Report> {
+        let Some(reload) = &self.reload else {
+            // Standalone ACP clients own their load lifecycle. Keep serving
+            // prompts without inventing a client request or pushing history.
+            tracing::warn!(%session, "recovered Cursor history is available on session/load");
+            return Ok(());
+        };
+        reload
+            .send(session.clone())
+            .map_err(|error| rootcause::report!("{error}"))
+    }
+
+    async fn turn_complete(
+        &self,
+        session: &SessionId,
+        outcome: agent_runtime_protocol::domain::turn::TurnOutcome,
+    ) -> Result<(), rootcause::Report> {
         let connection = self
             .connection
             .get()
-            .ok_or_else(|| rootcause::report!("session update before the acp connection was up"))?;
+            .ok_or_else(|| rootcause::report!("ACP connection is not bound"))?;
         connection
-            .send_notification(SessionNotification::new(session.clone(), update))
+            .send_notification(
+                agent_runtime_protocol::domain::turn::TurnCompleteNotification {
+                    session_id: session.clone(),
+                    outcome,
+                },
+            )
+            .map_err(|error| rootcause::report!("{error}"))
+    }
+
+    async fn checkpoint(
+        &self,
+        session: &SessionId,
+        run: &crate::domain::model::CursorRunId,
+    ) -> Result<(), rootcause::Report> {
+        // Standalone domain tests and embedders without a durable host have no
+        // connection to checkpoint through. The Macro host always binds first;
+        // there the metadata marker is persisted with the ordinary ACP log.
+        let Some(connection) = self.connection.get() else {
+            return Ok(());
+        };
+        let mut meta = Meta::new();
+        meta.insert(
+            "macroCursorRunCheckpoint".to_owned(),
+            serde_json::Value::String(run.to_string()),
+        );
+        let update = SessionUpdate::AgentMessageChunk(ContentChunk::new(ContentBlock::Text(
+            TextContent::new(""),
+        )));
+        connection
+            .send_notification(SessionNotification::new(session.clone(), update).meta(meta))
             .map_err(|error| rootcause::report!("{error}"))
     }
 }
@@ -271,13 +323,14 @@ where
     Notifier: SessionNotifier + Send + Sync + 'static,
     Repos: RepoResolver + Send + Sync + 'static,
 {
+    let startup_notifier = notifier.clone();
     Agent
         .builder()
         .name("cursor-cloud-agents")
         // Runs with the connection's event loop, so the notifier is bound
         // before any handler can start a turn that would notify.
         .with_spawned(move |connection| async move {
-            notifier.bind(connection);
+            startup_notifier.bind(connection);
             Ok(())
         })
         .on_receive_request(
@@ -305,7 +358,9 @@ where
         .on_receive_request(
             {
                 let service = Arc::clone(&service);
-                async move |request: NewSessionRequest, responder, _connection| {
+                let notifier = notifier.clone();
+                async move |request: NewSessionRequest, responder, connection| {
+                    notifier.bind(connection.clone());
                     let mcp_servers = forwardable_mcp_servers(request.mcp_servers);
                     let session = service.new_session(&request.cwd, mcp_servers);
                     let options = session_config_options(&service, &session).await;
@@ -317,7 +372,9 @@ where
         .on_receive_request(
             {
                 let service = Arc::clone(&service);
+                let notifier = notifier.clone();
                 async move |request: PromptRequest, responder, connection| {
+                    notifier.bind(connection.clone());
                     // On its own task so the event loop keeps servicing
                     // cancels while the turn streams.
                     let service = Arc::clone(&service);
@@ -327,7 +384,10 @@ where
                         // A failed respond means the client is gone; failing
                         // the spawned task would tear down the (already
                         // closing) connection, so it is dropped instead.
-                        match service.prompt(&session, &text).await {
+                        match service
+                            .prompt_content(&session, &text, request.prompt)
+                            .await
+                        {
                             Ok(stop_reason) => {
                                 let _ = responder.respond(PromptResponse::new(stop_reason));
                             }
@@ -346,29 +406,25 @@ where
         .on_receive_request(
             {
                 let service = Arc::clone(&service);
-                async move |request: LoadSessionRequest, responder, _connection| {
-                    // Loading is a lookup, not a fetch: a host that restarts
-                    // restores its persisted (session -> agent) pairs with
-                    // `restore_session` before serving, so by the time a
-                    // `session/load` arrives the session either exists or
-                    // never will. No history is replayed — the hosts this
-                    // agent serves keep their own durable log of every frame,
-                    // and Cursor accumulates the conversation server-side, so
-                    // a replay would tell the client what it already knows.
+                let notifier = notifier.clone();
+                async move |request: LoadSessionRequest, responder, connection| {
+                    notifier.bind(connection.clone());
                     let session = request.session_id;
-                    if service.has_session(&session) {
-                        // The MCP list is the client's, and a load restates
-                        // it — the one way a restored process, whose host
-                        // never persisted the list, learns it again.
-                        service.set_mcp_servers(
-                            &session,
-                            forwardable_mcp_servers(request.mcp_servers),
-                        );
-                        let options = session_config_options(&service, &session).await;
-                        responder.respond(LoadSessionResponse::new().config_options(options))
-                    } else {
-                        responder.respond_with_error(AcpError::invalid_params())
+                    let guard = match service.replay_session(&session).await {
+                        Ok(guard) => guard,
+                        Err(error) => {
+                            return responder
+                                .respond_with_error(AcpError::new(-32603, error.to_string()));
+                        }
+                    };
+                    service.set_mcp_servers(&session, forwardable_mcp_servers(request.mcp_servers));
+                    let options = session_config_options(&service, &session).await;
+                    let response =
+                        responder.respond(LoadSessionResponse::new().config_options(options));
+                    if response.is_ok() {
+                        guard.complete();
                     }
+                    response
                 }
             },
             on_receive_request!(),
@@ -500,46 +556,7 @@ where
     //
     // If Cursor ever drops the entry there is no honest resting value, and no
     // picker beats one resting on a guess.
-    let current = current.or_else(|| {
-        models
-            .iter()
-            .find(|model| model.id == AUTO_MODEL_ID)
-            .map(|model| model.id.clone())
-    });
-    let Some(current) = current else {
-        return Vec::new();
-    };
-    let select_option = |model: &crate::domain::model::CursorModel| {
-        SessionConfigSelectOption::new(
-            SessionConfigValueId::new(model.id.clone()),
-            model.display_name.clone(),
-        )
-    };
-    let families = ModelFamily::group(&models);
-    let options = if ModelFamily::is_informative(&families) {
-        SessionConfigSelectOptions::Grouped(
-            families
-                .iter()
-                .map(|family| {
-                    SessionConfigSelectGroup::new(
-                        SessionConfigGroupId::new(family.id.clone()),
-                        family.name.clone(),
-                        family.models.iter().map(select_option).collect(),
-                    )
-                })
-                .collect(),
-        )
-    } else {
-        SessionConfigSelectOptions::Ungrouped(models.iter().map(select_option).collect())
-    };
-    vec![SessionConfigOption::new(
-        SessionConfigId::new(MODEL_CONFIG_ID),
-        "Model",
-        SessionConfigKind::Select(SessionConfigSelect::new(
-            SessionConfigValueId::new(current),
-            options,
-        )),
-    )]
+    cursor_model_config_options(&models, current)
 }
 
 /// Concatenate a prompt's content blocks into the single string Cursor takes.

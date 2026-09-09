@@ -15,6 +15,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "threadId: ID!",
         "emailLabels: [GraphqlSoupEmailLabel!]!",
         "emailLinks: [GraphqlEmailLink!]!",
+        "favorites: [GraphqlFavorite!]!",
         "emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread",
         "type GraphqlSoupEmailThread implements GraphqlSoupEntity {",
         "providerId: String",
@@ -69,11 +70,15 @@ fn soup_response_schema_exposes_frontend_fields() {
         "graphqlTypeName: String!",
         "entityId: ID!",
         "type SoupUpdated {",
-        "item: GraphqlSoupEntity",
+        "item: GraphqlSoupEntity!",
         "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
         "type GraphqlMutationSuccess {",
         "effects: [SoupPatch!]!",
         "setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!",
+        "setFavorite(entity: EntityRefInput!, favorite: Boolean!): SetFavoritePayload!",
+        "type SetFavoritePayload {",
+        "result: GraphqlEntityMutationResult!",
+        "favorite: GraphqlFavorite",
         "reorderFavorites(input: ReorderFavoritesInput!): [GraphqlFavorite!]!",
         "input ReorderFavoritesInput {",
         "favorites: [EntityRefInput!]!",
@@ -280,6 +285,9 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
             !object.fields.contains_key("cacheProjection"),
             "{name} must not carry entity projection metadata"
         );
+        if name == "SoupUpdated" {
+            assert_eq!(object.fields["item"].ty.to_string(), "GraphqlSoupEntity!");
+        }
     }
 }
 

@@ -11,7 +11,30 @@
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
-`Create` → `Coding Agent A`, or keyboard `c` then `a`.
+`Create` → `Agent A`, or keyboard `c` then `a`, opens a managed agent session
+directly at `/app/agent/<uuid>` (the runtime starts while the block mounts).
+That create path focuses the agent composer so you can type immediately.
+When the `enable-agent-session-composer` flag is on (default in dev;
+`VITE_ENABLE_AGENT_SESSION_COMPOSER` overrides), the same entry instead opens
+the **New agent session** composer popover. The prompt textarea (`Give your agent a
+prompt...`) is focused on open, so you can `type_text` immediately. Below the prompt a
+**Agent** section (`aria-label` `Agent`) lists the choices in the open, as a
+`radiogroup` of cards (`role="radio"`, `aria-checked`): **Macro** `@macro`
+(the default), **Cursor** `@cursor` (disabled with a `Connect Cursor in
+Settings → Harness` hint until a Cursor API key is stored), then the user's
+own agents, each card showing avatar, name and `@handle · Macro|Cursor` for
+the runtime (a disabled card reads `@cursor · Not connected`). Every agent is
+shown; the cards form an even grid that fills the popover width. Click a card
+or use arrow keys to change agent. The **Model
+override** pill (`aria-label` `Model override`) at the bottom left opens a
+menu whose first row is `Agent default · <model>`, followed by at most five
+featured models; longer catalogs put the rest under a `More models` submenu.
+Changing agent resets the override. Tab order is prompt → selected agent card → Model →
+**Create Session**; the close `X` is skipped. The menu opens on Enter/Space
+and selects with arrow keys + Enter. Escape in the prompt first blurs to the
+dialog, a second Escape closes it. Press **Create Session** or
+`Cmd/Ctrl+Enter`; the composer closes and the new `/app/agent/<uuid>` session
+opens while its runtime starts.
 
 ## Start a doc-scoped chat
 
@@ -39,6 +62,25 @@ The agent has workspace tools (it can list your documents, read channels, create
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
+## Agent sessions asking a question
+
+For manual testing on local or deployed development environments, send
+`/ask <question>` for free text or `/ask <question> | option | option` for a
+single choice. This shortcut bypasses the model. It is disabled in production,
+where the text is an ordinary prompt; the model's `AskUser` tool and user-tool
+review remain independent of this development setting.
+
+An agent session (the `/app/channel/<channel>/agent/<session>` pane) can pause its turn to
+ask you something. A card titled `<bot> is asking` with trailing text `Waiting for you`
+appears in the transcript, and the notice `The agent is waiting for your answer above` sits
+over the composer. Forms have one control per field (radios for a choice, an `Other` text
+box when the agent allows a custom answer, checkboxes for multi-select, text/number inputs)
+plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and URL with an
+`Open` button that only opens a new tab after you click it. Once answered the card collapses
+to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
+continues. Messages typed while a question is open queue behind it; the composer's `Stop`
+square cancels the question and the turn.
+
 ## In channels
 
 Mention `@Macro` in any channel message for the classic in-channel reply. Mention
@@ -48,7 +90,9 @@ transcript at `/app/agent/<uuid>` whose replies also stream back into the thread
 ## Agent sessions
 
 An agent session is `/app/agent/<uuid>`. The composer placeholder is
-**`Message the agent, @mention anything`**. Type `@` to insert the same mention chips
+**`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
+`Create` → `Agent`) leaves that composer focused — on mobile that is the same
+Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `@` to insert the same mention chips
 used in chat and channels; they serialize as `<m-document-mention>` tags in the prompt
 the agent sees. Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread).
@@ -89,6 +133,22 @@ Regression check: open a long session, let a reply stream while at latest, then
 scroll several screens up and confirm output does not pull you down. Scroll down
 to reveal the overlay and return to latest. Repeat with a short session and on a
 physical phone while opening/dismissing the keyboard, both at latest and in history.
+
+When a session reconnects using ACP load, the last committed conversation stays
+visible while history is reconstructed. A successful load replaces the transcript
+once, including prompts, thoughts, and tool results; it does not append another
+copy. Replayed rows can change content type under existing message or tool IDs;
+the live transcript must show the new content without an error or a reload.
+A failed or interrupted load leaves the previous conversation visible, and
+late replay notifications remain hidden across initialization/reconnect markers
+until a valid session open or dispatched prompt establishes live traffic. Reopening
+the session shows the same committed history. Initialization, creating a session, and ACP resume do
+not by themselves clear existing messages. Channel agent-reference previews follow
+the same replacement behavior. Every successful load can replace history with an
+empty transcript, including historical lookup-only Cursor load acknowledgments.
+If a load finishes while the browser
+is fetching history, buffered content from before the selected history boundary
+must stay hidden; subsequent live messages must still appear.
 
 ### Sending and queueing
 

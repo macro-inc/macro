@@ -42,6 +42,8 @@ use uuid::Uuid;
 
 use super::*;
 
+mod soup_patches;
+
 const VALID_USER_ID: &str = "macro|user@example.com";
 const INTERNAL_USER_ID: &str = "macro|internal@example.com";
 const VALID_INTERNAL_KEY: &str = "valid-internal-key";
@@ -1069,6 +1071,7 @@ impl TestHarness {
                 user_id,
                 self.email_content_reader.clone(),
             ))
+            .data(NoOpEntityFavoriteEdgeReader)
             .data(self.activity_reader.clone())
             .data(graphql_activity::entity_activity_loader(
                 self.activity_reader.clone(),
@@ -1089,6 +1092,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     };
     let soup_service = CountingSoupService::default();
     let document_id = Uuid::from_u128(42);
+    let deleted_document_id = Uuid::from_u128(43);
     soup_service.set_raw_response(vec![soup_document(document_id)]);
     let loader = graphql_soup::soup_item_loader(soup_service.clone(), Arc::new(NoOpEmailService));
     let schema: SoupSchema<
@@ -1131,7 +1135,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         .expect("subscription remains open");
     sender
         .send(Patch::Deleted(
-            ModelEntityType::Document.with_entity_string(document_id.to_string()),
+            ModelEntityType::Document.with_entity_string(deleted_document_id.to_string()),
         ))
         .await
         .expect("subscription remains open");
@@ -1155,7 +1159,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     assert!(updates[0]["item"]["cacheProjection"].is_string());
     assert_eq!(updates[1]["__typename"], "GraphqlCacheDeletion");
     assert_eq!(updates[1]["graphqlTypeName"], "GraphqlSoupDocument");
-    assert_eq!(updates[1]["entityId"], document_id.to_string());
+    assert_eq!(updates[1]["entityId"], deleted_document_id.to_string());
     assert_eq!(
         subscribed_user
             .lock()
@@ -1191,6 +1195,19 @@ async fn user_id_resolves_without_touching_services() {
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.grouped_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn favorites_are_nested_under_the_authenticated_user() {
+    let harness = harness();
+
+    let response = harness
+        .execute("{ user { favorites { entityType entityId sortOrder } } }")
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.to_string(), "{user: {favorites: []}}");
+    assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

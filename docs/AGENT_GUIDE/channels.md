@@ -44,15 +44,35 @@ bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cu
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 The reply renders a Magic Chip: a rounded card of constant height that is present
-from the moment the session boots. Its answer area shows a pulsing star while the
-agent works, then the opening of the answer clipped to four lines and faded out; its
-bottom row reads the current activity (`Booting agent`, `Writing response`, ...) and
-`Open session` once the turn ends. A `Show more` cue sits over the fade: click the
-answer text to expand it in place (`Show less` collapses it again); click the
-bottom row to open the agent session. Before an
-answer exists, clicking the answer area also opens the session.
+from the moment the session boots. Its header names the persona (`Macro Agent`,
+`Cursor Agent`), the model, and what the turn is doing (`Booting agent`, `Running
+command · cargo test`, `Waiting for you`, `Done`); clicking the header or its arrow
+(`Open in session`) opens the agent session. The area under the header holds the agent's
+latest passage: a pulsing star while the agent is busy before it writes, the passage as it
+streams, and the final passage once the turn ends - the last text the agent wrote, not the
+whole turn, and a finished turn with nothing said leaves the area empty. The area is
+cropped at the chip's height with a fade at its foot; clicking it expands it in place, and
+clicking again collapses it. Before anything is there to expand, clicking the area also
+opens the session.
+
+When the agent stops to ask a question the question takes the area in the passage's
+place, cropped and expandable the same way: the prompt, then what is asked - a form's
+fields (choice rows with an accent box, an `Other` row when the agent allows a free-text
+answer, text and number inputs, a yes/no), a URL request's host and address, or a Macro
+user tool's draft (`SendEmail`, `CreateCalendarEvent`) in the tool's own composer - the
+same email compose or calendar event form the session shows, editable in place; expand
+the area to reach its `Send`/`Create`, which answers with the edited draft. A row at the
+bottom of the area carries the other decisions, refusal first: `Dismiss · Open in session`
+for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) for a question.
+Only the session's owner can act; other viewers see the question read-only and the header
+names who is being waited on. Once answered, the area shows the agent's passage again.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
-other channel mention.
+other channel mention. With GraphQL enabled, document mentions and preview cards load
+in bounded batches, including task status/priority/assignees and the viewer's edit
+permission. Task badges can appear with the initial preview rather than waiting for
+separate properties/document-metadata requests; cached titles may appear first while
+those edges load. Ordinary document/task mentions do not wait for the built-in skills
+list. Built-in skill mentions retain their non-document behavior.
 The Magic Chip that streams the agent's reply stays inside the message column: long
 thoughts, file paths, and unbreakable tokens wrap or truncate instead of expanding the
 thread past the chat's right edge.
@@ -80,6 +100,22 @@ A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 
 The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
 keyed by message ID; offscreen rows are normally absent from the DOM.
+
+## Chat navigation rail
+
+On desktop, the Chat rail has `Browse` and `Recents` tabs. Browse contains
+independently paginated `Channels` and `DMs` sections; collapsing a section
+does not discard its loaded pages. Recents has its own pagination cursor.
+Each list is virtualized, so offscreen conversations may not exist in the DOM.
+
+Arrow Down / `j` at the last loaded conversation holds focus while that
+section loads its next page. Once loading finishes, the next press advances
+into the appended rows. If the section has no next page, navigation proceeds
+to the next section. `[` and `]` jump between the Channels and DMs section
+headers.
+
+On touch layouts, the `Recents`, `Channels`, and `DMs` pill tabs each retain
+their own loaded pages and load more as their active list approaches the end.
 
 ## Channel tabs
 

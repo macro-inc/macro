@@ -27,6 +27,7 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
+  type JSX,
   on,
   Show,
   Suspense,
@@ -57,6 +58,7 @@ export type PreviewPanelProps = {
   splitPanelContext: SplitPanelContextType;
   onFocusOut?: VoidFunction;
   ref?: (el: HTMLElement) => void;
+  headerLeading?: JSX.Element;
 };
 
 type PreviewBlockTarget = {
@@ -211,6 +213,9 @@ function PreviewPanelContent(
         ref={headerCollapseController.setRow}
         class="relative flex min-h-10 w-full shrink-0 items-center justify-between bg-surface px-2"
       >
+        <Show when={props.headerLeading}>
+          <div class="flex shrink-0 items-center">{props.headerLeading}</div>
+        </Show>
         <PriorityCollapseOverflowSensor
           controller={headerCollapseController}
           truncateAsLastResort

@@ -4987,10 +4987,10 @@ export interface SendEmail {
    */
   subject: string;
   /**
-   * The body of the email. Written as Markdown by the AI and rendered in
-   * the draft composer. At send time the frontend replaces this with the
-   * base64url-encoded HTML produced by the composer, which is what gets
-   * sent to recipients.
+   * The body of the email, written as Markdown. A host with a composer
+   * (chat) replaces this with the base64url-encoded HTML the composer
+   * exported before the tool runs; a host without one (an agent session)
+   * leaves the Markdown, and this tool renders it the same way.
    */
   body: string;
   /**

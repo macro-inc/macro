@@ -17,6 +17,15 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
 
+## Reference hover previews
+
+Hover a document reference chip to open its preview without navigating. With
+`ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
+batch, including task properties and viewer permission, without another fetch.
+Explicit refreshes may revalidate that batch, but requests must settle while the
+pointer stays over the same reference; cache updates must not cause a continuous
+fetch cascade.
+
 ## AI edit
 
 1. Click `Edit with AI` (button directly under the editor body).
@@ -44,6 +53,12 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
 - `Details` → Owner, Created, Last updated.
 - `Tags` → `Add tags` (dialog). `Properties` → `Add property`.
 - Collapsed sections: `Stats`, `History` (version time-travel), `Activity`.
+- `Activity` lists the same glyph-rail lines as `/app/component/activity` (plain glyphs on a
+  thin connector, one line each with long names truncated, compact `17h` / `8d` / `1mo`
+  times; consecutive edits fold into one `made 3 edits` line). Past four entries it shows the
+  three newest, a `View all activities` toggle row (dotted connector, caret glyph), and the
+  oldest fetched entry (usually `created this`) pinned last; the toggle flips to `Show less`
+  once expanded.
 - Header: `Share`, `Copy Share Link`, overflow menu — use `Share` to inspect or change the
   doc's visibility/permissions.
 

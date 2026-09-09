@@ -8,7 +8,7 @@
 	--fc-event-bg-color: color-mix(
 		in oklch,
 		var(--color-calendar) 5%,
-		var(--color-surface)
+		var(--color-panel)
 	);
 	--fc-event-border-color: var(--color-calendar);
 	--fc-event-text-color: var(--color-calendar);
@@ -418,13 +418,18 @@
 	display: none;
 }
 
-.calendar-view .fc .calendar-event-color-bar {
+.calendar-view .fc .calendar-event-color-bars {
 	position: absolute;
 	top: 2px;
 	left: 2px;
 	z-index: 1;
-	width: 4px;
+	display: flex;
 	height: min(2rem, 70%);
+	gap: 1px;
+}
+
+.calendar-view .fc .calendar-event-color-bar {
+	width: 4px;
 	border-radius: 9999px;
 	background: var(--event-calendar-color, var(--color-calendar));
 }
@@ -433,7 +438,9 @@
 	.fc
 	.calendar-event-content-with-color-bar
 	.calendar-event-content-layout {
-	padding-left: 10px;
+	padding-left: calc(
+		5px + var(--calendar-event-color-bar-count, 1) * 5px
+	);
 }
 
 /* Single-day timed events use a compact dot treatment in the month grid. */
@@ -481,7 +488,7 @@
 	.fc-event:not(.fc-daygrid-dot-event):not(
 		:has(.calendar-event-content-selected)
 	):has([data-response-status="accepted"]) {
-	--fc-event-bg-color: var(--color-surface);
+	--fc-event-bg-color: var(--color-panel);
 	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
 	background-image: linear-gradient(
 		color-mix(
@@ -521,7 +528,7 @@
 .calendar-view
 	.fc
 	.fc-event:has(.calendar-event-content[data-response-status="needs_action"]) {
-	--fc-event-bg-color: transparent;
+	--fc-event-bg-color: var(--color-panel);
 	--fc-event-text-color: var(--color-ink-muted);
 }
 
@@ -547,7 +554,7 @@
 
 /* A color bar and response dot carry no signal on a chip already filled
    with the calendar color. */
-.calendar-view .fc .calendar-event-out-of-office .calendar-event-color-bar,
+.calendar-view .fc .calendar-event-out-of-office .calendar-event-color-bars,
 .calendar-view .fc .calendar-event-out-of-office .calendar-event-response-dot {
 	display: none;
 }
@@ -589,7 +596,7 @@
 		--fc-event-bg-color: color-mix(
 			in oklch,
 			var(--event-calendar-color, var(--color-calendar)) 18%,
-			var(--color-surface)
+			var(--color-panel)
 		);
 		--fc-event-text-color: var(--color-ink);
 		box-shadow:
@@ -660,7 +667,7 @@
 		--fc-event-bg-color: color-mix(
 			in oklch,
 			var(--event-calendar-color, var(--color-calendar)) 16%,
-			var(--color-surface)
+			var(--color-panel)
 		);
 		background-color: var(--fc-event-bg-color);
 		background-image: none;

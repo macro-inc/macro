@@ -10,6 +10,58 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agent-models/load": {
+      "post": {
+        "tags": ["agent-models"],
+        "summary": "Probe one provider's model catalog without creating an agent session.",
+        "operationId": "load_agent_models_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadAgentModelsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Fresh provider model catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadAgentModelsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid target"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Harness is not visible to caller"
+          },
+          "409": {
+            "description": "Macrod runtime is disconnected"
+          },
+          "502": {
+            "description": "Provider probe failed"
+          },
+          "504": {
+            "description": "Macrod probe timed out"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/agent-sandbox-size": {
       "get": {
         "tags": ["agent-sessions"],
@@ -375,7 +427,7 @@
       "get": {
         "tags": ["agent-sessions"],
         "summary": "The raw protocol log of one agent session.",
-        "description": "Served unfolded, and whole: the fold is a left fold over the frames from\nthe beginning, so a reader that skipped any of them would derive different\nturn numbering.\n\nAn unknown session is an error: the response has to name the session's\nagent, and a session that never existed has none to name.",
+        "description": "Served unfolded from the latest successful load initialization, or the\nbeginning when no load succeeded. Consumers stage load attempts so failed\nor interrupted replay does not become visible conversation content.\n\nAn unknown session is an error: the response has to name the session's\nagent, and a session that never existed has none to name.",
         "operationId": "get_agent_session_log",
         "parameters": [
           {
@@ -869,6 +921,25 @@
                 "enum": ["stop"]
               }
             }
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentRespondElicitationAction",
+                "description": "Answer an `elicitation/create` the agent sent.\n\nThe one action whose wire form is a JSON-RPC *response* rather than a\nrequest or notification: the agent asked, we answer on its id. The\nminted [`AgentActionId`] therefore never reaches the wire for this\naction; the fold correlates on the agent's id instead."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["respondElicitation"]
+                  }
+                }
+              }
+            ],
+            "description": "Answer an `elicitation/create` the agent sent.\n\nThe one action whose wire form is a JSON-RPC *response* rather than a\nrequest or notification: the agent asked, we answer on its id. The\nminted [`AgentActionId`] therefore never reaches the wire for this\naction; the fold correlates on the agent's id instead."
           }
         ],
         "description": "One thing a caller wants an agent to do."
@@ -877,6 +948,34 @@
         "type": "string",
         "format": "uuid",
         "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nMinted only by the server at accept time, as a v7 uuid so ids sort by mint\ntime. On the wire and in JSON it is the bare uuid, and a uuid-shaped\nrequest id is the whole ownership test: the server is the only writer of\nruntime-bound frames. The machine's own handshake request ids\n(`agent_session:{session}:{n}`) are not uuids and stay `None`."
+      },
+      "AgentModelDto": {
+        "type": "object",
+        "description": "One model picker option.",
+        "required": ["id", "name"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional provider description."
+          },
+          "group": {
+            "type": ["string", "null"],
+            "description": "Optional group heading supplied by the provider."
+          },
+          "id": {
+            "type": "string",
+            "description": "Provider model id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          }
+        }
+      },
+      "AgentModelsStatusDto": {
+        "type": "string",
+        "description": "Model-selection availability returned over HTTP.",
+        "enum": ["available", "unsupported"]
       },
       "AgentPromptAction": {
         "type": "object",
@@ -889,6 +988,25 @@
           }
         }
       },
+      "AgentRespondElicitationAction": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ElicitationAnswer",
+            "description": "The decision."
+          },
+          {
+            "type": "object",
+            "required": ["requestId"],
+            "properties": {
+              "requestId": {
+                "$ref": "#/components/schemas/ElicitationRequestId",
+                "description": "The agent's `elicitation/create` request id - not an\n[`AgentActionId`], because the agent minted it."
+              }
+            }
+          }
+        ],
+        "description": "Answer an elicitation the agent is waiting on."
+      },
       "AgentSessionLogEntryDto": {
         "allOf": [
           {
@@ -897,12 +1015,17 @@
           },
           {
             "type": "object",
-            "required": ["createdAt"],
+            "required": ["id", "createdAt"],
             "properties": {
               "createdAt": {
                 "type": "string",
                 "format": "date-time",
                 "description": "When the log recorded the frame.\n\nThe frame itself carries no time, so this comes from the log row. It is\nwhat a reader has to order these against anything else it is showing\nbeside them - the fold derives an order among the messages of one\nsession and nothing more."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Durable transport row identity; together with `createdAt`, its order cursor."
               },
               "userId": {
                 "type": ["string", "null"],
@@ -927,7 +1050,7 @@
             "items": {
               "$ref": "#/components/schemas/AgentSessionLogEntryDto"
             },
-            "description": "Every logged frame, oldest first. Folding depends on this order."
+            "description": "Effective history in ascending `(createdAt, id)` order.\nThe first row is the inclusive history boundary cursor: buffered rows\nbefore it are obsolete. Reconcile snapshot overlap by row ID, never content.\nAn empty history has no boundary or overlapping rows."
           }
         }
       },
@@ -1095,12 +1218,12 @@
       },
       "CreateAgentSessionRequest": {
         "type": "object",
-        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose sandbox this deployment provisions from its\nown configuration - which is why the fields describing someone else's\nruntime must be omitted along with it rather than quietly ignored. Mixing\nthe two is refused rather than guessed at, so that no request can reach the\nmanaged path carrying a bot the caller was never entitled to name.\n\nClients serialize this, so both derives are used.",
+        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose runtime this deployment provisions. A managed\nrequest may select an authorized persisted persona with `botId`; omitting\nit uses the deployment's default coding persona. Fields describing someone\nelse's runtime must still be omitted rather than quietly ignored. Mixing\nthe two shapes is refused rather than guessed at.\n\nClients serialize this, so both derives are used.",
         "properties": {
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. Bot callers may omit it (their own identity\nis used) and must not name another bot; user callers must supply a\nbot they own. External sessions only: a managed session runs as the\nbot its deployment is configured for."
+            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns or may use through team membership;\nomitting it uses the deployment's default coding persona. On an\nexternal request, bot callers may omit it (their own identity is used)\nand must not name another bot; user callers must supply a bot they own."
           },
           "instructions": {
             "type": ["string", "null"],
@@ -1184,6 +1307,98 @@
           }
         }
       },
+      "ElicitationAnswer": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The user submitted the form, or consented to open the URL.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["accept"]
+              },
+              "content": {
+                "type": ["object", "null"],
+                "description": "Form: the submitted values keyed by property. URL: omitted.",
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ElicitationContentValue"
+                },
+                "propertyNames": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user explicitly said no.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["decline"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user dismissed the request without choosing.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["cancel"]
+              }
+            }
+          }
+        ],
+        "description": "What the user decided about an elicitation. Mirrors ACP's three actions;\nthere is no `Other` because we never originate an action we do not know."
+      },
+      "ElicitationContentValue": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "A string, and the shape a whole draft rides in as JSON text."
+          },
+          {
+            "type": "boolean",
+            "description": "A yes/no."
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "A whole number."
+          },
+          {
+            "type": "number",
+            "format": "double",
+            "description": "A number that is not whole."
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A multi-select's chosen values."
+          }
+        ],
+        "description": "A value ACP accepts in an elicitation answer.\n\nMirrors ACP's `ElicitationContentValue` so that the contract a caller\nanswers against is the closed union ACP will accept, rather than arbitrary\nJSON narrowed on the way out. An object, a null, or a mixed array is\nrefused when the request is deserialized - where the caller learns of it -\ninstead of at send time, when the elicitation slot has already been\nreleased."
+      },
+      "ElicitationRequestId": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "A numeric JSON-RPC id. Specta refuses `i64` (it does not fit a JS\nnumber); agents count their requests from zero, so `i32` is the\nhonest TypeScript face."
+          },
+          {
+            "type": "string",
+            "description": "A string JSON-RPC id."
+          }
+        ],
+        "description": "The JSON-RPC id of an agent's `elicitation/create` request, carried whole\nso the answer echoes exactly what the agent sent.\n\nAgents pick these, not us: Claude Code counts from `0`, others use\nstrings. `null` is not a legal id for a request that expects a response,\nso it is not representable here."
+      },
       "ExternalSessionResponse": {
         "type": "object",
         "description": "The provider-side identity of an externally-served session.",
@@ -1200,6 +1415,44 @@
           "url": {
             "type": ["string", "null"],
             "description": "The agent's page on the provider's site, for a client to link out to."
+          }
+        }
+      },
+      "LoadAgentModelsRequest": {
+        "type": "object",
+        "description": "HTTP request selecting one provider to probe.",
+        "required": ["harness"],
+        "properties": {
+          "harness": {
+            "$ref": "#/components/schemas/ModelHarnessDto",
+            "description": "Provider to probe."
+          },
+          "harnessId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Required for macrod and forbidden for other targets."
+          }
+        }
+      },
+      "LoadAgentModelsResponse": {
+        "type": "object",
+        "description": "Successful model-discovery response.",
+        "required": ["status", "models"],
+        "properties": {
+          "currentModel": {
+            "type": ["string", "null"],
+            "description": "Current provider model, if model selection is available."
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentModelDto"
+            },
+            "description": "Ordered model catalog."
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentModelsStatusDto",
+            "description": "Model-selection availability."
           }
         }
       },
@@ -1222,6 +1475,11 @@
             "description": "Which way the frame travelled."
           }
         }
+      },
+      "ModelHarnessDto": {
+        "type": "string",
+        "description": "Harness names accepted by the model discovery endpoint.",
+        "enum": ["in-memory", "cursor", "macrod"]
       },
       "QueuedActionDto": {
         "type": "object",
@@ -1339,12 +1597,22 @@
         ],
         "description": "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
       }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
     }
   },
   "tags": [
     {
       "name": "agent-sessions",
       "description": "Agent sessions"
+    },
+    {
+      "name": "agent-models",
+      "description": "Fresh provider model discovery"
     }
   ]
 }

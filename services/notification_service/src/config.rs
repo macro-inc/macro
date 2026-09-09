@@ -10,20 +10,8 @@ use database_env_vars::{DatabaseUrl, RedisUri};
 use macro_auth::InternalApiKey;
 use macro_env::Environment;
 use macro_env_var::{env_var, env_vars, maybe_env_var};
-use std::sync::LazyLock;
-
-// We load this through `macro_config` at startup as part of [`Config`]. This lazy is retained for
-// older notification template code paths that do not receive `Config` directly.
-pub static BASE_URL: LazyLock<String> = LazyLock::new(|| {
-    BaseUrl::new()
-        .expect("BASE_URL must be provided via APP_SECRETS_JSON or env")
-        .as_ref()
-        .to_string()
-});
 
 env_vars! {
-    #[derive(Debug, Clone)]
-    pub(crate) struct BaseUrl;
     #[derive(Debug, Clone)]
     pub(crate) struct AppleBundleId;
     #[derive(Debug, Clone)]
@@ -55,10 +43,6 @@ env_var!(
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
-    /// The service's base url including the scheme.
-    #[allow(dead_code)]
-    pub(crate) base_url: BaseUrl,
-
     /// The connection URL for the Postgres database this application should use.
     pub(crate) database_url: DatabaseUrl,
 

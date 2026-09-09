@@ -15,6 +15,7 @@ import {
   SoupEntityContextMenu,
   useSoupListNavigationHotkeys,
 } from '@app/features/soup';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   addUnique,
@@ -41,8 +42,8 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
+import { useTagSets } from '@property/tags/tag-sets-context';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import { useTagsQuery } from '@queries/properties/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button, cn, Surface } from '@ui';
 import {
@@ -98,10 +99,18 @@ type TasksListActivationMetadata = {
   newSplit?: boolean;
 };
 
-export function TaskList() {
+export type TaskListProps = {
+  /** The focusable list root, for callers that hand keyboard focus back. */
+  ref?: (element: HTMLDivElement) => void;
+};
+
+export function TaskList(props: TaskListProps) {
   const panel = useSplitPanelOrThrow();
   const { state, setState } = useTasksView();
   const userId = useUserId();
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
   const isGroupExpanded = (groupId: string) =>
     !state.collapsedGroupIds.includes(groupId);
   const setGroupExpanded = (groupId: string, expanded: boolean) =>
@@ -112,15 +121,14 @@ export function TaskList() {
   const toggleGroup = (groupId: string) =>
     setState('collapsedGroupIds', toggleValue(groupId));
 
-  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () => {
-    const tagsQuery = useTagsQuery();
-
-    return useTasksDataSource(state, {
+  const tagSets = useTagSets();
+  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
+    useTasksDataSource(state, {
       userId,
-      tagSets: () => tagsQuery.data ?? [],
+      tagSets,
       isGroupExpanded,
-    });
-  });
+    })
+  );
 
   function openEntity(
     entity: EntityData,
@@ -420,14 +428,24 @@ export function TaskList() {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <Surface
-        depth={2}
-        ref={setGrid}
+        depth={isTouchDevice() ? 0 : 2}
+        hideBorder={isTouchDevice()}
+        ref={(element: HTMLDivElement) => {
+          setGrid(element);
+          props.ref?.(element);
+        }}
         role="grid"
         aria-label="Tasks"
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="@container/u-list flex min-h-0 min-w-0 flex-col rounded-2xl p-2 outline-none"
+        class={cn(
+          '@container/u-list flex min-h-0 min-w-0 flex-col outline-none',
+          {
+            'rounded-2xl p-2': !isTouchDevice(),
+            'rounded-none bg-transparent p-0': isTouchDevice(),
+          }
+        )}
       >
         <ListLayoutProvider ref={grid}>
           <ResponsiveTaskListHeader />
@@ -439,13 +457,13 @@ export function TaskList() {
             triggerBehavior="spring-back"
           >
             <Switch>
-              <Match when={source.isLoading()}>
+              <Match when={!forceEmptyState() && source.isLoading()}>
                 <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
                   <SpinnerIcon class="size-5 animate-spin" />
                 </div>
               </Match>
 
-              <Match when={source.error()}>
+              <Match when={!forceEmptyState() && source.error()}>
                 <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
                   <span>Tasks couldn’t be loaded.</span>
                   <Button
@@ -459,10 +477,10 @@ export function TaskList() {
                 </div>
               </Match>
 
-              <Match when={visibleRows().length === 0}>
+              <Match when={forceEmptyState() || visibleRows().length === 0}>
                 <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
                   <span>{emptyMessage()}</span>
-                  <Show when={source.hasMore()}>
+                  <Show when={!forceEmptyState() && source.hasMore()}>
                     <Button
                       variant="outline"
                       size="sm"

@@ -30,16 +30,30 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 ## Sidebar (a11y names are load-bearing)
 
 - Top: buttons `Search` and `Create`.
-- Nav: `Go to Home`, `Go to Getting Started`, `Go to Inbox`, `Go to Recent`, `Go to Activity`.
+- Nav: `Go to Home`, `Go to Getting Started`, `Go to Notifications`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
   `Go to Calendar`, `Go to Agents`, `Go to Customers`.
 - Then `Favorites` (pinned items) and `Latest` (recent channels/DMs with an `Unread` switch).
 - Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
   `Settings (Ctrl ;)`, `Log out`.
 
+## Favorites
+
+Use an entity's command/context menu to add or remove it from Favorites; drag rows
+within the expanded sidebar's Favorites section to reorder them. Documents, chats,
+projects, email threads, channels, calls, CRM companies, and CRM contacts support
+toggling. Individual channel messages are not favoritable.
+
+With the GraphQL local cache enabled, cached favorites remain visible when offline
+or when a background refresh fails. Toggle and reorder success while offline means
+the change was accepted into the durable queue, not yet confirmed by the server.
+Removing then re-adding an item appends it to the end; those operations are replayed
+in order. A newer queued reorder replaces an older queued reorder. Server-rejected
+changes roll back rather than becoming committed local favorites.
+
 ## Create menu
 
-`Create` button (top-left) opens a menu of: Email E, Automation U, Coding Agent A, Skill K,
+`Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
 Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task and Channel open dialogs.
 
@@ -56,6 +70,12 @@ category, Esc closes.
 - `c` then `d`/`t`/`e`/`m`/`a` — create doc / task / email / channel / AI chat.
   Single-letter shortcuts only work when no editor has focus; press `Escape` first.
 - `/` — search everything. `j`/`k` — move in lists. `e` — mark done. `g` then `i` — inbox.
+- In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
+  Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
+
+Settings → Agents and Settings → Harness render while their requests are pending.
+A pending Cursor model catalog shows `Loading models…` beside a disabled model
+picker; a failed catalog shows an inline error. The rest of settings stays usable.

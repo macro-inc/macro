@@ -5942,6 +5942,115 @@
         }
       }
     },
+    "/crm/stages": {
+      "put": {
+        "tags": ["crm::inbound::axum_router::stages"],
+        "summary": "Replace the team's deal stages; requires `edit_stages_role` (403 otherwise).",
+        "operationId": "put_crm_team_stages",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceCrmStagesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrmStagesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crm::inbound::axum_router::stages"],
+        "summary": "Reset the team's deal stages to the defaults; gated like `PUT /crm/stages`.",
+        "operationId": "reset_crm_team_stages",
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents": {
       "get": {
         "tags": ["document"],
@@ -17955,6 +18064,57 @@
         "description": "Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.",
         "enum": ["admin", "owner"]
       },
+      "CrmStageInput": {
+        "type": "object",
+        "description": "One stage in a `PUT /crm/stages` body.",
+        "required": ["label"],
+        "properties": {
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Existing stage to keep; omit to add one."
+          },
+          "label": {
+            "type": "string",
+            "description": "Label after the update; non-blank and unique within the set."
+          }
+        }
+      },
+      "CrmStageResponse": {
+        "type": "object",
+        "description": "One stage of the team's custom pipeline.",
+        "required": ["id", "label"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Property option id companies carry as their stage value."
+          },
+          "label": {
+            "type": "string",
+            "description": "Label."
+          }
+        }
+      },
+      "CrmStagesResponse": {
+        "type": "object",
+        "description": "The team's custom stage set.",
+        "required": ["definition_id", "stages"],
+        "properties": {
+          "definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team-scoped stage definition id."
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmStageResponse"
+            },
+            "description": "Stages in pipeline order."
+          }
+        }
+      },
       "CrmTeamSettingsResponse": {
         "type": "object",
         "description": "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH /team/crm` on the auth service).",
@@ -17962,6 +18122,7 @@
           "edit_stages_role",
           "move_closed_deals_role",
           "delete_records_role",
+          "legacy_stage_ids",
           "team_views"
         ],
         "properties": {
@@ -17984,6 +18145,18 @@
           "edit_stages_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
             "description": "Who can change the deal stage set in CRM settings."
+          },
+          "legacy_stage_ids": {
+            "type": "object",
+            "description": "System stage option id to team stage option id for seeded stages.",
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           "move_closed_deals_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
@@ -23884,6 +24057,20 @@
           "pinnedItemType": {
             "type": "string",
             "description": "The type of the pin"
+          }
+        }
+      },
+      "ReplaceCrmStagesRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /crm/stages`: the whole stage set in order.",
+        "required": ["stages"],
+        "properties": {
+          "stages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CrmStageInput"
+            },
+            "description": "Stages first to last."
           }
         }
       },

@@ -11,6 +11,7 @@ use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
 use livekit_api::services::agent_dispatch::AgentDispatchClient;
 use livekit_api::services::egress::{EgressClient, EgressOutput, RoomCompositeOptions, encoding};
 use livekit_api::services::room::{CreateRoomOptions, RoomClient};
+use livekit_api::services::{ServiceError, TwirpError, TwirpErrorCode};
 use livekit_api::webhooks::WebhookReceiver;
 use livekit_protocol::{
     AudioCodec, CreateAgentDispatchRequest, EncodedFileOutput, EncodedFileType, S3Upload,
@@ -227,10 +228,11 @@ impl CallRtcClient for LivekitRtcClient {
         room_name: &str,
         participant_identity: MacroUserIdStr<'_>,
     ) -> anyhow::Result<()> {
-        self.room_client
-            .remove_participant(room_name, participant_identity.as_ref())
-            .await?;
-        Ok(())
+        interpret_remove_participant_result(
+            self.room_client
+                .remove_participant(room_name, participant_identity.as_ref())
+                .await,
+        )
     }
 
     #[tracing::instrument(err, skip(self, s3_config))]
@@ -312,23 +314,36 @@ impl CallRtcClient for LivekitRtcClient {
             event: event.event,
             id: event.id,
             room_name: event.room.map(|r| r.name),
-            participant_identity: event
-                .participant
-                .and_then(|p| {
-                    // The transcription agent joins with its agent name as the
-                    // identity, which is not a MacroUserId — short-circuit so
-                    // join/leave events for the agent don't fail parsing.
-                    if Some(p.identity.as_str()) == self.transcription_agent_name.as_deref() {
+            participant_identity: event.participant.and_then(|p| {
+                match MacroUserIdStr::parse_from_str(&p.identity) {
+                    Ok(id) => Some(id.into_owned()),
+                    Err(_) => {
+                        tracing::debug!(
+                            identity = %p.identity,
+                            "skipping non-user LiveKit participant identity"
+                        );
                         None
-                    } else {
-                        Some(MacroUserIdStr::parse_from_str(&p.identity).map(CowLike::into_owned))
                     }
-                })
-                .transpose()
-                .map_err(anyhow::Error::from)?,
+                }
+            }),
             egress_id,
             file_url,
             created_at: event.created_at,
         })
     }
+}
+
+fn interpret_remove_participant_result(result: Result<(), ServiceError>) -> anyhow::Result<()> {
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) if is_participant_already_absent(&error) => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn is_participant_already_absent(error: &ServiceError) -> bool {
+    matches!(
+        error,
+        ServiceError::Twirp(TwirpError::Twirp(code)) if code.code == TwirpErrorCode::NOT_FOUND
+    )
 }

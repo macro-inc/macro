@@ -12,6 +12,7 @@ import { parseISO } from 'date-fns';
 import { type Accessor, createMemo } from 'solid-js';
 import type { CalendarEvent } from '../types';
 import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
+import { useCalendarTeamOooFlag } from './use-calendar-ui-flag';
 
 /** Visibility-source id gating the whole team out-of-office overlay. */
 export const TEAM_OOO_SOURCE_ID = 'team-ooo';
@@ -47,6 +48,11 @@ function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
       : { allDay: true, start: time.startDate, end: time.endDate };
   const name = getDisplayName(tryMacroId(item.ownerId));
   const title = item.title ?? TEAM_OOO_FALLBACK_TITLE;
+  const calendar = {
+    id: teamOooSourceId(item.ownerId),
+    name: name || TEAM_OOO_FALLBACK_TITLE,
+    color: TEAM_OOO_COLOR,
+  };
 
   return {
     ...range,
@@ -61,11 +67,8 @@ function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
     eventType: EventType.out_of_office,
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: name ? `${name}: ${title}` : title,
-    calendar: {
-      id: teamOooSourceId(item.ownerId),
-      name: name || TEAM_OOO_FALLBACK_TITLE,
-      color: TEAM_OOO_COLOR,
-    },
+    calendar,
+    visibleCalendars: [calendar],
   };
 }
 
@@ -86,12 +89,13 @@ export function useTeamOooEvents(
   options: TeamOooEventOptions
 ): TeamOooEventData {
   const userId = useUserId();
+  const teamOooEnabled = useCalendarTeamOooFlag();
   const isRangeSupported = createMemo(() => {
     const range = options.range();
     return range !== undefined && isCalendarRangeSupported(range);
   });
   const isOverlayVisible = () =>
-    options.isSourceVisible?.(TEAM_OOO_SOURCE_ID) !== false;
+    teamOooEnabled() && options.isSourceVisible?.(TEAM_OOO_SOURCE_ID) !== false;
   const query = useTeamOutOfOfficeQuery(
     () => ({ userId: userId(), range: options.range() }),
     () => ({
@@ -103,7 +107,9 @@ export function useTeamOooEvents(
     // Read data only on success: a failed overlay fetch degrades to no events
     // since the grid's own state is driven by the occurrences query, and gating
     // on success keeps this off the pending/errored resource read that suspends.
-    if (!isRangeSupported() || !query.isSuccess) return [];
+    if (!teamOooEnabled() || !isRangeSupported() || !query.isSuccess) {
+      return [];
+    }
     return query.data.map(mapTeamOooItem);
   });
   const visibleEvents = createMemo(() => (isOverlayVisible() ? events() : []));

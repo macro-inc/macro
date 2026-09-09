@@ -9,7 +9,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 
 use crate::domain::{
-    models::{Favorite, FavoritesError, FavoritesMutationActor},
+    models::{Favorite, FavoritesError, FavoritesMutationActor, SetFavoriteResult},
     ports::{FavoritesAuthorizer, FavoritesMutationService, FavoritesService},
 };
 
@@ -44,19 +44,29 @@ where
         actor: FavoritesMutationActor,
         entity: Entity<'static>,
         favorite: bool,
-    ) -> Result<Entity<'static>, FavoritesError> {
+    ) -> Result<SetFavoriteResult, FavoritesError> {
         validate_favoritable(entity.entity_type)?;
 
-        if favorite {
+        let persisted_favorite = if favorite {
             let receipt = self.authorizer.authorize_favorite(&actor, &entity).await?;
-            self.favorites.add_favorite(&receipt).await?;
+            Some(self.favorites.add_favorite(&receipt).await?)
         } else {
-            self.favorites
+            // Setting an absolute state must tolerate replay after a lost response.
+            match self
+                .favorites
                 .remove_favorite_by_entity(&actor.user_id, &entity)
-                .await?;
-        }
+                .await
+            {
+                Ok(()) | Err(FavoritesError::NotFound) => {}
+                Err(error) => return Err(error),
+            }
+            None
+        };
 
-        Ok(entity)
+        Ok(SetFavoriteResult {
+            entity,
+            favorite: persisted_favorite,
+        })
     }
 
     #[tracing::instrument(err, skip(self, ordered))]
@@ -84,12 +94,12 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::EmailThread
         | EntityType::Call
         | EntityType::ForeignEntity
-        | EntityType::CrmCompany => Ok(()),
+        | EntityType::CrmCompany
+        | EntityType::CrmContact => Ok(()),
         EntityType::User
         | EntityType::Team
         | EntityType::ChannelMessage
         | EntityType::StaticFile
-        | EntityType::CrmContact
         | EntityType::CalendarEvent
         | EntityType::Reminder
         | EntityType::Skill

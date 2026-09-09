@@ -25,6 +25,10 @@ import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/s
  * second one beside it.
  */
 export interface FoldStream {
+  /** Replace with durable history; retain row metadata for live overlap. */
+  snapshot: (entries: AgentSessionLogEntryDto[]) => FoldedMessage[];
+  /** Reconcile durable rows against the snapshot, preserving delivery order. */
+  push_rows: (entries: AgentSessionLogEntryDto[]) => FoldedStreamEvent[];
   /**
    * Fold a run of frames and answer with every message derived so far.
    *
@@ -33,14 +37,18 @@ export interface FoldStream {
    * over and over, so replaying a fetched log one frame at a time would
    * serialize thousands of whole messages to produce a handful.
    */
-  extend: (entries: AgentSessionLogEntryDto[]) => FoldedMessage[];
+  extend: (
+    entries: Pick<AgentSessionLogEntryDto, 'direction' | 'content' | 'userId'>[]
+  ) => FoldedMessage[];
   /**
    * Fold one more frame, reporting the changes it implied.
    *
    * Empty for the frames that change nothing renderable — handshakes, token
    * accounting — which is most of them.
    */
-  push: (entry: AgentSessionLogEntryDto) => FoldedStreamEvent[];
+  push: (
+    entry: Pick<AgentSessionLogEntryDto, 'direction' | 'content' | 'userId'>
+  ) => FoldedStreamEvent[];
   /** Every message folded so far, oldest first. */
   messages: () => FoldedMessage[];
   /**

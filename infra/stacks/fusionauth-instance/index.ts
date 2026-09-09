@@ -303,6 +303,9 @@ const macroApplication = new FusionAuthApplication(
             ]
           : []),
         `https://mcp-server${stack === 'prod' ? '' : `-${stack}`}.macro.com/oauth/callback`,
+        ...(stack === 'dev' || stack === 'prod'
+          ? [`${getServiceUrl(ServiceUrl.MCP_SERVER_URL)}/oauth/callback`]
+          : []),
         ...(stack === 'local' || stack === 'dev'
           ? ['http://localhost:8085/*', 'http://localhost:8085/oauth/*']
           : []),

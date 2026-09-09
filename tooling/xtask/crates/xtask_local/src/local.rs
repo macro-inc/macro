@@ -245,7 +245,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     }
 
     // The Cursor egress tunnel, before env resolution because the minted
-    // hostname is written into `EGRESS_BASE_URL`. Best-effort with a loud
+    // hostname overrides `AgentHarnessEgressUrl`. Best-effort with a loud
     // downgrade: a laptop with no route to Cloudflare should still get a
     // working stack, minus the one thing that needs public ingress -
     // `@cursor` sessions reaching local MCP servers.
@@ -258,7 +258,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
                 }
                 Err(error) => {
                     stage.note(&format!(
-                        "WARNING: no cursor egress tunnel ({error:#}); EGRESS_BASE_URL stays \
+                        "WARNING: no cursor egress tunnel ({error:#}); the egress URL stays \
                          in-network, so @cursor sessions cannot reach this stack's MCP servers"
                     ));
                     None

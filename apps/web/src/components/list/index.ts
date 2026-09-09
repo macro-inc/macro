@@ -37,6 +37,7 @@ export type {
 export {
   type ListInteractionActivation,
   type ListInteractionActivationIntent,
+  type ListInteractionBeforeMoveEvent,
   type ListInteractionDisclosure,
   type ListInteractionNavigation,
   type ListInteractionNavigationEvent,

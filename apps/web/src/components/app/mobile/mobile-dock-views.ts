@@ -26,12 +26,17 @@ export type MobileDockView = {
 /**
  * The navigation views shared by the search scope pills (MobileViewsRow) and
  * the dock's Views menu (MoreViewsMenu), in canonical order: the pill row
- * renders it as-is after the "All" pill, the menu reversed so Inbox stays
+ * renders it as-is after the "All" pill, the menu reversed so Notifications stays
  * nearest the thumb. "All" (pills only) and Settings (menu only) are
  * per-surface additions at the edges.
  */
 const MOBILE_DOCK_VIEWS: MobileDockView[] = [
-  { id: 'inbox', label: 'Inbox', icon: AnimatedInboxIcon, pillIcon: BellIcon },
+  {
+    id: 'inbox',
+    label: 'Notifications',
+    icon: AnimatedInboxIcon,
+    pillIcon: BellIcon,
+  },
   {
     id: 'calendar',
     label: 'Calendar',

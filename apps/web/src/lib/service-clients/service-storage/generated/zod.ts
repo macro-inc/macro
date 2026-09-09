@@ -4985,6 +4985,11 @@ export const getCrmTeamSettingsResponse = zod
       .describe(
         'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
+    legacy_stage_ids: zod
+      .record(zod.string(), zod.uuid())
+      .describe(
+        'System stage option id to team stage option id for seeded stages.'
+      ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])
       .describe(
@@ -5085,6 +5090,11 @@ export const putCrmTeamSettingsResponse = zod
       .describe(
         'Minimum team role required for a CRM governance capability. Members\ncan edit visible CRM records (e.g. company properties), but the\ngovernance capabilities these settings gate stay restricted to\nadmin (default) vs owner. Maps to the `team_role` Postgres enum;\n`member` is deliberately not representable.'
       ),
+    legacy_stage_ids: zod
+      .record(zod.string(), zod.uuid())
+      .describe(
+        'System stage option id to team stage option id for seeded stages.'
+      ),
     move_closed_deals_role: zod
       .enum(['admin', 'owner'])
       .describe(
@@ -5099,6 +5109,53 @@ export const putCrmTeamSettingsResponse = zod
   .describe(
     "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
   );
+
+/**
+ * @summary Replace the team's deal stages; requires `edit_stages_role` (403 otherwise).
+ */
+export const putCrmTeamStagesBody = zod
+  .object({
+    stages: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .nullish()
+              .describe('Existing stage to keep; omit to add one.'),
+            label: zod
+              .string()
+              .describe(
+                'Label after the update; non-blank and unique within the set.'
+              ),
+          })
+          .describe('One stage in a `PUT \/crm\/stages` body.')
+      )
+      .describe('Stages first to last.'),
+  })
+  .describe(
+    'Request body for `PUT \/crm\/stages`: the whole stage set in order.'
+  );
+
+export const putCrmTeamStagesResponse = zod
+  .object({
+    definition_id: zod.uuid().describe('Team-scoped stage definition id.'),
+    stages: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'Property option id companies carry as their stage value.'
+              ),
+            label: zod.string().describe('Label.'),
+          })
+          .describe("One stage of the team's custom pipeline.")
+      )
+      .describe('Stages in pipeline order.'),
+  })
+  .describe("The team's custom stage set.");
 
 /**
  * @summary Gets the users documents to populate their recent document list

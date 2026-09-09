@@ -1,4 +1,5 @@
 import { isListViewID } from '@app/constants/list-views';
+import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
 import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCalendarBlockRange } from '@block-calendar/calendar-range';
@@ -13,7 +14,6 @@ import {
   goToChannelLatest,
   goToChannelMessage,
 } from '@block-channel/utils/link';
-import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/constants';
 import type {

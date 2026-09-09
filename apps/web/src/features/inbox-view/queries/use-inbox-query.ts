@@ -3,7 +3,6 @@ import {
   buildFlatSoupRows,
   buildGroupedSoupRows,
   createSearchState,
-  createSoupLoadMoreRow,
   type SoupRow,
   testFacets,
   useSearchContext,
@@ -31,7 +30,6 @@ import { startOfDay, subWeeks } from 'date-fns';
 import { createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
-  explicitNoiseFilter,
   noiseFilter,
   signalFilter,
 } from '../../next-soup/filters/inbox-filters';
@@ -95,7 +93,6 @@ function matchesTab(
       );
     })
     .with('noise', () => noiseFilter(entity) && notDoneFilter(source)(entity))
-    .with('all', () => !explicitNoiseFilter(entity))
     .with('reminders', () => scheduledRemindersFilter(entity))
     .exhaustive();
 }
@@ -262,15 +259,6 @@ export function useInboxDataSource(
       );
     } else {
       result = buildFlatSoupRows(entities().items);
-    }
-
-    if (hasMore()) {
-      result.push(
-        createSoupLoadMoreRow({
-          scopeId: `inbox:${state.tab}`,
-          isLoading: isLoadingMore(),
-        })
-      );
     }
 
     return result;

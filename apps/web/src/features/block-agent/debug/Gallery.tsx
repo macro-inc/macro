@@ -5,14 +5,20 @@
  */
 
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
+import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
 import type {
+  ElicitationSchema,
   FoldedMessage,
   ModelOption,
+  PendingElicitation,
   ToolStatus,
 } from '@service-agent-fold/generated/types';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { Message } from '../component/AgentMessage';
 import { ReplyToSelection } from '../component/ReplyToSelection';
+import { initialValues, validate } from '../state/elicitation-form';
 import {
   ActionLine,
   AgentInput,
@@ -21,6 +27,7 @@ import {
   ComposerNotice,
   CountSummary,
   DiffChanges,
+  ElicitationForm,
   PierreDiff,
   QuestionAnswers,
   type QuoteInsert,
@@ -355,6 +362,155 @@ const FIXTURE_MESSAGE: FoldedMessage = {
   ],
 };
 
+/**
+ * The Claude Code colour question after the fold collapsed its custom pair,
+ * plus one of every other field type, so the form's controls can be eyeballed.
+ */
+const FIXTURE_ELICITATION: ElicitationSchema = {
+  title: 'Deployment',
+  description: 'A few details before the agent continues.',
+  required: ['question_0', 'name'],
+  properties: [
+    {
+      name: 'question_0',
+      title: 'Best colour',
+      description: null,
+      schema: {
+        type: 'string',
+        minLength: null,
+        maxLength: null,
+        pattern: null,
+        format: null,
+        default: null,
+        options: [
+          { value: 'Red', title: 'Red', description: 'Warm' },
+          { value: 'Blue', title: 'Blue', description: 'Cool' },
+          { value: 'Green', title: 'Green', description: null },
+        ],
+        customField: 'question_0_custom',
+      },
+    },
+    {
+      name: 'name',
+      title: 'Service name',
+      description: 'Lowercase letters only',
+      schema: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 32,
+        pattern: '^[a-z]+$',
+        format: null,
+        default: 'api',
+        options: [],
+        customField: null,
+      },
+    },
+    {
+      name: 'port',
+      title: 'Port',
+      description: null,
+      schema: { type: 'integer', minimum: 1024, maximum: 65535, default: 3000 },
+    },
+    {
+      name: 'logging',
+      title: 'Enable logging',
+      description: null,
+      schema: { type: 'boolean', default: true },
+    },
+    {
+      name: 'regions',
+      title: 'Regions',
+      description: null,
+      schema: {
+        type: 'multi_select',
+        minItems: 1,
+        maxItems: 2,
+        options: [
+          { value: 'us', title: 'US', description: null },
+          { value: 'eu', title: 'EU', description: null },
+          { value: 'ap', title: 'APAC', description: null },
+        ],
+        default: ['us'],
+        customField: 'regions_custom',
+      },
+    },
+    {
+      name: 'weird',
+      title: 'Hologram',
+      description: null,
+      schema: { type: 'unrecognized', typeName: '_hologram', raw: {} },
+    },
+  ],
+};
+
+const GALLERY_CHIP_HEADER = {
+  agent: 'Cursor Agent',
+  model: 'Claude Opus 5 High',
+};
+
+/** The chip through a turn: booting, writing, and done. */
+function MagicChipStateDemo(props: { presentation: MagicChipPresentation }) {
+  return (
+    <MagicChipView
+      agentSessionId="gallery"
+      presentation={props.presentation}
+      header={GALLERY_CHIP_HEADER}
+      onOpen={() => console.log('[gallery] open session')}
+    />
+  );
+}
+
+/** The chip asking, one per request kind; answers land in the console. */
+function MagicChipAskingDemo(props: {
+  request: PendingElicitation['request'];
+}) {
+  const presentation: MagicChipPresentation = {
+    kind: 'asking',
+    markdown: 'Happy to. One quick question before I go on.',
+    asking: {
+      question: {
+        requestId: 0,
+        turn: 0,
+        toolCall: null,
+        message: 'Which colour, and where should it run?',
+        request: props.request,
+      },
+      canAnswer: true,
+      ownerName: 'You',
+    },
+  };
+  return (
+    <MagicChipView
+      agentSessionId="gallery"
+      presentation={presentation}
+      header={GALLERY_CHIP_HEADER}
+      answer={{
+        answering: false,
+        respond: async (answer) => {
+          console.log('[gallery] elicitation answer', answer);
+          return true;
+        },
+      }}
+      onOpen={() => console.log('[gallery] open session')}
+    />
+  );
+}
+
+function ElicitationFormDemo() {
+  const [values, setValues] = createStore(initialValues(FIXTURE_ELICITATION));
+  const errors = () => validate(FIXTURE_ELICITATION, values);
+  return (
+    <ToolCard title="Macro Coder is asking" status="running" defaultOpen>
+      <ElicitationForm
+        schema={FIXTURE_ELICITATION}
+        values={values}
+        errors={errors()}
+        onChange={(name, value) => setValues(name, value)}
+      />
+    </ToolCard>
+  );
+}
+
 export default function AgentUiGallery() {
   const pulse = usePulse();
   const status = (): ToolStatus => (pulse() ? 'running' : 'completed');
@@ -364,6 +520,75 @@ export default function AgentUiGallery() {
     <StaticMarkdownContext>
       <div class="size-full overflow-auto">
         <div class="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8">
+          <Item label="ElicitationForm (live validation)">
+            <ElicitationFormDemo />
+          </Item>
+
+          <Item label="MagicChip (booting, writing, done)">
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'working',
+                activity: {
+                  label: 'Booting agent',
+                  detail: 'Preparing workspace',
+                  busy: true,
+                },
+              }}
+            />
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'answering',
+                markdown:
+                  'The failing test is in `agent_fold`: the batch fold re-derives every message per frame, so the',
+                activity: {
+                  label: 'Running command',
+                  detail: 'cargo test -p agent_fold',
+                  busy: true,
+                },
+              }}
+            />
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'settled',
+                markdown:
+                  '**Fixed.** The incremental machine now handles the replay; `cargo test -p agent_fold` passes.',
+              }}
+            />
+          </Item>
+
+          <Item label="MagicChip asking (form, url, tool draft)">
+            <MagicChipAskingDemo
+              request={{ kind: 'form', schema: FIXTURE_ELICITATION }}
+            />
+            <MagicChipAskingDemo
+              request={{
+                kind: 'url',
+                elicitationId: 'gh-1',
+                url: 'https://github.com/login/device?user_code=ABCD-1234',
+              }}
+            />
+            <MagicChipAskingDemo
+              request={{
+                kind: 'user_tool',
+                tool: 'CreateCalendarEvent',
+                draft: {
+                  title: 'Q3 sync',
+                  time: {
+                    kind: 'timed',
+                    startsAt: '2026-08-20T17:00:00Z',
+                    endsAt: '2026-08-20T17:30:00Z',
+                    timeZone: 'UTC',
+                  },
+                  attendees: [],
+                  recurrenceLines: [],
+                  addGoogleMeet: false,
+                  eventType: 'default',
+                },
+                schema: FIXTURE_ELICITATION,
+              }}
+            />
+          </Item>
+
           <Item label="ComposerNotice">
             <ComposerNotice text="Waking the agent's sandbox…" active />
           </Item>

@@ -11,6 +11,7 @@
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 
 type RecordedLine = {
+  id?: string;
   ts?: string;
   createdAt?: string;
   userId?: string | null;
@@ -43,6 +44,9 @@ export function parseRecording(jsonl: string): AgentSessionLogEntryDto[] {
       throw new Error(`recording line ${index + 1} has no content envelope`);
     }
     entries.push({
+      id:
+        parsed.id ??
+        `00000000-0000-0000-0000-${index.toString(16).padStart(12, '0')}`,
       content: content as AgentSessionLogEntryDto['content'],
       createdAt: parsed.createdAt ?? parsed.ts ?? new Date(0).toISOString(),
       direction,

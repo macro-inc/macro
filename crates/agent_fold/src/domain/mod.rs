@@ -7,10 +7,14 @@ mod error;
 pub mod fold;
 /// Harness-specific `_meta` and raw-input extraction.
 pub mod harness;
+/// Durable snapshot and live-row ingestion around the append-only protocol fold.
+pub mod ingestion;
 /// The raw log vocabulary the fold consumes.
 pub mod log;
 /// The renderable message vocabulary.
 pub mod model;
+/// Projection of ACP model configuration into domain model choices.
+pub mod model_selection;
 /// The driving query port and the driven log-source port.
 pub mod ports;
 /// The domain service answering queries by folding on read.

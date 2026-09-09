@@ -316,6 +316,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         user_email_service.clone(),
         Arc::new(email::domain::ports::NoOpGmailTokenProvider),
         entity_access_service.clone(),
+        Arc::new(test_lexical_client.clone()),
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(

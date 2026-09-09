@@ -38,7 +38,13 @@ use model_entity::EntityType;
 use teams::domain::team_repo::TeamService;
 
 /// Macro support team members added to every new user's support channel.
-const MACRO_SUPPORT_EMAILS: [&str; 3] = ["jacob@macro.com", "julia@macro.com", "teo@macro.com"];
+const MACRO_SUPPORT_EMAILS: [&str; 5] = [
+    "jacob@macro.com",
+    "julia@macro.com",
+    "teo@macro.com",
+    "valentina@macro.com",
+    "chaitanya@macro.com",
+];
 
 fn support_channel_name<T: AsRef<str>>(email: &Email<T>) -> String {
     format!("Macro Support x {}", email.local_part())

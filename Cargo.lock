@@ -210,6 +210,7 @@ version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "agent_runtime_protocol",
+ "chrono",
  "clap",
  "insta",
  "lazy-regex",
@@ -280,6 +281,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "url",
+ "utoipa",
  "workspace-hack",
 ]
 
@@ -287,6 +289,7 @@ dependencies = [
 name = "agent_harness_service"
 version = "0.1.0"
 dependencies = [
+ "agent-client-protocol",
  "agent_egress",
  "agent_fold",
  "agent_harness",
@@ -314,6 +317,7 @@ dependencies = [
  "futures",
  "github",
  "harness_id",
+ "harnesses",
  "kafka_util",
  "lexical_client",
  "macro_auth",
@@ -363,8 +367,12 @@ dependencies = [
  "ai_tools",
  "ai_toolset",
  "ai_usage",
+ "anyhow",
+ "async-trait",
+ "axum",
  "bot_id",
  "bytes",
+ "chat",
  "dashmap",
  "futures",
  "http 1.4.0",
@@ -377,6 +385,7 @@ dependencies = [
  "prompt",
  "rig-agent",
  "rmcp",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
@@ -681,6 +690,7 @@ dependencies = [
  "sync_service_client",
  "system_properties",
  "teams",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",
@@ -2994,7 +3004,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.4"
+version = "0.6.6"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3117,6 +3127,7 @@ dependencies = [
  "async-trait",
  "aws-sdk-s3",
  "axum",
+ "base64 0.22.1",
  "channels",
  "chrono",
  "cloudfront_sign",
@@ -3147,6 +3158,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sqlx",
  "subtle",
  "thiserror 2.0.18",
@@ -3779,6 +3791,7 @@ dependencies = [
  "soup",
  "soup_realtime",
  "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]
@@ -4524,6 +4537,9 @@ name = "cursor_cloud_agents"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "agent_fold",
+ "agent_runtime_protocol",
+ "agent_session",
  "futures",
  "insta",
  "macro_env_var",
@@ -4531,12 +4547,14 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "sqlx",
  "sse-core",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "workspace-hack",
  "zeroize",
 ]
@@ -5764,6 +5782,7 @@ dependencies = [
  "frecency",
  "futures",
  "item_filters",
+ "lexical_client",
  "lol_html",
  "macro_authorization",
  "macro_db_migrator",
@@ -7552,7 +7571,6 @@ dependencies = [
  "model-error-response",
  "rand 0.9.4",
  "serde",
- "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -9151,7 +9169,6 @@ version = "0.1.0"
 dependencies = [
  "agent_fold",
  "anyhow",
- "models_search",
  "reqwest 0.13.4",
  "serde",
  "serde_json",

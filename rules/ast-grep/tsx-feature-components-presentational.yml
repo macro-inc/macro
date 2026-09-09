@@ -13,6 +13,9 @@ note: |-
   untyped wire JSON for property-changed rows.
 files:
   - apps/web/src/features/activity/components/**
+  - apps/web/src/features/email-message/components/**
+  - apps/web/src/features/email-thread/components/**
+  - apps/web/src/features/email-compose/components/**
 rule:
   any:
     - kind: string

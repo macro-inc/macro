@@ -9,6 +9,7 @@ agent-client-protocol = { workspace = true }
 # The session-token claim shape and its signing, so the harness and the proxy
 # cannot disagree about what a token says.
 agent_egress = { path = "../agent_egress" }
+agent_fold = { path = "../agent_fold" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 agent_trigger = { path = "../agent_trigger" }
@@ -55,6 +56,7 @@ tokio-tungstenite = { workspace = true }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 url = { workspace = true }
+utoipa = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

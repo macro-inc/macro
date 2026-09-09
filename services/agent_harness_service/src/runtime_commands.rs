@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+use crate::model_providers::{MacrodModels, ModelProbeEvent};
+
 use agent_harness::domain::service::ForwardedCommands;
 use agent_harness::outbound::forward::{
     COMMAND_CHANNEL, RuntimeCommandRequest, RuntimeCommandTarget,
@@ -16,12 +18,20 @@ use tracing::Instrument as _;
 #[cfg(test)]
 mod test;
 
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum RuntimeBusEvent {
+    Models(ModelProbeEvent),
+    Command(Box<RuntimeCommandRequest>),
+}
+
 pub(crate) async fn consume_runtime_commands<Harness>(
     redis: redis::Client,
     replica: ReplicaId,
     connected: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
     harness_service: Arc<Harness>,
     ready: tokio::sync::watch::Sender<bool>,
+    models: MacrodModels,
 ) -> anyhow::Result<()>
 where
     Harness: ForwardedCommands,
@@ -30,7 +40,20 @@ where
     subscriber.subscribe(COMMAND_CHANNEL).await?;
     ready.send_replace(true);
     let mut requests = subscriber.into_on_message();
-    while let Some(request) = requests.next().await {
+    let mut probes = tokio::task::JoinSet::new();
+    loop {
+        let request = tokio::select! {
+            request = requests.next() => match request {
+                Some(request) => request,
+                None => break,
+            },
+            result = probes.join_next(), if !probes.is_empty() => {
+                if let Some(Err(error)) = result {
+                    tracing::error!(error = ?error, "runtime model observer task failed");
+                }
+                continue;
+            }
+        };
         let payload: String = match request.get_payload() {
             Ok(payload) => payload,
             Err(error) => {
@@ -38,10 +61,26 @@ where
                 continue;
             }
         };
-        let request: RuntimeCommandRequest = match serde_json::from_str(&payload) {
+        let event: RuntimeBusEvent = match serde_json::from_str(&payload) {
             Ok(request) => request,
             Err(error) => {
                 tracing::warn!(error = ?error, "dropping malformed runtime command broadcast");
+                continue;
+            }
+        };
+        let request = match event {
+            RuntimeBusEvent::Command(request) => *request,
+            RuntimeBusEvent::Models(event) => {
+                let models = models.clone();
+                probes.spawn(async move {
+                    models
+                        .observe(event)
+                        .await
+                        .inspect_err(|error| {
+                            tracing::error!(error = ?error, "runtime model bus event failed");
+                        })
+                        .ok();
+                });
                 continue;
             }
         };

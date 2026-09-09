@@ -55,6 +55,8 @@ async fn main() -> anyhow::Result<()> {
                 context.mcp_public_host.clone(),
                 "localhost".into(),
                 "127.0.0.1".into(),
+                "gateway.macro.com".into(),
+                "dev-gateway.macro.com".into(),
             ]);
             config.stateful_mode = false;
             config.json_response = true;
