@@ -64,12 +64,38 @@ describe('$collapseInlineSearch', () => {
 
     editor.read(() => {
       const children = $getRoot().getFirstChild()?.getChildren() ?? [];
-      expect($isInlineSearchNode(children[0])).toBe(true);
-      expect(children[0]?.getTextContent()).toBe('@docs');
-      expect(
-        $isTextNode(children[2]) && !$isInlineSearchNode(children[2])
-      ).toBe(true);
-      expect(children[2]?.getTextContent()).toBe('/qc');
+      const searches = children.filter($isInlineSearchNode);
+      expect(searches).toHaveLength(1);
+      expect(searches[0]?.getTextContent()).toBe('@docs');
+      const collapsed = children
+        .filter((node) => $isTextNode(node) && !$isInlineSearchNode(node))
+        .map((node) => node.getTextContent())
+        .join('');
+      expect(collapsed).toContain('/qc');
+    });
+  });
+
+  it('leaves / command search intact when collapsing mentions', () => {
+    const editor = createTestEditor();
+    seedMentionAndCommandSearches(editor);
+
+    editor.update(
+      () => {
+        $collapseInlineSearch(undefined, InlineSearchNodesType.Mentions);
+      },
+      { discrete: true }
+    );
+
+    editor.read(() => {
+      const children = $getRoot().getFirstChild()?.getChildren() ?? [];
+      const searches = children.filter($isInlineSearchNode);
+      expect(searches).toHaveLength(1);
+      expect(searches[0]?.getTextContent()).toBe('/qc');
+      const collapsed = children
+        .filter((node) => $isTextNode(node) && !$isInlineSearchNode(node))
+        .map((node) => node.getTextContent())
+        .join('');
+      expect(collapsed).toContain('@docs');
     });
   });
 

@@ -1,4 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@core/block', () => ({
+  NonDocumentBlockTypes: [
+    'call',
+    'calendar',
+    'chat',
+    'channel',
+    'project',
+    'email',
+    'contact',
+    'company',
+    'automation',
+    'pr',
+    'agent',
+  ],
+}));
+
 import { canTrackMentionFromBlock } from './mention-tracking';
 
 describe('canTrackMentionFromBlock', () => {
