@@ -215,7 +215,8 @@ export function TasksSidebar() {
           <Button
             type="button"
             variant="ghost"
-            class="h-10 shrink-0 justify-start gap-3 rounded-xl bg-hover px-3 text-ink"
+            depth={2}
+            class="h-10 shrink-0 justify-start gap-3 rounded-xl bg-surface px-3"
             onClick={() =>
               layout.popoverSplit({ type: 'component', id: 'task-compose' })
             }

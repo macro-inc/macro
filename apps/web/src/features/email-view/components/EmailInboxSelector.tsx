@@ -79,7 +79,7 @@ export function EmailInboxSelector(props: EmailInboxSelectorProps) {
       >
         <Combobox.Trigger
           as={Button}
-          variant={compact() ? 'ghost' : 'outline'}
+          variant="ghost"
           size={compact() ? 'sm' : 'md'}
           square={compact()}
           depth={2}
@@ -88,7 +88,7 @@ export function EmailInboxSelector(props: EmailInboxSelectorProps) {
           class={cn(
             compact()
               ? 'size-8 shrink-0 rounded-full'
-              : 'h-10 w-full min-w-0 justify-start gap-2.5 rounded-xl bg-surface px-3 font-medium',
+              : 'h-10 w-full min-w-0 justify-start gap-2.5 rounded-xl bg-surface px-3',
             props.class
           )}
         >
