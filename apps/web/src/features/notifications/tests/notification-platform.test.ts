@@ -1,8 +1,14 @@
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
-import { describe, expect, it, vi } from 'vitest';
+import { checkEmailNotificationSignal } from '@queries/notification/email-signal';
+import { err, ok } from 'neverthrow';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlatformNotificationState } from '../components/PlatformNotificationProvider';
 import type { PlatformNotificationHandle } from '../notification-platform';
 import type { UnifiedNotification } from '../types';
+
+vi.mock('@queries/notification/email-signal', () => ({
+  checkEmailNotificationSignal: vi.fn(),
+}));
 
 vi.mock('@app/util/favicon', () => ({
   getFaviconUrl: () => 'favicon.ico',
@@ -61,6 +67,24 @@ function createChannelInviteNotification(): UnifiedNotification {
       content: {
         channelName: 'General',
         invitedBy: 'user-1',
+      },
+    },
+  });
+}
+
+function createEmailNotification(): UnifiedNotification {
+  return baseNotification({
+    entity_id: 'email-thread-1',
+    entity_type: 'email_thread',
+    notification_event_type: 'new_email',
+    notification_metadata: {
+      tag: 'new_email',
+      content: {
+        sender: 'Sender',
+        toEmail: 'staff@macro.com',
+        threadId: 'email-thread-1',
+        subject: 'Email subject',
+        snippet: 'Email snippet',
       },
     },
   });
@@ -137,6 +161,93 @@ function createNotificationHandle(): PlatformNotificationHandle {
 }
 
 describe('maybeHandlePlatformNotification', () => {
+  beforeEach(() => {
+    vi.mocked(checkEmailNotificationSignal).mockReset();
+  });
+
+  it('keeps non-Signal emails in-app without showing a browser popup', async () => {
+    vi.mocked(checkEmailNotificationSignal).mockResolvedValue(ok(false));
+    const notification = createEmailNotification();
+    const original = structuredClone(notification);
+    const showNotification = vi.fn();
+
+    await maybeHandlePlatformNotification(
+      notification,
+      createNotificationInterface(showNotification),
+      {} as SplitManager
+    );
+
+    expect(checkEmailNotificationSignal).toHaveBeenCalledWith('email-thread-1');
+    expect(showNotification).not.toHaveBeenCalled();
+    expect(notification).toEqual(original);
+  });
+
+  it('still shows Signal email popups', async () => {
+    vi.mocked(checkEmailNotificationSignal).mockResolvedValue(ok(true));
+    const handle = createNotificationHandle();
+    const showNotification = vi.fn(async () => handle);
+
+    await maybeHandlePlatformNotification(
+      createEmailNotification(),
+      createNotificationInterface(showNotification),
+      {} as SplitManager
+    );
+
+    expect(showNotification).toHaveBeenCalledOnce();
+    expect(handle.onClick).toHaveBeenCalledOnce();
+  });
+
+  it('waits for Signal membership before displaying an email popup', async () => {
+    let resolveSignal!: (
+      value: Awaited<ReturnType<typeof checkEmailNotificationSignal>>
+    ) => void;
+    vi.mocked(checkEmailNotificationSignal).mockReturnValue(
+      new Promise((resolve) => {
+        resolveSignal = resolve;
+      })
+    );
+    const showNotification = vi.fn(async () => createNotificationHandle());
+    const pending = maybeHandlePlatformNotification(
+      createEmailNotification(),
+      createNotificationInterface(showNotification),
+      {} as SplitManager
+    );
+
+    expect(showNotification).not.toHaveBeenCalled();
+    resolveSignal(ok(false));
+    await pending;
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it.each(['result', 'exception'] as const)(
+    'suppresses email popups on a lookup %s failure',
+    async (failure) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const showNotification = vi.fn();
+      if (failure === 'result') {
+        vi.mocked(checkEmailNotificationSignal).mockResolvedValue(
+          err([{ code: 'UNKNOWN', message: 'Lookup failed' }])
+        );
+      } else {
+        vi.mocked(checkEmailNotificationSignal).mockRejectedValue(
+          new Error('Lookup failed')
+        );
+      }
+
+      try {
+        await maybeHandlePlatformNotification(
+          createEmailNotification(),
+          createNotificationInterface(showNotification),
+          {} as SplitManager
+        );
+        expect(showNotification).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledOnce();
+      } finally {
+        warn.mockRestore();
+      }
+    }
+  );
+
   it('skips GitHub PR events so they do not render as browser notifications', async () => {
     const showNotification = vi.fn<
       PlatformNotificationState['showNotification']
@@ -190,5 +301,6 @@ describe('maybeHandlePlatformNotification', () => {
       })
     );
     expect(handle.onClick).toHaveBeenCalledOnce();
+    expect(checkEmailNotificationSignal).not.toHaveBeenCalled();
   });
 });
