@@ -1205,6 +1205,14 @@ where
         self.repo.session_bot(id).await
     }
 
+    async fn recent_for_owner(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        limit: std::num::NonZeroUsize,
+    ) -> Result<Vec<super::model::RecentAgentSession>> {
+        self.repo.recent_for_owner(owner, limit).await
+    }
+
     async fn find_for_channel(
         &self,
         thread_id: Option<Uuid>,

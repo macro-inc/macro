@@ -248,6 +248,27 @@ pub struct AgentSession {
     pub modified_at: DateTime<Utc>,
 }
 
+/// One of an owner's recent sessions, as much of it as describing their
+/// recent work needs.
+///
+/// Deliberately narrower than [`AgentSession`]: the consumer is a prompt
+/// template telling a classifier what this person has been working on lately,
+/// so it carries the generated name, the repository, and when - not the
+/// runtime state, the log, or the credentials a full session row drags along.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecentAgentSession {
+    /// The session, for a caller that needs to open it.
+    pub id: AgentSessionId,
+    /// User-facing session name, already a generated title of the work.
+    pub name: String,
+    /// Harness slug the session ran on.
+    pub harness: String,
+    /// Repository the agent worked with, when one was stated.
+    pub repo_url: Option<String>,
+    /// When the session was created - how recent "lately" is.
+    pub created_at: DateTime<Utc>,
+}
+
 /// A persisted agent-session name changed and should be shown to live viewers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentSessionRenamed {
