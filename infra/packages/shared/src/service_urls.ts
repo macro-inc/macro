@@ -15,6 +15,7 @@ export enum ServiceUrl {
   LEXICAL_SERVICE_URL = 'LEXICAL_SERVICE_URL',
   UNFURL_SERVICE_URL = 'UNFURL_SERVICE_URL',
   AGENT_HARNESS_SERVICE_URL = 'AGENT_HARNESS_SERVICE_URL',
+  AGENT_HARNESS_EGRESS_URL = 'AGENT_HARNESS_EGRESS_URL',
   MCP_SERVER_URL = 'MCP_SERVER_URL',
 }
 
@@ -48,6 +49,8 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.UNFURL_SERVICE_URL]: 'https://dev-gateway.macro.com/unfurl',
   [ServiceUrl.AGENT_HARNESS_SERVICE_URL]:
     'https://dev-gateway.macro.com/agent-harness',
+  [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
+    'https://dev-gateway.macro.com/agent-harness-egress',
   [ServiceUrl.MCP_SERVER_URL]: 'https://dev-gateway.macro.com/mcp',
 };
 
@@ -72,6 +75,8 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.UNFURL_SERVICE_URL]: 'https://gateway.macro.com/unfurl',
   [ServiceUrl.AGENT_HARNESS_SERVICE_URL]:
     'https://gateway.macro.com/agent-harness',
+  [ServiceUrl.AGENT_HARNESS_EGRESS_URL]:
+    'https://gateway.macro.com/agent-harness-egress',
   [ServiceUrl.MCP_SERVER_URL]: 'https://gateway.macro.com/mcp',
 };
 
