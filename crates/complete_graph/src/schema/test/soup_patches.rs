@@ -1,7 +1,11 @@
 use super::*;
 use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, futures_util::StreamExt};
 use graphql_entity_mutation::GraphqlEntityMutationResult;
-use std::io::Write;
+use tracing::{
+    Event, Metadata, Subscriber,
+    field::{Field, Visit},
+    span::{Attributes, Id, Record},
+};
 
 const PATCH_SELECTION: &str = r#"
     __typename
@@ -162,41 +166,64 @@ async fn dedup_uses_entity_type_and_id_and_preserves_last_occurrence_order() {
     );
 }
 
-#[derive(Clone)]
-struct LogWriter(Arc<Mutex<Vec<u8>>>);
-impl Write for LogWriter {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(bytes);
-        Ok(bytes.len())
+#[derive(Default)]
+struct CapturedEvent {
+    fields: HashMap<String, String>,
+}
+
+impl Visit for CapturedEvent {
+    fn record_str(&mut self, field: &Field, value: &str) {
+        self.fields
+            .insert(field.name().to_owned(), value.to_owned());
     }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
+
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        self.fields
+            .insert(field.name().to_owned(), format!("{value:?}"));
     }
 }
 
-fn captured_logs() -> Arc<Mutex<Vec<u8>>> {
+struct EventCapture(Arc<Mutex<Vec<CapturedEvent>>>);
+
+impl Subscriber for EventCapture {
+    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+        metadata.is_event() && metadata.target() == "graphql_soup::objects"
+    }
+
+    fn event(&self, event: &Event<'_>) {
+        let mut captured = CapturedEvent::default();
+        event.record(&mut captured);
+        self.0.lock().unwrap().push(captured);
+    }
+
+    // This probe observes structured events only, not span state or formatting.
+    fn new_span(&self, _attrs: &Attributes<'_>) -> Id {
+        Id::from_u64(1)
+    }
+    fn record(&self, _span: &Id, _values: &Record<'_>) {}
+    fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
+    fn enter(&self, _span: &Id) {}
+    fn exit(&self, _span: &Id) {}
+}
+
+fn captured_events() -> Arc<Mutex<Vec<CapturedEvent>>> {
     // The schema and DataLoader may poll work outside the test's scoped
-    // dispatcher. Keep one capture subscriber for this test binary and select
-    // this test's unique entity IDs when asserting events.
-    static LOGS: std::sync::OnceLock<Arc<Mutex<Vec<u8>>>> = std::sync::OnceLock::new();
-    LOGS.get_or_init(|| {
-        let logs = Arc::new(Mutex::new(Vec::new()));
-        let writer = logs.clone();
-        let subscriber = tracing_subscriber::fmt()
-            .json()
-            .without_time()
-            .with_ansi(false)
-            .with_writer(move || LogWriter(writer.clone()))
-            .finish();
-        tracing::subscriber::set_global_default(subscriber).expect("test capture subscriber");
-        logs
-    })
-    .clone()
+    // dispatcher. Keep one probe for this test binary and select each test's
+    // unique entity IDs. No production subscriber setup or formatter is needed.
+    static EVENTS: std::sync::OnceLock<Arc<Mutex<Vec<CapturedEvent>>>> = std::sync::OnceLock::new();
+    EVENTS
+        .get_or_init(|| {
+            let events = Arc::new(Mutex::new(Vec::new()));
+            tracing::subscriber::set_global_default(EventCapture(events.clone()))
+                .expect("test capture subscriber");
+            events
+        })
+        .clone()
 }
 
 #[tokio::test]
 async fn two_missing_updates_log_identities_without_emitting_nulls_or_deletions() {
-    let logs = captured_logs();
+    let events = captured_events();
     let soup = CountingSoupService {
         return_empty_raw: true,
         ..Default::default()
@@ -210,22 +237,19 @@ async fn two_missing_updates_log_identities_without_emitting_nulls_or_deletions(
         responses.is_empty(),
         "a batch of misses emits no data frame"
     );
-    let logs = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
-    let logs = logs
-        .lines()
-        .filter(|line| {
-            [4, 5]
-                .into_iter()
-                .any(|id| line.contains(&Uuid::from_u128(id).to_string()))
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert_eq!(logs.matches("omitting update").count(), 2, "{logs}");
+    let events = events.lock().unwrap();
     for id in [4, 5] {
-        assert!(logs.contains(&Uuid::from_u128(id).to_string()), "{logs}");
+        let entity_id = Uuid::from_u128(id).to_string();
+        let matching = events
+            .iter()
+            .filter(|event| event.fields.get("entity_id") == Some(&entity_id))
+            .collect::<Vec<_>>();
+        assert_eq!(matching.len(), 1, "one hydration miss per entity");
+        let fields = &matching[0].fields;
+        assert!(fields["message"].contains("omitting update"));
+        assert_eq!(fields["user_id"], VALID_USER_ID);
+        assert_eq!(fields["entity_type"], "document");
     }
-    assert!(logs.contains(VALID_USER_ID), "{logs}");
-    assert!(logs.contains("\"entity_type\":\"document\""), "{logs}");
 }
 
 #[tokio::test]
@@ -252,7 +276,7 @@ async fn missing_update_does_not_suppress_valid_sibling_or_explicit_delete() {
 
 #[tokio::test]
 async fn hydration_service_failure_is_an_error_not_a_deletion() {
-    let logs = captured_logs();
+    let events = captured_events();
     let responses = subscription_responses(
         CountingSoupService::default(),
         vec![Patch::Updated(entity(6))],
@@ -266,14 +290,15 @@ async fn hydration_service_failure_is_an_error_not_a_deletion() {
             .to_string()
             .contains("GraphqlCacheDeletion")
     );
-    let logs = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
-    let event = logs
-        .lines()
-        .find(|line| line.contains(&Uuid::from_u128(6).to_string()))
+    let events = events.lock().unwrap();
+    let entity_id = Uuid::from_u128(6).to_string();
+    let event = events
+        .iter()
+        .find(|event| event.fields.get("entity_id") == Some(&entity_id))
         .expect("hydration failure logs its entity");
-    assert!(event.contains("failed to hydrate Soup update"), "{event}");
-    assert!(event.contains("\"error\":"), "{event}");
-    assert!(event.contains(VALID_USER_ID), "{event}");
+    assert!(event.fields["message"].contains("failed to hydrate Soup update"));
+    assert!(event.fields.contains_key("error"));
+    assert_eq!(event.fields["user_id"], VALID_USER_ID);
 }
 
 struct MutationEffectsQuery;
