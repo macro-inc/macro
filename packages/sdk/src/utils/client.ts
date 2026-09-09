@@ -24,22 +24,12 @@ import { User } from '../entities/users/user';
 import { MacroEvents } from '../events/receiver';
 import { type LocalPortmap, resolveLocalPortmap } from '../local-portmap';
 
-/** Mirrors `USER_API_KEY_HEADER` in crates/macro_authorization. */
 const USER_API_KEY_HEADER = 'x-macro-user-api-key';
-/** Mirrors `KEY_PREFIX` in crates/user_api_key. */
 const USER_API_KEY_PREFIX = 'mak_';
-/** Mirrors the bot token prefix the interceptor already rejects on the user path. */
 const BOT_TOKEN_PREFIX = 'mbot_';
 
-/** One outgoing credential header. */
 type CredentialHeader = readonly [name: string, value: string];
 
-/**
- * Which header carries a resolved user credential string.
- *
- * Runs per request because `TokenSource` may be a function, so the string is
- * only known at send time. A bot token here is a misconfiguration.
- */
 function userCredentialHeader(secret: string): CredentialHeader {
   return match(secret)
     .with(P.string.startsWith(BOT_TOKEN_PREFIX), () => {
@@ -180,9 +170,6 @@ export class MacroClient {
             );
           }
           request.headers.set('x-macro-bot-token', tok);
-          // A per-call scope wins: the channel webhook fallback pins `user`,
-          // the only scope a user-owned bot can present (a team scope with no
-          // owning team is rejected outright).
           if (!request.headers.has('x-macro-bot-scope')) {
             request.headers.set(
               'x-macro-bot-scope',

@@ -71,8 +71,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
   },
 };
 
-/** A bearer token, or a (possibly async) function that returns one. The
- * function form exists for refresh, which is a bearer concept. */
+/** A credential string, or a (possibly async) function that returns one. */
 export type TokenSource = string | (() => string | Promise<string>);
 
 /** Access scope for bot-authenticated requests. `user` acts with the
@@ -83,27 +82,17 @@ export type BotScope = 'user' | 'team';
 /**
  * How the SDK authenticates with Macro.
  *
- * `type` names the principal the backend sees. Internal code branches on it
- * for acting-user, `requestedAs`, and bot-identity decisions, and none of
- * those care which header carried the credential.
- *
  * A user has exactly one of two credential fields.
  *
  * - `token`: a bearer token, or a `mak_` API key. The SDK picks the header
- *   from the prefix at send time. This is what `MACRO_API_KEY` and the
- *   `token` shorthand produce, so a Settings API key in either place works.
+ *   from the prefix at send time.
  * - `apiKey`: a Settings → API Keys key, always sent as
  *   `x-macro-user-api-key`. Not prefix-checked, so keys that predate the
- *   `mak_` prefix work here. A plain string, because API keys do not rotate
- *   in-process.
+ *   `mak_` prefix work here.
  *
- * A bot is unchanged. `mbot_` token as `x-macro-bot-token` plus
+ * A bot uses an `mbot_` token as `x-macro-bot-token` plus
  * `x-macro-bot-scope`, defaulting to `user` when `requestedAs` is set and
  * `team` otherwise.
- *
- * The `never` fields make `{ type: 'user', token, apiKey }` a compile error.
- * Two credentials on one request is `400 ambiguous credentials`, so the
- * illegal state is unrepresentable rather than resolved by match order.
  */
 export type MacroAuth =
   | { type: 'user'; token: TokenSource; apiKey?: never }

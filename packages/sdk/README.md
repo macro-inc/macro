@@ -33,7 +33,7 @@ The default for scripts and integrations. Put the key in `MACRO_API_KEY` and con
 ```ts
 import { Macro } from '@macro/sdk';
 
-const macro = new Macro({}); // MACRO_API_KEY=mak_…
+const macro = new Macro({});
 const me = await macro.users.me();
 ```
 
@@ -51,7 +51,7 @@ const macro = new Macro({
 });
 ```
 
-An API key always acts as the user who minted it. `requestedAs` is bot-only, as before.
+An API key always acts as the user who minted it. `requestedAs` is bot-only.
 
 #### Bot token
 
