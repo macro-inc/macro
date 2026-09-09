@@ -271,7 +271,6 @@ export function useDealStages(): DealStages {
     if (direct && stageIds().has(direct)) return direct;
     if (stageDefinitionId() === SYSTEM_PROPERTY_IDS.STAGE) return direct;
 
-    // Legacy system value: use the recorded map, then match by label.
     const legacy = getCompanyStageOptionId(
       entity as Parameters<typeof getCompanyStageOptionId>[0]
     );
