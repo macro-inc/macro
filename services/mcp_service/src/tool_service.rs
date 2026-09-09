@@ -108,7 +108,9 @@ where
         info.instructions = Some(format!(
             "This server provides tools for interacting with a user's Macro workspace. \
              Use ContentSearch and NameSearch to find entities. \
-             Use ReadContent, ReadMetadata, and ReadThread to read them. \
+             Use ReadContent and ReadMetadata to read documents. \
+             Use ReadThread to read channels, chats, and projects. \
+             Use GetThread to read email threads. \
              Use CreateDocument to create new documents. \
              Use EditDocument to edit existing documents. \
              Use ListEntities to browse recent items.\n\n{}",

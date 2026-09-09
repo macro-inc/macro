@@ -58,6 +58,7 @@ async fn server_instructions_describe_available_workflows() {
         "ReadContent",
         "ReadMetadata",
         "ReadThread",
+        "GetThread",
         "CreateDocument",
         "ListEntities",
     ] {
