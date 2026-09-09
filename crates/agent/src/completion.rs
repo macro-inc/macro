@@ -2,6 +2,9 @@
 //!
 //! This is the non-streaming API layer: routing only resolves a model, and the
 //! actual prompting lives here.
+#[cfg(test)]
+mod test;
+
 use crate::model::router::{ModelRouter, RoutedModel};
 use crate::telemetry::{ChatSpanHook, GenAiContext, TracedModel};
 use ai_usage::{UsageContext, UsageRecorder};

@@ -207,14 +207,39 @@ impl GenAiContext {
         if !self.0.enabled {
             return;
         }
-        let description = if self.0.policy.capture {
+        let description = self.failure_description(error_type, detail);
+        agent_span.set_str_array(attr::RESPONSE_FINISH_REASONS, [finish_reason]);
+        agent_span.set_error(error_type, description.clone());
+        self.fail_parked_chat(error_type, finish_reason, description);
+    }
+
+    /// Record that the model call whose request was recorded last failed
+    /// before it produced a response: the provider refused or errored. The
+    /// parked `chat` span is marked and released. Called by [`TracedModel`]
+    /// on every path - a one-shot completion has no run driver to do it.
+    fn record_chat_failure(&self, error: &CompletionError) {
+        if !self.0.enabled {
+            return;
+        }
+        let description = self.failure_description("provider_error", &error.to_string());
+        self.fail_parked_chat("provider_error", attr::finish_reason::ERROR, description);
+    }
+
+    /// The description a failure's span status carries: the detail, bounded,
+    /// when content may be recorded - an error message can quote the request
+    /// - and a fixed summary otherwise.
+    fn failure_description(&self, error_type: &str, detail: &str) -> String {
+        if self.0.policy.capture {
             genai_telemetry::truncate_chars(detail, self.0.policy.limits.max_part_chars)
                 .into_owned()
         } else {
-            format!("the agent run ended with {error_type}")
-        };
-        agent_span.set_str_array(attr::RESPONSE_FINISH_REASONS, [finish_reason]);
-        agent_span.set_error(error_type, description.clone());
+            format!("the call ended with {error_type}")
+        }
+    }
+
+    /// Mark the parked `chat` span, if any, as ended by `error_type` and
+    /// release it. A no-op when no model call is in flight.
+    fn fail_parked_chat(&self, error_type: &str, finish_reason: &'static str, description: String) {
         if let Some(chat_span) = self
             .0
             .chat_span
@@ -312,7 +337,11 @@ impl<M: CompletionModel> CompletionModel for TracedModel<M> {
         request: CompletionRequest,
     ) -> Result<CompletionResponse<Self::Response>, CompletionError> {
         self.telemetry.record_request(&request);
-        self.inner.completion(request).await
+        let result = self.inner.completion(request).await;
+        if let Err(error) = &result {
+            self.telemetry.record_chat_failure(error);
+        }
+        result
     }
 
     async fn stream(
@@ -320,7 +349,11 @@ impl<M: CompletionModel> CompletionModel for TracedModel<M> {
         request: CompletionRequest,
     ) -> Result<StreamingCompletionResponse<Self::StreamingResponse>, CompletionError> {
         self.telemetry.record_request(&request);
-        self.inner.stream(request).await
+        let result = self.inner.stream(request).await;
+        if let Err(error) = &result {
+            self.telemetry.record_chat_failure(error);
+        }
+        result
     }
 
     fn composes_native_output_with_tools(&self) -> bool {
