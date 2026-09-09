@@ -11,7 +11,14 @@ import {
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
-import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
+import {
+  type Accessor,
+  createContext,
+  getOwner,
+  type JSX,
+  runWithOwner,
+  useContext,
+} from 'solid-js';
 
 /** Resolved display for one referenced entity: name, icon, and link target. */
 export type EntityDisplay = {
@@ -76,6 +83,13 @@ export function useActivityContext(): ActivityContext {
 
 function appActivityContext(): ActivityContext {
   const userId = useUserId();
+  // One bots subscription per consumer, made under the consumer's owner the
+  // first time a bot row asks for a name and reused after that, so it is not
+  // rebuilt each time a recycled row changes actor and user-only surfaces
+  // never fetch the list at all.
+  const owner = getOwner();
+  let bots: ReturnType<typeof useBotsQuery> | undefined;
+  const botsQuery = () => (bots ??= runWithOwner(owner, useBotsQuery));
   return {
     graphql: () => getGraphqlSoupClient(),
     currentUserId: () => userId() ?? '',
@@ -85,15 +99,13 @@ function appActivityContext(): ActivityContext {
       const [name] = useDisplayName(id, { emailFallback: 'local-part' });
       return name;
     },
-    botName: (botId) => {
-      const bots = useBotsQuery();
-      return () => {
-        const id = botId();
-        const firstParty = firstPartyBotName(id);
-        if (firstParty) return firstParty;
-        if (!bots.isSuccess) return undefined;
-        return getBotDisplayName(`bot|${id}`, undefined, bots.data);
-      };
+    botName: (botId) => () => {
+      const id = botId();
+      const firstParty = firstPartyBotName(id);
+      if (firstParty) return firstParty;
+      const list = botsQuery();
+      if (!list?.isSuccess) return undefined;
+      return getBotDisplayName(`bot|${id}`, undefined, list.data);
     },
     entityDisplay: (entityId, entityType) =>
       usePropertyEntityDisplay(entityId, entityType),
