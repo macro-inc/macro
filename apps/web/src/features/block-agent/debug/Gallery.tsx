@@ -100,6 +100,23 @@ const FIXTURE_MODELS: ModelOption[] = [
   },
 ];
 
+/** Short catalog with a long selected name; the pill must grow with the label. */
+const LONG_NAME_MODELS: ModelOption[] = [
+  { id: 'auto', name: 'Auto', description: null, group: null },
+  {
+    id: 'anthropic-sonnet-5',
+    name: 'Anthropic/Claude Sonnet 5',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'sonnet-5-thinking',
+    name: 'Claude Sonnet 5 Thinking',
+    description: null,
+    group: null,
+  },
+];
+
 /** The composer as the block mounts it, with the model control wired. */
 function ModelSelectorDemo() {
   const [model, setModel] = createSignal<string | null>('grok-4.6-high-fast');
@@ -114,6 +131,22 @@ function ModelSelectorDemo() {
             console.info('[gallery] model', id);
             setModel(id);
           }}
+        />
+      }
+    />
+  );
+}
+
+function LongModelNameDemo() {
+  const [model, setModel] = createSignal<string | null>('anthropic-sonnet-5');
+  return (
+    <AgentInput
+      onSend={(content) => console.info('[gallery] send', content)}
+      modelControl={
+        <AgentModelSelector
+          model={model()}
+          options={LONG_NAME_MODELS}
+          onSelect={setModel}
         />
       }
     />
@@ -733,6 +766,10 @@ export default function AgentUiGallery() {
 
           <Item label="AgentInput with model selector">
             <ModelSelectorDemo />
+          </Item>
+
+          <Item label="AgentInput with a long model name">
+            <LongModelNameDemo />
           </Item>
 
           <Item label="AgentMessage (end-to-end)">
