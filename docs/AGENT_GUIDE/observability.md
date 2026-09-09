@@ -67,3 +67,32 @@ trace context — timestamps + service are the only join for those.
   (structured metadata), so prefer erroring *handlers* as log entry points.
 - Frontend spans stop at the fetch: no spans for user interactions or the websocket-delivered
   results, so async flows (AI edits applying, message fan-out) have no trace at all.
+
+## Agent sessions
+
+A session's lifetime is reconstructable from these spans. All of them carry
+`agent.session.id` — the Macro session UUID, and only ever that. The ACP-local
+session name (`cursor-acp-1`) is `agent.acp.session_id`; the two are different
+identifier spaces and must not be confused.
+
+| Span | Answers |
+| --- | --- |
+| `agent.turn` | Did a Cursor turn run, and how did it end? `agent.turn.stop_reason` / `agent.turn.outcome`, plus `cursor.agent.id` / `cursor.run.id`. |
+| `cursor.run.poll` | Is a turn still alive? One per poll, at DEBUG. |
+| `agent.session.turn_ended` | The turn reached a stop reason. |
+| `agent.session.disconnect` | The session's actor wrote a `disconnected` event, and `agent.session.close_reason` says why. |
+| `agent.session.mark_disconnected` | The session was marked dead by its opener because the runtime never came up. |
+| `agent.pipe.reap` | A Cursor pipe was closed for idleness, with `agent.pipe.idle_ms`. |
+| `agent.session.realtime.publish` | A frame reached watchers; `agent.log.event` names the status event when it is one. |
+| `agent.session.rename` | Auto-naming ran; `agent.rename.outcome` says whether it named, skipped, or failed. |
+
+Two things worth knowing when reading these:
+
+- **An unset `agent.turn.outcome` is a signal, not missing data.** `#[instrument(err)]`
+  records an error only on an `Err` return, so a turn whose future is *dropped* — a pipe torn
+  down under it — closes its span with no error and looks identical to a clean finish. The
+  outcome field is recorded explicitly on the way out; if it is absent, the turn did not
+  return.
+- **The idle-check DEBUG line fires every tick, not just the reaping one.** `agent.pipe.reaped`,
+  `agent.pipe.active_turn` and `agent.pipe.idle_ms` on the ticks that did *nothing* are what
+  show a deadline sitting long expired while a live turn held the pipe open.
