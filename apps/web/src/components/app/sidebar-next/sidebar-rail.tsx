@@ -1,3 +1,4 @@
+import { useEmailUnreadCount } from '@app/features/email-view/queries/use-email-unread-count';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
@@ -7,6 +8,7 @@ import {
 } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
+import { useActiveCallsQuery } from '@queries/call/call';
 import { For } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
@@ -38,6 +40,11 @@ export const SidebarRail = (props: SidebarRailProps) => {
   const gates = useNavItemGates();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
+  const activeCalls = useActiveCallsQuery();
+  const emailUnreadCount = useEmailUnreadCount();
+  // The outer rail must not suspend while call state is loading.
+  const hasActiveCall = () =>
+    activeCalls.isSuccess && (activeCalls.data?.length ?? 0) > 0;
 
   const isExpanded = () => (props.sidebarState ?? 'expanded') === 'expanded';
 
@@ -76,7 +83,13 @@ export const SidebarRail = (props: SidebarRailProps) => {
           <For each={visibleNavItems(gates())}>
             {(item) => (
               <li class="flex">
-                <ListNav item={item} />
+                <ListNav
+                  item={item}
+                  unreadCount={
+                    item.id === 'mail' ? emailUnreadCount() : undefined
+                  }
+                  hasActiveCall={item.id === 'channels' && hasActiveCall()}
+                />
               </li>
             )}
           </For>

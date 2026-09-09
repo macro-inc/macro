@@ -7,13 +7,17 @@ import {
 } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { TOKENS } from '@core/hotkey/tokens';
+import PhoneIcon from '@phosphor-fill/phone-fill.svg';
 import { useLocation } from '@solidjs/router';
 import { Button, cn } from '@ui';
+import { Show } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
 
 export type ListNavProps = {
   item: SidebarNextNavItem;
+  unreadCount?: number;
+  hasActiveCall?: boolean;
   onContextMenuOpenChange?: (open: boolean) => void;
 };
 
@@ -35,6 +39,13 @@ export const ListNav = (props: ListNavProps) => {
   const location = useLocation();
 
   const content = () => sidebarContent(props.item.id, props.item.params);
+  const hasUnread = () => (props.unreadCount ?? 0) > 0;
+  const label = () =>
+    [
+      props.item.label,
+      ...(hasUnread() ? [`${props.unreadCount} unread`] : []),
+      ...(props.hasActiveCall ? ['active call'] : []),
+    ].join(', ');
 
   // Read the manager signal live: it is undefined until the split layout
   // mounts, which happens after the sidebar.
@@ -91,8 +102,8 @@ export const ListNav = (props: ListNavProps) => {
         variant="ghost"
         size="icon-md"
         class="cursor-default rounded-xl"
-        label={props.item.label}
-        tooltip={`Go to ${props.item.label}`}
+        label={label()}
+        tooltip={`Go to ${label()}`}
         tooltipPlacement="right"
         hotkey={[TOKENS.sidebar.goToLeader, props.item.hotkeyToken]}
         draggable={false}
@@ -128,6 +139,24 @@ export const ListNav = (props: ListNavProps) => {
           filled={isActive()}
           class={cn('size-5.5', isActive() && 'text-accent')}
         />
+        <Show when={hasUnread()}>
+          <span
+            aria-hidden="true"
+            data-sidebar-unread-count
+            class="pointer-events-none absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold tabular-nums text-panel ring-2 ring-surface"
+          >
+            {(props.unreadCount ?? 0) > 99 ? '99+' : props.unreadCount}
+          </span>
+        </Show>
+        <Show when={props.hasActiveCall}>
+          <span
+            aria-hidden="true"
+            data-sidebar-active-call
+            class="pointer-events-none absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-accent text-panel ring-2 ring-surface"
+          >
+            <PhoneIcon class="size-2.5" />
+          </span>
+        </Show>
       </Button>
     </SidebarOpenInSplitMenu>
   );
