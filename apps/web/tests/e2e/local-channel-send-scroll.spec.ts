@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test';
+import { devices, expect, type Page, test } from '@playwright/test';
 import { gotoApp, LOCAL_E2E, uniqueE2EText } from './helpers/local-app';
 import { observeBottomPresentation } from './helpers/scroll-presentation';
 
@@ -231,3 +231,89 @@ for (const viewport of [
     }
   });
 }
+
+// An iPhone user agent switches TanStack Virtual onto its iOS WebKit path,
+// which defers scroll corrections while a finger is on the list. iOS ends a
+// touch that becomes a scroll (or that the OS takes over) with touchcancel,
+// never touchend, so that deferral must also release on touchcancel.
+test('iPhone: sends stay pinned after a touch on the list ends in touchcancel', async ({
+  page: setupPage,
+  browser,
+  browserName,
+  context: setupContext,
+}) => {
+  test.skip(browserName !== 'chromium', 'dispatches touches through CDP');
+  test.setTimeout(120_000);
+  const channelId = await createOverflowingChannel(setupPage);
+  const context = await browser.newContext({
+    ...devices['iPhone 13'],
+    storageState: await setupContext.storageState(),
+  });
+  try {
+    const page = await context.newPage();
+    const presentation = await observeBottomPresentation(
+      page,
+      CHANNEL_SCROLL_SELECTOR,
+      BOTTOM_TOLERANCE_PX
+    );
+    await page.goto(setupPage.url());
+    const input = composer(page, channelId);
+    const collapsedInput = page.getByRole('button', {
+      name: /Type @ to share/,
+    });
+    await expect(
+      input.or(collapsedInput).filter({ visible: true }).first()
+    ).toBeVisible();
+    if (await collapsedInput.isVisible()) await collapsedInput.tap();
+    await expect(input).toBeVisible();
+    await positionFromBottom(page, 0);
+
+    const box = (await page.locator(CHANNEL_SCROLL_SELECTOR).boundingBox())!;
+    const touch = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [touch],
+    });
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ ...touch, y: touch.y + 40 }],
+    });
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchCancel',
+      touchPoints: [],
+    });
+    await positionFromBottom(page, 0);
+    await presentation.reset();
+
+    for (const text of [
+      'iPhone send one',
+      'Wrapped iPhone text. '.repeat(40),
+      'After wrapping',
+      Array.from({ length: 22 }, (_, index) => `Tall line ${index}`).join('\n'),
+      'After tall 🙂',
+    ]) {
+      await input.fill(text);
+      const sent = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          response.url().endsWith(`/channels/${channelId}/message`)
+      );
+      await page
+        .getByRole('button', { name: 'Send message', exact: true })
+        .tap();
+      expect((await sent).ok()).toBe(true);
+      await page.waitForTimeout(350);
+      expect(
+        (await scrollPosition(page)).gap,
+        text.slice(0, 24)
+      ).toBeLessThanOrEqual(BOTTOM_TOLERANCE_PX);
+    }
+    const report = await presentation.read();
+    expect(report.first).toBeDefined();
+    expect(report.firstViolation).toBeUndefined();
+    expect(report.violationCount).toBe(0);
+  } finally {
+    await context.close();
+  }
+});
