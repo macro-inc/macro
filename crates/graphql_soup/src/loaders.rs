@@ -371,6 +371,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             | EntityType::Team
             | EntityType::StaticFile
             | EntityType::CrmContact
+            | EntityType::CrmListEntry
             | EntityType::Skill
             | EntityType::AgentSession => {
                 return Err(rootcause::report!(

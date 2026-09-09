@@ -30,7 +30,10 @@ fn entity_type(property_entity: &PropertyEntityType) -> Option<EntityType> {
         PropertyEntityType::Thread => Some(EntityType::EmailThread),
         PropertyEntityType::CallRecord => Some(EntityType::Call),
         PropertyEntityType::Company => Some(EntityType::CrmCompany),
-        PropertyEntityType::CalendarEvent | PropertyEntityType::User => None,
+        // List entries have no soup surface of their own yet.
+        PropertyEntityType::CalendarEvent
+        | PropertyEntityType::CrmListEntry
+        | PropertyEntityType::User => None,
     }
 }
 

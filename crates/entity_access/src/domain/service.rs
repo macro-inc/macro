@@ -125,6 +125,16 @@ where
         self.repo.get_crm_contact_access(entity_id, user_id).await
     }
 
+    /// Get access level + owning team for a CRM list entry via its list's
+    /// team.
+    async fn get_crm_list_entry_access(
+        &self,
+        entity_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        self.repo.get_crm_list_entry_access(entity_id, user_id).await
+    }
+
     /// Resolve a call id string to the channel id that owns it.
     ///
     /// Looks up both the active `calls` table and the archived `call_records`
@@ -223,6 +233,15 @@ where
             EntityType::CrmContact => {
                 self.repo
                     .get_team_crm_contact_access(entity_id, team_id)
+                    .await?
+                    .ok_or(AccessError::Unauthorized)?;
+                Ok(EntityPermission::AccessLevel {
+                    access_level: AccessLevel::View,
+                })
+            }
+            EntityType::CrmListEntry => {
+                self.repo
+                    .get_team_crm_list_entry_access(entity_id, team_id)
                     .await?
                     .ok_or(AccessError::Unauthorized)?;
                 Ok(EntityPermission::AccessLevel {
@@ -431,6 +450,10 @@ where
                 .get_crm_contact_access(entity_id, user_id)
                 .await?
                 .map(|a| a.access_level)),
+            EntityType::CrmListEntry => Ok(self
+                .get_crm_list_entry_access(entity_id, user_id)
+                .await?
+                .map(|a| a.access_level)),
             // Static files are always viewable. This is wrong for owners
             EntityType::StaticFile => Ok(Some(AccessLevel::View)),
             // These entity types either don't have access checks implemented yet, or they should not have access checks.
@@ -529,6 +552,15 @@ where
                     None => Err(AccessError::Unauthorized),
                 }
             }
+            EntityType::CrmListEntry => {
+                let access = self.get_crm_list_entry_access(entity_id, user_id).await?;
+                match access {
+                    Some(access) => Ok(EntityPermission::AccessLevel {
+                        access_level: access.access_level,
+                    }),
+                    None => Err(AccessError::Unauthorized),
+                }
+            }
             EntityType::Channel => {
                 let channel_uuid = Uuid::from_str(entity_id)
                     .map_err(|_| AccessError::BadRequest("Invalid channel ID format"))?;
@@ -568,6 +600,7 @@ where
         let access = match entity_type {
             EntityType::CrmCompany => self.get_crm_company_access(entity_id, user_id).await?,
             EntityType::CrmContact => self.get_crm_contact_access(entity_id, user_id).await?,
+            EntityType::CrmListEntry => self.get_crm_list_entry_access(entity_id, user_id).await?,
             _ => {
                 return Err(AccessError::BadRequest(
                     "get_crm_entity_permission_with_team supports only CRM entities",

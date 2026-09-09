@@ -406,6 +406,7 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmListEntry
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
@@ -452,6 +453,7 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmListEntry
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
@@ -500,6 +502,7 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmListEntry
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
@@ -551,6 +554,7 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmListEntry
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
@@ -581,6 +585,7 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmListEntry
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
@@ -631,6 +636,7 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmListEntry
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
@@ -691,6 +697,7 @@ where
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmListEntry
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill

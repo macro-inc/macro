@@ -357,6 +357,22 @@ impl AccessRepository for MockRepo {
         Ok(*self.team_crm_contact_access.lock().await)
     }
 
+    async fn get_team_crm_list_entry_access(
+        &self,
+        _entry_id: &str,
+        _team_id: Uuid,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        Ok(None)
+    }
+
+    async fn get_crm_list_entry_access(
+        &self,
+        _entry_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        Ok(None)
+    }
+
     async fn has_foreign_entity_access(
         &self,
         _foreign_entity_id: &str,

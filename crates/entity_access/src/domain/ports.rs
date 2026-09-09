@@ -136,6 +136,14 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
 
+    /// Get member-equivalent access to a CRM list entry owned by the scoped
+    /// team whose parent record is visible.
+    fn get_team_crm_list_entry_access(
+        &self,
+        entry_id: &str,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
+
     /// Check whether a user has access to a foreign entity.
     ///
     /// Foreign entity access is boolean because it only maps to [`AccessLevel::View`]
@@ -171,6 +179,16 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
     fn get_crm_contact_access(
         &self,
         contact_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
+
+    /// Get the access level a user has for a CRM list entry, with the owning
+    /// `team_id` (its list's team). Same role-to-level mapping as
+    /// [`Self::get_crm_company_access`]; a hidden parent record hides the
+    /// entry from plain members.
+    fn get_crm_list_entry_access(
+        &self,
+        entry_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<CrmEntityAccess>, AccessError>> + Send;
 

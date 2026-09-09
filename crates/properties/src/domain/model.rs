@@ -28,6 +28,7 @@ pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
         EntityType::Thread => AccessEntityType::EmailThread,
         EntityType::Channel => AccessEntityType::Channel,
         EntityType::Company => AccessEntityType::CrmCompany,
+        EntityType::CrmListEntry => AccessEntityType::CrmListEntry,
         EntityType::User => AccessEntityType::User,
     }
 }
@@ -47,6 +48,7 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         AccessEntityType::EmailThread => Some(EntityType::Thread),
         AccessEntityType::Channel => Some(EntityType::Channel),
         AccessEntityType::CrmCompany => Some(EntityType::Company),
+        AccessEntityType::CrmListEntry => Some(EntityType::CrmListEntry),
         AccessEntityType::User => Some(EntityType::User),
         AccessEntityType::ChannelMessage
         | AccessEntityType::Team

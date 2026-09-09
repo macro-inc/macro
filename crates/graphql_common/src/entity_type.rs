@@ -59,6 +59,8 @@ pub enum GraphqlEntityType {
     StaticFile,
     /// CRM contact entity.
     CrmContact,
+    /// CRM list entry entity.
+    CrmListEntry,
     /// Reminder entity.
     Reminder,
     /// AI skill entity (skill document or built-in system skill).
@@ -130,6 +132,7 @@ impl GraphqlEntityType {
             EntityType::Team => Self::Team,
             EntityType::StaticFile => Self::StaticFile,
             EntityType::CrmContact => Self::CrmContact,
+            EntityType::CrmListEntry => Self::CrmListEntry,
             EntityType::Reminder => Self::Reminder,
             EntityType::Skill => Self::Skill,
             EntityType::AgentSession => Self::AgentSession,
@@ -158,6 +161,7 @@ impl GraphqlEntityType {
             Self::Team => EntityType::Team,
             Self::StaticFile => EntityType::StaticFile,
             Self::CrmContact => EntityType::CrmContact,
+            Self::CrmListEntry => EntityType::CrmListEntry,
             Self::Reminder => EntityType::Reminder,
             Self::Skill => EntityType::Skill,
             Self::AgentSession => EntityType::AgentSession,

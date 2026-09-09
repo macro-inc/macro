@@ -19,6 +19,8 @@ pub enum PropertyTargetEntityType {
     Chat,
     /// CRM company.
     Company,
+    /// Entry of a CRM list (a company or contact's membership row).
+    CrmListEntry,
     /// Document, including tasks and snippets.
     Document,
     /// Project.

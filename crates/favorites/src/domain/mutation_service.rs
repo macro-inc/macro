@@ -103,6 +103,7 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::CalendarEvent
         | EntityType::Reminder
         | EntityType::Skill
-        | EntityType::AgentSession => Err(FavoritesError::UnsupportedEntityType(entity_type)),
+        | EntityType::AgentSession
+        | EntityType::CrmListEntry => Err(FavoritesError::UnsupportedEntityType(entity_type)),
     }
 }

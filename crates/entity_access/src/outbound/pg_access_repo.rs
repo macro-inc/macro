@@ -317,6 +317,7 @@ impl AccessRepository for PgAccessRepository {
             | EntityType::StaticFile
             | EntityType::CrmCompany
             | EntityType::CrmContact
+            | EntityType::CrmListEntry
             | EntityType::Skill
             // Reminders are user-owned, never reachable through a team scope.
             | EntityType::Reminder => {
@@ -455,6 +456,43 @@ impl AccessRepository for PgAccessRepository {
             queries::crm_company_access::get_crm_company_access(&self.pool, &company_uuid, user_id)
                 .await?,
         )
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_crm_list_entry_access(
+        &self,
+        entry_id: &str,
+        team_id: Uuid,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        let entry_uuid = entry_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid CRM list entry ID format"))?;
+        Ok(queries::crm_list_entry_access::get_team_crm_list_entry_access(
+            &self.pool,
+            &entry_uuid,
+            &team_id,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_crm_list_entry_access(
+        &self,
+        entry_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<CrmEntityAccess>, AccessError> {
+        let entry_uuid = entry_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid CRM list entry ID format"))?;
+        let Some(user_id) = user_id else {
+            return Ok(None);
+        };
+        Ok(queries::crm_list_entry_access::get_crm_list_entry_access(
+            &self.pool,
+            &entry_uuid,
+            user_id,
+        )
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self))]
