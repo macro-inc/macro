@@ -45,8 +45,11 @@ describe('buildRecommendationPrompt', () => {
     'requires the notification tool for non-email items',
     'calling ListNotifications exactly once'
   );
-  check('requests active notifications', 'done false');
-  check('does not use a notification seen filter', 'no seen filter');
+  check('requests active notifications', 'states ["unseen", "seen"]');
+  check(
+    'includes both unseen and seen active notifications',
+    'states ["unseen", "seen"]'
+  );
   check('excludes emails from notification state', 'Never use notification');
   check('requires the canonical email source', 'ListEntities exactly once');
   check('requests active inbox emails', 'emailView "inbox"');

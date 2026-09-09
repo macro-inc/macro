@@ -1,5 +1,4 @@
 import { toast } from '@core/component/Toast/Toast';
-import { notificationStateFromGraphql } from '@notifications/notification-state';
 import {
   ENABLE_BEARER_TOKEN_AUTH,
   enableGraphqlSoup,
@@ -22,6 +21,7 @@ import {
 import { registerCacheHost } from '@graphql-cache/lifecycle';
 import { getBrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
+import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { ChannelType } from '@service-notification/generated/schemas/channelType';

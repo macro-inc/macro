@@ -2402,8 +2402,35 @@ export const ListLabelsResponse = z.object({
 
 export const ListNotifications = z.object({
   limit: z.union([z.number().int().gte(0), z.null()]).optional(),
-  done: z.union([z.boolean(), z.null()]).optional(),
-  seen: z.union([z.boolean(), z.null()]).optional(),
+  states: z
+    .union([
+      z.array(
+        z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('unseen'),
+            z.literal('seen'),
+            z.literal('done'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        })
+      ),
+      z.null(),
+    ])
+    .optional(),
   includeTypes: z
     .union([
       z.array(
@@ -2461,8 +2488,28 @@ export const ListNotificationsResponse = z.object({
       eventType: z.string(),
       entityType: z.string(),
       entityId: z.string(),
-      seen: z.boolean(),
-      done: z.boolean(),
+      state: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('unseen'),
+          z.literal('seen'),
+          z.literal('done'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
       createdAt: z.string(),
       metadata: z.any(),
       senderId: z.union([z.string(), z.null()]).optional(),

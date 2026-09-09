@@ -27,9 +27,7 @@ const tabTypes: Record<InboxTab, ReadonlySet<InboxTypeFilter>> = {
   reminders: new Set(['reminders']),
 };
 
-function readFilter(
-  selection: FacetSelection
-): boolean | undefined {
+function readFilter(selection: FacetSelection): boolean | undefined {
   const active = selection.read ?? [];
   if (active.length !== 1) return undefined;
   if (active[0] === 'read') return true;
@@ -71,9 +69,16 @@ export function buildInboxSearchRequest(
     context.tab === 'signal' || context.tab === 'noise';
 
   const notificationFilters: NotificationFilters = {
-    states: notification === false ? ['unseen']
-      : notification === true ? (filtersIncompleteEntities ? ['seen'] : ['seen', 'done'])
-      : filtersIncompleteEntities ? ['unseen', 'seen'] : [],
+    states:
+      notification === false
+        ? ['unseen']
+        : notification === true
+          ? filtersIncompleteEntities
+            ? ['seen']
+            : ['seen', 'done']
+          : filtersIncompleteEntities
+            ? ['unseen', 'seen']
+            : [],
   };
 
   const documentTypes = [...types].filter(

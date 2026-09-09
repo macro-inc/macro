@@ -29,8 +29,8 @@ describe('unreadFilterFn', () => {
       const entity: WithNotification<EntityData> = {
         type: 'document',
         notifications: () => [
-          { viewed_at: null , state: 'unseen'} as any,
-          { viewed_at: 1234567890 , state: 'seen'} as any,
+          { viewed_at: null, state: 'unseen' } as any,
+          { viewed_at: 1234567890, state: 'seen' } as any,
         ],
       } as any;
 
@@ -41,8 +41,8 @@ describe('unreadFilterFn', () => {
       const entity: WithNotification<EntityData> = {
         type: 'document',
         notifications: () => [
-          { viewed_at: 1234567890 , state: 'seen'} as any,
-          { viewed_at: 9876543210 , state: 'seen'} as any,
+          { viewed_at: 1234567890, state: 'seen' } as any,
+          { viewed_at: 9876543210, state: 'seen' } as any,
         ],
       } as any;
 
@@ -100,7 +100,8 @@ describe('unreadFilterFn', () => {
             id: 'notification-1',
             created_at: '2025-01-01T00:00:00Z',
             updated_at: '2025-01-01T00:00:00Z',
-            viewed_at: null, state: 'unseen',
+            viewed_at: null,
+            state: 'unseen',
             sent: true,
             notification_event_type: 'document_mention',
             notification_metadata: {
@@ -124,9 +125,9 @@ describe('unreadFilterFn', () => {
       const entity: WithNotification<EntityData> = {
         type: 'channel',
         notifications: () => [
-          { viewed_at: null , state: 'unseen'} as any,
-          { viewed_at: null , state: 'unseen'} as any,
-          { viewed_at: null , state: 'unseen'} as any,
+          { viewed_at: null, state: 'unseen' } as any,
+          { viewed_at: null, state: 'unseen' } as any,
+          { viewed_at: null, state: 'unseen' } as any,
         ],
       } as any;
 
@@ -137,10 +138,10 @@ describe('unreadFilterFn', () => {
       const entity: WithNotification<EntityData> = {
         type: 'channel',
         notifications: () => [
-          { viewed_at: 1234567890 , state: 'seen'} as any,
-          { viewed_at: 1234567890 , state: 'seen'} as any,
-          { viewed_at: null , state: 'unseen'} as any,
-          { viewed_at: 1234567890 , state: 'seen'} as any,
+          { viewed_at: 1234567890, state: 'seen' } as any,
+          { viewed_at: 1234567890, state: 'seen' } as any,
+          { viewed_at: null, state: 'unseen' } as any,
+          { viewed_at: 1234567890, state: 'seen' } as any,
         ],
       } as any;
 
@@ -150,12 +151,12 @@ describe('unreadFilterFn', () => {
     it('handles different entity types correctly', () => {
       const documentEntity: WithNotification<EntityData> = {
         type: 'document',
-        notifications: () => [{ viewed_at: null , state: 'unseen'} as any],
+        notifications: () => [{ viewed_at: null, state: 'unseen' } as any],
       } as any;
 
       const channelEntity: WithNotification<EntityData> = {
         type: 'channel',
-        notifications: () => [{ viewed_at: null , state: 'unseen'} as any],
+        notifications: () => [{ viewed_at: null, state: 'unseen' } as any],
       } as any;
 
       expect(unreadFilterFn(documentEntity)).toBe(true);
@@ -167,7 +168,7 @@ describe('unreadFilterFn', () => {
     it('handles notifications with viewed_at as 0', () => {
       const entity: WithNotification<EntityData> = {
         type: 'document',
-        notifications: () => [{ viewed_at: 0 , state: 'unseen'} as any],
+        notifications: () => [{ viewed_at: 0, state: 'unseen' } as any],
       } as any;
 
       // viewed_at: 0 is falsy and treated as unread by the filter
@@ -177,7 +178,7 @@ describe('unreadFilterFn', () => {
     it('handles notifications with undefined viewed_at', () => {
       const entity: WithNotification<EntityData> = {
         type: 'document',
-        notifications: () => [{ viewed_at: undefined , state: 'unseen'} as any],
+        notifications: () => [{ viewed_at: undefined, state: 'unseen' } as any],
       } as any;
 
       expect(unreadFilterFn(entity)).toBe(true);
@@ -187,7 +188,7 @@ describe('unreadFilterFn', () => {
       const entity: WithNotification<EntityData> = {
         type: 'email',
         isRead: false,
-        notifications: () => [{ viewed_at: 1234567890 , state: 'seen'} as any],
+        notifications: () => [{ viewed_at: 1234567890, state: 'seen' } as any],
       } as any;
 
       // For email type, should only check isRead

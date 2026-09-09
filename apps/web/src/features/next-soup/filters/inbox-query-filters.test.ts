@@ -11,19 +11,47 @@ describe('inbox-query-filters', () => {
     it('applies inbox notification filters and email importance', () => {
       const result = applyInboxQueryFilters({});
 
-      expect(result.channel_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
-      expect(result.chat_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
-      expect(result.project_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
-      expect(result.document_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
+      expect(result.channel_filters?.notification_filters?.states).toEqual([
+        'unseen',
+        'seen',
+      ]);
+      expect(result.chat_filters?.notification_filters?.states).toEqual([
+        'unseen',
+        'seen',
+      ]);
+      expect(result.project_filters?.notification_filters?.states).toEqual([
+        'unseen',
+        'seen',
+      ]);
+      expect(result.document_filters?.notification_filters?.states).toEqual([
+        'unseen',
+        'seen',
+      ]);
       expect(result.email_filters?.importance).toBe(true);
     });
   });
 
   it('retains exact active subsets and never broadens a done-only selection to all states', () => {
-    expect(applyInboxQueryFilters({ document_filters: { notification_filters: { states: ['unseen'] } } }).document_filters?.notification_filters?.states).toEqual(['unseen']);
-    expect(applyInboxQueryFilters({ document_filters: { notification_filters: { states: ['seen'] } } }).document_filters?.notification_filters?.states).toEqual(['seen']);
-    expect(applyInboxQueryFilters({ document_filters: { notification_filters: { states: ['done'] } } }).document_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
-    expect(applyInboxQueryFilters({ document_filters: { notification_filters: { states: [] } } }).document_filters?.notification_filters?.states).toEqual(['unseen', 'seen']);
+    expect(
+      applyInboxQueryFilters({
+        document_filters: { notification_filters: { states: ['unseen'] } },
+      }).document_filters?.notification_filters?.states
+    ).toEqual(['unseen']);
+    expect(
+      applyInboxQueryFilters({
+        document_filters: { notification_filters: { states: ['seen'] } },
+      }).document_filters?.notification_filters?.states
+    ).toEqual(['seen']);
+    expect(
+      applyInboxQueryFilters({
+        document_filters: { notification_filters: { states: ['done'] } },
+      }).document_filters?.notification_filters?.states
+    ).toEqual(['unseen', 'seen']);
+    expect(
+      applyInboxQueryFilters({
+        document_filters: { notification_filters: { states: [] } },
+      }).document_filters?.notification_filters?.states
+    ).toEqual(['unseen', 'seen']);
   });
 
   describe('removeInboxQueryFilters', () => {
@@ -47,7 +75,9 @@ describe('inbox-query-filters', () => {
         },
       });
 
-      expect(result.channel_filters?.notification_filters?.states).toEqual(['done']);
+      expect(result.channel_filters?.notification_filters?.states).toEqual([
+        'done',
+      ]);
     });
   });
 

@@ -4,7 +4,6 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
-import { nextNotificationState } from './notification-state';
 import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
@@ -38,6 +37,7 @@ import {
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { fromZodError } from 'zod-validation-error';
+import { nextNotificationState } from './notification-state';
 import { createMutedEntitiesQuery } from './queries/muted-entities-query';
 import {
   type CompositeEntity,
@@ -120,22 +120,29 @@ export function setDoneOverride(
     const next = new Map(prev);
     for (const id of ids) {
       if (done === undefined) next.delete(id);
-      else next.set(id, { done, reopened: !done && (prev.get(id)?.done === true || prev.get(id)?.reopened === true) });
+      else
+        next.set(id, {
+          done,
+          reopened:
+            !done &&
+            (prev.get(id)?.done === true || prev.get(id)?.reopened === true),
+        });
       applied.set(id, next.get(id));
     }
     return next;
   });
   // A failed older mutation must not undo a newer local action.
-  return () => setDoneOverrides((current) => {
-    const next = new Map(current);
-    for (const id of ids) {
-      if (current.get(id) !== applied.get(id)) continue;
-      const before = previous.get(id);
-      if (before === undefined) next.delete(id);
-      else next.set(id, before);
-    }
-    return next;
-  });
+  return () =>
+    setDoneOverrides((current) => {
+      const next = new Map(current);
+      for (const id of ids) {
+        if (current.get(id) !== applied.get(id)) continue;
+        const before = previous.get(id);
+        if (before === undefined) next.delete(id);
+        else next.set(id, before);
+      }
+      return next;
+    });
 }
 
 // Client-asserted seen state, the `doneOverrides` twin for `viewed_at`. Seen
@@ -152,18 +159,26 @@ const [seenOverrides, setSeenOverrides] = createRoot(() =>
 
 function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
   const token = Symbol();
-  const previous = new Map(ids.map((id) => {
-    const entry = seenOverrides[id];
-    return [id, entry ? { ...entry } : undefined] as const;
-  }));
+  const previous = new Map(
+    ids.map((id) => {
+      const entry = seenOverrides[id];
+      return [id, entry ? { ...entry } : undefined] as const;
+    })
+  );
   batch(() => {
-    for (const id of ids) setSeenOverrides(id, viewedAt === undefined ? undefined : { viewedAt, token });
+    for (const id of ids)
+      setSeenOverrides(
+        id,
+        viewedAt === undefined ? undefined : { viewedAt, token }
+      );
   });
-  return () => batch(() => {
-    for (const id of ids) {
-      if (seenOverrides[id]?.token === token) setSeenOverrides(id, previous.get(id));
-    }
-  });
+  return () =>
+    batch(() => {
+      for (const id of ids) {
+        if (seenOverrides[id]?.token === token)
+          setSeenOverrides(id, previous.get(id));
+      }
+    });
 }
 
 export function createNotificationSource(
@@ -204,18 +219,25 @@ export function createNotificationSource(
       return {
         ...notification,
         get state() {
-          const state = doneOverride?.done ? 'done'
-            : doneOverride?.reopened ? 'seen'
-            : doneOverride ? nextNotificationState(notification.state, 'MARK_UNDONE')
-            : notification.state;
-          return state === 'unseen' && seenOverrides[notification.id] ? 'seen' : state;
+          const state = doneOverride?.done
+            ? 'done'
+            : doneOverride?.reopened
+              ? 'seen'
+              : doneOverride
+                ? nextNotificationState(notification.state, 'MARK_UNDONE')
+                : notification.state;
+          return state === 'unseen' && seenOverrides[notification.id]
+            ? 'seen'
+            : state;
         },
         // Keep seen overrides granular. Reading one notification's state/viewed_at
         // subscribes only to that id instead of invalidating the complete
         // notifications array and every channel/favorite consumer.
         get viewed_at() {
           if (notification.viewed_at) return notification.viewed_at;
-          return seenOverrides[notification.id]?.viewedAt ?? notification.viewed_at;
+          return (
+            seenOverrides[notification.id]?.viewedAt ?? notification.viewed_at
+          );
         },
       };
     });
@@ -302,7 +324,8 @@ export function createNotificationSource(
   if (!ENABLE_DOCUMENT_MENTION_NOTIFICATIONS) {
     createEffect(() => {
       const toDiscard = notifications().filter(
-        (n) => n.notification_event_type === 'document_mention' && n.state !== 'done'
+        (n) =>
+          n.notification_event_type === 'document_mention' && n.state !== 'done'
       );
       if (toDiscard.length === 0) return;
       void markNotificationsAsDoneMutation.mutateAsync({
@@ -387,6 +410,10 @@ export function createNotificationSource(
     try {
       const raw = JSON.parse(wsData.data) as ConnGatewayNotificationPayload;
       const unsafeMapped = mapWebsocketNotification(raw);
+      // Metadata fallback must never admit a missing or invalid lifecycle state.
+      if (!['unseen', 'seen', 'done'].includes(unsafeMapped.state)) {
+        throw new Error('Invalid notification state');
+      }
       const parseResult = unifiedNotificationSchema.safeParse(unsafeMapped);
       if (!parseResult.success) {
         console.warn(

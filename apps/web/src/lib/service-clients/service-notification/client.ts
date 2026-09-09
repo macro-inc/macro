@@ -77,9 +77,15 @@ export const documentMentionMetadata = z.object({
 type NotificationParams = { cursor?: string; limit?: number };
 
 /** Omitted states selects active notifications; an empty array selects all states. */
-type UserNotificationParams = NotificationParams & { states?: NotificationState[] };
+type UserNotificationParams = NotificationParams & {
+  states?: NotificationState[];
+};
 
-function userNotificationQuery({ limit, cursor, states }: UserNotificationParams): string {
+function userNotificationQuery({
+  limit,
+  cursor,
+  states,
+}: UserNotificationParams): string {
   const query = new URLSearchParams();
   if (limit !== undefined) query.set('limit', String(limit));
   if (cursor !== undefined) query.set('cursor', cursor);

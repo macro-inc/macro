@@ -513,7 +513,8 @@ describe('notification utils', () => {
     describe('single notification', () => {
       it('returns true for unviewed notification', () => {
         const notification = {
-          viewed_at: null, state: 'unseen',
+          viewed_at: null,
+          state: 'unseen',
         } as Notification;
 
         expect(isNotificationUnread(notification)).toBe(true);
@@ -521,7 +522,8 @@ describe('notification utils', () => {
 
       it('returns false for viewed notification', () => {
         const notification = {
-          viewed_at: new Date(1234567890).toISOString(), state: 'seen',
+          viewed_at: new Date(1234567890).toISOString(),
+          state: 'seen',
         } as Notification;
 
         expect(isNotificationUnread(notification)).toBe(false);
@@ -551,11 +553,13 @@ describe('notification utils', () => {
         const stack = {
           notifications: [
             {
-              viewed_at: new Date(1234567890).toISOString(), state: 'seen',
+              viewed_at: new Date(1234567890).toISOString(),
+              state: 'seen',
             } as Notification,
             { viewed_at: null, state: 'unseen' } as Notification,
             {
-              viewed_at: new Date(1234567890).toISOString(), state: 'seen',
+              viewed_at: new Date(1234567890).toISOString(),
+              state: 'seen',
             } as Notification,
           ],
         } as any;
@@ -567,10 +571,12 @@ describe('notification utils', () => {
         const stack = {
           notifications: [
             {
-              viewed_at: new Date(1234567890).toISOString(), state: 'seen',
+              viewed_at: new Date(1234567890).toISOString(),
+              state: 'seen',
             } as Notification,
             {
-              viewed_at: new Date(1234567890).toISOString(), state: 'seen',
+              viewed_at: new Date(1234567890).toISOString(),
+              state: 'seen',
             } as Notification,
           ],
         } as any;

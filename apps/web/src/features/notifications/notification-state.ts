@@ -1,4 +1,5 @@
 import type { NotificationState } from '@service-notification/generated/schemas/notificationState';
+import { match } from 'ts-pattern';
 
 export type NotificationAction = 'MARK_SEEN' | 'MARK_DONE' | 'MARK_UNDONE';
 
@@ -7,18 +8,22 @@ export function nextNotificationState(
   state: NotificationState,
   action: NotificationAction
 ): NotificationState {
-  if (action === 'MARK_DONE') return 'done';
-  if (action === 'MARK_UNDONE') return state === 'done' ? 'seen' : state;
-  return state === 'unseen' ? 'seen' : state;
+  return match(action)
+    .with('MARK_DONE', () => 'done' as const)
+    .with('MARK_UNDONE', () => (state === 'done' ? 'seen' : state))
+    .with('MARK_SEEN', () => (state === 'unseen' ? 'seen' : state))
+    .exhaustive();
 }
 
 /** Convert the GraphQL wire enum without inferring anything from timestamps. */
 export function notificationStateFromGraphql(
   state: 'UNSEEN' | 'SEEN' | 'DONE'
 ): NotificationState {
-  if (state === 'UNSEEN') return 'unseen';
-  if (state === 'SEEN') return 'seen';
-  return 'done';
+  return match(state)
+    .with('UNSEEN', () => 'unseen' as const)
+    .with('SEEN', () => 'seen' as const)
+    .with('DONE', () => 'done' as const)
+    .exhaustive();
 }
 
 /** Compile persisted UI filter intent into exact backend lifecycle states. */

@@ -5,7 +5,10 @@ import {
 import type { Maybe } from '@core/types';
 import { throwOnErr } from '@core/util/result';
 import { channelThreadRootId } from '@notifications/channel-thread-root';
-import { nextNotificationState, notificationStatesForFilter } from '@notifications/notification-state';
+import {
+  nextNotificationState,
+  notificationStatesForFilter,
+} from '@notifications/notification-state';
 import type { UnifiedNotification } from '@notifications/types';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
@@ -120,7 +123,11 @@ function reapplyUnconfirmedInserts(queryKey: readonly unknown[]) {
       );
       const missing = [...unconfirmedInserts.values()]
         .map((entry) => entry.item)
-        .filter((item) => !presentIds.has(item.id) && (item.state === 'done') === notificationQueryWantsDone(queryKey));
+        .filter(
+          (item) =>
+            !presentIds.has(item.id) &&
+            (item.state === 'done') === notificationQueryWantsDone(queryKey)
+        );
       if (missing.length === 0) return data;
       return {
         ...data,
@@ -465,14 +472,25 @@ type NotificationsMutationParams = {
 type NotificationData<T> = InfiniteData<GetAllUserNotificationsResponse, T>;
 
 function notificationQueryWantsDone(key: readonly unknown[]): boolean {
-  return key.some((part) => !!part && typeof part === 'object' && 'done' in part && part.done === true);
+  return key.some(
+    (part) =>
+      !!part && typeof part === 'object' && 'done' in part && part.done === true
+  );
 }
 
 function updateUserNotificationQueries(
-  update: (data: NotificationData<UserNotificationsPageParam> | undefined, wantsDone: boolean) => NotificationData<UserNotificationsPageParam> | undefined
+  update: (
+    data: NotificationData<UserNotificationsPageParam> | undefined,
+    wantsDone: boolean
+  ) => NotificationData<UserNotificationsPageParam> | undefined
 ) {
-  for (const [key] of queryClient.getQueriesData<NotificationData<UserNotificationsPageParam>>({ queryKey: notificationKeys.user._def })) {
-    queryClient.setQueryData<NotificationData<UserNotificationsPageParam>>(key, (data) => update(data, notificationQueryWantsDone(key)));
+  for (const [key] of queryClient.getQueriesData<
+    NotificationData<UserNotificationsPageParam>
+  >({ queryKey: notificationKeys.user._def })) {
+    queryClient.setQueryData<NotificationData<UserNotificationsPageParam>>(
+      key,
+      (data) => update(data, notificationQueryWantsDone(key))
+    );
   }
 }
 
@@ -486,7 +504,11 @@ type NotificationsMutationContext = {
   >;
 };
 
-type UpdaterWithParams<T, P> = (input: Maybe<T>, params: P, wantsDone: boolean) => Maybe<T>;
+type UpdaterWithParams<T, P> = (
+  input: Maybe<T>,
+  params: P,
+  wantsDone: boolean
+) => Maybe<T>;
 
 type NotificationsUpdater = UpdaterWithParams<
   NotificationData<UserNotificationsPageParam>,
@@ -531,7 +553,9 @@ function createNotificationsMutateFn(
       queryKey: notificationKeys.user._def,
     });
 
-    updateUserNotificationQueries((input, wantsDone) => updaterFn(input, params, wantsDone));
+    updateUserNotificationQueries((input, wantsDone) =>
+      updaterFn(input, params, wantsDone)
+    );
 
     return { previousData };
   };
@@ -698,7 +722,11 @@ const mapNotificationsAsSeen = (
         ...page,
         items: page.items.map((n) =>
           params.notificationIds.includes(n.id)
-            ? { ...n, state: nextNotificationState(n.state, 'MARK_SEEN'), viewed_at: n.viewed_at ?? new Date().toISOString() }
+            ? {
+                ...n,
+                state: nextNotificationState(n.state, 'MARK_SEEN'),
+                viewed_at: n.viewed_at ?? new Date().toISOString(),
+              }
             : n
         ),
       })),
@@ -726,7 +754,11 @@ const filterOutDoneNotifications = (
       pages: input.pages.map((page) => ({
         ...page,
         items: wantsDone
-          ? page.items.map((n) => params.notificationIds.includes(n.id) ? { ...n, state: 'done' as const } : n)
+          ? page.items.map((n) =>
+              params.notificationIds.includes(n.id)
+                ? { ...n, state: 'done' as const }
+                : n
+            )
           : page.items.filter((n) => !params.notificationIds.includes(n.id)),
       })),
     }
@@ -838,25 +870,26 @@ export function applyNotificationStatusUpdate(
   retireUnconfirmedInserts(removeIds);
 
   updateUserNotificationQueries((data, wantsDone) => {
-      if (!data) return data;
+    if (!data) return data;
 
-      return {
-        ...data,
-        pages: data.pages.map((page) => ({
-          ...page,
-          items: page.items
-            .filter((notification) => !deleteIds.has(notification.id))
-            .map((notification) => {
-              const patch = patchById.get(notification.id);
-              return patch
-                ? applyNotificationStatusPatch(notification, patch)
-                : notification;
-            })
-            .filter((notification) => (notification.state === 'done') === wantsDone),
-        })),
-      };
-    }
-  );
+    return {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        items: page.items
+          .filter((notification) => !deleteIds.has(notification.id))
+          .map((notification) => {
+            const patch = patchById.get(notification.id);
+            return patch
+              ? applyNotificationStatusPatch(notification, patch)
+              : notification;
+          })
+          .filter(
+            (notification) => (notification.state === 'done') === wantsDone
+          ),
+      })),
+    };
+  });
 
   queryClient.invalidateQueries({
     queryKey: notificationKeys.user._def,
@@ -944,20 +977,30 @@ export function snapshotUserNotifications(ids: string[]): NotificationItem[] {
  */
 export function restoreUserNotifications(notifications: NotificationItem[]) {
   if (notifications.length === 0) return;
-  const restored = new Map(notifications.map((n) => [n.id, { ...n, state: 'seen' as const }]));
+  const restored = new Map(
+    notifications.map((n) => [n.id, { ...n, state: 'seen' as const }])
+  );
   updateUserNotificationQueries((data, wantsDone) => {
     if (!data) return data;
-    const present = new Set(data.pages.flatMap((page) => page.items.map((n) => n.id)));
-    const missing = wantsDone ? [] : [...restored.values()].filter((n) => !present.has(n.id));
+    const present = new Set(
+      data.pages.flatMap((page) => page.items.map((n) => n.id))
+    );
+    const missing = wantsDone
+      ? []
+      : [...restored.values()].filter((n) => !present.has(n.id));
     return {
       ...data,
       pages: data.pages.map((page, index) => ({
         ...page,
         items: [
           ...(index === 0 ? missing : []),
-          ...page.items.flatMap((n) => restored.has(n.id)
-            ? wantsDone ? [] : [{ ...n, state: 'seen' as const }]
-            : [n]),
+          ...page.items.flatMap((n) =>
+            restored.has(n.id)
+              ? wantsDone
+                ? []
+                : [{ ...n, state: 'seen' as const }]
+              : [n]
+          ),
         ],
       })),
     };
@@ -1031,46 +1074,45 @@ export function optimisticInsertNotification(
   trackUnconfirmedInsert(item);
 
   updateUserNotificationQueries((data, wantsDone) => {
-      if ((notification.state === 'done') !== wantsDone) return data;
-      if (!data) return data;
+    if ((notification.state === 'done') !== wantsDone) return data;
+    if (!data) return data;
 
-      const exists = data.pages.some((page) =>
-        page.items.some((n) => n.id === item.id)
-      );
-      if (exists) return data;
+    const exists = data.pages.some((page) =>
+      page.items.some((n) => n.id === item.id)
+    );
+    if (exists) return data;
 
-      // Clear the firing this one replaces before inserting, so a daily reminder
-      // shows one row rather than one per day since the user last looked.
-      //
-      // Retired from `unconfirmedInserts` as well as dropped from the pages. A
-      // superseded firing that arrived over the websocket is still tracked
-      // there, and `reapplyUnconfirmedInserts` re-prepends anything it finds
-      // missing from the pages — so removing it here alone would put it back on
-      // the next query success and leave it sitting beside its replacement.
-      const superseded = data.pages.flatMap((page) =>
-        page.items.filter((n) => isSupersededReminder(n, item)).map((n) => n.id)
-      );
-      if (superseded.length > 0) {
-        retireUnconfirmedInserts(superseded);
-        const ids = new Set(superseded);
-        data = {
-          ...data,
-          pages: data.pages.map((page) =>
-            page.items.some((n) => ids.has(n.id))
-              ? { ...page, items: page.items.filter((n) => !ids.has(n.id)) }
-              : page
-          ),
-        };
-      }
-
-      return {
+    // Clear the firing this one replaces before inserting, so a daily reminder
+    // shows one row rather than one per day since the user last looked.
+    //
+    // Retired from `unconfirmedInserts` as well as dropped from the pages. A
+    // superseded firing that arrived over the websocket is still tracked
+    // there, and `reapplyUnconfirmedInserts` re-prepends anything it finds
+    // missing from the pages — so removing it here alone would put it back on
+    // the next query success and leave it sitting beside its replacement.
+    const superseded = data.pages.flatMap((page) =>
+      page.items.filter((n) => isSupersededReminder(n, item)).map((n) => n.id)
+    );
+    if (superseded.length > 0) {
+      retireUnconfirmedInserts(superseded);
+      const ids = new Set(superseded);
+      data = {
         ...data,
-        pages: data.pages.map((page, index) =>
-          index === 0 ? { ...page, items: [item, ...page.items] } : page
+        pages: data.pages.map((page) =>
+          page.items.some((n) => ids.has(n.id))
+            ? { ...page, items: page.items.filter((n) => !ids.has(n.id)) }
+            : page
         ),
       };
     }
-  );
+
+    return {
+      ...data,
+      pages: data.pages.map((page, index) =>
+        index === 0 ? { ...page, items: [item, ...page.items] } : page
+      ),
+    };
+  });
 
   if (soupTag) {
     if (hasSoupEntity(notification.entity_id)) {
