@@ -11,6 +11,10 @@ async fn prompt_trace_context_reaches_the_engine_for_each_turn() {
 
     struct TracedEngine;
     impl TurnEngine for TracedEngine {
+        fn supported_models(&self) -> &[&str] {
+            crate::testing::TEST_MODELS
+        }
+
         fn run_turn(
             &self,
             _request: TurnRequest,
@@ -31,7 +35,15 @@ async fn prompt_trace_context_reaches_the_engine_for_each_turn() {
     let subscriber = tracing_subscriber::registry()
         .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
     let _guard = tracing::subscriber::set_default(subscriber);
-    let (_, parents) = with_agent(Arc::new(TracedEngine), async |connection, session| {
+    // While exactly one dispatcher is registered, tracing-core caches each
+    // new span callsite's interest from the registering thread's default
+    // subscriber. Other tests in this binary hit the prompt callsite with no
+    // subscriber, which would cache "never interested" and disable the span
+    // on this thread too. A second registered dispatcher makes tracing-core
+    // combine every registered subscriber's interest instead, so the cache
+    // stays "sometimes" and each thread's own default subscriber decides.
+    let _pin_interest = tracing::Dispatch::new(tracing::subscriber::NoSubscriber::default());
+    let (_, _, parents) = with_agent(Arc::new(TracedEngine), async |connection, session| {
         let mut parents = Vec::new();
         for _ in 0..2 {
             let parent = tracing::info_span!(parent: None, "invocation");

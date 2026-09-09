@@ -201,6 +201,7 @@ deny = [
   ], reason = "Use macro_aws_config for AWS configuration in workspace crates" },
   { crate = "tracing-subscriber", wrappers = [
     "agent",                     # GenAI span tests
+    "agent_inmem",               # GenAI trace propagation tests
     "agent_session",             # GenAI span tests
     "ai_toolset",                # GenAI span tests
     "channels",                  # Dev logging only
