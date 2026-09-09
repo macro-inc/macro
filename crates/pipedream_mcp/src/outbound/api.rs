@@ -372,7 +372,7 @@ impl McpConnection for PipedreamClient {
 
         let config = StreamableHttpClientTransportConfig::with_uri(upstream.url.as_str());
         let transport = StreamableHttpClientTransport::with_client(client, config);
-        Ok(client_info().serve(transport).await?)
+        Ok(client_info().into_dyn().serve(transport).await?)
     }
 }
 

@@ -7,13 +7,7 @@
 //! prompt (immediately before any session instructions), and the owner's
 //! memory, with usage recorded per turn against the session owner.
 //!
-//! User tools (`SendEmail`, `CreateCalendarEvent`) are the chat host's
-//! deferring ones, finished inside the turn: the turn's [`TurnRequest`]
-//! carries a reviewer over the ACP connection, and the agent loop's
-//! user-tool finisher puts each pending call to it - the session renders the
-//! elicitation - then runs or rejects the tool before the model reads the
-//! result. Without a reviewer (a client with no form support) a pending call
-//! stays pending, as in chat.
+//! Product tools execute through MCP; this engine only registers harness utilities.
 //!
 //! This is also where a session's own instructions become a system prompt.
 //! Nothing has to be transported for it - the loop runs in this process - which
@@ -23,7 +17,6 @@
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, StreamPart};
-use ai_tools::user_tool_review::user_tool_finisher;
 use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
@@ -116,30 +109,28 @@ async fn drive_turn(
         owner,
         model,
         instructions,
-        messages,
+        mut messages,
         mcp_tools,
         cancel,
         user_input,
-        reviewer,
     } = request;
 
-    // Chat's tools with the session's prompt: the user tools (`SendEmail`,
-    // `CreateCalendarEvent`) defer to the user, and this runtime finishes
-    // them in the turn through `reviewer`.
-    let tools = tools_for(AiHost::AgentSession);
+    let mcp_tools = mcp_tools.ok_or_else(|| {
+        AgentError::Other(anyhow::anyhow!(
+            "Macro MCP is unavailable; reconnect the session"
+        ))
+    })?;
     let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
     let system_prompt = system_prompt(
-        &tools.prompt,
+        &prompt::SESSION_TOOL_USE_PROMPT,
         instructions.as_deref(),
         user_memory.as_deref(),
     );
 
-    // `tools_for` returns a fresh Arc. Take its collection back so the
-    // in-memory runtime can widen it onto the session-specific context and
-    // add the one tool that needs the active ACP connection.
-    let base_tools = Arc::into_inner(tools.toolset)
-        .expect("tools_for should return a fresh, uniquely owned collection");
-    let toolset = Arc::new(tools_for_turn(base_tools, user_input.is_some()));
+    let toolset = Arc::new(tools_for_turn(
+        ai_tools::harness_tools(),
+        user_input.is_some(),
+    ));
     let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
     // Carry the feature on the context so tool-spawned subagents attribute to it.
     let mut tool_context = base_context.clone();
@@ -151,22 +142,17 @@ async fn drive_turn(
         },
     };
 
-    let mut agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
-    if let Some(reviewer) = reviewer {
-        agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(
-            Arc::clone(&toolset),
-            tool_context.clone(),
-            owner,
-            reviewer,
-            cancel.clone(),
-        ));
-    }
-    // Keep remote MCP tools alongside the native and AskUser tools. The
-    // finisher above reviews only Macro's native user tools.
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
-        Some(mcp) => Arc::new(mcp_select::CombinedToolSet::new(toolset, mcp)),
-        None => toolset,
-    };
+    normalize_tool_history(
+        &mut messages,
+        &mcp_tools
+            .searchable_catalog()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect(),
+    );
+    let agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> =
+        Arc::new(mcp_select::CombinedToolSet::new(toolset, mcp_tools));
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
         .await;
@@ -250,6 +236,31 @@ async fn fetch_user_memory(
         Err(error) => {
             tracing::warn!(error=?error, %owner, "failed to fetch user memory; running without it");
             None
+        }
+    }
+}
+
+/// Adapt model context from before the MCP cutover without rewriting stored logs.
+fn normalize_tool_history(
+    messages: &mut [agent::types::ChatMessage],
+    catalog: &std::collections::HashSet<String>,
+) {
+    use agent::types::{AssistantMessagePart, ChatMessageContent};
+    for message in messages {
+        let ChatMessageContent::AssistantMessageParts(parts) = &mut message.content else {
+            continue;
+        };
+        for part in parts {
+            let name = match part {
+                AssistantMessagePart::ToolCall { name, .. }
+                | AssistantMessagePart::ToolCallResponseJson { name, .. }
+                | AssistantMessagePart::ToolCallErr { name, .. } => name,
+                _ => continue,
+            };
+            let qualified = format!("mcp__macro__{name}");
+            if catalog.contains(&qualified) {
+                *name = qualified;
+            }
         }
     }
 }

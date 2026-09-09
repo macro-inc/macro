@@ -16,7 +16,6 @@ mod self_knowledge;
 pub mod serde_utils;
 mod subagent;
 mod tool_context;
-pub mod user_tool_review;
 
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
@@ -109,34 +108,23 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
 }
 
-/// The host a toolset is assembled for.
-///
-/// Hosts differ on two axes. First, whether something finishes a deferred
-/// user tool for them: [`AiHost::Chat`] has the composer card after the
-/// turn and [`AiHost::AgentSession`] the review elicitation in it, so those
-/// two register `SendEmail` and the deferring `CreateCalendarEvent` — on any
-/// other host those registrations would return `PendingUserExecution`
-/// forever while reading to the model as success. Second, whether the host
-/// runs the chat frontend's tool discovery and display tools.
+/// The host assembling Macro's canonical product tools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AiHost {
-    /// The AI chat, and any host whose conversation is stored as a chat the
-    /// frontend can render (scheduled agents, memory generation): composer
-    /// cards finish deferred user tools there, after the turn.
+    /// Chat defers reviewed tools to its existing composer.
     Chat,
-    /// Macro's in-process agent serving an agent session: the same toolset
-    /// as [`AiHost::Chat`], but its user tools are reviewed in the turn - the
-    /// agent loop's finisher puts the call to the user over ACP and the tool
-    /// returns the outcome - so the prompt describes a review card the agent
-    /// waits on, never a pending composer.
-    AgentSession,
-    /// The channel-mention bot: no composer, so `CreateCalendarEvent`
-    /// executes directly in the agent loop and `SendEmail` is omitted.
+    /// The legacy channel bot keeps direct calendar creation and no email sending.
     ChannelBot,
-    /// The MCP server: like [`AiHost::ChannelBot`] for user tools — MCP
-    /// clients apply their own confirmation policy from tool annotations —
-    /// and without the chat frontend's discovery/display tools.
+    /// MCP reviews user tools through elicitation before execution.
     Mcp,
+}
+
+/// Harness-local discovery and presentation tools, without product actions.
+pub fn harness_tools() -> AiToolSet {
+    AsyncToolCollection::new()
+        .add_tool::<SearchTools, ToolServiceContext>()
+        .add_tool::<LoadTools, ToolServiceContext>()
+        .add_tool::<DisplayResults, ToolServiceContext>()
 }
 
 /// Assemble the toolset and tool-use prompt for a host. These are actually
@@ -146,10 +134,10 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset());
     let toolset = match host {
-        AiHost::Chat | AiHost::AgentSession => toolset
+        AiHost::Chat | AiHost::Mcp => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_toolset())
             .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset()),
-        AiHost::ChannelBot | AiHost::Mcp => toolset
+        AiHost::ChannelBot => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
             .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset()),
     };
@@ -157,16 +145,13 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
         .add_tool::<Subagent, ToolServiceContext>();
     let toolset = match host {
-        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
-            .add_tool::<SearchTools, ToolServiceContext>()
-            .add_tool::<LoadTools, ToolServiceContext>()
-            .add_tool::<DisplayResults, ToolServiceContext>(),
+        AiHost::Chat | AiHost::ChannelBot => toolset.add_toolset(harness_tools()),
         AiHost::Mcp => toolset,
     };
     let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
         AiHost::Chat => Box::new(&prompt::TOOL_USE_PROMPT),
-        AiHost::AgentSession => Box::new(&prompt::SESSION_TOOL_USE_PROMPT),
-        AiHost::ChannelBot | AiHost::Mcp => Box::new(&prompt::DIRECT_TOOL_USE_PROMPT),
+        AiHost::Mcp => Box::new(&prompt::SESSION_TOOL_USE_PROMPT),
+        AiHost::ChannelBot => Box::new(&prompt::DIRECT_TOOL_USE_PROMPT),
     };
     ToolSetWithPrompt {
         toolset: Arc::new(toolset),

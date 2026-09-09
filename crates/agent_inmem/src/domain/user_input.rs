@@ -55,6 +55,17 @@ impl std::error::Error for UserInputError {}
 /// Capability used by a turn to ask its connected user a question.
 #[async_trait]
 pub trait UserInputRequester: Send + Sync {
+    /// Present a flat schema supplied by a connected tool server.
+    /// The response contains the user's action and submitted content.
+    async fn form(
+        &self,
+        _message: String,
+        _schema: serde_json::Value,
+        _meta: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<serde_json::Value, UserInputError> {
+        Err(UserInputError::Unsupported)
+    }
+
     /// Ask one question and wait for the user's decision.
     async fn ask(&self, request: UserInputRequest) -> Result<UserInputOutcome, UserInputError>;
 }

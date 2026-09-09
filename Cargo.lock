@@ -10246,6 +10246,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "base64 0.22.1",
  "call",
  "channels",
  "chat",
@@ -10261,6 +10262,7 @@ dependencies = [
  "foreign_entity",
  "frecency",
  "fusionauth",
+ "futures",
  "http 1.4.0",
  "lexical_client",
  "macro_auth",
@@ -10273,16 +10275,20 @@ dependencies = [
  "macro_queues",
  "macro_service_urls",
  "macro_user_id",
+ "macro_uuid",
  "mcp_auth_proxy",
  "notification",
  "prompt",
+ "pulldown-cmark",
  "readonly_pool",
  "redis",
  "reminders",
  "reqwest 0.13.4",
  "rmcp",
+ "schemars 1.2.1",
  "search_service_client",
  "secretsmanager_client",
+ "serde",
  "serde_json",
  "soup",
  "sqlx",
@@ -10290,6 +10296,7 @@ dependencies = [
  "sync_service_client",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "url",
  "workspace-hack",
@@ -10307,6 +10314,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]
@@ -12974,6 +12982,24 @@ checksum = "9091c90b0a32608e984ff2fa4091273cbdd755d54935c51d520887f4a1dbd5b0"
 dependencies = [
  "prost 0.12.6",
 ]
+
+[[package]]
+name = "pulldown-cmark"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
+dependencies = [
+ "bitflags 2.11.1",
+ "memchr",
+ "pulldown-cmark-escape",
+ "unicase",
+]
+
+[[package]]
+name = "pulldown-cmark-escape"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "007d8adb5ddab6f8e3f491ac63566a7d5002cc7ed73901f72057943fa71ae1ae"
 
 [[package]]
 name = "pxfm"

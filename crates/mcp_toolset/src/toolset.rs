@@ -67,9 +67,14 @@ impl RemoteMcpToolSet {
     #[tracing::instrument(skip_all, fields(servers = servers.len(), subject = ?subject))]
     pub async fn from_connected(servers: Vec<ConnectedServer>, subject: Option<String>) -> Self {
         let listings = futures::future::join_all(servers.into_iter().map(|server| async move {
-            match server.client.list_all_tools().await {
-                Ok(tools) => Some((server.name, server.client, tools)),
-                Err(error) => {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(20),
+                server.client.list_all_tools(),
+            )
+            .await
+            {
+                Ok(Ok(tools)) => Some((server.name, server.client, tools)),
+                error => {
                     tracing::warn!(
                         server = %server.name,
                         error = ?error,
@@ -175,6 +180,7 @@ impl RemoteMcpToolSet {
         &self,
         name: &str,
         arguments: serde_json::Map<String, serde_json::Value>,
+        request_context: RequestContext,
     ) -> Result<CallToolResult, Error> {
         let key = MangledName(name.to_owned());
         let entry = self
@@ -183,13 +189,36 @@ impl RemoteMcpToolSet {
             .get(&key)
             .ok_or_else(|| Error::UnknownTool(name.to_owned()))?;
 
+        if request_context.cancel.is_cancelled() {
+            return Err(Error::ToolCall("the agent turn was cancelled".to_owned()));
+        }
         let params = CallToolRequestParams::new(entry.tool.name.clone()).with_arguments(arguments);
 
-        entry
+        let mut pending = entry
             .peer
-            .call_tool(params)
+            .send_cancellable_request(
+                rmcp::model::CallToolRequest::new(params).into(),
+                Default::default(),
+            )
             .await
-            .map_err(|e| Error::ToolCall(e.to_string()))
+            .map_err(|error| Error::ToolCall(error.to_string()))?;
+        let mut cancel_on_drop = CancelOnDrop(Some((entry.peer.clone(), pending.id.clone())));
+        let response = tokio::select! {
+            biased;
+            _ = request_context.cancel.cancelled() => {
+                cancel_on_drop.0.take();
+                let _ = pending.cancel(Some("the agent turn was cancelled".to_owned())).await;
+                return Err(Error::ToolCall("the agent turn was cancelled".to_owned()));
+            }
+            response = &mut pending.rx => response,
+        }
+        .map_err(|error| Error::ToolCall(error.to_string()))?
+        .map_err(|error| Error::ToolCall(error.to_string()))?;
+        cancel_on_drop.0.take();
+        match response {
+            rmcp::model::ServerResult::CallToolResult(result) => Ok(result),
+            _ => Err(Error::ToolCall("unexpected MCP tool response".to_owned())),
+        }
     }
 }
 
@@ -197,7 +226,7 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for RemoteMcpToolSet {
     fn try_tool_call<'a>(
         &'a self,
         _context: Context,
-        _request_context: RequestContext,
+        request_context: RequestContext,
         tool_name: &'a str,
         json: &'a serde_json::Value,
     ) -> Pin<
@@ -209,7 +238,7 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for RemoteMcpToolSet {
                 _ => serde_json::Map::new(),
             };
 
-            let result = match self.call_tool(tool_name, arguments).await {
+            let result = match self.call_tool(tool_name, arguments, request_context).await {
                 Ok(result) => result,
                 Err(Error::UnknownTool(name)) => {
                     return Err(ToolSetError::NotFound(name));
@@ -276,3 +305,23 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for RemoteMcpToolSet {
         })
     }
 }
+
+/// Dropping a Rig tool future must also release the server's pending review.
+struct CancelOnDrop(Option<(Peer<RoleClient>, rmcp::model::RequestId)>);
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        if let Some((peer, request_id)) = self.0.take() {
+            tokio::spawn(async move {
+                let _ = peer
+                    .notify_cancelled(rmcp::model::CancelledNotificationParam {
+                        request_id,
+                        reason: Some("the tool call was abandoned".to_owned()),
+                    })
+                    .await;
+            });
+        }
+    }
+}
+
+#[cfg(test)]
+mod test;

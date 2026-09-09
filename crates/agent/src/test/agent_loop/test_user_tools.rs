@@ -1,9 +1,6 @@
-//! User tools through the whole loop: the tool answers pending, the session's
-//! finisher (when it has one) settles the call before the model reads it, and
-//! the model's next request carries what the user decided.
+//! Chat user tools still return pending for the existing composer flow.
 
 use super::util;
-use crate::hook::{FinishedUserTool, PendingUserTool, UserToolFinisher};
 use crate::stream::ToolResponse;
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations,
@@ -15,8 +12,7 @@ use rig_core::message::{Message, UserContent};
 use rig_core::test_utils::{MockCompletionModel, MockStreamEvent};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Deserialize, JsonSchema)]
 #[schemars(
@@ -91,7 +87,7 @@ fn tool_result_shown(requests: &[CompletionRequest]) -> String {
 }
 
 #[tokio::test]
-async fn without_a_finisher_the_model_reads_the_pending_answer() {
+async fn chat_reads_the_deferred_user_tool_answer() {
     let model = call_then_done();
     let toolset = util::tool_set(AsyncToolCollection::<()>::new().add_user_tool::<SendNote, ()>());
     let mut session = util::session(toolset, Arc::new(()), model.clone()).await;
@@ -107,68 +103,5 @@ async fn without_a_finisher_the_model_reads_the_pending_answer() {
         "chat's flow: the pending answer is recorded as-is, got {response:?}"
     );
     assert!(tool_result_shown(&model.requests()).contains("PendingUserExecution"));
-    assert_eq!(result.content(), "done");
-}
-
-#[tokio::test]
-async fn with_a_finisher_the_model_reads_what_the_user_decided() {
-    let model = call_then_done();
-    let seen: Arc<Mutex<Vec<PendingUserTool>>> = Arc::new(Mutex::new(Vec::new()));
-    let finisher: UserToolFinisher = {
-        let seen = Arc::clone(&seen);
-        Arc::new(move |call: PendingUserTool| {
-            let seen = Arc::clone(&seen);
-            Box::pin(async move {
-                seen.lock().unwrap().push(call);
-                Some(FinishedUserTool::Result(
-                    serde_json::json!({"UserAction": {"delivered": "hello, edited"}}),
-                ))
-            }) as Pin<Box<dyn Future<Output = Option<FinishedUserTool>> + Send>>
-        })
-    };
-    let toolset = util::tool_set(AsyncToolCollection::<()>::new().add_user_tool::<SendNote, ()>());
-    let mut session = util::test_loop()
-        .with_user_tool_finisher(finisher)
-        .test_session(
-            toolset,
-            Arc::new(()),
-            "test preamble",
-            util::usage_ctx(),
-            model.clone(),
-        )
-        .await;
-
-    let result = util::drive(&mut session, "send hello").await;
-
-    let call = result.tool_calls()[0].clone();
-    assert_eq!(
-        &*seen.lock().unwrap(),
-        &[PendingUserTool {
-            tool_name: "SendNote".to_owned(),
-            tool_call_id: call.id.clone(),
-            args: serde_json::json!({ "text": "hello" }),
-        }],
-        "the finisher saw the call as the model made it, under the id the stream gave it"
-    );
-    let response = result
-        .tool_response(&call.id)
-        .expect("the call was answered");
-    assert!(
-        matches!(
-            response,
-            ToolResponse::Json { json, .. }
-                if json == &serde_json::json!({"UserAction": {"delivered": "hello, edited"}})
-        ),
-        "the stream records the finished result, got {response:?}"
-    );
-    let shown = tool_result_shown(&model.requests());
-    assert!(
-        shown.contains("hello, edited"),
-        "the model read the finished result: {shown}"
-    );
-    assert!(
-        !shown.contains("PendingUserExecution"),
-        "the pending answer never reached the model: {shown}"
-    );
     assert_eq!(result.content(), "done");
 }

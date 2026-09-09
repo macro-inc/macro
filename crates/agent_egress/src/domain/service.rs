@@ -92,11 +92,13 @@ where
         span.record("session", tracing::field::display(&grant.session));
         span.record("owner", tracing::field::display(&grant.owner));
 
-        // Staff-only for now, checked here so every target - git, connected
-        // MCP servers, Macro's own - passes one gate. The refusal names
+        // Macro tools belong to every authenticated session owner. Git and
+        // third-party MCP retain their staff-only rollout gate. The refusal names
         // itself ("not Macro staff") so the sandbox can report an actionable
         // reason; the reason is our own static wording, never the request's.
-        if !is_macro_staff(&grant.owner) {
+        if !is_macro_staff(&grant.owner)
+            && !matches!(&target, EgressTarget::McpServer(McpDestination::Macro))
+        {
             tracing::warn!(owner = %grant.owner, "refusing egress for a session owned outside macro.com");
             return Err(EgressError::Unauthenticated(
                 "the session owner is not Macro staff",

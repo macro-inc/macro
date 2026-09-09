@@ -22,22 +22,15 @@ fn subagent_toolset_passes_schema_validation() {
 
 #[test]
 fn every_host_toolset_passes_schema_validation() {
-    for host in [
-        AiHost::Chat,
-        AiHost::AgentSession,
-        AiHost::ChannelBot,
-        AiHost::Mcp,
-    ] {
+    for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
         let _ = tools_for(host);
     }
 }
 
-/// An agent session finishes user tools in the turn, so it keeps chat's
-/// deferring registrations - and gets the prompt that says a review card,
-/// not a pending composer, is what follows the call.
+/// MCP and chat share the product catalog; MCP settles reviews before returning.
 #[test]
-fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
-    let session = tools_for(AiHost::AgentSession);
+fn mcp_keeps_chats_reviewed_product_tools() {
+    let session = tools_for(AiHost::Mcp);
     assert!(
         session
             .toolset
@@ -48,17 +41,12 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
     let prompt = session.prompt.to_string();
     assert!(prompt.contains("review card"));
     assert!(!prompt.contains("PendingUserExecution"));
-    assert_eq!(
-        session
-            .toolset
-            .request_schemas()
-            .map(|schemas| schemas.len()),
-        tools_for(AiHost::Chat)
-            .toolset
-            .request_schemas()
-            .map(|schemas| schemas.len()),
-        "the same tools as chat"
-    );
+    let chat = tools_for(AiHost::Chat);
+    for name in chat.toolset.tools.keys() {
+        if !["SearchTools", "LoadTools", "DisplayResults"].contains(&name.as_str()) {
+            assert!(session.toolset.tools.contains_key(name), "missing {name}");
+        }
+    }
 }
 
 /// Hosts without a composer cannot finish a deferred user tool, so their
@@ -67,7 +55,7 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
 /// nothing can ever execute.
 #[test]
 fn composerless_hosts_execute_calendar_create_directly_and_omit_send_email() {
-    for host in [AiHost::ChannelBot, AiHost::Mcp] {
+    for host in [AiHost::ChannelBot] {
         let json = frontend_schemas_builder()
             .merge(&tools_for(host))
             .build()

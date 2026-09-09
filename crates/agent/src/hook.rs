@@ -30,44 +30,6 @@ pub type ToolRouter = Arc<dyn Fn(&str) -> Option<ToolInfo> + Send + Sync>;
 pub type RegisterFn =
     Arc<dyn Fn(Vec<SearchableTool>) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
-/// A user tool the model called, as the host's [`UserToolFinisher`] sees it.
-///
-/// A user tool (`ai_toolset::UserTool`) answers `"PendingUserExecution"` and
-/// does nothing: the host is meant to finish it - let the user review the
-/// call, then execute or reject it. Chat does that after the turn, over HTTP;
-/// a host that can reach its user mid-turn does it here, before the model
-/// reads the result.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PendingUserTool {
-    /// The tool's name as the toolset knows it.
-    pub tool_name: String,
-    /// The call's id as the stream reported it ([`ToolCall::id`]): the
-    /// provider's, or rig's correlation id when the provider gave none. The
-    /// id the host's transcript shows the call under.
-    pub tool_call_id: String,
-    /// The arguments the model called the tool with.
-    pub args: serde_json::Value,
-}
-
-/// What a finished user tool comes back as, in place of the pending answer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FinishedUserTool {
-    /// The tool's own result (`UserToolResponse<T>` as JSON: the user's
-    /// action, or their rejection).
-    Result(serde_json::Value),
-    /// Finishing failed; the description is what the model reads.
-    Error(String),
-}
-
-/// Finishes a user tool inside the turn. Returns `None` to leave the pending
-/// answer as it is - the host will finish the call some other way, or not at
-/// all. Context-erased for the same reason as [`RegisterFn`].
-pub type UserToolFinisher = Arc<
-    dyn Fn(PendingUserTool) -> Pin<Box<dyn Future<Output = Option<FinishedUserTool>> + Send>>
-        + Send
-        + Sync,
->;
-
 /// Everything the session hands the stream bridge besides the request context.
 #[derive(Clone)]
 pub struct BridgeInputs {
@@ -77,12 +39,7 @@ pub struct BridgeInputs {
     pub loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
     /// Registers loaded tools with the live tool server.
     pub register_loaded: RegisterFn,
-    /// Finishes user tools mid-turn, when the host can.
-    pub user_tool_finisher: Option<UserToolFinisher>,
 }
-
-/// The answer a user tool gives when it has not been finished.
-const PENDING_USER_EXECUTION: &str = "PendingUserExecution";
 
 static CANCELLED_REASON: &str = "user cancelled";
 
@@ -110,9 +67,6 @@ pub struct StreamBridge {
     /// [`Self::on_invalid_tool_call`] to recover calls to tools the model
     /// discovered but never loaded.
     searchable_catalog: Arc<Vec<SearchableTool>>,
-    /// Finishes a user tool's pending answer before the model reads it, on
-    /// hosts that can reach the user mid-turn (see [`UserToolFinisher`]).
-    user_tool_finisher: Option<UserToolFinisher>,
     /// the user has requested the stream stop
     cancel: CancellationToken,
 }
@@ -137,7 +91,6 @@ impl StreamBridge {
             routing,
             loaded_buffer,
             register_loaded,
-            user_tool_finisher,
         } = inputs;
         let (tx, rx) = mpsc::unbounded_channel();
         (
@@ -147,7 +100,6 @@ impl StreamBridge {
                 loaded_buffer,
                 register_loaded,
                 searchable_catalog,
-                user_tool_finisher,
                 cancel,
             },
             rx,
@@ -175,11 +127,6 @@ fn presentation_json(presentation: &ToolOutput) -> Option<serde_json::Value> {
     presentation
         .as_text()
         .and_then(|text| serde_json::from_str(text).ok())
-}
-
-/// Whether a tool's JSON result is a user tool's unfinished answer.
-fn is_pending_user_execution(json: &serde_json::Value) -> bool {
-    json.as_str() == Some(PENDING_USER_EXECUTION)
 }
 
 /// The hook bodies, as inherent methods so tests can exercise them directly:
@@ -274,7 +221,7 @@ impl StreamBridge {
         tool_name: &str,
         tool_call_id: Option<&str>,
         internal_call_id: &str,
-        args: &str,
+        _args: &str,
         presentation: &ToolOutput,
         is_success: bool,
     ) -> ToolResultAction {
@@ -296,40 +243,6 @@ impl StreamBridge {
         } else {
             None
         };
-
-        // A user tool's pending answer is finished here when the host can:
-        // the user reviews the call while the turn waits, and the model reads
-        // what they decided instead of a "pending" it would take for success.
-        if let Some(finisher) = &self.user_tool_finisher
-            && json.as_ref().is_some_and(is_pending_user_execution)
-        {
-            let call = PendingUserTool {
-                tool_name: tool_name.to_owned(),
-                tool_call_id: id.clone(),
-                args: serde_json::from_str(args).unwrap_or(serde_json::Value::Null),
-            };
-            match finisher(call).await {
-                Some(FinishedUserTool::Result(result)) => {
-                    let _ = self
-                        .tx
-                        .send(Ok(StreamPart::ToolResponse(ToolResponse::Json {
-                            id,
-                            json: result.clone(),
-                            name: tool_name.to_owned(),
-                        })));
-                    return ToolResultAction::Rewrite(ToolOutput::json(result));
-                }
-                Some(FinishedUserTool::Error(description)) => {
-                    let _ = self.tx.send(Ok(StreamPart::ToolResponse(ToolResponse::Err {
-                        id,
-                        name: tool_name.to_owned(),
-                        description: description.clone(),
-                    })));
-                    return ToolResultAction::rewrite(description);
-                }
-                None => {}
-            }
-        }
 
         let response = if let Some(json) = json {
             ToolResponse::Json {

@@ -318,29 +318,10 @@ branch:
 - `scripts/convert_stdio_recording.py` turns a stdio recorder's log into a
   fold fixture.
 
-Second pass, same branch — Macro's own user tools reviewed through
-elicitation (see [User tools reviewed in the turn](#user-tools-reviewed-in-the-turn)):
-
-- `agent`: `AgentLoop::with_user_tool_finisher`. The stream bridge's
-  `on_tool_result` hands a `"PendingUserExecution"` answer to the finisher
-  and rewrites what the model reads (and the stream records) to what the
-  user decided.
-- `ai_tools::user_tool_review`: the `UserToolReviewer` port in a neutral
-  form vocabulary, the schema→form projection, and `user_tool_finisher`
-  over `is_valid_tool` / `try_user_tool_call` — the same pair chat's
-  `/tool/call` uses.
-- `agent_inmem`: the ACP requester implements the port; a review is a
-  form elicitation scoped to the call with `_meta.macro.userTool`. The idle
-  timeout re-arms while any question is out. `AiHost::AgentSession` pairs
-  chat's toolset with a prompt that describes the review card.
-- `agent_fold`: `ElicitationRequest::UserTool { tool, draft, schema }`,
-  recognized from the absorbed user-tool call or `_meta.macro.userTool`;
-  `MessagePart::Elicitation.tool_outcome` from the absorbed call's later
-  updates.
-- Web: the calendar and email composers split from their chat bindings
-  behind `UserToolReviewSink`; `ElicitationPart` mounts them for a review
-  and settles into the finished user tool; the owner gate lives in the
-  controller; the MagicChip gets an `asking` state with a compact card.
+Macro product tools now run through MCP for the in-memory agent and external
+harnesses. The MCP server reviews user tools before execution, and inmem forwards
+forms to ACP. The chat composer retains its deferred user-tool path. See
+[User tools reviewed in the turn](#user-tools-reviewed-in-the-turn).
 
 Third pass, same branch - the answer surface typed end to end (see [Answers
 are shapes, not values](#answers-are-shapes-not-values)):
@@ -359,68 +340,60 @@ are shapes, not values](#answers-are-shapes-not-values)):
   The radio needs no synthetic `__custom` value. Decisions use exhaustive
   matches, and `pattern` / `format` / `looksSuspicious` are gone.
 
-Still to do: request scope, more than one outstanding question per session
-(Claude Code's parallel subagents), the MCP server reviewing user tools for
-sandboxed harnesses.
-
 ## User tools reviewed in the turn
 
-Macro's user tools (`SendEmail`, `CreateCalendarEvent`) are registered with
-`add_user_tool`: calling one returns `"PendingUserExecution"` and does
-nothing, and the *host* finishes the call with the pieces `ai_toolset`
-exposes for that — `is_valid_tool` for edited arguments,
-`try_user_tool_call` to run the wrapped tool, `UserToolResponse<T>` as the
-answer. Chat is one host: it finishes after the turn, over HTTP, from its
-composer. An agent session is another: it finishes *inside* the turn,
-through elicitation, before the model reads the result.
+Macro MCP exposes the canonical product catalog, including `SendEmail` and
+`CreateCalendarEvent`. The main inmem agent loads product tools through that MCP
+server; only `AskUser`, `SearchTools`, `LoadTools`, and `DisplayResults` are local.
+Memory lookup and generation remain native. The older channel bot retains its
+existing direct calendar creation and does not gain `SendEmail`.
 
 ```text
-model calls CreateCalendarEvent(draft)
-  └─ UserTool::call → "PendingUserExecution"
-       └─ StreamBridge::on_tool_result (agent)
-            └─ UserToolFinisher (ai_tools)
-                 ├─ form = project(tool input schema, draft) + `draft` (_macro/json)
-                 ├─ reviewer.review(..)          → elicitation/create   (agent_inmem)
-                 │      sessionId, toolCallId, mode: form, requestedSchema,
-                 │      _meta.macro.userTool = { name, draft }
-                 │   ← accept {content} | decline | cancel
-                 ├─ accept: args = apply(draft, content); is_valid_tool; try_user_tool_call
-                 │          → Rewrite(UserToolResponse::UserAction(result))
-                 ├─ decline → Rewrite("Rejected")
-                 └─ cancel / unreachable client → tool error, nothing runs
+model → mcp__macro__SendEmail → Macro MCP
+                               ├─ elicitation/create (MCP 2025-11-25 form)
+                               │    → inmem MCP client → ACP elicitation/create
+                               │    ← accept / decline / cancel
+                               ├─ accept: validate edited arguments, execute tool
+                               └─ return UserToolResponse or tool error
 ```
 
-Why this shape rather than a second, "reviewing" tool wrapper:
+External MCP clients answer the same form directly. Clients must advertise form
+support; missing support, cancellation, invalid content, and a failed review
+cannot execute a reviewed tool. A review expires after one hour. The server
+returns the existing `UserToolResponse` envelope; chat still receives
+`PendingUserExecution` and finishes through its composer endpoint. The agent-loop
+finisher and neutral `UserToolReviewer` abstraction have been removed.
 
-- One contract. `PendingUserExecution` already means "the host finishes
-  this"; the session just finishes sooner. Toolset, schemas, descriptions
-  and the `UserToolResponse` output type are identical across chat and
-  sessions, so the fold's `user_tool_outcome` reader and the generated
-  frontend types need nothing new.
-- `toolCallId` for free. The hook has the call's id, so the elicitation is
-  properly tool-call-scoped and the fold's absorption replaces the tool row
-  with the question.
-- Generic forms. The flat elicitation form is projected from the tool's
-  input schema (top-level string / boolean / number / enum arguments,
-  pre-filled from the call); anything nested rides in one `draft` field of
-  Macro's `_macro/json` type. Any user tool is reviewable with no per-tool
-  code; a client without a composer edits the flat fields, Macro's client
-  renders the tool's composer and sends the whole edited draft.
-- Fail closed. No form capability, a slot already taken, or a cancelled
-  turn all read to the model as an error; nothing is created silently.
+Forms use standard MCP primitive fields, projected from the draft with defaults.
+The optional string `draft` accepts the complete edited arguments as JSON, allowing
+nested recipients and other complex arguments without a private schema type.
+Malformed JSON is rejected rather than falling back to the original draft.
+`_meta.macro.userTool = { name, draft }` lets Macro clients open the existing email
+or calendar composer. Email forms default to Markdown; the email composer
+explicitly submits `bodyFormat: base64url_html`, which preserves its rendered HTML.
+The server renders generic Markdown submissions and passes encoded HTML to the
+existing email service. Old review forms without this field retain their original
+composer response shape.
 
-The fold types the review — `ElicitationRequest::UserTool` — so the web
-`match`es on it exhaustively: the session block mounts the calendar or
-email composer over the draft (through `UserToolReviewSink`, the same
-components chat uses) and the MagicChip shows a compact summary with
-Create/Cancel and "Edit in session". Once the tool reports, the part's
-`tool_outcome` carries its result and the question renders as the finished
-user tool.
+The inmem MCP client advertises form support only when the ACP client supports it.
+It prefixes the question with the server name, preserves standard schemas and
+answers, and trusts Macro composer metadata only from the reserved Macro server.
+A per-session gate serializes concurrent forms and native questions; time queued
+or awaiting an answer does not consume the turn's five-minute idle allowance.
+Stopping the turn cancels the MCP request and pending review.
 
-Hosts (`ai_tools::AiHost`): `Chat` keeps the deferring registrations and the
-composer prompt; `AgentSession` keeps the same tools with the review prompt;
-`ChannelBot` and `Mcp` are unchanged — direct `CreateCalendarEvent`, no
-`SendEmail` — until the MCP server reviews through `rmcp`'s elicitation.
+These forms are session-scoped. The current Rig dispatch API does not expose an
+exact provider tool-call ID to the MCP client, so no guessed ID is attached. The
+composer review and final MCP tool-result row remain separate. Existing logs with
+tool-scoped reviews still fold as before. Old native tool names are normalized
+only in the model's copied context; persisted transcripts are not rewritten.
+
+The server uses stateful Streamable HTTP with SSE and authenticated session
+ownership. Redis locates the process holding each session; requests landing on
+another replica are streamed to that owner. Session IDs do not grant access.
+Each hop verifies the bearer token, and session routing checks its user. A process
+restart expires its pending sessions; it never restores or replays an uncertain
+mutation. See [deployment and verification](MCP_TOOL_CONSOLIDATION.md).
 
 ## Answers are shapes, not values
 

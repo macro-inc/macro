@@ -25,7 +25,7 @@ use rmcp::service::RunningService;
 pub const MCP_CLIENT_NAME: &str = "Macro";
 
 /// A connected MCP server session.
-pub type McpServer = RunningService<RoleClient, ClientInfo>;
+pub type McpServer = RunningService<RoleClient, Box<dyn rmcp::service::DynService<RoleClient>>>;
 
 /// Build the client info sent to MCP servers during initialization.
 pub fn client_info() -> ClientInfo {

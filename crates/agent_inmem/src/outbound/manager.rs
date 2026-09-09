@@ -18,7 +18,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::agent::{AgentState, serve};
 use crate::domain::engine::TurnEngine;
-use crate::domain::mcp::DynMcpToolConnector;
+use crate::domain::mcp::McpToolConnector;
 use crate::domain::replay::{FrameSource, replay_history};
 use crate::domain::session::{SessionState, SessionStore};
 
@@ -64,7 +64,7 @@ impl Drop for LiveAgent {
 pub struct InMemAgentManager {
     engine: Arc<dyn TurnEngine>,
     frames: Arc<dyn FrameSource>,
-    mcp: Arc<dyn DynMcpToolConnector>,
+    mcp: Arc<dyn McpToolConnector>,
     enable_dev_commands: bool,
     store: Arc<SessionStore>,
     live: DashMap<AgentSessionId, LiveAgent>,
@@ -84,7 +84,7 @@ impl InMemAgentManager {
     pub fn new(
         engine: Arc<dyn TurnEngine>,
         frames: Arc<dyn FrameSource>,
-        mcp: Arc<dyn DynMcpToolConnector>,
+        mcp: Arc<dyn McpToolConnector>,
     ) -> Self {
         Self {
             engine,
@@ -155,6 +155,8 @@ impl InMemAgentManager {
             turn_lock: tokio::sync::Mutex::new(()),
             mcp: Arc::clone(&self.mcp),
             mcp_tools: std::sync::Mutex::new(None),
+            awaiting_user: Default::default(),
+            input_gate: Default::default(),
             client_renders_forms: AtomicBool::new(false),
             enable_dev_commands: self.enable_dev_commands,
         });

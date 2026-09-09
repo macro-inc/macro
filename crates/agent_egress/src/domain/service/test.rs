@@ -146,8 +146,18 @@ impl McpCredentials for SpyCredentials {
         owner: &MacroUserIdStr<'static>,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
+        if matches!(destination, McpDestination::Macro) {
+            self.asked
+                .lock()
+                .unwrap()
+                .push((owner.to_string(), "macro".into()));
+            return Ok(McpResolution::Connected(UpstreamCall::bearer(
+                Url::parse(&self.url).expect("url"),
+                BearerToken::new("upstream-token"),
+            )?));
+        }
         let McpDestination::Connected(slug) = destination else {
-            unreachable!("these tests only dial connected servers");
+            unreachable!()
         };
         self.asked
             .lock()
@@ -668,11 +678,9 @@ async fn strips_hop_by_hop_headers_from_the_response() {
     assert_eq!(names(response.headers()), ["mcp-session-id"]);
 }
 
-/// The proxy is staff-only for now: a session owned outside macro.com gets
-/// nothing, whatever its token says - told only, in our words, that staff
-/// membership is what it lacks.
+/// Third-party integrations remain restricted to staff.
 #[tokio::test]
-async fn a_session_owned_outside_macro_gets_nothing() {
+async fn a_session_owned_outside_macro_cannot_use_third_party_integrations() {
     let service = EgressServiceImpl::new(
         StubSessions(Ok(SessionGrant {
             session: AgentSessionId::new(),
@@ -976,4 +984,33 @@ async fn a_cleartext_git_base_is_refused_too() {
 
     assert!(matches!(error, EgressError::InsecureUpstream(_)));
     assert!(!service.forward.was_called());
+}
+
+#[tokio::test]
+async fn a_nonstaff_session_can_reach_macro_with_its_verified_owner() {
+    let owner = MacroUserIdStr::try_from_email("visitor@example.com").unwrap();
+    let service = EgressServiceImpl::new(
+        StubSessions(Ok(SessionGrant {
+            session: AgentSessionId::new(),
+            owner: owner.clone(),
+            repo: session_repo(),
+            mcp_servers: Vec::new(),
+        })),
+        SpyCredentials::knowing(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+    service
+        .proxy(
+            &SessionToken::new("token"),
+            EgressTarget::McpServer(McpDestination::Macro),
+            request(Method::POST, &[]),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        *service.credentials.asked.lock().unwrap(),
+        vec![(owner.to_string(), "macro".to_owned())]
+    );
+    assert!(service.forward.was_called());
 }

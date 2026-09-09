@@ -10,10 +10,10 @@ fn http(name: &str) -> AcpMcpServer {
 }
 
 #[test]
-fn macros_own_server_is_never_dialed() {
+fn macros_own_server_is_dialed() {
     let dialable = dialable_servers(vec![http("macro"), http("linear"), http("notion")]);
     let names: Vec<&str> = dialable.iter().map(|server| server.name.as_str()).collect();
-    assert_eq!(names, ["linear", "notion"]);
+    assert_eq!(names, ["macro", "linear", "notion"]);
 }
 
 #[test]
