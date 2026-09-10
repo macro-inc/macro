@@ -5,23 +5,38 @@
 //! wanted those facts used to derive them again from the raw frames - the
 //! session machine parsing `stopReason` a second time, the harness refolding
 //! the log to find the last passage. This wraps the fold once and hands the
-//! facts out as [`TurnSignal`]s, so there is one definition of "the turn
-//! ended", and it is the one the chip renders from.
+//! facts back with every push as [`TurnSignal`]s, so there is one definition
+//! of "the turn ended", and it is the one the chip renders from.
 //!
-//! History is not news. A machine that catches up on a stored log, or has its
-//! messages replaced by a `session/load`, reports the same messages the live
-//! stream would have, but signals nothing for them: a reconnect must not
-//! announce every past turn again.
+//! Deliberately not a [`FoldMachine`](crate::domain::ports::FoldMachine): a
+//! signal is inseparable from the frame that implied it, so [`push`] returns
+//! the fold's events and the turn's signals together, and nothing is held
+//! back for later. Folding stored history is the caller's plain decision to
+//! push it and ignore what it signals - history is not news, and only the
+//! caller knows which frames are history.
+//!
+//! [`push`]: LifecycleFold::push
 
 use std::collections::HashSet;
 
 use crate::domain::fold::FoldMachineImpl;
 use crate::domain::log::AgentSessionLog;
 use crate::domain::model::{
-    Author, ElicitationRequestId, FoldEvent, FoldedMessage, MessagePart, SessionMetadata, TurnId,
-    TurnSignal,
+    Author, ElicitationRequestId, FoldEvent, FoldedMessage, MessagePart, OwnedFoldEvent,
+    SessionMetadata, TurnId, TurnSignal,
 };
-use crate::domain::ports::FoldMachine;
+use crate::domain::ports::FoldMachine as _;
+
+/// What one frame did: how the fold's messages changed, and what that meant
+/// for the turn.
+#[derive(Debug, Default, PartialEq)]
+#[must_use = "a dropped push loses the frame's turn signals"]
+pub struct Pushed {
+    /// The fold's own report, exactly as a bare [`FoldMachineImpl`] gives it.
+    pub events: Vec<OwnedFoldEvent>,
+    /// The turn facts the frame established, in order. Usually empty.
+    pub signals: Vec<TurnSignal>,
+}
 
 /// A fold that also says what each frame meant for the turn's lifecycle.
 #[derive(Debug, Default)]
@@ -32,10 +47,6 @@ pub struct LifecycleFold {
     closed: HashSet<TurnId>,
     /// The pending elicitation after the last push, to diff against.
     pending: Option<(ElicitationRequestId, TurnId)>,
-    /// Signals implied by pushes since the last take.
-    signals: Vec<TurnSignal>,
-    /// While replaying stored history nothing is new, so nothing is signalled.
-    replaying: bool,
 }
 
 impl LifecycleFold {
@@ -45,18 +56,27 @@ impl LifecycleFold {
         Self::default()
     }
 
-    /// Fold stored history silently, then resume signalling.
-    pub fn catch_up(&mut self, log: impl IntoIterator<Item = AgentSessionLog>) {
-        self.replaying = true;
-        for entry in log {
-            let _ = self.push(entry);
+    /// Advance the fold by one frame, reporting its events and turn signals.
+    pub fn push(&mut self, log: AgentSessionLog) -> Pushed {
+        let events: Vec<OwnedFoldEvent> = self
+            .inner
+            .push(log)
+            .into_iter()
+            .map(FoldEvent::into_owned)
+            .collect();
+        let mut signals = Vec::new();
+        for event in &events {
+            match event {
+                FoldEvent::NewMessage(message) | FoldEvent::MessageUpdate(message) => {
+                    self.observe_message(message, &mut signals);
+                }
+                FoldEvent::MessagesReplaced(messages) => self.observe_replacement(messages),
+                FoldEvent::MetadataUpdated(metadata) => {
+                    self.observe_metadata(metadata, &mut signals);
+                }
+            }
         }
-        self.replaying = false;
-    }
-
-    /// The signals implied by pushes since the last take, in log order.
-    pub fn take_signals(&mut self) -> Vec<TurnSignal> {
-        std::mem::take(&mut self.signals)
+        Pushed { events, signals }
     }
 
     /// The fold itself, for its messages and metadata.
@@ -65,14 +85,11 @@ impl LifecycleFold {
         &self.inner
     }
 
-    fn observe_message(&mut self, message: &FoldedMessage) {
+    fn observe_message(&mut self, message: &FoldedMessage, signals: &mut Vec<TurnSignal>) {
         let (Author::Agent, Some(stop)) = (&message.author, &message.stop) else {
             return;
         };
         if !self.closed.insert(message.id) {
-            return;
-        }
-        if self.replaying {
             return;
         }
         // The prompt that opened the turn carries the action id; the agent's
@@ -85,7 +102,7 @@ impl LifecycleFold {
                 candidate.id == message.id && matches!(candidate.author, Author::User { .. })
             })
             .and_then(|prompt| prompt.request_id);
-        self.signals.push(TurnSignal::TurnEnded {
+        signals.push(TurnSignal::TurnEnded {
             turn: message.id,
             action_id,
             stop: stop.clone(),
@@ -93,7 +110,7 @@ impl LifecycleFold {
         });
     }
 
-    fn observe_metadata(&mut self, metadata: &SessionMetadata) {
+    fn observe_metadata(&mut self, metadata: &SessionMetadata, signals: &mut Vec<TurnSignal>) {
         let now = metadata
             .pending_elicitation
             .as_ref()
@@ -102,15 +119,11 @@ impl LifecycleFold {
             return;
         }
         let before = std::mem::replace(&mut self.pending, now.clone());
-        if self.replaying {
-            return;
-        }
         if let Some((request_id, turn)) = before {
-            self.signals
-                .push(TurnSignal::ElicitationCleared { turn, request_id });
+            signals.push(TurnSignal::ElicitationCleared { turn, request_id });
         }
         if let (Some((request_id, turn)), Some(pending)) = (now, &metadata.pending_elicitation) {
-            self.signals.push(TurnSignal::ElicitationRaised {
+            signals.push(TurnSignal::ElicitationRaised {
                 turn,
                 request_id,
                 question: pending.message.clone(),
@@ -124,30 +137,6 @@ impl LifecycleFold {
             .filter(|message| matches!(message.author, Author::Agent) && message.stop.is_some())
             .map(|message| message.id)
             .collect();
-    }
-}
-
-impl FoldMachine for LifecycleFold {
-    fn push(&mut self, log: AgentSessionLog) -> Vec<FoldEvent<'_>> {
-        // The events borrow the inner machine, so they are observed owned and
-        // returned borrowed: cloning what changed is cheaper than a refold and
-        // keeps the pass-through contract byte for byte.
-        let observed: Vec<crate::domain::model::OwnedFoldEvent> = self
-            .inner
-            .push(log)
-            .into_iter()
-            .map(FoldEvent::into_owned)
-            .collect();
-        for event in &observed {
-            match event {
-                FoldEvent::NewMessage(message) | FoldEvent::MessageUpdate(message) => {
-                    self.observe_message(message);
-                }
-                FoldEvent::MessagesReplaced(messages) => self.observe_replacement(messages),
-                FoldEvent::MetadataUpdated(metadata) => self.observe_metadata(metadata),
-            }
-        }
-        observed
     }
 }
 

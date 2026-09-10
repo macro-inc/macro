@@ -29,7 +29,8 @@ use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::SessionId;
 use agent_fold::domain::lifecycle::LifecycleFold;
-use agent_fold::domain::ports::{FoldMachine, FoldedMessageRepo};
+use agent_fold::domain::model::TurnSignal;
+use agent_fold::domain::ports::FoldedMessageRepo;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToServerMessage};
 use dashmap::DashMap;
@@ -1042,12 +1043,10 @@ where
         };
 
         let signals = if let Some(fold) = &mut self.fold {
-            let _ = fold.push(log.clone());
-            fold.take_signals()
+            fold.push(log.clone()).signals
         } else {
             match self.catch_up(session).await {
-                Ok(mut fold) => {
-                    let signals = fold.take_signals();
+                Ok((fold, signals)) => {
                     self.fold = Some(fold);
                     signals
                 }
@@ -1220,9 +1219,10 @@ where
     /// starts from where the session actually is rather than from nothing.
     ///
     /// Runs once per connection, on its first frame - by which point that
-    /// frame is already in the log. Everything before it is history and is
-    /// folded silently; the frame itself is pushed live, so whatever it meant
-    /// for the turn is signalled like any later frame's.
+    /// frame is already in the log. Everything before it is history: folded,
+    /// and whatever it signalled discarded, because a reconnect must not
+    /// announce past turns again. The frame itself is live, so its signals
+    /// are returned like any later frame's.
     ///
     /// This is what makes re-attaching correct.
     /// [`TurnId`](agent_fold::domain::model::TurnId)s are a counter over the
@@ -1233,18 +1233,20 @@ where
     async fn catch_up(
         &self,
         session: AgentSessionId,
-    ) -> std::result::Result<LifecycleFold, rootcause::Report> {
+    ) -> std::result::Result<(LifecycleFold, Vec<TurnSignal>), rootcause::Report> {
         let mut log = AgentSessionLogRepo::list_by_session(&self.repo, session)
             .await
             .map_err(|error| rootcause::report!(error))?;
 
         let mut fold = LifecycleFold::new();
         let just_appended = log.pop();
-        fold.catch_up(log.into_iter().map(|stored| stored.entry));
-        if let Some(stored) = just_appended {
+        for stored in log {
             let _ = fold.push(stored.entry);
         }
-        Ok(fold)
+        let signals = just_appended
+            .map(|stored| fold.push(stored.entry).signals)
+            .unwrap_or_default();
+        Ok((fold, signals))
     }
 }
 

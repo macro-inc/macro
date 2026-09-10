@@ -4,7 +4,7 @@ use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::lifecycle::LifecycleFold;
 use crate::domain::log::AgentSessionLog;
 use crate::domain::model::{FoldEvent, FoldedMessage, StopReason, TurnSignal};
-use crate::domain::ports::FoldMachine;
+use crate::domain::ports::FoldMachine as _;
 use crate::testing::fixtures::{ELICITATION_CLAUDE_SINGLE_SELECT, RESUMED_NO_PROMPT};
 use serde_json::{Value, json};
 
@@ -43,8 +43,7 @@ fn signals_of(log: &[AgentSessionLog]) -> (LifecycleFold, Vec<TurnSignal>) {
     let mut machine = LifecycleFold::new();
     let mut signals = Vec::new();
     for entry in log {
-        let _ = machine.push(entry.clone());
-        signals.extend(machine.take_signals());
+        signals.extend(machine.push(entry.clone()).signals);
     }
     (machine, signals)
 }
@@ -71,11 +70,7 @@ fn passes_fold_events_through_unchanged() {
     let mut bare = FoldMachineImpl::new();
     let mut visible = vec![];
     for entry in &log {
-        let wrapped: Vec<_> = lifecycle
-            .push(entry.clone())
-            .into_iter()
-            .map(FoldEvent::into_owned)
-            .collect();
+        let wrapped = lifecycle.push(entry.clone()).events;
         let plain: Vec<_> = bare
             .push(entry.clone())
             .into_iter()
@@ -176,28 +171,34 @@ fn a_question_is_raised_then_cleared_before_the_turn_ends() {
     assert_eq!(raised_id, cleared_id);
 }
 
+/// Folding stored history is the caller's plain decision to push it and
+/// ignore what it signals; the fold needs no notion of "history" for a live
+/// turn afterwards to be signalled correctly.
 #[test]
-fn catching_up_on_history_signals_nothing_but_live_frames_still_do() {
+fn history_pushed_and_ignored_leaves_a_live_turn_signalling_normally() {
     let history = parse_log(TURN);
-    let mut machine = LifecycleFold::new();
-    machine.catch_up(history.iter().cloned());
-    assert!(machine.take_signals().is_empty(), "history is not news");
-    assert_eq!(machine.inner().messages(), fold(history.iter().cloned()));
-
-    // A fresh turn after the catch-up is news.
     let mut live = LifecycleFold::new();
-    live.catch_up(history.iter().cloned());
+    for entry in &history {
+        // What the log writer does on catch-up: fold, discard the signals.
+        let _ = live.push(entry.clone());
+    }
+    assert_eq!(live.inner().messages(), fold(history.iter().cloned()));
+
     let _ = live.push(prompt(json!(7), "once more"));
     let _ = live.push(update("agent_message_chunk", "again"));
-    let _ = live.push(frame(
+    let pushed = live.push(frame(
         "to_server",
         json!({"id":7,"result":{"stopReason":"end_turn"}}),
     ));
-    assert!(matches!(
-        live.take_signals().as_slice(),
-        [TurnSignal::TurnEnded { stop: StopReason::EndTurn, last_text: Some(text), .. }]
-            if text == "again"
-    ));
+    assert!(
+        matches!(
+            pushed.signals.as_slice(),
+            [TurnSignal::TurnEnded { stop: StopReason::EndTurn, last_text: Some(text), .. }]
+                if text == "again"
+        ),
+        "{:#?}",
+        pushed.signals
+    );
 }
 
 #[test]
