@@ -89,7 +89,9 @@ impl PgCursorJournal {
                     // waited, so report it exactly like a lost fence.
                     rootcause::report!("Cursor journal writer fenced out")
                 } else {
-                    rootcause::report!("{e}")
+                    // Every other database failure keeps its type, SQLSTATE
+                    // and source chain, as elsewhere in this file.
+                    rootcause::report!(e).into_dynamic()
                 }
             })?
             .ok_or_else(|| rootcause::report!("Cursor journal writer fenced out"))?;

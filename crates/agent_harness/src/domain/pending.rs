@@ -80,6 +80,9 @@ impl PendingCommands {
 
 #[cfg(test)]
 mod test {
+    use agent_fold::domain::model::TurnId;
+    use agent_runtime_protocol::domain::action::AgentActionId;
+
     use super::*;
 
     fn session_id(n: u128) -> AgentSessionId {
@@ -88,8 +91,8 @@ mod test {
 
     fn turn() -> InFlightTurn {
         InFlightTurn {
-            action_id: crate::domain::model::AgentActionId::new(),
-            turn: agent_session::domain::model::TurnId::new(),
+            action_id: AgentActionId::mint(),
+            turn: TurnId(7),
             actor: None,
             announcement_message_id: None,
         }
