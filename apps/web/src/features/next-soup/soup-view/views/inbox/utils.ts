@@ -4,7 +4,7 @@ import {
   soupPropertyToProperty,
 } from '@entity/extractors-property/property-helpers';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 
 /**
  * Soup attaches notifications per `toNotificationEntity`, which maps a
@@ -38,45 +38,49 @@ export function scopeThreadNotifications(
             { tag: 'channel_message_reply' },
             (m) => m.content.threadId === messageId
           )
+          .with(
+            {
+              tag: P.union(
+                'agent_session_settled',
+                'agent_session_waiting_for_input',
+                'agent_session_mentioned'
+              ),
+            },
+            (m) => m.content.threadId === messageId
+          )
           .otherwise(() => false)
       ),
   };
 }
 
+/** Which metadata field carries the preview text, per notification kind. */
+const NOTIFICATION_CONTENT_FIELD: Partial<
+  Record<Notification['notification_metadata']['tag'], string>
+> = {
+  channel_mention: 'messageContent',
+  channel_message_send: 'messageContent',
+  channel_message_reply: 'messageContent',
+  mentioned_in_document_comment: 'text',
+  replied_to_document_comment_thread: 'text',
+  commented_on_document: 'text',
+  new_email: 'snippet',
+  ai_response: 'summary',
+  github_pr_comment: 'commentSnippet',
+  github_pr_mention: 'textSnippet',
+  github_pr_review: 'reviewSnippet',
+  agent_session_settled: 'excerpt',
+  agent_session_waiting_for_input: 'question',
+};
+
 function notificationContent(notification: Notification): string | undefined {
+  const field =
+    NOTIFICATION_CONTENT_FIELD[notification.notification_metadata.tag];
+  if (!field) return undefined;
   const content = notification.notification_metadata.content as
-    | {
-        messageContent?: string;
-        text?: string;
-        snippet?: string;
-        summary?: string;
-        commentSnippet?: string;
-        textSnippet?: string;
-        reviewSnippet?: string;
-      }
+    | Record<string, unknown>
     | undefined;
-  switch (notification.notification_metadata.tag) {
-    case 'channel_mention':
-    case 'channel_message_send':
-    case 'channel_message_reply':
-      return content?.messageContent;
-    case 'mentioned_in_document_comment':
-    case 'replied_to_document_comment_thread':
-    case 'commented_on_document':
-      return content?.text;
-    case 'new_email':
-      return content?.snippet || undefined;
-    case 'ai_response':
-      return content?.summary;
-    case 'github_pr_comment':
-      return content?.commentSnippet;
-    case 'github_pr_mention':
-      return content?.textSnippet;
-    case 'github_pr_review':
-      return content?.reviewSnippet;
-    default:
-      return undefined;
-  }
+  const value = content?.[field];
+  return typeof value === 'string' && value ? value : undefined;
 }
 
 export function getNotificationTag(notification?: Notification) {
@@ -103,6 +107,18 @@ export function itemContent(
 
   if (meta?.tag === 'call_started') {
     return;
+  }
+
+  // An agent notification is about what the agent said, not the message
+  // that opened the thread: lead with the excerpt or the question.
+  if (
+    notification &&
+    (meta?.tag === 'agent_session_settled' ||
+      meta?.tag === 'agent_session_waiting_for_input' ||
+      meta?.tag === 'agent_session_mentioned')
+  ) {
+    const agent = notificationContent(notification);
+    if (agent) return agent;
   }
 
   const channel = channelMessageContent(entity);

@@ -115,7 +115,9 @@ plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and U
 `Open` button that only opens a new tab after you click it. Once answered the card collapses
 to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
 continues. Messages typed while a question is open queue behind it; the composer's `Stop`
-square cancels the question and the turn.
+square cancels the question and the turn. The owner also receives an
+`agent_session_waiting_for_input` notification (inbox, browser, and iOS push) while the
+question is open; it is marked done once anyone answers.
 
 ## In channels
 

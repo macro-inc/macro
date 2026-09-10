@@ -41,6 +41,8 @@ import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?compone
 import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
+import QuestionIcon from '@phosphor-icons/core/regular/question.svg?component-solid';
+import RobotIcon from '@phosphor-icons/core/regular/robot.svg?component-solid';
 import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import {
   PropertiesProvider,
@@ -122,7 +124,12 @@ const getNotificationSenderFallbackName = (
   notification: Notification
 ): string | undefined => {
   const content = notification.notification_metadata.content as
-    | { sender?: string; senderGithubLogin?: string }
+    | {
+        sender?: string;
+        senderGithubLogin?: string;
+        botName?: string;
+        mentionedBy?: string;
+      }
     | undefined;
 
   switch (notification.notification_metadata.tag) {
@@ -130,6 +137,11 @@ const getNotificationSenderFallbackName = (
       return content?.sender ?? undefined;
     case 'ai_response':
       return 'Macro agent';
+    case 'agent_session_settled':
+    case 'agent_session_waiting_for_input':
+      return content?.botName;
+    case 'agent_session_mentioned':
+      return content?.mentionedBy ?? content?.botName;
     case 'channel_message_send':
       return content?.sender ?? notification.sender_id ?? undefined;
     case 'github_pr_status_changed':
@@ -274,6 +286,15 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('call_started', () => () => <PhoneIcon class={AVATAR_GLYPH_CLASS} />)
+    .with('agent_session_settled', () => () => (
+      <RobotIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('agent_session_waiting_for_input', () => () => (
+      <QuestionIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('agent_session_mentioned', () => () => (
+      <AtIcon class={AVATAR_GLYPH_CLASS} />
+    ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
       <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
@@ -807,8 +828,36 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
 
   const senderName = createSenderDisplayName(senderId);
   const currentUserId = useUserId();
+
+  // An agent notification reads as being from the bot (or, for a mention,
+  // from whoever wrote the prompt) - not from whoever opened the thread.
+  const agentMeta = () => {
+    const meta = props.item.notification?.notification_metadata;
+    return meta?.tag === 'agent_session_settled' ||
+      meta?.tag === 'agent_session_waiting_for_input' ||
+      meta?.tag === 'agent_session_mentioned'
+      ? meta
+      : undefined;
+  };
+  const mentionedBy = () => {
+    const meta = agentMeta();
+    return meta?.tag === 'agent_session_mentioned'
+      ? (meta.content.mentionedBy ?? undefined)
+      : undefined;
+  };
+  const mentionedByName = createSenderDisplayName(mentionedBy);
+  const agentSenderLabel = () => {
+    const meta = agentMeta();
+    if (!meta) return undefined;
+    if (mentionedBy()) {
+      return mentionedBy() === currentUserId() ? 'You' : mentionedByName();
+    }
+    return meta.content.botName;
+  };
+
   const senderLabel = () =>
-    senderId() === currentUserId() ? 'You' : senderName();
+    agentSenderLabel() ??
+    (senderId() === currentUserId() ? 'You' : senderName());
 
   // The root/original thread message sender (who a reply is replying to).
   const originalSenderId = () =>

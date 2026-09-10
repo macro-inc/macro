@@ -206,7 +206,8 @@ Three families are delivered: `document.*`, `channel.*`, and `agent_session.*`.
 Agent-session events describe a coding agent's life: `opened`, `turn_started`,
 `turn_ended`, `settled` (a turn ended with nothing queued behind it),
 `waiting_for_input` (the agent asked its owner a question), `input_received`,
-`stopped`, `renamed`, and `deleted`. Each carries the session's identity and
+`mentioned` (a prompt named other users who can see the session), `stopped`,
+`renamed`, and `deleted`. Each carries the session's identity and
 hydrates to an `AgentSession` handle, the owner `User`, and, for a session
 opened from a channel thread, the `Channel`, `Thread`, and magic-chip
 `Message` the turn renders into.

@@ -13160,6 +13160,21 @@
           },
           {
             "type": "object",
+            "description": "A prompt named other users who can open the session.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.mentioned"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionMentionedMetadata",
+                "description": "A prompt named other users who can open the session."
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "The session's live actor is gone.",
             "required": ["metadata", "event_type"],
             "properties": {
@@ -24603,6 +24618,13 @@
           "owner_id"
         ],
         "properties": {
+          "audience": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "Everyone with a stake in what happens next: the owner plus every user\nwho has prompted or answered this session. Resolved by the emitter so\na consumer fanning out never has to read the session's log."
+          },
           "bot_id": {
             "$ref": "#/components/schemas/BotId",
             "description": "Bot the session runs for."
@@ -24634,6 +24656,39 @@
           "session_name": {
             "type": "string",
             "description": "User-facing session name at the time of the event."
+          }
+        }
+      },
+      "SessionMentionedMetadata": {
+        "type": "object",
+        "description": "A prompt named other users who can open the session. Published when the\nprompt is accepted, not when it is answered: \"come look at this\" should\nnot wait for the turn.",
+        "required": ["identity", "action_id", "mentioned"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action carrying the prompt."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "mentioned": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "The users named, already narrowed to those who can open the session\nand never including the author."
+          },
+          "mentioned_by": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+              }
+            ]
           }
         }
       },

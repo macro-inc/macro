@@ -60,6 +60,16 @@ an unread badge. Applying the active Inbox preset preserves read/unread selectio
 read (`seen` or `done`) narrows to `seen`, not to all active states. Email read/unread
 is separate from notification lifecycle state.
 
+Agent sessions notify through the same inbox. `<bot> finished <session>` goes to the
+owner and everyone who has prompted or answered in that session when a turn ends with
+nothing queued; `<bot> needs your answer in <session>` goes to the owner alone when the
+agent stops to ask; `<user> mentioned you in <session>` goes to users @-mentioned in a
+prompt who can already open the session. All three open the agent session (not the
+thread) when clicked, and are filed under the origin thread when the session was opened
+from one. Answering the question marks its notification done; the next turn marks the
+previous "finished" done. The chip announcement post itself no longer notifies the
+thread. Settings → notifications lists them under `AI`.
+
 ## Tasks — `/app/component/tasks`
 
 Task navigation uses `My Tasks`, `All Tasks`, and `Created by me`. The desktop

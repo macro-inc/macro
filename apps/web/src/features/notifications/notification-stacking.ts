@@ -1,6 +1,6 @@
 import type { NotificationType } from '@core/types';
 import { compareDateDesc } from '@core/util/date';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import {
   isChannelNotification,
   isDocumentCommentNotification,
@@ -59,6 +59,16 @@ export function getThreadId(group: NotificationStack): string {
       )
       .with({ tag: 'commented_on_document' }, (m) =>
         m.content.threadId.toString()
+      )
+      .with(
+        {
+          tag: P.union(
+            'agent_session_settled',
+            'agent_session_waiting_for_input',
+            'agent_session_mentioned'
+          ),
+        },
+        (m) => m.content.threadId ?? ''
       )
       .otherwise(() => '');
     if (threadId) return threadId;
