@@ -8,7 +8,7 @@ import CheckIcon from '@phosphor/check.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import TrayIcon from '@phosphor/tray.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { Button, cn, Dropdown } from '@ui';
+import { Button, cn, Dropdown, pressHandlers } from '@ui';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 
@@ -117,8 +117,8 @@ export function EmailInboxList(props: { class?: string }) {
           <ViewSidebar.Item
             active={selection.isAll()}
             aria-current={selection.isAll() ? 'true' : undefined}
-            onClick={selection.selectAll}
             class="min-w-0 flex-1"
+            {...pressHandlers(selection.selectAll)}
           >
             <AllInboxesIcon />
             <span class="truncate">All inboxes</span>
@@ -129,9 +129,9 @@ export function EmailInboxList(props: { class?: string }) {
               variant="ghost"
               size="sm"
               square
-              class="size-8 shrink-0 rounded-full text-ink-muted"
+              class="size-8 shrink-0 rounded-full text-ink-muted transition-none"
               label="Connect another account"
-              onClick={selection.addInbox}
+              {...pressHandlers(selection.addInbox)}
             >
               <PlusIcon class="size-4" />
             </Button>
@@ -144,7 +144,7 @@ export function EmailInboxList(props: { class?: string }) {
               aria-current={
                 selection.isSelected(option.id) ? 'true' : undefined
               }
-              onClick={() => selection.select(option.id)}
+              {...pressHandlers(() => selection.select(option.id))}
             >
               <span
                 aria-hidden="true"

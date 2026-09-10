@@ -92,7 +92,10 @@ section when the user can pick one: `All inboxes` or a single address, never sev
 `Clear all` resets those filters and the inbox selection. Desktop keeps its sidebar,
 search field, filter menu and preview control. The sidebar lists the inboxes above the
 tabs as plain rows; clicking one shows only that inbox, and the `+` beside
-`All inboxes` (`Connect another account`) starts the add-inbox flow.
+`All inboxes` (`Connect another account`) starts the add-inbox flow. Sidebar rows,
+`New`, and the panel's back, forward and close controls act on primary-button
+mousedown, so the selection changes before the click completes; a normal click
+still works.
 
 ## Search
 
