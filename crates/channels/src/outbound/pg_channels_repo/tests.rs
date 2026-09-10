@@ -3052,6 +3052,76 @@ async fn attachment_references_returns_generic_reference(
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn attachment_references_collapse_repeat_mentions_from_one_source(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // src-doc already mentions doc-generic at 2024-01-03; a second mention of the
+    // same pair must not surface as a second reference.
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_entity_mentions
+            (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at)
+        VALUES
+            ('00000000-0000-0000-0000-00000000e0a1'::uuid, 'doc', 'src-doc',
+             'document', 'doc-generic', 'macro|user-a@test.com', '2024-01-05 00:00:00+00')
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    let refs = repo(pool)
+        .get_attachment_references("document", "doc-generic", NON_MEMBER)
+        .await?;
+
+    assert_eq!(refs.len(), 1);
+    let AttachmentEntityReference::Generic(generic) = &refs[0] else {
+        anyhow::bail!("expected a generic reference");
+    };
+    assert_eq!(generic.source_entity_id, "src-doc");
+    assert_eq!(generic.created_at.to_rfc3339(), "2024-01-05T00:00:00+00:00");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_collapse_alias_typed_mentions_from_one_source(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // The same email thread recorded once as `thread` and once as `email` — both
+    // match the thread lookup aliases, and both come from one source.
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_entity_mentions
+            (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at)
+        VALUES
+            ('00000000-0000-0000-0000-00000000e0b1'::uuid, 'document', 'task-1',
+             'thread', 'thread-9', 'macro|user-a@test.com', '2024-01-05 00:00:00+00'),
+            ('00000000-0000-0000-0000-00000000e0b2'::uuid, 'document', 'task-1',
+             'email', 'thread-9', 'macro|user-a@test.com', '2024-01-06 00:00:00+00')
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    let refs = repo(pool)
+        .get_attachment_references("email", "thread-9", NON_MEMBER)
+        .await?;
+
+    assert_eq!(refs.len(), 1);
+    let AttachmentEntityReference::Generic(generic) = &refs[0] else {
+        anyhow::bail!("expected a generic reference");
+    };
+    assert_eq!(generic.source_entity_id, "task-1");
+    assert_eq!(generic.created_at.to_rfc3339(), "2024-01-06T00:00:00+00:00");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn attachment_references_merges_channel_and_generic_newest_first(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
