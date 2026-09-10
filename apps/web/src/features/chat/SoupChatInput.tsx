@@ -123,9 +123,6 @@ function SoupChatInputInner() {
       <div
         ref={containerRef}
         class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none touch:static touch:pb-0 touch:px-(--mobile-chrome-gutter)"
-        style={{
-          'background-image': `linear-gradient(transparent, var(--color-surface) 85%)`,
-        }}
       >
         <div class="w-full max-w-3xl">
           <div class="pointer-events-auto">

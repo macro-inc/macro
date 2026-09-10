@@ -13,6 +13,7 @@ instead of a floating plus button. Type a prompt, optionally choose a model or
 attach context, and tap **Send** to create the chat and send its first message.
 The composer stays above the software keyboard; the list reserves space for it
 so its last row remains reachable.
+The area behind the composer is transparent, without a bottom gradient overlay.
 
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
