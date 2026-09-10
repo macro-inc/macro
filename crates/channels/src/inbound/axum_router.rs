@@ -188,6 +188,7 @@ pub struct Params {
     attachment_type: Option<ChannelAttachmentType>,
 }
 
+/// Query parameters for the catch-up messages endpoint.
 #[derive(Debug, Default, Deserialize)]
 pub struct CatchUpParams {
     #[serde(default)]
@@ -1164,6 +1165,7 @@ fn parse_catch_up_after(after: Option<String>) -> Result<DateTime<Utc>, Channels
         .map_err(|_| ChannelsHandlerErr::BadRequest("after must be an RFC3339 timestamp"))
 }
 
+/// Handler for `GET /channels/{channel_id}/messages/catch-up`.
 #[utoipa::path(
     get,
     operation_id = "get_channel_messages_catch_up",
