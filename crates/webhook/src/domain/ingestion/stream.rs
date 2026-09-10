@@ -1,9 +1,9 @@
 //! Stream-candidate adapters over shared webhook event normalization.
 
 use super::{
-    WebhookEventIngestionError, normalized_agent_session_lifecycle_event,
-    normalized_agent_trigger_event, normalized_channel_event, normalized_document_event,
-    normalized_webhook_event,
+    LifecycleAudience, WebhookEventIngestionError, lifecycle_audience,
+    normalized_agent_session_lifecycle_event, normalized_agent_trigger_event,
+    normalized_channel_event, normalized_document_event, normalized_webhook_event,
 };
 use crate::domain::{
     events::WebhookTopicEvent,
@@ -70,11 +70,33 @@ pub(crate) fn agent_session_lifecycle_stream_candidate(
     event: &Event<AgentSessionLifecycleEvent>,
 ) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
     let normalized = normalized_agent_session_lifecycle_event(event)?;
-    Ok(StreamCandidateEvent {
-        audience: StreamAudience::Entity {
+    let audience = match lifecycle_audience(&event.event) {
+        LifecycleAudience::Session => StreamAudience::Entity {
             entity_id: normalized.entity_id.clone(),
             entity_type: EntityType::AgentSession,
         },
+        // The session's grants are gone with it; the channel it came from
+        // still knows its audience, and a session without one was its
+        // owner's alone.
+        LifecycleAudience::Departed {
+            owner,
+            origin_channel_id: Some(channel_id),
+        } => {
+            drop(owner);
+            StreamAudience::Entity {
+                entity_id: channel_id.to_string(),
+                entity_type: EntityType::Channel,
+            }
+        }
+        LifecycleAudience::Departed {
+            owner,
+            origin_channel_id: None,
+        } => StreamAudience::Workspace {
+            workspace_id: owner.to_string(),
+        },
+    };
+    Ok(StreamCandidateEvent {
+        audience,
         event: normalized,
     })
 }

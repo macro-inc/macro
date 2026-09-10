@@ -1582,3 +1582,72 @@ async fn every_agent_session_lifecycle_variant_is_named_by_its_wire_tag() {
         ["agent_session.waiting_for_input", "agent_session.deleted"]
     );
 }
+
+/// A deleted session has no access rows left to ask, so its audience comes
+/// from the event: the owner, plus the channel it was opened from.
+#[tokio::test]
+async fn a_deleted_session_is_delivered_to_its_owner_and_origin_channel() {
+    use agent_session_events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+
+    let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+
+    service
+        .ingest_agent_session_lifecycle_event(agent_session_lifecycle_event(|identity| {
+            AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+        }))
+        .await
+        .expect("lifecycle events are ingested");
+
+    // The session is never asked about; the origin channel is.
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(uuid::Uuid::from_u128(1).to_string(), EntityType::Channel)],
+    );
+    let repository_state = lock(&repository.state);
+    assert_eq!(repository_state.match_calls.len(), 1);
+    assert_eq!(
+        repository_state.match_calls[0].event_name,
+        "agent_session.deleted"
+    );
+    assert_eq!(
+        repository_state.workspace_calls.last().map(Vec::len),
+        Some(2),
+        "the owner and the channel's member both resolve to workspaces"
+    );
+}
+
+#[tokio::test]
+async fn a_deleted_session_without_an_origin_is_its_owners_alone() {
+    use agent_session_events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+
+    let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
+
+    let mut event = agent_session_lifecycle_event(|identity| {
+        AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+    });
+    if let AgentSessionLifecycleEvent::Deleted(deleted) = &mut event.event {
+        deleted.identity.origin = None;
+    }
+
+    service
+        .ingest_agent_session_lifecycle_event(event)
+        .await
+        .expect("lifecycle events are ingested");
+
+    assert!(lock(&access.calls).is_empty(), "nothing is looked up");
+    assert_eq!(
+        lock(&repository.state).workspace_calls.last().map(Vec::len),
+        Some(1)
+    );
+}
