@@ -6,7 +6,7 @@ import {
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
-import { SoupBackfillDocument } from '@service-storage/graphql/generated/graphql';
+import { SoupBackfillDocument, SoupMailBackfillDocument } from '@service-storage/graphql/generated/graphql';
 import {
   type FetchGraphqlSoupOptions,
   type GraphqlSoupHydrationPage,
@@ -22,7 +22,7 @@ import { createEffect, createSignal, onCleanup } from 'solid-js';
 
 // Bump when a default backfill input or completion guarantee changes so
 // persisted cursors cannot retain an older hydration contract.
-const BACKFILL_VERSION = 9;
+const BACKFILL_VERSION = 10;
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
@@ -107,6 +107,15 @@ export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   },
 };
 
+/** Filter/row metadata is synchronized before the independently bounded body cache.
+ * ALL covers the first Mail slice across every readable owned/delegated inbox. */
+export const EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
+  checkpointId: 'email-filter-metadata',
+  fetchPage: (input, options) => hydrateGraphqlSoup(SoupMailBackfillDocument, { input }, options),
+  catchUpAfterInitialPass: true,
+  input: { ...EMAIL_SOUP_BACKFILL_LANE.input, limit: PAGE_LIMIT },
+};
+
 /** Backfills CRM companies and foreign entities. */
 export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'auxiliary-entities',
@@ -131,6 +140,7 @@ export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 /** Independently checkpointed backfills run serially in priority order. */
 export const DEFAULT_SOUP_BACKFILL_LANES = [
   CORE_SOUP_BACKFILL_LANE,
+  EMAIL_FILTER_BACKFILL_LANE,
   EMAIL_SOUP_BACKFILL_LANE,
   AUXILIARY_SOUP_BACKFILL_LANE,
 ] as const satisfies readonly SoupBackfillParams[];

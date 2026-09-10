@@ -1014,7 +1014,17 @@ impl CacheEngine {
                 serde_wasm_bindgen::from_value(request).map_err(err_js)?;
             if let Some(mail) = request.mail {
                 let generation = state.mail_generation.clone();
-                let result = soup_filter_cache_adapter::mail::page(state.engine_mut()?, &generation, request.filters, &request.sort_method, &request.sort_direction, request.limit, mail).await.map_err(err_js)?;
+                let result = soup_filter_cache_adapter::mail::page(
+                    state.engine_mut()?,
+                    &generation,
+                    request.filters,
+                    &request.sort_method,
+                    &request.sort_direction,
+                    request.limit,
+                    mail,
+                )
+                .await
+                .map_err(err_js)?;
                 return to_js(&result);
             }
             let outcome = compile_filter_request(
@@ -1144,7 +1154,17 @@ impl CacheEngine {
                     .map_err(err_js)?,
                 );
             }
-            projections.extend(soup_filter_cache_adapter::mail::projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &vars, &data).await.map_err(err_js)?);
+            projections.extend(
+                soup_filter_cache_adapter::mail::projection_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(err_js)?,
+            );
             let result = state
                 .engine_mut()?
                 .write_query_with_registration_and_projections(
@@ -1204,7 +1224,17 @@ impl CacheEngine {
                     .map_err(err_js)?,
                 );
             }
-            projections.extend(soup_filter_cache_adapter::mail::projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &variables, &data).await.map_err(err_js)?);
+            projections.extend(
+                soup_filter_cache_adapter::mail::projection_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &data,
+                )
+                .await
+                .map_err(err_js)?,
+            );
             let result = state
                 .engine_mut()?
                 .hydrate_query_with_projections(
@@ -1279,7 +1309,17 @@ impl CacheEngine {
                 )
                 .map_err(err_js)?,
             );
-            projection_mutations.extend(soup_filter_cache_adapter::mail::optimistic_updates(soup_filter_cache_adapter::mail::projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &vars, &data).await.map_err(err_js)?));
+            projection_mutations.extend(soup_filter_cache_adapter::mail::optimistic_updates(
+                soup_filter_cache_adapter::mail::projection_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(err_js)?,
+            ));
             let claim = MutationClaimRequest {
                 owner: lease_owner,
                 now_ms: parse_timestamp(now_ms, "claim timestamp")?,
@@ -1487,7 +1527,17 @@ impl CacheEngine {
                 .await
                 .map_err(err_js)?,
             );
-            projections.extend(soup_filter_cache_adapter::mail::projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &vars, &data).await.map_err(err_js)?);
+            projections.extend(
+                soup_filter_cache_adapter::mail::projection_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(err_js)?,
+            );
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write_with_projections_outcome(

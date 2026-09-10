@@ -310,9 +310,21 @@ impl IndexDocument {
                     && lower.is_none_or(|bound| lower_matches(fact.value, bound))
                     && upper.is_none_or(|bound| upper_matches(fact.value, bound))
             }),
-            PredicateExpr::After {attribute, value, key, direction, tie_direction} => self.sort_facts.iter().find(|fact| &fact.attribute == attribute).is_some_and(|fact| {
-                directional_cmp(fact.value.cmp(value), *direction).then_with(|| directional_cmp(self.record_key.cmp(key), *tie_direction)) == Ordering::Greater
-            }),
+            PredicateExpr::After {
+                attribute,
+                value,
+                key,
+                direction,
+                tie_direction,
+            } => self
+                .sort_facts
+                .iter()
+                .find(|fact| &fact.attribute == attribute)
+                .is_some_and(|fact| {
+                    directional_cmp(fact.value.cmp(value), *direction)
+                        .then_with(|| directional_cmp(self.record_key.cmp(key), *tie_direction))
+                        == Ordering::Greater
+                }),
             PredicateExpr::And(left, right) => self.matches(left) && self.matches(right),
             PredicateExpr::Or(left, right) => self.matches(left) || self.matches(right),
             PredicateExpr::Not(expr) => !self.matches(expr),
@@ -402,7 +414,16 @@ impl ValidatedIndexQuery {
     pub fn after(&self, value: i64, key: RecordKey) -> Result<Self, ValidationError> {
         let mut query = self.0.clone();
         for partition in &mut query.partitions {
-            partition.predicate = PredicateExpr::And(Box::new(partition.predicate.clone()), Box::new(PredicateExpr::After {attribute:query.sort_attribute.clone(),value,key:key.clone(),direction:query.sort_direction,tie_direction:query.tie_break_direction}));
+            partition.predicate = PredicateExpr::And(
+                Box::new(partition.predicate.clone()),
+                Box::new(PredicateExpr::After {
+                    attribute: query.sort_attribute.clone(),
+                    value,
+                    key: key.clone(),
+                    direction: query.sort_direction,
+                    tie_direction: query.tie_break_direction,
+                }),
+            );
         }
         Self::new(query)
     }
@@ -913,7 +934,10 @@ fn expression_depends_on(expr: &PredicateExpr, attribute: &Token) -> bool {
         | PredicateExpr::ExactExists {
             attribute: candidate,
         }
-        | PredicateExpr::After { attribute: candidate, .. } => candidate == attribute,
+        | PredicateExpr::After {
+            attribute: candidate,
+            ..
+        } => candidate == attribute,
         PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
             expression_depends_on(left, attribute) || expression_depends_on(right, attribute)
         }

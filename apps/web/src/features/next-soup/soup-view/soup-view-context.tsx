@@ -109,6 +109,8 @@ import { unwrap } from 'solid-js/store';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
+  /** Results are limited to synchronized email metadata. */
+  cachedMail?: Accessor<boolean>;
   error: Accessor<Error | null>;
   /** True when the active request has local or network data, including an
    * intentionally empty result. */
@@ -1513,6 +1515,7 @@ export const SoupViewContextProvider: FlowComponent<
     initialize,
     source: {
       data: entities,
+      cachedMail: () => !search.isSearching() && itemsQueryData()?.cachedMail === true,
       error: () =>
         search.isSearching() ? searchSourceError() : itemsSource.error(),
       hasData: () =>
