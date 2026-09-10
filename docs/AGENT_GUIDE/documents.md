@@ -17,6 +17,10 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
 
+On a touch device, swipe a list item right to indent one level (Apple Notes
+style) or left to outdent. Nested children move with the parent. The first
+item in a list cannot indent. Vertical scrolling and taps are unchanged.
+
 ## Reference hover previews
 
 Hover a document reference chip to open its preview without navigating. With
