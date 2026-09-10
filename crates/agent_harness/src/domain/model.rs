@@ -214,11 +214,27 @@ pub enum HarnessCommand {
     /// The session's runtime answered its in-flight turn: clear the busy
     /// mark and dispatch the next queued action. Internal - enqueued by the
     /// turn observer on the managing replica, never forwarded.
-    TurnEnded,
+    TurnEnded {
+        /// How the turn ended, as downstream sees it: the ACP stop reason,
+        /// or `error` for a refused prompt.
+        stop_reason: String,
+    },
     /// The session's live actor stopped: clear the busy mark and nothing
     /// more - resuming a dead runtime stays the next user action's job.
     /// Internal, like [`Self::TurnEnded`].
-    SessionStopped,
+    SessionStopped {
+        /// Why the actor stopped.
+        reason: String,
+    },
+    /// The session's agent asked its owner a question. Internal, like
+    /// [`Self::TurnEnded`].
+    ElicitationRaised {
+        /// The question, as the agent phrased it.
+        question: String,
+    },
+    /// The held question was answered or withdrawn. Internal, like
+    /// [`Self::TurnEnded`].
+    ElicitationCleared,
     /// Change the session's sandbox size and the owner's default.
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
@@ -304,6 +320,13 @@ pub struct SessionAnnouncement {
     pub prompted_content: String,
     /// User whose mention triggered the announcement.
     pub triggered_by: MacroUserIdStr<'static>,
+}
+
+/// The channel message an announcement became.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnnouncedMessage {
+    /// The posted message: the magic chip its turn renders into.
+    pub message_id: Uuid,
 }
 
 /// Values required to provision a new session container.

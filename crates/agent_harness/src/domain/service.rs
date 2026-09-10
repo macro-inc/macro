@@ -18,6 +18,7 @@ mod test;
 
 mod deliver;
 mod lifecycle;
+mod lifecycle_events;
 mod open;
 mod queue;
 
@@ -31,8 +32,8 @@ use agent_session::domain::model::{
     SandboxSize,
 };
 use agent_session::domain::ports::{
-    AcceptedControl, AgentSessionNotificationRecipient, AgentSessionQueueChanged,
-    ControlDisposition, ControlEvent, QueuedControl,
+    AcceptedControl, AgentSessionLifecyclePublisher, AgentSessionNotificationRecipient,
+    AgentSessionQueueChanged, ControlDisposition, ControlEvent, QueuedControl,
 };
 use agent_session::domain::service::AgentSessionService;
 use bot_id::BotId;
@@ -52,7 +53,7 @@ use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
     RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
-use crate::domain::queue::{QueueError, QueuedEntry, SessionQueues};
+use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
 
 use self::queue::{ErasedForwarder, SessionWorkers};
@@ -78,11 +79,13 @@ struct AgentHarnessInner<
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory beside the live actors this replica manages.
     queues: SessionQueues,
-    /// The sessions with a turn in flight. Marked when a turn-occupying
-    /// action reaches the runtime, cleared by `TurnEnded`/`SessionStopped`.
-    /// Only ever touched from the session's own command worker, which is
-    /// what serializes it against dispatch.
-    busy: DashMap<AgentSessionId, ()>,
+    /// The sessions with a turn in flight, and which turn. Marked when a
+    /// turn-occupying action reaches the runtime, cleared by
+    /// `TurnEnded`/`SessionStopped`. Only ever touched from the session's
+    /// own command worker, which is what serializes it against dispatch.
+    busy: DashMap<AgentSessionId, InFlightTurn>,
+    /// Where lifecycle facts go. Erased so it is not an eighth type parameter.
+    lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
 }
 
 /// Turns trigger commands into running, announced agent sessions.
@@ -166,6 +169,7 @@ where
         egress: Egress,
         forwarder: impl CommandForwarder,
         defaults: impl Into<HarnessDefaults>,
+        lifecycle_publisher: impl AgentSessionLifecyclePublisher,
     ) -> Self {
         Self {
             inner: Arc::new(AgentHarnessInner {
@@ -180,6 +184,7 @@ where
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 busy: DashMap::new(),
+                lifecycle_publisher: Arc::new(lifecycle_publisher),
             }),
             workers: Arc::new(DashMap::new()),
         }
@@ -258,6 +263,9 @@ where
                 triggered_by: prompt.sender,
             })
             .await
+            // The external runtime drives this turn itself; there is no
+            // in-flight record here to remember the chip in.
+            .map(drop)
     }
 }
 

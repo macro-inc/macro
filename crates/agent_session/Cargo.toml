@@ -18,6 +18,10 @@ dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true, optional = true }
 agent_fold = { path = "../agent_fold" }
+agent_session_events = { path = "../agent_session_events" }
+# Only the domain vocabulary; `outbound` would pull rdkafka into every
+# consumer of this crate.
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", features = ["utoipa"] }
 axum = { workspace = true }
 bots = { path = "../bots"}

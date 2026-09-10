@@ -33,7 +33,9 @@ use crate::domain::ports::{
     AgentConnector, AgentSessionLogWriter, AgentSessionRepo, SessionTurnObserver,
 };
 
-use super::{CloseReason, Effect, HandshakeStatus, Input, RuntimeStatus, SessionMachine};
+use super::{
+    CloseReason, Effect, HandshakeStatus, Input, RuntimeStatus, SessionMachine, StopReason,
+};
 
 /// How long the ACP handshake has to finish before the session is declared dead.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(60);
@@ -56,12 +58,12 @@ pub(crate) struct SessionCompletion {
 }
 
 /// Whether a [`SessionActor`] has more steps to take.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Stepped {
     /// Keep stepping.
     Continue,
-    /// The machine stopped; clean up.
-    Stopped,
+    /// The machine stopped for this reason; clean up.
+    Stopped(StopReason),
 }
 
 /// One session connection's imperative shell: pulls one input, runs the
@@ -407,7 +409,7 @@ where
                         }),
                     });
                 }
-                Effect::TurnEnded { action_id } => {
+                Effect::TurnEnded { action_id, outcome } => {
                     // The counterpart to `agent.session.disconnect`: a turn
                     // that ended here reached its stop reason, so a session
                     // whose last turn has this span and no disconnect after
@@ -416,6 +418,7 @@ where
                         "agent.session.turn_ended",
                         agent.session.id = %self.machine.id(),
                         agent.action.id = %action_id,
+                        agent.turn.stop_reason = %outcome.wire_stop_reason(),
                     )
                     .entered();
                     tracing::info!(
@@ -423,7 +426,27 @@ where
                         %action_id,
                         "agent session turn ended"
                     );
-                    self.turn_observer.turn_ended(self.machine.id());
+                    self.turn_observer.turn_ended(self.machine.id(), outcome);
+                }
+                Effect::ElicitationRaised {
+                    request_id,
+                    question,
+                } => {
+                    tracing::info!(
+                        id = %self.machine.id(),
+                        ?request_id,
+                        "agent session is waiting for input"
+                    );
+                    self.turn_observer
+                        .elicitation_raised(self.machine.id(), question);
+                }
+                Effect::ElicitationCleared { request_id } => {
+                    tracing::info!(
+                        id = %self.machine.id(),
+                        ?request_id,
+                        "agent session elicitation cleared"
+                    );
+                    self.turn_observer.elicitation_cleared(self.machine.id());
                 }
                 Effect::Complete { token, result } => {
                     if let Err(error) = &result {
@@ -478,7 +501,7 @@ where
                         }
                     }
                     tracing::info!(id = %self.machine.id(), %reason, "agent session stopped");
-                    stepped = Stepped::Stopped;
+                    stepped = Stepped::Stopped(reason);
                 }
             }
         }
@@ -586,7 +609,9 @@ where
                 | Effect::EstablishInitialization { .. }
                 | Effect::PersistAcpSession { .. }
                 | Effect::Initialized { .. }
-                | Effect::TurnEnded { .. } => {}
+                | Effect::TurnEnded { .. }
+                | Effect::ElicitationRaised { .. }
+                | Effect::ElicitationCleared { .. } => {}
             }
         }
         if let Some(stop) = stop {

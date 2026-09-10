@@ -23,8 +23,9 @@ use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::{AgentAnnouncementChip, AgentAnnouncementReplyTarget};
 
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::SessionAnnouncement;
+use crate::domain::model::{AnnouncedMessage, SessionAnnouncement};
 use crate::domain::ports::SessionAnnouncer;
+use macro_uuid::Uuid;
 
 fn announcement_chip(announcement: &SessionAnnouncement) -> AgentAnnouncementChip {
     AgentAnnouncementChip {
@@ -64,7 +65,7 @@ impl<Channels> SessionAnnouncer for ChannelAnnouncer<Channels>
 where
     Channels: ChannelService + Send + Sync + 'static,
 {
-    async fn announce(&self, announcement: SessionAnnouncement) -> Result<()> {
+    async fn announce(&self, announcement: SessionAnnouncement) -> Result<AnnouncedMessage> {
         let reply_target = announcement_reply_target(&announcement);
         let chip = announcement_chip(&announcement);
         let content = self
@@ -73,7 +74,8 @@ where
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
 
-        self.channels
+        let posted = self
+            .channels
             .post_message(
                 ChannelSender::new_from_bot(announcement.bot_id),
                 announcement.origin_channel_id,
@@ -92,6 +94,18 @@ where
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
 
-        Ok(())
+        // Message ids are uuids everywhere in the channels domain; anything
+        // else here is a bug in the poster, not a shape to tolerate.
+        let message_id = Uuid::parse_str(&posted.id).map_err(|error| {
+            HarnessError::Announce(
+                rootcause::report!(error)
+                    .context(format!(
+                        "announcement posted a non-uuid message id {}",
+                        posted.id
+                    ))
+                    .into(),
+            )
+        })?;
+        Ok(AnnouncedMessage { message_id })
     }
 }

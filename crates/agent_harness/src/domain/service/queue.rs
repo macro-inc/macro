@@ -1,7 +1,22 @@
 //! The per-session command queue: admission, the worker that drains it one
 //! command at a time, and routing to the replica that holds the session.
 
+use agent_session_events::{
+    AgentSessionLifecycleEvent, InputReceivedMetadata, SessionDeletedMetadata,
+    SessionSettledMetadata, SessionStoppedMetadata, TurnEndedMetadata, TurnStartedMetadata,
+    WaitingForInputMetadata,
+};
+
 use super::*;
+
+/// What [`AgentHarnessInner::dispatch_next`] found waiting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Dispatch {
+    /// The oldest queued action reached the runtime.
+    Dispatched,
+    /// Nothing was queued: the session is idle.
+    QueueEmpty,
+}
 
 pub(super) type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
@@ -251,8 +266,10 @@ where
                 }
             }
             HarnessCommand::Open(_)
-            | HarnessCommand::TurnEnded
-            | HarnessCommand::SessionStopped
+            | HarnessCommand::TurnEnded { .. }
+            | HarnessCommand::SessionStopped { .. }
+            | HarnessCommand::ElicitationRaised { .. }
+            | HarnessCommand::ElicitationCleared
             | HarnessCommand::SetSandboxSize(_)
             | HarnessCommand::Delete => {}
         }
@@ -291,18 +308,94 @@ where
                 self.publish_queue(session_id).await;
                 Ok(CommandOutcome::Completed)
             }
-            HarnessCommand::TurnEnded => {
-                self.busy.remove(&session_id);
+            HarnessCommand::TurnEnded { stop_reason } => {
+                let ended = self.busy.remove(&session_id).map(|(_, turn)| turn);
+                // A turn end with no record: this replica restarted mid-turn
+                // and the in-memory mark went with it. The queue still
+                // drains; only the facts about *that* turn are unknowable.
+                if ended.is_none() {
+                    tracing::info!(%session_id, "turn ended with no in-flight record");
+                }
+                if let Some(turn) = &ended {
+                    let turn = turn.clone();
+                    let queued_remaining = self.queues.list(session_id).len();
+                    let stop_reason = stop_reason.clone();
+                    self.publish_lifecycle(session_id, |identity| {
+                        AgentSessionLifecycleEvent::TurnEnded(TurnEndedMetadata {
+                            identity,
+                            turn: turn.turn,
+                            action_id: turn.action_id,
+                            actor: turn.actor,
+                            announcement_message_id: turn.announcement_message_id,
+                            stop_reason,
+                            queued_remaining,
+                        })
+                    })
+                    .await;
+                }
                 let dispatched = self.dispatch_next(session_id).await;
                 // Published whatever dispatching did: a claim, a requeued
                 // failure, and an emptied queue are all changes a viewer is
                 // watching for.
                 self.publish_queue(session_id).await;
-                dispatched?;
+                let dispatched = dispatched?;
+                // Settled: the turn ended and nothing followed it. Emitted
+                // only with the turn's record, because "settled" without
+                // knowing what settled is a fact nobody can act on.
+                if let (Dispatch::QueueEmpty, Some(turn)) = (dispatched, ended) {
+                    let excerpt = self.settled_excerpt(session_id).await;
+                    self.publish_lifecycle(session_id, |identity| {
+                        AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
+                            identity,
+                            last_turn: Some(turn.ended(stop_reason, excerpt)),
+                        })
+                    })
+                    .await;
+                }
                 Ok(CommandOutcome::Completed)
             }
-            HarnessCommand::SessionStopped => {
-                self.busy.remove(&session_id);
+            HarnessCommand::SessionStopped { reason } => {
+                let in_flight = self.busy.remove(&session_id).map(|(_, turn)| turn);
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::Stopped(SessionStoppedMetadata {
+                        identity,
+                        reason,
+                        turn_in_flight: in_flight.as_ref().map(InFlightTurn::summary),
+                    })
+                })
+                .await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::ElicitationRaised { question } => {
+                let Some(turn) = self.busy.get(&session_id).map(|turn| turn.clone()) else {
+                    tracing::warn!(%session_id, "elicitation raised with no in-flight record");
+                    return Ok(CommandOutcome::Completed);
+                };
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::WaitingForInput(WaitingForInputMetadata {
+                        identity,
+                        turn: turn.turn,
+                        action_id: turn.action_id,
+                        announcement_message_id: turn.announcement_message_id,
+                        question,
+                    })
+                })
+                .await;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::ElicitationCleared => {
+                let Some(turn) = self.busy.get(&session_id).map(|turn| turn.clone()) else {
+                    tracing::warn!(%session_id, "elicitation cleared with no in-flight record");
+                    return Ok(CommandOutcome::Completed);
+                };
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::InputReceived(InputReceivedMetadata {
+                        identity,
+                        turn: turn.turn,
+                        action_id: turn.action_id,
+                    })
+                })
+                .await;
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::SetSandboxSize(size) => {
@@ -310,6 +403,8 @@ where
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Delete => {
+                // Identity first: the row is gone once the delete succeeds.
+                let identity = self.identity(session_id).await;
                 self.delete(session_id).await?;
                 // The queue and busy mark die with the session: a deleted
                 // session's entries will never dispatch, and leaving them
@@ -318,6 +413,20 @@ where
                 self.busy.remove(&session_id);
                 self.queues.drop_session(session_id);
                 self.publish_queue(session_id).await;
+                match identity {
+                    Ok(identity) => {
+                        self.lifecycle_publisher
+                            .publish(AgentSessionLifecycleEvent::Deleted(
+                                SessionDeletedMetadata { identity },
+                            ))
+                            .await;
+                    }
+                    Err(error) => tracing::warn!(
+                        error = ?error,
+                        %session_id,
+                        "skipping agent_session.deleted: identity unavailable"
+                    ),
+                }
                 Ok(CommandOutcome::Completed)
             }
         }
@@ -344,7 +453,7 @@ where
                     action: command.action,
                     actor: command.actor,
                     announce: command.announce,
-                    announced: false,
+                    announced: None,
                     created_at: chrono::Utc::now(),
                 },
             ),
@@ -354,7 +463,7 @@ where
         let dispatched = if self.busy.contains_key(&session_id) {
             Ok(())
         } else {
-            self.dispatch_next(session_id).await
+            self.dispatch_next(session_id).await.map(drop)
         };
         self.publish_queue(session_id).await;
         dispatched?;
@@ -403,9 +512,9 @@ where
     /// the queue meanwhile. The error still propagates, so a caller whose
     /// own action triggered this dispatch hears about it.
     #[tracing::instrument(err, skip(self), fields(%session_id))]
-    pub(super) async fn dispatch_next(&self, session_id: AgentSessionId) -> Result<()> {
+    pub(super) async fn dispatch_next(&self, session_id: AgentSessionId) -> Result<Dispatch> {
         let Some(mut entry) = self.queues.claim_next(session_id) else {
-            return Ok(());
+            return Ok(Dispatch::QueueEmpty);
         };
 
         // Compose a copy: the queued entry stays raw so a retry still edits
@@ -420,13 +529,25 @@ where
             return Err(error);
         }
 
-        if !entry.announced {
+        // The turn this action opens, read before delivery appends the
+        // prompt to the log. Unchanged across a failed attempt, so a retry
+        // reports the same turn.
+        let prompted_message_id = match self.sessions.next_prompt_message_id(session_id).await {
+            Ok(message_id) => message_id,
+            Err(error) => {
+                self.queues.requeue_front(session_id, entry);
+                return Err(error.into());
+            }
+        };
+
+        if entry.announced.is_none() {
             let announcement = match self
                 .announcement(
                     session_id,
                     &entry.action,
                     entry.actor.as_ref(),
                     entry.announce.clone(),
+                    prompted_message_id,
                 )
                 .await
             {
@@ -437,11 +558,13 @@ where
                 }
             };
             if let Some(announcement) = announcement {
-                if let Err(error) = self.announcer.announce(announcement).await {
-                    self.queues.requeue_front(session_id, entry);
-                    return Err(error);
+                match self.announcer.announce(announcement).await {
+                    Ok(announced) => entry.announced = Some(announced.message_id),
+                    Err(error) => {
+                        self.queues.requeue_front(session_id, entry);
+                        return Err(error);
+                    }
                 }
-                entry.announced = true;
             }
         }
 
@@ -453,8 +576,24 @@ where
         };
         match self.deliver(session_id, command).await {
             Ok(()) => {
-                self.busy.insert(session_id, ());
-                Ok(())
+                let turn = InFlightTurn {
+                    action_id: entry.action_id,
+                    turn: prompted_message_id.turn,
+                    actor: entry.actor,
+                    announcement_message_id: entry.announced,
+                };
+                self.busy.insert(session_id, turn.clone());
+                self.publish_lifecycle(session_id, |identity| {
+                    AgentSessionLifecycleEvent::TurnStarted(TurnStartedMetadata {
+                        identity,
+                        turn: turn.turn,
+                        action_id: turn.action_id,
+                        actor: turn.actor,
+                        announcement_message_id: turn.announcement_message_id,
+                    })
+                })
+                .await;
+                Ok(Dispatch::Dispatched)
             }
             Err(error) => {
                 self.queues.requeue_front(session_id, entry);

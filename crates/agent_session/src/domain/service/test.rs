@@ -5,7 +5,9 @@ use crate::domain::model::{
 };
 use crate::domain::ports::NoOpRealtime;
 use crate::domain::session::HandshakeStatus;
-use crate::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
+use crate::testing::{
+    InMemoryAgentSessionRepo, RecordingLifecyclePublisher, RecordingRealtime, test_agent_session,
+};
 use agent_fold::domain::fold::fold;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_fold::testing::{TURN, parse_log_as, test_session};
@@ -287,28 +289,32 @@ async fn background_naming_persists_then_publishes_the_generated_name() {
     let session = test_session();
     repo.insert_session(test_agent_session(session));
     let realtime = RenameRealtime::default();
+    let lifecycle = RecordingLifecyclePublisher::new();
 
     spawn_initial_agent_session_rename(
         repo.clone(),
         realtime.clone(),
+        Arc::new(lifecycle.clone()),
         FixedNameGenerator,
         session,
         "fix the flaky tests".to_owned(),
     );
-    for _ in 0..20 {
-        if !realtime
-            .0
-            .lock()
-            .expect("rename store is not poisoned")
-            .is_empty()
-        {
-            break;
-        }
-        tokio::task::yield_now().await;
-    }
+    // The lifecycle event is published last, so its arrival means the
+    // rename and its realtime push are done too.
+    lifecycle.wait_for_published(1).await;
 
     let stored = repo.get(session).await.expect("get session");
     assert_eq!(stored.name, "Fix Flaky Tests");
+    assert!(
+        matches!(
+            lifecycle.published().as_slice(),
+            [AgentSessionLifecycleEvent::Renamed(renamed)]
+                if renamed.identity.session_id == session
+                    && renamed.identity.session_name == "Fix Flaky Tests"
+        ),
+        "renamed is published with the new name: {:?}",
+        lifecycle.published()
+    );
     assert_eq!(
         realtime
             .0
@@ -334,6 +340,7 @@ async fn background_naming_does_not_overwrite_a_manual_name() {
     spawn_initial_agent_session_rename(
         repo.clone(),
         realtime.clone(),
+        Arc::new(NoopLifecyclePublisher),
         FixedNameGenerator,
         session,
         "fix the flaky tests".to_owned(),
@@ -1508,18 +1515,17 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
         };
         assert_eq!(load.method.as_ref(), "session/load");
         failed_response_id = Some(load.id.clone());
-        assert_eq!(
+        assert!(matches!(
             actor
                 .dispatch(Input::Inbound(ToServerMessage::Acp(AcpMessage(
                     RawJsonRpcMessage::response(load.id, Ok(serde_json::json!({}))),
                 ))))
                 .await,
-            Stepped::Stopped
-        );
+            Stepped::Stopped(_)
+        ));
     } else {
-        assert_eq!(
-            step,
-            Stepped::Stopped,
+        assert!(
+            matches!(step, Stepped::Stopped(_)),
             "initialization failure stops before load"
         );
     }

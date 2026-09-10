@@ -12,6 +12,7 @@ agent_egress = { path = "../agent_egress" }
 agent_fold = { path = "../agent_fold" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
+agent_session_events = { path = "../agent_session_events" }
 agent_trigger = { path = "../agent_trigger" }
 cursor_api_key = { path = "../cursor_api_key" }
 cursor_cloud_agents = { path = "../cursor_cloud_agents" }

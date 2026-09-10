@@ -46,6 +46,8 @@ use bots::domain::models::BotId;
 
 use super::connection::RuntimeAttachment;
 use super::error::{AgentSessionError, Result};
+use super::lifecycle::session_identity;
+use super::model::SessionBot;
 use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AgentSessionRenamed, AuthorKind, ChannelSession,
     ClaimOutcome, CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS, Message,
@@ -53,12 +55,15 @@ use super::model::{
     StoredAgentSessionLog,
 };
 use super::ports::{
-    AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionNameGenerator,
-    AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
-    NoOpAgentSessionNameGenerator, NoOpTurnObserver, SessionOwnership, SessionTurnObserver,
+    AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
+    AgentSessionNameGenerator, AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
+    NoOpAgentSessionNameGenerator, NoOpTurnObserver, NoopLifecyclePublisher, SessionOwnership,
+    SessionTurnObserver,
 };
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 use super::session::{CloseReason, Input};
+use agent_fold::domain::model::FoldedMessage;
+use agent_session_events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
 const COMMAND_BUFFER: usize = 1028;
@@ -189,6 +194,15 @@ pub trait AgentSessionService: Send + Sync + 'static {
         bot_id: Option<BotId>,
     ) -> impl Future<Output = Result<ChannelSession>> + Send;
 
+    /// The bot a session runs for, as viewers see it.
+    fn session_bot(&self, id: BotId) -> impl Future<Output = Result<SessionBot>> + Send;
+
+    /// A session's log folded into messages, oldest first.
+    fn folded_messages(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<FoldedMessage>>> + Send;
+
     /// The user-message id the next prompt appended to this session will fold to.
     fn next_prompt_message_id(
         &self,
@@ -254,6 +268,9 @@ pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGen
     /// Told when a session's turn ends or its actor stops - the harness's
     /// prompt-queue gate. Erased so wiring it is not another type parameter.
     turn_observer: Arc<dyn SessionTurnObserver>,
+    /// Where lifecycle facts go - renames, from here; everything else from
+    /// the harness. Erased for the same reason as the observer.
+    lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
     active: Arc<ActiveSessions>,
     /// This service's identity in the session-management lease. Minted at
     /// construction: a restarted process is a new replica, and its claims
@@ -278,6 +295,7 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             realtime,
             name_generator: NoOpAgentSessionNameGenerator,
             turn_observer: Arc::new(NoOpTurnObserver),
+            lifecycle_publisher: Arc::new(NoopLifecyclePublisher),
             active: Arc::new(DashMap::new()),
             replica: ReplicaId::mint(),
             tasks: TaskTracker::new(),
@@ -300,6 +318,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             realtime: self.realtime,
             name_generator,
             turn_observer: self.turn_observer,
+            lifecycle_publisher: self.lifecycle_publisher,
             active: self.active,
             replica: self.replica,
             tasks: self.tasks,
@@ -313,6 +332,17 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
     #[must_use]
     pub fn with_turn_observer(mut self, turn_observer: Arc<dyn SessionTurnObserver>) -> Self {
         self.turn_observer = turn_observer;
+        self
+    }
+
+    /// Replace the no-op lifecycle publisher with whoever carries session
+    /// facts downstream - in production, the Kafka broker.
+    #[must_use]
+    pub fn with_lifecycle_publisher(
+        mut self,
+        lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
+    ) -> Self {
+        self.lifecycle_publisher = lifecycle_publisher;
         self
     }
 
@@ -582,6 +612,7 @@ where
                 tracing::warn!(error = ?error, %id, "failed to publish agent session rename");
             })
             .ok();
+        publish_renamed_lifecycle(&self.repo, &self.lifecycle_publisher, id).await;
         Ok(())
     }
 
@@ -714,12 +745,21 @@ where
             spawn_initial_agent_session_rename(
                 self.repo.clone(),
                 self.realtime.clone(),
+                self.lifecycle_publisher.clone(),
                 self.name_generator.clone(),
                 id,
                 initial_prompt,
             );
         }
         Ok(())
+    }
+
+    async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
+        self.repo.session_bot(id).await
+    }
+
+    async fn folded_messages(&self, id: AgentSessionId) -> Result<Vec<FoldedMessage>> {
+        Ok(self.folds.messages(id).await?)
     }
 
     async fn next_prompt_message_id(&self, id: AgentSessionId) -> Result<MessageId> {
@@ -789,6 +829,7 @@ where
 fn spawn_initial_agent_session_rename<R, Rt, Namer>(
     repo: R,
     realtime: Rt,
+    lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
     name_generator: Namer,
     id: AgentSessionId,
     initial_prompt: String,
@@ -835,6 +876,7 @@ fn spawn_initial_agent_session_rename<R, Rt, Namer>(
                         name,
                     })
                     .await?;
+                publish_renamed_lifecycle(&repo, &lifecycle_publisher, id).await;
                 Ok("renamed")
             }
             .await;
@@ -851,6 +893,38 @@ fn spawn_initial_agent_session_rename<R, Rt, Namer>(
         }
         .instrument(span),
     );
+}
+
+/// Publish `agent_session.renamed` for a session whose name just changed.
+///
+/// The rename itself is already durable, so a failure to describe it here is
+/// logged and swallowed: the event is a courtesy to downstream, not part of
+/// the rename.
+async fn publish_renamed_lifecycle<R>(
+    repo: &R,
+    lifecycle_publisher: &Arc<dyn AgentSessionLifecyclePublisher>,
+    id: AgentSessionId,
+) where
+    R: AgentSessionRepo,
+{
+    let identity = async {
+        let session = repo.get(id).await?;
+        let bot = repo.session_bot(session.bot_id).await?;
+        Ok::<_, AgentSessionError>(session_identity(&session, &bot))
+    }
+    .await;
+    match identity {
+        Ok(identity) => {
+            lifecycle_publisher
+                .publish(AgentSessionLifecycleEvent::Renamed(
+                    SessionRenamedMetadata { identity },
+                ))
+                .await;
+        }
+        Err(error) => {
+            tracing::warn!(error = ?error, %id, "skipping agent_session.renamed: identity unavailable");
+        }
+    }
 }
 
 /// The telemetry shape of a log frame: its kind, and the status event it
@@ -1195,17 +1269,17 @@ async fn run_session<Connector, Logs, Ownership>(
     Logs: AgentSessionLogWriter + AgentSessionRepo,
     Ownership: SessionOwnership,
 {
-    loop {
+    let stop_reason = loop {
         let input = tokio::select! {
             biased;
             () = cancellation.cancelled() => Input::Closed(CloseReason::Abandoned),
             input = actor.next_input() => input,
         };
         let stepped = actor.dispatch(input).await;
-        if stepped == Stepped::Stopped {
-            break;
+        if let Stepped::Stopped(reason) = stepped {
+            break reason;
         }
-    }
+    };
 
     // Refuse late commands before releasing the registry entry, so a caller
     // cannot enqueue into an actor that will never step again.
@@ -1230,5 +1304,5 @@ async fn run_session<Connector, Logs, Ownership>(
     // Last, after the registry entry is gone: whatever the observer does with
     // the fact - clear a busy flag, dispatch nothing - it sees a session that
     // really has no actor anymore.
-    turn_observer.session_stopped(id);
+    turn_observer.session_stopped(id, stop_reason);
 }

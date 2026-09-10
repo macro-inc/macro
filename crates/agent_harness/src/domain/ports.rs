@@ -14,8 +14,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{HarnessError, Result};
 use super::model::{
-    AgentRuntimeConfig, CommandOutcome, HarnessCommand, PriorChannelMessage, ProvisionedEgress,
-    SandboxEgress, SessionAnnouncement, SpawnContainer,
+    AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, HarnessCommand, PriorChannelMessage,
+    ProvisionedEgress, SandboxEgress, SessionAnnouncement, SpawnContainer,
 };
 use super::sandbox::SandboxResizeEffect;
 
@@ -130,11 +130,11 @@ pub trait AgentPromptComposer: Send + Sync + 'static {
 
 /// Posts a pointer to a new agent session into its originating thread.
 pub trait SessionAnnouncer: Send + Sync + 'static {
-    /// Publish one session announcement.
+    /// Publish one session announcement, returning the message it became.
     fn announce(
         &self,
         announcement: SessionAnnouncement,
-    ) -> impl Future<Output = Result<()>> + Send;
+    ) -> impl Future<Output = Result<AnnouncedMessage>> + Send;
 }
 
 /// Where a session finds its bot's live runtime connection.

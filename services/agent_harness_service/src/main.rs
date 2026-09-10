@@ -67,6 +67,7 @@ use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
 };
+use agent_session::outbound::broker_lifecycle_publisher::BrokerLifecyclePublisher;
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::name_generator::HaikuAgentSessionNameGenerator;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
@@ -223,6 +224,15 @@ async fn run() -> anyhow::Result<()> {
     // Bound to the harness once it exists (it is built *from* this service);
     // both attach-capable service instances report turns to the same one.
     let turn_observer = Arc::new(agent_session::domain::ports::LateBoundTurnObserver::new());
+    // One broker for channel side effects and session lifecycle facts alike;
+    // every session service instance publishes lifecycle through the same
+    // adapter, so a rename from any of them lands on the topic.
+    let broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        macro_event_broker::GlobalSpawner,
+    );
+    let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
@@ -233,6 +243,7 @@ async fn run() -> anyhow::Result<()> {
     )
     .with_replica(replica)
     .with_turn_observer(turn_observer.clone())
+    .with_lifecycle_publisher(lifecycle_publisher.clone())
     .with_name_generator(HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(
         pool.clone(),
     )));
@@ -384,7 +395,8 @@ async fn run() -> anyhow::Result<()> {
         NoOpRealtime,
     )
     .with_replica(replica)
-    .with_turn_observer(turn_observer.clone());
+    .with_turn_observer(turn_observer.clone())
+    .with_lifecycle_publisher(lifecycle_publisher.clone());
     let sandbox_and_inmem = RoutedContainers::new(sandbox, inmem, inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
@@ -469,11 +481,6 @@ async fn run() -> anyhow::Result<()> {
             macro_queues::ContactsQueue::new().to_string(),
         ),
     });
-    let broker = MacroEventBrokerService::new(
-        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-        macro_event_broker::GlobalSpawner,
-    );
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(connection_gateway.clone()),
@@ -541,6 +548,7 @@ async fn run() -> anyhow::Result<()> {
         EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url),
         RedisCommandForwarder::new(redis.clone()),
         defaults,
+        Arc::clone(&lifecycle_publisher),
     ));
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.
@@ -622,7 +630,8 @@ async fn run() -> anyhow::Result<()> {
             session_repo.clone(),
             FoldedMessageService::new(session_repo.clone()),
             ConnectionGatewayAgentSessionRealtime::new(connection_gateway, session_repo.clone()),
-        ),
+        )
+        .with_lifecycle_publisher(lifecycle_publisher),
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
@@ -792,8 +801,10 @@ async fn run() -> anyhow::Result<()> {
                                 // HTTP, and the turn signals are the harness's own.
                                 HarnessCommand::EditQueued { .. }
                                 | HarnessCommand::RemoveQueued { .. }
-                                | HarnessCommand::TurnEnded
-                                | HarnessCommand::SessionStopped => "agent_trigger.unexpected",
+                                | HarnessCommand::TurnEnded { .. }
+                                | HarnessCommand::SessionStopped { .. }
+                                | HarnessCommand::ElicitationRaised { .. }
+                                | HarnessCommand::ElicitationCleared => "agent_trigger.unexpected",
                             };
                             tracing::Span::current().record("macro.event.type", event_type);
                             let execution_span = tracing::info_span!(
