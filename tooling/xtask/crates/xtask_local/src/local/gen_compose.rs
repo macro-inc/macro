@@ -233,6 +233,27 @@ fn add_localstack_service(
             // shows up as `"kms": "disabled"` on its health endpoint rather
             // than as a connection error.
             environment: kv(&[("SERVICES", "sqs,dynamodb,s3,kms")]),
+            // Probe the readiness endpoint over loopback instead of the
+            // image's own healthcheck, which shells out to `localstack status
+            // services`. That CLI resolves `localhost.localstack.cloud`, a
+            // public name; where DNS cannot reach it the probe takes ~40s
+            // against its 10s timeout, so the container never reports healthy
+            // and `compose up --wait` fails the whole stack even though
+            // LocalStack is serving fine. Overriding only the probe keeps
+            // `LOCALSTACK_HOST` unset, so the hostname LocalStack advertises
+            // in returned SQS/S3 URLs stays `localstack`, which is how every
+            // other container addresses it.
+            healthcheck: Some(dct::Healthcheck {
+                test: Some(dct::HealthcheckTest::Multiple(vec![
+                    "CMD-SHELL".to_string(),
+                    "curl -fsS http://localhost:4566/_localstack/health".to_string(),
+                ])),
+                interval: Some("10s".to_string()),
+                timeout: Some("10s".to_string()),
+                retries: 5,
+                start_period: Some("15s".to_string()),
+                ..Default::default()
+            }),
             ports: dct::Ports::Short(vec![format!("{}:4566", instance.port(Port::LocalStack))]),
             networks: net_aliases(&[
                 ("databases", &["localstack"]),

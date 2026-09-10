@@ -5,6 +5,7 @@ mod elicitation;
 mod fold;
 mod harness;
 mod harness_readers;
+mod lifecycle;
 mod machine;
 mod macro_tools;
 mod metadata;

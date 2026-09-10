@@ -14,6 +14,7 @@ import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { type Accessor, onCleanup } from 'solid-js';
 import type {
   EntityActionListState,
+  EntityActionNavigationHandler,
   EntityActionViewContext,
 } from './entity-action-context';
 import {
@@ -46,6 +47,9 @@ type UseEntityActionHotkeysOptions = {
   restoreFocus: (entityId?: string) => void | Promise<void>;
   viewContext: Accessor<EntityActionViewContext>;
   splitHandle?: SplitHandle;
+  createActionNavigationHandler?: () =>
+    | EntityActionNavigationHandler
+    | undefined;
   condition?: () => boolean;
 };
 
@@ -119,12 +123,25 @@ export const useEntityActionHotkeys = (
     return [];
   };
 
-  const openNextEntity = (entity: EntityData) => {
+  const openNextEntity: EntityActionNavigationHandler = ({ entity }) => {
     if (!splitHandle) return;
-    // Preview Controllers are synchronized centrally by executeWithSoup so
-    // every mark-done entry point, including menus and swipe, behaves alike.
-    if (splitHandle.isControllerSplit()) return;
-    const handleContent = splitHandle.content().type;
+    if (!entity) {
+      if (splitHandle.isControllerSplit()) splitHandle.resetPreview();
+      return;
+    }
+
+    if (splitHandle.isControllerSplit()) {
+      openEntityInSplitFromUnifiedList(entity, {
+        splitHandle,
+        mergeHistory: true,
+        referredFrom: splitHandle.referredFrom(),
+        notificationSource,
+      });
+      return;
+    }
+
+    const handleContent = splitHandle.content()?.type;
+    if (!handleContent) return;
     if (handleContent === 'component' || handleContent === 'project') return;
     openEntityInSplitFromUnifiedList(entity, {
       splitHandle,
@@ -181,7 +198,11 @@ export const useEntityActionHotkeys = (
       if (entities.length === 0) return false;
       if (!entities.every(markDone.canExecute)) return false;
 
-      markDone.executeWithSoup(entities, list, openNextEntity);
+      markDone.executeWithSoup(
+        entities,
+        list,
+        options.createActionNavigationHandler?.() ?? openNextEntity
+      );
       return true;
     },
     condition: () => {
@@ -540,6 +561,7 @@ export const useEntityActionHotkeys = (
       if (!createReminderAction.canExecute(entities[0])) return false;
       createReminderAction.executeWithSoup(entities, list, {
         advances: marksDoneOnThisView(),
+        onNavigate: options.createActionNavigationHandler?.() ?? openNextEntity,
       });
       return true;
     },

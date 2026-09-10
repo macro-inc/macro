@@ -19,6 +19,10 @@ use super::ContainerManager;
 use crate::domain::model::{AgentKind, SpawnContainer};
 use crate::testing::helpers::containers::{ContainerMock, MockContainerManager};
 use crate::testing::helpers::egress::test_egress;
+use agent_session::domain::model::ReplicaId;
+use agent_session::domain::ports::{
+    NoOpAgentSessionNameGenerator, NoOpTurnObserver, NoopLifecyclePublisher,
+};
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("owner@example.com").unwrap()
@@ -62,6 +66,10 @@ async fn container_session_runs_and_logs_end_to_end() {
         store.clone(),
         FoldedMessageService::new(store.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     ));
     let containers = MockContainerManager::new();
     let attachment = containers
@@ -146,6 +154,10 @@ async fn attaching_a_second_transport_to_an_active_session_fails() {
         store.clone(),
         FoldedMessageService::new(store),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
     let first = ContainerMock::default();
     let second = ContainerMock::default();

@@ -37,7 +37,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
 
   protected async fetch(): Promise<ChannelDetail> {
     return unwrap(
-      await this.client.storage.getChannel({ path: { channel_id: this.id } }),
+      await this.client.storage.getChannel({ path: { channel_id: this.id } })
     );
   }
 
@@ -51,7 +51,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     const { channel_id } = unwrap(
       await client.storage.getOrCreateDm({
         body: { recipient_id: recipient.id },
-      }),
+      })
     );
     return new Channel(client, channel_id);
   }
@@ -59,12 +59,12 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /** Open (creating if needed) the private group channel with a set of users. */
   static async private(
     client: MacroClient,
-    recipients: User[],
+    recipients: User[]
   ): Promise<Channel> {
     const { channel_id } = unwrap(
       await client.storage.getOrCreatePrivate({
         body: { recipients: recipients.map((u) => u.id) },
-      }),
+      })
     );
     return new Channel(client, channel_id);
   }
@@ -79,7 +79,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
       participants?: User[];
       /** Team, for team channels. */
       team?: Team;
-    },
+    }
   ): Promise<Channel> {
     const { id } = unwrap(
       await client.storage.createChannel({
@@ -89,7 +89,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
           participants: (opts.participants ?? []).map((u) => u.id),
           team_id: opts.team?.id ?? null,
         },
-      }),
+      })
     );
     return new Channel(client, id);
   }
@@ -108,12 +108,12 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
    */
   async send(
     body: string | RichMessage,
-    opts?: { thread?: Thread },
+    opts?: { thread?: Thread }
   ): Promise<Message> {
     const id = await postToChannel(
       this.client,
       opts?.thread ?? this,
-      toBody(body),
+      toBody(body)
     );
     return Message.byId(this.client, this.id, id);
   }
@@ -128,7 +128,31 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
             ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
             ...(cursor ? { cursor } : {}),
           },
-        }),
+        })
+      );
+      return {
+        items: page.items.map((m) => Message.from(this.client, m)),
+        nextCursor: page.next_cursor,
+      };
+    });
+  }
+
+  /** Messages created strictly after `after`, most recent first, auto-paginated. */
+  messagesAfter(
+    after: Date | string,
+    opts?: { pageSize?: number }
+  ): AsyncGenerator<Message> {
+    const afterQuery = after instanceof Date ? after.toISOString() : after;
+    return paginate(async (cursor) => {
+      const page = unwrap(
+        await this.client.storage.getChannelMessagesCatchUp({
+          path: { channel_id: this.id },
+          query: {
+            after: afterQuery,
+            ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
+            ...(cursor ? { cursor } : {}),
+          },
+        })
       );
       return {
         items: page.items.map((m) => Message.from(this.client, m)),
@@ -148,21 +172,21 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
       c.storage.patchChannel({
         path: { channel_id: this.id },
         body: { channel_name: name },
-      }),
+      })
     );
   }
 
   /** Delete the channel. This is not reversible. */
   async delete(): Promise<void> {
     await this.mutate((c) =>
-      c.storage.deleteChannel({ path: { channel_id: this.id } }),
+      c.storage.deleteChannel({ path: { channel_id: this.id } })
     );
   }
 
   /** Join the channel as the current user. */
   async join(): Promise<void> {
     await this.mutate((c) =>
-      c.storage.joinChannel({ path: { channel_id: this.id } }),
+      c.storage.joinChannel({ path: { channel_id: this.id } })
     );
   }
 
@@ -171,7 +195,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     const { join_code } = unwrap(
       await this.client.storage.getChannelJoinLink({
         path: { channel_id: this.id },
-      }),
+      })
     );
     return join_code;
   }
@@ -179,7 +203,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
   /** Leave the channel as the current user. */
   async leave(): Promise<void> {
     await this.mutate((c) =>
-      c.storage.leaveChannel({ path: { channel_id: this.id } }),
+      c.storage.leaveChannel({ path: { channel_id: this.id } })
     );
   }
 
@@ -188,7 +212,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return unwrap(
       await this.client.storage.getChannelParticipants({
         path: { channel_id: this.id },
-      }),
+      })
     );
   }
 
@@ -198,7 +222,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
       c.storage.addParticipants({
         path: { channel_id: this.id },
         body: { participants: users.map((u) => u.id) },
-      }),
+      })
     );
   }
 
@@ -208,20 +232,20 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
       c.storage.removeParticipants({
         path: { channel_id: this.id },
         body: { participants: users.map((u) => u.id) },
-      }),
+      })
     );
   }
 
   /** Broadcast a typing indicator, optionally scoped to a thread. */
   async typing(
     action: TypingAction,
-    opts?: { thread?: Thread },
+    opts?: { thread?: Thread }
   ): Promise<void> {
     unwrap(
       await this.client.storage.postTyping({
         path: { channel_id: this.id },
         body: { action, thread_id: opts?.thread?.rootId ?? null },
-      }),
+      })
     );
   }
 
@@ -240,7 +264,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
             ...(opts?.type ? { attachment_type: opts.type } : {}),
             ...(cursor ? { cursor } : {}),
           },
-        }),
+        })
       );
       return { items: page.items, nextCursor: page.next_cursor };
     });

@@ -1,6 +1,11 @@
+use std::pin::Pin;
+
 use super::error::{AgentSessionError, Result};
 use super::model::*;
+use super::session::StopReason;
+use crate::domain::events::AgentSessionLifecycleEvent;
 use agent_client_protocol::schema::v1::SessionId;
+use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
@@ -480,20 +485,31 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
 }
 
+/// One frame appended: its durable identity, and what the fold made of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Appended {
+    /// The log row the frame became.
+    pub log_id: Uuid,
+    /// What the frame meant for the turn, per the connection's live fold.
+    /// Empty for most frames; never filled while catching up on history.
+    pub signals: Vec<TurnSignal>,
+}
+
 /// Sequential live log writer owned by one session actor.
 pub trait AgentSessionLogWriter: Send + 'static {
     /// Persist and fold one frame into this connection's live projection.
-    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Uuid>> + Send {
+    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Appended>> + Send {
         self.append_with_boundary(log, None)
     }
 
     /// Persist a frame and optional successful-load boundary in one transaction.
-    /// Returns its durable row identity before the actor continues.
+    /// Returns its durable row identity, and the turn signals the frame
+    /// implied, before the actor continues.
     fn append_with_boundary(
         &mut self,
         log: AgentSessionLog,
         boundary: Option<HistoryBoundary>,
-    ) -> impl Future<Output = Result<Uuid>> + Send;
+    ) -> impl Future<Output = Result<Appended>> + Send;
 }
 
 /// A session's queue changed; this is the whole queue as it stands now.
@@ -542,33 +558,79 @@ pub trait AgentSessionRealtime {
     }
 }
 
-/// Told when a session's turn ends and when its live actor stops.
+/// Publishing a session's lifecycle facts for anyone downstream: webhooks,
+/// notifications, observability.
+///
+/// Best effort by contract: an implementation logs a failed publish and never
+/// returns it, because nothing about the session itself went wrong. Object-
+/// safe so the harness and this service can hold it erased rather than as one
+/// more type parameter; the broker's `send_event` is generic and cannot be.
+pub trait AgentSessionLifecyclePublisher: Send + Sync + 'static {
+    /// Publish one fact. Resolves once the publish has been attempted.
+    fn publish(
+        &self,
+        event: AgentSessionLifecycleEvent,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+}
+
+impl<Publisher: AgentSessionLifecyclePublisher + ?Sized> AgentSessionLifecyclePublisher
+    for std::sync::Arc<Publisher>
+{
+    fn publish(
+        &self,
+        event: AgentSessionLifecycleEvent,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        (**self).publish(event)
+    }
+}
+
+/// An [`AgentSessionLifecyclePublisher`] that publishes nothing: tests,
+/// offline tooling, and replay.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopLifecyclePublisher;
+
+impl AgentSessionLifecyclePublisher for NoopLifecyclePublisher {
+    fn publish(
+        &self,
+        _event: AgentSessionLifecycleEvent,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async {})
+    }
+}
+
+/// Told what the session's log meant for its turn, and when its live actor
+/// stops.
 ///
 /// What the harness gates its prompt queue on: a turn ending means the agent
 /// can take the next queued prompt, an actor stopping means no turn is in
-/// flight anymore however the last one looked. Both fire from the actor's own
-/// task, so implementations must only hand the fact off - enqueue, notify -
-/// never do the resulting work inline.
+/// flight anymore however the last one looked. Every method fires from the
+/// actor's own task, so implementations must only hand the fact off -
+/// enqueue, notify - never do the resulting work inline.
+///
+/// Turn signals come from the connection's live fold - the same fold the
+/// chip renders from - so "the turn ended" has one definition. That includes
+/// turns nobody here prompted: a resumed session's runtime reports those
+/// with `_session/turn_complete`, and the fold closes them too.
 ///
 /// Object-safe and synchronous on purpose: the service stores it erased so
 /// wiring it is not another type parameter, and the one production
 /// implementation admits work to a queue synchronously.
 pub trait SessionTurnObserver: Send + Sync + 'static {
-    /// The runtime answered the session's in-flight turn.
-    fn turn_ended(&self, id: AgentSessionId);
+    /// A fold-derived fact about the session's turn.
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal);
 
     /// The session's live actor is gone - disconnect, teardown, or crash. Any
-    /// in-flight turn went with it, without [`Self::turn_ended`] firing.
-    fn session_stopped(&self, id: AgentSessionId);
+    /// in-flight turn went with it, without a [`TurnSignal::TurnEnded`].
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason);
 }
 
 impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> {
-    fn turn_ended(&self, id: AgentSessionId) {
-        (**self).turn_ended(id);
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        (**self).signal(id, signal);
     }
 
-    fn session_stopped(&self, id: AgentSessionId) {
-        (**self).session_stopped(id);
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
+        (**self).session_stopped(id, reason);
     }
 }
 
@@ -578,9 +640,9 @@ impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> 
 pub struct NoOpTurnObserver;
 
 impl SessionTurnObserver for NoOpTurnObserver {
-    fn turn_ended(&self, _id: AgentSessionId) {}
+    fn signal(&self, _id: AgentSessionId, _signal: TurnSignal) {}
 
-    fn session_stopped(&self, _id: AgentSessionId) {}
+    fn session_stopped(&self, _id: AgentSessionId, _reason: StopReason) {}
 }
 
 /// A [`SessionTurnObserver`] bound after construction, for the composition
@@ -609,15 +671,15 @@ impl LateBoundTurnObserver {
 }
 
 impl SessionTurnObserver for LateBoundTurnObserver {
-    fn turn_ended(&self, id: AgentSessionId) {
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
         if let Some(observer) = self.observer.get() {
-            observer.turn_ended(id);
+            observer.signal(id, signal);
         }
     }
 
-    fn session_stopped(&self, id: AgentSessionId) {
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
         if let Some(observer) = self.observer.get() {
-            observer.session_stopped(id);
+            observer.session_stopped(id, reason);
         }
     }
 }

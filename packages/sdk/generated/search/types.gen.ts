@@ -1001,6 +1001,10 @@ export type EmailFilters = {
      */
     include_labels?: Array<string>;
     /**
+     * Filter by the email thread's read flag, independently of notification state.
+     */
+    is_read?: boolean | null;
+    /**
      * Restrict to specific inboxes by email_links.id. Empty means "any inbox the
      * caller can access" (soup expands to the full set at the router edge).
      */
@@ -1339,16 +1343,16 @@ export type MatchType = 'exact' | 'partial' | 'regexp' | 'query';
  */
 export type NotificationFilters = {
     /**
-     * Filter by notification done state.
-     * None to ignore, true to include only done notifications, false to include only not-done notifications.
+     * Include entities with a non-deleted notification in any of these exact states.
+     * Empty means no notification restriction. Active means `[unseen, seen]`.
      */
-    done?: boolean | null;
-    /**
-     * Filter by notification seen state.
-     * None to ignore, true to include only seen notifications, false to include only unseen notifications.
-     */
-    seen?: boolean | null;
+    states?: Array<NotificationState>;
 };
+
+/**
+ * The mutually exclusive lifecycle states of a user's notification.
+ */
+export type NotificationState = 'unseen' | 'seen' | 'done';
 
 /**
  * The project filters used to filter down what projects you search over.

@@ -5,6 +5,7 @@
 //! [`AgentSessionLogRepo`] contract without a database.
 
 use crate::domain::error::{AgentSessionError, Result};
+use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, ClaimOutcome,
     CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence,
@@ -12,8 +13,8 @@ use crate::domain::model::{
     SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
-    AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo, REPLICA_STALE_AFTER,
-    SessionOwnership,
+    AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
+    REPLICA_STALE_AFTER, SessionOwnership,
 };
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -665,3 +666,64 @@ impl AgentSessionRealtime for RecordingRealtime {
 
 #[cfg(test)]
 mod test;
+
+/// An [`AgentSessionLifecyclePublisher`] that keeps every event, for
+/// asserting what a flow published and in what order.
+///
+/// Cheap to clone - clones share one store. `wait_for_published` is a real
+/// wait on a `watch`: a publish that lands before the waiter subscribes is
+/// counted, and nothing polls.
+#[derive(Debug, Clone)]
+pub struct RecordingLifecyclePublisher {
+    published: Arc<Mutex<Vec<AgentSessionLifecycleEvent>>>,
+    count: tokio::sync::watch::Sender<usize>,
+}
+
+impl Default for RecordingLifecyclePublisher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RecordingLifecyclePublisher {
+    /// A publisher that records everything.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            published: Arc::default(),
+            count: tokio::sync::watch::Sender::new(0),
+        }
+    }
+
+    /// Everything published, in order.
+    #[must_use]
+    pub fn published(&self) -> Vec<AgentSessionLifecycleEvent> {
+        self.published
+            .lock()
+            .expect("in-memory lifecycle store is not poisoned")
+            .clone()
+    }
+
+    /// Resolve once at least `count` events have been published.
+    pub async fn wait_for_published(&self, count: usize) {
+        let mut receiver = self.count.subscribe();
+        receiver
+            .wait_for(|published| *published >= count)
+            .await
+            .expect("the recording publisher holds the sender");
+    }
+}
+
+impl AgentSessionLifecyclePublisher for RecordingLifecyclePublisher {
+    fn publish(
+        &self,
+        event: AgentSessionLifecycleEvent,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        self.published
+            .lock()
+            .expect("in-memory lifecycle store is not poisoned")
+            .push(event);
+        self.count.send_modify(|published| *published += 1);
+        Box::pin(async {})
+    }
+}

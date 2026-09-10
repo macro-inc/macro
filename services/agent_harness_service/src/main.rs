@@ -67,6 +67,7 @@ use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
 };
+use agent_session::outbound::broker_lifecycle_publisher::BrokerLifecyclePublisher;
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::name_generator::HaikuAgentSessionNameGenerator;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
@@ -118,6 +119,7 @@ use sqlx::postgres::PgPoolOptions;
 use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::Instrument as _;
 
+use agent_session::domain::ports::{NoOpAgentSessionNameGenerator, NoOpTurnObserver};
 use runtime_commands::consume_runtime_commands;
 
 /// Consumer group owning this harness's agent-session offsets.
@@ -223,6 +225,15 @@ async fn run() -> anyhow::Result<()> {
     // Bound to the harness once it exists (it is built *from* this service);
     // both attach-capable service instances report turns to the same one.
     let turn_observer = Arc::new(agent_session::domain::ports::LateBoundTurnObserver::new());
+    // One broker for channel side effects and session lifecycle facts alike;
+    // every session service instance publishes lifecycle through the same
+    // adapter, so a rename from any of them lands on the topic.
+    let broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        macro_event_broker::GlobalSpawner,
+    );
+    let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
@@ -230,12 +241,19 @@ async fn run() -> anyhow::Result<()> {
             connection_gateway.clone(),
             session_repo.clone(),
         ),
-    )
-    .with_replica(replica)
-    .with_turn_observer(turn_observer.clone())
-    .with_name_generator(HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(
-        pool.clone(),
-    )));
+        HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(pool.clone())),
+        turn_observer.clone(),
+        lifecycle_publisher.clone(),
+        replica,
+    );
+
+    // Sessions with a command admitted but not yet resolved - shared with
+    // every provider whose idle reaper closes a session's transport on its
+    // own schedule, so a reaper never pulls the transport out from under a
+    // command already on its way in. Built before the container managers
+    // below (which read it) and handed to the harness after them (which
+    // marks and clears it); nothing else needs to know its type.
+    let pending_commands = agent_harness::domain::pending::PendingCommands::new();
 
     // Containers: the sandbox provider (local Docker when a developer has
     // opted in, Daytona otherwise) plus Cursor cloud agents for the `@cursor`
@@ -275,12 +293,15 @@ async fn run() -> anyhow::Result<()> {
                 "DAYTONA_API_KEY is unset: Daytona-backed sandboxes are unarmed; external agent sessions are unaffected"
             );
         }
-        HarnessContainers::Daytona(DaytonaContainerManager::new(DaytonaSettings {
-            api_url: config.daytona_api_url.clone(),
-            api_key: DaytonaApiKeySecret::new(config.daytona_api_key.clone()),
-            snapshot: Snapshot::new(config.daytona_snapshot.clone()),
-            anthropic_api_key,
-        }))
+        HarnessContainers::Daytona(DaytonaContainerManager::new(
+            DaytonaSettings {
+                api_url: config.daytona_api_url.clone(),
+                api_key: DaytonaApiKeySecret::new(config.daytona_api_key.clone()),
+                snapshot: Snapshot::new(config.daytona_snapshot.clone()),
+                anthropic_api_key,
+            },
+            pending_commands.clone(),
+        ))
     };
     let container_shutdown = sandbox.clone();
 
@@ -382,9 +403,11 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
         NoOpRealtime,
-    )
-    .with_replica(replica)
-    .with_turn_observer(turn_observer.clone());
+        NoOpAgentSessionNameGenerator,
+        turn_observer.clone(),
+        lifecycle_publisher.clone(),
+        replica,
+    );
     let sandbox_and_inmem = RoutedContainers::new(sandbox, inmem, inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
@@ -406,6 +429,7 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         pool.clone(),
         replica,
+        pending_commands.clone(),
     );
     // Fixed system agents retain their deployment defaults. User/team agents
     // are resolved from agent_configs for every trigger so newly-created or
@@ -469,11 +493,6 @@ async fn run() -> anyhow::Result<()> {
             macro_queues::ContactsQueue::new().to_string(),
         ),
     });
-    let broker = MacroEventBrokerService::new(
-        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
-            .context("failed to create kafka event publisher")?,
-        macro_event_broker::GlobalSpawner,
-    );
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(connection_gateway.clone()),
@@ -541,6 +560,8 @@ async fn run() -> anyhow::Result<()> {
         EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url),
         RedisCommandForwarder::new(redis.clone()),
         defaults,
+        Arc::clone(&lifecycle_publisher),
+        pending_commands,
     ));
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.
@@ -622,6 +643,10 @@ async fn run() -> anyhow::Result<()> {
             session_repo.clone(),
             FoldedMessageService::new(session_repo.clone()),
             ConnectionGatewayAgentSessionRealtime::new(connection_gateway, session_repo.clone()),
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            lifecycle_publisher,
+            ReplicaId::mint(),
         ),
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -792,8 +817,8 @@ async fn run() -> anyhow::Result<()> {
                                 // HTTP, and the turn signals are the harness's own.
                                 HarnessCommand::EditQueued { .. }
                                 | HarnessCommand::RemoveQueued { .. }
-                                | HarnessCommand::TurnEnded
-                                | HarnessCommand::SessionStopped => "agent_trigger.unexpected",
+                                | HarnessCommand::Turn(_)
+                                | HarnessCommand::SessionStopped { .. } => "agent_trigger.unexpected",
                             };
                             tracing::Span::current().record("macro.event.type", event_type);
                             let execution_span = tracing::info_span!(

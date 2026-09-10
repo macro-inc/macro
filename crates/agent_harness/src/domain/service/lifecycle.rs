@@ -1,6 +1,9 @@
 //! A session after it is open: control events from the app, sandbox sizing,
 //! turn boundaries, and teardown.
 
+use agent_fold::domain::model::TurnSignal;
+use agent_session::domain::session::StopReason;
+
 use super::*;
 
 /// The harness is what holds a session's live resources, so it is what the
@@ -152,12 +155,17 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
 {
-    fn turn_ended(&self, id: AgentSessionId) {
-        drop(self.execute_here(id, HarnessCommand::TurnEnded));
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        drop(self.execute_here(id, HarnessCommand::Turn(signal)));
     }
 
-    fn session_stopped(&self, id: AgentSessionId) {
-        drop(self.execute_here(id, HarnessCommand::SessionStopped));
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
+        drop(self.execute_here(
+            id,
+            HarnessCommand::SessionStopped {
+                reason: reason.to_string(),
+            },
+        ));
     }
 }
 

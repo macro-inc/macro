@@ -191,11 +191,21 @@ async fn done_filters_exclude_without_moving_the_sort_key(
     // Not-done gates per type: chat-A's only notification is done, so it
     // drops; doc-A keeps its T9 key even though its T1 mention is done.
     let filter = EntityFilterAst {
-        document_filter: Some(Arc::new(filter_ast::Expr::val(
-            DocumentLiteral::NotificationDone(false),
+        document_filter: Some(Arc::new(filter_ast::Expr::or(
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(DocumentLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
         ))),
-        chat_filter: Some(Arc::new(filter_ast::Expr::val(
-            ChatLiteral::NotificationDone(false),
+        chat_filter: Some(Arc::new(filter_ast::Expr::or(
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ChatLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
         ))),
         ..EntityFilterAst::default()
     };
@@ -221,7 +231,7 @@ async fn calendar_filter_folds_notification_state(pool: Pool<Postgres>) -> anyho
     // Neither alarm is done, so asking for done calendar events drops both.
     let filter = EntityFilterAst {
         calendar_event_filter: Some(Arc::new(filter_ast::Expr::val(
-            CalendarEventLiteral::NotificationDone(true),
+            CalendarEventLiteral::NotificationState(item_filters::NotificationState::Done),
         ))),
         ..EntityFilterAst::default()
     };
@@ -275,7 +285,14 @@ async fn email_and_channel_conjuncts_prefilter_candidates(
     // notification is live, so it stays.
     let filter = EntityFilterAst {
         email_filter: email_tree(filter_ast::Expr::and(
-            filter_ast::Expr::val(EmailLiteral::NotificationDone(false)),
+            filter_ast::Expr::or(
+                filter_ast::Expr::val(EmailLiteral::NotificationState(
+                    item_filters::NotificationState::Unseen,
+                )),
+                filter_ast::Expr::val(EmailLiteral::NotificationState(
+                    item_filters::NotificationState::Seen,
+                )),
+            ),
             filter_ast::Expr::val(EmailLiteral::Importance(true)),
         )),
         ..EntityFilterAst::default()
@@ -288,7 +305,14 @@ async fn email_and_channel_conjuncts_prefilter_candidates(
     // importance conjunct drops it before hydration.
     let filter = EntityFilterAst {
         email_filter: email_tree(filter_ast::Expr::and(
-            filter_ast::Expr::val(EmailLiteral::NotificationDone(false)),
+            filter_ast::Expr::or(
+                filter_ast::Expr::val(EmailLiteral::NotificationState(
+                    item_filters::NotificationState::Unseen,
+                )),
+                filter_ast::Expr::val(EmailLiteral::NotificationState(
+                    item_filters::NotificationState::Seen,
+                )),
+            ),
             filter_ast::Expr::val(EmailLiteral::Importance(false)),
         )),
         ..EntityFilterAst::default()
@@ -303,7 +327,7 @@ async fn email_and_channel_conjuncts_prefilter_candidates(
     // it stays.
     let filter = EntityFilterAst {
         channel_filter: Some(Arc::new(filter_ast::Expr::val(
-            ChannelLiteral::NotificationDone(true),
+            ChannelLiteral::NotificationState(item_filters::NotificationState::Done),
         ))),
         ..EntityFilterAst::default()
     };
@@ -313,11 +337,28 @@ async fn email_and_channel_conjuncts_prefilter_candidates(
     assert!(keys(&page).contains(&(EntityType::ChannelMessage, THREAD_M.to_string())));
     assert_eq!(page.len(), 10);
 
-    // An `Or` implies neither branch, so nothing is pre-filtered.
+    // A fully supported OR is safe to pre-filter as a whole.
     let filter = EntityFilterAst {
         email_filter: email_tree(filter_ast::Expr::or(
             filter_ast::Expr::val(EmailLiteral::Importance(false)),
-            filter_ast::Expr::val(EmailLiteral::NotificationDone(true)),
+            filter_ast::Expr::val(EmailLiteral::NotificationState(
+                item_filters::NotificationState::Done,
+            )),
+        )),
+        ..EntityFilterAst::default()
+    };
+    let page =
+        notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
+    assert!(!keys(&page).contains(&thread));
+    assert_eq!(page.len(), 10);
+
+    // Never push only one side of an OR when another branch belongs to hydration.
+    let filter = EntityFilterAst {
+        email_filter: email_tree(filter_ast::Expr::or(
+            filter_ast::Expr::val(EmailLiteral::NotificationState(
+                item_filters::NotificationState::Done,
+            )),
+            filter_ast::Expr::val(EmailLiteral::ThreadId(Uuid::parse_str(THREAD_Z)?)),
         )),
         ..EntityFilterAst::default()
     };
@@ -343,16 +384,23 @@ async fn channel_conjuncts_ignore_thread_scoped_notifications(
 ) -> anyhow::Result<()> {
     use item_filters::ast::channel::ChannelLiteral;
 
-    sqlx::query("UPDATE user_notification SET done = TRUE WHERE notification_id = $1::uuid")
-        .bind(CHANNEL_X_INVITE)
-        .execute(&pool)
-        .await?;
+    sqlx::query!(
+        "UPDATE user_notification SET state = 'done' WHERE notification_id = $1::uuid",
+        Uuid::parse_str(CHANNEL_X_INVITE)?,
+    )
+    .execute(&pool)
+    .await?;
 
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();
     let filter = EntityFilterAst {
-        channel_filter: Some(Arc::new(filter_ast::Expr::val(
-            ChannelLiteral::NotificationDone(false),
+        channel_filter: Some(Arc::new(filter_ast::Expr::or(
+            filter_ast::Expr::val(ChannelLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ChannelLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
         ))),
         ..EntityFilterAst::default()
     };
@@ -378,13 +426,15 @@ async fn thread_and_foreign_entity_conjuncts_prefilter_candidates(
 ) -> anyhow::Result<()> {
     use item_filters::ast::channel::ChannelThreadLiteral;
 
-    sqlx::query("UPDATE user_notification SET done = TRUE WHERE notification_id = ANY($1::uuid[])")
-        .bind(vec![
+    sqlx::query!(
+        "UPDATE user_notification SET state = 'done' WHERE notification_id = ANY($1::uuid[])",
+        &[
             Uuid::parse_str(THREAD_M_MENTION)?,
             Uuid::parse_str(PR_F1_EVENT)?,
-        ])
-        .execute(&pool)
-        .await?;
+        ],
+    )
+    .execute(&pool)
+    .await?;
 
     let link_ids = [Uuid::parse_str(LINK_1)?];
     let sources = sources();
@@ -395,11 +445,21 @@ async fn thread_and_foreign_entity_conjuncts_prefilter_candidates(
     // Not-done trees drop the done mention and the done pull request; the
     // channel's live invite does not keep the thread row.
     let filter = EntityFilterAst {
-        channel_thread_filter: Some(Arc::new(filter_ast::Expr::val(
-            ChannelThreadLiteral::NotificationDone(false),
+        channel_thread_filter: Some(Arc::new(filter_ast::Expr::or(
+            filter_ast::Expr::val(ChannelThreadLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ChannelThreadLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
         ))),
-        foreign_entity_filter: Some(Arc::new(filter_ast::Expr::val(
-            ForeignEntityLiteral::NotificationDone(false),
+        foreign_entity_filter: Some(Arc::new(filter_ast::Expr::or(
+            filter_ast::Expr::val(ForeignEntityLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ForeignEntityLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
         ))),
         ..EntityFilterAst::default()
     };
@@ -414,10 +474,10 @@ async fn thread_and_foreign_entity_conjuncts_prefilter_candidates(
     // Done trees keep them and drop the live pull request instead.
     let filter = EntityFilterAst {
         channel_thread_filter: Some(Arc::new(filter_ast::Expr::val(
-            ChannelThreadLiteral::NotificationDone(true),
+            ChannelThreadLiteral::NotificationState(item_filters::NotificationState::Done),
         ))),
         foreign_entity_filter: Some(Arc::new(filter_ast::Expr::val(
-            ForeignEntityLiteral::NotificationDone(true),
+            ForeignEntityLiteral::NotificationState(item_filters::NotificationState::Done),
         ))),
         ..EntityFilterAst::default()
     };
@@ -494,13 +554,13 @@ fn calendar_fold_renders_supported_literals() {
     let tree = filter_ast::Expr::and(
         filter_ast::Expr::val(CalendarEventLiteral::Id(Uuid::from_u128(7))),
         filter_ast::Expr::is_not(filter_ast::Expr::val(
-            CalendarEventLiteral::NotificationDone(true),
+            CalendarEventLiteral::NotificationState(item_filters::NotificationState::Done),
         )),
     );
     let sql = build_calendar_event_filter(Some(&tree));
     assert!(sql.starts_with(" AND ("));
     assert!(sql.contains("event.id = '00000000-0000-0000-0000-000000000007'"));
     assert!(sql.contains("NOT (EXISTS ("));
-    assert!(sql.contains("un.done = true"));
+    assert!(sql.contains("un.state = 'done'"));
     assert_eq!(build_calendar_event_filter(None), "");
 }

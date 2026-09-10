@@ -325,11 +325,12 @@ fn push_thread_candidate_select(
 
     let view_thread_filter = build_view_thread_filter(view);
     if !view_thread_filter.is_empty() {
-        view_thread_filter.push_into(builder);
+        view_thread_filter.push_into(builder, &params.user_id);
     }
 
     if has_thread_literals(email_filter) {
-        build_thread_email_filter(email_filter, sort_ts_field, &params.resolved).push_into(builder);
+        build_thread_email_filter(email_filter, sort_ts_field, &params.resolved)
+            .push_into(builder, &params.user_id);
     }
 
     // Ensure the candidate LIMIT only counts threads that will survive the
@@ -339,9 +340,10 @@ fn push_thread_candidate_select(
     // `matching_threads` CTE referenced via
     // `t.id IN (SELECT thread_id FROM matching_threads)`.
     if wants_message_exists_pushdown(view) {
-        build_thread_message_exists_filter(email_filter, view, &params.resolved).push_into(builder);
+        build_thread_message_exists_filter(email_filter, view, &params.resolved)
+            .push_into(builder, &params.user_id);
     } else if has_address_literals(email_filter) {
-        build_thread_address_filter(email_filter).push_into(builder);
+        build_thread_address_filter(email_filter).push_into(builder, &params.user_id);
     }
 
     // Team-scoped: the cursor moves outside the dedupe wrapper (see
@@ -473,7 +475,7 @@ fn build_query(
                     builder.push(",\n        ");
                 }
                 builder.push(format!("{name} AS MATERIALIZED (\n            "));
-                body.push_into(&mut builder);
+                body.push_into(&mut builder, &params.user_id);
                 builder.push("\n        )");
                 needs_comma = true;
             }
@@ -481,7 +483,7 @@ fn build_query(
                 builder.push(",\n        ");
             }
             builder.push("matching_threads AS MATERIALIZED (\n            ");
-            ctes.body.push_into(&mut builder);
+            ctes.body.push_into(&mut builder, &params.user_id);
             builder.push("\n        )");
         }
         builder.push("\n        ");
@@ -667,16 +669,16 @@ fn build_query(
             WHERE m.thread_id = t.id
               AND "#,
     );
-    build_lateral_trash_exclusion(&params.resolved).push_into(&mut builder);
+    build_lateral_trash_exclusion(&params.resolved).push_into(&mut builder, &params.user_id);
 
     // Add view-specific message filters
     if !view_message_filter.is_empty() {
-        view_message_filter.push_into(&mut builder);
+        view_message_filter.push_into(&mut builder, &params.user_id);
     }
 
     if has_message_literals(email_filter) {
         build_message_email_filter(email_filter, &params.resolved, sort_ts_field)
-            .push_into(&mut builder);
+            .push_into(&mut builder, &params.user_id);
     }
 
     builder.push(

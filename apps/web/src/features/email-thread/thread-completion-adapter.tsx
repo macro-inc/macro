@@ -276,9 +276,14 @@ export function createThreadCompletionAdapter(
         markAsDoneAction.executeWithSoup(
           [selectedRow.original],
           soup,
-          (nextEntity) => {
+          ({ entity: nextEntity }) => {
             const splitHandle = splitPanel?.handle;
             if (!splitHandle) return;
+            if (!nextEntity) {
+              splitHandle.resetPreview();
+              return;
+            }
+
             void openEntityInSplitFromUnifiedList(nextEntity, {
               splitHandle,
               mergeHistory: true,

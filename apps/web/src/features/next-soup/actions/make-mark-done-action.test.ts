@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     content: vi.fn(() => ({ id: 'other' })),
     isControllerSplit: vi.fn(() => true),
     referredFrom: vi.fn(() => undefined),
+    resetPreview: vi.fn(),
   },
   executeMarkEntitiesDone: vi.fn(async () => [] as string[]),
   executeMarkEntitiesUndone: vi.fn(async () => {}),
@@ -120,6 +121,7 @@ describe('makeMarkDoneAction', () => {
     mocks.controller.content.mockReturnValue({ id: 'other' });
     mocks.controller.isControllerSplit.mockReturnValue(true);
     mocks.controller.referredFrom.mockReturnValue(undefined);
+    mocks.controller.resetPreview.mockClear();
     mocks.executeMarkEntitiesDone.mockClear();
     mocks.executeMarkEntitiesDone.mockResolvedValue([]);
     mocks.executeMarkEntitiesUndone.mockClear();
@@ -161,6 +163,37 @@ describe('makeMarkDoneAction', () => {
     await action.executeWithSoup([currentEntity], soup);
 
     expect(mocks.openEntityInSplitFromUnifiedList).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('uses an explicit navigation handler instead of the split Controller', async () => {
+    const { soup } = createSoup();
+    const onNavigate = vi.fn();
+    const { action, dispose } = createAction();
+
+    await action.executeWithSoup([currentEntity], soup, onNavigate);
+
+    expect(onNavigate).toHaveBeenCalledWith({
+      actionId: 'mark-done',
+      entity: nextEntity,
+    });
+    expect(mocks.openEntityInSplitFromUnifiedList).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('passes no target to the navigation handler when no item remains', async () => {
+    const { soup, focusSet } = createSoup();
+    soup.navigate.peekOffset = vi.fn(() => undefined);
+    const onNavigate = vi.fn();
+    const { action, dispose } = createAction();
+
+    await action.executeWithSoup([currentEntity], soup, onNavigate);
+
+    expect(focusSet).toHaveBeenCalledWith(undefined);
+    expect(onNavigate).toHaveBeenCalledWith({
+      actionId: 'mark-done',
+      entity: undefined,
+    });
     dispose();
   });
 

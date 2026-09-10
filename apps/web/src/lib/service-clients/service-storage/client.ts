@@ -1020,6 +1020,31 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async getChannelMessagesCatchUp(
+    args: WithChannelId & {
+      after: string;
+      limit: number;
+      next_cursor: string | null;
+      previous_cursor: string | null;
+    }
+  ) {
+    const { channel_id, after, limit, next_cursor, previous_cursor } = args;
+    const params = new URLSearchParams();
+    params.append('after', after);
+    params.append('limit', limit.toString());
+    if (next_cursor) {
+      params.append('cursor', next_cursor);
+    } else if (previous_cursor) {
+      params.append('previous_cursor', previous_cursor);
+    }
+    return (
+      await dssFetch<ApiChannelMessagesPage>(
+        `/channels/${channel_id}/messages/catch-up?${params.toString()}`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
   async postChannelMessages(
     args: WithChannelId & { filters: ChannelMessageFilters; limit?: number }
   ) {

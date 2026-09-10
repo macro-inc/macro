@@ -72,14 +72,26 @@ const groupVerticalSize: Record<ButtonSize, string> = {
   'icon-sm': 'w-6',
 };
 
+const groupRadius: Record<ButtonSize, string> = {
+  xs: 'rounded-md',
+  'icon-xs': 'rounded-md',
+  sm: 'rounded-md',
+  'icon-sm': 'rounded-md',
+  md: 'rounded-md',
+  'icon-md': 'rounded-md',
+  lg: 'rounded-lg',
+  'icon-lg': 'rounded-md',
+  xl: 'rounded-lg',
+};
+
 export const ButtonGroup = (props: ButtonGroupProps) => {
   const orientation = () => props.orientation ?? 'horizontal';
   const variant = () => props.variant ?? 'ghost';
+  const size = () => props.size ?? 'md';
   const sizeClass = () => {
-    if (!props.size) return '';
     return orientation() === 'horizontal'
-      ? groupHorizontalSize[props.size]
-      : groupVerticalSize[props.size];
+      ? groupHorizontalSize[size()]
+      : groupVerticalSize[size()];
   };
 
   const ctx: ButtonGroupContextValue = {
@@ -87,7 +99,7 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
       return props.variant;
     },
     get size() {
-      return props.size;
+      return size();
     },
     get orientation() {
       return orientation();
@@ -100,14 +112,18 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
         <div
           data-slot="button-group"
           data-orientation={orientation()}
+          data-size={size()}
           class={cn(
             'data-[orientation=horizontal]:flex-row items-center',
             'data-[orientation=vertical]:flex-col justify-center',
-            'inline-flex overflow-hidden rounded-sm',
+            'inline-flex overflow-hidden',
             /* strip per-button rounding + borders so the group owns the frame */
             '**:data-button:rounded-none',
             '**:data-button:border-0',
             groupVariantStyles[variant()],
+            variant() !== 'ghost' &&
+              'has-[[data-slot=input-group-control]:focus-visible]:border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-edge-muted',
+            groupRadius[size()],
             sizeClass(),
             props.class
           )}

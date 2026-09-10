@@ -73,7 +73,7 @@ export function scopeChannelNotificationsForEntity(
   return notifications;
 }
 
-type EntityWithRawNotifications = EntityData & {
+type EntityWithRawNotifications<T extends EntityData> = T & {
   notifications?: UnifiedNotification[] | Accessor<UnifiedNotification[]>;
 };
 
@@ -81,11 +81,11 @@ type EntityWithRawNotifications = EntityData & {
  * Normalizes GraphQL notification arrays and the global notification source
  * into the accessor shape expected by reusable list-entity components.
  */
-export function withEntityNotifications(
-  entity: EntityWithRawNotifications,
+export function withEntityNotifications<T extends EntityData>(
+  entity: EntityWithRawNotifications<T>,
   source: NotificationSource,
   options: { scopeChannelThreads?: boolean } = {}
-): WithNotification<EntityData> {
+): WithNotification<T> {
   const attached = entity.notifications;
   const read = (): UnifiedNotification[] => {
     if (typeof attached === 'function') return attached();

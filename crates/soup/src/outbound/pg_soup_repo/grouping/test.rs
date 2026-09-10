@@ -630,7 +630,7 @@ async fn grouped_soup_runs_when_calendar_arm_excluded(pool: Pool<Postgres>) -> a
 }
 
 /// The inbox surfaces calendar events through the grouped query with a
-/// `NotificationDone(false)` filter: only events carrying a not-done
+/// `Unseen OR Seen` filter: only events carrying a not-done
 /// notification for the requester appear, and the filter renders bind-free so
 /// it survives this query's hand-numbered parameters.
 #[sqlx::test(
@@ -814,8 +814,8 @@ async fn grouped_soup_filters_calendar_events_by_notification_done(
         .await?;
         sqlx::query!(
             r#"
-            INSERT INTO user_notification (user_id, notification_id, done)
-            VALUES ($1, $2, $3)
+            INSERT INTO user_notification (user_id, notification_id, state)
+            VALUES ($1, $2, CASE WHEN $3::bool THEN 'done'::notification_state ELSE 'unseen'::notification_state END)
             "#,
             OWNER_ID,
             notification_id,
@@ -827,9 +827,14 @@ async fn grouped_soup_filters_calendar_events_by_notification_done(
 
     let user_id = MacroUserIdStr::parse_from_str(OWNER_ID).unwrap();
     let filter = EntityFilterAst {
-        calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::NotificationDone(
-            false,
-        )))),
+        calendar_event_filter: Some(Arc::new(Expr::or(
+            filter_ast::Expr::val(CalendarEventLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(CalendarEventLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
         ..EntityFilterAst::mock_empty()
     };
 

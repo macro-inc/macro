@@ -1,3 +1,4 @@
+import { notificationStatesForFilter } from '@notifications/notification-state';
 import type {
   DateRangeFilter,
   DocumentFieldFilters,
@@ -76,6 +77,7 @@ const FIELD_CONFIG: Record<
   {
     target: QueryTarget;
     field: string;
+    notification?: 'done' | 'seen';
     formatValue?: (value: unknown) => unknown;
     // unit: true -> `{ l: field }`; unit: false/undefined -> `{ l: { field: value } }`
     unit?: boolean;
@@ -87,17 +89,17 @@ const FIELD_CONFIG: Record<
   subType: { target: 'df', field: 'dst' },
   projectId: { target: 'df', field: 'pid' },
   documentOwnerId: { target: 'df', field: 'o' },
-  documentSeen: { target: 'df', field: 'ns' },
-  documentDone: { target: 'df', field: 'nd' },
+  documentSeen: { target: 'df', field: 'ns', notification: 'seen' },
+  documentDone: { target: 'df', field: 'ns', notification: 'done' },
   documentImportance: { target: 'df', field: 'imp' },
   isEmailAttachment: { target: 'df', field: 'iea' },
   calendarEventId: { target: 'calf', field: 'id' },
-  calendarEventSeen: { target: 'calf', field: 'ns' },
-  calendarEventDone: { target: 'calf', field: 'nd' },
+  calendarEventSeen: { target: 'calf', field: 'ns', notification: 'seen' },
+  calendarEventDone: { target: 'calf', field: 'ns', notification: 'done' },
   threadId: { target: 'ef', field: 'ThreadId' },
   emailLinkId: { target: 'ef', field: 'Owner' },
-  emailSeen: { target: 'ef', field: 'NotificationSeen' },
-  emailDone: { target: 'ef', field: 'NotificationDone' },
+  emailSeen: { target: 'ef', field: 'Read' },
+  emailDone: { target: 'ef', field: 'NotificationState', notification: 'done' },
   emailImportance: { target: 'ef', field: 'Importance' },
   emailProjectId: { target: 'ef', field: 'ProjectId' },
   emailSender: {
@@ -109,8 +111,16 @@ const FIELD_CONFIG: Record<
   emailCalendarOnly: { target: 'ef', field: 'CalendarOnly' },
   channelId: { target: 'chanf', field: 'ChannelId' },
   channelType: { target: 'chanf', field: 'ChannelType' },
-  channelSeen: { target: 'chanf', field: 'NotificationSeen' },
-  channelDone: { target: 'chanf', field: 'NotificationDone' },
+  channelSeen: {
+    target: 'chanf',
+    field: 'NotificationState',
+    notification: 'seen',
+  },
+  channelDone: {
+    target: 'chanf',
+    field: 'NotificationState',
+    notification: 'done',
+  },
   channelImportance: { target: 'chanf', field: 'Importance' },
   channelIsParticipant: { target: 'chanf', field: 'IsParticipant' },
   channelSenderId: { target: 'chanf', field: 'Sender' },
@@ -118,17 +128,25 @@ const FIELD_CONFIG: Record<
   channelThreadId: { target: 'cthf', field: 'ThreadId' },
   channelThreadRootSenderId: { target: 'cthf', field: 'RootSender' },
   channelThreadParticipantId: { target: 'cthf', field: 'Participant' },
-  channelThreadSeen: { target: 'cthf', field: 'NotificationSeen' },
-  channelThreadDone: { target: 'cthf', field: 'NotificationDone' },
+  channelThreadSeen: {
+    target: 'cthf',
+    field: 'NotificationState',
+    notification: 'seen',
+  },
+  channelThreadDone: {
+    target: 'cthf',
+    field: 'NotificationState',
+    notification: 'done',
+  },
   chatId: { target: 'cf', field: 'cid' },
   chatOwnerId: { target: 'cf', field: 'o' },
   chatProjectId: { target: 'cf', field: 'pid' },
-  chatSeen: { target: 'cf', field: 'ns' },
-  chatDone: { target: 'cf', field: 'nd' },
+  chatSeen: { target: 'cf', field: 'ns', notification: 'seen' },
+  chatDone: { target: 'cf', field: 'ns', notification: 'done' },
   folderId: { target: 'pf', field: 'pid' },
   folderOwnerId: { target: 'pf', field: 'o' },
-  folderSeen: { target: 'pf', field: 'ns' },
-  folderDone: { target: 'pf', field: 'nd' },
+  folderSeen: { target: 'pf', field: 'ns', notification: 'seen' },
+  folderDone: { target: 'pf', field: 'ns', notification: 'done' },
   callId: { target: 'callf', field: 'CallId' },
   callChannelId: { target: 'callf', field: 'ChannelId' },
   callSpeakerId: { target: 'callf', field: 'Speaker' },
@@ -136,8 +154,8 @@ const FIELD_CONFIG: Record<
   callAttended: { target: 'callf', field: 'Attended' },
   foreignEntityRecordId: { target: 'fef', field: 'id' },
   foreignEntitySource: { target: 'fef', field: 'fes' },
-  foreignEntitySeen: { target: 'fef', field: 'ns' },
-  foreignEntityDone: { target: 'fef', field: 'nd' },
+  foreignEntitySeen: { target: 'fef', field: 'ns', notification: 'seen' },
+  foreignEntityDone: { target: 'fef', field: 'ns', notification: 'done' },
   foreignEntityIncludesMe: { target: 'fef', field: 'me', unit: true },
   crmCompanyId: { target: 'ccf', field: 'id' },
   crmCompanyHidden: { target: 'ccf', field: 'hidden' },
@@ -232,6 +250,14 @@ function pushFieldFiltersToTargets(
     }
 
     const format = config.formatValue ?? ((v: unknown) => v);
+    const literal = (value: unknown): BackendAst =>
+      config.notification
+        ? AST.or(
+            notificationStatesForFilter(config.notification, value).map(
+              (state) => AST.literal(config.field, state)
+            )
+          )
+        : AST.literal(config.field, format(value));
 
     if (Array.isArray(includeVal) || Array.isArray(excludeVal)) {
       const includeVals = includeVal as unknown[] | undefined;
@@ -239,7 +265,7 @@ function pushFieldFiltersToTargets(
 
       if (includeVals?.length) {
         byTarget[config.target].push(
-          AST.or(includeVals.map((v) => AST.literal(config.field, format(v))))
+          AST.or(includeVals.map((v) => literal(v)))
         );
       }
 
@@ -250,21 +276,15 @@ function pushFieldFiltersToTargets(
 
         if (filtered.length > 0) {
           byTarget[config.target].push(
-            AST.not(
-              AST.or(filtered.map((v) => AST.literal(config.field, format(v))))
-            )
+            AST.not(AST.or(filtered.map((v) => literal(v))))
           );
         }
       }
     } else {
       if (includeVal !== undefined) {
-        byTarget[config.target].push(
-          AST.literal(config.field, format(includeVal))
-        );
+        byTarget[config.target].push(literal(includeVal));
       } else if (excludeVal !== undefined) {
-        byTarget[config.target].push(
-          AST.not(AST.literal(config.field, format(excludeVal)))
-        );
+        byTarget[config.target].push(AST.not(literal(excludeVal)));
       }
     }
   }

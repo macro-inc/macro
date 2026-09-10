@@ -24,7 +24,7 @@ const BUTTON_TOUCH_STYLES =
 export const buttonVariants = createVariants(
   cn(
     'relative inline-flex shrink-0 items-center justify-center whitespace-nowrap text-sm',
-    'rounded-md border border-transparent font-medium outline-none select-none transition-colors',
+    'rounded-md border-1 border-transparent font-medium outline-none select-none transition-colors',
     'data-disabled:cursor-not-allowed data-disabled:opacity-30',
     '[&_svg]:pointer-events-none [&_svg]:shrink-0'
   ),
@@ -136,6 +136,19 @@ function isIconSize(size: ButtonSize): boolean {
   return size.startsWith('icon-');
 }
 
+/**
+ * The standard way to trigger an action. `variant` carries emphasis and
+ * `size` carries density; both are shared with Badge so button-like elements
+ * line up.
+ *
+ * @do Give every screen at most one `cta` or `accent` button.
+ * @do Always set `label` on icon-only buttons; it is the accessible name.
+ * @do Use `danger` only for destructive actions, paired with a confirmation.
+ * @dont Do not restyle a button with utility classes when a variant already
+ *   covers it.
+ * @dont Do not use a Button for navigation that should be a link.
+ * @dont Do not put two `danger` buttons next to each other.
+ */
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
     'tooltipPlacement',

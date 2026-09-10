@@ -1,7 +1,6 @@
 //! Named compute tier for a managed coding-agent sandbox.
 
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 #[cfg(test)]
 mod test;
@@ -10,7 +9,8 @@ mod test;
 ///
 /// The API and database store the name. CPU, RAM, and disk live in
 /// `crates/agent_harness/sandbox_sizes.json`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum SandboxSize {
     /// Smallest named tier.
