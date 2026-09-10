@@ -36,6 +36,17 @@ dialog, a second Escape closes it. Press **Create Session** or
 `Cmd/Ctrl+Enter`; the composer closes and the new `/app/agent/<uuid>` session
 opens while its runtime starts.
 
+## AI usage limits
+
+Paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
+usage rates). When it is used up and no credits or usage billing cover the
+request, sending a message answers HTTP 402 and the app opens the
+**AI usage limit** dialog (title `You've used this month's included AI`, or the
+spending-limit / failed-charge variants). It shows the same meter and controls
+as Settings → Billing: credit-pack buttons, the `Usage billing` toggle, an
+`Open billing settings` button, and `Upgrade to Max` for Premium payers. Team
+members who are not the payer see a note to ask the team owner instead.
+
 ## Start a doc-scoped chat
 
 Open a doc → side panel `Actions` → `Ask Macro`. Opens a chat pane with the document already

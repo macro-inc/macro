@@ -155,10 +155,44 @@ async fn test_user_respository_get_user_id_by_email() -> anyhow::Result<()> {
         )
         .await?;
 
+    // One removal for the sibling tiers on activation, one for the pause.
     assert_eq!(
         mock_user_roles_and_permissions_repository.get_remove_roles_from_user_calls(),
+        2
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn activating_a_tier_removes_the_other_tier_roles() -> anyhow::Result<()> {
+    let mock_user_repository = MockUserRepository::default();
+    let mock_user_roles_and_permissions_repository =
+        MockUserRolesAndPermissionsRepository::default();
+
+    let user_service = UserRolesAndPermissionsServiceImpl::new(
+        mock_user_roles_and_permissions_repository.clone(),
+        mock_user_repository,
+    );
+
+    user_service
+        .update_user_roles_and_permissions_for_subscription(
+            Email::parse_from_str("user@user.com")?.lowercase(),
+            SubscriptionStatus::Active,
+            ProductTier::Max,
+        )
+        .await?;
+
+    assert_eq!(
+        mock_user_roles_and_permissions_repository.get_add_roles_to_user_calls(),
         1
     );
+    let removed = mock_user_roles_and_permissions_repository.get_removed_roles_from_user_calls();
+    assert_eq!(removed.len(), 1);
+    assert!(removed[0].contains(&RoleId::SubOpus));
+    assert!(removed[0].contains(&RoleId::SubSonnet));
+    assert!(removed[0].contains(&RoleId::SubHaiku));
+    assert!(!removed[0].contains(&RoleId::SubMax));
+    assert!(!removed[0].contains(&RoleId::ProfessionalSubscriber));
     Ok(())
 }
 

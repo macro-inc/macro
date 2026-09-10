@@ -342,11 +342,21 @@ async fn main() -> anyhow::Result<()> {
         user_roles_and_permissions_macro_db,
     );
 
+    let stripe_prices = api::StripePrices {
+        premium: config.stripe_price_id.to_string(),
+        max: config
+            .stripe_max_price_id
+            .value()
+            .filter(|id| !id.trim().is_empty())
+            .map(str::to_owned),
+    };
+    if stripe_prices.max.is_none() {
+        tracing::warn!("STRIPE_MAX_PRICE_ID is not set; the Max plan cannot be sold");
+    }
+
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
-    let customer_repo_impl = CustomerRepositoryImpl::new(
-        stripe_client.clone(),
-        config.stripe_price_id.to_string().clone(),
-    );
+    let customer_repo_impl =
+        CustomerRepositoryImpl::new(stripe_client.clone(), stripe_prices.seat_price_ids());
     let favorites_service = favorites::domain::service::FavoritesServiceImpl::new(
         favorites::outbound::pg_favorites_repo::PgFavoritesRepo::new(db.clone()),
     );
@@ -397,7 +407,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
-        teams_repo_impl,
+        teams_repo_impl.clone(),
         customer_repo_impl,
         channel_service.clone(),
         user_roles_and_permissions_service.clone(),
@@ -438,6 +448,17 @@ async fn main() -> anyhow::Result<()> {
         notification_ingress: notification_ingress_service.clone(),
     };
 
+    let stripe_client = Arc::new(stripe_client);
+    let ai_billing_service = Arc::new(ai_billing::domain::BillingServiceImpl::new(
+        ai_billing::outbound::RolesTeamsEntitlementSource::new(
+            user_roles_and_permissions_service.clone(),
+            teams_repo_impl.clone(),
+        ),
+        ai_billing::outbound::PgUsageReader::new(db.clone()),
+        ai_billing::outbound::PgBillingRepo::new(db.clone()),
+        ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone()),
+    ));
+
     let server_result = api::setup_and_serve(
         ApiContext {
             db,
@@ -446,7 +467,7 @@ async fn main() -> anyhow::Result<()> {
             microsoft_token_cipher,
             cursor_api_key_cipher,
             macro_cache_client: Arc::new(macro_cache_client),
-            stripe_client: Arc::new(stripe_client),
+            stripe_client,
             document_storage_service_client: Arc::new(document_storage_service_client),
             email_service_client: Arc::new(email_service_client),
             ses_client: Arc::new(ses_client),
@@ -492,7 +513,8 @@ async fn main() -> anyhow::Result<()> {
             }),
             loops_client: Arc::new(loops_client),
             analytics_client,
-            stripe_price_id: config.stripe_price_id.to_string(),
+            stripe_prices,
+            ai_billing_service,
         },
         config.port,
     )

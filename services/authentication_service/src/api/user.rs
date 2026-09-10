@@ -61,6 +61,7 @@ fn router_with_auth() -> Router<ApiContext> {
             "/stripe/portal",
             post(stripe::create_portal_session::create_portal_session),
         )
+        .route("/stripe/plan", post(stripe::change_plan::change_plan))
         .route(
             "/legacy_user_permissions",
             get(get_legacy_user_permissions::handler),

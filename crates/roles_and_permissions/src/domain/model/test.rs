@@ -9,6 +9,7 @@ fn paid_subscription_roles_include_legacy_and_pricing_tiers() {
         RoleId::SubHaiku,
         RoleId::SubSonnet,
         RoleId::SubOpus,
+        RoleId::SubMax,
     ] {
         assert!(
             role.is_paid_subscription(),
@@ -30,4 +31,10 @@ fn non_subscription_roles_do_not_grant_paid_access() {
             "{role} should not grant paid access"
         );
     }
+}
+
+#[test]
+fn max_role_roundtrips_through_its_string_id() {
+    assert_eq!(RoleId::SubMax.to_string(), "sub_max");
+    assert_eq!("sub_max".parse::<RoleId>().unwrap(), RoleId::SubMax);
 }

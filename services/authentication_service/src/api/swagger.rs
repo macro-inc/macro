@@ -36,9 +36,10 @@ use crate::api::user::patch_user_group::PatchUserGroupRequest;
 use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
-use crate::api::user::stripe::StripeSessionResponse;
+use crate::api::user::stripe::change_plan::{ChangePlanRequest, ChangePlanResponse};
 use crate::api::user::stripe::create_checkout_session_v2::CreateCheckoutSessionV2Request;
 use crate::api::user::stripe::create_portal_session::CreatePortalSessionRequest;
+use crate::api::user::stripe::{PaidPlan, StripeSessionResponse};
 use crate::api::{
     email, github_pull_requests, health, jwt, link, login, logout, merge, mobile_welcome_email,
     oauth, oauth2, permissions, session, user,
@@ -125,6 +126,13 @@ use model::user::{
                 user::patch_tutorial::handler,
                 user::stripe::create_checkout_session_v2::create_checkout_session,
                 user::stripe::create_portal_session::create_portal_session,
+                user::stripe::change_plan::change_plan,
+
+                /// /ai-billing
+                ai_billing::inbound::axum_router::get_summary_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
+                ai_billing::inbound::axum_router::get_plans_handler,
+                ai_billing::inbound::axum_router::update_overage_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
+                ai_billing::inbound::axum_router::create_credit_checkout_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
 
                 /// /session
                 session::session_login::handler,
@@ -196,6 +204,20 @@ use model::user::{
                         InitOutlookLinkResponse,
                         CursorApiKeyStatus,
                         PutCursorApiKeyRequest,
+
+                        // Plans and AI billing
+                        PaidPlan,
+                        ChangePlanRequest,
+                        ChangePlanResponse,
+                        ai_billing::UsageSnapshot,
+                        ai_billing::PlanTier,
+                        ai_billing::DenyReason,
+                        ai_billing::inbound::axum_router::AiBillingErrorBody,
+                        ai_billing::inbound::axum_router::PlanCatalogEntry,
+                        ai_billing::inbound::axum_router::PlanCatalogResponse,
+                        ai_billing::inbound::axum_router::UpdateOverageRequest,
+                        ai_billing::inbound::axum_router::CreditCheckoutRequestBody,
+                        ai_billing::inbound::axum_router::CreditCheckoutResponse,
 
                         // GitHub pull requests
                         EnrichGithubPullRequestsProxyRequest,

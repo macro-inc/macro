@@ -34,8 +34,8 @@ use macro_authorization::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_service_urls::{
-    ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl,
-    StaticFileServiceUrl, SyncServiceUrl,
+    AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
+    LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
 };
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
@@ -447,7 +447,37 @@ async fn main() -> anyhow::Result<()> {
             macro_event_broker: macro_event_broker.clone(),
         },
     );
-    let recorder = ai_usage::pg_recorder(db.clone());
+    let user_permissions_service = Arc::new(
+        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
+            roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
+            roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
+        ),
+    );
+
+    // The AI billing gate reads allowances, credits, and overage state here;
+    // collection (Stripe) lives in the authentication service, which the
+    // recorder below asks to settle once a payer runs past their allowance.
+    let ai_billing = Arc::new(ai_billing::domain::BillingServiceImpl::new(
+        ai_billing::outbound::RolesTeamsEntitlementSource::new(
+            (*user_permissions_service).clone(),
+            teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+        ),
+        ai_billing::outbound::PgUsageReader::new(db.clone()),
+        ai_billing::outbound::PgBillingRepo::new(db.clone()),
+        ai_billing::outbound::NoOpPaymentGateway,
+    ));
+    let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
+        internal_api_key.clone(),
+        AuthServiceUrl::new()?.to_string(),
+    ));
+    let recorder: Arc<dyn ai_usage::UsageRecorder> =
+        Arc::new(ai_billing::outbound::SettlingUsageRecorder::new(
+            Arc::new(ai_usage::domain::service::UsageServiceImpl::new(
+                ai_usage::outbound::PgUsageRepo::new(db.clone()),
+            )),
+            ai_billing.clone(),
+            ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client),
+        ));
 
     // The import pipeline: staged/imported external items, gather jobs over
     // the user's connectors, and the Haiku import job. Built before the tool
@@ -755,13 +785,6 @@ async fn main() -> anyhow::Result<()> {
     )
     .with_auth_completed_hook(pipedream_auth_hook);
 
-    let user_permissions_service = Arc::new(
-        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
-            roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
-            roles_and_permissions::outbound::pgpool::MacroDB::new(db.clone()),
-        ),
-    );
-
     let api_result = api::setup_and_serve(ApiContext {
         db: db.clone(),
         email_service_client_external,
@@ -770,6 +793,7 @@ async fn main() -> anyhow::Result<()> {
         search_service_client,
         authorization_state,
         user_permissions_service,
+        ai_billing,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
         notification_ingress_service,

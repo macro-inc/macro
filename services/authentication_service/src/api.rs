@@ -37,6 +37,8 @@ mod permissions_extractor;
 mod session;
 pub(crate) mod signup_policy;
 mod user;
+
+pub use user::stripe::StripePrices;
 mod webhooks;
 
 // Misc
@@ -140,6 +142,12 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         )
         .nest("/jwt", jwt::router())
         .nest("/session", session::router())
+        .merge(ai_billing::inbound::ai_billing_router(
+            ai_billing::inbound::AiBillingRouterState {
+                service: state.ai_billing_service.clone(),
+                authorization_state: state.authorization_state.clone(),
+            },
+        ))
         .merge(mobile_welcome_email::router(state.clone()))
         .nest(
             "/webhooks",

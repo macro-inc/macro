@@ -12,16 +12,17 @@ use crate::domain::{customer_repo::CustomerRepository, model::CustomerError};
 pub struct CustomerRepositoryImpl {
     /// The underlying stripe::Client connected to stripe.
     client: Arc<stripe::Client>,
-    /// The stripe price id for the per-seat subscription item.
-    stripe_price_id: String,
+    /// The stripe price ids that carry per-seat subscription items (one per
+    /// paid plan). A subscription holds exactly one of them.
+    seat_price_ids: Vec<String>,
 }
 
 impl CustomerRepositoryImpl {
     /// Creates a new instance of CustomerRepositoryImpl
-    pub fn new(stripe_client: stripe::Client, stripe_price_id: String) -> Self {
+    pub fn new(stripe_client: stripe::Client, seat_price_ids: Vec<String>) -> Self {
         Self {
             client: Arc::new(stripe_client),
-            stripe_price_id,
+            seat_price_ids,
         }
     }
 
@@ -46,7 +47,11 @@ impl CustomerRepositoryImpl {
             .find(|item| {
                 item.price
                     .as_ref()
-                    .map(|price| price.id == self.stripe_price_id)
+                    .map(|price| {
+                        self.seat_price_ids
+                            .iter()
+                            .any(|id| *id == price.id.as_str())
+                    })
                     .unwrap_or(false)
             })
             .ok_or(CustomerError::NoMatchingLineItem)?;

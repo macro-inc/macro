@@ -1,23 +1,38 @@
 ---
 title: "Billing & Plans"
 icon: "credit-card"
-description: "Macro's free and premium plans, and how to manage your subscription."
+description: "Macro's free, Premium, and Max plans, how AI usage is included, and how to manage your subscription."
 ---
 
-Macro has one paid plan, priced per person. The price is the same whether you're solo or on a team.
+Macro has two paid plans, priced per person. The price is the same whether you're solo or on a team.
 
-|  | Free | Premium |
-| --- | --- | --- |
-| Price | \$0 | \$40 / month |
-| AI agent | Fast model only | All models |
-| AI tool calls | Limited | Unlimited |
-| Storage | 5 GB | 1 TB |
+|  | Free | Premium | Max |
+| --- | --- | --- | --- |
+| Price | \$0 | \$40 / month | \$200 / month |
+| AI agent | Fast model only | All models | All models |
+| AI usage included each month | Limited | \$40 | \$200 |
+| Beyond included AI | — | Credits or usage billing | Credits or usage billing |
+| Storage | 5 GB | 1 TB | 1 TB |
 
-Teams require a paid seat for every member; there's no free plan for teams. Your current plan is shown in **Settings → Account**, with an **Upgrade** button if you're on the free plan.
+Teams require a paid seat for every member; there's no free plan for teams. Your current plan is shown in **Settings → Billing**, with **Upgrade** buttons if you're on the free plan and an **Upgrade to Max** button on Premium.
+
+## AI usage
+
+Every paid plan includes a monthly amount of AI usage worth the plan's price, measured at Macro's usage rates: Premium includes \$40 of AI each month and Max includes \$200. Each AI request draws on that amount based on the model and the tokens it used. On a team, seats pool together, so a five-seat Premium team shares \$200 of AI each month.
+
+**Settings → Billing** shows how much of this period's included AI you've used, when it resets, your credit balance, and your usage billing settings. Included usage resets at the start of each billing period; it doesn't roll over.
+
+When the included amount is used up, AI requests pause until one of these applies:
+
+- **Credits** — prepaid AI usage you buy in \$10, \$25, \$50, or \$100 packs. Credits are applied after your included amount, never expire, and carry over between periods.
+- **Usage billing** — turn it on to bill AI beyond your included amount and credits to your card in \$10 increments, up to a monthly limit you choose. If a charge fails, usage billing pauses until you update your payment method and turn it back on.
+- **Upgrading to Max** — five times the included usage. Upgrades take effect immediately and are prorated for the rest of the period.
+
+On a team, the team owner buys credits and controls usage billing for everyone; members see the team's position but not the controls.
 
 ## Managing your subscription
 
-Subscriptions are handled through Stripe. From **Settings → Account**, choose **Manage Subscription** to open the billing portal, where you can update your payment method, download invoices, or cancel. If you cancel, your plan stays active until the end of the billing period.
+Subscriptions are handled through Stripe. From **Settings → Billing**, choose **Manage** to open the billing portal, where you can update your payment method, download invoices, or cancel. If you cancel, your plan stays active until the end of the billing period.
 
 ## Self-hosting
 

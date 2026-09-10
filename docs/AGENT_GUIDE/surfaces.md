@@ -213,7 +213,11 @@ Greeting, getting-started checklist, example prompt buttons (`Draft a document`,
 
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
-`x-macro-user-api-key`), `Notifications`, `Billing`,
+`x-macro-user-api-key`), `Notifications`, `Billing` (current plan card with
+`Manage`; on paid plans an **AI usage** card with the period meter, credit
+balance, credit-pack buttons `$10`/`$25`/`$50`/`$100` that redirect to Stripe
+Checkout, and a `Usage billing` toggle with per-period limit pills; an
+`Upgrade`/`Upgrade to Max` card, or a `Switch to Premium` link on Max),
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
 Workspace → `Team`, `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
 with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down

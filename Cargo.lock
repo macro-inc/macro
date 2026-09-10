@@ -539,6 +539,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai_billing"
+version = "0.1.0"
+dependencies = [
+ "ai_usage",
+ "anyhow",
+ "async-stripe",
+ "authentication_service_client",
+ "axum",
+ "chrono",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "roles_and_permissions",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "teams",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "ai_projections"
 version = "0.1.0"
 dependencies = [
@@ -1547,6 +1575,7 @@ name = "authentication_service"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
+ "ai_billing",
  "analytics_client",
  "anyhow",
  "async-stripe",
@@ -5115,6 +5144,7 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "aho-corasick",
+ "ai_billing",
  "ai_projections",
  "ai_tools",
  "ai_toolset",
@@ -5124,6 +5154,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "attachment",
+ "authentication_service_client",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -5206,6 +5237,7 @@ dependencies = [
  "stream",
  "strum 0.27.2",
  "sync_service_client",
+ "teams",
  "thiserror 2.0.18",
  "time",
  "tokio",

@@ -4,11 +4,71 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use model::response::ErrorResponse;
-use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
-use serde::Serialize;
+use roles_and_permissions::domain::model::{ProductTier, UserRolesAndPermissionsError};
+use serde::{Deserialize, Serialize};
 use stripe::{ParseIdError, StripeError};
 use thiserror::Error;
 use utoipa::ToSchema;
+
+/// The paid plans a customer can subscribe to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PaidPlan {
+    /// $40/seat/month.
+    Premium,
+    /// $200/seat/month with a 5x AI allowance.
+    Max,
+}
+
+impl PaidPlan {
+    /// The role tier recorded on subscribers of this plan.
+    pub fn product_tier(self) -> ProductTier {
+        match self {
+            PaidPlan::Premium => ProductTier::Opus,
+            PaidPlan::Max => ProductTier::Max,
+        }
+    }
+}
+
+/// The Stripe price ids behind each paid plan's per-seat subscription item.
+#[derive(Debug, Clone)]
+pub struct StripePrices {
+    /// Premium seat price.
+    pub premium: String,
+    /// Max seat price, when configured.
+    pub max: Option<String>,
+}
+
+impl StripePrices {
+    /// The price to sell `plan` at.
+    pub fn price_id(&self, plan: PaidPlan) -> Result<&str, StripeOperationError> {
+        match plan {
+            PaidPlan::Premium => Ok(&self.premium),
+            PaidPlan::Max => self
+                .max
+                .as_deref()
+                .ok_or(StripeOperationError::PlanUnavailable),
+        }
+    }
+
+    /// Which plan a subscription item's price belongs to, if any.
+    pub fn plan_for_price(&self, price_id: &str) -> Option<PaidPlan> {
+        if price_id == self.premium {
+            Some(PaidPlan::Premium)
+        } else if self.max.as_deref() == Some(price_id) {
+            Some(PaidPlan::Max)
+        } else {
+            None
+        }
+    }
+
+    /// Every price that carries a seat item.
+    pub fn seat_price_ids(&self) -> Vec<String> {
+        std::iter::once(self.premium.clone())
+            .chain(self.max.clone())
+            .collect()
+    }
+}
 
 /// Shared error type for Stripe operations
 #[derive(Debug, Error)]
@@ -33,6 +93,12 @@ pub enum StripeOperationError {
     TeamsErr(#[from] teams::domain::model::TeamError),
     #[error("Roles and permissions error")]
     RolesErr(#[from] UserRolesAndPermissionsError),
+    #[error("This plan is not available yet")]
+    PlanUnavailable,
+    #[error("No active subscription")]
+    NoSubscription,
+    #[error("Already on this plan")]
+    AlreadyOnPlan,
 }
 
 impl IntoResponse for StripeOperationError {
@@ -51,6 +117,9 @@ impl IntoResponse for StripeOperationError {
             StripeOperationError::AlreadySubscribed => StatusCode::CONFLICT,
             StripeOperationError::TeamsErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::RolesErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            StripeOperationError::PlanUnavailable => StatusCode::BAD_REQUEST,
+            StripeOperationError::NoSubscription => StatusCode::NOT_FOUND,
+            StripeOperationError::AlreadyOnPlan => StatusCode::CONFLICT,
         };
         (
             status,

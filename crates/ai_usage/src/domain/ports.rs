@@ -64,6 +64,19 @@ pub enum AiFeature {
     AgentSession,
 }
 
+/// Strip a provider prefix from a routing id, yielding the bare model api id
+/// that [`ai_pricing`](UsageRepo::get_pricing) is keyed on.
+///
+/// Chat routes models as `provider/model` (`anthropic/claude-opus-5`) while
+/// one-shot callers pass the bare id. Pricing and stored usage always use the
+/// bare form so a price resolves either way.
+pub fn normalize_model_id(model: &str) -> &str {
+    match model.rsplit_once('/') {
+        Some((_, bare)) if !bare.is_empty() => bare,
+        _ => model,
+    }
+}
+
 /// Resolved price for one completion.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct Price {

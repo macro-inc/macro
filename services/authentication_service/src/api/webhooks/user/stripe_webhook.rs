@@ -2,7 +2,12 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use crate::api::context::ApiContext;
+use crate::api::user::stripe::PaidPlan;
 
+use ai_billing::BillingService;
+use ai_billing::outbound::stripe_gateway::{
+    PAYER_METADATA_KEY, PURPOSE_AI_CREDITS, PURPOSE_AI_OVERAGE, PURPOSE_METADATA_KEY,
+};
 use analytics_client::{AnalyticsClient, MetaActionSource, MetaUserData};
 use anyhow::Context;
 use axum::{
@@ -11,6 +16,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
 };
+use chrono::{DateTime, Utc};
 use macro_user_id::email::Email;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
@@ -18,7 +24,7 @@ use miniserde::json::Value as JsonValue;
 use model::response::ErrorResponse;
 use referral::domain::ports::ReferralService;
 use roles_and_permissions::domain::{
-    model::{ProductTier, SubscriptionStatus},
+    model::{ProductTier, RoleId, SubscriptionStatus},
     port::UserRolesAndPermissionsService,
 };
 use serde::Serialize;
@@ -169,6 +175,9 @@ pub async fn handler(
         EventType::InvoicePaymentFailed
         | EventType::InvoicePaymentSucceeded
         | EventType::InvoicePaid => handle_payment_event(&ctx, event.data.object, event_type).await,
+        EventType::CheckoutSessionCompleted => {
+            handle_checkout_session_completed(&ctx, event.data.object).await
+        }
         _ => {
             tracing::error!(event_type=?event_type, "unexpected event type");
             Ok(())
@@ -205,6 +214,26 @@ async fn handle_payment_event(
         .as_ref()
         .map(|subscription| subscription.id().as_str())
     else {
+        // Our own one-off invoices: AI overage chunks. Their outcome drives
+        // whether the payer keeps overage; they never touch plan roles.
+        let is_overage_invoice = invoice
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get(PURPOSE_METADATA_KEY))
+            .is_some_and(|purpose| purpose == PURPOSE_AI_OVERAGE);
+        if is_overage_invoice && let Some(invoice_id) = invoice.id.as_ref() {
+            tracing::info!(
+                event_type = ?event_type,
+                invoice_id = %invoice_id,
+                paid = !outcome.is_revoke(),
+                "processing ai overage invoice event"
+            );
+            ctx.ai_billing_service
+                .mark_overage_invoice(invoice_id.as_str(), !outcome.is_revoke())
+                .await
+                .context("failed to record ai overage invoice outcome")?;
+            return Ok(());
+        }
         tracing::info!(
             event_type = ?event_type,
             invoice_id = ?invoice.id.as_ref().map(|id| id.as_str()),
@@ -272,14 +301,34 @@ async fn handle_payment_event(
         "processing stripe invoice payment event"
     );
 
+    let plan = subscription
+        .items
+        .data
+        .iter()
+        .filter_map(|item| item.price.as_ref())
+        .find_map(|price| ctx.stripe_prices.plan_for_price(price.id.as_str()));
+    let period = period_from_timestamps(
+        subscription.current_period_start,
+        subscription.current_period_end,
+    );
+
     if let Some(team_id) = subscription.metadata.get("team_id") {
         let team_id = macro_uuid::string_to_uuid(team_id)?;
+        let owner = subscription
+            .metadata
+            .get("owner_id")
+            .and_then(|id| MacroUserIdStr::try_from(id.clone()).ok());
         return handle_team_subscription_event(
             ctx,
             subscription_id,
             subscription_status,
             &team_id,
             &email,
+            TeamPlanSync {
+                owner,
+                plan,
+                period,
+            },
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
                 fbp: fbp.clone(),
@@ -324,12 +373,123 @@ async fn handle_payment_event(
 
     ctx.user_roles_and_permissions_service
         .update_user_roles_and_permissions_for_subscription(
-            email,
+            email.clone(),
             outcome.personal_subscription_status(),
-            ProductTier::Opus,
+            plan.map(PaidPlan::product_tier)
+                .unwrap_or(ProductTier::Opus),
         )
         .await?;
+    sync_personal_billing_period(ctx, &email, period).await;
 
+    Ok(())
+}
+
+/// The period a subscription is currently in, from Stripe's unix timestamps.
+fn period_from_timestamps(start: i64, end: i64) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
+    DateTime::from_timestamp(start, 0).zip(DateTime::from_timestamp(end, 0))
+}
+
+/// Anchor a personal subscriber's AI allowance to their Stripe period.
+/// Best-effort: the allowance falls back to the calendar month without it.
+async fn sync_personal_billing_period(
+    ctx: &ApiContext,
+    email: &Email<Lowercase<'_>>,
+    period: Option<(DateTime<Utc>, DateTime<Utc>)>,
+) {
+    let Some((start, end)) = period else {
+        return;
+    };
+    let Ok(user_id) = MacroUserIdStr::try_from_email(email.as_ref()) else {
+        tracing::warn!("could not derive a macro user id for billing period sync");
+        return;
+    };
+    if let Err(e) = ctx
+        .ai_billing_service
+        .sync_period(&user_id, start, end)
+        .await
+    {
+        tracing::warn!(error = ?e, "failed to sync ai billing period");
+    }
+}
+
+/// What a team subscription event tells us about the team's plan.
+#[derive(Debug, Clone)]
+struct TeamPlanSync {
+    /// The team owner (the payer), from subscription metadata.
+    owner: Option<MacroUserIdStr<'static>>,
+    /// The plan the seat price maps to.
+    plan: Option<PaidPlan>,
+    /// The subscription's current period.
+    period: Option<(DateTime<Utc>, DateTime<Utc>)>,
+}
+
+/// Team members carry `sub_opus` from the teams service; the owner's tier
+/// role is what the AI allowance reads for every seat. Keep it in step with
+/// the seat price, and anchor the owner's billing period.
+async fn sync_team_owner_plan(ctx: &ApiContext, sync: &TeamPlanSync, active: bool) {
+    let Some(owner) = sync.owner.as_ref() else {
+        tracing::warn!("team subscription without owner_id metadata; skipping plan sync");
+        return;
+    };
+    let max_role = [RoleId::SubMax];
+    let max_role = non_empty::NonEmpty::new(max_role.as_slice()).expect("one role");
+    let result = if active && sync.plan == Some(PaidPlan::Max) {
+        ctx.user_roles_and_permissions_service
+            .dangerous_upsert_roles_for_user(owner, max_role)
+            .await
+    } else {
+        ctx.user_roles_and_permissions_service
+            .dangerous_remove_roles_from_user(owner, &max_role)
+            .await
+    };
+    if let Err(e) = result {
+        tracing::warn!(error = ?e, owner = %owner, "failed to sync team owner plan role");
+    }
+    if let Some((start, end)) = sync.period
+        && let Err(e) = ctx.ai_billing_service.sync_period(owner, start, end).await
+    {
+        tracing::warn!(error = ?e, owner = %owner, "failed to sync team billing period");
+    }
+}
+
+/// Book a completed credit-pack purchase. Subscription checkouts also arrive
+/// here and are ignored; the subscription events carry those.
+#[tracing::instrument(skip(ctx, event_object), err, ret)]
+async fn handle_checkout_session_completed(
+    ctx: &ApiContext,
+    event_object: EventObject,
+) -> anyhow::Result<()> {
+    let EventObject::CheckoutSessionCompleted(session) = event_object else {
+        anyhow::bail!("expected checkout session");
+    };
+    let metadata = session.metadata.clone().unwrap_or_default();
+    if metadata.get(PURPOSE_METADATA_KEY).map(String::as_str) != Some(PURPOSE_AI_CREDITS) {
+        tracing::info!(session_id = %session.id, "checkout session is not a credit purchase");
+        return Ok(());
+    }
+    if session.payment_status.as_str() != "paid" {
+        tracing::info!(
+            session_id = %session.id,
+            payment_status = ?session.payment_status,
+            "credit purchase not paid yet; waiting for a later event"
+        );
+        return Ok(());
+    }
+    let payer = metadata
+        .get(PAYER_METADATA_KEY)
+        .cloned()
+        .context("credit checkout session is missing the payer")?;
+    let payer = MacroUserIdStr::try_from(payer).context("invalid payer id on checkout session")?;
+    let amount_cents = session
+        .amount_total
+        .or_else(|| metadata.get("amount_cents").and_then(|a| a.parse().ok()))
+        .context("credit checkout session has no amount")?;
+
+    ctx.ai_billing_service
+        .apply_credit_purchase(&payer, amount_cents, session.id.as_str())
+        .await
+        .context("failed to book credit purchase")?;
+    tracing::info!(payer = %payer, amount_cents, "booked ai credit purchase");
     Ok(())
 }
 
@@ -455,10 +615,25 @@ async fn handle_customer_subscription_event(
     let is_new_subscription = matches!(event_type, EventType::CustomerSubscriptionCreated)
         || is_transition_from_incomplete;
 
+    // The seat price says which plan this is; the first item carries the
+    // current period on this API version.
+    let plan = subscription
+        .items
+        .data
+        .iter()
+        .find_map(|item| ctx.stripe_prices.plan_for_price(item.price.id.as_str()));
+    let period = subscription.items.data.first().and_then(|item| {
+        period_from_timestamps(item.current_period_start, item.current_period_end)
+    });
+
     // Get subscription metadata, if this is a team subscription then we need to handle it
     // separately.
     if let Some(team_id) = subscription.metadata.get("team_id") {
         let team_id = macro_uuid::string_to_uuid(team_id)?;
+        let owner = subscription
+            .metadata
+            .get("owner_id")
+            .and_then(|id| MacroUserIdStr::try_from(id.clone()).ok());
         // We need to handle team subscriptions differently than regular subscriptions.
         return handle_team_subscription_event(
             ctx,
@@ -466,6 +641,11 @@ async fn handle_customer_subscription_event(
             subscription_status,
             &team_id,
             &email,
+            TeamPlanSync {
+                owner,
+                plan,
+                period,
+            },
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
                 fbp: fbp.clone(),
@@ -563,15 +743,11 @@ async fn handle_customer_subscription_event(
         tracing::error!(error=?e, "failed to process referral on subscription created");
     }
 
-    // Extract the price ID(s) from the subscription items
-    let _price_id = subscription
-        .items
-        .data
-        .first() // SAFETY: we only need the first item because we know the user is not in a team
-        .map(|item| item.price.id.as_str().to_string())
-        .context("no price id attached to subscription")?;
-
-    let product_tier = ProductTier::Opus;
+    // Unknown prices (legacy or manually created subscriptions) keep the
+    // Premium entitlements.
+    let product_tier = plan
+        .map(PaidPlan::product_tier)
+        .unwrap_or(ProductTier::Opus);
 
     ctx.user_roles_and_permissions_service
         .update_user_roles_and_permissions_for_subscription(
@@ -580,6 +756,7 @@ async fn handle_customer_subscription_event(
             product_tier,
         )
         .await?;
+    sync_personal_billing_period(ctx, &email, period).await;
 
     // Track conversion events to GA and Meta (fire-and-forget)
     let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
@@ -643,6 +820,7 @@ async fn handle_team_subscription_event<'a>(
     subscription_status: &str,
     team_id: &uuid::Uuid,
     email: &Email<Lowercase<'a>>,
+    plan_sync: TeamPlanSync,
     tracking_data: SubscriptionTrackingData,
 ) -> anyhow::Result<()> {
     tracing::trace!("handling team subscription");
@@ -662,6 +840,10 @@ async fn handle_team_subscription_event<'a>(
             ctx.teams_service
                 .restore_permissions_for_team_members(team_id)
                 .await?;
+            // After restore: it stamps every member (owner included) with the
+            // Premium tier role, and the owner's tier is what the AI allowance
+            // reads for the whole team.
+            sync_team_owner_plan(ctx, &plan_sync, true).await;
 
             ctx.teams_service
                 .patch_team_payment_status(team_id, true)
@@ -678,6 +860,7 @@ async fn handle_team_subscription_event<'a>(
             ctx.teams_service
                 .revoke_permissions_for_team_members(team_id)
                 .await?;
+            sync_team_owner_plan(ctx, &plan_sync, false).await;
             ctx.teams_service
                 .patch_team_payment_status(team_id, false)
                 .await?;
