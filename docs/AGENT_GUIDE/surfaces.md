@@ -13,8 +13,9 @@ visible; local results do not trigger the tab-loading bar. A fresh server respon
 still replaces that result, and initial loads without usable data retain normal loading
 indicators.
 
-This is a best-effort display, not proof that every matching entity is cached. Loading
-more still follows the original server cursors and preserves already loaded pages.
+This is a best-effort display, not proof that every matching entity is cached. Outside
+the supported cached-Mail slice below, loading more follows the original server cursors
+and preserves already loaded pages.
 Newly loaded server rows join the retained display immediately, without duplicates or
 waiting for local recomputation to succeed. Removing pages from the server baseline
 invalidates overlays built from those pages.
@@ -72,6 +73,30 @@ Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `
 `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
+
+### Cached Mail filtering
+
+With browser GraphQL caching enabled and the email metadata backfill synchronized,
+All, Signal, and Noise support new filter combinations while offline: account selection
+(including delegated inboxes), read/unread, and archive-based Done/Not Done. Mail Done
+means `inboxVisible = false`; it is **not** notification lifecycle state. Signal/Noise
+retain their Inbox scope, so archived mail is found using All + Done.
+
+A `Showing cached mail` notice identifies results over synchronized metadata, not a
+claim of complete mailbox coverage. These lists paginate locally beyond the first
+page without a server cursor. Filter, revision, or engine-generation changes restart
+the local page chain; online server results take over again when available. Account
+choices are cached in the viewer-scoped GraphQL catalog. Timestamp ordering and date
+headers use the selected Mail view's indexed timestamps, not a preview cached from
+another view.
+
+The lightweight metadata backfill runs before body hydration. Filter availability
+therefore does not guarantee that opening every message body works offline. Missing
+projection proof is unknown, never false. Drafts, Sent, Shared, calendar/attachment,
+sender, property/tag refinements and non-created/updated sorts remain network-only
+or existing client refinements; durable offline sending/archiving is not added by
+this slice. No cache-format wipe is required: Mail uses a separate versioned profile
+and a new backfill checkpoint, preserving existing queued work.
 
 Threads open at `/app/email/<thread-id>`. Click a message header to expand or
 collapse it; `Show N hidden messages` reveals the collapsed middle of a longer

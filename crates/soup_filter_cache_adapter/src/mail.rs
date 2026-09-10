@@ -91,6 +91,51 @@ fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
     })
 }
 
+fn canonical_preview(
+    selections: &[Selection],
+    variables: &Map<String, Value>,
+) -> Result<bool, SoupFilterCacheAdapterError> {
+    fn addresses(value: &Value) -> bool {
+        match value {
+            Value::Object(object) => object.iter().any(|(key, value)| {
+                matches!(key.as_str(), "sender" | "recipient" | "cc" | "bcc") || addresses(value)
+            }),
+            Value::Array(values) => values.iter().any(addresses),
+            _ => false,
+        }
+    }
+    for selection in selections {
+        let children = match selection {
+            Selection::Field(field) => {
+                if field.name == "soup" {
+                    let args =
+                        cache_core::document::resolve_args(field, variables).map_err(error)?;
+                    if let Some(input) = args.get("input").and_then(|input| {
+                        input.get("initial").or_else(|| input.get("continuation"))
+                    })
+                        && (input
+                            .get("emailView")
+                            .and_then(Value::as_str)
+                            .is_some_and(|view| !matches!(view, "ALL" | "INBOX"))
+                            || input
+                                .get("filters")
+                                .and_then(|filters| filters.get("emailFilter"))
+                                .is_some_and(addresses))
+                    {
+                        return Ok(false);
+                    }
+                }
+                &field.selection_set
+            }
+            Selection::Fragment { selection_set, .. } => selection_set,
+        };
+        if !canonical_preview(children, variables)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// Compose full canonical snapshots, or bounded patches preserving completeness.
 /// Unsupported preview views invalidate Mail projection rather than displaying a
 /// SENT/DRAFTS-specific preview as the canonical ALL/INBOX preview offline.
@@ -121,12 +166,7 @@ pub async fn projection_updates<S: Storage>(
         .map(|(key, _)| key.clone())
         .collect::<Vec<_>>();
     let bases = storage.get_batch(&keys).await.map_err(error)?;
-    let view = variables
-        .get("input")
-        .and_then(|input| input.get("initial").or_else(|| input.get("continuation")))
-        .and_then(|input| input.get("emailView"))
-        .and_then(Value::as_str);
-    let supported_view = view.is_none_or(|view| matches!(view, "ALL" | "INBOX"));
+    let supported_view = canonical_preview(&op.selection_set, variables)?;
     Ok(updates
         .into_iter()
         .zip(bases)
