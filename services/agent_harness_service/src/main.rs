@@ -44,7 +44,7 @@ use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::channel_prompt_context::ChannelPromptContextAdapter;
 use agent_harness::outbound::containers::HarnessContainers;
-use agent_harness::outbound::cursor::{CursorContainerManager, PgCursorApiKeys};
+use agent_harness::outbound::cursor::{CursorContainerManager, PgCursorApiKeys, PostgresJournal};
 use agent_harness::outbound::daytona::{
     AnthropicApiKey as AnthropicApiKeySecret, DaytonaApiKey as DaytonaApiKeySecret,
     DaytonaContainerManager, DaytonaSettings, Snapshot,
@@ -434,8 +434,10 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         reachable_repositories,
         ai_usage::pg_recorder(pool.clone()),
-        pool.clone(),
-        replica,
+        PostgresJournal {
+            pool: pool.clone(),
+            replica,
+        },
         pending_commands.clone(),
     );
     // Fixed system agents retain their deployment defaults. User/team agents
