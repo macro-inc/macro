@@ -96,7 +96,9 @@ fn event_names_match_the_wire() {
     // `AgentSessionLifecycleEventName` must agree with it variant for variant.
     let wire_names: Vec<String> = one_of_each()
         .into_iter()
-        .map(|event| serde_json::to_value(event).expect("serialize event")["event_type"].to_string())
+        .map(|event| {
+            serde_json::to_value(event).expect("serialize event")["event_type"].to_string()
+        })
         .collect();
     let names: Vec<String> = AgentSessionLifecycleEventName::iter()
         .map(|name| serde_json::Value::String(name.to_string()).to_string())

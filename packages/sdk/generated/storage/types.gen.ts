@@ -122,6 +122,20 @@ export type Agent = {
 };
 
 /**
+ * Identifies one accepted [`AgentAction`] end to end: returned by the
+ * control endpoint, written as the JSON-RPC request id on the action's wire
+ * frame, and read back off that frame as `request_id` on the folded message
+ * it derives.
+ *
+ * Minted only by the server at accept time, as a v7 uuid so ids sort by mint
+ * time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
+ * request id is the whole ownership test: the server is the only writer of
+ * runtime-bound frames. The machine's own handshake request ids
+ * (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+ */
+export type AgentActionId = string;
+
+/**
  * Whether an agent is available everywhere or only in selected channels.
  */
 export type AgentChannelScope = 'all' | 'selected';
@@ -158,6 +172,70 @@ export type AgentMcpServers = {
      * The apps, in the order the agent's author picked them.
      */
     servers: Array<AgentMcpServer>;
+};
+
+/**
+ * Events publishable to [`MacroAgentSessionLifecycleTopic`].
+ *
+ * The serde tag and [`AgentSessionLifecycleEventName`] spell the same wire
+ * names: subscribers filter on them, so they are API. The
+ * `event_names_match_the_wire` test holds the two in step. Exhaustive on
+ * purpose: a consumer's match should break when a variant is added.
+ */
+export type AgentSessionLifecycleEvent = {
+    event_type: 'agent_session.opened';
+    /**
+     * A session was created.
+     */
+    metadata: SessionOpenedMetadata;
+} | {
+    event_type: 'agent_session.turn_started';
+    /**
+     * A prompt was delivered to the runtime.
+     */
+    metadata: TurnStartedMetadata;
+} | {
+    event_type: 'agent_session.turn_ended';
+    /**
+     * The runtime answered a turn.
+     */
+    metadata: TurnEndedMetadata;
+} | {
+    event_type: 'agent_session.settled';
+    /**
+     * A turn ended with nothing queued behind it.
+     */
+    metadata: SessionSettledMetadata;
+} | {
+    event_type: 'agent_session.waiting_for_input';
+    /**
+     * The agent is blocked on a question to its owner.
+     */
+    metadata: WaitingForInputMetadata;
+} | {
+    event_type: 'agent_session.input_received';
+    /**
+     * The question was answered or withdrawn.
+     */
+    metadata: InputReceivedMetadata;
+} | {
+    event_type: 'agent_session.stopped';
+    /**
+     * The session's live actor is gone.
+     */
+    metadata: SessionStoppedMetadata;
+} | {
+    event_type: 'agent_session.renamed';
+    /**
+     * The session was renamed.
+     */
+    metadata: SessionRenamedMetadata;
+} | {
+    event_type: 'agent_session.deleted';
+    /**
+     * The session was deleted.
+     */
+    metadata: SessionDeletedMetadata;
 };
 
 export type Anchor = PdfAnchor;
@@ -6146,6 +6224,43 @@ export type HashMap = {
 export type HighlightType = 1 | 2 | 3;
 
 /**
+ * A turn the runtime never answered: the session stopped underneath it.
+ */
+export type InFlightTurnSummary = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The magic-chip message posted for this turn, when one was.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * Position in the session's log.
+     */
+    turn: number;
+};
+
+/**
+ * The pending question was answered or withdrawn.
+ */
+export type InputReceivedMetadata = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * The turn that was asking.
+     */
+    turn: number;
+};
+
+/**
  * Why a document interaction was reported.
  */
 export type InteractionReason = 'edited' | 'first_join' | 'last_leave';
@@ -7258,6 +7373,98 @@ export type SaveDocumentResponseData = {
      * If the document is an editable file, we provide a presigned url to save the updated file to.
      */
     presignedUrl?: string | null;
+};
+
+/**
+ * The session was deleted.
+ */
+export type SessionDeletedMetadata = {
+    /**
+     * The session as it was.
+     */
+    identity: SessionIdentity;
+};
+
+/**
+ * Who and what a session is; carried by every lifecycle event so a
+ * consumer never has to look the session up.
+ */
+export type SessionIdentity = {
+    /**
+     * Bot the session runs for.
+     */
+    bot_id: BotId;
+    /**
+     * The bot's display name at the time of the event.
+     */
+    bot_name: string;
+    origin?: null | ThreadOrigin;
+    /**
+     * User who owns the session.
+     */
+    owner_id: MacroUserIdStr;
+    /**
+     * The session.
+     */
+    session_id: string;
+    /**
+     * User-facing session name at the time of the event.
+     */
+    session_name: string;
+};
+
+/**
+ * A session was created.
+ */
+export type SessionOpenedMetadata = {
+    /**
+     * Harness slug the session runs on.
+     */
+    harness: string;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * Model slug the session runs with.
+     */
+    model: string;
+};
+
+/**
+ * The session was renamed; `identity` carries the new name.
+ */
+export type SessionRenamedMetadata = {
+    /**
+     * The session, with its new name.
+     */
+    identity: SessionIdentity;
+};
+
+/**
+ * A turn ended and nothing is queued: the agent has stopped working.
+ */
+export type SessionSettledMetadata = {
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    last_turn?: null | TurnSummary;
+};
+
+/**
+ * The session's live actor is gone: idle teardown, transport loss, or crash.
+ */
+export type SessionStoppedMetadata = {
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * Why it stopped, as the session machine reported it.
+     */
+    reason: string;
+    turn_in_flight?: null | InFlightTurnSummary;
 };
 
 /**
@@ -8708,6 +8915,24 @@ export type Thread = {
     updatedAt?: string | null;
 };
 
+/**
+ * The channel thread a session was opened from, when it was.
+ */
+export type ThreadOrigin = {
+    /**
+     * Channel the thread lives in.
+     */
+    channel_id: string;
+    /**
+     * The message whose mention opened the session.
+     */
+    originating_message_id: string;
+    /**
+     * Root message of the thread.
+     */
+    thread_id: string;
+};
+
 export type ThreadResponse = {
     data: Array<CommentThread>;
 };
@@ -8761,6 +8986,88 @@ export type TranscriptSegmentRequest = {
      * (it stamps egress bootstrap, not first audio frame).
      */
     streamStartedAt?: string | null;
+};
+
+/**
+ * The runtime answered a turn. Another prompt may follow at once; see
+ * [`SessionSettledMetadata`] for "nothing left to do".
+ */
+export type TurnEndedMetadata = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The magic-chip message posted for this turn, when one was.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * Prompts still waiting behind this turn.
+     */
+    queued_remaining: number;
+    /**
+     * The ACP stop reason, or `"error"` when the runtime refused the prompt.
+     */
+    stop_reason: string;
+    /**
+     * Position in the session's log.
+     */
+    turn: number;
+};
+
+/**
+ * A prompt was delivered to the runtime.
+ */
+export type TurnStartedMetadata = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The magic-chip message posted for this turn, when one was.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * Position in the session's log.
+     */
+    turn: number;
+};
+
+/**
+ * A turn the runtime answered.
+ */
+export type TurnSummary = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The magic-chip message posted for this turn, when one was.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * The tail of the agent's last text in the turn, capped by the emitter.
+     */
+    excerpt?: string | null;
+    /**
+     * The ACP stop reason, or `"error"` when the runtime refused the prompt.
+     */
+    stop_reason: string;
+    /**
+     * Position in the session's log.
+     */
+    turn: number;
 };
 
 export type TypedSuccessResponse = {
@@ -9113,6 +9420,32 @@ export type ViewsResponse = {
 };
 
 /**
+ * The agent asked its owner a question and is blocked on the answer.
+ */
+export type WaitingForInputMetadata = {
+    /**
+     * The action that opened the turn.
+     */
+    action_id: AgentActionId;
+    /**
+     * The magic-chip message posted for this turn, when one was.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * The question, as the agent phrased it.
+     */
+    question: string;
+    /**
+     * The turn asking.
+     */
+    turn: number;
+};
+
+/**
  * Webhook row returned by application APIs.
  *
  * Clients deserialize this, so both derives are used.
@@ -9181,7 +9514,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | AgentSessionLifecycleEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.

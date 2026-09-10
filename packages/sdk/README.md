@@ -202,6 +202,22 @@ replay if you disconnect.
 Handlers receive the same hydrated payloads as webhook deliveries — ORM
 handles for every entity the event names.
 
+Three families are delivered: `document.*`, `channel.*`, and `agent_session.*`.
+Agent-session events describe a coding agent's life: `opened`, `turn_started`,
+`turn_ended`, `settled` (a turn ended with nothing queued behind it),
+`waiting_for_input` (the agent asked its owner a question), `input_received`,
+`stopped`, `renamed`, and `deleted`. Each carries the session's identity and
+hydrates to an `AgentSession` handle, the owner `User`, and, for a session
+opened from a channel thread, the `Channel`, `Thread`, and magic-chip
+`Message` the turn renders into.
+
+```ts
+macro.events.on('agent_session.settled', async ({ metadata, session, thread }) => {
+  console.log(`${metadata.identity.bot_name} finished: ${metadata.last_turn?.excerpt}`);
+  await thread?.reply(msg`Done — see ${session}`);
+});
+```
+
 ### Persisted webhooks
 
 To receive the same events as HTTPS POSTs instead of (or in addition to) SSE,

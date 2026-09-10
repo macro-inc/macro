@@ -5,6 +5,7 @@ import type {
 } from '../../generated/storage/types.gen';
 import { MacroError } from '../utils';
 import type { MacroClient } from '../utils/client';
+import { hydrateAgentSessionEvent } from './hydrate/agentSession';
 import { hydrateChannelEvent } from './hydrate/channel';
 import { hydrateDocumentEvent } from './hydrate/document';
 import type {
@@ -49,6 +50,11 @@ function hydrate(
     )
     .with({ event_type: P.string.startsWith('channel.') }, (channelEvent) =>
       hydrateChannelEvent(client, channelEvent),
+    )
+    .with(
+      { event_type: P.string.startsWith('agent_session.') },
+      (agentSessionEvent) =>
+        hydrateAgentSessionEvent(client, agentSessionEvent),
     )
     .otherwise(() => undefined);
 }
