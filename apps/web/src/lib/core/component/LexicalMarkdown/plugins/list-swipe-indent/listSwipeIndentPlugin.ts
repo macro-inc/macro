@@ -20,7 +20,6 @@ import {
   $getNodeByKey,
   $isElementNode,
   type LexicalEditor,
-  type NodeKey,
 } from 'lexical';
 import { $collectNestedGroup } from '../draggable-block/draggableBlockPlugin';
 
@@ -49,8 +48,10 @@ export function $canOutdentListItem(item: ListItemNode): boolean {
  */
 function $unwrapNestedListItem(item: ListItemNode): ListItemNode {
   let current = item;
-  while ($isListNode(current.getFirstChild())) {
-    const inner = current.getFirstChild()?.getFirstChild();
+  while (true) {
+    const child = current.getFirstChild();
+    if (!$isListNode(child)) break;
+    const inner = child.getFirstChild();
     if (!$isListItemNode(inner)) break;
     current = inner;
   }
@@ -163,16 +164,15 @@ function registerListSwipeIndent(
       if (!(eventTarget instanceof Node) || !root.contains(eventTarget)) return;
       endGesture?.();
 
-      let itemKey: NodeKey | null = null;
       let canIndent = false;
       let canOutdent = false;
 
-      editor.read(() => {
+      const itemKey = editor.read(() => {
         const item = listItemFromTarget(eventTarget);
-        if (!item) return;
-        itemKey = item.getKey();
+        if (!item) return null;
         canIndent = $canIndentListItem(item);
         canOutdent = $canOutdentListItem(item);
+        return item.getKey();
       });
       if (itemKey == null) return;
 
