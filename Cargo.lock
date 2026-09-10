@@ -5465,6 +5465,7 @@ dependencies = [
  "chrono",
  "clap",
  "cloudfront_sign",
+ "comms_db_client",
  "connection",
  "document_sub_type",
  "dotenvy",

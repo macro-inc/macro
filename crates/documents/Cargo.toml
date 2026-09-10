@@ -54,7 +54,13 @@ backfill_binary = [
 ]
 default = ["ai_tools", "axum", "inbound", "outbound", "ports", "service"]
 document_create = ["dep:base64", "dep:sha2", "ports"]
-document_create_adapters = ["dep:reqwest", "document_create", "markdown_init"]
+document_create_adapters = [
+  "dep:comms_db_client",
+  "dep:reqwest",
+  "dep:sqlx",
+  "document_create",
+  "markdown_init",
+]
 inbound = ["axum", "document_create_adapters", "ports"]
 markdown_init = ["dep:lexical_client"]
 outbound = [
@@ -134,6 +140,7 @@ utoipa = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 cloudfront_sign = { workspace = true }
+comms_db_client = { path = "../comms_db_client", optional = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 futures = { workspace = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }

@@ -6,6 +6,7 @@
 pub mod create;
 pub mod editing;
 pub mod markdown;
+pub mod mentions;
 
 use std::future::Future;
 
