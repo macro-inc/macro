@@ -106,12 +106,13 @@ pub fn reconciliation_baseline_entry(
 ///
 /// Document supplements are decoded only where `cacheProjection` is selected
 /// for the surrounding entity and are merged with direct fields from that same
-/// object. A selected null or missing Document supplement marks v3 incomplete;
-/// selected null values on direct-only Projects and Chats are expected. Payloads
-/// that omit the field become bounded v3 direct-field patches, preserving
-/// server-owned facts from an existing complete projection. A payload without
-/// direct projection fields emits an empty patch so an existing v3 projection is
-/// retained while a missing base becomes explicitly incomplete.
+/// object. The immutable v3 Document supplement is composed with the complete
+/// active-notification edge into the browser's v4 profile. Selected null values
+/// on Projects and Chats are expected; missing notification snapshots cannot
+/// establish v4 completeness. Payloads omitting `cacheProjection` become bounded
+/// v4 patches, preserving server-owned facts and any unselected notification
+/// membership from an existing complete projection. A missing base remains
+/// explicitly incomplete.
 pub fn authoritative_projection_mutations(
     query: &str,
     operation_name: Option<&str>,
