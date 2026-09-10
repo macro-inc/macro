@@ -122,6 +122,7 @@ export { Tabs } from './components/Tabs';
 export type { ToggleSwitchProps } from './components/ToggleSwitch';
 export { ToggleSwitch } from './components/ToggleSwitch';
 export { Tooltip } from './components/Tooltip';
+export { UserMessageBubble } from './components/UserMessageBubble';
 export { cn } from './utils/classname';
 export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';
 export {

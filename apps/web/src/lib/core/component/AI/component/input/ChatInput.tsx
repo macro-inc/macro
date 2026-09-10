@@ -224,7 +224,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       ref={setAttachMenuAnchorRef}
       variant="ghost"
       size="icon-sm"
-      class="text-ink touch:rounded-full"
+      class="text-ink rounded-full size-7 touch:size-6"
       label="Attach files"
       aria-label="Attach files"
       onClick={() => setShowAttachMenu((prev) => !prev)}
@@ -235,14 +235,15 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const StopButton = () => (
     <Button
-      variant="ghost"
+      variant={isTouchDevice() ? 'ghost' : 'strong'}
       size="icon-sm"
       label="Stop generating"
       hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
       class={cn(
-        'rounded-[11px] touch:rounded-full size-7.5 text-ink-extra-muted [&_svg]:stroke-[4px]',
-        'not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
+        'rounded-full size-7 touch:size-7.5 [&_svg]:stroke-[4px]',
+        isTouchDevice() &&
+          'text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5'
       )}
     >
@@ -252,6 +253,7 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const SendButton = () => (
     <UiSendButton
+      appearance="composer"
       tooltip={'Ask AI'}
       shortcut="enter"
       tooltipPlacement="top"
@@ -346,7 +348,7 @@ export function ChatInput(props: ChatInputComponentProps) {
           <div
             ref={setLineEl}
             class={cn('relative px-2 py-1.5 touch:min-h-12.5 touch:py-[9px]', {
-              'flex flex-col px-3 py-2 touch:p-0': isTallVariant(),
+              'flex flex-col px-2 py-2 touch:p-0': isTallVariant(),
             })}
           >
             {/* Invisible reference of the fully-expanded control row laid out
@@ -360,7 +362,7 @@ export function ChatInput(props: ChatInputComponentProps) {
                 inert
                 class="pointer-events-none invisible absolute flex w-max items-center gap-1"
               >
-                <div class="size-7.5 shrink-0" />
+                <div class="size-7 shrink-0" />
                 <div
                   class="shrink-0"
                   style={{ width: `${MIN_EDITOR_WIDTH}px` }}
@@ -370,15 +372,18 @@ export function ChatInput(props: ChatInputComponentProps) {
                   models={modelOptions()}
                   onSelect={() => {}}
                 />
-                <div class="size-7.5 shrink-0" />
+                <div class="size-7 shrink-0" />
               </div>
             </Show>
             <div
               id={CHAT_INPUT_TEXT_AREA_ID}
-              class={cn('text-sm sm:text-sm text-ink touch:px-3 touch:py-2')}
+              class={cn(
+                'text-[15px] leading-5 touch:text-sm text-ink touch:px-3 touch:py-2',
+                !isTouchDevice() && (isMultiline() || isTallVariant()) && 'pl-2'
+              )}
               classList={{
                 'pl-8': !isMultiline() && !isTallVariant(),
-                'px-0 pb-8 touch:pb-10': isMultiline() && !isTallVariant(),
+                'pb-8 touch:pb-10': isMultiline() && !isTallVariant(),
                 'max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto':
                   isMobile() && isMultiline(),
                 // While empty, the only thing rendered is the placeholder.
@@ -423,7 +428,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               <div
                 class={cn(
                   !isTallVariant() &&
-                    'absolute left-2 bottom-1.5 touch:bottom-[7px]'
+                    'absolute left-2 bottom-2 touch:bottom-[7px]'
                 )}
               >
                 <LeftButton />
@@ -432,7 +437,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               <div
                 class={cn(
                   !isTallVariant() &&
-                    'absolute right-1.5 bottom-1.5 touch:right-2 touch:bottom-[7px]'
+                    'absolute right-2 bottom-2 touch:right-2 touch:bottom-[7px]'
                 )}
               >
                 <RightControls />

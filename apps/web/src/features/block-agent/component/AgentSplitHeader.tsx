@@ -9,6 +9,7 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -46,7 +47,7 @@ export function AgentSplitHeader(props: {
   // The session, not `useBlockId()`: a block created from the launcher mounts
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
-  const { sessionId } = useAgentSession();
+  const { sessionId, metadata } = useAgentSession();
   const userId = useUserId();
   const [renameOpen, setRenameOpen] = createSignal(false);
   const title = () => {
@@ -124,7 +125,15 @@ export function AgentSplitHeader(props: {
   return (
     <>
       <SplitHeaderLeft>
-        <StaticSplitLabel iconType="agent" label={title()} />
+        <StaticSplitLabel
+          icon={
+            <ProviderIcon
+              model={metadata()?.model ?? props.session?.model}
+              class="size-4 shrink-0"
+            />
+          }
+          label={title()}
+        />
       </SplitHeaderLeft>
 
       {/* Tools live on the header row itself — `ResponsiveBlockToolbar`

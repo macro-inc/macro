@@ -16,6 +16,12 @@ channel between two users.
 
 ## Message composer
 
+Desktop composer and conversation body text use 15px type. Mobile keeps its
+existing text sizing.
+
+Desktop message text uses a 16px horizontal inset and a compact gap above the
+toolbar, consistent at narrow and wide composer widths.
+
 Placeholder `Type @ to share with #<name>`. Click it, `type_text`, press Enter to send.
 The message renders immediately with avatar, email, timestamp. Composer extras: `Attach
 files`, `Format`, a `Task` switch (turns the message into a task), `Send message` button.
@@ -140,3 +146,7 @@ instead.
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —
 useful as a guaranteed-existing channel in tests.
+
+Locally sent channel messages and thread replies enter with a brief upward slide
+and fade, without bubble scaling. Opening history or remounting a row does not
+replay the effect. Reduced-motion preferences disable it.

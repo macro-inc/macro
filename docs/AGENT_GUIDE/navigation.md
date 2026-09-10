@@ -53,6 +53,18 @@ changes roll back rather than becoming committed local favorites.
 
 ## Create menu
 
+On mobile, the bottom dock contains Notifications, Calendar (always visible, independent of feature flags),
+Email, Channels, Files, and More views. More views contains only Settings,
+Calls, Tasks, and Agents. Search is the separate bottom-right button; it opens
+the search input and scope pills.
+
+The separate button one row above Search opens the current page's creation
+flow directly: new task on Tasks, email on Email, message on Channels or
+Notifications, document on Files, agent session on Agents, and event on
+Calendar. It does not open a create menu. It hides during search, while the
+keyboard is open, and on entity/detail pages with their own reply or compose
+controls.
+
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
 Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task and Channel open dialogs.

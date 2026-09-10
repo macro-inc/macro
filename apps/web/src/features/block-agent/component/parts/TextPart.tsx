@@ -11,7 +11,7 @@ export function TextPart(props: { text: string; inFlight?: boolean }) {
   return (
     // `chat-markdown-container` is the overflow host for KaTeX display math
     // (see index.css).
-    <div class="chat-markdown-container whitespace-pre-wrap wrap-break-word max-w-full text-sm">
+    <div class="chat-markdown-container whitespace-pre-wrap wrap-break-word max-w-full text-[15px] leading-5 touch:text-sm">
       <StaticMarkdown
         markdown={markdown()}
         theme={channelTheme}

@@ -1,7 +1,7 @@
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin';
 import XIcon from '@phosphor/x.svg';
-import { Button, cn, SendButton } from '@ui';
+import { Button, ComposerSurface, SendButton } from '@ui';
 import { batch, createEffect, createSignal, Show, useContext } from 'solid-js';
 import { CommentsContext, ThreadContext } from './Thread';
 
@@ -17,6 +17,7 @@ function EditBottomRow(props: {
       <Button
         tooltip="Delete Draft"
         size="icon-sm"
+        class="size-7 rounded-full touch:size-6"
         variant="ghost"
         on:click={props.handleCancel}
       >
@@ -24,6 +25,7 @@ function EditBottomRow(props: {
       </Button>
 
       <SendButton
+        appearance="composer"
         tooltip="Send Comment"
         shortcut="enter"
         disabled={!props.hasContent || props.isSending}
@@ -99,8 +101,8 @@ export function EditInput(props: {
   };
 
   return (
-    <div
-      class={cn('relative p-2 pb-12')}
+    <ComposerSurface
+      class="h-auto px-4 pt-2 pb-11 touch:px-3 touch:pb-12"
       on:click={(e) => {
         e.stopPropagation();
         focusEditor();
@@ -108,7 +110,7 @@ export function EditInput(props: {
     >
       <MarkdownTextarea
         autoLinkMatchMode="common-tlds"
-        class="text-sm wrap-break-word text-ink"
+        class="text-[15px] leading-5 touch:text-sm wrap-break-word text-ink"
         editable={() => true}
         onChange={(value) => {
           setEditState(value);
@@ -136,7 +138,7 @@ export function EditInput(props: {
         hasContent={editState().trim().length > 0}
         isSending={isSending()}
       />
-    </div>
+    </ComposerSurface>
   );
 }
 

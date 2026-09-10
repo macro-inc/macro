@@ -561,8 +561,7 @@ html[data-theme-light='false'] {
   }
 }
 
-/* Apple-style glass chrome: backdrop blur, a bright inner top edge, a dark
-   inner bottom edge, a soft drop shadow, and a specular rim drawn as a 1px
+/* Glass chrome: backdrop blur, a soft cast shadow, and a specular rim drawn as a 1px
    gradient masked to the border box (a plain `border` can't fade along its
    length). Shape and background come from the consumer, so this composes with
    any radius — the rim inherits it — and with variants (`mobile:glass`).
@@ -573,6 +572,10 @@ html[data-theme-light='false'] {
    why the palette lives there). */
 @utility glass {
   position: relative;
+  /* The masked rim owns the outer edge. Even a transparent border would
+     inset the absolute pseudo-element by a pixel. Override Surface inline
+     borders too, so every glass consumer uses the same border-box geometry. */
+  border-width: 0 !important;
   /* Standard property only — Lightning CSS adds `-webkit-backdrop-filter`
      itself when it minifies. Writing the prefix by hand *after* the standard
      one makes it collapse the pair down to just the prefixed declaration,
@@ -580,10 +583,6 @@ html[data-theme-light='false'] {
      still looking right in dev. */
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   box-shadow:
-    inset 0 1px 0
-      color-mix(in oklch, var(--glass-tint) calc(var(--glass-highlight-base) * var(--glass-scale)), transparent),
-    inset 0 -1px 0
-      color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-shade-base) * var(--glass-scale)), transparent),
     0 var(--glass-shadow-y) var(--glass-shadow-blur) var(--glass-shadow-spread)
       oklch(0 0 0 / calc(var(--glass-shadow-alpha) * var(--glass-shadow-scale, var(--glass-scale))));
 

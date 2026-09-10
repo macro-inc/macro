@@ -100,7 +100,7 @@ export function Dialog(props: DialogProps) {
               // chrome (e.g. cmd+k's toolbar/footer) reads as the same pane.
               props.fullscreen
                 ? 'size-full'
-                : 'w-200 max-w-[calc(100vw-16px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)]',
+                : 'w-200 max-w-[calc(100vw-16px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)] [&>[data-surface]]:border-0!',
               animateOnOpen() &&
                 (props.fullscreen
                   ? 'dialog-fullscreen-open-animation'

@@ -30,6 +30,7 @@ import { EmailTaskButton } from './component/EmailTaskButton';
 import { ModalsProvider } from './component/ModalsProvider';
 import { EmailSidePanelSections } from './component/sidepanel/EmailSidePanelSections';
 import { TopBar } from './component/TopBar';
+import { useEmailListNavigation } from './use-email-list-navigation';
 import { registerEmailHotkeys } from './util/emailHotkeys';
 
 export function EmailBlockAdapter(props: {
@@ -42,6 +43,7 @@ export function EmailBlockAdapter(props: {
     Array.isArray(rawTarget) ? rawTarget[0] : rawTarget
   );
   const split = useSplitPanel();
+  const listNavigation = useEmailListNavigation(props.threadId);
   const canAutofocus = useCanAutofocusSplitContent();
   const { popoverSplit } = useSplitLayout();
   const blockElement = blockElementSignal.get;
@@ -86,6 +88,7 @@ export function EmailBlockAdapter(props: {
       title={props.title}
       threadId={props.threadId}
       host={{
+        listNavigation,
         targetMessageId,
         focusContainer,
         isActive: () => split?.isPanelActive() !== false,

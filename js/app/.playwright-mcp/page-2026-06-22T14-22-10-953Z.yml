@@ -1,0 +1,892 @@
+- generic [ref=e3]:
+  - navigation "Primary" [ref=e5]:
+    - generic [ref=e6]:
+      - link [ref=e7]:
+        - /url: /
+        - img [ref=e8]
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - button "Features" [ref=e12]:
+            - text: Features
+            - img [ref=e13]
+          - generic:
+            - generic:
+              - link "Agents AI with your whole workspace as context.":
+                - /url: /agents
+                - generic:
+                  - img
+                - generic:
+                  - generic: Agents
+                  - generic: AI with your whole workspace as context.
+              - link "Email A unified inbox, faster than Superhuman.":
+                - /url: /email
+                - generic:
+                  - img
+                - generic:
+                  - generic: Email
+                  - generic: A unified inbox, faster than Superhuman.
+              - link "Documents Markdown docs, wired into everything.":
+                - /url: /documents
+                - generic:
+                  - img
+                - generic:
+                  - generic: Documents
+                  - generic: Markdown docs, wired into everything.
+              - link "Channels Team chat, quieter than Slack.":
+                - /url: /channels
+                - generic:
+                  - img
+                - generic:
+                  - generic: Channels
+                  - generic: Team chat, quieter than Slack.
+              - link "Calls Calls with transcripts and team memory.":
+                - /url: /calls
+                - generic:
+                  - img
+                - generic:
+                  - generic: Calls
+                  - generic: Calls with transcripts and team memory.
+              - link "CRM A CRM that builds itself from email.":
+                - /url: /crm
+                - generic:
+                  - img
+                - generic:
+                  - generic: CRM
+                  - generic: A CRM that builds itself from email.
+              - link "Tasks Lightweight tasks linked to everything.":
+                - /url: /tasks
+                - generic:
+                  - img
+                - generic:
+                  - generic: Tasks
+                  - generic: Lightweight tasks linked to everything.
+              - link "Pull Requests Review pull requests in your inbox.":
+                - /url: /github
+                - generic:
+                  - img
+                - generic:
+                  - generic: Pull Requests
+                  - generic: Review pull requests in your inbox.
+        - link "Pricing" [ref=e15]:
+          - /url: /pricing
+        - link "Videos" [ref=e16]:
+          - /url: https://www.youtube.com/channel/UCcn-1WTGff0X_RscGVtwljQ
+        - link "Docs" [ref=e17]:
+          - /url: https://docs.macro.com
+        - link "Demo" [ref=e18]:
+          - /url: https://cal.com/team/macro/macro-demo-call
+        - link "Login" [ref=e19]:
+          - /url: https://macro.com/app/login
+      - generic [ref=e20]:
+        - link "Macro on GitHub" [ref=e21]:
+          - /url: https://github.com/macro-inc/macro
+          - img [ref=e22]
+          - text: GitHub
+          - generic [ref=e24]: "|"
+          - generic [ref=e25]:
+            - img [ref=e26]
+            - text: "283"
+        - link "Get started" [ref=e28]:
+          - /url: https://auth-service.macro.com/login/sso?idp_name=google_gmail
+  - generic [ref=e32]:
+    - generic [ref=e33]:
+      - heading "One app for all your work." [level=1] [ref=e34]
+      - paragraph [ref=e35]:
+        - text: Shared AI memory across everything. Super fast. Open source.
+        - text: Email, messages, docs, tasks, agents, calls, and CRM.
+      - link "Get started" [ref=e37]:
+        - /url: https://auth-service.macro.com/login/sso?idp_name=google_gmail
+        - img [ref=e38]
+        - text: Get started
+      - generic [ref=e43]:
+        - link "Macro on GitHub — open source" [ref=e44]:
+          - /url: https://github.com/macro-inc/macro
+          - img [ref=e46]
+          - paragraph [ref=e48]: GitHub
+        - generic "SOC 2 Type II certified" [ref=e50]:
+          - img "AICPA SOC 2 Type II" [ref=e52]
+          - paragraph [ref=e56]: SOC 2 Type II
+        - generic "Funding and users" [ref=e58]:
+          - img [ref=e60]
+          - paragraph [ref=e61]: a16z led
+    - separator [ref=e62]
+    - region "Product preview" [ref=e63]:
+      - generic [ref=e64]:
+        - generic [ref=e67]:
+          - navigation "Macro sections" [ref=e68]:
+            - generic [ref=e69]:
+              - img [ref=e70]
+              - img [ref=e73]
+            - button "Create" [ref=e75]:
+              - img [ref=e76]
+              - generic [ref=e79]: Create
+              - generic [ref=e80]: C
+            - button "Agents" [ref=e81]:
+              - img [ref=e82]
+              - text: Agents
+            - button "Email" [ref=e84]:
+              - img [ref=e85]
+              - text: Email
+            - button "Files" [ref=e88]:
+              - img [ref=e89]
+              - text: Files
+            - button "Tasks" [ref=e91]:
+              - img [ref=e92]
+              - text: Tasks
+            - button "Channels" [ref=e97]:
+              - img [ref=e98]
+              - text: Channels
+            - button "Calls" [ref=e100]:
+              - img [ref=e101]
+              - text: Calls
+          - application "Interactive Macro inbox demo. Use J and K to navigate, E to archive." [ref=e105]:
+            - generic [ref=e107]:
+              - generic [ref=e108]:
+                - generic [ref=e109]:
+                  - text: Email
+                  - img [ref=e110]
+                - generic [ref=e113]:
+                  - button "Signal" [ref=e114] [cursor=pointer]
+                  - button "Noise" [ref=e115] [cursor=pointer]
+                  - button "All" [ref=e116] [cursor=pointer]
+                - generic [ref=e117]:
+                  - text: All inboxes
+                  - img [ref=e118]
+                - generic [ref=e120]: + Email
+              - generic [ref=e121]:
+                - generic [ref=e122]: Today
+                - generic [ref=e123] [cursor=pointer]:
+                  - img [ref=e125]
+                  - generic [ref=e127]: Sarah Kim
+                  - generic [ref=e128]:
+                    - text: Revised SOW before Thursday?
+                    - generic [ref=e129]: Legal signed off on the new terms. Can you send the updated…
+                  - generic [ref=e132]: 10:33
+                - generic [ref=e133] [cursor=pointer]:
+                  - img [ref=e135]
+                  - generic [ref=e137]: Priya Patel
+                  - generic [ref=e138]:
+                    - text: Design review for the new onboarding
+                    - generic [ref=e139]: Left notes in the Figma — mostly around the empty states and…
+                  - generic [ref=e142]: 9:14
+                - generic [ref=e143]: This week
+                - generic [ref=e144] [cursor=pointer]:
+                  - img [ref=e146]
+                  - generic [ref=e148]: Shawn Bergeron
+                  - generic [ref=e149]:
+                    - text: "Invitation: Macro <> intro @ 11am"
+                    - generic [ref=e150]: You have been invited to an event on Thu Jun 19, 2026…
+                  - generic [ref=e153]: Jun 16
+                - generic [ref=e154] [cursor=pointer]:
+                  - img [ref=e156]
+                  - generic [ref=e158]: Marcus Lee
+                  - generic [ref=e159]:
+                    - text: "Re: Q3 roadmap draft"
+                    - generic [ref=e160]: Thanks for putting this together. One thing on the timeline…
+                  - generic [ref=e163]: Jun 15
+                - generic [ref=e164] [cursor=pointer]:
+                  - img [ref=e166]
+                  - generic [ref=e168]: Mom
+                  - generic [ref=e169]:
+                    - text: dinner sunday?
+                    - generic [ref=e170]: your sister is coming into town, thought we could all…
+                  - generic [ref=e173]: Jun 14
+                - generic [ref=e174]: Earlier this month
+                - generic [ref=e175] [cursor=pointer]:
+                  - img [ref=e177]
+                  - generic [ref=e179]: Dana Whitfield
+                  - generic [ref=e180]:
+                    - text: Contract countersigned
+                    - generic [ref=e181]: Attaching the fully executed copy for your records. Thanks…
+                  - generic [ref=e184]: Jun 9
+                - generic [ref=e185] [cursor=pointer]:
+                  - img [ref=e187]
+                  - generic [ref=e189]: Rachel Beckerman
+                  - generic [ref=e190]:
+                    - text: "Re: Letters to the kids at Timberlane"
+                    - generic [ref=e191]: Hi fam! It's my annual plea for letters to the kids this summer…
+                  - generic [ref=e194]: Jun 8
+              - generic [ref=e196]:
+                - generic [ref=e197]:
+                  - generic [ref=e198]: 📎
+                  - generic [ref=e199]: Ask AI, @mention anything
+                  - img [ref=e201]
+                - generic [ref=e203]:
+                  - generic [ref=e204]: J
+                  - generic [ref=e205]: K
+                  - text: navigate
+                  - generic [ref=e206]: E
+                  - text: archive
+        - generic [ref=e209]:
+          - button "Show Agents in the product preview" [ref=e210]:
+            - img [ref=e212]
+            - generic [ref=e219]: Agents
+          - button "Show Email in the product preview" [pressed] [ref=e220]:
+            - img [ref=e222]
+            - generic [ref=e232]: Email
+          - button "Show Documents in the product preview" [ref=e233]:
+            - img [ref=e235]
+            - generic [ref=e248]: Documents
+          - button "Show Channels in the product preview" [ref=e249]:
+            - img [ref=e251]
+            - generic [ref=e264]: Channels
+          - button "Show Calls in the product preview" [ref=e265]:
+            - img [ref=e267]
+            - generic [ref=e274]: Calls
+          - link "CRM" [ref=e275]:
+            - /url: /crm
+            - img [ref=e277]
+            - generic [ref=e293]: CRM
+          - button "Show Tasks in the product preview" [ref=e294]:
+            - img [ref=e296]
+            - generic [ref=e309]: Tasks
+          - link "Pull Requests" [ref=e310]:
+            - /url: /github
+            - img [ref=e312]
+            - generic [ref=e323]: Pull Requests
+    - separator [ref=e324]
+    - region "What is Macro" [ref=e326]:
+      - heading "The unified system for you and your agents." [level=2] [ref=e327]
+      - generic [ref=e328]:
+        - generic [ref=e329]:
+          - generic [ref=e330]: Fig 01
+          - img [ref=e332]
+          - generic [ref=e348]:
+            - heading "All in one" [level=3] [ref=e349]
+            - paragraph [ref=e350]: One app replaces your whole stack — email, messages, docs, tasks, calls, and CRM.
+        - generic [ref=e351]:
+          - generic [ref=e352]: Fig 02
+          - img [ref=e354]
+          - generic [ref=e377]:
+            - heading "Shared memory" [level=3] [ref=e378]
+            - paragraph [ref=e379]: Everything your team does lands in one memory, so you and your agents always have full context.
+        - generic [ref=e380]:
+          - generic [ref=e381]: Fig 03
+          - img [ref=e383]
+          - generic [ref=e392]:
+            - heading "Open source" [level=3] [ref=e393]
+            - paragraph [ref=e394]: Built in the open on GitHub. Audit it, extend it, and run it anywhere — it’s yours to trust.
+    - separator [ref=e395]
+    - generic [ref=e396]:
+      - generic [ref=e397]:
+        - region "Email" [ref=e398]:
+          - generic [ref=e399]:
+            - heading "The fastest and smartest email client." [level=2] [ref=e400]
+            - paragraph [ref=e401]: We combined the best features of Superhuman, Claude, Gmail, and Outlook into a single keyboard-first inbox with brilliant AI.
+            - link "Explore Email →" [ref=e403] [cursor=pointer]:
+              - /url: /email
+          - generic [ref=e407]:
+            - generic:
+              - application:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - text: Email
+                        - img
+                      - generic:
+                        - button: Signal
+                        - button: Noise
+                        - button: All
+                      - generic:
+                        - text: All inboxes
+                        - img
+                      - generic: + Email
+                    - generic:
+                      - generic: Today
+                      - generic:
+                        - img
+                        - generic: Sarah Kim
+                        - generic:
+                          - text: Revised SOW before Thursday?
+                          - generic: Legal signed off on the new terms. Can you send the updated…
+                        - generic:
+                          - generic: 10:33
+                      - generic:
+                        - img
+                        - generic: Priya Patel
+                        - generic:
+                          - text: Design review for the new onboarding
+                          - generic: Left notes in the Figma — mostly around the empty states and…
+                        - generic:
+                          - generic: 9:14
+                      - generic: This week
+                      - generic:
+                        - img
+                        - generic: Shawn Bergeron
+                        - generic:
+                          - text: "Invitation: Macro <> intro @ 11am"
+                          - generic: You have been invited to an event on Thu Jun 19, 2026…
+                        - generic:
+                          - generic: Jun 16
+                      - generic:
+                        - img
+                        - generic: Marcus Lee
+                        - generic:
+                          - text: "Re: Q3 roadmap draft"
+                          - generic: Thanks for putting this together. One thing on the timeline…
+                        - generic:
+                          - generic: Jun 15
+                      - generic:
+                        - img
+                        - generic: Mom
+                        - generic:
+                          - text: dinner sunday?
+                          - generic: your sister is coming into town, thought we could all…
+                        - generic:
+                          - generic: Jun 14
+                      - generic: Earlier this month
+                      - generic:
+                        - img
+                        - generic: Dana Whitfield
+                        - generic:
+                          - text: Contract countersigned
+                          - generic: Attaching the fully executed copy for your records. Thanks…
+                        - generic:
+                          - generic: Jun 9
+                      - generic:
+                        - img
+                        - generic: Rachel Beckerman
+                        - generic:
+                          - text: "Re: Letters to the kids at Timberlane"
+                          - generic: Hi fam! It's my annual plea for letters to the kids this summer…
+                        - generic:
+                          - generic: Jun 8
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic: 📎
+                          - generic: Ask AI, @mention anything
+                          - generic:
+                            - img
+                        - generic:
+                          - generic: J
+                          - generic: K
+                          - text: navigate
+                          - generic: E
+                          - text: archive
+            - generic [ref=e412]:
+              - generic [ref=e413]:
+                - generic [ref=e414]: From
+                - generic [ref=e415]: JB
+                - generic [ref=e416]: Jacob Beckerman
+                - img [ref=e417]
+                - generic [ref=e419]: Cc Bcc
+              - generic [ref=e420]:
+                - generic [ref=e421]: To
+                - generic [ref=e422]: Macro users or email addresses
+              - generic [ref=e423]:
+                - generic [ref=e424]: Subject
+                - generic [ref=e425]: "Pitch memo: follow up"
+              - generic [ref=e427]: Lo
+        - generic [ref=e430]:
+          - generic [ref=e431]:
+            - generic [ref=e432]: Fig 0.1
+            - img [ref=e434]
+            - generic [ref=e444]:
+              - generic [ref=e445]: All your accounts
+              - generic [ref=e446]: Every inbox in one unified view.
+          - generic [ref=e447]:
+            - generic [ref=e448]: Fig 0.2
+            - img [ref=e450]
+            - generic [ref=e460]:
+              - generic [ref=e461]: Not just email
+              - generic [ref=e462]: Messages, docs, tasks, and calls.
+          - generic [ref=e463]:
+            - generic [ref=e464]: Fig 0.3
+            - img [ref=e466]
+            - generic [ref=e518]:
+              - generic [ref=e519]: Keyboard shortcuts
+              - generic [ref=e520]: Triage hands-on-keyboard, no mouse.
+          - generic [ref=e521]:
+            - generic [ref=e522]: Fig 0.4
+            - img [ref=e524]
+            - generic [ref=e531]:
+              - generic [ref=e532]: Super fast
+              - generic [ref=e533]: Instant search, send, and sync.
+      - separator [ref=e534]
+      - region "Documents" [ref=e536]:
+        - generic [ref=e537]:
+          - heading "Markdown docs, built for agents." [level=2] [ref=e538]
+          - paragraph [ref=e539]: Agent-editable, collaborative, version-controlled, mobile-friendly, markdown-native documents — @linked into your workspace.
+          - link "Explore Documents →" [ref=e541] [cursor=pointer]:
+            - /url: /documents
+        - generic [ref=e547]:
+          - generic [ref=e548]:
+            - img [ref=e549]
+            - generic [ref=e552]: How realtime editing works
+            - generic [ref=e553]:
+              - generic [ref=e554]:
+                - img [ref=e555]
+                - text: Task
+              - generic [ref=e558]:
+                - img [ref=e559]
+                - text: Chat
+              - generic [ref=e561]:
+                - img [ref=e562]
+                - text: Share
+              - img [ref=e566]
+              - img [ref=e570]
+          - generic [ref=e573]:
+            - heading "How realtime editing works" [level=3] [ref=e574]
+            - paragraph [ref=e575]:
+              - text: Every document is a CRDT backed by its own
+              - strong [ref=e576]: Durable Object
+              - text: in the cloud — a single fast actor that
+              - generic [ref=e577]:
+                - text: lives microseconds from your keystrokes
+                - generic [ref=e578]: Rahul
+              - text: . Edits merge in order, so the page is always consistent.
+            - paragraph [ref=e579]:
+              - text: Everyone can
+              - generic [ref=e580]:
+                - text: type in this very line
+                - generic [ref=e581]: Gab
+              - text: at once — and it never conflicts.
+              - generic [ref=e584]: Julia
+            - paragraph [ref=e585]: Why it's instant
+            - generic [ref=e586]:
+              - generic [ref=e589]: Edits apply locally first, then reconcile in the background.
+              - generic [ref=e592]: No round-trips to a central database — the actor is the source of truth.
+              - generic [ref=e595]: Offline changes replay automatically the moment you reconnect.
+          - generic [ref=e598]:
+            - img [ref=e599]
+            - generic [ref=e601]: Ask AI to draft, edit, or @mention anything
+            - img [ref=e603]
+      - separator [ref=e605]
+      - region "Tasks" [ref=e607]:
+        - generic [ref=e608]:
+          - heading "Tasks built for human-agent collaboration." [level=2] [ref=e609]
+          - paragraph [ref=e610]: Email, chat, and docs in one workspace. Keyboard-first tasks agents can close. Nothing stranded elsewhere.
+          - link "Explore Tasks →" [ref=e612] [cursor=pointer]:
+            - /url: /tasks
+        - generic "How a task moves through Macro" [ref=e616]:
+          - generic [ref=e617]:
+            - generic [ref=e618]:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - text: Tasks
+                        - generic:
+                          - button: Assigned
+                          - button: Created
+                          - button: All
+                      - generic:
+                        - generic: Task
+                        - generic: Assignees
+                        - generic: Updated
+                      - generic:
+                        - generic:
+                          - img
+                          - img
+                          - generic: Not Started
+                          - generic: "5"
+                        - generic:
+                          - generic:
+                            - img
+                            - generic: Port PDF package to Solid.js
+                          - generic:
+                            - generic: JB
+                            - generic: Jacob
+                          - generic: May 14
+                        - generic:
+                          - generic:
+                            - img
+                            - generic: Generate team memory with MCP
+                          - generic:
+                            - generic: 14 people
+                          - generic: Jun 12
+                        - generic:
+                          - img
+                          - img
+                          - generic: In Progress
+                          - generic: "2"
+                        - generic:
+                          - generic:
+                            - img
+                            - generic: Ship realtime sync to the finish line
+                          - generic:
+                            - generic: DK
+                            - generic: Daniel
+                          - generic: 2:14 PM
+                        - generic:
+                          - img
+                          - img
+                          - generic: In Review
+                          - generic: "2"
+                        - generic:
+                          - generic:
+                            - img
+                            - generic: Fix flaky deploy pipeline
+                          - generic:
+                            - img
+                            - text: Agent
+                          - generic: 12:59 PM
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: Ask AI, @mention anything
+                          - generic:
+                            - img
+              - generic [ref=e622]:
+                - generic [ref=e623]:
+                  - generic [ref=e624]:
+                    - generic [ref=e625]:
+                      - img [ref=e626]
+                      - text: "#bug-reports"
+                    - generic [ref=e628]:
+                      - img [ref=e629]
+                      - text: Create task
+                  - generic [ref=e634]:
+                    - generic [ref=e635]: SK
+                    - generic [ref=e636]:
+                      - generic [ref=e637]:
+                        - generic [ref=e638]: Sarah Kim
+                        - generic [ref=e639]: 9:14 AM
+                      - generic [ref=e640]: Deploys are flaking again. The pipeline times out on the realtime sync tests about half the time.
+                - generic [ref=e641]:
+                  - img [ref=e642]
+                  - generic [ref=e644]: One click
+                - generic [ref=e645]:
+                  - generic [ref=e646]:
+                    - img [ref=e647]
+                    - generic [ref=e649]: Fix flaky deploy pipeline
+                  - generic [ref=e650]:
+                    - generic [ref=e651]:
+                      - img [ref=e652]
+                      - text: Not Started
+                    - generic [ref=e654]:
+                      - generic [ref=e655]: EH
+                      - text: Eric
+                    - generic [ref=e656]:
+                      - generic [ref=e657]: "#"
+                      - text: linked to bug-reports
+            - list [ref=e658]:
+              - listitem [ref=e659]:
+                - button "Capture Turn any message into a task in one keystroke." [ref=e660]:
+                  - generic [ref=e661]: Capture
+                  - generic [ref=e662]: Turn any message into a task in one keystroke.
+              - listitem [ref=e663]:
+                - button "Triage Status, priority, and assignee — one keystroke each." [ref=e664]:
+                  - generic [ref=e665]: Triage
+                  - generic [ref=e666]: Status, priority, and assignee — one keystroke each.
+              - listitem [ref=e667]:
+                - button "Delegate Hand it to an agent that reports back in the task." [ref=e668]:
+                  - generic [ref=e669]: Delegate
+                  - generic [ref=e670]: Hand it to an agent that reports back in the task.
+              - listitem [ref=e671]:
+                - button "Ship Open a PR and the status keeps itself up to date." [ref=e672]:
+                  - generic [ref=e673]: Ship
+                  - generic [ref=e674]: Open a PR and the status keeps itself up to date.
+          - link "Star on GitHub 283" [ref=e676]:
+            - /url: https://github.com/macro-inc/macro
+            - img [ref=e677]
+            - text: Star on GitHub
+            - generic [ref=e680]:
+              - img [ref=e682]
+              - text: "283"
+      - separator [ref=e684]
+      - region "Messages" [ref=e686]:
+        - generic [ref=e687]:
+          - heading "Team chat built for deep work." [level=2] [ref=e688]
+          - paragraph [ref=e689]: Channels linked to your whole workspace. Everything you @mention — docs, tasks, email — is shared with the channel.
+          - link "Explore Messages →" [ref=e691] [cursor=pointer]:
+            - /url: /channels
+        - generic [ref=e696]:
+          - generic [ref=e697]:
+            - generic [ref=e698]:
+              - generic [ref=e699]:
+                - img [ref=e700]
+                - img [ref=e702]
+              - generic [ref=e704]:
+                - img [ref=e705]
+                - text: go-to-market
+              - generic [ref=e707]:
+                - generic [ref=e708]:
+                  - generic [ref=e709]: GB
+                  - generic [ref=e711]: JW
+                - generic [ref=e712]:
+                  - img [ref=e713]
+                  - text: Call
+            - generic [ref=e715]:
+              - generic [ref=e716]:
+                - generic [ref=e717]: GB
+                - generic [ref=e718]:
+                  - generic [ref=e719]:
+                    - generic [ref=e720]: Gabriel Birman
+                    - generic [ref=e721]: 9:58 AM
+                  - paragraph [ref=e722]: are we locking the launch plan today?
+              - generic [ref=e723]:
+                - generic [ref=e724]: JW
+                - generic [ref=e725]:
+                  - generic [ref=e726]:
+                    - generic [ref=e727]: Julia
+                    - generic [ref=e728]: 10:02 AM
+                  - paragraph [ref=e729]: finishing the timeline now — one sec
+              - generic [ref=e730]:
+                - generic [ref=e731]: JB
+                - generic [ref=e732]:
+                  - generic [ref=e733]:
+                    - generic [ref=e734]: Jacob
+                    - generic [ref=e735]: 10:04 AM
+                  - paragraph [ref=e736]:
+                    - text: Final plan is locked in
+                    - generic [ref=e738]:
+                      - img [ref=e740]
+                      - text: Q3 launch plan
+            - generic [ref=e744]:
+              - generic [ref=e745]: "Message #go-to-market"
+              - generic [ref=e746]:
+                - img [ref=e748]
+                - generic [ref=e750]: Aa
+                - img [ref=e752]
+          - generic [ref=e755]:
+            - generic [ref=e756]:
+              - img [ref=e757]
+              - generic [ref=e760]: Q3 launch plan
+              - generic [ref=e761]:
+                - generic [ref=e762]: JB
+                - generic [ref=e764]: JW
+            - generic [ref=e765]:
+              - heading "Q3 launch plan" [level=3] [ref=e766]
+              - paragraph [ref=e767]: "Ship the new workspace to general availability the week of July 14. Owners and dates below — shared automatically with everyone in #go-to-market."
+              - generic [ref=e768]:
+                - generic [ref=e769]:
+                  - img [ref=e771]
+                  - generic [ref=e773]: Finalize launch timeline
+                - generic [ref=e774]:
+                  - img [ref=e776]
+                  - generic [ref=e778]: Lock pricing & packaging
+                - generic [ref=e781]: Draft the announcement post
+                - generic [ref=e784]: Brief the support team
+              - generic [ref=e785]:
+                - img [ref=e787]
+                - generic [ref=e789]: "Linked from #go-to-market — open right next to the conversation."
+          - generic [ref=e790]:
+            - img [ref=e792]
+            - generic [ref=e794]:
+              - generic [ref=e795]: "Shared to #go-to-market"
+              - generic [ref=e796]: Q3 launch plan · everyone now has access
+      - separator [ref=e797]
+      - region "CRM" [ref=e799]:
+        - generic [ref=e800]:
+          - heading "CRM that updates itself." [level=2] [ref=e801]
+          - paragraph [ref=e802]: Records build themselves from your team’s email. They get created, enriched, and kept up to date, with no data entry.
+          - link "Explore CRM →" [ref=e804] [cursor=pointer]:
+            - /url: /crm
+        - generic [ref=e808]:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - generic: Hartwell
+                      - paragraph: Streaming data pipelines for Postgres and Kafka. Founded 2017, Austin. Show more
+                  - generic:
+                    - generic:
+                      - img
+                      - text: Discussion
+                    - generic:
+                      - generic: Leave a comment…
+                      - generic:
+                        - generic:
+                          - img
+                        - generic: Aa
+                        - generic:
+                          - img
+                  - generic:
+                    - generic:
+                      - generic: Emails
+                      - generic:
+                        - generic: Team
+                        - generic: Me
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                        - generic: Sarah Chen
+                        - generic: "Re: Pilot rollout plan Thanks for the deck. The team is in."
+                        - generic: Jun 12
+                      - generic:
+                        - generic:
+                          - img
+                        - generic: Marcus Lee
+                        - generic: Security review questionnaire Attaching our SOC 2 and DPA for
+                        - generic: Jun 9
+                      - generic:
+                        - generic:
+                          - img
+                        - generic: Sarah Chen
+                        - generic: "Re: Pricing for 200 seats That works on our end. Let's lock"
+                        - generic: Jun 3
+                      - generic:
+                        - generic:
+                          - img
+                        - generic: Priya Nair
+                        - generic: "Intro: data platform team Hi, Sarah suggested I reach out about"
+                        - generic: May 28
+                      - generic:
+                        - generic:
+                          - img
+                        - generic: Hartwell Team
+                        - generic: Kickoff scheduled for Tuesday Calendar invite attached. Looking
+                        - generic: May 21
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                      - text: Details
+                    - generic:
+                      - generic: Domains
+                      - generic:
+                        - img
+                        - text: hartwell.com
+                  - generic:
+                    - generic:
+                      - img
+                      - text: Contacts
+                    - generic:
+                      - img
+                      - text: Search contacts…
+                    - generic:
+                      - generic:
+                        - generic: Sarah Chen
+                        - generic: sarah@hartwell.com
+                      - generic:
+                        - generic: Marcus Lee
+                        - generic: marcus@hartwell.com
+                      - generic:
+                        - generic: Priya Nair
+                        - generic: priya@hartwell.com
+                      - generic:
+                        - generic: David Okoro
+                        - generic: david@hartwell.com
+                  - generic:
+                    - generic:
+                      - img
+                    - text: Sharing
+          - generic [ref=e812]:
+            - generic [ref=e813]:
+              - img [ref=e815]
+              - generic [ref=e822]: Macro Agent
+            - generic [ref=e823]:
+              - generic [ref=e825]:
+                - text: What's the latest with
+                - generic [ref=e826]:
+                  - img [ref=e828]
+                  - text: Hartwell
+                - text: "? Need a recap before today's"
+                - generic [ref=e835]: 2pm call
+                - text: .
+              - generic [ref=e837]:
+                - generic [ref=e838]:
+                  - img [ref=e841]
+                  - generic [ref=e845]: Scanning Hartwell emails
+                  - img [ref=e848]
+                  - generic [ref=e851]: Found 6 calls · 4 open tasks
+                  - img [ref=e854]
+                  - generic [ref=e857]: Reading Monday call notes
+                  - img [ref=e860]
+                  - generic [ref=e862]: Thought for 18 seconds
+                - paragraph [ref=e863]: "Pilot is approved. Here's the snapshot before your call:"
+              - generic [ref=e864]:
+                - generic [ref=e865]:
+                  - img [ref=e866]
+                  - generic [ref=e873]: Hartwell
+                  - generic [ref=e874]: Enterprise pilot
+                - list [ref=e876]:
+                  - listitem [ref=e877]:
+                    - generic [ref=e878]:
+                      - generic [ref=e880]: SC
+                      - text: Sarah
+                    - text: approved 200 seats on Monday's
+                    - generic [ref=e881]:
+                      - img [ref=e883]
+                      - text: call
+                    - text: .
+                  - listitem [ref=e885]:
+                    - text: "Security docs due Friday:"
+                    - generic [ref=e886]:
+                      - img [ref=e888]
+                      - text: PRJ-204
+                    - text: .
+                  - listitem [ref=e890]:
+                    - text: Redlines are in
+                    - generic [ref=e891]:
+                      - img [ref=e893]
+                      - text: Mutual NDA
+                    - text: ", waiting on legal."
+      - separator [ref=e896]
+      - region "Get started" [ref=e898]:
+        - generic [ref=e899]:
+          - heading "Let's get started." [level=2] [ref=e900]
+          - paragraph [ref=e901]: It takes 30 seconds to connect your inbox and bring messages, docs, tasks, calls, and agents into shared memory.
+        - link "Get started" [ref=e902]:
+          - /url: https://auth-service.macro.com/login/sso?idp_name=google_gmail
+          - img [ref=e903]
+          - text: Get started
+      - generic [ref=e909]:
+        - generic [ref=e910]: Or keep exploring...
+        - generic [ref=e911]:
+          - link "Agents" [ref=e912] [cursor=pointer]:
+            - /url: /agents
+            - img [ref=e914]
+            - generic [ref=e921]: Agents
+          - link "Email" [ref=e922] [cursor=pointer]:
+            - /url: /email
+            - img [ref=e924]
+            - generic [ref=e934]: Email
+          - link "Documents" [ref=e935] [cursor=pointer]:
+            - /url: /documents
+            - img [ref=e937]
+            - generic [ref=e950]: Documents
+          - link "Channels" [ref=e951] [cursor=pointer]:
+            - /url: /channels
+            - img [ref=e953]
+            - generic [ref=e966]: Channels
+          - link "Calls" [ref=e967] [cursor=pointer]:
+            - /url: /calls
+            - img [ref=e969]
+            - generic [ref=e976]: Calls
+          - link "CRM" [ref=e977] [cursor=pointer]:
+            - /url: /crm
+            - img [ref=e979]
+            - generic [ref=e995]: CRM
+          - link "Tasks" [ref=e996] [cursor=pointer]:
+            - /url: /tasks
+            - img [ref=e998]
+            - generic [ref=e1011]: Tasks
+          - link "Pull Requests" [ref=e1012] [cursor=pointer]:
+            - /url: /github
+            - img [ref=e1014]
+            - generic [ref=e1025]: Pull Requests
+        - generic [ref=e1026]:
+          - link "X" [ref=e1027] [cursor=pointer]:
+            - /url: https://x.com/macrodotcom
+            - img [ref=e1028]
+          - link "GitHub" [ref=e1030] [cursor=pointer]:
+            - /url: https://github.com/macro-inc/macro
+            - img [ref=e1031]
+          - link "LinkedIn" [ref=e1033] [cursor=pointer]:
+            - /url: https://www.linkedin.com/company/macrocom
+            - img [ref=e1034]
+          - link "Instagram" [ref=e1036] [cursor=pointer]:
+            - /url: https://www.instagram.com/macrodotcom/
+            - img [ref=e1037]
+        - paragraph [ref=e1039]: © 2026 Macro. All rights reserved.
+        - paragraph [ref=e1040]:
+          - link "Jobs" [ref=e1041] [cursor=pointer]:
+            - /url: /jobs
+          - text: ·
+          - link "Terms" [ref=e1042] [cursor=pointer]:
+            - /url: /terms
+          - text: ·
+          - link "Privacy" [ref=e1043] [cursor=pointer]:
+            - /url: /privacy

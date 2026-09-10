@@ -124,7 +124,10 @@ export function EmailThreadView(props: EmailThreadViewProps) {
               </div>
               <Show when={isTouchDevice() && mobileBottomReplyMessage()}>
                 {(lastMessage) => (
-                  <BottomReplyButtons lastMessage={lastMessage()} />
+                  <BottomReplyButtons
+                    lastMessage={lastMessage()}
+                    navigation={props.host?.listNavigation}
+                  />
                 )}
               </Show>
               <Show when={isTouchDevice()}>

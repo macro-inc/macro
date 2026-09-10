@@ -150,10 +150,7 @@ function isIconSize(size: ButtonSize): boolean {
 // from template strings.
 const glassClass = (variant: ButtonVariant): string => {
   if (variant === 'ghost') return '';
-  // The glass rim is the edge. `outline` is the one variant with a hard
-  // border of its own, and under the rim it reads as a double line — so the
-  // border goes transparent and the tinted fill plus rim carry the shape.
-  return variant === 'outline' ? 'glass border-transparent' : 'glass';
+  return 'glass';
 };
 
 export const Button = (props: ButtonProps) => {

@@ -9,6 +9,8 @@ import type { FileOperation } from '@components/app/split-layout/components/Spli
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
+import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
+import { useChatInputContext } from '@core/component/AI/context';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
@@ -29,6 +31,7 @@ export function TopBar(props: {
   toggleStreamDebug?: () => void;
 }) {
   const blockId = useBlockId();
+  const input = useChatInputContext();
 
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
   const chatName = () => name();
@@ -81,6 +84,7 @@ export function TopBar(props: {
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel
+          icon={<ProviderIcon model={input.model()} class="size-4 shrink-0" />}
           fallbackName={DEFAULT_CHAT_NAME}
           lockRename={false}
         />

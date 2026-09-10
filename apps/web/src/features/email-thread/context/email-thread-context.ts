@@ -59,8 +59,16 @@ export interface EmailThreadContext {
   ): EmailThreadCommands;
 }
 
+export interface EmailThreadListNavigation {
+  canPrevious: Accessor<boolean>;
+  canNext: Accessor<boolean>;
+  previous(): void;
+  next(): void;
+}
+
 /** Host behavior is optional. A thread can render without a block or router. */
 export interface EmailThreadHost {
+  listNavigation?: EmailThreadListNavigation;
   isActive?: Accessor<boolean>;
   registerKeyboard?: (handlers: EmailThreadKeyboardHandlers) => void;
   targetMessageId?: Accessor<string | undefined>;

@@ -1,0 +1,204 @@
+- generic [ref=e3]:
+  - navigation "Primary" [ref=e5]:
+    - link [ref=e6]:
+      - /url: /
+      - img [ref=e7]
+    - generic [ref=e9]:
+      - link "GitHub" [ref=e10]:
+        - /url: https://github.com/macro-inc/macro
+      - link "Pricing" [ref=e11]:
+        - /url: /#pricing
+      - link "Videos" [ref=e12]:
+        - /url: https://www.youtube.com/channel/UCcn-1WTGff0X_RscGVtwljQ
+      - link "Docs" [ref=e13]:
+        - /url: https://docs.macro.com
+      - link "Book Demo" [ref=e14]:
+        - /url: https://cal.com/team/macro/macro-demo-call
+    - link "Continue with Google" [ref=e15]:
+      - /url: https://macro.com/app/welcome
+      - img [ref=e16]
+      - text: Continue with Google
+  - generic [ref=e23]:
+    - generic [ref=e25]:
+      - region "Security and privacy" [ref=e26]:
+        - paragraph [ref=e28]: Enterprise-grade security. Zero data retention (ZDR, no training) with model providers. SOC 2 Type II certified.
+        - generic "Security certifications" [ref=e29]:
+          - img "ISO 27001" [ref=e30]
+          - img "AICPA SOC 2" [ref=e33]
+          - img "CASA Tier 2" [ref=e37]:
+            - generic [ref=e39]: CASA
+            - generic [ref=e40]: TIER 2
+      - generic [ref=e43]:
+        - generic [ref=e45]:
+          - generic [ref=e47]: Free
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - paragraph [ref=e50]:
+                - generic [ref=e51]: $0
+              - generic [ref=e52]:
+                - paragraph [ref=e53]: for personal use
+                - paragraph [ref=e54]: free forever
+            - paragraph [ref=e56]:
+              - strong [ref=e57]: "Free includes:"
+              - text: "\"Sent with Macro\" in email signatures, limits on storage and AI."
+            - link "Connect with Google" [ref=e59]:
+              - /url: https://macro.com/app/welcome
+              - img [ref=e60]
+              - text: Connect with Google
+        - generic [ref=e66]:
+          - generic [ref=e68]: Flat pricing
+          - generic [ref=e69]:
+            - generic [ref=e70]:
+              - paragraph [ref=e71]:
+                - generic [ref=e72]: $40
+              - generic [ref=e73]:
+                - paragraph [ref=e74]: per seat / month
+                - paragraph [ref=e75]: billed monthly
+            - paragraph [ref=e77]:
+              - strong [ref=e78]: "Includes your whole workspace:"
+              - text: messages, docs, tasks, calls, email, unified search, and AI context.
+            - link "Connect with Google" [ref=e80]:
+              - /url: https://macro.com/app/welcome
+              - img [ref=e81]
+              - text: Connect with Google
+      - generic [ref=e87]:
+        - generic [ref=e88]: Focus on what matters
+        - generic [ref=e89]: AI separates Signal, like important emails and messages, from Noise.
+      - img [ref=e94]
+      - img [ref=e141]
+      - generic [ref=e244]:
+        - generic [ref=e245]: Team-Level Memory
+        - generic [ref=e246]: Everything your team does is stored in one place so agents have full context.
+      - generic [ref=e250]:
+        - img [ref=e252]
+        - generic:
+          - generic [ref=e326]:
+            - paragraph [ref=e327]: EMAIL & CRM
+            - paragraph [ref=e328]: Superhuman speed x Cursor-like AI.
+          - generic [ref=e329]:
+            - paragraph [ref=e330]: MESSAGES
+            - paragraph [ref=e331]:
+              - text: Designed for focused
+              - text: technical discussions.
+          - generic [ref=e332]:
+            - paragraph [ref=e333]: TASKS
+            - paragraph [ref=e334]: Integrated with Github, @linked to mail and messages.
+          - generic [ref=e335]:
+            - paragraph [ref=e336]: CALLS
+            - paragraph [ref=e337]: Vectorized and stored to team-level memory.
+          - generic [ref=e338]:
+            - paragraph [ref=e339]: DOCS
+            - paragraph [ref=e340]: CRDT-fast live markdown collaboration.
+        - img
+        - img
+        - img
+        - img
+        - img
+      - generic [ref=e341]:
+        - generic [ref=e342]:
+          - generic [ref=e343]: All In One
+          - generic [ref=e344]: Macro replaces your siloed stack with a single app. Messages, docs, tasks, calls, and email all connected.
+        - img "Macro's unified list showing messages, docs, tasks, and email together"
+      - generic [ref=e345]:
+        - generic [ref=e346]:
+          - heading "The unified system for work." [level=1] [ref=e347]
+          - paragraph [ref=e348]:
+            - img "Macro" [ref=e349]
+            - text: brings your mail, messages, agents, tasks, calls, docs, and crm into one interface with shared memory.
+          - generic [ref=e355]:
+            - link "Connect with Google" [ref=e356]:
+              - /url: https://macro.com/app/welcome
+              - img [ref=e357]
+              - text: Connect with Google
+            - link "GitHub" [ref=e362]:
+              - /url: https://github.com/macro-inc/macro
+              - img [ref=e363]
+              - text: GitHub
+        - generic [ref=e365]:
+          - img "Macro app channels interface" [ref=e366]
+          - button "Watch demo video" [ref=e367] [cursor=pointer]:
+            - generic [ref=e370]: Watch demo video
+      - region "Manifesto" [ref=e371]:
+        - heading "The future of work is not another app. It's a single unified system." [level=2] [ref=e373]
+        - generic [ref=e374]:
+          - generic [ref=e375]:
+            - generic [ref=e376]: "01"
+            - generic [ref=e377]: One unified interface.
+          - generic [ref=e378]:
+            - generic [ref=e379]: "02"
+            - generic [ref=e380]: Shared memory for agents.
+          - generic [ref=e381]:
+            - generic [ref=e382]: "03"
+            - generic [ref=e383]: Extremely fast.
+          - generic [ref=e384]:
+            - generic [ref=e385]: "04"
+            - generic [ref=e386]: Open source.
+      - generic [ref=e387]:
+        - generic [ref=e388]:
+          - generic [ref=e389]: Launcher
+          - generic [ref=e390]: Launch anything instantly. Send a message, spawn an agent, draft an email.
+        - img [ref=e392]
+      - figure "— Teo Nys, CTO" [ref=e534]:
+        - blockquote [ref=e539]: “Macro keeps our whole team in sync, connected as one hive mind.”
+        - generic [ref=e540]: — Teo Nys, CTO
+      - generic [ref=e542]:
+        - generic [ref=e543]: Unified Inbox
+        - generic [ref=e544]:
+          - generic [ref=e545]: One inbox for everything.
+          - text: Triage all your email accounts, messages, and tasks in one place.
+      - img [ref=e549]
+      - generic [ref=e806]:
+        - img [ref=e808]
+        - generic:
+          - generic [ref=e983]:
+            - paragraph [ref=e984]: COMMAND
+            - paragraph [ref=e985]: Press K to open Macro.
+          - generic [ref=e986]:
+            - paragraph [ref=e987]: SEARCH
+            - paragraph [ref=e988]: Find anything instantly.
+          - generic [ref=e989]:
+            - paragraph [ref=e990]: CREATE
+            - paragraph [ref=e991]: Start from one menu.
+        - img
+        - img
+        - img
+      - region "Get started" [ref=e992]:
+        - generic [ref=e993]:
+          - generic [ref=e994]:
+            - heading "Let's get started." [level=2] [ref=e995]
+            - paragraph [ref=e996]: It takes 30 seconds to connect your inbox and bring messages, docs, tasks, calls, and agents into shared memory.
+          - link "Connect with Google" [ref=e997]:
+            - /url: https://macro.com/app/welcome
+            - img [ref=e998]
+            - text: Connect with Google
+    - contentinfo [ref=e1003]:
+      - generic [ref=e1004]:
+        - navigation "Footer" [ref=e1005]:
+          - link "Pricing" [ref=e1006] [cursor=pointer]:
+            - /url: /#pricing
+          - link "Book Demo" [ref=e1007] [cursor=pointer]:
+            - /url: https://cal.com/team/macro/macro-demo-call
+          - link "Jobs" [ref=e1008] [cursor=pointer]:
+            - /url: /jobs
+          - link "Terms" [ref=e1009] [cursor=pointer]:
+            - /url: /terms
+          - link "Privacy" [ref=e1010] [cursor=pointer]:
+            - /url: /privacy
+          - link "GitHub" [ref=e1011] [cursor=pointer]:
+            - /url: https://github.com/macro-inc/macro
+          - link "Videos" [ref=e1012] [cursor=pointer]:
+            - /url: https://www.youtube.com/channel/UCcn-1WTGff0X_RscGVtwljQ
+        - generic [ref=e1013]:
+          - link "X" [ref=e1014] [cursor=pointer]:
+            - /url: https://x.com/macrodotcom
+            - img [ref=e1015]
+          - link "GitHub" [ref=e1017] [cursor=pointer]:
+            - /url: https://github.com/macro-inc/macro
+            - img [ref=e1018]
+          - link "LinkedIn" [ref=e1020] [cursor=pointer]:
+            - /url: https://www.linkedin.com/company/macrocom
+            - img [ref=e1021]
+          - link "Instagram" [ref=e1023] [cursor=pointer]:
+            - /url: https://www.instagram.com/macrodotcom/
+            - img [ref=e1024]
+        - paragraph [ref=e1026]: © 2026 Macro. All rights reserved.

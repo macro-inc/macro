@@ -16,6 +16,7 @@
  * they already handle while the GET is in flight.
  */
 
+import { markMessageSent } from '@core/util/message-send-motion';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { CreateAgentSessionRequest } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
@@ -94,6 +95,7 @@ export function startPendingSession(
           setFailed(true);
           return;
         }
+        markMessageSent(`agent:${id}:${delivered.value.actionId}`);
       }
       setSessionId(id);
     })

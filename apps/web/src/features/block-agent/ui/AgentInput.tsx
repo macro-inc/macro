@@ -15,7 +15,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
-import { Button, ComposerSurface, SendButton } from '@ui';
+import { Button, ComposerSurface, cn, SendButton } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 
 /**
@@ -182,7 +182,10 @@ export function AgentInput(props: AgentInputProps) {
           <div
             id={AGENT_INPUT_TEXT_AREA_ID}
             ref={bodyRef}
-            class="min-w-0 flex-1 pl-1 text-sm text-ink touch:px-3 touch:py-2 touch:text-sm"
+            class={cn(
+              'min-w-0 flex-1 pl-1 text-[15px] leading-5 text-ink touch:px-3 touch:py-2 touch:text-sm',
+              !isTouchDevice() && isMultiline() && 'pl-3'
+            )}
             classList={{
               // While empty only the placeholder renders; keep it to one clipped
               // line so it doesn't wrap into the single-line height.
@@ -212,6 +215,7 @@ export function AgentInput(props: AgentInputProps) {
                 when={props.busy && props.onStop}
                 fallback={
                   <SendButton
+                    appearance="composer"
                     tooltip="Send"
                     disabled={!canSend()}
                     onClick={send}
@@ -222,17 +226,22 @@ export function AgentInput(props: AgentInputProps) {
                   when={canSendNext()}
                   fallback={
                     <Button
-                      variant="ghost"
+                      variant={isTouchDevice() ? 'ghost' : 'strong'}
                       size="icon-sm"
                       label="Stop"
                       onClick={() => props.onStop?.()}
-                      class="rounded-[11px] touch:rounded-full size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
+                      class={
+                        isTouchDevice()
+                          ? 'rounded-full size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
+                          : 'rounded-full size-7'
+                      }
                     >
                       <div class="size-3.5 rounded-sm bg-current" />
                     </Button>
                   }
                 >
                   <SendButton
+                    appearance="composer"
                     aria-label="Send next queued message"
                     tooltip="Send next queued message"
                     shortcut="Enter"

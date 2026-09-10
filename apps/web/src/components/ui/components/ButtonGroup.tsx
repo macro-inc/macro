@@ -43,9 +43,7 @@ const groupVariantStyles: Record<ButtonVariant, string> = {
    only — Tailwind's scanner can't see template-built classes. */
 const glassClass = (variant: ButtonVariant): string => {
   if (variant === 'ghost') return '';
-  // The rim is the edge, so `outline` drops its hard border rather than
-  // drawing a second line under it.
-  return variant === 'outline' ? 'glass border-transparent' : 'glass';
+  return 'glass';
 };
 
 const dividerVariantStyles: Record<ButtonVariant, string> = {

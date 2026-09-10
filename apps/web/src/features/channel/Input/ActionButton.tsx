@@ -14,6 +14,7 @@ export function InputActionButton(props: {
       label={props.label}
       variant={props.active ? 'accent' : 'ghost'}
       size="icon-sm"
+      class="rounded-full size-7 touch:size-6"
       onPointerDown={(event: PointerEvent) => event.preventDefault()}
       onClick={(event) => props.onClick?.(event)}
     >

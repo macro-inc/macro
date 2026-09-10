@@ -1,4 +1,3 @@
-import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import BellIcon from '@phosphor/bell.svg';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
@@ -81,12 +80,9 @@ const MOBILE_DOCK_VIEWS: MobileDockView[] = [
   { id: 'calls', label: 'Calls', icon: CallsIcon },
 ];
 
-/** The dock views with feature gating applied (the calendar UI flag). */
+/** Mobile navigation always includes Calendar, independent of feature flags. */
 export function useMobileDockViews(): Accessor<MobileDockView[]> {
-  const calendarUiEnabled = useCalendarUiFlag();
   return createMemo(() =>
-    MOBILE_DOCK_VIEWS.map((view) => ({ ...view, animateIcon: false })).filter(
-      (view) => view.id !== 'calendar' || calendarUiEnabled()
-    )
+    MOBILE_DOCK_VIEWS.map((view) => ({ ...view, animateIcon: false }))
   );
 }

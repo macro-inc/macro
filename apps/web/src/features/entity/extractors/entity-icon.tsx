@@ -11,7 +11,7 @@ import type { StreamEvent } from '@service-connection/generated/schemas';
 import { Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
-import { PulsingStar } from '../components/PulsingStar';
+import { ChatProviderIcon } from '../components/ChatProviderIcon';
 import type {
   ChannelEntity,
   EntityData,
@@ -175,10 +175,10 @@ export function EntityIcon(props: EntityIconProps) {
         />
       </Match>
       <Match when={isChatEntity()}>
-        <PulsingStar
-          kind="listIcon"
+        <ChatProviderIcon
+          id={props.entity.id}
           animate={props.streamState?.type === 'created'}
-          class={props.class}
+          class={`size-full ${props.class ?? ''}`}
         />
       </Match>
     </Switch>

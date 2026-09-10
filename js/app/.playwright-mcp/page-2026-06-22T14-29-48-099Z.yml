@@ -1,0 +1,453 @@
+- generic [ref=e3]:
+  - navigation "Primary" [ref=e5]:
+    - generic [ref=e6]:
+      - link [ref=e7]:
+        - /url: /
+        - img [ref=e8]
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - button "Features" [ref=e12]:
+            - text: Features
+            - img [ref=e13]
+          - generic:
+            - generic:
+              - link "Agents AI with your whole workspace as context.":
+                - /url: /agents
+                - generic:
+                  - img
+                - generic:
+                  - generic: Agents
+                  - generic: AI with your whole workspace as context.
+              - link "Email A unified inbox, faster than Superhuman.":
+                - /url: /email
+                - generic:
+                  - img
+                - generic:
+                  - generic: Email
+                  - generic: A unified inbox, faster than Superhuman.
+              - link "Documents Markdown docs, wired into everything.":
+                - /url: /documents
+                - generic:
+                  - img
+                - generic:
+                  - generic: Documents
+                  - generic: Markdown docs, wired into everything.
+              - link "Channels Team chat, quieter than Slack.":
+                - /url: /channels
+                - generic:
+                  - img
+                - generic:
+                  - generic: Channels
+                  - generic: Team chat, quieter than Slack.
+              - link "Calls Calls with transcripts and team memory.":
+                - /url: /calls
+                - generic:
+                  - img
+                - generic:
+                  - generic: Calls
+                  - generic: Calls with transcripts and team memory.
+              - link "CRM A CRM that builds itself from email.":
+                - /url: /crm
+                - generic:
+                  - img
+                - generic:
+                  - generic: CRM
+                  - generic: A CRM that builds itself from email.
+              - link "Tasks Lightweight tasks linked to everything.":
+                - /url: /tasks
+                - generic:
+                  - img
+                - generic:
+                  - generic: Tasks
+                  - generic: Lightweight tasks linked to everything.
+              - link "Pull Requests Review pull requests in your inbox.":
+                - /url: /github
+                - generic:
+                  - img
+                - generic:
+                  - generic: Pull Requests
+                  - generic: Review pull requests in your inbox.
+        - link "Pricing" [ref=e15]:
+          - /url: /pricing
+        - link "Videos" [ref=e16]:
+          - /url: https://www.youtube.com/channel/UCcn-1WTGff0X_RscGVtwljQ
+        - link "Docs" [ref=e17]:
+          - /url: https://docs.macro.com
+        - link "Demo" [ref=e18]:
+          - /url: https://cal.com/team/macro/macro-demo-call
+        - link "Login" [ref=e19]:
+          - /url: https://macro.com/app/login
+      - generic [ref=e20]:
+        - link "Macro on GitHub" [ref=e21]:
+          - /url: https://github.com/macro-inc/macro
+          - img [ref=e22]
+        - link "Connect with Google" [ref=e24]:
+          - /url: https://auth-service.macro.com/login/sso?idp_name=google_gmail
+          - img [ref=e25]
+          - text: Connect with Google
+  - generic [ref=e34]:
+    - generic [ref=e36]:
+      - generic [ref=e37]: Focus on what matters
+      - generic [ref=e38]: AI separates Signal, like important emails and messages, from Noise.
+    - img [ref=e43]
+    - img [ref=e91]
+    - generic [ref=e194]:
+      - generic [ref=e195]: All In One
+      - generic [ref=e196]: Macro replaces your siloed stack with a single app. Messages, docs, tasks, calls, and email all connected.
+    - generic [ref=e197]:
+      - generic [ref=e198]:
+        - heading "The unified AI workspace." [level=1] [ref=e199]
+        - paragraph [ref=e200]:
+          - img "Macro" [ref=e201]
+          - text: unifies your work into one app with shared memory. Email, messages, docs, tasks, code, agents, calls, and CRM.
+        - generic [ref=e207]:
+          - link "Connect with Google" [ref=e208]:
+            - /url: https://auth-service.macro.com/login/sso?idp_name=google_gmail
+            - img [ref=e209]
+            - text: Connect with Google
+          - link "GitHub" [ref=e214]:
+            - /url: https://github.com/macro-inc/macro
+            - img [ref=e215]
+            - text: GitHub
+      - generic [ref=e217]:
+        - img "Macro app channels interface" [ref=e218]
+        - button "Watch demo video" [ref=e219] [cursor=pointer]:
+          - generic [ref=e222]: Watch demo video
+    - region "Manifesto" [ref=e223]:
+      - heading "Macro is the unified system for you, your agents and your team." [level=2] [ref=e225]
+      - generic [ref=e226]:
+        - generic [ref=e227]:
+          - generic [ref=e228]: "01"
+          - generic [ref=e229]: One unified interface.
+        - generic [ref=e230]:
+          - generic [ref=e231]: "02"
+          - generic [ref=e232]: Shared memory for agents.
+        - generic [ref=e233]:
+          - generic [ref=e234]: "03"
+          - generic [ref=e235]: Extremely fast.
+        - generic [ref=e236]:
+          - generic [ref=e237]: "04"
+          - generic [ref=e238]: Open source.
+    - generic [ref=e240]:
+      - generic [ref=e241]: Unified Inbox
+      - generic [ref=e242]:
+        - generic [ref=e243]: One inbox for everything.
+        - text: Triage all your email accounts, messages, and tasks in one place.
+    - img [ref=e247]
+    - region "How Macro compares" [ref=e502]:
+      - generic [ref=e503]:
+        - generic [ref=e504]:
+          - img [ref=e505]
+          - generic [ref=e512]:
+            - heading "Quieter than Slack" [level=3] [ref=e513]:
+              - link "Quieter than Slack" [ref=e514] [cursor=pointer]:
+                - /url: /posts/what-we-learned-from-slack
+            - paragraph [ref=e515]: "Designed for focused work, with AI to filter out #random pings."
+        - generic [ref=e516]:
+          - img [ref=e517]
+          - generic [ref=e524]:
+            - heading "Simpler than Notion" [level=3] [ref=e525]:
+              - link "Simpler than Notion" [ref=e526] [cursor=pointer]:
+                - /url: /posts/what-we-learned-from-notion
+            - paragraph [ref=e527]: "Live @linked docs, native markdown: better for agents."
+        - generic [ref=e528]:
+          - img [ref=e529]
+          - generic [ref=e535]:
+            - heading "Faster than Superhuman" [level=3] [ref=e536]:
+              - link "Faster than Superhuman" [ref=e537] [cursor=pointer]:
+                - /url: /posts/what-we-learned-from-superhuman
+            - paragraph [ref=e538]: Email, messages, and tasks in one unified inbox with shortcuts.
+        - generic [ref=e539]:
+          - img [ref=e540]
+          - generic [ref=e545]:
+            - heading "Lighter than Linear" [level=3] [ref=e546]:
+              - link "Lighter than Linear" [ref=e547] [cursor=pointer]:
+                - /url: /posts/what-we-learned-from-linear
+            - paragraph [ref=e548]: Simple. Fast. Always up-to-date. @linked to agents.
+    - generic [ref=e551]:
+      - link "Email" [ref=e552] [cursor=pointer]:
+        - /url: /email
+        - text: Email
+        - generic [ref=e553]: →
+      - generic [ref=e554]: "@mention from your workspace. People are cc'd and files are attachments."
+    - generic [ref=e557]:
+      - generic [ref=e558]:
+        - generic [ref=e559]: From
+        - generic [ref=e560]: JB
+        - generic [ref=e561]: Jacob Beckerman
+        - img [ref=e562]
+        - generic [ref=e564]: Cc Bcc
+      - generic [ref=e565]:
+        - generic [ref=e566]: To
+        - generic [ref=e567]: Macro users or email addresses
+      - generic [ref=e568]:
+        - generic [ref=e569]: Subject
+        - generic [ref=e570]: "Pitch memo: follow up"
+      - generic [ref=e572]: Loop
+    - generic [ref=e575]:
+      - generic [ref=e576]:
+        - generic [ref=e577]: Team-Level Memory
+        - generic [ref=e578]: Everything your team does is stored in one place so agents have full context.
+      - img [ref=e580]
+    - generic [ref=e720]:
+      - generic [ref=e721]:
+        - generic [ref=e722]: It's all open source. Modular, extensible, and fully owned by the community.
+        - link "GitHub 283" [ref=e723]:
+          - /url: https://github.com/macro-inc/macro
+          - img [ref=e724]
+          - text: GitHub
+          - generic [ref=e726]: "|"
+          - generic [ref=e727]:
+            - img [ref=e728]
+            - text: "283"
+      - generic [ref=e732]:
+        - img [ref=e734]
+        - generic:
+          - generic [ref=e909]:
+            - paragraph [ref=e910]: COMMAND
+            - paragraph [ref=e911]: Command + K.
+          - generic [ref=e912]:
+            - paragraph [ref=e913]: SEARCH
+            - paragraph [ref=e914]: Find anything instantly.
+          - generic [ref=e915]:
+            - paragraph [ref=e916]: CREATE
+            - paragraph [ref=e917]: Start from one menu.
+        - img
+        - img
+        - img
+    - region "Real-time collaboration" [ref=e918]:
+      - generic [ref=e919]:
+        - link "Documents" [ref=e920] [cursor=pointer]:
+          - /url: /documents
+          - text: Documents
+          - generic [ref=e921]: →
+        - generic [ref=e922]: Edits instantly like you're on the same computer.
+      - generic [ref=e924]:
+        - generic [ref=e925]:
+          - img [ref=e926]
+          - generic [ref=e929]: Collaborative editor (jacob rewrite)
+        - generic [ref=e931]:
+          - text: "Edits resolve instantly and never thrash:"
+          - generic [ref=e932]:
+            - text: multiple people can type at once
+            - generic [ref=e933]: Owen
+          - text: ", and"
+          - generic [ref=e936]: Julia
+      - generic [ref=e937]:
+        - paragraph [ref=e938]: Markdown docs built for human-agent collaboration. Built with CRDTs for offline editing.
+        - link "Star on GitHub 283" [ref=e939]:
+          - /url: https://github.com/macro-inc/macro
+          - img [ref=e940]
+          - text: Star on GitHub
+          - generic [ref=e943]:
+            - img [ref=e945]
+            - text: "283"
+    - region "Security and privacy" [ref=e948]:
+      - paragraph [ref=e950]: Enterprise-grade security. Zero data retention (ZDR, no training) with model providers. SOC 2 Type II certified.
+      - generic "Security certifications" [ref=e951]:
+        - img "ISO 27001" [ref=e952]
+        - img "AICPA SOC 2" [ref=e955]
+        - img "CASA Tier 2" [ref=e959]:
+          - generic [ref=e961]: CASA
+          - generic [ref=e962]: TIER 2
+    - generic [ref=e964]:
+      - generic [ref=e965]:
+        - generic [ref=e966] [cursor=pointer]:
+          - img [ref=e967]
+          - text: In Progress
+          - img [ref=e970]
+        - generic [ref=e972]:
+          - generic [ref=e973]:
+            - img [ref=e974]
+            - generic [ref=e977]: Change status…
+          - generic [ref=e978] [cursor=pointer]:
+            - img [ref=e979]
+            - generic [ref=e981]: Not Started
+            - generic [ref=e982]: "12"
+          - generic [ref=e983] [cursor=pointer]:
+            - img [ref=e984]
+            - generic [ref=e987]: In Progress
+            - generic [ref=e988]: "5"
+          - generic [ref=e989] [cursor=pointer]:
+            - img [ref=e990]
+            - generic [ref=e993]: In Review
+            - generic [ref=e994]: "2"
+          - generic [ref=e995] [cursor=pointer]:
+            - img [ref=e996]
+            - generic [ref=e999]: Completed
+            - generic [ref=e1000]: "38"
+          - generic [ref=e1001] [cursor=pointer]:
+            - img [ref=e1002]
+            - generic [ref=e1005]: Canceled
+            - generic [ref=e1006]: "3"
+      - generic [ref=e1007]:
+        - generic [ref=e1008] [cursor=pointer]:
+          - img [ref=e1009]
+          - text: Urgent
+          - img [ref=e1013]
+        - generic [ref=e1015]:
+          - generic [ref=e1016]:
+            - img [ref=e1017]
+            - generic [ref=e1020]: Change priority…
+          - generic [ref=e1021] [cursor=pointer]:
+            - img [ref=e1022]
+            - generic [ref=e1024]: No priority
+            - generic [ref=e1025]: "9"
+          - generic [ref=e1026] [cursor=pointer]:
+            - img [ref=e1027]
+            - generic [ref=e1031]: Low
+            - generic [ref=e1032]: "6"
+          - generic [ref=e1033] [cursor=pointer]:
+            - img [ref=e1034]
+            - generic [ref=e1038]: Medium
+            - generic [ref=e1039]: "14"
+          - generic [ref=e1040] [cursor=pointer]:
+            - img [ref=e1041]
+            - generic [ref=e1045]: High
+            - generic [ref=e1046]: "7"
+          - generic [ref=e1047] [cursor=pointer]:
+            - img [ref=e1048]
+            - generic [ref=e1052]: Urgent
+            - generic [ref=e1053]: "4"
+    - generic [ref=e1055]:
+      - link "Tasks" [ref=e1056] [cursor=pointer]:
+        - /url: /tasks
+        - text: Tasks
+        - generic [ref=e1057]: →
+      - generic [ref=e1058]: Tasks stay up to date automatically. Deep @linked to Github PR's and your workspace.
+    - generic [ref=e1062]:
+      - generic [ref=e1063]:
+        - img [ref=e1064]
+        - generic [ref=e1066]: go-to-market
+      - generic [ref=e1067]:
+        - generic [ref=e1068]: JB
+        - generic [ref=e1069]:
+          - generic [ref=e1070]:
+            - generic [ref=e1071]: Jacob
+            - generic [ref=e1072]: 9:02 AM
+          - paragraph [ref=e1073]:
+            - text: Plan lives in
+            - generic [ref=e1075]:
+              - img [ref=e1077]
+              - text: Q3 launch plan
+            - text: ", tracked in"
+            - generic [ref=e1081]:
+              - img [ref=e1083]
+              - text: PRJ-128
+              - generic [ref=e1085]:
+                - img [ref=e1086]
+                - img [ref=e1088]
+                - generic [ref=e1092]: SW
+            - text: . Heads up
+            - generic [ref=e1094]:
+              - generic [ref=e1096]: JW
+              - text: Julia
+            - text: .
+      - generic [ref=e1097]:
+        - img [ref=e1099]
+        - generic [ref=e1101]: "Auto-shared with everyone in #go-to-market"
+    - generic [ref=e1103]:
+      - link "Messages" [ref=e1104] [cursor=pointer]:
+        - /url: /channels
+        - text: Messages
+        - generic [ref=e1105]: →
+      - generic [ref=e1106]: Channels linked to your whole workspace. Everything you @link is shared with the channel.
+    - generic [ref=e1108]:
+      - link "CRM" [ref=e1109] [cursor=pointer]:
+        - /url: /crm
+        - text: CRM
+        - generic [ref=e1110]: →
+      - generic [ref=e1111]: A CRM that builds itself. Contacts and deals update from your email and calls.
+    - generic [ref=e1113]:
+      - generic [ref=e1114]:
+        - img [ref=e1116]
+        - generic [ref=e1119]:
+          - generic [ref=e1120]:
+            - generic [ref=e1121]: Sarah Chen
+            - generic [ref=e1122]: sarah@hartwell.com
+          - generic [ref=e1123]: "Re: Pilot rollout plan. The team is in."
+      - generic [ref=e1126]: Created from this email
+      - generic [ref=e1128]:
+        - generic [ref=e1129]:
+          - img [ref=e1131]
+          - generic [ref=e1138]:
+            - generic [ref=e1139]: Hartwell
+            - generic [ref=e1140]:
+              - img [ref=e1141]
+              - text: hartwell.com
+          - generic [ref=e1144]:
+            - generic [ref=e1145]: SC
+            - generic [ref=e1147]: ML
+            - generic [ref=e1149]: PN
+        - paragraph [ref=e1150]: Streaming data pipelines for Postgres and Kafka.
+        - generic [ref=e1151]:
+          - generic [ref=e1152]: Developer tools
+          - generic [ref=e1153]: 237 employees
+          - generic [ref=e1154]: Austin, TX
+    - region "Get started" [ref=e1155]:
+      - generic [ref=e1156]:
+        - generic [ref=e1157]:
+          - heading "Let's get started." [level=2] [ref=e1158]
+          - paragraph [ref=e1159]: It takes 30 seconds to connect your inbox and bring messages, docs, tasks, calls, and agents into shared memory.
+        - link "Connect with Google" [ref=e1160]:
+          - /url: https://auth-service.macro.com/login/sso?idp_name=google_gmail
+          - img [ref=e1161]
+          - text: Connect with Google
+      - generic [ref=e1166]:
+        - generic [ref=e1167]: Or keep exploring...
+        - generic [ref=e1168]:
+          - link "Agents" [ref=e1169]:
+            - /url: /agents
+            - img [ref=e1171]
+            - text: Agents
+          - link "Email" [ref=e1175]:
+            - /url: /email
+            - img [ref=e1177]
+            - text: Email
+          - link "Documents" [ref=e1180]:
+            - /url: /documents
+            - img [ref=e1182]
+            - text: Documents
+          - link "Channels" [ref=e1185]:
+            - /url: /channels
+            - img [ref=e1187]
+            - text: Channels
+          - link "Calls" [ref=e1189]:
+            - /url: /calls
+            - img [ref=e1191]
+            - text: Calls
+          - link "CRM" [ref=e1193]:
+            - /url: /crm
+            - img [ref=e1195]
+            - text: CRM
+          - link "Tasks" [ref=e1202]:
+            - /url: /tasks
+            - img [ref=e1204]
+            - text: Tasks
+          - link "Pull Requests" [ref=e1209]:
+            - /url: /github
+            - img [ref=e1211]
+            - text: Pull Requests
+        - generic [ref=e1213]:
+          - link "X" [ref=e1214] [cursor=pointer]:
+            - /url: https://x.com/macrodotcom
+            - img [ref=e1215]
+          - link "GitHub" [ref=e1217] [cursor=pointer]:
+            - /url: https://github.com/macro-inc/macro
+            - img [ref=e1218]
+          - link "LinkedIn" [ref=e1220] [cursor=pointer]:
+            - /url: https://www.linkedin.com/company/macrocom
+            - img [ref=e1221]
+          - link "Instagram" [ref=e1223] [cursor=pointer]:
+            - /url: https://www.instagram.com/macrodotcom/
+            - img [ref=e1224]
+        - paragraph [ref=e1226]: © 2026 Macro. All rights reserved.
+        - paragraph [ref=e1227]:
+          - link "Jobs" [ref=e1228] [cursor=pointer]:
+            - /url: /jobs
+          - text: ·
+          - link "Terms" [ref=e1229] [cursor=pointer]:
+            - /url: /terms
+          - text: ·
+          - link "Privacy" [ref=e1230] [cursor=pointer]:
+            - /url: /privacy

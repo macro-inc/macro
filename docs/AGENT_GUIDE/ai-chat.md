@@ -8,6 +8,12 @@
 
 ## Start a standalone chat
 
+On mobile, the Agents list has an AI composer directly above the bottom dock
+instead of a floating plus button. Type a prompt, optionally choose a model or
+attach context, and tap **Send** to create the chat and send its first message.
+The composer stays above the software keyboard; the list reserves space for it
+so its last row remains reachable.
+
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
@@ -45,9 +51,31 @@ notified when the AI responds).
 
 ## Composer anatomy (a11y)
 
+Desktop composer and conversation body text use 15px type. Mobile keeps its
+existing text sizing.
+
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
 - Model picker button showing the current model (e.g. `Haiku 4.5`).
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
+
+On desktop, production AI, new agent, and channel composers use 28px circular
+send/stop buttons with a neutral contrast fill (white in dark themes). The outer
+corner radius is 22px, matching the 14px button radius plus its 8px inset.
+Expanded/multiline desktop AI text gets an extra 8px of left padding; toolbar
+positions and single-line text spacing stay the same. Desktop composers have
+an additional 2px of space below them; mobile dock spacing is unchanged.
+
+On mobile the production AI, new agent, and channel composers share rounded
+glass chrome, text padding, and a footer toolbar with a circular Send button.
+The production AI composer has an `Attach files` paperclip, `Ask AI…` placeholder,
+and compact model picker. Both AI systems keep model selection in the toolbar
+and expand with longer drafts. The new agent editor supports context via `@`
+mentions; its existing attachment capabilities are unchanged. Stop and queued
+message controls remain available.
+
+User messages in both AI systems appear in right-aligned, filled gray bubbles
+with rounded corners, including on mobile. Long prompts wrap within the bubble;
+production chat retains its Show more/Show less and editing controls.
 
 ## Waiting for a response
 
@@ -174,3 +202,24 @@ must stay hidden; subsequent live messages must still appear.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
   entries, then stop.
+
+Locally sent user messages in both AI implementations enter with a short rise
+and soft expansion from the bottom right. History and remounted messages stay
+still; reduced-motion preferences disable the transition.
+
+The compact model menus use the standard menu text size and a 240px width
+(capped to the viewport), consistently in production chat and the agent input.
+
+Chat title icons follow the selected model's provider, including the agent
+system's live model. Soup and recent-chat rows resolve the provider through the
+shared chat query cache. Anthropic, OpenAI, and Google use their provider logos;
+loading or unknown providers reserve the icon space without the Macro star.
+
+Both AI composers display their model trigger label at the input text size
+(15px), using the softer secondary text color. This includes the agent model
+catalog trigger and mobile model sheet trigger.
+
+Soup chat icons use the same model resolution as the chat composer: the saved
+per-chat selection takes precedence over the server model; retired server model
+IDs fall back to the current default. Changing a selection updates mounted list
+icons when the draft is saved, without refreshing the list.

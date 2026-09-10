@@ -1,0 +1,26 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e7]:
+      - generic [ref=e8]: Create an account to get started.
+      - generic [ref=e9]:
+        - button "Login" [ref=e11]
+        - generic [ref=e12]: or
+        - button "Sign Up" [ref=e14]
+    - generic [ref=e27]:
+      - button [disabled] [ref=e30]
+      - generic [ref=e31]:
+        - button "Go Back" [disabled] [ref=e34]
+        - button "Go Forward" [disabled] [ref=e37]
+  - generic:
+    - generic:
+      - region "Notifications (alt+T)":
+        - list
+      - region "Notifications (alt+T)":
+        - list
+      - region "Notifications (alt+T)":
+        - list
+    - generic:
+      - region "Notifications (alt+T)":
+        - list
+      - region "Notifications (alt+T)":
+        - list

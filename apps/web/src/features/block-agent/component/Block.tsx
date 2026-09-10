@@ -69,7 +69,7 @@ function AgentBlockContent() {
               <FloatRegionOrInline region="accessory">
                 {/* Home/chat: re-enable pointer events on the accessory
                     contribution — the float host is pointer-transparent. */}
-                <div class="flex w-full justify-center shrink-0 px-4 pb-4 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
+                <div class="flex w-full justify-center shrink-0 px-4 pb-4.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
                   <div class="macro-message-width mx-auto">
                     <AgentComposer
                       autofocus={canAutofocusSplitContent && !navigatedFromJK()}

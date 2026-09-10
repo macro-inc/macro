@@ -763,8 +763,9 @@ export const SoupView = (props: SoupViewProps) => {
             content that is already constrained in both layouts. */}
         <Show
           when={
-            ENABLE_UNIFIED_LIST_AI_INPUT &&
-            !isTouchDevice() &&
+            (isTouchDevice()
+              ? isComponentListView('agents')
+              : ENABLE_UNIFIED_LIST_AI_INPUT) &&
             !isInboxView() &&
             !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&

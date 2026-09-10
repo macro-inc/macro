@@ -7,7 +7,6 @@ const PAGE_CREATE_LABELS: Partial<Record<MobileNavViewId, string>> = {
   channels: 'Message',
   documents: 'Document',
   tasks: 'Task',
-  agents: 'Agent',
 };
 
 export function mobilePageCreateLabel(view: MobileNavViewId | undefined) {

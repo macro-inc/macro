@@ -3,7 +3,7 @@ import { splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Surface, type SurfaceProps } from './Surface';
 
-/** Shared glass chrome for channel, AI chat, and agent composers. */
+/** Shared glass chrome. Desktop radius = 14px action radius + 8px inset. */
 export function ComposerSurface(
   props: Omit<SurfaceProps, 'depth' | 'hideBorder'>
 ) {
@@ -12,7 +12,7 @@ export function ComposerSurface(
     <Surface
       {...rest}
       class={cn(
-        'rounded-xl bg-surface touch:rounded-3xl touch:island',
+        'rounded-[22px] bg-surface touch:rounded-3xl touch:island',
         !isTouchDevice() && 'glass-input bg-menu-glass',
         isTouchDevice() && 'bg-chrome',
         local.class
