@@ -8,6 +8,7 @@ import {
   type RespondToElicitation,
   UserToolComposer,
 } from '@app/features/block-agent/component/parts/LiveElicitation';
+import { WorkingLine } from '@app/features/block-agent/ui/WorkingLine';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
@@ -239,18 +240,34 @@ const ChipHeader: Component<{
 );
 
 /**
- * Holds the answer's space while the agent is busy writing nothing yet: the
- * chat's own waiting glyph. Once the agent is done (or waiting on the user)
- * with nothing said, the space stays empty rather than showing a still star.
+ * Holds the answer's space while the agent is busy writing nothing yet.
+ * The session's working row (dot + rotating verbs) fills generic waits —
+ * booting, the gap before the first thought, the gap after a tool. A
+ * thought keeps the chat's pulsing star, since the header already says
+ * Thinking. Once the agent is done (or waiting on the user) with nothing
+ * said, the space stays empty rather than showing a still glyph.
  */
-const AnswerPending: Component<{ busy: boolean }> = (props) => (
+const AnswerPending: Component<{
+  busy: boolean;
+  /** The chip is in its working kind — nothing to read yet. */
+  working: boolean;
+  label: string;
+}> = (props) => (
   <Show when={props.busy}>
     <div
       class="flex h-full items-center justify-center"
+      classList={{
+        'justify-start': props.working && props.label !== 'Thinking',
+      }}
       data-magic-chip-pending
       aria-hidden="true"
     >
-      <PulsingStar kind="streamIndicator" animate />
+      <Show
+        when={props.working && props.label !== 'Thinking'}
+        fallback={<PulsingStar kind="streamIndicator" animate />}
+      >
+        <WorkingLine />
+      </Show>
     </div>
   </Show>
 );
@@ -432,7 +449,13 @@ export const MagicChipView: Component<{
               fallback={
                 <Show
                   when={markdown()}
-                  fallback={<AnswerPending busy={status().busy} />}
+                  fallback={
+                    <AnswerPending
+                      busy={status().busy}
+                      working={props.presentation.kind === 'working'}
+                      label={status().label}
+                    />
+                  }
                 >
                   {(answer) => <Passage markdown={answer()} />}
                 </Show>

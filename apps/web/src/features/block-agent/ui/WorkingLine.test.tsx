@@ -12,6 +12,7 @@ describe('WorkingLine', () => {
     const { container } = render(() => <WorkingLine />);
 
     expect(container.textContent).toContain(WORKING_LABEL);
+    expect(container.querySelector('[data-agent-working-line]')).toBeTruthy();
   });
 
   it('offers one stable label rather than a rotating one', () => {

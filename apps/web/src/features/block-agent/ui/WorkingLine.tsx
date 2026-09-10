@@ -44,7 +44,10 @@ export function WorkingLine() {
   });
 
   return (
-    <div class="flex min-h-7 items-center gap-1 py-1 text-xs leading-5 text-ink-extra-muted">
+    <div
+      class="flex min-h-7 items-center gap-1 py-1 text-xs leading-5 text-ink-extra-muted"
+      data-agent-working-line
+    >
       <span
         aria-hidden="true"
         class="flex size-4 shrink-0 items-center justify-center"

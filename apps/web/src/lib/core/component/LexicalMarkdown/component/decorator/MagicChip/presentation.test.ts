@@ -16,6 +16,37 @@ const response = (overrides: Partial<FoldedMessage> = {}): FoldedMessage => ({
 });
 
 describe('deriveMagicChipPresentation', () => {
+  it('shimmers from persisted no_messages so the chip is never still', () => {
+    expect(
+      deriveMagicChipPresentation({ persistedStatus: 'no_messages' })
+    ).toMatchObject({
+      kind: 'working',
+      activity: { label: 'Starting session', busy: true },
+    });
+  });
+
+  it('keeps working after a tool finishes while the turn is still open', () => {
+    expect(
+      deriveMagicChipPresentation({
+        persistedStatus: 'acp_ready',
+        response: response({
+          parts: [
+            {
+              kind: 'tool_use',
+              id: 'read',
+              name: { kind: 'native', name: 'Read' },
+              status: 'completed',
+              detail: { kind: 'read', paths: ['README.md'] },
+            },
+          ],
+        }),
+      })
+    ).toEqual({
+      kind: 'working',
+      activity: { label: 'Working', busy: true },
+    });
+  });
+
   it('renders immediately from persisted booting state', () => {
     expect(
       deriveMagicChipPresentation({ persistedStatus: 'booting' })

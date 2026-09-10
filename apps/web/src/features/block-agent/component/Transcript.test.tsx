@@ -8,6 +8,9 @@ import { Transcript } from './Transcript';
 const session = vi.hoisted(() => ({
   messages: () => [] as FoldedMessage[],
   quoteSelection: vi.fn(),
+  working: (): boolean => false,
+  blockedOnUser: (): boolean => false,
+  composer: { sending: (): boolean => false },
   touch: false,
   top: () => 40,
   bottom: (): number => 80,
@@ -31,6 +34,9 @@ vi.mock('./AgentMessage', () => ({
       {JSON.stringify(props.message.parts)}
     </span>
   ),
+}));
+vi.mock('../ui', () => ({
+  WorkingLine: () => <span data-agent-working-line>Working</span>,
 }));
 vi.mock('./ReplyToSelection', () => ({
   ReplyToSelection: (props: {
@@ -84,11 +90,23 @@ const settle = async () => {
   await new Promise((resolve) => setTimeout(resolve, 40));
 };
 
+const prompt = (turn: number): FoldedMessage =>
+  ({
+    agentSessionId: 'session',
+    turn,
+    author: { kind: 'user', userId: null },
+    parts: [{ kind: 'text', text: 'hello' }],
+    stop: null,
+  }) as FoldedMessage;
+
 beforeEach(() => {
   viewport = 400;
   rowHeight = 96;
   session.touch = false;
   session.bottom = () => 80;
+  session.working = () => false;
+  session.blockedOnUser = () => false;
+  session.composer = { sending: () => false };
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -358,6 +376,24 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     resize();
     await settle();
     expect(view.scroller.scrollTop).toBe(offset);
+  });
+
+  it('shows the working row after a prompt, before the reply has any parts', async () => {
+    session.working = () => true;
+    const view = mount([prompt(0)]);
+    await settle();
+    expect(
+      view.container.querySelector('[data-agent-working-line]')
+    ).not.toBeNull();
+  });
+
+  it('does not add a trailing working row once the in-flight reply owns it', async () => {
+    session.working = () => true;
+    const view = mount([prompt(0), message(0)]);
+    await settle();
+    expect(
+      view.container.querySelector('[data-agent-working-line]')
+    ).toBeNull();
   });
 
   it('reveals the shared overlay on downward intent and resumes following on click', async () => {

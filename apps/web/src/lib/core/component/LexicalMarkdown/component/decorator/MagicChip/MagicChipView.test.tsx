@@ -132,6 +132,34 @@ describe('MagicChipView', () => {
     expect(onOpen).toHaveBeenCalledTimes(3);
   });
 
+  it('fills a generic wait with the working row, so the card is never still', () => {
+    const { container } = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={{
+          kind: 'working',
+          activity: { label: 'Waiting for agent', busy: true },
+        }}
+      />
+    ));
+    expect(container.querySelector('[data-agent-working-line]')).toBeTruthy();
+    expect(container.textContent).toContain('Working');
+  });
+
+  it('keeps the star while thinking, so the verbs do not stack on Thinking', () => {
+    const { container } = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={{
+          kind: 'working',
+          activity: { label: 'Thinking', busy: true },
+        }}
+      />
+    ));
+    expect(container.querySelector('[data-agent-working-line]')).toBeNull();
+    expect(container.querySelector('[data-magic-chip-pending]')).toBeTruthy();
+  });
+
   it('names the persona and its model in the header', () => {
     const { container } = render(() => (
       <MagicChipView

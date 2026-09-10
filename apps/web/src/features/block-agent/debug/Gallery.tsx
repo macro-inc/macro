@@ -37,6 +37,7 @@ import {
   ToolCard,
   ToolErrorCard,
   ToolStatusTitle,
+  WorkingLine,
 } from '../ui';
 
 /** A Cursor-shaped catalog: long enough to scroll, with one grouped tail. */
@@ -630,6 +631,10 @@ export default function AgentUiGallery() {
             >
               <PierreDiff diffs={[FIXTURE_DIFF]} />
             </ToolCard>
+          </Item>
+
+          <Item label="WorkingLine">
+            <WorkingLine />
           </Item>
 
           <Item label="Thought (active / settled)">
