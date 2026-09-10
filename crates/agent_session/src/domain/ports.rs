@@ -2,8 +2,9 @@ use std::pin::Pin;
 
 use super::error::{AgentSessionError, Result};
 use super::model::*;
-use super::session::{StopReason, TurnOutcome};
+use super::session::StopReason;
 use agent_client_protocol::schema::v1::SessionId;
+use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
@@ -484,20 +485,31 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
 }
 
+/// One frame appended: its durable identity, and what the fold made of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Appended {
+    /// The log row the frame became.
+    pub log_id: Uuid,
+    /// What the frame meant for the turn, per the connection's live fold.
+    /// Empty for most frames; never filled while catching up on history.
+    pub signals: Vec<TurnSignal>,
+}
+
 /// Sequential live log writer owned by one session actor.
 pub trait AgentSessionLogWriter: Send + 'static {
     /// Persist and fold one frame into this connection's live projection.
-    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Uuid>> + Send {
+    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Appended>> + Send {
         self.append_with_boundary(log, None)
     }
 
     /// Persist a frame and optional successful-load boundary in one transaction.
-    /// Returns its durable row identity before the actor continues.
+    /// Returns its durable row identity, and the turn signals the frame
+    /// implied, before the actor continues.
     fn append_with_boundary(
         &mut self,
         log: AgentSessionLog,
         boundary: Option<HistoryBoundary>,
-    ) -> impl Future<Output = Result<Uuid>> + Send;
+    ) -> impl Future<Output = Result<Appended>> + Send;
 }
 
 /// A session's queue changed; this is the whole queue as it stands now.
@@ -586,8 +598,8 @@ impl AgentSessionLifecyclePublisher for NoopLifecyclePublisher {
     }
 }
 
-/// Told when a session's turn ends, when it asks its owner something, and
-/// when its live actor stops.
+/// Told what the session's log meant for its turn, and when its live actor
+/// stops.
 ///
 /// What the harness gates its prompt queue on: a turn ending means the agent
 /// can take the next queued prompt, an actor stopping means no turn is in
@@ -595,39 +607,30 @@ impl AgentSessionLifecyclePublisher for NoopLifecyclePublisher {
 /// actor's own task, so implementations must only hand the fact off -
 /// enqueue, notify - never do the resulting work inline.
 ///
+/// Turn signals come from the connection's live fold - the same fold the
+/// chip renders from - so "the turn ended" has one definition. That includes
+/// turns nobody here prompted: a resumed session's runtime reports those
+/// with `_session/turn_complete`, and the fold closes them too.
+///
 /// Object-safe and synchronous on purpose: the service stores it erased so
 /// wiring it is not another type parameter, and the one production
 /// implementation admits work to a queue synchronously.
 pub trait SessionTurnObserver: Send + Sync + 'static {
-    /// The runtime answered the session's in-flight turn.
-    fn turn_ended(&self, id: AgentSessionId, outcome: TurnOutcome);
+    /// A fold-derived fact about the session's turn.
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal);
 
     /// The session's live actor is gone - disconnect, teardown, or crash. Any
-    /// in-flight turn went with it, without [`Self::turn_ended`] firing.
+    /// in-flight turn went with it, without a [`TurnSignal::TurnEnded`].
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason);
-
-    /// The agent asked its owner a question and is holding for the answer.
-    fn elicitation_raised(&self, id: AgentSessionId, question: String);
-
-    /// The held question was answered or withdrawn.
-    fn elicitation_cleared(&self, id: AgentSessionId);
 }
 
 impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> {
-    fn turn_ended(&self, id: AgentSessionId, outcome: TurnOutcome) {
-        (**self).turn_ended(id, outcome);
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        (**self).signal(id, signal);
     }
 
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
         (**self).session_stopped(id, reason);
-    }
-
-    fn elicitation_raised(&self, id: AgentSessionId, question: String) {
-        (**self).elicitation_raised(id, question);
-    }
-
-    fn elicitation_cleared(&self, id: AgentSessionId) {
-        (**self).elicitation_cleared(id);
     }
 }
 
@@ -637,13 +640,9 @@ impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> 
 pub struct NoOpTurnObserver;
 
 impl SessionTurnObserver for NoOpTurnObserver {
-    fn turn_ended(&self, _id: AgentSessionId, _outcome: TurnOutcome) {}
+    fn signal(&self, _id: AgentSessionId, _signal: TurnSignal) {}
 
     fn session_stopped(&self, _id: AgentSessionId, _reason: StopReason) {}
-
-    fn elicitation_raised(&self, _id: AgentSessionId, _question: String) {}
-
-    fn elicitation_cleared(&self, _id: AgentSessionId) {}
 }
 
 /// A [`SessionTurnObserver`] bound after construction, for the composition
@@ -672,27 +671,15 @@ impl LateBoundTurnObserver {
 }
 
 impl SessionTurnObserver for LateBoundTurnObserver {
-    fn turn_ended(&self, id: AgentSessionId, outcome: TurnOutcome) {
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
         if let Some(observer) = self.observer.get() {
-            observer.turn_ended(id, outcome);
+            observer.signal(id, signal);
         }
     }
 
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
         if let Some(observer) = self.observer.get() {
             observer.session_stopped(id, reason);
-        }
-    }
-
-    fn elicitation_raised(&self, id: AgentSessionId, question: String) {
-        if let Some(observer) = self.observer.get() {
-            observer.elicitation_raised(id, question);
-        }
-    }
-
-    fn elicitation_cleared(&self, id: AgentSessionId) {
-        if let Some(observer) = self.observer.get() {
-            observer.elicitation_cleared(id);
         }
     }
 }

@@ -236,64 +236,12 @@ pub enum Effect<Token> {
         /// Whether the action reached the transport.
         result: Result<()>,
     },
-    /// The runtime answered the in-flight turn's `session/prompt` - however it
-    /// ended, including cancelled and refused. What the harness drains its
-    /// queue on: the agent can take another prompt now.
-    TurnEnded {
-        /// The action whose turn this was.
-        action_id: AgentActionId,
-        /// How the runtime answered.
-        outcome: TurnOutcome,
-    },
-    /// The agent asked its owner a question and the machine is holding it.
-    ElicitationRaised {
-        /// The `elicitation/create` request being held.
-        request_id: RequestId,
-        /// The question, as the agent phrased it.
-        question: String,
-    },
-    /// The held question was answered by the owner or withdrawn by a stop.
-    ElicitationCleared {
-        /// The request that was held.
-        request_id: RequestId,
-    },
     /// Tear the connection down. Always the final effect of its batch; the
     /// machine is [`RuntimeStatus::Dead`] once it appears.
     Stop {
         /// Why, for the shell's diagnostics.
         reason: StopReason,
     },
-}
-
-/// How the runtime answered a turn's `session/prompt`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TurnOutcome {
-    /// A result carrying the ACP `stopReason`, verbatim.
-    Completed {
-        /// `end_turn`, `cancelled`, `max_tokens`, and the rest.
-        stop_reason: String,
-    },
-    /// A result with no readable `stopReason`: a protocol violation the shell
-    /// logs, but the turn is over all the same.
-    CompletedWithoutStopReason,
-    /// A JSON-RPC error: the agent refused the prompt and produced no reply.
-    Failed {
-        /// The error's message.
-        message: String,
-    },
-}
-
-impl TurnOutcome {
-    /// The stop reason as downstream consumers see it: the ACP string,
-    /// `unknown` for a result without one, `error` for a refusal.
-    #[must_use]
-    pub fn wire_stop_reason(&self) -> String {
-        match self {
-            Self::Completed { stop_reason } => stop_reason.clone(),
-            Self::CompletedWithoutStopReason => "unknown".to_owned(),
-            Self::Failed { .. } => "error".to_owned(),
-        }
-    }
 }
 
 /// Why the machine ended its connection.

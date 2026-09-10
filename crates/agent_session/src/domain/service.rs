@@ -28,7 +28,7 @@ mod test;
 use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::SessionId;
-use agent_fold::domain::fold::FoldMachineImpl;
+use agent_fold::domain::lifecycle::LifecycleFold;
 use agent_fold::domain::ports::{FoldMachine, FoldedMessageRepo};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToServerMessage};
@@ -57,12 +57,11 @@ use super::model::{
 use super::ports::{
     AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
     AgentSessionNameGenerator, AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
-    NoOpAgentSessionNameGenerator, NoOpTurnObserver, NoopLifecyclePublisher, SessionOwnership,
-    SessionTurnObserver,
+    Appended, NoOpAgentSessionNameGenerator, NoOpTurnObserver, NoopLifecyclePublisher,
+    SessionOwnership, SessionTurnObserver,
 };
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 use super::session::{CloseReason, Input};
-use agent_fold::domain::model::FoldedMessage;
 use agent_session_events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
@@ -196,12 +195,6 @@ pub trait AgentSessionService: Send + Sync + 'static {
 
     /// The bot a session runs for, as viewers see it.
     fn session_bot(&self, id: BotId) -> impl Future<Output = Result<SessionBot>> + Send;
-
-    /// A session's log folded into messages, oldest first.
-    fn folded_messages(
-        &self,
-        id: AgentSessionId,
-    ) -> impl Future<Output = Result<Vec<FoldedMessage>>> + Send;
 
     /// The user-message id the next prompt appended to this session will fold to.
     fn next_prompt_message_id(
@@ -758,10 +751,6 @@ where
         self.repo.session_bot(id).await
     }
 
-    async fn folded_messages(&self, id: AgentSessionId) -> Result<Vec<FoldedMessage>> {
-        Ok(self.folds.messages(id).await?)
-    }
-
     async fn next_prompt_message_id(&self, id: AgentSessionId) -> Result<MessageId> {
         Ok(MessageId {
             turn: self.folds.next_turn_id(id).await?,
@@ -976,7 +965,7 @@ fn validate_agent_session_name(raw: &str) -> Result<&str> {
 pub struct LiveSessionLogWriter<R, Rt> {
     repo: R,
     realtime: Rt,
-    fold: Option<FoldMachineImpl>,
+    fold: Option<LifecycleFold>,
     /// The management claim this writer appends under, when it has one. A
     /// session actor always writes fenced; the unfenced constructor exists
     /// for writers outside any live-management contest - `seed_jsonl`
@@ -1022,7 +1011,7 @@ where
         &mut self,
         log: AgentSessionLog,
         boundary: Option<crate::domain::model::HistoryBoundary>,
-    ) -> Result<macro_uuid::Uuid> {
+    ) -> Result<Appended> {
         let session = log.agent_session_id;
 
         // The wire tap: every frame of every session, both directions,
@@ -1052,20 +1041,26 @@ where
             None => AgentSessionLogRepo::create(&self.repo, log.clone()).await?,
         };
 
-        if let Some(fold) = &mut self.fold {
+        let signals = if let Some(fold) = &mut self.fold {
             let _ = fold.push(log.clone());
+            fold.take_signals()
         } else {
             match self.catch_up(session).await {
-                Ok(fold) => self.fold = Some(fold),
+                Ok(mut fold) => {
+                    let signals = fold.take_signals();
+                    self.fold = Some(fold);
+                    signals
+                }
                 Err(error) => {
                     tracing::error!(
                         error = ?error,
                         %session,
                         "failed to fold agent session frame"
                     );
+                    Vec::new()
                 }
             }
-        }
+        };
 
         // Projected on every frame - idempotent, rebuildable from the log,
         // and best-effort like the stream below, so a failed write must not
@@ -1073,7 +1068,7 @@ where
         if let Some(model) = self
             .fold
             .as_ref()
-            .and_then(|fold| fold.metadata().model.clone())
+            .and_then(|fold| fold.inner().metadata().model.clone())
             && let Err(error) = self.repo.set_model(session, &model).await
         {
             tracing::error!(
@@ -1086,7 +1081,7 @@ where
         // Best-effort once the durable append has succeeded: the port drops
         // frames by contract, and the log this was derived from is already
         // durable, so the worst a failure costs is a viewer who has to reload.
-        let id = stored.id;
+        let log_id = stored.id;
         if let Err(error) = self.stream(session, stored).await {
             tracing::error!(
                 error = ?error,
@@ -1094,7 +1089,7 @@ where
                 "failed to stream agent session frame"
             );
         }
-        Ok(id)
+        Ok(Appended { log_id, signals })
     }
 }
 
@@ -1225,8 +1220,9 @@ where
     /// starts from where the session actually is rather than from nothing.
     ///
     /// Runs once per connection, on its first frame - by which point that
-    /// frame is already in the log, so replaying the log folds it too and the
-    /// caller must not push it again.
+    /// frame is already in the log. Everything before it is history and is
+    /// folded silently; the frame itself is pushed live, so whatever it meant
+    /// for the turn is signalled like any later frame's.
     ///
     /// This is what makes re-attaching correct.
     /// [`TurnId`](agent_fold::domain::model::TurnId)s are a counter over the
@@ -1237,13 +1233,15 @@ where
     async fn catch_up(
         &self,
         session: AgentSessionId,
-    ) -> std::result::Result<FoldMachineImpl, rootcause::Report> {
-        let log = AgentSessionLogRepo::list_by_session(&self.repo, session)
+    ) -> std::result::Result<LifecycleFold, rootcause::Report> {
+        let mut log = AgentSessionLogRepo::list_by_session(&self.repo, session)
             .await
             .map_err(|error| rootcause::report!(error))?;
 
-        let mut fold = FoldMachineImpl::new();
-        for stored in log {
+        let mut fold = LifecycleFold::new();
+        let just_appended = log.pop();
+        fold.catch_up(log.into_iter().map(|stored| stored.entry));
+        if let Some(stored) = just_appended {
             let _ = fold.push(stored.entry);
         }
         Ok(fold)

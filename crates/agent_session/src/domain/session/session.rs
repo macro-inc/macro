@@ -23,7 +23,7 @@ use crate::domain::model::AgentSessionId;
 
 use super::types::{
     CloseReason, Effect, Input, PendingAction, PendingElicitation, RuntimeStatus, SessionOpening,
-    SessionPhase, SessionRestoreSupport, StopReason, TurnOutcome,
+    SessionPhase, SessionRestoreSupport, StopReason,
 };
 
 const INITIAL_REQUEST_NUM: u64 = 0;
@@ -247,12 +247,8 @@ impl<Token> SessionMachine<Token> {
                 });
                 return effects;
             }
-            if let SessionPhase::Live { elicitation, .. } = &mut self.phase
-                && let Some(pending) = elicitation.take()
-            {
-                effects.push(Effect::ElicitationCleared {
-                    request_id: pending.request_id,
-                });
+            if let SessionPhase::Live { elicitation, .. } = &mut self.phase {
+                *elicitation = None;
             }
         }
 
@@ -349,16 +345,12 @@ impl<Token> SessionMachine<Token> {
         if matches!(self.phase, SessionPhase::Live { .. }) {
             // The in-flight turn's answer ends the turn whichever shape it
             // takes: a result carries the stop reason, an error is the agent
-            // refusing the prompt. Either way the agent can take another.
+            // refusing the prompt. The fold reads the frame from the log and
+            // signals the end; the machine only lets go of the turn.
             if let Some((request_id, _)) = &self.in_flight_turn
                 && frame.response_id() == Some(request_id)
             {
-                let outcome = turn_outcome(&frame);
-                let (_, action_id) = self
-                    .in_flight_turn
-                    .take()
-                    .expect("checked just above; nothing between the check and the take");
-                effects.push(Effect::TurnEnded { action_id, outcome });
+                self.in_flight_turn = None;
                 if self.reload_required {
                     self.begin_reload(effects);
                 }
@@ -677,8 +669,8 @@ impl<Token> SessionMachine<Token> {
                 serde_json::from_value::<CreateElicitationRequest>(params.into_value())
                     .map_err(|_| "the elicitation did not parse")
             });
-        let (refusal, question) = match parsed {
-            Err(reason) => (Some(reason), None),
+        let refusal = match parsed {
+            Err(reason) => Some(reason),
             Ok(elicitation_request) => {
                 let scope = match &elicitation_request.mode {
                     ElicitationMode::Form(form) => Some(&form.scope),
@@ -686,7 +678,7 @@ impl<Token> SessionMachine<Token> {
                     // `#[non_exhaustive]`: an `Other` mode, or one ACP adds later.
                     _ => None,
                 };
-                let refusal = match scope {
+                match scope {
                     None => Some("this client renders only form and url elicitations"),
                     Some(ElicitationScope::Request(_)) => {
                         Some("request-scoped elicitation is not supported")
@@ -700,24 +692,17 @@ impl<Token> SessionMachine<Token> {
                     Some(ElicitationScope::Session(_)) => None,
                     // `#[non_exhaustive]` scope.
                     Some(_) => Some("unrecognized elicitation scope"),
-                };
-                (refusal, Some(elicitation_request.message))
+                }
             }
         };
 
-        match (refusal, question) {
-            (None, Some(question)) => {
+        match refusal {
+            None => {
                 *elicitation = Some(PendingElicitation {
                     request_id: request.id.clone(),
                 });
-                effects.push(Effect::ElicitationRaised {
-                    request_id: request.id.clone(),
-                    question,
-                });
             }
-            // A parsed request always has a question; only a refusal has none.
-            (None, None) => unreachable!("an accepted elicitation was parsed"),
-            (Some(reason), _) => {
+            Some(reason) => {
                 let error = agent_client_protocol::Error::invalid_params().data(reason);
                 effects.push(Effect::Send {
                     from: None,
@@ -749,9 +734,6 @@ impl<Token> SessionMachine<Token> {
         else {
             return;
         };
-        effects.push(Effect::ElicitationCleared {
-            request_id: pending.request_id.clone(),
-        });
         effects.push(Effect::Send {
             from,
             message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::response(
@@ -844,30 +826,5 @@ impl<Token> SessionMachine<Token> {
         });
         self.next_request += 1;
         id
-    }
-}
-
-/// How a response frame ended its turn: the `stopReason` of a result, or an
-/// error's message when the agent refused the prompt.
-fn turn_outcome(frame: &RawJsonRpcMessage) -> TurnOutcome {
-    match frame {
-        RawJsonRpcMessage::Response(Response::Result { result, .. }) => {
-            match result.get("stopReason").and_then(serde_json::Value::as_str) {
-                Some(stop_reason) => TurnOutcome::Completed {
-                    stop_reason: stop_reason.to_owned(),
-                },
-                None => {
-                    tracing::warn!("session/prompt result carried no stopReason");
-                    TurnOutcome::CompletedWithoutStopReason
-                }
-            }
-        }
-        RawJsonRpcMessage::Response(Response::Error { error, .. }) => TurnOutcome::Failed {
-            message: error.message.clone(),
-        },
-        // Only responses match the in-flight request id.
-        RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => {
-            TurnOutcome::CompletedWithoutStopReason
-        }
     }
 }

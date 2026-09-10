@@ -20,7 +20,6 @@ use crate::domain::model::AgentSessionId;
 
 use super::{
     CloseReason, Effect, Input, RuntimeStatus, SessionMachine, SessionRestoreSupport, StopReason,
-    TurnOutcome,
 };
 
 fn machine() -> SessionMachine<u32> {
@@ -174,7 +173,8 @@ fn recovery_waits_for_prompt_then_loads_with_a_new_durable_boundary() {
             assert!(
                 effects
                     .iter()
-                    .any(|effect| matches!(effect, Effect::TurnEnded { .. }))
+                    .any(|effect| matches!(effect, Effect::Log { .. })),
+                "the answer is logged; the fold reads the turn's end from there"
             );
         }
         assert_eq!(sent_methods(&effects), ["initialize"]);
@@ -761,76 +761,41 @@ fn machine_with_turn_in_flight(action_id: AgentActionId) -> SessionMachine<u32> 
     machine
 }
 
+/// The machine lets go of the turn on the prompt's answer, whatever shape
+/// the answer takes. What the turn *meant* - its stop reason, its last words
+/// - is the fold's to say, from the same logged frame.
 #[test]
-fn the_prompts_response_ends_its_turn() {
-    let action_id = AgentActionId::mint();
-    let mut machine = machine_with_turn_in_flight(action_id);
-
-    let effects = machine.handle(turn_answered(action_id.to_request_id()));
-
-    assert!(
-        matches!(
-            effects[..],
-            [
-                Effect::Log { .. },
-                Effect::TurnEnded {
-                    action_id: ended,
-                    outcome: TurnOutcome::Completed { ref stop_reason },
-                },
-            ] if ended == action_id && stop_reason == "end_turn"
+fn the_prompts_response_releases_the_turn() {
+    for answer in [
+        RawJsonRpcMessage::response(
+            AgentActionId::mint().to_request_id(),
+            Ok(serde_json::json!({"stopReason":"end_turn"})),
         ),
-        "the answer is logged and the turn ends with its stop reason: {effects:?}"
-    );
-}
-
-#[test]
-fn a_refused_prompt_ends_its_turn_too() {
-    let action_id = AgentActionId::mint();
-    let mut machine = machine_with_turn_in_flight(action_id);
-
-    let effects = machine.handle(frame(RawJsonRpcMessage::response(
-        action_id.to_request_id(),
-        Err(agent_client_protocol::Error::internal_error()),
-    )));
-
-    assert!(
-        matches!(
-            effects[..],
-            [
-                Effect::Log { .. },
-                Effect::TurnEnded {
-                    action_id: ended,
-                    outcome: TurnOutcome::Failed { .. },
-                },
-            ] if ended == action_id
+        RawJsonRpcMessage::response(
+            AgentActionId::mint().to_request_id(),
+            Err(agent_client_protocol::Error::internal_error()),
         ),
-        "a refusal ends the turn the same way: {effects:?}"
-    );
-}
-
-#[test]
-fn a_result_without_a_stop_reason_still_ends_the_turn() {
-    let action_id = AgentActionId::mint();
-    let mut machine = machine_with_turn_in_flight(action_id);
-
-    let effects = machine.handle(frame(RawJsonRpcMessage::response(
-        action_id.to_request_id(),
-        Ok(serde_json::json!({})),
-    )));
-
-    assert!(
-        matches!(
-            effects[..],
-            [
-                Effect::Log { .. },
-                Effect::TurnEnded {
-                    action_id: ended,
-                    outcome: TurnOutcome::CompletedWithoutStopReason,
-                },
-            ] if ended == action_id
+        RawJsonRpcMessage::response(
+            AgentActionId::mint().to_request_id(),
+            Ok(serde_json::json!({})),
         ),
-        "the turn ends, its stop reason unknown: {effects:?}"
-    );
+    ] {
+        let action_id =
+            AgentActionId::from_request_id(answer.response_id().expect("a response has an id"))
+                .expect("the test minted a uuid id");
+        let mut machine = machine_with_turn_in_flight(action_id);
+
+        let effects = machine.handle(frame(answer));
+
+        assert!(
+            matches!(effects[..], [Effect::Log { .. }]),
+            "the answer is logged and nothing else happens here: {effects:?}"
+        );
+        // Released: the next prompt goes straight out rather than queueing
+        // behind a turn the machine still thinks is running.
+        let effects = machine.handle(command("next", 9));
+        assert_eq!(sent_methods(&effects), ["session/prompt"]);
+    }
 }
 
 #[test]
@@ -848,12 +813,11 @@ fn another_requests_response_does_not_end_the_turn() {
         "only logged: {effects:?}"
     );
 
-    // The turn is still in flight: its own answer still ends it.
+    // The turn is still in flight: its own answer still releases it.
     let effects = machine.handle(turn_answered(action_id.to_request_id()));
-    assert!(matches!(effects[..], [
-        Effect::Log { .. },
-        Effect::TurnEnded { action_id: ended, outcome: _ }
-    ] if ended == action_id));
+    assert!(matches!(effects[..], [Effect::Log { .. }]));
+    let effects = machine.handle(command("next", 9));
+    assert_eq!(sent_methods(&effects), ["session/prompt"]);
 }
 
 #[test]
@@ -864,12 +828,9 @@ fn a_death_mid_turn_is_not_a_turn_end() {
     let effects = machine.handle(Input::Closed(CloseReason::TransportClosed));
 
     assert!(
-        !effects
-            .iter()
-            .any(|effect| matches!(effect, Effect::TurnEnded { .. })),
-        "the session stopped; the turn did not end: {effects:?}"
+        matches!(effects[..], [Effect::Stop { .. }]),
+        "the session stopped; nothing else was answered: {effects:?}"
     );
-    assert!(matches!(effects[..], [Effect::Stop { .. }]));
     assert_eq!(machine.status(), RuntimeStatus::Dead);
 }
 
@@ -1358,17 +1319,8 @@ mod elicitation {
         let effects = machine.handle(create(RequestId::Number(0), form_for("acp-42")));
 
         assert!(
-            matches!(
-                effects[..],
-                [
-                    Effect::Log { .. },
-                    Effect::ElicitationRaised {
-                        request_id: RequestId::Number(0),
-                        ref question,
-                    },
-                ] if question == "Which approach?"
-            ),
-            "held, and the question is raised: {effects:?}"
+            matches!(effects[..], [Effect::Log { .. }]),
+            "held: {effects:?}"
         );
         assert_eq!(machine.pending_elicitation(), Some(&RequestId::Number(0)));
         assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
@@ -1388,10 +1340,7 @@ mod elicitation {
 
         let effects = machine.handle(create(RequestId::Str("el-1".to_owned()), request));
 
-        assert!(matches!(
-            effects[..],
-            [Effect::Log { .. }, Effect::ElicitationRaised { .. }]
-        ));
+        assert!(matches!(effects[..], [Effect::Log { .. }]));
         assert_eq!(
             machine.pending_elicitation(),
             Some(&RequestId::Str("el-1".to_owned()))
@@ -1477,15 +1426,6 @@ mod elicitation {
         let response: CreateElicitationResponse =
             serde_json::from_value(result.clone().unwrap()).unwrap();
         assert!(matches!(response.action, ElicitationAction::Accept(_)));
-        assert!(
-            matches!(
-                effects.first(),
-                Some(Effect::ElicitationCleared {
-                    request_id: RequestId::Number(0)
-                })
-            ),
-            "the slot is released before the answer goes out: {effects:?}"
-        );
         assert!(matches!(
             effects.last(),
             Some(Effect::Complete {
@@ -1565,12 +1505,10 @@ mod elicitation {
             serde_json::from_value(responses[0].1.clone().unwrap()).unwrap();
         assert!(matches!(response.action, ElicitationAction::Cancel));
 
-        // The slot is released, then the cancel answer precedes the cancel
-        // notification.
+        // The cancel answer precedes the cancel notification.
         let order: Vec<&str> = effects
             .iter()
             .filter_map(|effect| match effect {
-                Effect::ElicitationCleared { .. } => Some("cleared"),
                 Effect::Send {
                     message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(_))),
                     ..
@@ -1582,7 +1520,7 @@ mod elicitation {
                 _ => None,
             })
             .collect();
-        assert_eq!(order, ["cleared", "answer", "cancel"]);
+        assert_eq!(order, ["answer", "cancel"]);
         assert_eq!(machine.pending_elicitation(), None);
     }
 

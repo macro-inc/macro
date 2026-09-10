@@ -162,7 +162,7 @@ impl AgentSessionLogWriter for BlockingPromptLogs {
         &mut self,
         log: AgentSessionLog,
         _boundary: Option<crate::domain::model::HistoryBoundary>,
-    ) -> Result<macro_uuid::Uuid> {
+    ) -> Result<Appended> {
         let is_prompt = matches!(
             &log.content,
             Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(
@@ -173,7 +173,10 @@ impl AgentSessionLogWriter for BlockingPromptLogs {
             self.entered.notify_one();
             self.release.notified().await;
         }
-        Ok(AgentSessionLogRepo::create(&self.repo, log).await?.id)
+        Ok(Appended {
+            log_id: AgentSessionLogRepo::create(&self.repo, log).await?.id,
+            signals: Vec::new(),
+        })
     }
 }
 
@@ -1565,3 +1568,62 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
 }
 
 mod owner_binding;
+
+/// The live writer's fold says what each appended frame meant for the turn;
+/// history it catches up on says nothing.
+mod fold_signals {
+    use super::*;
+    use crate::domain::ports::AgentSessionLogWriter as _;
+    use agent_fold::domain::model::{StopReason as FoldStop, TurnSignal};
+    use agent_fold::testing::parse_log_as;
+    use agent_runtime_protocol::domain::schema::v0::SystemEvent;
+
+    #[tokio::test]
+    async fn appending_a_turn_signals_its_end_once_with_its_last_text() {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_session();
+        repo.insert_session(test_agent_session(session));
+        let mut logs = LiveSessionLogWriter::new(repo.clone(), NoOpRealtime);
+
+        let mut signals = Vec::new();
+        for frame in parse_log_as(session, TURN) {
+            signals.extend(logs.append(frame).await.expect("append succeeds").signals);
+        }
+
+        assert!(
+            matches!(
+                signals.as_slice(),
+                [TurnSignal::TurnEnded { stop: FoldStop::EndTurn, last_text: Some(text), .. }]
+                    if !text.is_empty()
+            ),
+            "{signals:#?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_writer_catching_up_on_a_stored_turn_signals_nothing_for_it() {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_session();
+        repo.insert_session(test_agent_session(session));
+        let mut first = LiveSessionLogWriter::new(repo.clone(), NoOpRealtime);
+        for frame in parse_log_as(session, TURN) {
+            first.append(frame).await.expect("append succeeds");
+        }
+
+        // A reconnect: a fresh writer over the same stored log. Its first
+        // frame is the runtime coming back, not a turn ending.
+        let mut second = LiveSessionLogWriter::new(repo.clone(), NoOpRealtime);
+        let appended = second
+            .append(AgentSessionLog {
+                agent_session_id: session,
+                user_id: None,
+                content: Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::AcpReady,
+                }),
+            })
+            .await
+            .expect("append succeeds");
+
+        assert!(appended.signals.is_empty(), "{:#?}", appended.signals);
+    }
+}

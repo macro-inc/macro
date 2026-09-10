@@ -32,6 +32,7 @@ use agent_runtime_protocol::domain::ports::{TransportReceiver, TransportSender};
 use crate::domain::ports::{
     AgentConnector, AgentSessionLogWriter, AgentSessionRepo, SessionTurnObserver,
 };
+use agent_fold::domain::model::TurnSignal;
 
 use super::{
     CloseReason, Effect, HandshakeStatus, Input, RuntimeStatus, SessionMachine, StopReason,
@@ -341,15 +342,18 @@ where
                             ),
                         },
                     };
-                    if let Err(error) = result {
-                        tracing::error!(
-                            error = ?error,
-                            id = %self.machine.id(),
-                            "agent session failed to persist an inbound message"
-                        );
-                        self.fail_remaining_completions(&mut effects, error);
-                        effects.extend(self.machine.handle(Input::Closed(close_reason)));
-                        self.finish_handshake_if_complete();
+                    match result {
+                        Ok(appended) => self.forward_signals(appended.signals),
+                        Err(error) => {
+                            tracing::error!(
+                                error = ?error,
+                                id = %self.machine.id(),
+                                "agent session failed to persist an inbound message"
+                            );
+                            self.fail_remaining_completions(&mut effects, error);
+                            effects.extend(self.machine.handle(Input::Closed(close_reason)));
+                            self.finish_handshake_if_complete();
+                        }
                     }
                 }
                 Effect::EstablishInitialization { context } => {
@@ -361,7 +365,8 @@ where
                                 user_id: None,
                                 content: Message::ToRuntime(context.request.clone()),
                             })
-                            .await?;
+                            .await?
+                            .log_id;
                         self.machine.initialization_persisted(id);
                         self.log(None, Message::ToServer(context.response.clone()))
                             .await
@@ -408,45 +413,6 @@ where
                             response: response.clone(),
                         }),
                     });
-                }
-                Effect::TurnEnded { action_id, outcome } => {
-                    // The counterpart to `agent.session.disconnect`: a turn
-                    // that ended here reached its stop reason, so a session
-                    // whose last turn has this span and no disconnect after
-                    // it finished cleanly. One per turn.
-                    let _ended = tracing::info_span!(
-                        "agent.session.turn_ended",
-                        agent.session.id = %self.machine.id(),
-                        agent.action.id = %action_id,
-                        agent.turn.stop_reason = %outcome.wire_stop_reason(),
-                    )
-                    .entered();
-                    tracing::info!(
-                        id = %self.machine.id(),
-                        %action_id,
-                        "agent session turn ended"
-                    );
-                    self.turn_observer.turn_ended(self.machine.id(), outcome);
-                }
-                Effect::ElicitationRaised {
-                    request_id,
-                    question,
-                } => {
-                    tracing::info!(
-                        id = %self.machine.id(),
-                        ?request_id,
-                        "agent session is waiting for input"
-                    );
-                    self.turn_observer
-                        .elicitation_raised(self.machine.id(), question);
-                }
-                Effect::ElicitationCleared { request_id } => {
-                    tracing::info!(
-                        id = %self.machine.id(),
-                        ?request_id,
-                        "agent session elicitation cleared"
-                    );
-                    self.turn_observer.elicitation_cleared(self.machine.id());
                 }
                 Effect::Complete { token, result } => {
                     if let Err(error) = &result {
@@ -530,7 +496,7 @@ where
             tracing::Span::current().record("rpc.system.name", "jsonrpc");
             tracing::Span::current().record("rpc.method", method);
         }
-        let id = self
+        let appended = self
             .logs
             .append(AgentSessionLog {
                 agent_session_id: self.machine.id(),
@@ -539,10 +505,13 @@ where
             })
             .await?;
         if acp_method(&message) == Some("initialize") {
-            self.machine.initialization_persisted(id);
+            self.machine.initialization_persisted(appended.log_id);
             self.initialization_request = Some(message.clone());
         }
         self.outbound.send(message).await?;
+        // After the send, so a signal never describes a frame the runtime has
+        // not seen: an answer to a question clears it once it is on the wire.
+        self.forward_signals(appended.signals);
         Ok(())
     }
 
@@ -551,14 +520,59 @@ where
         user_id: Option<MacroUserIdStr<'static>>,
         content: Message,
     ) -> Result<()> {
-        self.logs
+        let appended = self
+            .logs
             .append(AgentSessionLog {
                 agent_session_id: self.machine.id(),
                 user_id,
                 content,
             })
-            .await
-            .map(|_| ())
+            .await?;
+        self.forward_signals(appended.signals);
+        Ok(())
+    }
+
+    /// Hand the fold's turn signals to the observer, one span per turn end.
+    ///
+    /// The counterpart to `agent.session.disconnect`: a turn that ended here
+    /// reached its stop reason, so a session whose last turn has this span
+    /// and no disconnect after it finished cleanly.
+    fn forward_signals(&self, signals: Vec<TurnSignal>) {
+        for signal in signals {
+            match &signal {
+                TurnSignal::TurnEnded {
+                    turn,
+                    action_id,
+                    stop,
+                    ..
+                } => {
+                    let _ended = tracing::info_span!(
+                        "agent.session.turn_ended",
+                        agent.session.id = %self.machine.id(),
+                        agent.turn.id = turn.0,
+                        agent.action.id = action_id.map(tracing::field::display),
+                        agent.turn.stop_reason = ?stop,
+                    )
+                    .entered();
+                    tracing::info!(id = %self.machine.id(), "agent session turn ended");
+                }
+                TurnSignal::ElicitationRaised { request_id, .. } => {
+                    tracing::info!(
+                        id = %self.machine.id(),
+                        ?request_id,
+                        "agent session is waiting for input"
+                    );
+                }
+                TurnSignal::ElicitationCleared { request_id, .. } => {
+                    tracing::info!(
+                        id = %self.machine.id(),
+                        ?request_id,
+                        "agent session elicitation cleared"
+                    );
+                }
+            }
+            self.turn_observer.signal(self.machine.id(), signal);
+        }
     }
 
     async fn persist_acp_session(&self, acp_session_id: SessionId) -> Result<()> {
@@ -608,10 +622,7 @@ where
                 | Effect::Log { .. }
                 | Effect::EstablishInitialization { .. }
                 | Effect::PersistAcpSession { .. }
-                | Effect::Initialized { .. }
-                | Effect::TurnEnded { .. }
-                | Effect::ElicitationRaised { .. }
-                | Effect::ElicitationCleared { .. } => {}
+                | Effect::Initialized { .. } => {}
             }
         }
         if let Some(stop) = stop {
