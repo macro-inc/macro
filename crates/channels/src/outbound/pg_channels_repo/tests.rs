@@ -1776,41 +1776,47 @@ async fn top_level_created_after_exclusive_drops_boundary_row(
         created_after_exclusive: Some(bound),
         ..Default::default()
     };
-    let exclusive_ids: Vec<Uuid> = repo
-        .get_top_level_messages(
-            CH1,
-            &Query::Sort(CreatedAt, ()),
-            MessagePageDirection::Older,
-            50,
-            &exclusive,
-            None,
-        )
-        .await?
-        .rows
-        .into_iter()
-        .map(|r| r.id)
-        .collect();
-    assert_eq!(exclusive_ids, vec![MSG3]);
-
     let inclusive = ChannelMessageFilters {
         created_after: Some(bound),
         ..Default::default()
     };
-    let inclusive_ids: Vec<Uuid> = repo
-        .get_top_level_messages(
-            CH1,
-            &Query::Sort(CreatedAt, ()),
-            MessagePageDirection::Older,
-            50,
-            &inclusive,
-            None,
-        )
-        .await?
-        .rows
-        .into_iter()
-        .map(|r| r.id)
-        .collect();
-    assert_eq!(inclusive_ids, vec![MSG3, MSG2]);
+    for (direction, query) in [
+        (MessagePageDirection::Older, Query::Sort(CreatedAt, ())),
+        (
+            MessagePageDirection::Newer,
+            Query::Cursor(Cursor {
+                id: MSG1,
+                limit: 50,
+                val: CursorVal {
+                    sort_type: CreatedAt,
+                    last_val: ts("2024-01-01T10:00:00Z"),
+                },
+                filter: (),
+            }),
+        ),
+    ] {
+        let exclusive_ids: Vec<Uuid> = repo
+            .get_top_level_messages(CH1, &query, direction, 50, &exclusive, None)
+            .await?
+            .rows
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(exclusive_ids, vec![MSG3], "{direction:?}: exclusive bound");
+
+        let inclusive_ids: Vec<Uuid> = repo
+            .get_top_level_messages(CH1, &query, direction, 50, &inclusive, None)
+            .await?
+            .rows
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(
+            inclusive_ids,
+            vec![MSG3, MSG2],
+            "{direction:?}: inclusive bound"
+        );
+    }
     Ok(())
 }
 

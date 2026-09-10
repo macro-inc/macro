@@ -1757,7 +1757,7 @@ impl ChannelRepo for PgChannelsRepo {
                       AND ($5::uuid[] IS NULL OR m.id = ANY($5))
                       AND ($6::timestamptz IS NULL OR m.created_at >= $6)
                       AND ($7::timestamptz IS NULL OR m.created_at < $7)
-                      AND ($14::timestamptz IS NULL OR m.created_at > $14)
+                      AND ($13::timestamptz IS NULL OR m.created_at > $13)
                       AND (
                           ($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
                           OR (
@@ -1834,7 +1834,7 @@ impl ChannelRepo for PgChannelsRepo {
                       AND ($5::uuid[] IS NULL OR m.id = ANY($5))
                       AND ($6::timestamptz IS NULL OR m.created_at >= $6)
                       AND ($7::timestamptz IS NULL OR m.created_at < $7)
-                      AND ($14::timestamptz IS NULL OR m.created_at > $14)
+                      AND ($13::timestamptz IS NULL OR m.created_at > $13)
                       AND (
                           ($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
                           OR (
