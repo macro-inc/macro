@@ -137,10 +137,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     });
   }
 
-  /**
-   * Messages created strictly after `after`, most recent first, auto-paginated.
-   * A `Date` is sent as `toISOString()`. A string is sent unchanged.
-   */
+  /** Messages created strictly after `after`, most recent first, auto-paginated. */
   messagesAfter(
     after: Date | string,
     opts?: { pageSize?: number }

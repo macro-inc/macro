@@ -188,14 +188,10 @@ pub struct Params {
     attachment_type: Option<ChannelAttachmentType>,
 }
 
-/// Query parameters for the catch-up messages endpoint.
 #[derive(Debug, Default, Deserialize)]
 pub struct CatchUpParams {
-    /// Exclusive lower bound. Messages with `created_at` equal to this instant
-    /// are omitted.
     #[serde(default)]
     after: Option<String>,
-    /// Page size. Clamped to [1, 100], defaults to 50.
     #[serde(default)]
     limit: Option<u16>,
 }
@@ -1168,7 +1164,6 @@ fn parse_catch_up_after(after: Option<String>) -> Result<DateTime<Utc>, Channels
         .map_err(|_| ChannelsHandlerErr::BadRequest("after must be an RFC3339 timestamp"))
 }
 
-/// Handler for `GET /channels/{channel_id}/messages/catch-up`.
 #[utoipa::path(
     get,
     operation_id = "get_channel_messages_catch_up",
