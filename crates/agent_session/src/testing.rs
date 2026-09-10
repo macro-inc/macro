@@ -9,8 +9,8 @@ use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
     AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, ReplicaAddress, ReplicaId,
-    SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, ReplicaAddress, ReplicaId, SandboxSize,
+    SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -170,9 +170,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .iter()
             .map(|id| match sessions.get(id) {
                 None => AgentSessionPreview::DoesNotExist(*id),
-                Some(session) if session.owner_id != *viewer => {
-                    AgentSessionPreview::NoAccess(*id)
-                }
+                Some(session) if session.owner_id != *viewer => AgentSessionPreview::NoAccess(*id),
                 Some(session) => AgentSessionPreview::Access(AgentSessionPreviewData {
                     id: *id,
                     name: session.name.clone(),

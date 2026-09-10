@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-
+    
     constructor(args?: {
         client?: Client;
     }) {
@@ -131,7 +131,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-
+    
     /**
      * Delete an agent session and its live resources.
      */
