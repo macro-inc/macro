@@ -213,8 +213,8 @@ describe('channelMessagesQueryOptions', () => {
     expect(mocks.getChannelMessages).not.toHaveBeenCalled();
     expect(result.items.map((item) => item.id)).toEqual([
       'msg-delta',
-      'msg-older',
       'msg-newer',
+      'msg-older',
     ]);
     expect(result.next_cursor).toBe('cached-next');
     expect(result.previous_cursor).toBeNull();
@@ -407,7 +407,7 @@ describe('channelMessagesQueryOptions', () => {
     });
     await Promise.resolve();
     seedLatestCache([
-      createMessage('msg-live', '2026-09-10T13:18:00.000000Z', {
+      createMessage('msg-live', '2026-09-10T13:21:00.000000Z', {
         content: 'from websocket',
       }),
       cached,
@@ -416,11 +416,11 @@ describe('channelMessagesQueryOptions', () => {
 
     const result = await pending;
     expect(result.items.map((item) => item.id)).toEqual([
-      'msg-delta',
       'msg-live',
+      'msg-delta',
       'msg-1',
     ]);
-    expect(result.items[1]?.content).toBe('from websocket');
+    expect(result.items[0]?.content).toBe('from websocket');
   });
 
   it('later pages keep using the full endpoint without an event', async () => {
@@ -466,5 +466,29 @@ describe('mergeCatchUpPage', () => {
     expect(merged.items[1]?.content).toBe('from delta');
     expect(merged.next_cursor).toBe('cached-next');
     expect(merged.previous_cursor).toBeNull();
+  });
+
+  it('keeps a newer live insert ahead of older delta rows', () => {
+    const cached = createMessage('msg-1', '2026-09-10T13:19:00Z');
+    const live = createMessage('msg-live', '2026-09-10T13:21:00Z');
+    const delta = createMessage('msg-delta', '2026-09-10T13:20:00Z');
+    const merged = mergeCatchUpPage(
+      {
+        items: [delta],
+        next_cursor: null,
+        previous_cursor: null,
+      },
+      {
+        items: [live, cached],
+        next_cursor: 'cached-next',
+        previous_cursor: null,
+      }
+    );
+
+    expect(merged.items.map((item) => item.id)).toEqual([
+      'msg-live',
+      'msg-delta',
+      'msg-1',
+    ]);
   });
 });

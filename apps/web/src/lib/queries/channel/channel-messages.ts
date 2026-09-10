@@ -136,11 +136,17 @@ export function mergeCatchUpPage(
   firstPage: ChannelMessagesPage
 ): ChannelMessagesPage {
   const deltaIds = new Set(delta.items.map((item) => item.id));
+  const items = [
+    ...delta.items,
+    ...firstPage.items.filter((item) => !deltaIds.has(item.id)),
+  ];
+  items.sort((left, right) => {
+    if (isNewerCreatedAt(left.created_at, right.created_at)) return -1;
+    if (isNewerCreatedAt(right.created_at, left.created_at)) return 1;
+    return 0;
+  });
   return {
-    items: [
-      ...delta.items,
-      ...firstPage.items.filter((item) => !deltaIds.has(item.id)),
-    ],
+    items,
     next_cursor: firstPage.next_cursor,
     previous_cursor: null,
   };
