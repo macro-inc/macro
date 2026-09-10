@@ -90,7 +90,9 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 subtle = { workspace = true }
 
 [dev-dependencies]
+base64 = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
+sha2 = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }

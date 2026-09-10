@@ -895,7 +895,7 @@ export function optimisticUpdateSoupItemUpdatedAt(
   itemId: string,
   tag: SoupEntityTag,
   updatedAt: string
-) {
+): SoupTransaction | undefined {
   const current = getSoupEntityById(itemId);
   if (!current || current.tag !== tag) return;
 
@@ -908,7 +908,7 @@ export function optimisticUpdateSoupItemUpdatedAt(
     )
       return;
 
-    optimisticUpdateSoupEntity({
+    return optimisticUpdateSoupEntity({
       tag: 'channel',
       data: { channel: { id: itemId, updated_at: updatedAt } },
       frecency_score: current.frecency_score,
@@ -924,7 +924,7 @@ export function optimisticUpdateSoupItemUpdatedAt(
 
     if (!shouldUpdateOptimisticTimestamp(timestamp, updatedAt)) return;
 
-    optimisticUpdateSoupEntity({
+    return optimisticUpdateSoupEntity({
       tag: current.tag,
       data: { id: itemId, updatedAt },
       frecency_score: current.frecency_score,

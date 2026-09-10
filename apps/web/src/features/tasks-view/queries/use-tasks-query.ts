@@ -12,6 +12,8 @@ import {
   tagFacetReady,
   useSearchContext,
 } from '@app/features/soup';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   type EntityData,
   isTaskEntity,
@@ -61,6 +63,10 @@ export function useTasksDataSource(
   state: TasksDataSourceInput,
   options: UseTasksDataSourceOptions
 ): TasksDataSource {
+  const notificationSource = useGlobalNotificationSource();
+  const attachNotifications = (entity: TaskEntityWithProperties) =>
+    withEntityNotifications(entity, notificationSource);
+
   const facetContext = createMemo(
     (): TaskFacetContext => createTagFacetContext(options.tagSets())
   );
@@ -96,7 +102,7 @@ export function useTasksDataSource(
       if (!isTaskEntity(entity)) continue;
       if (!taskMatchesView(entity, context)) continue;
 
-      selected.push(entity);
+      selected.push(attachNotifications(entity));
     }
     return selected;
   };
@@ -165,7 +171,7 @@ export function useTasksDataSource(
   const continuations: TaskGroupContinuationReader = {
     entities: (groupKey) =>
       (groupQueryFor(groupKey)?.data()?.entities ?? []).flatMap((entity) =>
-        isTaskEntity(entity) ? [entity] : []
+        isTaskEntity(entity) ? [attachNotifications(entity)] : []
       ),
     hasMore: (groupKey) => groupQueryFor(groupKey)?.hasNextPage() ?? false,
     isLoading: (groupKey) =>

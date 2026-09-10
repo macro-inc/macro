@@ -24,15 +24,6 @@ const tabTypes: Record<InboxTab, ReadonlySet<InboxTypeFilter>> = {
     'calendar',
   ]),
   noise: new Set(['email']),
-  all: new Set([
-    'documents',
-    'tasks',
-    'email',
-    'channels',
-    'agents',
-    'projects',
-    'github',
-  ]),
   reminders: new Set(['reminders']),
 };
 

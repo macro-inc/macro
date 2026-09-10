@@ -1,0 +1,5 @@
+{
+  "root": true,
+  "extends": ["../../biome.base.jsonc"],
+  "files": { "includes": ["**/*.ts", "!test-results", "!playwright-report"] }
+}

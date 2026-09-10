@@ -1792,6 +1792,96 @@ async fn clamps_limit() {
 }
 
 #[tokio::test]
+async fn catch_up_filter_short_page_has_no_next_cursor() {
+    let after = Utc::now();
+    let mut repo = MockChannelRepo::new();
+    repo.expect_get_top_level_messages()
+        .withf(move |_, _, _, limit, filters, _| {
+            *limit == 50 && filters.created_after_exclusive == Some(after)
+        })
+        .returning(|_, _, _, _, _, _| {
+            Box::pin(async {
+                Ok(TopLevelMessagesQueryResult {
+                    rows: vec![
+                        make_row(Uuid::new_v4(), 2),
+                        make_row(Uuid::new_v4(), 1),
+                        make_row(Uuid::new_v4(), 0),
+                    ],
+                    has_more_newer: false,
+                })
+            })
+        });
+    repo.expect_get_thread_data()
+        .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
+    repo.expect_get_reactions_batch()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+    repo.expect_get_attachments_batch()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+
+    let svc = ChannelServiceImpl::new(repo);
+    let result = svc
+        .get_channel_messages(
+            Uuid::nil(),
+            Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &ChannelMessageFilters {
+                created_after_exclusive: Some(after),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.page.items.len(), 3);
+    assert!(result.page.next_cursor.is_none());
+}
+
+#[tokio::test]
+async fn catch_up_filter_full_page_has_next_cursor() {
+    let after = Utc::now();
+    let mut repo = MockChannelRepo::new();
+    repo.expect_get_top_level_messages()
+        .withf(move |_, _, _, limit, filters, _| {
+            *limit == 50 && filters.created_after_exclusive == Some(after)
+        })
+        .returning(|_, _, _, _, _, _| {
+            Box::pin(async {
+                Ok(TopLevelMessagesQueryResult {
+                    rows: (0..50).map(|i| make_row(Uuid::new_v4(), i)).collect(),
+                    has_more_newer: false,
+                })
+            })
+        });
+    repo.expect_get_thread_data()
+        .returning(|_, _| Box::pin(async { Ok(HashMap::new()) }));
+    repo.expect_get_reactions_batch()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+    repo.expect_get_attachments_batch()
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+
+    let svc = ChannelServiceImpl::new(repo);
+    let result = svc
+        .get_channel_messages(
+            Uuid::nil(),
+            Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &ChannelMessageFilters {
+                created_after_exclusive: Some(after),
+                ..Default::default()
+            },
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.page.items.len(), 50);
+    assert!(result.page.next_cursor.is_some());
+}
+
+#[tokio::test]
 async fn returns_empty_attachments_page() {
     let svc = ChannelServiceImpl::new(empty_repo());
     let page = svc

@@ -31,7 +31,8 @@ This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
 | --- | --- |
 | Rust code, builds, or tests | [Rust development](docs/RUST_DEVELOPMENT.md) |
 | SQLx queries, migrations, DB tests, or cache errors | [Database development](docs/DATABASE_DEVELOPMENT.md) |
-| Web frontend or email-rendering snapshots | [Web agent guide](apps/web/AGENTS.md) |
+| Web frontend | [Web agent guide](apps/web/AGENTS.md) |
+| Email body rendering or snapshots | [Standalone renderer](packages/email-renderer/README.md) |
 | Running the frontend or backend on a local machine | [Running locally](docs/RUNNING_LOCALLY.md) |
 | Working inside Cursor Cloud | [Cursor Cloud](docs/CURSOR_CLOUD.md) |
 | Driving the app through a browser | [App agent guide](docs/AGENT_GUIDE/README.md) |

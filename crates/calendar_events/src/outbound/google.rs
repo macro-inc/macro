@@ -88,7 +88,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             if let Some(token) = &page_token {
                 request = request.query(&[("pageToken", token)]);
             }
-            let page: GoogleCalendarListResponse = send_google(request).await?;
+            let page: GoogleCalendarListResponse =
+                send_google(GoogleRequestKind::AccountRead, request).await?;
             result.extend(page.items);
             page_token = page.next_page_token;
             if page_token.is_none() {
@@ -129,7 +130,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             if let Some(token) = &page_token {
                 request = request.query(&[("pageToken", token)]);
             }
-            let page: GoogleEventListResponse = send_google(request).await?;
+            let page: GoogleEventListResponse =
+                send_google(GoogleRequestKind::Read, request).await?;
             result.extend(page.items);
             page_token = page.next_page_token;
             if page_token.is_none() {
@@ -176,7 +178,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             if let Some(token) = &page_token {
                 request = request.query(&[("pageToken", token)]);
             }
-            let page: GoogleEventListResponse = send_google(request).await?;
+            let page: GoogleEventListResponse =
+                send_google(GoogleRequestKind::Read, request).await?;
             result.extend(page.items);
             page_token = page.next_page_token;
             if page_token.is_none() {
@@ -218,7 +221,11 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         }
         if !status.is_success() {
             let body = response.text().await.map_err(provider_transport_error)?;
-            return Err(provider_response_error(status, &body));
+            return Err(provider_response_error(
+                GoogleRequestKind::Read,
+                status,
+                &body,
+            ));
         }
         response
             .json()
@@ -252,7 +259,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             if let Some(token) = &page_token {
                 request = request.query(&[("pageToken", token)]);
             }
-            let page: GoogleEventListResponse = send_google(request).await?;
+            let page: GoogleEventListResponse =
+                send_google(GoogleRequestKind::Read, request).await?;
             result.extend(page.items);
             page_token = page.next_page_token;
             if page_token.is_none() {
@@ -292,7 +300,24 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             if let Some(token) = &page_token {
                 request = request.query(&[("pageToken", token)]);
             }
-            let page: GoogleEventListResponse = send_google(request).await?;
+            let response = request.send().await.map_err(provider_transport_error)?;
+            let status = response.status();
+            if !status.is_success() {
+                let body = response.text().await.map_err(provider_transport_error)?;
+                let error = provider_response_error(GoogleRequestKind::Read, status, &body);
+                // A missing series master is not a Google quirk to retry.
+                if status == StatusCode::NOT_FOUND
+                    && error.kind() == GoogleProviderErrorKind::Transient
+                {
+                    return Err(GoogleProviderError::new(
+                        GoogleProviderErrorKind::Permanent,
+                        error.message(),
+                    ));
+                }
+                return Err(error);
+            }
+            let page: GoogleEventListResponse =
+                response.json().await.map_err(provider_transport_error)?;
             result.extend(page.items);
             page_token = page.next_page_token;
             if page_token.is_none() {
@@ -303,14 +328,34 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
     }
 }
 
+/// Whether a request reads calendar state or mutates it. An unrecognized 4xx
+/// means different things for each: our read requests are well-formed, so an
+/// unknown 4xx from a read is a Google-side quirk (like the undocumented 412)
+/// and is retried. A mutation's unknown 4xx is a real client rejection and
+/// stays permanent so it does not retry forever.
+#[derive(Clone, Copy)]
+enum GoogleRequestKind {
+    /// A read scoped to one calendar. Retrying is safe because the backfill
+    /// loop isolates a calendar that keeps failing, so a deterministic 4xx is
+    /// bounded to a badge rather than the whole account.
+    Read,
+    /// A read at account scope (the calendar list). Nothing isolates it, so a
+    /// deterministic unknown 4xx retried here would hold the account at
+    /// `pending` indefinitely; it stays terminal like a mutation. The
+    /// undocumented 412 is still classified retryable regardless of kind.
+    AccountRead,
+    Mutation,
+}
+
 async fn send_google<T: DeserializeOwned>(
+    kind: GoogleRequestKind,
     request: RequestBuilder,
 ) -> Result<T, GoogleProviderError> {
     let response = request.send().await.map_err(provider_transport_error)?;
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.map_err(provider_transport_error)?;
-        return Err(provider_response_error(status, &body));
+        return Err(provider_response_error(kind, status, &body));
     }
     response.json().await.map_err(provider_transport_error)
 }
@@ -319,7 +364,11 @@ fn provider_transport_error(error: reqwest::Error) -> GoogleProviderError {
     GoogleProviderError::new(GoogleProviderErrorKind::Transient, format!("{error:?}"))
 }
 
-fn provider_response_error(status: StatusCode, body: &str) -> GoogleProviderError {
+fn provider_response_error(
+    request_kind: GoogleRequestKind,
+    status: StatusCode,
+    body: &str,
+) -> GoogleProviderError {
     let payload = serde_json::from_str::<GoogleErrorResponse>(body).ok();
     let reasons: Vec<_> = payload
         .as_ref()
@@ -339,6 +388,11 @@ fn provider_response_error(status: StatusCode, body: &str) -> GoogleProviderErro
     } else if status == StatusCode::UNAUTHORIZED
         || status == StatusCode::REQUEST_TIMEOUT
         || status == StatusCode::TOO_MANY_REQUESTS
+        // Google returns an undocumented 412 ("Precondition check failed.")
+        // transiently, and we never send an If-Match, so it is never the
+        // documented precondition failure. Reads already fall through to
+        // retryable below, so this arm keeps a mutation's 412 retryable too.
+        || status == StatusCode::PRECONDITION_FAILED
         || status.is_server_error()
         || reasons.contains(&"authError")
         || reasons.contains(&"backendError")
@@ -349,13 +403,35 @@ fn provider_response_error(status: StatusCode, body: &str) -> GoogleProviderErro
     {
         GoogleProviderErrorKind::Transient
     } else {
-        GoogleProviderErrorKind::Permanent
+        match request_kind {
+            GoogleRequestKind::Read => GoogleProviderErrorKind::Transient,
+            GoogleRequestKind::AccountRead | GoogleRequestKind::Mutation => {
+                GoogleProviderErrorKind::Permanent
+            }
+        }
     };
-    let message = payload
-        .map(|payload| payload.error.message)
-        .filter(|message| !message.is_empty())
-        .unwrap_or_else(|| format!("Google Calendar returned HTTP {status}"));
+    let message = provider_error_message(payload.as_ref(), status, &reasons);
     GoogleProviderError::new(kind, message)
+}
+
+/// Compose the provider error message, keeping Google's `reason` strings
+/// alongside the human-readable `message` so a failure is diagnosable from a
+/// stored `last_error` alone.
+fn provider_error_message(
+    payload: Option<&GoogleErrorResponse>,
+    status: StatusCode,
+    reasons: &[&str],
+) -> String {
+    let base = payload
+        .map(|payload| &payload.error.message)
+        .filter(|message| !message.is_empty())
+        .cloned()
+        .unwrap_or_else(|| format!("Google Calendar returned HTTP {status}"));
+    if reasons.is_empty() {
+        base
+    } else {
+        format!("{base} (reasons: {})", reasons.join(", "))
+    }
 }
 
 impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
@@ -496,6 +572,7 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
         let calendar = urlencoding::encode(provider_calendar_id);
         self.gate.acquire(email_link_id).await?;
         let response: GoogleChannelResponse = send_google(
+            GoogleRequestKind::Mutation,
             self.client
                 .post(format!(
                     "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/watch"
@@ -788,7 +865,21 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
     /// Recurring series are re-read from the provider so Google stays the
     /// recurrence expansion authority, exactly like ingestion. `None` means
     /// the series master disappeared between the mutation and the refresh.
+    ///
+    /// The write has already landed by the time this runs, so no failure here
+    /// may surface as retryable — see [`non_retryable_after_write`].
     async fn mutation_readback(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        event: GoogleEvent,
+    ) -> Result<Option<CalendarEventUpsert>, GoogleProviderError> {
+        self.readback_mutation(access_token, target, event)
+            .await
+            .map_err(non_retryable_after_write)
+    }
+
+    async fn readback_mutation(
         &self,
         access_token: &str,
         target: &GoogleCalendarTarget,
@@ -844,11 +935,29 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             return Ok(());
         }
         let body = response.text().await.map_err(provider_transport_error)?;
-        Err(provider_response_error(status, &body))
+        Err(provider_response_error(
+            GoogleRequestKind::Mutation,
+            status,
+            &body,
+        ))
     }
 
     /// Refresh a series after reshaping it, mapping the outcome for callers.
+    ///
+    /// The reshaping write has already landed, so no failure here may surface
+    /// as retryable — see [`non_retryable_after_write`].
     async fn series_outcome(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+    ) -> Result<GoogleSeriesMutationOutcome, GoogleProviderError> {
+        self.refreshed_series_outcome(access_token, target, master_provider_event_id)
+            .await
+            .map_err(non_retryable_after_write)
+    }
+
+    async fn refreshed_series_outcome(
         &self,
         access_token: &str,
         target: &GoogleCalendarTarget,
@@ -895,7 +1004,11 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         }
         if !status.is_success() {
             let body = response.text().await.map_err(provider_transport_error)?;
-            return Err(provider_response_error(status, &body));
+            return Err(provider_response_error(
+                GoogleRequestKind::Mutation,
+                status,
+                &body,
+            ));
         }
         response
             .json()
@@ -925,8 +1038,11 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
             .post(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
             .bearer_auth(access_token)
             .query(&[SEND_UPDATES]);
-        let created: GoogleEvent =
-            send_google(with_conference_query(request, &body).json(&body)).await?;
+        let created: GoogleEvent = send_google(
+            GoogleRequestKind::Mutation,
+            with_conference_query(request, &body).json(&body),
+        )
+        .await?;
         // The insert already happened and carries no idempotency key, so a
         // readback miss must not surface as retryable: a client retry would
         // POST a duplicate event.
@@ -1073,12 +1189,20 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
                 .and_then(google_start)
                 .is_some_and(|candidate| candidate == start)
         });
-        if let Some(instance) = matched {
-            self.delete_event_raw(access_token, target, &instance.id)
-                .await?;
+        // Only a landed delete makes the refresh non-retryable; when no
+        // instance matched nothing was written, so a flaky refresh may retry.
+        match matched {
+            Some(instance) => {
+                self.delete_event_raw(access_token, target, &instance.id)
+                    .await?;
+                self.series_outcome(access_token, target, master_provider_event_id)
+                    .await
+            }
+            None => {
+                self.refreshed_series_outcome(access_token, target, master_provider_event_id)
+                    .await
+            }
         }
-        self.series_outcome(access_token, target, master_provider_event_id)
-            .await
     }
 
     #[tracing::instrument(
@@ -1167,23 +1291,31 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
                 .await?
             }
         };
-        if let Some(provider_event_id) = &patch_target {
+        let wrote = if let Some(provider_event_id) = &patch_target {
             match self
                 .patch_actor_response(access_token, target, provider_event_id, actor, response)
                 .await?
             {
-                RsvpPatch::Applied => {}
+                RsvpPatch::Applied => true,
                 RsvpPatch::NotAttendee => return Ok(GoogleRsvpOutcome::NotAttendee),
                 RsvpPatch::Gone => return Ok(GoogleRsvpOutcome::Gone),
             }
-        }
+        } else {
+            false
+        };
 
         // Every scope resolves by refreshing the series from Google, which
         // owns recurrence expansion and now holds the exceptions just written.
-        match self
-            .series_outcome(access_token, target, master_provider_event_id)
-            .await?
-        {
+        // Only a landed patch makes that refresh non-retryable; with no
+        // occurrence to patch nothing was written, so a flaky refresh may retry.
+        let outcome = if wrote {
+            self.series_outcome(access_token, target, master_provider_event_id)
+                .await?
+        } else {
+            self.refreshed_series_outcome(access_token, target, master_provider_event_id)
+                .await?
+        };
+        match outcome {
             GoogleSeriesMutationOutcome::Applied(upsert) => Ok(GoogleRsvpOutcome::Applied(upsert)),
             GoogleSeriesMutationOutcome::SeriesDeleted | GoogleSeriesMutationOutcome::Gone => {
                 Ok(GoogleRsvpOutcome::Gone)
@@ -1217,7 +1349,11 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
             return Ok(());
         }
         let body = response.text().await.map_err(provider_transport_error)?;
-        Err(provider_response_error(status, &body))
+        Err(provider_response_error(
+            GoogleRequestKind::Mutation,
+            status,
+            &body,
+        ))
     }
 }
 
@@ -1384,6 +1520,28 @@ fn truncate_recurrence_lines(lines: &[String], cutoff: &EventStart) -> Vec<Strin
             format!("RRULE:{}", kept.join(";"))
         })
         .collect()
+}
+
+/// A read that runs after a mutation has already landed must never surface as
+/// retryable: the caller's retry would re-apply the write. `create_event`
+/// carries no idempotency key, so it would POST a duplicate event, and a
+/// re-sent patch re-notifies every guest. The write is in Google either way.
+/// The next sync converges the projection, so the demotion loses nothing.
+/// A reauthorization signal is kept — retrying would not help it either, and
+/// the caller maps it to a reauth prompt rather than a retry.
+fn non_retryable_after_write(error: GoogleProviderError) -> GoogleProviderError {
+    match error.kind() {
+        GoogleProviderErrorKind::Transient | GoogleProviderErrorKind::SyncTokenExpired => {
+            GoogleProviderError::new(
+                GoogleProviderErrorKind::Permanent,
+                format!(
+                    "Google Calendar applied the change but has not returned it yet, refresh to see it: {}",
+                    error.message()
+                ),
+            )
+        }
+        GoogleProviderErrorKind::Permanent | GoogleProviderErrorKind::ReauthRequired => error,
+    }
 }
 
 fn mutation_normalization_error(error: Report) -> GoogleProviderError {

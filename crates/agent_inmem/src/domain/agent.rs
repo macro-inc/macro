@@ -21,11 +21,11 @@ use agent_client_protocol::schema::v1::{
     ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
     InitializeResponse, IntegerPropertySchema, Meta, NewSessionRequest, NewSessionResponse,
     NumberPropertySchema, OtherElicitationPropertySchema, PromptRequest, PromptResponse,
-    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionId,
-    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, StopReason, StringFormat, StringPropertySchema,
-    ToolCall as AcpToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields,
-    ToolKind,
+    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
+    SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason, StringFormat,
+    StringPropertySchema, ToolCall as AcpToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate,
+    ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
@@ -177,6 +177,18 @@ impl AgentState {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
             state.model = model;
         }
+    }
+
+    /// ACP model configuration backed by the engine's supported-model source
+    /// and this session's current selection.
+    fn model_config_options(&self) -> Vec<SessionConfigOption> {
+        let Some(session) = self.store.get(&self.session_id) else {
+            return Vec::new();
+        };
+        crate::domain::model_options::model_config_options(
+            &session.model,
+            self.engine.supported_models(),
+        )
     }
 
     /// Everything from the session's state that a turn answering `prompt`
@@ -504,7 +516,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
                     state.connect_mcp(request.mcp_servers).await;
-                    responder.respond(NewSessionResponse::new(acp_id))
+                    responder.respond(
+                        NewSessionResponse::new(acp_id)
+                            .config_options(state.model_config_options()),
+                    )
                 }
             },
             agent_client_protocol::on_receive_request!(),

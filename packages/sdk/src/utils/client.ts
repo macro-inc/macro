@@ -1,3 +1,4 @@
+import { match, P } from 'ts-pattern';
 import { Sdk as AgentHarnessSdk } from '../../generated/agent-harness/sdk.gen';
 import { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
 import { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
@@ -15,12 +16,81 @@ import {
   type MacroAuth,
   type MacroOpts,
   type ServiceName,
+  type TokenSource,
   WEB_APP_URLS,
 } from '../config';
 import { BotsNamespace } from '../entities/bots/namespace';
 import { User } from '../entities/users/user';
 import { MacroEvents } from '../events/receiver';
 import { type LocalPortmap, resolveLocalPortmap } from '../local-portmap';
+
+const USER_API_KEY_HEADER = 'x-macro-user-api-key';
+const USER_API_KEY_PREFIX = 'mak_';
+const BOT_TOKEN_PREFIX = 'mbot_';
+
+type CredentialHeader = readonly [name: string, value: string];
+
+function userCredentialHeader(secret: string): CredentialHeader {
+  return match(secret)
+    .with(P.string.startsWith(BOT_TOKEN_PREFIX), () => {
+      throw new Error(
+        "bot token passed as a user credential. Use auth: { type: 'bot', token } or MACRO_BOT_TOKEN.",
+      );
+    })
+    .with(
+      P.string.startsWith(USER_API_KEY_PREFIX),
+      (key): CredentialHeader => [USER_API_KEY_HEADER, key],
+    )
+    .otherwise(
+      (token): CredentialHeader => ['Authorization', `Bearer ${token}`],
+    );
+}
+
+async function resolveToken(source: TokenSource): Promise<string> {
+  return typeof source === 'function' ? await source() : source;
+}
+
+export async function requestAuthHeaders(
+  auth: MacroAuth,
+  requestedAs?: string,
+  existing?: { hasBotScope?: boolean },
+): Promise<ReadonlyArray<readonly [string, string]>> {
+  return match(auth)
+    .with({ type: 'bot' }, async (botAuth) => {
+      const tok = await resolveToken(botAuth.token);
+      if (!tok.startsWith(BOT_TOKEN_PREFIX)) {
+        throw new Error(
+          "user API key passed as a bot token. Use auth: { type: 'user', apiKey } or MACRO_API_KEY.",
+        );
+      }
+      const headers: Array<readonly [string, string]> = [
+        ['x-macro-bot-token', tok],
+      ];
+      if (!existing?.hasBotScope) {
+        headers.push([
+          'x-macro-bot-scope',
+          botAuth.scope ?? (requestedAs ? 'user' : 'team'),
+        ]);
+      }
+      if (requestedAs) {
+        headers.push(['x-macro-bot-for-macro-user-id', requestedAs]);
+      }
+      return headers;
+    })
+    .with({ type: 'user', apiKey: P.string }, ({ apiKey }) => {
+      if (apiKey.startsWith(BOT_TOKEN_PREFIX)) {
+        throw new Error(
+          "bot token passed as a user credential. Use auth: { type: 'bot', token } or MACRO_BOT_TOKEN.",
+        );
+      }
+      return [[USER_API_KEY_HEADER, apiKey] as const];
+    })
+    .with({ type: 'user' }, async ({ token }) => {
+      const pair = userCredentialHeader(await resolveToken(token));
+      return [pair];
+    })
+    .exhaustive();
+}
 
 export class MacroClient {
   readonly agentHarness: AgentHarnessSdk;
@@ -133,32 +203,13 @@ export class MacroClient {
   private makeClient(baseUrl: string) {
     const c = createClient({ baseUrl });
     c.interceptors.request.use(async (request) => {
-      const source = this.authConfig.token;
-      const tok = typeof source === 'function' ? await source() : source;
-      if (this.authConfig.type === 'bot') {
-        request.headers.set('x-macro-bot-token', tok);
-        // A per-call scope wins: the channel webhook fallback pins `user`,
-        // the only scope a user-owned bot can present (a team scope with no
-        // owning team is rejected outright).
-        if (!request.headers.has('x-macro-bot-scope')) {
-          request.headers.set(
-            'x-macro-bot-scope',
-            this.authConfig.scope ?? (this.requestedAs ? 'user' : 'team'),
-          );
-        }
-        if (this.requestedAs) {
-          request.headers.set(
-            'x-macro-bot-for-macro-user-id',
-            this.requestedAs,
-          );
-        }
-      } else {
-        if (tok.startsWith('mbot_')) {
-          throw new Error(
-            "bot API key passed as a user token — use auth: { type: 'bot', token } (or MACRO_BOT_TOKEN)",
-          );
-        }
-        request.headers.set('Authorization', `Bearer ${tok}`);
+      const headers = await requestAuthHeaders(
+        this.authConfig,
+        this.requestedAs,
+        { hasBotScope: request.headers.has('x-macro-bot-scope') },
+      );
+      for (const [name, value] of headers) {
+        request.headers.set(name, value);
       }
       return request;
     });
@@ -198,7 +249,7 @@ function resolveAuth(opts: MacroOpts): MacroAuth {
       envApiKey ??
       (() => {
         throw new Error(
-          'no Macro API token — set MACRO_API_KEY / MACRO_BOT_TOKEN or pass token/auth to new Macro()',
+          'no Macro credential. Set MACRO_API_KEY (API key or bearer token) or MACRO_BOT_TOKEN, or pass token/auth to new Macro().',
         );
       }),
   };

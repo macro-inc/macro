@@ -7,7 +7,6 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { cn, Surface } from '@ui';
 import {
   createSignal,
   onMount,
@@ -30,18 +29,9 @@ export type EmailViewProps = {
 
 function EmailListFallback() {
   return (
-    <Surface
-      depth={isTouchDevice() ? 0 : 2}
-      hideBorder={isTouchDevice()}
-      class={cn(
-        'grid size-full min-h-0 min-w-0 place-items-center text-ink-muted',
-        isTouchDevice()
-          ? 'rounded-none bg-transparent pt-(--mobile-content-inset-top) pb-(--mobile-content-inset-bottom)'
-          : 'rounded-2xl'
-      )}
-    >
+    <div class="grid size-full min-h-0 min-w-0 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
       <SpinnerIcon aria-label="Loading email" class="size-5 animate-spin" />
-    </Surface>
+    </div>
   );
 }
 

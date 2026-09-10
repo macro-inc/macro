@@ -330,9 +330,33 @@ where
                         // Recheck under the activity lock after inspecting the
                         // turn gate. A prompt frame arriving in that window
                         // changes the instant and prevents a stale idle reap.
-                        if *activity == observed_at
-                            && should_reap_cursor_pipe(activity.elapsed(), active_turn)
-                        {
+                        let raced = *activity != observed_at;
+                        let idle_ms = activity.elapsed().as_millis();
+                        let reaped = !raced
+                            && should_reap_cursor_pipe(activity.elapsed(), active_turn);
+                        // Every tick, not just the reaping one. The inputs to
+                        // this decision are what tell a pipe that died of
+                        // idleness apart from one pulled out from under a
+                        // live turn, and after the fact only the tick that
+                        // fired is reconstructable - so the deadline being
+                        // long expired while a turn held it open has to be
+                        // visible on the ticks that did nothing.
+                        tracing::debug!(
+                            %session_id,
+                            agent.pipe.idle_ms = idle_ms as u64,
+                            agent.pipe.active_turn = active_turn,
+                            agent.pipe.activity_raced = raced,
+                            agent.pipe.reaped = reaped,
+                            "cursor pipe idle check"
+                        );
+                        if reaped {
+                            let _reap = tracing::info_span!(
+                                "agent.pipe.reap",
+                                agent.session.id = %session_id,
+                                agent.pipe.idle_ms = idle_ms as u64,
+                                agent.pipe.close_cause = "idle_timeout",
+                            )
+                            .entered();
                             tracing::info!(%session_id, "idle cursor session; closing its pipe");
                             reaper_shutdown.cancel();
                             break;

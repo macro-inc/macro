@@ -18,6 +18,14 @@ export type MagicChipActivity = {
   busy: boolean;
 };
 
+/** Who is answering, for the chip's header: the persona and its model. */
+export type MagicChipHeader = {
+  /** The persona's name, e.g. `Macro Agent`. */
+  agent?: string;
+  /** The model's display name, when the runtime has reported one. */
+  model?: string;
+};
+
 /**
  * A question the agent is waiting on, as the chip offers it: the live slot
  * from the session's metadata, and whether this viewer is the one who may
@@ -34,9 +42,10 @@ export type MagicChipQuestion = {
  * The one state the chip renders.
  *
  * Four: an activity line while the agent works with nothing to show, the
- * answer as it is written with the activity line still under it, a question
- * the agent has stopped to ask (with whatever answer it had written so far
- * above it), and the answer alone once the turn ends.
+ * agent's latest passage as it is written with the activity alongside, a
+ * question the agent has stopped to ask (with that passage beside it), and
+ * the final passage alone once the turn ends. `markdown` is always the
+ * turn's latest text chunk, never the whole turn.
  */
 export type MagicChipPresentation =
   | { kind: 'working'; activity: MagicChipActivity }
@@ -321,16 +330,35 @@ function liveEventActivity(
   return statusActivity(name);
 }
 
-function answerMarkdown(response: FoldedMessage | undefined): string {
+/**
+ * The agent's latest prose: the last text part of the turn, which the fold
+ * appends into as chunks land. A passage written before a tool ran gives way
+ * to what the agent says after it, and when the turn ends cleanly the final
+ * passage is what stays.
+ */
+function latestChunk(response: FoldedMessage | undefined): string {
   return (
-    response?.parts
-      .filter(
-        (part): part is Extract<MessagePart, { kind: 'text' }> =>
-          part.kind === 'text' && Boolean(part.text.trim())
-      )
-      .map((part) => part.text)
-      .join('\n\n') ?? ''
+    response?.parts.findLast(
+      (part): part is Extract<MessagePart, { kind: 'text' }> =>
+        part.kind === 'text' && Boolean(part.text.trim())
+    )?.text ?? ''
   );
+}
+
+/** The one line the chip's header reads for the turn. */
+export function presentationStatus(
+  presentation: MagicChipPresentation
+): MagicChipActivity {
+  return match(presentation)
+    .with({ kind: 'working' }, { kind: 'answering' }, (p) => p.activity)
+    .with({ kind: 'asking' }, ({ asking }) => ({
+      label: asking.canAnswer
+        ? 'Waiting for you'
+        : `Waiting for ${asking.ownerName}`,
+      busy: false,
+    }))
+    .with({ kind: 'settled' }, () => ({ label: 'Done', busy: false }))
+    .exhaustive();
 }
 
 /** Project fold and lifecycle facts into the one state the view renders. */
@@ -339,7 +367,7 @@ export function deriveMagicChipPresentation(
 ): MagicChipPresentation {
   const { response, prompt, latestEvent, persistedStatus, asking } = input;
 
-  const markdown = answerMarkdown(response);
+  const markdown = latestChunk(response);
   if (response?.stop?.kind === 'end_turn' && markdown) {
     return { kind: 'settled', markdown };
   }

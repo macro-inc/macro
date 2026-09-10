@@ -92,6 +92,11 @@ impl EgressService for StubEgress {
     }
 }
 
+/// The proxy's address as a deployment behind the shared gateway configures
+/// it: a path on a host serving many services. What broke was reading a route
+/// off a URL built on one of these.
+const BASE_URL: &str = "https://gateway.example/agent-harness-egress";
+
 fn hubspot() -> EgressTarget {
     EgressTarget::McpServer(McpDestination::Connected(
         McpServerSlug::parse("hubspot").expect("slug"),
@@ -101,10 +106,9 @@ fn hubspot() -> EgressTarget {
 #[tokio::test]
 async fn a_handshake_and_tool_listing_go_through_the_service_as_the_session() {
     let egress = Arc::new(StubEgress::default());
-    let client = EgressMcpClient::new(Arc::clone(&egress));
-    let config =
-        StreamableHttpClientTransportConfig::with_uri("http://egress.internal/mcp/hubspot")
-            .auth_header("session-token");
+    let client = EgressMcpClient::new(Arc::clone(&egress), BASE_URL);
+    let config = StreamableHttpClientTransportConfig::with_uri(format!("{BASE_URL}/mcp/hubspot"))
+        .auth_header("session-token");
     let transport = StreamableHttpClientTransport::with_client(client, config);
 
     let server = client_info().serve(transport).await.expect("handshake");
@@ -132,11 +136,11 @@ async fn a_handshake_and_tool_listing_go_through_the_service_as_the_session() {
 #[tokio::test]
 async fn a_url_off_the_proxy_routes_is_refused_before_the_service_is_called() {
     let egress = Arc::new(StubEgress::default());
-    let client = EgressMcpClient::new(Arc::clone(&egress));
+    let client = EgressMcpClient::new(Arc::clone(&egress), BASE_URL);
 
     let error = client
         .post_message(
-            Arc::from("http://egress.internal/git/info/refs"),
+            Arc::from("https://gateway.example/agent-harness-egress/git/info/refs"),
             ClientJsonRpcMessage::notification(
                 rmcp::model::ClientNotification::InitializedNotification(Default::default()),
             ),
@@ -159,11 +163,11 @@ async fn a_url_off_the_proxy_routes_is_refused_before_the_service_is_called() {
 #[tokio::test]
 async fn a_server_entry_without_a_token_is_refused_before_the_service_is_called() {
     let egress = Arc::new(StubEgress::default());
-    let client = EgressMcpClient::new(Arc::clone(&egress));
+    let client = EgressMcpClient::new(Arc::clone(&egress), BASE_URL);
 
     let error = client
         .delete_session(
-            Arc::from("http://egress.internal/mcp/hubspot"),
+            Arc::from("https://gateway.example/agent-harness-egress/mcp/hubspot"),
             Arc::from("stub-session"),
             None,
             HashMap::new(),
@@ -183,13 +187,13 @@ async fn a_server_entry_without_a_token_is_refused_before_the_service_is_called(
 #[tokio::test]
 async fn the_macro_route_names_macros_own_server() {
     let egress = Arc::new(StubEgress::default());
-    let client = EgressMcpClient::new(Arc::clone(&egress));
+    let client = EgressMcpClient::new(Arc::clone(&egress), BASE_URL);
 
     // The stub answers DELETE with 405, which the client reads as "nothing to
     // delete", so this exercises the address step alone.
     client
         .delete_session(
-            Arc::from("http://egress.internal/mcp-macro"),
+            Arc::from("https://gateway.example/agent-harness-egress/mcp-macro"),
             Arc::from("stub-session"),
             Some("session-token".to_owned()),
             HashMap::new(),
@@ -203,4 +207,83 @@ async fn the_macro_route_names_macros_own_server() {
             EgressTarget::McpServer(McpDestination::Macro)
         )]
     );
+}
+
+/// A `delete_session` the stub answers with 405, which the client reads as
+/// "nothing to delete": the cheapest way to exercise the address step alone.
+async fn address_only(
+    egress: &Arc<StubEgress>,
+    base_url: &str,
+    uri: &'static str,
+) -> Result<(), CallError> {
+    EgressMcpClient::new(Arc::clone(egress), base_url)
+        .delete_session(
+            Arc::from(uri),
+            Arc::from("stub-session"),
+            Some("session-token".to_owned()),
+            HashMap::new(),
+        )
+        .await
+}
+
+#[tokio::test]
+async fn a_route_under_the_proxys_own_path_prefix_is_read_off_it() {
+    let egress = Arc::new(StubEgress::default());
+
+    address_only(
+        &egress,
+        BASE_URL,
+        "https://gateway.example/agent-harness-egress/mcp/hubspot",
+    )
+    .await
+    .expect("405 is fine");
+
+    assert_eq!(egress.seen(), vec![("session-token".to_owned(), hubspot())]);
+}
+
+#[tokio::test]
+async fn a_base_url_with_no_path_reads_the_same_routes() {
+    let egress = Arc::new(StubEgress::default());
+
+    address_only(
+        &egress,
+        "http://localhost:8102",
+        "http://localhost:8102/mcp/hubspot",
+    )
+    .await
+    .expect("405 is fine");
+
+    assert_eq!(egress.seen(), vec![("session-token".to_owned(), hubspot())]);
+}
+
+#[tokio::test]
+async fn a_trailing_slash_on_the_base_url_does_not_hide_the_route() {
+    let egress = Arc::new(StubEgress::default());
+
+    address_only(
+        &egress,
+        "https://gateway.example/agent-harness-egress/",
+        "https://gateway.example/agent-harness-egress/mcp/hubspot",
+    )
+    .await
+    .expect("405 is fine");
+
+    assert_eq!(egress.seen(), vec![("session-token".to_owned(), hubspot())]);
+}
+
+#[tokio::test]
+async fn a_url_that_is_not_under_the_proxys_base_is_refused() {
+    let egress = Arc::new(StubEgress::default());
+
+    let error = address_only(&egress, BASE_URL, "https://gateway.example/mcp/hubspot")
+        .await
+        .expect_err("not this proxy");
+    assert!(
+        matches!(
+            error,
+            StreamableHttpError::Client(EgressCallError::NotAnEgressUrl(_))
+        ),
+        "{error:?}"
+    );
+    assert!(egress.seen().is_empty());
 }

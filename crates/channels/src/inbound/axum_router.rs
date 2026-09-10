@@ -188,6 +188,15 @@ pub struct Params {
     attachment_type: Option<ChannelAttachmentType>,
 }
 
+/// Query parameters for the catch-up messages endpoint.
+#[derive(Debug, Default, Deserialize)]
+pub struct CatchUpParams {
+    #[serde(default)]
+    after: Option<String>,
+    #[serde(default)]
+    limit: Option<u16>,
+}
+
 /// Path params for thread replies endpoint.
 #[derive(Debug, Deserialize)]
 pub struct ThreadRepliesPath {
@@ -348,6 +357,10 @@ where
             "/{channel_id}/messages",
             get(get_channel_messages_handler::<S, Svc, Auth>)
                 .post(post_channel_messages_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/{channel_id}/messages/catch-up",
+            get(get_channel_messages_catch_up_handler::<S, Svc, Auth>),
         )
         .route(
             "/{channel_id}/messages/{message_id}/replies",
@@ -1120,6 +1133,7 @@ pub async fn delete_mention_handler<
     err,
     skip_all,
     fields(
+        path = "full",
         channel_id = tracing::field::Empty,
         limit = tracing::field::Empty,
         page_direction = tracing::field::Empty,
@@ -1140,6 +1154,82 @@ pub async fn get_channel_messages_handler<
     let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
     let filters = ChannelMessageFilters::default();
     channel_messages_response(&state, params, cursor, channel_id, &filters, None).await
+}
+
+fn parse_catch_up_after(after: Option<String>) -> Result<DateTime<Utc>, ChannelsHandlerErr> {
+    let after = after.ok_or(ChannelsHandlerErr::BadRequest(
+        "after must be an RFC3339 timestamp",
+    ))?;
+    DateTime::parse_from_rfc3339(&after)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|_| ChannelsHandlerErr::BadRequest("after must be an RFC3339 timestamp"))
+}
+
+/// Handler for `GET /channels/{channel_id}/messages/catch-up`.
+#[utoipa::path(
+    get,
+    operation_id = "get_channel_messages_catch_up",
+    path = "/channels/{channel_id}/messages/catch-up",
+    params(
+        ("channel_id" = Uuid, Path, description = "Channel ID"),
+        ("after" = String, Query, description = "Exclusive RFC3339 lower bound. Messages at this instant are omitted."),
+        ("limit" = Option<u16>, Query, description = "Page size (1-100, default 50)"),
+        ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value for older messages"),
+        ("previous_cursor" = Option<String>, Query, description = "Base64 encoded cursor value for newer messages"),
+    ),
+    responses(
+        (status = 200, body = ApiChannelMessagesPage),
+        (status = 401, body = ErrorResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(
+    err,
+    skip_all,
+    fields(
+        path = "catch_up",
+        channel_id = tracing::field::Empty,
+        limit = tracing::field::Empty,
+        page_direction = tracing::field::Empty,
+        has_cursor = tracing::field::Empty,
+        load_around_message_id = tracing::field::Empty,
+        after = tracing::field::Empty,
+        items_returned = tracing::field::Empty
+    )
+)]
+pub async fn get_channel_messages_catch_up_handler<
+    S: ChannelService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<ChannelsRouterState<S, Svc, Auth>>,
+    access: ChannelAccessLevelExtractor<MemberParticipantRole, Svc, Auth>,
+    Query(params): Query<CatchUpParams>,
+    cursor: Option<BidirectionalCursor<Uuid, CreatedAt, ()>>,
+) -> Result<Json<ApiChannelMessagesPage>, ChannelsHandlerErr> {
+    let after = parse_catch_up_after(params.after)?;
+    tracing::Span::current().record("after", tracing::field::display(after));
+    let channel_id = channel_id_from_receipt(&access.entity_access_receipt)?;
+    let filters = ChannelMessageFilters {
+        created_after_exclusive: Some(after),
+        ..Default::default()
+    };
+    let response = channel_messages_response(
+        &state,
+        Params {
+            limit: params.limit,
+            ..Default::default()
+        },
+        cursor,
+        channel_id,
+        &filters,
+        None,
+    )
+    .await?;
+    tracing::Span::current().record("items_returned", response.0.items.len());
+    Ok(response)
 }
 
 /// Handler for `POST /channels/{channel_id}/messages`.
@@ -1167,6 +1257,7 @@ pub async fn get_channel_messages_handler<
     err,
     skip_all,
     fields(
+        path = "full",
         channel_id = tracing::field::Empty,
         limit = tracing::field::Empty,
         page_direction = tracing::field::Empty,

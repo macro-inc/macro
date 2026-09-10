@@ -112,10 +112,11 @@ test-watch:
     bunx --bun vitest
 
 test-email-rendering:
-    cd src/lib/core/email/tests && bunx playwright test
+    bun run --cwd ../../packages/email-renderer test
+    bun run --cwd ../../packages/email-renderer test:browser
 
 test-email-rendering-update:
-    cd src/lib/core/email/tests && bunx playwright test --update-snapshots
+    bun run --cwd ../../packages/email-renderer test:browser --update-snapshots
 
 preview-prod:
     MODE=production NODE_ENV=production bun run preview:prod
@@ -165,10 +166,10 @@ fix-lock:
 
 # Analysis
 cycles:
-    bunx --bun biome lint --only=nursery/noImportCycles
+    bunx --bun biome lint --only=suspicious/noImportCycles
 
 cycles-ci:
-    bunx --bun biome lint --changed --only=nursery/noImportCycles
+    bunx --bun biome lint --changed --only=suspicious/noImportCycles
 
 # Build the GraphQL cache wasm module into src/lib/graphql-cache/wasm
 # (gitignored). Unconditional — CI app builds must never skip it (schema or

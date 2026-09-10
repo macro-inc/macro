@@ -12,11 +12,17 @@ note: |-
   reactive view models in `primitives/`. The `dateBucket` import from
   `soup/collection/date-buckets` (a pure date-fns module, not the soup barrel)
   is the documented exception for feed labels that must match soup views.
+  The shared @core/util/base64 codec is also pure and may be reused by email.
 files:
   - apps/web/src/features/activity/core/**
+  - apps/web/src/features/email-message/core/**
+  - apps/web/src/features/email-thread/core/**
+  - apps/web/src/features/email-compose/core/**
 rule:
   kind: string
   regex: ^['"](solid-js|@urql|urql|@app/lib/urql|@queries/|@service-storage/|@core/|@property/|@components/|@ui|@entity/|(\.\./)+(queries|primitives|components|views)/|(\.\./)+context/)
+  not:
+    regex: ^['"]@core/util/base64['"]
   any:
     - inside:
         kind: import_statement

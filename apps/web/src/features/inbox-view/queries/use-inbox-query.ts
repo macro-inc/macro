@@ -30,7 +30,6 @@ import { startOfDay, subWeeks } from 'date-fns';
 import { createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
-  explicitNoiseFilter,
   noiseFilter,
   signalFilter,
 } from '../../next-soup/filters/inbox-filters';
@@ -94,7 +93,6 @@ function matchesTab(
       );
     })
     .with('noise', () => noiseFilter(entity) && notDoneFilter(source)(entity))
-    .with('all', () => !explicitNoiseFilter(entity))
     .with('reminders', () => scheduledRemindersFilter(entity))
     .exhaustive();
 }

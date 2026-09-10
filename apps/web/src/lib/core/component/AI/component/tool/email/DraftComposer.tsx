@@ -8,23 +8,28 @@
  * knows how to edit the draft and what Send means.
  */
 
+import { SignaturePreview } from '@app/features/email-compose/components/signature-preview';
+import { ComposeProvider } from '@app/features/email-compose/context/compose-context';
+import { decodeBase64Utf8 } from '@app/features/email-compose/core/decode-base64';
+import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
+import { convertContactInfoToEmailRecipient } from '@app/features/email-compose/core/recipient-conversion';
+import { createComposeBodyActions } from '@app/features/email-compose/editor-adapter';
+import type {
+  ComposeContextValue,
+  ComposeValidationError,
+} from '@app/features/email-compose/primitives/compose-view-state';
+import type { DraftFormAttachment } from '@app/features/email-compose/primitives/email-form-state';
+import { prepareEmailBody } from '@app/features/email-compose/primitives/prepare-email-body';
+import { ComposeLayout } from '@app/features/email-compose/views/compose-layout';
+import { EmailComposeToolbar } from '@app/features/email-compose/views/compose-toolbar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { toast } from '@core/component/Toast/Toast';
 import {
-  ComposeLayout,
-  EmailComposeToolbar,
-} from '@block-email/component/compose';
-import {
-  type ComposeContextValue,
-  ComposeProvider,
-  type ComposeValidationError,
-} from '@block-email/component/compose/ComposeContext';
-import { SignaturePreview } from '@block-email/component/compose/SignaturePreview';
-import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
-import type { EmailRecipient } from '@block-email/component/EmailContext';
-import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
-import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
-import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
-import { enableEmailSignatures } from '@core/constant/featureFlags';
+  ENABLE_EMAIL_SCHEDULED_SEND,
+  enableEmailSignatures,
+} from '@core/constant/featureFlags';
+import { isMobile } from '@core/mobile/isMobile';
+import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { useEmailLinksQuery, useEmailSignature } from '@queries/email/link';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { debounce } from '@solid-primitives/scheduled';
@@ -46,6 +51,8 @@ export type EmailDraftComposerProps = {
   readOnly?: boolean;
   /** Suffix for the body editor's debug name, unique per draft. */
   debugName: string;
+  /** The imported body in the same encoding used for subsequent edits. */
+  onBodyInitialized?: (bodyHtml: string) => void;
 };
 
 function toEmailRecipients(
@@ -70,7 +77,10 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   const emailLinksQuery = useEmailLinksQuery();
   // The inbox this card sends from — always the first linked inbox (shown as
   // "from"); the backend resolves the same default at send time.
-  const sendingLink = createMemo(() => emailLinksQuery.data?.links?.[0]);
+  const sendingLink = createMemo(() => {
+    if (!emailLinksQuery.isSuccess && !emailLinksQuery.isError) return;
+    return emailLinksQuery.data?.links?.[0];
+  });
   const fromAddress = () => sendingLink()?.email_address;
   const signature = useEmailSignature(() => sendingLink()?.id);
   const emailSignaturesFlag = useFeatureFlag(enableEmailSignatures);
@@ -191,6 +201,10 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   };
 
   const ctx: ComposeContextValue = {
+    bodyActions: createComposeBodyActions(),
+    isMobile,
+    scheduleEnabled: ENABLE_EMAIL_SCHEDULED_SEND,
+    attachmentFailure: toast.failure,
     subject,
     attachments: () => [],
     sendTime: () => undefined,
@@ -210,6 +224,9 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
     onAddAttachments: (_: DraftFormAttachment[]) => {},
     onRemoveAttachment: (_: DraftFormAttachment) => {},
     captureEditor: setEditor,
+    onEditorInitialized: (editor) => {
+      props.onBodyInitialized?.(prepareEmailBody(editor)?.bodyHtml ?? '');
+    },
     onSend: handleSend,
     disabled: () => isSending() || uiDisabled(),
     isSending,
@@ -234,6 +251,8 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
       <Show when={previewSignatureHtml()}>
         {(html) => (
           <SignaturePreview
+            mobile={isMobile()}
+            prepareLinks={interceptMailtoLinks}
             html={html()}
             onDismiss={() => {
               setIncludeSignature(false);

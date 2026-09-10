@@ -30,7 +30,7 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 ## Sidebar (a11y names are load-bearing)
 
 - Top: buttons `Search` and `Create`.
-- Nav: `Go to Home`, `Go to Getting Started`, `Go to Inbox`, `Go to Recent`, `Go to Activity`.
+- Nav: `Go to Home`, `Go to Getting Started`, `Go to Notifications`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
   `Go to Calendar`, `Go to Agents`, `Go to Customers`.
 - Then `Favorites` (pinned items) and `Latest` (recent channels/DMs with an `Unread` switch).

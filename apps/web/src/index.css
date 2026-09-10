@@ -586,6 +586,31 @@ html[data-theme-light='false'] {
   }
 }
 
+/* The dot leading an open agent turn that has nothing to expand yet. Shares
+   the shimmer's period so the row reads as one motion, not two. */
+@keyframes agent-working-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.65);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.agent-working-dot {
+  animation: agent-working-dot 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-working-dot {
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
 @keyframes skeleton-shimmer {
   100% {
     transform: translateX(100%);
