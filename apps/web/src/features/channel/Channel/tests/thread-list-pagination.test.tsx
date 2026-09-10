@@ -3,6 +3,8 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThreadList, type ThreadListNavigation } from '../ThreadList';
 
+const rowHeights = new Map<string, number>();
+
 const platform = vi.hoisted(() => ({ safari: true }));
 vi.mock('@solid-primitives/platform', () => ({
   get isSafari() {
@@ -16,10 +18,13 @@ vi.mock('@core/component/CustomScrollbar', () => ({
 
 beforeEach(() => {
   platform.safari = true;
+  rowHeights.clear();
   // Supply layout for the real virtualizer; jsdom does not measure DOM nodes.
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
     function (this: HTMLElement) {
-      return this.hasAttribute('data-index') ? 96 : 400;
+      return this.hasAttribute('data-index')
+        ? (rowHeights.get(this.textContent ?? '') ?? 96)
+        : 400;
     }
   );
   vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(400);
@@ -60,7 +65,7 @@ afterEach(() => {
   Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
 });
 
-function setup() {
+function setup(followOnAppend = true) {
   const [keys, setKeys] = createSignal(
     Array.from({ length: 20 }, (_, index) => String(index))
   );
@@ -69,6 +74,7 @@ function setup() {
   const { container } = render(() => (
     <ThreadList
       keys={keys}
+      followOnAppend={followOnAppend}
       onReady={(value) => {
         navigation = value;
       }}
@@ -89,7 +95,7 @@ function setup() {
       ...previous,
     ]);
   };
-  return { element, paginate, prepend, navigation: () => navigation };
+  return { element, paginate, prepend, setKeys, navigation: () => navigation };
 }
 
 describe('history loading ahead of scrolling', () => {
@@ -136,5 +142,39 @@ describe('history loading ahead of scrolling', () => {
     );
     f.element.dispatchEvent(new Event('scroll'));
     await waitFor(() => expect(f.paginate).toHaveBeenCalledOnce());
+  });
+});
+
+describe('server acknowledgement scroll anchoring', () => {
+  it.each([0, 10])(
+    'preserves the pin only when already at the end (%ipx gap)',
+    async (gap) => {
+      rowHeights.set('19', 64);
+      rowHeights.set('ack', 160);
+      const f = setup();
+      await waitFor(() => expect(f.navigation()).toBeDefined());
+      f.element.scrollTop -= gap;
+      f.element.dispatchEvent(new Event('scroll'));
+      await new Promise((resolve) => queueMicrotask(() => resolve(undefined)));
+      const before = f.element.scrollTop;
+      f.setKeys((keys) => [...keys.slice(0, -1), 'ack']);
+      await waitFor(() => expect(f.element.scrollHeight).toBe(19 * 96 + 160));
+      await waitFor(() =>
+        expect(f.element.scrollTop).toBe(
+          gap === 0 ? f.element.scrollHeight - 400 : before
+        )
+      );
+    }
+  );
+
+  it('does not follow replacements in a window without the latest page', async () => {
+    rowHeights.set('19', 64);
+    rowHeights.set('ack', 160);
+    const f = setup(false);
+    await waitFor(() => expect(f.navigation()).toBeDefined());
+    const before = f.element.scrollTop;
+    f.setKeys((keys) => [...keys.slice(0, -1), 'ack']);
+    await waitFor(() => expect(f.element.scrollHeight).toBe(19 * 96 + 160));
+    expect(f.element.scrollTop).toBe(before);
   });
 });

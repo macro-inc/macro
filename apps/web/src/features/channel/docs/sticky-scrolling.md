@@ -10,7 +10,11 @@ Use the same 1px end tolerance for TanStack, composer/viewport resizing, and sav
 positions. Scrolling up beyond rounding tolerance stops following, even a few pixels
 from the bottom; returning to the end resumes it.
 Acknowledging a send replaces the optimistic message ID, temporarily replacing its
-measured height with an estimate. A loose end threshold treats that intermediate
+measured height with an estimate. The core patch also allows bottom following when
+the last key changes without increasing the row count (`nextCount >= prevCount`),
+so acknowledgement keeps the end anchor through remeasurement. Following still
+requires an existing bottom pin and `followOnAppend`; readers in history retain
+their position. A loose end threshold treats that intermediate
 layout as pinned and applies the estimate-to-measurement delta as a backward scroll.
 ResizeObserver measurements also run in the current frame: delaying them with
 `useAnimationFrameWithResizeObserver` exposes stale row and composer geometry.
@@ -98,3 +102,9 @@ reduces pagination stops, but a fling can still exhaust the native headroom that
 existed when it started: prepends during momentum remain visually compensated
 until idle or the boundary. This is a bounded preloading strategy, not a guarantee
 of uninterrupted scrolling through arbitrarily many pages.
+
+On iOS, sending clears the composer once and commits that clear before restoring
+focus in the same task. Blur still terminates the dictation session, but refocusing
+must not wait until the next animation frame, which permits the virtual keyboard
+to hide and resize the chat. Only refocus when that editor was focused before the
+clear; an asynchronous completion must not steal focus after the user leaves.
