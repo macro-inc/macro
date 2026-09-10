@@ -264,7 +264,11 @@ export function createGraphqlSoupAstItemsQuery(
       return;
     }
     const baseline = soupReconciliationBaseline(records, sortMethod);
-    if (!baseline) {
+    if (
+      !baseline &&
+      initial.emailView !== 'ALL' &&
+      initial.emailView !== 'INBOX'
+    ) {
       setLocalProjection(undefined);
       localEvaluationPending = false;
       return;
@@ -302,6 +306,7 @@ export function createGraphqlSoupAstItemsQuery(
             mailView &&
             (result.kind === 'unsupported' || result.kind === 'incomplete')
           ) {
+            if (!baseline) return;
             result = await host.entityFilter({
               filters,
               sortMethod,

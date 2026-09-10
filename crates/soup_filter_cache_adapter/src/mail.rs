@@ -112,15 +112,14 @@ fn canonical_preview(
                         cache_core::document::resolve_args(field, variables).map_err(error)?;
                     if let Some(input) = args.get("input").and_then(|input| {
                         input.get("initial").or_else(|| input.get("continuation"))
-                    })
-                        && (input
-                            .get("emailView")
-                            .and_then(Value::as_str)
-                            .is_some_and(|view| !matches!(view, "ALL" | "INBOX"))
-                            || input
-                                .get("filters")
-                                .and_then(|filters| filters.get("emailFilter"))
-                                .is_some_and(addresses))
+                    }) && (input
+                        .get("emailView")
+                        .and_then(Value::as_str)
+                        .is_some_and(|view| !matches!(view, "ALL" | "INBOX"))
+                        || input
+                            .get("filters")
+                            .and_then(|filters| filters.get("emailFilter"))
+                            .is_some_and(addresses))
                     {
                         return Ok(false);
                     }

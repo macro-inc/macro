@@ -227,7 +227,8 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       expect(query.hasNextPage()).toBe(false);
       expect(fake.executions).toHaveLength(1);
       expect(
-        (query.data()?.entities[0] as unknown as { sortTs: string } | undefined)?.sortTs
+        (query.data()?.entities[0] as unknown as { sortTs: string } | undefined)
+          ?.sortTs
       ).toBe(ts);
       fake.executions[0].next(
         graphqlSoupPage({ items: [], next_cursor: 'server-cursor' }),

@@ -90,13 +90,16 @@ choices are cached in the viewer-scoped GraphQL catalog. Timestamp ordering and 
 headers use the selected Mail view's indexed timestamps, not a preview cached from
 another view.
 
-The lightweight metadata backfill runs before body hydration. Filter availability
-therefore does not guarantee that opening every message body works offline. Missing
+The lightweight metadata backfill runs before body hydration. Its refreshes scan all
+metadata: message-time watermarks alone miss archive/read changes on old threads.
+Filter availability therefore does not guarantee that opening every message body works offline. Missing
 projection proof is unknown, never false. Drafts, Sent, Shared, calendar/attachment,
 sender, property/tag refinements and non-created/updated sorts remain network-only
 or existing client refinements; durable offline sending/archiving is not added by
 this slice. No cache-format wipe is required: Mail uses a separate versioned profile
-and a new backfill checkpoint, preserving existing queued work.
+and a new backfill checkpoint, preserving existing queued work. Deploy the backend
+schema additions before the client: it selects canonical message eligibility/recency
+fields and sends the new `inboxVisible` email literal.
 
 Threads open at `/app/email/<thread-id>`. Click a message header to expand or
 collapse it; `Show N hidden messages` reveals the collapsed middle of a longer

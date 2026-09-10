@@ -59,6 +59,9 @@ export type SoupBackfillParams = {
   pageDelayMs?: number;
   /** Immediately follows the initial full scan with its watermark pass. */
   catchUpAfterInitialPass?: boolean;
+  /** Refresh the whole metadata corpus: message-time watermarks do not capture
+   * read/archive changes to old email threads. Interrupted scans still resume. */
+  refreshAll?: boolean;
 };
 
 /** Backfills the entities used most often by Quick Access and primary views. */
@@ -116,7 +119,7 @@ export const EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'email-filter-metadata',
   fetchPage: (input, options) =>
     hydrateGraphqlSoup(SoupMailBackfillDocument, { input }, options),
-  catchUpAfterInitialPass: true,
+  refreshAll: true,
   input: { ...EMAIL_SOUP_BACKFILL_LANE.input, limit: PAGE_LIMIT },
 };
 
@@ -380,7 +383,10 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   const fetchPage = params.fetchPage ?? fetchSoupPage;
 
   while (true) {
-    const passInput = withUpdatedSince(params.input, checkpoint.updatedSince);
+    const passInput = withUpdatedSince(
+      params.input,
+      params.refreshAll ? null : checkpoint.updatedSince
+    );
 
     while (true) {
       const input: GraphqlSoupInput = checkpoint.nextCursor
