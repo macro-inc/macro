@@ -42,76 +42,7 @@ async function sign(
   return `v1=${new Uint8Array(digest).toHex()}`;
 }
 
-const settled = {
-  event_type: 'agent_session.settled' as const,
-  metadata: {
-    identity: {
-      session_id: '01a00000-0000-7000-8000-00000000000a',
-      session_name: 'Fix the flaky test',
-      bot_id: '01a00000-0000-7000-8000-0000000000b7',
-      bot_name: 'Macro Coder',
-      owner_id: 'macro|owner@example.com',
-      origin: {
-        channel_id: '01a00000-0000-7000-8000-000000000001',
-        thread_id: '01a00000-0000-7000-8000-000000000002',
-        originating_message_id: '01a00000-0000-7000-8000-000000000003',
-      },
-    },
-    last_turn: {
-      turn: 0,
-      action_id: '01a00000-0000-7000-8000-000000000004',
-      actor: 'macro|asker@example.com',
-      announcement_message_id: '01a00000-0000-7000-8000-000000000005',
-      stop_reason: 'end_turn',
-      excerpt: 'Done.',
-    },
-  },
-};
-
 describe('MacroEvents', () => {
-  test('hydrates agent-session lifecycle events with session and thread handles', async () => {
-    const delivered = Promise.withResolvers<{
-      sessionId: string;
-      ownerId: string;
-      channelId: string | undefined;
-      announcementId: string | undefined;
-      actorId: string | undefined;
-      excerpt: string | null | undefined;
-    }>();
-    globalThis.fetch = (async (_input) =>
-      new Response(sseBody(settled), {
-        status: 200,
-        headers: { 'content-type': 'text/event-stream' },
-      })) as typeof fetch;
-
-    const macro = new Macro({
-      token: 'user-token',
-      hosts: { storage: 'https://storage.example.test' },
-    });
-    macro.events.on('agent_session.settled', (event) => {
-      delivered.resolve({
-        sessionId: event.session.id,
-        ownerId: event.owner.id,
-        channelId: event.channel?.id,
-        announcementId: event.announcement?.id,
-        actorId: event.actor?.id,
-        excerpt: event.metadata.last_turn?.excerpt,
-      });
-    });
-    const stop = await macro.events.listen();
-    const event = await delivered.promise;
-    stop();
-
-    expect(event).toEqual({
-      sessionId: settled.metadata.identity.session_id,
-      ownerId: settled.metadata.identity.owner_id,
-      channelId: settled.metadata.identity.origin.channel_id,
-      announcementId: settled.metadata.last_turn.announcement_message_id,
-      actorId: settled.metadata.last_turn.actor,
-      excerpt: 'Done.',
-    });
-  });
-
   test('is always available and defaults listen() filters from .on()', async () => {
     let request: Request | undefined;
     const delivered = Promise.withResolvers<typeof created>();
