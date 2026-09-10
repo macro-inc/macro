@@ -2282,6 +2282,10 @@ export type ChannelMessageFilters = {
      */
     created_after?: string | null;
     /**
+     * When set, only return top-level messages created strictly after this timestamp.
+     */
+    created_after_exclusive?: string | null;
+    /**
      * When set, only return top-level messages created before this timestamp.
      */
     created_before?: string | null;
@@ -10736,6 +10740,50 @@ export type PostChannelMessagesResponses = {
 };
 
 export type PostChannelMessagesResponse = PostChannelMessagesResponses[keyof PostChannelMessagesResponses];
+
+export type GetChannelMessagesCatchUpData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query: {
+        /**
+         * Exclusive RFC3339 lower bound. Messages at this instant are omitted.
+         */
+        after: string;
+        /**
+         * Page size (1-100, default 50)
+         */
+        limit?: number;
+        /**
+         * Base64 encoded cursor value for older messages
+         */
+        cursor?: string;
+        /**
+         * Base64 encoded cursor value for newer messages
+         */
+        previous_cursor?: string;
+    };
+    url: '/channels/{channel_id}/messages/catch-up';
+};
+
+export type GetChannelMessagesCatchUpErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetChannelMessagesCatchUpError = GetChannelMessagesCatchUpErrors[keyof GetChannelMessagesCatchUpErrors];
+
+export type GetChannelMessagesCatchUpResponses = {
+    200: ApiChannelMessagesPage;
+};
+
+export type GetChannelMessagesCatchUpResponse = GetChannelMessagesCatchUpResponses[keyof GetChannelMessagesCatchUpResponses];
 
 export type GetMessageWithContextData = {
     body?: never;

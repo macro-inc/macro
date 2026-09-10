@@ -31,6 +31,7 @@ function InboxFallback() {
 }
 
 function NotificationsListPane(props: {
+  previewEntity: EntityData | undefined;
   onPreviewEntityChange: (entity: EntityData | undefined) => void;
 }) {
   return (
@@ -39,7 +40,10 @@ function NotificationsListPane(props: {
         <InboxTabs />
       </InboxHeader>
       <Suspense fallback={<InboxFallback />}>
-        <InboxList onPreviewEntityChange={props.onPreviewEntityChange} />
+        <InboxList
+          previewEntity={props.previewEntity}
+          onPreviewEntityChange={props.onPreviewEntityChange}
+        />
       </Suspense>
     </>
   );
@@ -91,6 +95,7 @@ function InboxViewRoot() {
                   >
                     <ViewShell.Aside class="flex flex-col border-r border-edge bg-panel">
                       <NotificationsListPane
+                        previewEntity={previewEntity()}
                         onPreviewEntityChange={setPreviewEntity}
                       />
                     </ViewShell.Aside>
@@ -129,6 +134,7 @@ function InboxViewRoot() {
               <ViewShell.Root aside={false} main={{ min: 224 }}>
                 <ViewShell.Main>
                   <NotificationsListPane
+                    previewEntity={previewEntity()}
                     onPreviewEntityChange={setPreviewEntity}
                   />
                 </ViewShell.Main>

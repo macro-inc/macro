@@ -1738,6 +1738,7 @@ impl ChannelRepo for PgChannelsRepo {
             Some(&filters.message_ids)
         };
         let created_after = filters.created_after;
+        let created_after_exclusive = filters.created_after_exclusive;
         let created_before = filters.created_before;
         let activity_after = filters.activity_after;
         let activity_before = filters.activity_before;
@@ -1779,6 +1780,7 @@ impl ChannelRepo for PgChannelsRepo {
                       AND ($5::uuid[] IS NULL OR m.id = ANY($5))
                       AND ($6::timestamptz IS NULL OR m.created_at >= $6)
                       AND ($7::timestamptz IS NULL OR m.created_at < $7)
+                      AND ($14::timestamptz IS NULL OR m.created_at > $14)
                       AND (
                           ($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
                           OR (
@@ -1841,6 +1843,7 @@ impl ChannelRepo for PgChannelsRepo {
                     notification_done,
                     notification_seen,
                     notification_user_id,
+                    created_after_exclusive,
                 )
                 .fetch_all(&self.pool)
                 .await?;
@@ -1872,6 +1875,7 @@ impl ChannelRepo for PgChannelsRepo {
                       AND ($5::uuid[] IS NULL OR m.id = ANY($5))
                       AND ($6::timestamptz IS NULL OR m.created_at >= $6)
                       AND ($7::timestamptz IS NULL OR m.created_at < $7)
+                      AND ($14::timestamptz IS NULL OR m.created_at > $14)
                       AND (
                           ($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
                           OR (
@@ -1934,6 +1938,7 @@ impl ChannelRepo for PgChannelsRepo {
                     notification_done,
                     notification_seen,
                     notification_user_id,
+                    created_after_exclusive,
                 )
                 .fetch_all(&self.pool)
                 .await?;

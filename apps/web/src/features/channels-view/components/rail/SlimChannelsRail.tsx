@@ -228,7 +228,7 @@ function SlimHeader() {
   };
 
   return (
-    <div class="flex shrink-0 flex-col items-center gap-3">
+    <div class="flex shrink-0 flex-col items-center gap-3 pt-2">
       <div class="flex w-full items-center justify-center px-2">
         <SplitPanel.ControlGroup>
           <SplitPanel.CloseButton size="icon-sm" />

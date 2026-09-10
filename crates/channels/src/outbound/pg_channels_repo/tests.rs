@@ -25,6 +25,7 @@ use uuid::Uuid;
 const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
     message_ids: Vec::new(),
     created_after: None,
+    created_after_exclusive: None,
     created_before: None,
     activity_after: None,
     activity_before: None,
@@ -1751,6 +1752,148 @@ async fn top_level_message_ids_filter_limits_to_subset(pool: Pool<Postgres>) -> 
 
     let ids: Vec<Uuid> = result.rows.iter().map(|r| r.id).collect();
     assert_eq!(ids, vec![MSG3, MSG1]);
+    Ok(())
+}
+
+fn ts(rfc3339: &str) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(rfc3339)
+        .unwrap()
+        .with_timezone(&Utc)
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn top_level_created_after_exclusive_drops_boundary_row(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let bound = ts("2024-01-01T11:00:00Z");
+    let exclusive = ChannelMessageFilters {
+        created_after_exclusive: Some(bound),
+        ..Default::default()
+    };
+    let exclusive_ids: Vec<Uuid> = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &exclusive,
+            None,
+        )
+        .await?
+        .rows
+        .into_iter()
+        .map(|r| r.id)
+        .collect();
+    assert_eq!(exclusive_ids, vec![MSG3]);
+
+    let inclusive = ChannelMessageFilters {
+        created_after: Some(bound),
+        ..Default::default()
+    };
+    let inclusive_ids: Vec<Uuid> = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &inclusive,
+            None,
+        )
+        .await?
+        .rows
+        .into_iter()
+        .map(|r| r.id)
+        .collect();
+    assert_eq!(inclusive_ids, vec![MSG3, MSG2]);
+    Ok(())
+}
+
+async fn insert_catch_up_messages(pool: &Pool<Postgres>, count: i64) -> anyhow::Result<Vec<Uuid>> {
+    let mut ids = Vec::with_capacity(usize::try_from(count)?);
+    let base = ts("2024-01-01T13:00:00Z");
+    for i in 1..=count {
+        let id = Uuid::now_v7();
+        let created_at = base + chrono::Duration::seconds(i);
+        sqlx::query!(
+            r#"
+            INSERT INTO comms_messages (
+                id, channel_id, thread_id, sender_id, content, created_at, updated_at
+            )
+            VALUES ($1, $2, NULL, $3, $4, $5, $5)
+            "#,
+            id,
+            CH1,
+            USER_A,
+            format!("catch-up {i}"),
+            created_at,
+        )
+        .execute(pool)
+        .await?;
+        ids.push(id);
+    }
+    Ok(ids)
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn top_level_created_after_exclusive_holds_across_cursor_pages(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let seeded = insert_catch_up_messages(&pool, 60).await?;
+    let repo = repo(pool);
+    let bound = ts("2024-01-01T12:30:00Z");
+    let filters = ChannelMessageFilters {
+        created_after_exclusive: Some(bound),
+        ..Default::default()
+    };
+    let page_one = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &filters,
+            None,
+        )
+        .await?;
+    assert_eq!(page_one.rows.len(), 50);
+    let last = page_one.rows.last().expect("page one has rows");
+    let page_two = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Cursor(Cursor {
+                id: last.id,
+                limit: 50,
+                val: CursorVal {
+                    sort_type: CreatedAt,
+                    last_val: last.created_at,
+                },
+                filter: (),
+            }),
+            MessagePageDirection::Older,
+            50,
+            &filters,
+            None,
+        )
+        .await?;
+    assert_eq!(page_two.rows.len(), 10);
+    let all_ids: HashSet<Uuid> = page_one
+        .rows
+        .iter()
+        .chain(page_two.rows.iter())
+        .map(|r| r.id)
+        .collect();
+    assert_eq!(all_ids.len(), 60);
+    assert!(seeded.iter().all(|id| all_ids.contains(id)));
+    for row in page_one.rows.iter().chain(page_two.rows.iter()) {
+        assert!(row.created_at > bound);
+    }
     Ok(())
 }
 

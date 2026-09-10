@@ -137,5 +137,6 @@ export {
   PALETTE_COLORS,
   type PaletteColor,
 } from './utils/palette';
+export { pressHandlers } from './utils/press';
 export type { VariantProps } from './utils/variants';
 export { createVariants } from './utils/variants';

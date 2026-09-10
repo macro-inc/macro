@@ -7,6 +7,7 @@
 import type { ChannelMessageFiltersActivityAfter } from './channelMessageFiltersActivityAfter';
 import type { ChannelMessageFiltersActivityBefore } from './channelMessageFiltersActivityBefore';
 import type { ChannelMessageFiltersCreatedAfter } from './channelMessageFiltersCreatedAfter';
+import type { ChannelMessageFiltersCreatedAfterExclusive } from './channelMessageFiltersCreatedAfterExclusive';
 import type { ChannelMessageFiltersCreatedBefore } from './channelMessageFiltersCreatedBefore';
 import type { NotificationFilters } from './notificationFilters';
 
@@ -26,6 +27,8 @@ reply falls in the requested activity window. */
   activity_before?: ChannelMessageFiltersActivityBefore;
   /** When set, only return top-level messages created at or after this timestamp. */
   created_after?: ChannelMessageFiltersCreatedAfter;
+  /** When set, only return top-level messages created strictly after this timestamp. */
+  created_after_exclusive?: ChannelMessageFiltersCreatedAfterExclusive;
   /** When set, only return top-level messages created before this timestamp. */
   created_before?: ChannelMessageFiltersCreatedBefore;
   /** When non-empty, only return messages with these IDs. */

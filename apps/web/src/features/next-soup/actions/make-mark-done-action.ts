@@ -23,7 +23,10 @@ import {
   toNotificationEntityRef,
 } from '@queries/notification/entity-mutations';
 import { type UndoHandle, useUndoableMutation } from '@queries/undo';
-import type { EntityActionListState } from './entity-action-context';
+import type {
+  EntityActionListState,
+  EntityActionNavigationHandler,
+} from './entity-action-context';
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
@@ -305,7 +308,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const executeWithSoup = async (
     entities: EntityData[],
     soup: EntityActionListState,
-    onNavigate?: (entity: EntityData) => void,
+    onNavigate?: EntityActionNavigationHandler,
     opts?: MarkDoneExecuteWithSoupOpts
   ) => {
     // Apply execute's already-done filter up front so navigation, selection
@@ -361,15 +364,28 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
 
     if (nextRow) {
       soup.focus.set(nextRow.id);
+    } else {
+      soup.focus.set(undefined);
+    }
+
+    if (onNavigate) {
+      onNavigate({
+        actionId: 'mark-done',
+        entity: nextRow?.original,
+      });
+    } else {
       const controller = splitPanel?.handle;
       if (controller?.isControllerSplit()) {
-        void openEntityInSplitFromUnifiedList(nextRow.original, {
-          splitHandle: controller,
-          mergeHistory: true,
-          notificationSource: options.notificationSource(),
-        });
+        if (nextRow) {
+          void openEntityInSplitFromUnifiedList(nextRow.original, {
+            splitHandle: controller,
+            mergeHistory: true,
+            notificationSource: options.notificationSource(),
+          });
+        } else {
+          controller.resetPreview();
+        }
       }
-      onNavigate?.(nextRow.original);
     }
 
     // When marking done navigated the view to the next item, undo navigates
@@ -377,8 +393,12 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     const firstEntity = targets[0];
     const navigateBack =
       opts?.navigateBack ??
-      (nextRow && onNavigate && firstEntity
-        ? () => onNavigate(firstEntity)
+      (onNavigate && firstEntity
+        ? () =>
+            onNavigate({
+              actionId: 'mark-done',
+              entity: firstEntity,
+            })
         : undefined);
 
     await execute(targets, restoreFocus, { ...opts, navigateBack });
