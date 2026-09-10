@@ -128,6 +128,17 @@ pub struct CursorContainerManager<Sessions, Keys, Repositories> {
     pending: PendingCommands,
 }
 
+/// Where a hosted session's journal lives: the pool it is written to and the
+/// replica claiming its rows. Passed as one value so the manager's constructor
+/// takes a journal rather than its two halves.
+#[derive(Clone)]
+pub struct PostgresJournal {
+    /// The pool session-log rows are written to.
+    pub pool: sqlx::PgPool,
+    /// The replica claiming those rows.
+    pub replica: ReplicaId,
+}
+
 /// Hosted sessions always use durable storage; tests select memory explicitly.
 #[derive(Clone)]
 enum JournalStorage {
@@ -168,8 +179,7 @@ where
         sessions: Sessions,
         repositories: Arc<Repositories>,
         usage: Arc<dyn ai_usage::UsageRecorder>,
-        pool: sqlx::PgPool,
-        replica: ReplicaId,
+        journal: PostgresJournal,
         pending: PendingCommands,
     ) -> Self {
         Self {
@@ -178,7 +188,10 @@ where
             sessions,
             repositories,
             usage,
-            journal_storage: JournalStorage::Postgres { pool, replica },
+            journal_storage: JournalStorage::Postgres {
+                pool: journal.pool,
+                replica: journal.replica,
+            },
             pending,
         }
     }
