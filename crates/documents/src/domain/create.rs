@@ -5,6 +5,9 @@
 //! call sites should choose the lifecycle they need (`create_markdown_text` or
 //! `create_text_file`).
 
+#[cfg(test)]
+mod test;
+
 use activity::Attribution;
 use anyhow::Context;
 use base64::Engine;
@@ -20,6 +23,7 @@ use crate::domain::ports::create::{
     DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService,
 };
 use crate::domain::ports::markdown::MarkdownInitializationPort;
+use crate::domain::ports::mentions::DocumentMentionTrackingPort;
 use crate::domain::response::CreateDocumentResponseData;
 
 /// Common metadata for a document that has not been created yet.
@@ -460,32 +464,39 @@ impl CreatedDocument {
 
 /// Service for creating backend-owned document content.
 #[derive(Clone)]
-pub struct DocumentCreator<Svc, MarkdownInit, BytesUpload> {
+pub struct DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker> {
     document_service: Svc,
     markdown_initializer: MarkdownInit,
     bytes_uploader: BytesUpload,
+    mention_tracker: MentionTracker,
 }
 
-impl<Svc, MarkdownInit, BytesUpload> DocumentCreator<Svc, MarkdownInit, BytesUpload> {
+impl<Svc, MarkdownInit, BytesUpload, MentionTracker>
+    DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>
+{
     /// Construct a document creator.
     pub fn new(
         document_service: Svc,
         markdown_initializer: MarkdownInit,
         bytes_uploader: BytesUpload,
+        mention_tracker: MentionTracker,
     ) -> Self {
         Self {
             document_service,
             markdown_initializer,
             bytes_uploader,
+            mention_tracker,
         }
     }
 }
 
-impl<Svc, MarkdownInit, BytesUpload> DocumentCreator<Svc, MarkdownInit, BytesUpload>
+impl<Svc, MarkdownInit, BytesUpload, MentionTracker>
+    DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>
 where
     Svc: DocumentCreationService,
     MarkdownInit: MarkdownInitializationPort,
     BytesUpload: DocumentBytesUploadPort,
+    MentionTracker: DocumentMentionTrackingPort,
 {
     /// Create a plaintext document using the lifecycle implied by its file type.
     #[tracing::instrument(skip(self, document), err)]
@@ -570,6 +581,7 @@ where
             },
         );
         let attribution = args.resolved_attribution();
+        let mention_user_id = user_id.clone();
 
         let mut response = self
             .document_service
@@ -625,6 +637,14 @@ where
                 return Err(error);
             }
         };
+
+        if let Err(error) = self
+            .mention_tracker
+            .track_document_mentions(&document_id, &mention_user_id, &markdown)
+            .await
+        {
+            tracing::error!(error=?error, document_id=%document_id, "unable to track document mentions");
+        }
 
         response.document_response.document_metadata.content =
             DocumentContent::ready(DocumentContentLocation::SyncService);
