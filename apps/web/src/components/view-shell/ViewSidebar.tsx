@@ -24,7 +24,7 @@ function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3',
+        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3',
         local.class
       )}
       data-view-sidebar-header=""
