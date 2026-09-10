@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n               SELECT pg_try_advisory_xact_lock($1)\n            ",
+  "query": "SELECT pg_advisory_unlock($1)",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "pg_try_advisory_xact_lock",
+        "name": "pg_advisory_unlock",
         "type_info": "Bool"
       }
     ],
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "89004da6bcdd66bccd56ed64402d82dc4fb489cccaf5ca647c5a9403fa760ce9"
+  "hash": "0115c52b6c77a377e6585308ba0df3daaaf7d30a19a37b28abcae7efbe9b4ca7"
 }
