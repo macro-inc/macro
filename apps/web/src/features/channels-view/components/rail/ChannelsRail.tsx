@@ -384,7 +384,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     <ChannelsRailProvider value={rail}>
       <aside
         aria-label="Chat navigation"
-        class="flex size-full min-h-0 flex-col gap-3 border-r border-edge bg-panel pt-2"
+        class="flex size-full min-h-0 flex-col gap-3 border-r border-edge bg-panel"
       >
         {props.mode === 'full' ? (
           <ExpandedChannelsRail />
