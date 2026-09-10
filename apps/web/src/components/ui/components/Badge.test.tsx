@@ -70,9 +70,9 @@ describe('badgeTriggerClasses', () => {
       size: 'sm',
     });
 
-    expect(passive).not.toContain('not-disabled:hover:bg-hover');
-    expect(interactive).toContain('not-disabled:hover:bg-hover');
-    expect(interactive).toContain('not-disabled:active:bg-active');
+    expect(passive).not.toContain('not-disabled:hover:overlay-hover');
+    expect(interactive).toContain('not-disabled:hover:overlay-hover');
+    expect(interactive).toContain('not-disabled:active:overlay-active');
     expect(interactive).toContain('focus-visible:ring-2');
     expect(interactive).toContain('rounded-full');
     expect(interactive).toContain('h-6');

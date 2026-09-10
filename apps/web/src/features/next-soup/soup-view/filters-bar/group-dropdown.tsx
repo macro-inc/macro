@@ -34,7 +34,7 @@ export const GroupDropdown: Component<GroupDropdownProps> = (props) => {
           </Show>
         </Dropdown.Trigger>
       </Tooltip>
-      <Dropdown.Content class="shadow-menu">
+      <Dropdown.Content>
         <Dropdown.Group>
           <For each={props.options}>
             {(option) => (
