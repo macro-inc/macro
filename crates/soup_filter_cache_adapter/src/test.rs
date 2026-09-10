@@ -89,7 +89,7 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
         456,
     );
     let [OptimisticProjectionMutation::Replace(complete)] = complete.as_slice() else {
-        panic!("a project optimistic create has every required v3 fact");
+        panic!("a project optimistic create has every required v4 fact");
     };
     assert_eq!(complete.profile, vocabulary::profile_v4());
 
@@ -162,7 +162,7 @@ fn optimistic_mutations_keep_first_seen_order_and_deletion_precedence() {
 }
 
 #[test]
-fn authoritative_direct_fields_without_projection_schema_field_become_v3_patch() {
+fn authoritative_direct_fields_without_projection_schema_field_become_v4_patch() {
     let query = r#"query LegacySoup {
         user {
             soup(input: { limit: 1 }) {
@@ -208,7 +208,7 @@ fn authoritative_direct_fields_without_projection_schema_field_become_v3_patch()
 }
 
 #[test]
-fn partial_queries_preserve_v3_authority_and_mark_missing_v3() {
+fn partial_queries_preserve_v4_authority_and_mark_missing_v4() {
     let id = "00000000-0000-0000-0000-000000000001";
     let base_mutations = authoritative_projection_mutations(
         SUPPLEMENT_SUBSCRIPTION,
@@ -221,7 +221,7 @@ fn partial_queries_preserve_v3_authority_and_mark_missing_v3() {
     )
     .unwrap();
     let [ProjectionMutation::Replace(base)] = base_mutations.as_slice() else {
-        panic!("complete Soup data must hydrate v3 authority");
+        panic!("complete Soup data must hydrate v4 authority");
     };
     let base = base.clone();
     let key = base.record_key.clone();
@@ -263,7 +263,7 @@ fn partial_queries_preserve_v3_authority_and_mark_missing_v3() {
         },
     ] = mutations.as_slice()
     else {
-        panic!("a projection-less partial query must produce a bounded v3 patch");
+        panic!("a projection-less partial query must produce a bounded v4 patch");
     };
     assert_eq!(profile, &vocabulary::profile_v4());
     assert_eq!(exact.len(), 2);
@@ -589,7 +589,7 @@ fn document_subtype_postings_are_composed_from_graphql_typenames() {
 }
 
 #[test]
-fn selected_project_and_chat_null_supplements_are_valid_direct_only_v3_hydration() {
+fn selected_project_and_chat_null_supplements_are_valid_direct_only_v4_hydration() {
     let query = r#"query SoupBackfill {
         user { soup(input: { initial: { limit: 2 } }) { items {
             __typename
@@ -737,7 +737,7 @@ fn backfill_rejects_invalid_supplements_and_missing_direct_document_fields() {
 }
 
 #[test]
-fn partial_mutation_payloads_patch_v3_without_fabricating_server_facts() {
+fn partial_mutation_payloads_patch_v4_without_fabricating_server_facts() {
     let query = r#"mutation PartialRename($inputs: [RenameEntityInput!]!) {
         renameEntities(inputs: $inputs) {
             results {
@@ -796,7 +796,7 @@ fn partial_mutation_payloads_patch_v3_without_fabricating_server_facts() {
         },
     ] = mutations.as_slice()
     else {
-        panic!("partial authoritative entity must produce one v3 patch");
+        panic!("partial authoritative entity must produce one v4 patch");
     };
     assert_eq!(profile, &vocabulary::profile_v4());
     assert!(
@@ -941,7 +941,7 @@ fn production_documents_presets_compile_for_created_and_updated_sorts() {
                 )
                 .unwrap_or_else(|error| panic!("{name} should materialize: {error}"));
                 let SoupFilterCompileOutcome::Supported(query) = outcome else {
-                    panic!("{name} must be soup-flat-v3 eligible");
+                    panic!("{name} must be soup-flat-v4 eligible");
                 };
                 assert_eq!(query.as_query().profile, vocabulary::profile_v4(), "{name}");
                 assert_eq!(query.as_query().sort_attribute, sort_attribute, "{name}");
@@ -1004,7 +1004,7 @@ fn production_my_tasks_importance_and_status_filter_compiles_locally() {
     let SoupFilterCompileOutcome::Supported(query) =
         compile_filter_request(filters, "UPDATED_AT", "DESC", 100).unwrap()
     else {
-        panic!("production My Tasks filter must use the local v3 profile");
+        panic!("production My Tasks filter must use the local v4 profile");
     };
     assert_eq!(query.as_query().profile, vocabulary::profile_v4());
     let document = &query.as_query().partitions[0].predicate;
@@ -1229,7 +1229,7 @@ fn production_documents_membership_matches_postgres_fixture_reference_and_real_t
 }
 
 #[test]
-fn production_documents_presets_support_importance_in_v3() {
+fn production_documents_presets_support_importance_in_v4() {
     let with_unsupported_sibling = serde_json::json!({
         "and": {
             "left": { "literal": { "isEmailAttachment": false } },
@@ -1243,7 +1243,7 @@ fn production_documents_presets_support_importance_in_v3() {
         100,
     )
     .unwrap() else {
-        panic!("importance must compile in soup-flat-v3");
+        panic!("importance must compile in soup-flat-v4");
     };
     assert_eq!(query.as_query().profile, vocabulary::profile_v4());
 }

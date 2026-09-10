@@ -22,6 +22,21 @@ Changing filters or resetting the cache discards prior reconciliation evidence. 
 lists, unsupported filters/sorts, and native/non-cache transports keep their existing
 network behavior.
 
+For Documents (including Tasks), Projects, and Chats, exact `UNSEEN`/`SEEN`
+notification filters also reconcile locally with created/updated timestamp sorts.
+Marking a notification done removes only that notification's contribution immediately;
+other active notifications can keep the entity in the list. Seen/reopen operations
+update filter membership on the authoritative reply, not from a guessed optimistic
+state. Rollback restores only the failed operation's contribution. `DONE` predicates,
+other entity partitions, and notified-at sorting still use the network path.
+
+Notification facts use the existing active-only GraphQL edge and primary entity
+association. Missing/partial or over-budget snapshots remain incomplete, never an
+empty notification set; display metadata decoding omissions remain a best-effort
+limitation. The v4 projection tracks individual notification IDs, bounded by the
+shared 256-fact per-entity budget. This cache-format upgrade resets old cached data
+and pending cache mutations, and the bumped backfill checkpoint rebuilds projections.
+
 Realtime Soup batches coalesce repeated entity IDs (including entity type), keeping
 that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.
 If viewer-scoped hydration finds no item, the backend logs and omits that update;

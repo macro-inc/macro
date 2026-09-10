@@ -200,7 +200,7 @@ fn walk_authoritative_object(
         if let Some((key_text, record_key)) = normalized_key {
             let kind = projection_kind(&partition).expect("supported partition has a kind");
             let mutation = if projection_fields.is_empty() {
-                match authoritative_v3_patch_for_object(
+                match authoritative_v4_patch_for_object(
                     record_key.clone(),
                     partition.clone(),
                     &projection_object,
@@ -222,7 +222,7 @@ fn walk_authoritative_object(
                 ))
             } else {
                 Some(
-                    complete_v3_projection_for_object(
+                    complete_v4_projection_for_object(
                         record_key.clone(),
                         partition.clone(),
                         &projection_object,
@@ -349,7 +349,7 @@ fn selected_document_projection_for_object(
     {
         return incomplete(ProjectionIncompleteKind::IncompatibleVersion);
     }
-    complete_v3_projection_for_object(
+    complete_v4_projection_for_object(
         record_key.clone(),
         partition.clone(),
         object,
@@ -378,12 +378,27 @@ fn insert_authoritative_mutation(
     }
 
     if let (
-        Some(ProjectionMutation::Patch { exact: prior_exact, integers: prior_integers, sorts: prior_sorts, .. }),
-        ProjectionMutation::Patch { exact, integers, sorts, .. },
-    ) = (mutations.get_mut(&key), &mutation) {
+        Some(ProjectionMutation::Patch {
+            exact: prior_exact,
+            integers: prior_integers,
+            sorts: prior_sorts,
+            ..
+        }),
+        ProjectionMutation::Patch {
+            exact,
+            integers,
+            sorts,
+            ..
+        },
+    ) = (mutations.get_mut(&key), &mutation)
+    {
         prior_exact.retain(|prior| !exact.iter().any(|next| next.attribute == prior.attribute));
         prior_exact.extend(exact.iter().cloned());
-        prior_integers.retain(|prior| !integers.iter().any(|next| next.attribute == prior.attribute));
+        prior_integers.retain(|prior| {
+            !integers
+                .iter()
+                .any(|next| next.attribute == prior.attribute)
+        });
         prior_integers.extend(integers.iter().cloned());
         prior_sorts.retain(|prior| !sorts.iter().any(|next| next.attribute == prior.attribute));
         prior_sorts.extend(sorts.iter().cloned());
@@ -523,7 +538,7 @@ fn direct_projection_input_for_object(
     })
 }
 
-fn complete_v3_projection_for_object(
+fn complete_v4_projection_for_object(
     record_key: RecordKey,
     partition: Token,
     object: &serde_json::Map<String, serde_json::Value>,
@@ -540,7 +555,7 @@ fn complete_v3_projection_for_object(
     notifications::compose_active_notifications(document, object)
 }
 
-fn authoritative_v3_patch_for_object(
+fn authoritative_v4_patch_for_object(
     record_key: RecordKey,
     partition: Token,
     object: &serde_json::Map<String, serde_json::Value>,

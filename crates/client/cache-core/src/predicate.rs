@@ -2,6 +2,9 @@
 
 pub mod reconciliation;
 
+#[cfg(test)]
+mod test;
+
 use crate::{
     queue::{MutationId, MutationQueueSnapshot},
     store::Storage,
