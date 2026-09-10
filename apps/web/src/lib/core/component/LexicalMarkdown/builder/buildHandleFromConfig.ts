@@ -163,7 +163,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
 
   // Touch swipe indent/outdent for list items (Apple Notes-style).
   if (config.type !== 'plain-text' && !config.singleLine) {
-    plugins.use(listSwipeIndentPlugin());
+    plugins.use(listSwipeIndentPlugin(isInteractable));
   }
 
   // Horizontal rules & normalize-enter (full multi-line markdown only)

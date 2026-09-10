@@ -233,7 +233,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         : selectionDataPlugin(lexicalWrapper)
     )
     .use(tabIndentationPlugin())
-    .use(listSwipeIndentPlugin())
+    .use(listSwipeIndentPlugin(props.editable))
     .use(textPastePlugin())
     .use(
       mentionsPlugin({

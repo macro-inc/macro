@@ -212,7 +212,7 @@ export function TestEditor(props: {
       .delete()
       .history(400)
       .use(tabIndentationPlugin())
-      .use(listSwipeIndentPlugin())
+      .use(listSwipeIndentPlugin(() => false))
       .use(mentionsPlugin({}))
       .use(mediaPlugin())
       .use(tablePlugin({}))

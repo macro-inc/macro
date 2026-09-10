@@ -23,6 +23,8 @@ item can indent too, even in a single-item list. Vertical scrolling and taps
 are unchanged.
 Items stay still during the swipe and change indentation only when a
 successful swipe is released; short or blocked swipes leave them in place.
+Swiping requires permission to edit the document; comment-only access does
+not allow indentation changes. Losing edit permission during a swipe cancels it.
 To verify nesting, give a list item a child and grandchild, then swipe the
 parent right and left: all three should shift one level together, preserving
 their relative depths and order.

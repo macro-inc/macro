@@ -83,7 +83,10 @@ function $unnestFromParentList(item: ListItemNode): boolean {
   const grand = parent.getParent();
   if (!$isListItemNode(grand)) return false;
   grand.insertAfter(item);
-  if (parent.getChildrenSize() === 0) grand.remove();
+  if (parent.getChildrenSize() === 0) {
+    parent.remove();
+    if (grand.getChildrenSize() === 0) grand.remove();
+  }
   return true;
 }
 
@@ -143,7 +146,10 @@ function listItemFromTarget(target: EventTarget | null): ListItemNode | null {
   return $unwrapNestedListItem(item);
 }
 
-function registerListSwipeIndent(editor: LexicalEditor): () => void {
+function registerListSwipeIndent(
+  editor: LexicalEditor,
+  isInteractable: () => boolean
+): () => void {
   let endGesture: (() => void) | null = null;
   let detachRoot: (() => void) | null = null;
 
@@ -151,7 +157,7 @@ function registerListSwipeIndent(editor: LexicalEditor): () => void {
     const onPointerDown = (down: PointerEvent) => {
       if (down.pointerType !== 'touch') return;
       if (down.isPrimary === false) return;
-      if (!editor.isEditable()) return;
+      if (!isInteractable() || !editor.isEditable()) return;
       if (down.clientX < EDGE_GUARD_PX) return;
       const eventTarget = down.target;
       if (!(eventTarget instanceof Node) || !root.contains(eventTarget)) return;
@@ -224,6 +230,7 @@ function registerListSwipeIndent(editor: LexicalEditor): () => void {
         const apply = commitIndent ? $indentListItem : $outdentListItem;
         // Apply after the pointer event so Lexical isn't mid-selection update.
         queueMicrotask(() => {
+          if (!isInteractable() || !editor.isEditable()) return;
           editor.update(() => {
             const item = $getNodeByKey(key);
             if (!$isListItemNode(item)) return;
@@ -255,6 +262,8 @@ function registerListSwipeIndent(editor: LexicalEditor): () => void {
   });
 }
 
-export function listSwipeIndentPlugin() {
-  return (editor: LexicalEditor) => registerListSwipeIndent(editor);
+/** isInteractable must represent permission to edit content, not to comment. */
+export function listSwipeIndentPlugin(isInteractable: () => boolean) {
+  return (editor: LexicalEditor) =>
+    registerListSwipeIndent(editor, isInteractable);
 }

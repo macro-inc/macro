@@ -19,7 +19,7 @@ import {
   REDO_COMMAND,
   UNDO_COMMAND,
 } from 'lexical';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   $indentListItem,
   $outdentListItem,
@@ -49,7 +49,7 @@ if (typeof globalThis.PointerEvent === 'undefined') {
     PolyfillPointerEvent as unknown as typeof PointerEvent;
 }
 
-function createTestEditor(): LexicalEditor {
+function createTestEditorWithCleanup(isInteractable = () => true) {
   const editor = createEditor({
     namespace: 'list-swipe-indent-test',
     nodes: [ListNode, ListItemNode],
@@ -62,8 +62,12 @@ function createTestEditor(): LexicalEditor {
   document.body.appendChild(root);
   editor.setRootElement(root);
   registerRichText(editor);
-  listSwipeIndentPlugin()(editor);
-  return editor;
+  const unregister = listSwipeIndentPlugin(isInteractable)(editor);
+  return { editor, unregister };
+}
+
+function createTestEditor(isInteractable = () => true): LexicalEditor {
+  return createTestEditorWithCleanup(isInteractable).editor;
 }
 
 function $buildList(
@@ -173,8 +177,72 @@ async function swipe(
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   document.dispatchEvent(pointerEvent('pointercancel'));
   document.body.innerHTML = '';
+});
+
+describe('list swipe indent cleanup', () => {
+  it('removes the document listener and cancels an active swipe when unregistered with a mounted root', async () => {
+    const addListener = vi.spyOn(document, 'addEventListener');
+    const removeListener = vi.spyOn(document, 'removeEventListener');
+    const { editor, unregister } = createTestEditorWithCleanup();
+    const pointerDown = addListener.mock.calls.find(
+      ([type, , options]) => type === 'pointerdown' && options === true
+    )?.[1];
+    expect(pointerDown).toBeDefined();
+    await update(editor, () => {
+      $buildList([{ text: 'one' }, { text: 'two' }]);
+    });
+    const root = editor.getRootElement();
+    itemElement(editor, 'two').dispatchEvent(pointerEvent('pointerdown'));
+    document.dispatchEvent(pointerEvent('pointermove', { clientX: 130 }));
+
+    unregister();
+
+    expect(root?.isConnected).toBe(true);
+    expect(editor.getRootElement()).toBe(root);
+    expect(removeListener).toHaveBeenCalledWith(
+      'pointerdown',
+      pointerDown,
+      true
+    );
+    const touchMove = new Event('touchmove', { cancelable: true });
+    document.dispatchEvent(touchMove);
+    expect(touchMove.defaultPrevented).toBe(false);
+    document.dispatchEvent(pointerEvent('pointerup', { clientX: 130 }));
+    await Promise.resolve();
+    expect(readIndents(editor)).toEqual([0, 0]);
+    await swipe(editor, 'two', 50);
+    expect(readIndents(editor)).toEqual([0, 0]);
+  });
+
+  it('removes the previous root listener while enabling swipes on a replacement root', async () => {
+    const addListener = vi.spyOn(document, 'addEventListener');
+    const removeListener = vi.spyOn(document, 'removeEventListener');
+    const { editor, unregister } = createTestEditorWithCleanup();
+    const pointerDown = addListener.mock.calls.find(
+      ([type, , options]) => type === 'pointerdown' && options === true
+    )?.[1];
+    expect(pointerDown).toBeDefined();
+    await update(editor, () => {
+      $buildList([{ text: 'one' }, { text: 'two' }]);
+    });
+    const root = document.createElement('div');
+    root.contentEditable = 'true';
+    document.body.appendChild(root);
+
+    editor.setRootElement(root);
+
+    expect(removeListener).toHaveBeenCalledWith(
+      'pointerdown',
+      pointerDown,
+      true
+    );
+    await swipe(editor, 'two', 50);
+    expect(readIndents(editor)).toEqual([0, 1]);
+    unregister();
+  });
 });
 
 describe('$indentListItem / $outdentListItem', () => {
@@ -224,9 +292,99 @@ describe('$indentListItem / $outdentListItem', () => {
     });
     expect(readIndents(editor)).toEqual([0]);
   });
+
+  it.each(['parent', ''])(
+    'outdent fallback preserves parent content %j and removes empty wrappers',
+    async (parentText) => {
+      const editor = createTestEditor();
+      await update(editor, () => {
+        const list = $createListNode('bullet');
+        const parent = $createListItemNode();
+        if (parentText) parent.append($createTextNode(parentText));
+        const nested = $createListNode('bullet');
+        const child = $createListItemNode().append($createTextNode('child'));
+        parent.append(nested.append(child));
+        $getRoot().clear().append(list.append(parent));
+
+        // Exercise the fallback for a setIndent call that leaves the tree unchanged.
+        const setIndent = vi.spyOn(child, 'setIndent').mockReturnValue(child);
+        expect($outdentListItem(child)).toBe(true);
+        setIndent.mockRestore();
+
+        expect(nested.isAttached()).toBe(false);
+        expect(list.getChildren()).toEqual(
+          parentText ? [parent, child] : [child]
+        );
+      });
+      editor.read(() => {
+        expect(
+          $getRoot()
+            .getAllTextNodes()
+            .map((node) => node.getTextContent())
+        ).toEqual(parentText ? [parentText, 'child'] : ['child']);
+      });
+      expect(readIndents(editor)).toEqual(parentText ? [0, 0] : [0]);
+    }
+  );
 });
 
 describe('list swipe indent gesture', () => {
+  it('does not mutate a comment-only editor that Lexical marks editable', async () => {
+    const editor = createTestEditor(() => false);
+    await update(editor, () => {
+      $buildList([{ text: 'one' }, { text: 'two', indent: 1 }]);
+    });
+    expect(editor.isEditable()).toBe(true);
+    const before = editor.getEditorState().toJSON();
+    const updateSpy = vi.spyOn(editor, 'update');
+
+    await swipe(editor, 'two', 50);
+    await swipe(editor, 'two', -50);
+
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect(editor.getEditorState().toJSON()).toEqual(before);
+  });
+
+  it.each(['during swipe', 'after release'] as const)(
+    'does not queue an editor update when edit permission is revoked %s',
+    async (when) => {
+      let canEdit = true;
+      const editor = createTestEditor(() => canEdit);
+      await update(editor, () => {
+        $buildList([{ text: 'one' }, { text: 'two' }]);
+      });
+      const elem = itemElement(editor, 'two');
+      const updateSpy = vi.spyOn(editor, 'update');
+      elem.dispatchEvent(pointerEvent('pointerdown'));
+      document.dispatchEvent(pointerEvent('pointermove', { clientX: 130 }));
+      if (when === 'during swipe') canEdit = false;
+      document.dispatchEvent(pointerEvent('pointerup', { clientX: 130 }));
+      canEdit = false;
+      await Promise.resolve();
+
+      expect(editor.isEditable()).toBe(true);
+      expect(updateSpy).not.toHaveBeenCalled();
+      expect(readIndents(editor)).toEqual([0, 0]);
+    }
+  );
+
+  it('requires a new swipe if edit permission is granted after pointer-down', async () => {
+    let canEdit = false;
+    const editor = createTestEditor(() => canEdit);
+    await update(editor, () => {
+      $buildList([{ text: 'one' }, { text: 'two' }]);
+    });
+    itemElement(editor, 'two').dispatchEvent(pointerEvent('pointerdown'));
+    canEdit = true;
+    document.dispatchEvent(pointerEvent('pointermove', { clientX: 130 }));
+    document.dispatchEvent(pointerEvent('pointerup', { clientX: 130 }));
+    await Promise.resolve();
+    expect(readIndents(editor)).toEqual([0, 0]);
+
+    await swipe(editor, 'two', 50);
+    expect(readIndents(editor)).toEqual([0, 1]);
+  });
+
   it('indents a list item on a right swipe', async () => {
     const editor = createTestEditor();
     await update(editor, () => {
