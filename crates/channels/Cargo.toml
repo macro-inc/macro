@@ -43,7 +43,6 @@ kafka_consumer = [
 list = [
   "dep:filter_ast",
   "dep:frecency",
-  "dep:item_filters",
   "dep:model-entity",
   "dep:recursion",
   "dep:rootcause",
@@ -52,6 +51,7 @@ list = [
   "ports",
 ]
 outbound = [
+  "item_filters/native",
   "dep:connection_gateway_client",
   "dep:contacts",
   "dep:entity_access",
@@ -79,7 +79,7 @@ entity_mutation = [
   "ports",
 ]
 ports = ["dep:entity_access", "dep:tokio", "entity_access/ports"]
-schema = ["channel_sender/schema", "dep:utoipa", "macro_user_id/schema"]
+schema = ["channel_sender/schema", "dep:utoipa", "macro_user_id/schema", "item_filters/schema"]
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
@@ -100,7 +100,7 @@ filter_ast = { path = "../filter_ast", optional = true }
 frecency = { path = "../frecency", optional = true }
 futures = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
-item_filters = { path = "../item_filters", optional = true }
+item_filters = { path = "../item_filters", default-features = false }
 kafka_util = { path = "../kafka_util", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
   "axum",

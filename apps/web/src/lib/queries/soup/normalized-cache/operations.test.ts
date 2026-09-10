@@ -381,15 +381,43 @@ describe('removeSoupEntitiesFromDoneFilteredQueries', () => {
   const inboxViewKey = [...soupKeys.items._def, { emailView: 'inbox' }];
   const doneFilterKey = [
     ...soupKeys.items._def,
-    { ef: [{ l: { NotificationDone: false } }] },
+    {
+      ef: [
+        {
+          '|': [
+            { l: { NotificationState: 'unseen' } },
+            { l: { NotificationState: 'seen' } },
+          ],
+        },
+      ],
+    },
   ];
-  const ndFilterKey = [...soupKeys.items._def, { df: [{ l: { nd: false } }] }];
+  const ndFilterKey = [
+    ...soupKeys.items._def,
+    { df: [{ '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] }] },
+  ];
   const allViewKey = [...soupKeys.items._def, { emailView: 'all' }];
 
   const itemsAt = (key: unknown[]) =>
     testQueryClient
       .getQueryData<InfiniteData<SoupPage, unknown>>(key)!
       .pages[0].items.map(getSoupItemId);
+
+  it('does not treat negated or mixed-OR state filters as active-only', () => {
+    const active = { l: { ns: 'unseen' } };
+    const cases = [
+      { '!': active },
+      { '|': [active, { l: { ns: 'done' } }] },
+      { '|': [active, { l: { id: 'e-1' } }] },
+      { l: { ns: 'done' } },
+    ];
+    for (const ast of cases) {
+      const key = [...soupKeys.items._def, { df: ast }];
+      testQueryClient.setQueryData(key, mockSoupCache([[emailItem('e-1')]]));
+      removeSoupEntitiesFromDoneFilteredQueries(new Set(['e-1']));
+      expect(itemsAt(key)).toEqual(['e-1']);
+    }
+  });
 
   it('removes from done-filtered queries and keeps done-inclusive ones', () => {
     const data = () => mockSoupCache([[emailItem('e-1'), mockChatItem('c-1')]]);
@@ -1102,12 +1130,30 @@ describe('insertSoupEntity — folder membership gate', () => {
 describe('restoreSoupEntityToDoneFilteredQueries', () => {
   const doneFilteredAstKey = (suffix: string) => [
     ...soupKeys.astItems._def,
-    { chanf: [{ l: { NotificationDone: false } }] },
+    {
+      chanf: [
+        {
+          '|': [
+            { l: { NotificationState: 'unseen' } },
+            { l: { NotificationState: 'seen' } },
+          ],
+        },
+      ],
+    },
     suffix,
   ];
   const doneFilteredItemsKey = [
     ...soupKeys.items._def,
-    { ef: [{ l: { NotificationDone: false } }] },
+    {
+      ef: [
+        {
+          '|': [
+            { l: { NotificationState: 'unseen' } },
+            { l: { NotificationState: 'seen' } },
+          ],
+        },
+      ],
+    },
     'legacy-inbox',
   ];
   const allViewAstKey = [
@@ -1137,6 +1183,65 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
     );
     return item;
   }
+
+  it('restores only queries whose state constraint accepts the arriving notification', () => {
+    cacheChannel('ch-1');
+    const unseen = [
+      ...soupKeys.astItems._def,
+      { chanf: { l: { NotificationState: 'unseen' } } },
+    ];
+    const seen = [
+      ...soupKeys.astItems._def,
+      { chanf: { l: { NotificationState: 'seen' } } },
+    ];
+    seedFlatAstQuery(unseen, [[]]);
+    seedFlatAstQuery(seen, [[]]);
+    seedFlatAstQuery(doneFilteredAstKey('union'), [[]]);
+    restoreSoupEntityToDoneFilteredQueries('ch-1', 'unseen');
+    expect(flatAstItemsAt(unseen)).toEqual(['ch-1']);
+    expect(flatAstItemsAt(seen)).toEqual([]);
+    expect(flatAstItemsAt(doneFilteredAstKey('union'))).toEqual(['ch-1']);
+  });
+
+  it('combines inbox scoping with sibling AST and DTO state constraints', () => {
+    cacheChannel('ch-1');
+    const seenOnly = [
+      [
+        ...soupKeys.astItems._def,
+        { emailView: 'inbox', chanf: { l: { NotificationState: 'seen' } } },
+      ],
+      [
+        ...soupKeys.astItems._def,
+        { emailView: 'inbox', notification_filters: { states: ['seen'] } },
+      ],
+      [
+        ...soupKeys.astItems._def,
+        {
+          emailView: 'inbox',
+          notification_filters: { states: ['unseen', 'seen'] },
+          chanf: { l: { NotificationState: 'seen' } },
+        },
+      ],
+    ];
+    const active = [
+      ...soupKeys.astItems._def,
+      {
+        emailView: 'inbox',
+        chanf: {
+          '|': [
+            { l: { NotificationState: 'unseen' } },
+            { l: { NotificationState: 'seen' } },
+          ],
+        },
+      },
+    ];
+    for (const key of [...seenOnly, active]) seedFlatAstQuery(key, [[]]);
+    restoreSoupEntityToDoneFilteredQueries('ch-1', 'unseen');
+    for (const key of seenOnly) expect(flatAstItemsAt(key)).toEqual([]);
+    expect(flatAstItemsAt(active)).toEqual(['ch-1']);
+    restoreSoupEntityToDoneFilteredQueries('ch-1', 'seen');
+    for (const key of seenOnly) expect(flatAstItemsAt(key)).toEqual(['ch-1']);
+  });
 
   it('prepends the cached entity to done-filtered queries missing it', () => {
     cacheChannel('ch-1');
@@ -1204,7 +1309,7 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
     );
     const key = [
       ...soupKeys.astItems._def,
-      { df: [{ l: { nd: false } }] },
+      { df: [{ '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] }] },
       STATUS_GROUP_BY,
       'grouped-inbox',
     ];
@@ -1243,7 +1348,7 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
       suffix,
     ];
     const doneFilteredKey = makeGroupQueryKey(
-      { df: [{ l: { nd: false } }] },
+      { df: [{ '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] }] },
       'done-filtered'
     );
     const allViewKey = makeGroupQueryKey({ emailView: 'all' }, 'all-view');
@@ -1286,7 +1391,16 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
     // insertGroupedPage cannot resolve a target group, so the query refetches.
     const key = [
       ...soupKeys.astItems._def,
-      { chanf: [{ l: { NotificationDone: false } }] },
+      {
+        chanf: [
+          {
+            '|': [
+              { l: { NotificationState: 'unseen' } },
+              { l: { NotificationState: 'seen' } },
+            ],
+          },
+        ],
+      },
       'grouped-date-inbox',
     ];
     testQueryClient.setQueryData(

@@ -10,6 +10,7 @@ import { z } from 'zod';
 import type {
   BulkGetByEventItemIdsRequest,
   GetAllUserNotificationsResponse,
+  NotificationState,
 } from './generated/schemas';
 import type { ApiUserNotification } from './generated/schemas/apiUserNotification';
 import type { DeviceRequest } from './generated/schemas/deviceRequest';
@@ -75,19 +76,28 @@ export const documentMentionMetadata = z.object({
 
 type NotificationParams = { cursor?: string; limit?: number };
 
-/**
- * Params for the user-notifications list. `done` filters by done status —
- * the server defaults to `false` (active notifications only) when omitted;
- * pass `true` to page through already-done notifications instead.
- */
-type UserNotificationParams = NotificationParams & { done?: boolean };
+/** Omitted states selects active notifications; an empty array selects all states. */
+type UserNotificationParams = NotificationParams & {
+  states?: NotificationState[];
+};
+
+function userNotificationQuery({
+  limit,
+  cursor,
+  states,
+}: UserNotificationParams): string {
+  const query = new URLSearchParams();
+  if (limit !== undefined) query.set('limit', String(limit));
+  if (cursor !== undefined) query.set('cursor', cursor);
+  if (states !== undefined) query.set('states', states.join(','));
+  return query.toString();
+}
 
 export const notificationServiceClient = {
   async userNotifications(args: UserNotificationParams) {
-    const { limit, cursor, done } = args;
     return (
       await notificationFetch<GetAllUserNotificationsResponse>(
-        `/user_notifications?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}${done !== undefined ? `&done=${done}` : ''}`,
+        `/user_notifications?${userNotificationQuery(args)}`,
         {
           method: 'GET',
         }
@@ -107,10 +117,9 @@ export const notificationServiceClient = {
   async bulkGetUserNotificationsByEventItemId(
     args: UserNotificationParams & BulkGetByEventItemIdsRequest
   ) {
-    const { limit, cursor, done } = args;
     return (
       await notificationFetch<GetAllUserNotificationsResponse>(
-        `/user_notifications/item/bulk?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}${done !== undefined ? `&done=${done}` : ''}`,
+        `/user_notifications/item/bulk?${userNotificationQuery(args)}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

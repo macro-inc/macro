@@ -134,13 +134,11 @@ describe('buildEmailQuery', () => {
       serialize(buildEmailQuery(contextFor({ facets })).body.ef);
 
     expect(ef({ read: ['unread'] })).toContain(
-      serialize({ l: { NotificationSeen: false } })
+      serialize({ l: { Read: false } })
     );
-    expect(ef({ read: ['read'] })).toContain(
-      serialize({ l: { NotificationSeen: true } })
-    );
+    expect(ef({ read: ['read'] })).toContain(serialize({ l: { Read: true } }));
     expect(ef({ done: ['done'] })).toContain(
-      serialize({ l: { NotificationDone: true } })
+      serialize({ l: { NotificationState: 'done' } })
     );
     expect(ef({ calendar: ['has-calendar-invite'] })).toContain(
       serialize({ l: { CalendarOnly: true } })
@@ -224,13 +222,24 @@ describe('buildEmailSearchRequest', () => {
     expect(none).toEqual({ link_ids: [NIL] });
   });
 
-  it('maps the read and done facets to notification filters', () => {
+  it('maps email read independently of notification state selections', () => {
     const filters = requestFor({
       facets: { read: ['unread'], done: ['not-done'] },
     }).filters.email_filters;
 
     expect(filters).toEqual({
-      notification_filters: { seen: false, done: false },
+      is_read: false,
+      notification_filters: { states: ['unseen', 'seen'] },
+    });
+    expect(
+      requestFor({ facets: { read: ['read'] } }).filters.email_filters
+    ).toEqual({ is_read: true });
+    expect(
+      requestFor({ facets: { read: ['read'], done: ['done'] } }).filters
+        .email_filters
+    ).toEqual({
+      is_read: true,
+      notification_filters: { states: ['done'] },
     });
   });
 

@@ -32,6 +32,9 @@ const base = {
   selection: 'rgb(from var(--color-edge) r g b / 0.6)',
   menuSelected: 'var(--color-hover)',
 
+  searchMatch: 'rgb(from var(--color-accent) r g b / 0.2)',
+  searchMatchSelected: 'rgb(from var(--color-accent) r g b / 0.45)',
+
   alt: 'var(--color-ink-extra-muted)',
   edge: 'var(--color-edge)',
   edge50: 'color-mix(in oklch, var(--color-edge), var(--color-surface) 50%)',
@@ -65,6 +68,9 @@ const theme = EditorView.theme({
     caretColor: base.accent,
     padding: '0.5rem 0',
     minHeight: '100%',
+    // The block shell sets `select-none` on the frame; code itself stays
+    // selectable, including for read-only viewers.
+    userSelect: 'text',
   },
   '.cm-line': {
     paddingLeft: '0.5rem',
@@ -110,6 +116,25 @@ const theme = EditorView.theme({
   },
   '.cm-selectionMatch': {
     backgroundColor: base.selection,
+  },
+  '.cm-searchMatch': {
+    backgroundColor: base.searchMatch,
+    borderRadius: '0.125rem',
+  },
+  '.cm-searchMatch-selected': {
+    backgroundColor: base.searchMatchSelected,
+  },
+  // The find bar brings its own chrome (see CodeSearchPanel), so drop the
+  // default panel background and separators CodeMirror paints around it.
+  '.cm-panels': {
+    backgroundColor: 'transparent',
+    color: base.fg,
+  },
+  '.cm-panels-top': {
+    borderBottom: 'none',
+  },
+  '.cm-panels-bottom': {
+    borderTop: 'none',
   },
   '.cm-tooltip': {
     backgroundColor: base.panel,

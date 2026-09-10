@@ -78,7 +78,14 @@ function PanelBody(props: BodyProps) {
         when={props.scroll}
         fallback={
           <div
-            class={cn('relative min-h-0 min-w-0 overflow-hidden', props.class)}
+            // `clip`, not `hidden`: both clip the overflow, but `hidden` still
+            // makes this a scroll container, so focusing anything below the
+            // fold — a switch, an input — lets the browser scroll the body to
+            // reveal it. With no scrollbar there is no way to scroll back, and
+            // the panel looks permanently broken. `clip` is not a scroll
+            // container, so it cannot be scrolled programmatically at all.
+            // Matches `Surface`, which already uses `overflow-clip`.
+            class={cn('relative min-h-0 min-w-0 overflow-clip', props.class)}
             style={{ 'grid-area': 'body' }}
           >
             {resolved()}
@@ -110,6 +117,19 @@ function PanelFooter(props: SlotProps) {
   );
 }
 
+/**
+ * A depth-aware container with fixed header, toolbar, and footer slots around
+ * a body that absorbs the remaining height.
+ *
+ * @do Put controls in `Panel.Toolbar` and titles in `Panel.Header` so heights
+ *   stay consistent across the app.
+ * @do Set `depth` on the Panel rather than a background class on its children.
+ * @do Use `Panel.Body scroll` instead of adding `overflow-auto` yourself.
+ * @dont Do not nest a Panel inside `Panel.Body` just to get padding — use the
+ *   body's own class.
+ * @dont Do not give `Panel.Header` a custom height; the 40px minimum is what
+ *   aligns panels side by side.
+ */
 export const Panel = Object.assign(PanelRoot, {
   Toolbar: PanelToolbar,
   Header: PanelHeader,

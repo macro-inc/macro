@@ -42,7 +42,7 @@ export function MarkMessageNotifications(props: {
   createEffect(() => {
     const unread = notifications().filter(
       (notification) =>
-        isMessageNotification(notification) && !notification.viewed_at
+        isMessageNotification(notification) && notification.state === 'unseen'
     );
     if (unread.length === 0 || inFlight() || attempts >= MAX_MARK_ATTEMPTS) {
       return;

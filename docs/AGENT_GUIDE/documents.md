@@ -17,6 +17,10 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
 
+`Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
+text and inline mention chips (tasks, docs, channels, skills, …) by the title
+shown on the chip.
+
 On a touch device, swipe a list item right to indent one level (Apple Notes
 style) or left to outdent. Nested children move with the parent. The first
 item can indent too, even in a single-item list. Vertical scrolling and taps

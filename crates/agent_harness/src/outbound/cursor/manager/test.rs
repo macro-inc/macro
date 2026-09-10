@@ -733,8 +733,16 @@ async fn an_idle_pipe_is_shut_down() {
 
 #[test]
 fn a_pipe_is_not_idle_while_cursor_is_running_a_turn() {
-    assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, true));
-    assert!(should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false));
+    assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, true, false));
+    assert!(should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false, false));
+}
+
+#[test]
+fn a_pipe_is_not_idle_while_a_command_is_pending() {
+    // Same idle duration, no active turn yet - the case a command admitted
+    // just before the reap tick looks like, before the runtime has had a
+    // chance to mark a turn active.
+    assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false, true));
 }
 
 /// Teardown archives the agent on cursor.com and forgets the mapping; a

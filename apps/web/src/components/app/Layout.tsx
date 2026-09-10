@@ -532,7 +532,7 @@ function LayoutInner(props: RouteSectionProps) {
             />
           </Show>
 
-          <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
+          <div class="flex-1 w-full min-h-0 font-sans text-ink caret-current">
             {props.children}
           </div>
         </ItemDndProvider>

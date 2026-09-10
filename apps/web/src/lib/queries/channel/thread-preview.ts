@@ -48,6 +48,23 @@ export function removeReplyFromThreadPreview(
   };
 }
 
+export function replaceReplyCreatedAtInThreadPreview(
+  thread: ThreadPreviewState,
+  replyIds: readonly string[],
+  createdAt: string
+): ThreadPreviewState {
+  if (replyIds.length === 0) return thread;
+  const ids = new Set(replyIds);
+  let didChange = false;
+  const preview = thread.preview.map((reply) => {
+    if (!ids.has(reply.id) || reply.created_at === createdAt) return reply;
+    didChange = true;
+    return { ...reply, created_at: createdAt };
+  });
+
+  return didChange ? { ...thread, preview } : thread;
+}
+
 export function replaceReplyIdInThreadPreview(
   thread: ThreadPreviewState,
   optimisticId: string,

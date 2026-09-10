@@ -3331,6 +3331,12 @@ export const postChannelMessagesBody = zod
       .describe(
         'When set, only return top-level messages created at or after this timestamp.'
       ),
+    created_after_exclusive: zod.iso
+      .datetime({})
+      .nullish()
+      .describe(
+        'When set, only return top-level messages created strictly after this timestamp.'
+      ),
     created_before: zod.iso
       .datetime({})
       .nullish()
@@ -3343,25 +3349,248 @@ export const postChannelMessagesBody = zod
       .describe('When non-empty, only return messages with these IDs.'),
     notification_filters: zod
       .object({
-        done: zod
-          .boolean()
-          .nullish()
+        states: zod
+          .array(
+            zod
+              .enum(['unseen', 'seen', 'done'])
+              .describe(
+                "The mutually exclusive lifecycle states of a user's notification."
+              )
+          )
+          .optional()
           .describe(
-            'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-          ),
-        seen: zod
-          .boolean()
-          .nullish()
-          .describe(
-            'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+            'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
           ),
       })
       .optional()
-      .describe('Notification state filters for channel message queries.'),
+      .describe('Notification-level filters that apply to an entity type.'),
   })
   .describe('Filters for channel message queries.');
 
 export const postChannelMessagesResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .object({
+            attachments: zod
+              .array(
+                zod
+                  .object({
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('When the attachment was created.'),
+                    entity_id: zod.string().describe('Entity id.'),
+                    entity_type: zod.string().describe('Type of entity.'),
+                    height: zod
+                      .number()
+                      .nullish()
+                      .describe('Height (for images).'),
+                    id: zod.uuid().describe('Attachment id.'),
+                    width: zod
+                      .number()
+                      .nullish()
+                      .describe('Width (for images).'),
+                  })
+                  .describe('An attachment on a message.')
+              )
+              .describe('Attachments on this message.'),
+            channel_id: zod.uuid().describe('Channel id.'),
+            content: zod.string().describe('Message content.'),
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the message was created.'),
+            deleted_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was soft-deleted.'),
+            edited_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('When the message was edited.'),
+            id: zod.uuid().describe('Message id.'),
+            reactions: zod
+              .array(
+                zod
+                  .object({
+                    emoji: zod.string().describe('The emoji string.'),
+                    users: zod
+                      .array(zod.string())
+                      .describe('User ids who added this reaction.'),
+                  })
+                  .describe('A reaction with emoji and user list.')
+              )
+              .describe('Reactions on this message.'),
+            sender: zod
+              .object({
+                avatar_url: zod
+                  .string()
+                  .nullish()
+                  .describe('Avatar URL for bot senders.'),
+                id: zod
+                  .string()
+                  .describe('Sender id without the storage namespace prefix.'),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('Display name for bot senders.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'For an agent (bot) message, the id of the user who triggered it.'
+                  ),
+                type: zod.enum(['user', 'bot']).describe('Public sender type.'),
+              })
+              .describe('Public sender identity for channel messages.'),
+            sender_id: zod.string().describe('Sender user id.'),
+            thread: zod
+              .object({
+                latest_reply_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('Timestamp of the latest reply.'),
+                preview: zod
+                  .array(
+                    zod
+                      .object({
+                        attachments: zod
+                          .array(
+                            zod
+                              .object({
+                                created_at: zod.iso
+                                  .datetime({})
+                                  .describe('When the attachment was created.'),
+                                entity_id: zod.string().describe('Entity id.'),
+                                entity_type: zod
+                                  .string()
+                                  .describe('Type of entity.'),
+                                height: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Height (for images).'),
+                                id: zod.uuid().describe('Attachment id.'),
+                                width: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Width (for images).'),
+                              })
+                              .describe('An attachment on a message.')
+                          )
+                          .describe('Attachments on this reply.'),
+                        content: zod.string().describe('Reply content.'),
+                        created_at: zod.iso
+                          .datetime({})
+                          .describe('When the reply was created.'),
+                        edited_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe('When the reply was edited.'),
+                        id: zod.uuid().describe('Reply id.'),
+                        reactions: zod
+                          .array(
+                            zod
+                              .object({
+                                emoji: zod
+                                  .string()
+                                  .describe('The emoji string.'),
+                                users: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'User ids who added this reaction.'
+                                  ),
+                              })
+                              .describe('A reaction with emoji and user list.')
+                          )
+                          .describe('Reactions on this reply.'),
+                        sender: zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Avatar URL for bot senders.'),
+                            id: zod
+                              .string()
+                              .describe(
+                                'Sender id without the storage namespace prefix.'
+                              ),
+                            name: zod
+                              .string()
+                              .nullish()
+                              .describe('Display name for bot senders.'),
+                            triggered_by: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'For an agent (bot) message, the id of the user who triggered it.'
+                              ),
+                            type: zod
+                              .enum(['user', 'bot'])
+                              .describe('Public sender type.'),
+                          })
+                          .describe(
+                            'Public sender identity for channel messages.'
+                          ),
+                        sender_id: zod.string().describe('Sender user id.'),
+                        updated_at: zod.iso
+                          .datetime({})
+                          .describe('When the reply was last updated.'),
+                      })
+                      .describe('A thread reply shown in preview.')
+                  )
+                  .describe('Last N replies for thread preview.'),
+                reply_count: zod.number().describe('Total reply count.'),
+              })
+              .describe('Thread metadata and preview replies.'),
+            updated_at: zod.iso
+              .datetime({})
+              .describe('When the message was last updated.'),
+          })
+          .describe('A top-level channel message with thread info.')
+      )
+      .describe('Messages on this page.'),
+    next_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the next page, null if no more pages.'),
+    previous_cursor: zod
+      .string()
+      .nullish()
+      .describe('Cursor for the previous page, null if no newer page exists.'),
+  })
+  .describe('Paginated response of channel messages.');
+
+/**
+ * @summary Handler for `GET /channels/{channel_id}/messages/catch-up`.
+ */
+export const getChannelMessagesCatchUpParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const getChannelMessagesCatchUpQueryLimitMin = 0;
+
+export const getChannelMessagesCatchUpQueryParams = zod.object({
+  after: zod
+    .string()
+    .describe(
+      'Exclusive RFC3339 lower bound. Messages at this instant are omitted.'
+    ),
+  limit: zod
+    .number()
+    .min(getChannelMessagesCatchUpQueryLimitMin)
+    .optional()
+    .describe('Page size (1-100, default 50)'),
+  cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for older messages'),
+  previous_cursor: zod
+    .string()
+    .optional()
+    .describe('Base64 encoded cursor value for newer messages'),
+});
+
+export const getChannelMessagesCatchUpResponse = zod
   .object({
     items: zod
       .array(
@@ -12212,21 +12441,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
         org_id: zod
           .number()
           .nullish()
@@ -12303,21 +12532,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -12388,21 +12617,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
@@ -12493,6 +12722,12 @@ export const postItemsSoupBody = zod
           .describe(
             'Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.'
           ),
+        is_read: zod
+          .boolean()
+          .nullish()
+          .describe(
+            "Filter by the email thread's read flag, independently of notification state."
+          ),
         link_ids: zod
           .array(zod.string())
           .optional()
@@ -12501,21 +12736,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
         project_ids: zod
           .array(zod.string())
           .optional()
@@ -12573,21 +12808,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
       })
       .optional()
       .describe('Filters for foreign entity records.'),
@@ -12607,21 +12842,21 @@ export const postItemsSoupBody = zod
           ),
         notification_filters: zod
           .object({
-            done: zod
-              .boolean()
-              .nullish()
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
               .describe(
-                'Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications.'
-              ),
-            seen: zod
-              .boolean()
-              .nullish()
-              .describe(
-                'Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications.'
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
               ),
           })
           .optional()
-          .describe('Notification state filters for channel message queries.'),
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()

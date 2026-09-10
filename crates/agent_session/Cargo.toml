@@ -5,6 +5,32 @@ edition = "2024"
 publish = false
 
 [features]
+default = ["inbound", "outbound"]
+# The `seed_jsonl` replay binary: an argument parser, and the Postgres
+# adapter it writes through.
+cli = ["dep:clap", "outbound"]
+# The axum router serving sessions over HTTP.
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "entity_access/inbound",
+  "macro_authorization/axum",
+  "schema",
+]
+# Postgres, the connection gateway, and the model-backed name generator.
+outbound = [
+  "bots/outbound",
+  "dep:agent",
+  "dep:ai_usage",
+  "dep:connection_gateway_client",
+  "dep:entity_access_db_utils",
+  "dep:model-entity",
+  "dep:sqlx",
+  "macro_user_id/sqlx",
+]
+# OpenAPI schemas for the vocabulary that reaches an HTTP boundary: the
+# router's DTOs, and the lifecycle events the webhook union carries.
+schema = ["dep:utoipa", "agent_runtime_protocol/utoipa", "macro_user_id/schema"]
 # Mock and in-memory port implementations, for crates that test against this one.
 test-utils = ["dep:mockall", "agent_fold/test-utils"]
 
@@ -12,31 +38,31 @@ test-utils = ["dep:mockall", "agent_fold/test-utils"]
 
 agent-client-protocol = { workspace = true }
 harness_id = { path = "../harness_id" }
-agent = { path = "../agent" }
-ai_usage = { path = "../ai_usage" }
+agent = { path = "../agent", optional = true }
+ai_usage = { path = "../ai_usage", optional = true }
 dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true, optional = true }
 agent_fold = { path = "../agent_fold" }
-agent_runtime_protocol = { path = "../agent_runtime_protocol", features = ["utoipa"] }
-axum = { workspace = true }
-bots = { path = "../bots"}
-connection_gateway_client = { path = "../connection_gateway_client" }
+# Only the domain vocabulary; `outbound` would pull rdkafka into every
+# consumer of this crate.
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+axum = { workspace = true, optional = true }
+bots = { path = "../bots", default-features = false }
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 entity_access = { path = "../entity_access", default-features = false, features = [
-  "inbound",
   "ports",
 ] }
-entity_access_db_utils = { path = "../entity_access_db_utils" }
-model-entity = { path = "../model-entity" }
-clap = { workspace = true }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = [
-  "axum",
-] }
-macro_service_urls = { path = "../macro_service_urls" }
-macro_user_id =  { path = "../macro_user_id", features = ["sqlx"] }
-utoipa = { workspace = true }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+model-entity = { path = "../model-entity", optional = true }
+clap = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, optional = true }
+macro_user_id = { path = "../macro_user_id" }
+utoipa = { workspace = true, optional = true }
 rootcause = { workspace = true }
-sqlx = { workspace = true, features = ["json"] }
+sqlx = { workspace = true, features = ["json"], optional = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
@@ -47,6 +73,11 @@ tokio = { workspace = true, features = ["rt", "sync"] }
 tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[[bin]]
+name = "seed_jsonl"
+path = "src/bin/seed_jsonl.rs"
+required-features = ["cli"]
 
 [dev-dependencies]
 agent-client-protocol = { workspace = true }

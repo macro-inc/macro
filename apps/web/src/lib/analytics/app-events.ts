@@ -183,6 +183,19 @@ export type AppEvents = {
   email_message_sent: Record<string, unknown>;
 
   channel_message_sent: Record<string, unknown>;
+  channel_messages_load: {
+    channelId: string;
+    path: 'catch_up' | 'full';
+    reason:
+      | 'watermark'
+      | 'list_ahead'
+      | 'no_cache'
+      | 'cache_not_at_latest'
+      | 'load_around'
+      | 'delta_overflow'
+      | 'catch_up_error';
+    after?: string;
+  };
   channel_reaction: {
     emoji: string;
     action: 'add' | 'remove';

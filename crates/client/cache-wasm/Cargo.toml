@@ -2,7 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-version = "0.6.6"
+# Rebuild dev caches for the notification-state schema and filter vocabulary.
+version = "0.6.7"
 
 [features]
 default = []

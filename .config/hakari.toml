@@ -74,6 +74,8 @@ workspace-members = [
     "agent_fold",
     "graphql_soup_filter_input",
     "item_filters",
+    # Shared notification state is also consumed by the browser-side filter model.
+    "notification_state",
     "item-filter-index",
     "predicate-index",
     "filter_ast",

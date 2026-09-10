@@ -129,7 +129,7 @@ const createMockNotification = (
   overrides?: Partial<Notification>
 ): Notification => ({
   id: 'notif_123',
-  done: false,
+  state: 'unseen',
   sent: true,
   sender_id: MOCK_USER_IDS.teamMember1,
   notification_event_type: 'document_mention',

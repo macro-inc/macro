@@ -129,14 +129,18 @@ where
 }
 
 /// the params for pagination
+#[serde_with::serde_as]
 #[derive(serde::Deserialize)]
 pub struct Params {
     /// the limit on the number of items to return in a page
     pub limit: Option<u32>,
-    /// Filter by done status. Defaults to false to preserve active-notification behavior.
-    pub done: Option<bool>,
-    /// Filter by seen status. Omitted means include both seen and unseen notifications.
-    pub seen: Option<bool>,
+    /// Comma-separated exact states. Omitted defaults to unseen and seen;
+    /// an empty string explicitly disables state filtering.
+    #[serde(default)]
+    #[serde_as(
+        as = "Option<serde_with::StringWithSeparator<serde_with::formats::CommaSeparator, crate::domain::models::NotificationState>>"
+    )]
+    pub states: Option<Vec<crate::domain::models::NotificationState>>,
 }
 
 /// the response from listing the users notifications
@@ -156,7 +160,7 @@ pub async fn list_user_notifications<
 >(
     service: &NotificationRouterState<S, Auth>,
     user_id: MacroUserIdStr<'static>,
-    Query(Params { limit, done, seen }): Query<Params>,
+    Query(Params { limit, states }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let query = cursor.into_query(CreatedAt, ());
@@ -167,8 +171,8 @@ pub async fn list_user_notifications<
             limit,
             query,
             NotificationListFilters {
-                done: done.or(Some(false)),
-                seen,
+                states: states
+                    .unwrap_or_else(|| crate::domain::models::NotificationState::ACTIVE.to_vec()),
                 include_types: Vec::new(),
                 entities: Vec::new(),
             },
@@ -205,8 +209,7 @@ pub struct BulkGetByEventItemIdsRequest {
     path = "/v2/user_notifications/item/bulk",
     params(
         ("limit" = Option<u32>, Query, description = "Size limit per page. Default 20, max 500."),
-        ("done" = Option<bool>, Query, description = "Filter by done status. Defaults to false."),
-        ("seen" = Option<bool>, Query, description = "Filter by seen status."),
+        ("states" = Option<String>, Query, description = "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states."),
         ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),
     ),
     request_body = BulkGetByEventItemIdsRequest,
@@ -224,7 +227,7 @@ pub async fn bulk_get_by_event_item_ids<
 >(
     State(service): State<NotificationRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Query(Params { limit, done, seen }): Query<Params>,
+    Query(Params { limit, states }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
     Json(req): Json<BulkGetByEventItemIdsRequest>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
@@ -236,8 +239,8 @@ pub async fn bulk_get_by_event_item_ids<
             limit,
             cursor: cursor.into_query(CreatedAt, ()),
             filters: NotificationListFilters {
-                done: done.or(Some(false)),
-                seen,
+                states: states
+                    .unwrap_or_else(|| crate::domain::models::NotificationState::ACTIVE.to_vec()),
                 include_types: Vec::new(),
                 entities: Vec::new(),
             },
@@ -383,8 +386,7 @@ async fn bulk_update<S: NotificationReader, Auth: MacroAuthorizationService>(
     params(
         ("event_item_id" = Uuid, Path, description = "The event item ID"),
         ("limit" = Option<u32>, Query, description = "Size limit per page. Default 20, max 500."),
-        ("done" = Option<bool>, Query, description = "Filter by done status. Defaults to false."),
-        ("seen" = Option<bool>, Query, description = "Filter by seen status."),
+        ("states" = Option<String>, Query, description = "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states."),
         ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),
     ),
     responses(
@@ -402,7 +404,7 @@ pub async fn get_by_event_item_id<
     State(service): State<NotificationRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(EventItemIdPath { event_item_id }): Path<EventItemIdPath>,
-    Query(Params { limit, done, seen }): Query<Params>,
+    Query(Params { limit, states }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let result = service
@@ -413,8 +415,8 @@ pub async fn get_by_event_item_id<
             limit,
             cursor: cursor.into_query(CreatedAt, ()),
             filters: NotificationListFilters {
-                done: done.or(Some(false)),
-                seen,
+                states: states
+                    .unwrap_or_else(|| crate::domain::models::NotificationState::ACTIVE.to_vec()),
                 include_types: Vec::new(),
                 entities: Vec::new(),
             },

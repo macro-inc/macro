@@ -7,6 +7,10 @@
 
 export type ListTypedNotificationsParams = {
   /**
+   * Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.
+   */
+  states?: string;
+  /**
    * Size limit per page.
    * @minimum 0
    */

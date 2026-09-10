@@ -38,6 +38,18 @@ const SWITCH_SIZES = {
   },
 } as const;
 
+/**
+ * An on/off switch for a setting that applies immediately. If the change
+ * needs a save step, use a Checkbox instead.
+ *
+ * @do Use a switch only when the change takes effect immediately.
+ * @do Label the setting in its on-state ("Read receipts", not "Disable read
+ *   receipts").
+ * @do Use `size="md"` in settings and `size="sm"` in toolbars.
+ * @dont Do not put a switch in a form that has a Save button — use a Checkbox.
+ * @dont Do not pair a switch with an on/off text label; the control already
+ *   says it.
+ */
 export const ToggleSwitch = (props: ToggleSwitchProps): JSX.Element => {
   const [local, others] = splitProps(props, [
     'defaultChecked',

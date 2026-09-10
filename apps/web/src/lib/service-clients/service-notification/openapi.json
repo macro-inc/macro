@@ -306,6 +306,15 @@
         "operationId": "list_typed_notifications",
         "parameters": [
           {
+            "name": "states",
+            "in": "query",
+            "description": "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Size limit per page.",
@@ -377,6 +386,15 @@
         "description": "Rows that fail to deserialize are dropped with a warning log.",
         "operationId": "bulk_get_typed_notifications_by_event_item_ids",
         "parameters": [
+          {
+            "name": "states",
+            "in": "query",
+            "description": "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "limit",
             "in": "query",
@@ -458,6 +476,15 @@
         "summary": "Typed wrapper for getting notifications by a single event item ID.",
         "operationId": "get_typed_notifications_by_event_item_id",
         "parameters": [
+          {
+            "name": "states",
+            "in": "query",
+            "description": "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "event_item_id",
             "in": "path",
@@ -1029,7 +1056,7 @@
               "id",
               "notification_event_type",
               "sent",
-              "done",
+              "state",
               "created_at",
               "updated_at",
               "notification_metadata"
@@ -1044,10 +1071,6 @@
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was deleted."
-              },
-              "done": {
-                "type": "boolean",
-                "description": "Whether the notification is marked as done."
               },
               "id": {
                 "type": "string",
@@ -1073,6 +1096,10 @@
               "sent": {
                 "type": "boolean",
                 "description": "Whether the notification has been sent."
+              },
+              "state": {
+                "$ref": "#/components/schemas/NotificationState",
+                "description": "The authoritative notification lifecycle state."
               },
               "updated_at": {
                 "type": "string",
@@ -2385,6 +2412,11 @@
         "type": "string",
         "enum": ["v1"]
       },
+      "NotificationState": {
+        "type": "string",
+        "description": "The mutually exclusive lifecycle states of a user's notification.",
+        "enum": ["unseen", "seen", "done"]
+      },
       "NotificationTypeName": {
         "type": "string",
         "description": "newtype wrapper for the the typename of a Notification"
@@ -2416,7 +2448,7 @@
               "notification_id",
               "notification_event_type",
               "sent",
-              "done",
+              "state",
               "created_at",
               "updated_at",
               "notification_metadata"
@@ -2431,10 +2463,6 @@
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was deleted."
-              },
-              "done": {
-                "type": "boolean",
-                "description": "Whether the notification is marked as done."
               },
               "notification_event_type": {
                 "type": "string",
@@ -2470,6 +2498,10 @@
               "sent": {
                 "type": "boolean",
                 "description": "Whether the notification has been sent."
+              },
+              "state": {
+                "$ref": "#/components/schemas/NotificationState",
+                "description": "The authoritative lifecycle state, independent of viewing timestamps."
               },
               "updated_at": {
                 "type": "string",

@@ -23,17 +23,18 @@ fn test_list_notifications_deserialization() {
     let json = r#"{}"#;
     let tool: ListNotifications = serde_json::from_str(json).unwrap();
     assert_eq!(tool.limit, None);
-    assert_eq!(tool.done, None);
-    assert_eq!(tool.seen, None);
+    assert_eq!(tool.states, None);
     assert_eq!(tool.include_types, None);
     assert_eq!(tool.entities, None);
 
     // With explicit filters
-    let json = r#"{"limit": 10, "done": true, "seen": false, "includeTypes": ["email", "message", "github"], "entities": [{"entityType": "email", "id": "thread-1"}, {"entityType": "github", "id": "foreign-entity-1"}]}"#;
+    let json = r#"{"limit": 10, "states": ["done"], "includeTypes": ["email", "message", "github"], "entities": [{"entityType": "email", "id": "thread-1"}, {"entityType": "github", "id": "foreign-entity-1"}]}"#;
     let tool: ListNotifications = serde_json::from_str(json).unwrap();
     assert_eq!(tool.limit, Some(10));
-    assert_eq!(tool.done, Some(true));
-    assert_eq!(tool.seen, Some(false));
+    assert_eq!(
+        tool.states,
+        Some(vec![crate::domain::models::NotificationState::Done])
+    );
     assert_eq!(
         tool.include_types,
         Some(vec![

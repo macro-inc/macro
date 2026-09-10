@@ -19,10 +19,6 @@ export type ApiUserNotification = Entity & {
      */
     deleted_at?: string | null;
     /**
-     * Whether the notification is marked as done.
-     */
-    done: boolean;
-    /**
      * The notification ID.
      */
     id: string;
@@ -47,6 +43,10 @@ export type ApiUserNotification = Entity & {
      * Whether the notification has been sent.
      */
     sent: boolean;
+    /**
+     * The authoritative notification lifecycle state.
+     */
+    state: NotificationState;
     /**
      * When the notification was last updated.
      */
@@ -896,6 +896,11 @@ export type NotificationDocumentSubType = {
 export type NotificationServiceApiVersion = 'v1';
 
 /**
+ * The mutually exclusive lifecycle states of a user's notification.
+ */
+export type NotificationState = 'unseen' | 'seen' | 'done';
+
+/**
  * newtype wrapper for the the typename of a Notification
  */
 export type NotificationTypeName = string;
@@ -925,10 +930,6 @@ export type RealtimeNotifTaggedContentValue = Entity & {
      */
     deleted_at?: string | null;
     /**
-     * Whether the notification is marked as done.
-     */
-    done: boolean;
-    /**
      * The notification event type string (e.g. "channel_mention").
      * TODO make this a new type
      */
@@ -949,6 +950,10 @@ export type RealtimeNotifTaggedContentValue = Entity & {
      * Whether the notification has been sent.
      */
     sent: boolean;
+    /**
+     * The authoritative lifecycle state, independent of viewing timestamps.
+     */
+    state: NotificationState;
     /**
      * When the notification was last updated.
      */
@@ -1209,6 +1214,10 @@ export type ListTypedNotificationsData = {
     path?: never;
     query?: {
         /**
+         * Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.
+         */
+        states?: string;
+        /**
          * Size limit per page.
          */
         limit?: number;
@@ -1238,6 +1247,10 @@ export type BulkGetTypedNotificationsByEventItemIdsData = {
     body: BulkGetByEventItemIdsRequest;
     path?: never;
     query?: {
+        /**
+         * Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.
+         */
+        states?: string;
         /**
          * Size limit per page. Default 20, max 500.
          */
@@ -1273,6 +1286,10 @@ export type GetTypedNotificationsByEventItemIdData = {
         event_item_id: string;
     };
     query?: {
+        /**
+         * Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.
+         */
+        states?: string;
         /**
          * Size limit per page.
          */

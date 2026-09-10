@@ -208,10 +208,8 @@ function mapCalendarEventLiteral(
   switch (field) {
     case 'id':
       return { id: mapString(value, 'id') };
-    case 'nd':
-      return { notificationDone: mapBoolean(value, 'notificationDone') };
     case 'ns':
-      return { notificationSeen: mapBoolean(value, 'notificationSeen') };
+      return { notificationState: mapNotificationState(value) };
     default:
       unsupported(`calendar event literal ${field}`);
   }
@@ -234,10 +232,8 @@ function mapDocumentLiteral(literal: unknown): GraphqlDocumentLiteralInput {
       return { owner: mapString(value, 'owner') };
     case 'imp':
       return { importance: mapBoolean(value, 'importance') };
-    case 'nd':
-      return { notificationDone: mapBoolean(value, 'notificationDone') };
     case 'ns':
-      return { notificationSeen: mapBoolean(value, 'notificationSeen') };
+      return { notificationState: mapNotificationState(value) };
     case 'cbm':
       return { includeCbmAtmNc: mapBoolean(value, 'includeCbmAtmNc') };
     case 'dst':
@@ -264,10 +260,8 @@ function mapProjectLiteral(literal: unknown): GraphqlProjectLiteralInput {
       return { owner: mapString(value, 'owner') };
     case 'imp':
       return { importance: mapBoolean(value, 'importance') };
-    case 'nd':
-      return { notificationDone: mapBoolean(value, 'notificationDone') };
     case 'ns':
-      return { notificationSeen: mapBoolean(value, 'notificationSeen') };
+      return { notificationState: mapNotificationState(value) };
     case 'ca':
       return { createdAt: mapDateLiteral(value) };
     case 'ua':
@@ -288,10 +282,8 @@ function mapChatLiteral(literal: unknown): GraphqlChatLiteralInput {
       return { owner: mapString(value, 'owner') };
     case 'imp':
       return { importance: mapBoolean(value, 'importance') };
-    case 'nd':
-      return { notificationDone: mapBoolean(value, 'notificationDone') };
     case 'ns':
-      return { notificationSeen: mapBoolean(value, 'notificationSeen') };
+      return { notificationState: mapNotificationState(value) };
     case 'ca':
       return { createdAt: mapDateLiteral(value) };
     case 'ua':
@@ -299,6 +291,14 @@ function mapChatLiteral(literal: unknown): GraphqlChatLiteralInput {
     default:
       unsupported(`chat literal ${field}`);
   }
+}
+
+function mapNotificationState(value: unknown) {
+  return match(value)
+    .with('unseen', () => 'UNSEEN' as const)
+    .with('seen', () => 'SEEN' as const)
+    .with('done', () => 'DONE' as const)
+    .otherwise(() => unsupported(`notification state ${String(value)}`));
 }
 
 function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
@@ -314,10 +314,10 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
       return { projectId: mapString(value, 'projectId') };
     case 'Importance':
       return { importance: mapBoolean(value, 'importance') };
-    case 'NotificationDone':
-      return { notificationDone: mapBoolean(value, 'notificationDone') };
-    case 'NotificationSeen':
-      return { notificationSeen: mapBoolean(value, 'notificationSeen') };
+    case 'NotificationState':
+      return { notificationState: mapNotificationState(value) };
+    case 'Read':
+      return { read: mapBoolean(value, 'read') };
     case 'Shared':
       return { shared: mapEmailShared(value) };
     case 'CalendarOnly':
@@ -346,10 +346,8 @@ function mapChannelLiteral(literal: unknown): GraphqlChannelLiteralInput {
       return { importance: mapBoolean(value, 'importance') };
     case 'IsParticipant':
       return { isParticipant: mapBoolean(value, 'isParticipant') };
-    case 'NotificationDone':
-      return { notificationDone: mapBoolean(value, 'notificationDone') };
-    case 'NotificationSeen':
-      return { notificationSeen: mapBoolean(value, 'notificationSeen') };
+    case 'NotificationState':
+      return { notificationState: mapNotificationState(value) };
     default:
       unsupported(`channel literal ${field}`);
   }
@@ -361,8 +359,7 @@ type ChannelThreadLiteralField =
   | 'RootSender'
   | 'Sender'
   | 'Participant'
-  | 'NotificationDone'
-  | 'NotificationSeen';
+  | 'NotificationState';
 
 const CHANNEL_THREAD_LITERAL_FIELDS = [
   'ThreadId',
@@ -370,8 +367,7 @@ const CHANNEL_THREAD_LITERAL_FIELDS = [
   'RootSender',
   'Sender',
   'Participant',
-  'NotificationDone',
-  'NotificationSeen',
+  'NotificationState',
 ] as const satisfies readonly ChannelThreadLiteralField[];
 
 function isChannelThreadLiteralField(
@@ -399,11 +395,8 @@ function mapChannelThreadLiteral(
     .with('Participant', () => ({
       participant: mapString(value, 'participant'),
     }))
-    .with('NotificationDone', () => ({
-      notificationDone: mapBoolean(value, 'notificationDone'),
-    }))
-    .with('NotificationSeen', () => ({
-      notificationSeen: mapBoolean(value, 'notificationSeen'),
+    .with('NotificationState', () => ({
+      notificationState: mapNotificationState(value),
     }))
     .exhaustive();
 }
@@ -454,10 +447,8 @@ function mapForeignEntityLiteral(
       return { foreignEntitySource: mapString(value, 'foreignEntitySource') };
     case 'me':
       return { includesMe: mapBoolean(value, 'includesMe') };
-    case 'nd':
-      return { notificationDone: mapBoolean(value, 'notificationDone') };
     case 'ns':
-      return { notificationSeen: mapBoolean(value, 'notificationSeen') };
+      return { notificationState: mapNotificationState(value) };
     default:
       unsupported(`foreign entity literal ${field}`);
   }

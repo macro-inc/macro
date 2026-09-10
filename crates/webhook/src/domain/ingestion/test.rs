@@ -1456,3 +1456,200 @@ async fn agent_trigger_events_are_scoped_by_the_channel_but_named_by_the_bot() {
         serde_json::to_value(&event).expect("a serializable envelope"),
     );
 }
+
+fn agent_session_lifecycle_event(
+    event: fn(
+        agent_session::domain::events::SessionIdentity,
+    ) -> agent_session::domain::events::AgentSessionLifecycleEvent,
+) -> Event<agent_session::domain::events::AgentSessionLifecycleEvent> {
+    use agent_session::domain::events::{SessionIdentity, ThreadOrigin};
+    use macro_user_id::cowlike::CowLike as _;
+
+    Event::new(event(SessionIdentity {
+        session_id: agent_session::domain::model::AgentSessionId::TEST_A,
+        session_name: "Fix the flaky test".to_owned(),
+        bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
+        bot_name: "Macro Coder".to_owned(),
+        owner_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|asker@example.com")
+            .expect("valid user id")
+            .into_owned(),
+        origin: Some(ThreadOrigin {
+            channel_id: uuid::Uuid::from_u128(1),
+            thread_id: uuid::Uuid::from_u128(2),
+            originating_message_id: uuid::Uuid::from_u128(3),
+        }),
+    }))
+}
+
+/// A lifecycle fact is about one session: the session is the entity, the
+/// ordering key, and whose grants gate it - not the bot, unlike a trigger.
+#[tokio::test]
+async fn agent_session_lifecycle_events_are_scoped_and_named_by_the_session() {
+    use agent_session::domain::events::{
+        AgentSessionLifecycleEvent, SessionSettledMetadata, TurnSummary,
+    };
+
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    let event = agent_session_lifecycle_event(|identity| {
+        AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
+            identity,
+            last_turn: Some(TurnSummary {
+                turn: agent_fold::domain::model::TurnId(0),
+                action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
+                actor: None,
+                announcement_message_id: None,
+                stop_reason: "end_turn".to_owned(),
+                excerpt: Some("Done.".to_owned()),
+            }),
+        })
+    });
+    let session_id = agent_session::domain::model::AgentSessionId::TEST_A.to_string();
+
+    service
+        .ingest_agent_session_lifecycle_event(event.clone())
+        .await
+        .expect("lifecycle events are ingested");
+
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(session_id.clone(), EntityType::AgentSession)],
+    );
+    let repository_state = lock(&repository.state);
+    assert_eq!(repository_state.match_calls.len(), 1);
+    assert_eq!(repository_state.match_calls[0].entity_id, session_id);
+    assert_eq!(
+        repository_state.match_calls[0].event_name,
+        "agent_session.settled"
+    );
+    drop(repository_state);
+
+    let enqueuer_state = lock(&enqueuer.state);
+    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+    let normalized = &enqueuer_state.attempted_messages[0].event;
+    assert_eq!(normalized.event_name, "agent_session.settled");
+    assert_eq!(normalized.entity_type, "agent_session");
+    assert_eq!(normalized.entity_id, session_id);
+    assert_eq!(normalized.ordering_key, session_id);
+    assert_eq!(
+        normalized.broker_envelope,
+        serde_json::to_value(&event).expect("a serializable envelope"),
+    );
+}
+
+#[tokio::test]
+async fn every_agent_session_lifecycle_variant_is_named_by_its_wire_tag() {
+    use agent_session::domain::events::{
+        AgentSessionLifecycleEvent, SessionDeletedMetadata, WaitingForInputMetadata,
+    };
+
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let service = service(access, repository.clone(), MockEnqueuer::default());
+
+    service
+        .ingest_agent_session_lifecycle_event(agent_session_lifecycle_event(|identity| {
+            AgentSessionLifecycleEvent::WaitingForInput(WaitingForInputMetadata {
+                identity,
+                turn: agent_fold::domain::model::TurnId(1),
+                action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
+                announcement_message_id: None,
+                question: "Which approach?".to_owned(),
+            })
+        }))
+        .await
+        .expect("lifecycle events are ingested");
+    service
+        .ingest_agent_session_lifecycle_event(agent_session_lifecycle_event(|identity| {
+            AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+        }))
+        .await
+        .expect("lifecycle events are ingested");
+
+    let names: Vec<String> = lock(&repository.state)
+        .match_calls
+        .iter()
+        .map(|call| call.event_name.clone())
+        .collect();
+    assert_eq!(
+        names,
+        ["agent_session.waiting_for_input", "agent_session.deleted"]
+    );
+}
+
+/// A deleted session has no access rows left to ask, so its audience comes
+/// from the event: the owner, plus the channel it was opened from.
+#[tokio::test]
+async fn a_deleted_session_is_delivered_to_its_owner_and_origin_channel() {
+    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+
+    let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+
+    service
+        .ingest_agent_session_lifecycle_event(agent_session_lifecycle_event(|identity| {
+            AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+        }))
+        .await
+        .expect("lifecycle events are ingested");
+
+    // The session is never asked about; the origin channel is.
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[(uuid::Uuid::from_u128(1).to_string(), EntityType::Channel)],
+    );
+    let repository_state = lock(&repository.state);
+    assert_eq!(repository_state.match_calls.len(), 1);
+    assert_eq!(
+        repository_state.match_calls[0].event_name,
+        "agent_session.deleted"
+    );
+    assert_eq!(
+        repository_state.workspace_calls.last().map(Vec::len),
+        Some(2),
+        "the owner and the channel's member both resolve to workspaces"
+    );
+}
+
+#[tokio::test]
+async fn a_deleted_session_without_an_origin_is_its_owners_alone() {
+    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+
+    let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
+
+    let mut event = agent_session_lifecycle_event(|identity| {
+        AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+    });
+    if let AgentSessionLifecycleEvent::Deleted(deleted) = &mut event.event {
+        deleted.identity.origin = None;
+    }
+
+    service
+        .ingest_agent_session_lifecycle_event(event)
+        .await
+        .expect("lifecycle events are ingested");
+
+    assert!(lock(&access.calls).is_empty(), "nothing is looked up");
+    assert_eq!(
+        lock(&repository.state).workspace_calls.last().map(Vec::len),
+        Some(1)
+    );
+}

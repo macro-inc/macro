@@ -62,6 +62,7 @@ where
                 // mention; it must not grant the channel anything.
             })
             .await?;
+        self.inner.publish_opened(&session).await;
 
         if let Some(thread) = request.thread {
             let announcement = SessionAnnouncement {
@@ -169,6 +170,7 @@ where
                 egress_token_hash: Some(egress.session_token_hash),
             })
             .await?;
+        self.inner.publish_opened(&session).await;
 
         let mcp_servers = egress.sandbox.acp_servers();
         let container = match self
@@ -299,7 +301,8 @@ where
             .provision(session_id, &origin.sender, &repo_url, &runtime.mcp_servers)
             .await?;
 
-        self.sessions
+        let session = self
+            .sessions
             .create_session(CreateAgentSessionParams {
                 id: session_id,
                 owner_id: origin.sender.clone(),
@@ -323,6 +326,7 @@ where
                 // This open came from the trigger pipeline seeing the mention.
             })
             .await?;
+        self.publish_opened(&session).await;
 
         let mcp_servers = egress.sandbox.acp_servers();
         let container = match self

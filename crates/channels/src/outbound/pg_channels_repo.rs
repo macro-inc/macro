@@ -920,25 +920,14 @@ fn build_channel_list_filter(ast: Option<&Expr<ChannelLiteral>>) -> String {
                 ))"#
             )
         }
-        filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationDone(done)) => {
+        filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationState(state)) => {
             build_channel_notification_exists_clause(
                 "c.id",
                 "channel",
-                if done {
-                    "un.done = true"
-                } else {
-                    "un.done = false"
-                },
-            )
-        }
-        filter_ast::ExprFrame::Literal(ChannelLiteral::NotificationSeen(seen)) => {
-            build_channel_notification_exists_clause(
-                "c.id",
-                "channel",
-                if seen {
-                    "un.seen_at IS NOT NULL"
-                } else {
-                    "un.seen_at IS NULL"
+                match state {
+                    item_filters::NotificationState::Unseen => "un.state = 'unseen'",
+                    item_filters::NotificationState::Seen => "un.state = 'seen'",
+                    item_filters::NotificationState::Done => "un.state = 'done'",
                 },
             )
         }
@@ -1034,25 +1023,14 @@ fn push_channel_thread_filter_expr(
         Expr::Literal(ChannelThreadLiteral::Participant(participant)) => {
             push_channel_thread_participant_filter_expr(builder, participant);
         }
-        Expr::Literal(ChannelThreadLiteral::NotificationDone(done)) => {
+        Expr::Literal(ChannelThreadLiteral::NotificationState(state)) => {
             push_channel_thread_notification_filter_expr(
                 builder,
                 user_id,
-                if *done {
-                    "un.done = true"
-                } else {
-                    "un.done = false"
-                },
-            );
-        }
-        Expr::Literal(ChannelThreadLiteral::NotificationSeen(seen)) => {
-            push_channel_thread_notification_filter_expr(
-                builder,
-                user_id,
-                if *seen {
-                    "un.seen_at IS NOT NULL"
-                } else {
-                    "un.seen_at IS NULL"
+                match state {
+                    item_filters::NotificationState::Unseen => "un.state = 'unseen'",
+                    item_filters::NotificationState::Seen => "un.state = 'seen'",
+                    item_filters::NotificationState::Done => "un.state = 'done'",
                 },
             );
         }
@@ -1738,6 +1716,7 @@ impl ChannelRepo for PgChannelsRepo {
             Some(&filters.message_ids)
         };
         let created_after = filters.created_after;
+        let created_after_exclusive = filters.created_after_exclusive;
         let created_before = filters.created_before;
         let activity_after = filters.activity_after;
         let activity_before = filters.activity_before;
@@ -1750,8 +1729,7 @@ impl ChannelRepo for PgChannelsRepo {
             }
             (false, _) => "",
         };
-        let notification_done = filters.notification_filters.done;
-        let notification_seen = filters.notification_filters.seen;
+        let notification_states = &filters.notification_filters.states;
 
         let (rows, has_more_newer) = match direction {
             MessagePageDirection::Older => {
@@ -1779,6 +1757,7 @@ impl ChannelRepo for PgChannelsRepo {
                       AND ($5::uuid[] IS NULL OR m.id = ANY($5))
                       AND ($6::timestamptz IS NULL OR m.created_at >= $6)
                       AND ($7::timestamptz IS NULL OR m.created_at < $7)
+                      AND ($13::timestamptz IS NULL OR m.created_at > $13)
                       AND (
                           ($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
                           OR (
@@ -1793,15 +1772,14 @@ impl ChannelRepo for PgChannelsRepo {
                                 AND ($9::timestamptz IS NULL OR r.created_at < $9)
                           )
                       )
-                      AND ($10::bool = FALSE OR (
-                          ($11::bool IS NULL OR EXISTS (
+                      AND ($10::bool = FALSE OR EXISTS (
                               SELECT 1
                               FROM notification n
                               JOIN user_notification un ON un.notification_id = n.id
                               JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                              WHERE un.user_id = $13::text
+                              WHERE un.user_id = $12::text
                                 AND un.deleted_at IS NULL
-                                AND un.done = $11
+                                AND un.state = ANY($11::notification_state[])
                                 AND n.event_item_type = 'channel'
                                 AND n.event_item_id = $1::uuid::text
                                 AND n.metadata->>'messageId' IS NOT NULL
@@ -1809,22 +1787,6 @@ impl ChannelRepo for PgChannelsRepo {
                                 AND msg.deleted_at IS NULL
                                 AND COALESCE(msg.thread_id, msg.id) = m.id
                           ))
-                          AND ($12::bool IS NULL OR EXISTS (
-                              SELECT 1
-                              FROM notification n
-                              JOIN user_notification un ON un.notification_id = n.id
-                              JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                              WHERE un.user_id = $13::text
-                                AND un.deleted_at IS NULL
-                                AND (un.seen_at IS NOT NULL) = $12
-                                AND n.event_item_type = 'channel'
-                                AND n.event_item_id = $1::uuid::text
-                                AND n.metadata->>'messageId' IS NOT NULL
-                                AND msg.channel_id = $1
-                                AND msg.deleted_at IS NULL
-                                AND COALESCE(msg.thread_id, msg.id) = m.id
-                          ))
-                      ))
                     ORDER BY m.created_at DESC, m.id DESC
                     LIMIT $4
                     "#,
@@ -1838,9 +1800,9 @@ impl ChannelRepo for PgChannelsRepo {
                     activity_after,
                     activity_before,
                     notification_filter_active,
-                    notification_done,
-                    notification_seen,
+                    notification_states as _,
                     notification_user_id,
+                    created_after_exclusive,
                 )
                 .fetch_all(&self.pool)
                 .await?;
@@ -1872,6 +1834,7 @@ impl ChannelRepo for PgChannelsRepo {
                       AND ($5::uuid[] IS NULL OR m.id = ANY($5))
                       AND ($6::timestamptz IS NULL OR m.created_at >= $6)
                       AND ($7::timestamptz IS NULL OR m.created_at < $7)
+                      AND ($13::timestamptz IS NULL OR m.created_at > $13)
                       AND (
                           ($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
                           OR (
@@ -1886,15 +1849,14 @@ impl ChannelRepo for PgChannelsRepo {
                                 AND ($9::timestamptz IS NULL OR r.created_at < $9)
                           )
                       )
-                      AND ($10::bool = FALSE OR (
-                          ($11::bool IS NULL OR EXISTS (
+                      AND ($10::bool = FALSE OR EXISTS (
                               SELECT 1
                               FROM notification n
                               JOIN user_notification un ON un.notification_id = n.id
                               JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                              WHERE un.user_id = $13::text
+                              WHERE un.user_id = $12::text
                                 AND un.deleted_at IS NULL
-                                AND un.done = $11
+                                AND un.state = ANY($11::notification_state[])
                                 AND n.event_item_type = 'channel'
                                 AND n.event_item_id = $1::uuid::text
                                 AND n.metadata->>'messageId' IS NOT NULL
@@ -1902,22 +1864,6 @@ impl ChannelRepo for PgChannelsRepo {
                                 AND msg.deleted_at IS NULL
                                 AND COALESCE(msg.thread_id, msg.id) = m.id
                           ))
-                          AND ($12::bool IS NULL OR EXISTS (
-                              SELECT 1
-                              FROM notification n
-                              JOIN user_notification un ON un.notification_id = n.id
-                              JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                              WHERE un.user_id = $13::text
-                                AND un.deleted_at IS NULL
-                                AND (un.seen_at IS NOT NULL) = $12
-                                AND n.event_item_type = 'channel'
-                                AND n.event_item_id = $1::uuid::text
-                                AND n.metadata->>'messageId' IS NOT NULL
-                                AND msg.channel_id = $1
-                                AND msg.deleted_at IS NULL
-                                AND COALESCE(msg.thread_id, msg.id) = m.id
-                          ))
-                      ))
                     ORDER BY m.created_at ASC, m.id ASC
                     LIMIT $4
                     "#,
@@ -1931,9 +1877,9 @@ impl ChannelRepo for PgChannelsRepo {
                     activity_after,
                     activity_before,
                     notification_filter_active,
-                    notification_done,
-                    notification_seen,
+                    notification_states as _,
                     notification_user_id,
+                    created_after_exclusive,
                 )
                 .fetch_all(&self.pool)
                 .await?;

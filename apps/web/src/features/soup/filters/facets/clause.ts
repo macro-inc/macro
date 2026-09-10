@@ -1,3 +1,4 @@
+import { notificationStatesForFilter } from '@notifications/notification-state';
 import {
   type DateRangeFilter,
   FILTER_TARGETS,
@@ -107,6 +108,13 @@ const compileLeaf = (
     return AST.and(expandDateRange(config.backend, value as DateRangeFilter));
   }
 
+  if (config.notification) {
+    return AST.or(
+      notificationStatesForFilter(config.notification, value).map((state) =>
+        AST.literal(config.backend, state)
+      )
+    );
+  }
   const format = config.formatValue ?? ((input: unknown) => input);
 
   return AST.literal(config.backend, format(value));

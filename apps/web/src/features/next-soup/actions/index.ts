@@ -1,6 +1,8 @@
 export {
   type EntityActionListFocusTarget,
   type EntityActionListState,
+  type EntityActionNavigationEvent,
+  type EntityActionNavigationHandler,
   type EntityActionSenderBucket,
   type EntityActionViewContext,
   resolveEntityActionViewContext,

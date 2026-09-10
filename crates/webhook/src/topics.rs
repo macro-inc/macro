@@ -6,6 +6,7 @@
 //! different topic sets.
 
 use crate::domain::events::WebhookMacroEvent;
+use agent_session::domain::events::AgentSessionLifecycleMacroEvent;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
@@ -15,4 +16,5 @@ macro_event_broker::declare_topics!(
     ChannelMacroEvent,
     WebhookMacroEvent,
     AgentSessionMacroEvent,
+    AgentSessionLifecycleMacroEvent,
 );

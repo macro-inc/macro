@@ -4,7 +4,9 @@ import { Accordion } from '@kobalte/core/accordion';
 import { batch, For } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 import { useEmailFilters } from '../filters/use-email-filters';
-import { EmailInboxSelector } from './EmailInboxSelector';
+import { EmailInboxDrawerSection } from './EmailInboxSelector';
+
+const INBOX_SECTION_ID = 'inbox';
 
 export function EmailFilterDrawer() {
   const { state, setInboxIds } = useEmailView();
@@ -25,11 +27,13 @@ export function EmailFilterDrawer() {
       }
     >
       <MobileDrawer.Label class="pt-4">Filters</MobileDrawer.Label>
-      <div class="px-3 pb-3 empty:hidden">
-        <EmailInboxSelector />
-      </div>
-      <Accordion multiple collapsible defaultValue={[filters.groups[0].id]}>
+      <Accordion
+        multiple
+        collapsible
+        defaultValue={[INBOX_SECTION_ID, filters.groups[0].id]}
+      >
         <div class="flex flex-col gap-3">
+          <EmailInboxDrawerSection value={INBOX_SECTION_ID} />
           <For each={filters.groups}>
             {(group) => (
               <MobileFilterDrawer.Section

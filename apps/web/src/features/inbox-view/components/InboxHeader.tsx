@@ -16,7 +16,7 @@ export function InboxHeader(props: ParentProps) {
       </Show>
       <Show when={!isTouchDevice()}>
         <div class="flex h-8 min-w-0 items-center">
-          <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.035em] text-ink">
+          <h1 class="m-0 min-w-0 flex-1 truncate text-base font-semibold tracking-[-0.035em] text-ink">
             Notifications
           </h1>
         </div>

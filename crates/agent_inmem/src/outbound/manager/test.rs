@@ -21,6 +21,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::*;
 use crate::outbound::log_frames::LogFrameSource;
 use crate::testing::ScriptedEngine;
+use agent_session::domain::model::ReplicaId;
+use agent_session::domain::ports::{
+    NoOpAgentSessionNameGenerator, NoOpTurnObserver, NoopLifecyclePublisher,
+};
 
 /// Instructions long enough to be unmistakable in an assertion, and shaped
 /// like something a real session would carry.
@@ -142,6 +146,10 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
         repo.clone(),
         FoldedMessageService::new(repo.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     let id = AgentSessionId::new();
@@ -277,6 +285,10 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
         repo.clone(),
         FoldedMessageService::new(repo.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     let id = AgentSessionId::new();
@@ -419,6 +431,10 @@ async fn instructions_reach_every_turn_including_after_a_reattach() {
         repo.clone(),
         FoldedMessageService::new(repo.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     let id = AgentSessionId::new();
@@ -489,6 +505,10 @@ async fn a_session_without_instructions_hands_the_engine_none() {
         repo.clone(),
         FoldedMessageService::new(repo.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     let id = AgentSessionId::new();
