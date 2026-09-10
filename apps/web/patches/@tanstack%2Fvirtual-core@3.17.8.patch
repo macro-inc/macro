@@ -1,0 +1,122 @@
+diff --git a/src/index.ts b/src/index.ts
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -367,6 +367,8 @@
+   followOnAppend?: FollowOnAppend
+   scrollEndThreshold?: number
+   isScrollingResetDelay?: number
++  /** Disable only when scrollToFn provides its own touch-safe compensation. */
++  useIOSScrollDeferral?: boolean
+   useScrollendEvent?: boolean
+   enabled?: boolean
+   isRtl?: boolean
+@@ -553,6 +555,7 @@
+       isScrollingResetDelay: 150,
+       enabled: true,
+       isRtl: false,
++      useIOSScrollDeferral: true,
+       useScrollendEvent: false,
+       useAnimationFrameWithResizeObserver: false,
+       laneAssignmentMode: 'estimate',
+@@ -700,6 +703,7 @@
+     }
+ 
+     if (
++      this.options.useIOSScrollDeferral &&
+       isIOSWebKit() &&
+       (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)
+     ) {
+@@ -962,6 +966,7 @@
+         // applyScrollAdjustment does — accumulate the delta and let
+         // _flushIosDeferredIfReady handle it once the scroll settles.
+         if (
++          this.options.useIOSScrollDeferral &&
+           isIOSWebKit() &&
+           (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)
+         ) {
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -274,7 +274,8 @@
+         isScrollingResetDelay: 150,
+         enabled: true,
+         isRtl: false,
+-        useScrollendEvent: false,
++        useIOSScrollDeferral: true,
++        useScrollendEvent: false,
+         useAnimationFrameWithResizeObserver: false,
+         laneAssignmentMode: "estimate",
+         useCachedMeasurements: false
+@@ -487,7 +488,7 @@
+       if (anchor && this.scrollElement && this.options.enabled) {
+         const [key, _offset, followOnAppend, anchorDelta] = anchor;
+         if (key !== null && !followOnAppend) {
+-          if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
++          if (this.options.useIOSScrollDeferral && isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
+             if (anchorDelta !== 0) {
+               this._iosDeferredAdjustment += anchorDelta;
+             }
+@@ -1132,7 +1133,7 @@
+     if (process.env.NODE_ENV !== "production" && this.options.debug) {
+       console.info("correction", delta);
+     }
+-    if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
++    if (this.options.useIOSScrollDeferral && isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
+       this._iosDeferredAdjustment += delta;
+       return false;
+     } else {
+diff --git a/dist/cjs/index.cjs b/dist/cjs/index.cjs
+--- a/dist/cjs/index.cjs
++++ b/dist/cjs/index.cjs
+@@ -276,7 +276,8 @@
+         isScrollingResetDelay: 150,
+         enabled: true,
+         isRtl: false,
+-        useScrollendEvent: false,
++        useIOSScrollDeferral: true,
++        useScrollendEvent: false,
+         useAnimationFrameWithResizeObserver: false,
+         laneAssignmentMode: "estimate",
+         useCachedMeasurements: false
+@@ -489,7 +490,7 @@
+       if (anchor && this.scrollElement && this.options.enabled) {
+         const [key, _offset, followOnAppend, anchorDelta] = anchor;
+         if (key !== null && !followOnAppend) {
+-          if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
++          if (this.options.useIOSScrollDeferral && isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
+             if (anchorDelta !== 0) {
+               this._iosDeferredAdjustment += anchorDelta;
+             }
+@@ -1134,7 +1135,7 @@
+     if (process.env.NODE_ENV !== "production" && this.options.debug) {
+       console.info("correction", delta);
+     }
+-    if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
++    if (this.options.useIOSScrollDeferral && isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
+       this._iosDeferredAdjustment += delta;
+       return false;
+     } else {
+diff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
+--- a/dist/esm/index.d.ts
++++ b/dist/esm/index.d.ts
+@@ -81,6 +81,8 @@
+     followOnAppend?: FollowOnAppend;
+     scrollEndThreshold?: number;
+     isScrollingResetDelay?: number;
++    /** Disable only when scrollToFn provides its own touch-safe compensation. */
++    useIOSScrollDeferral?: boolean;
+     useScrollendEvent?: boolean;
+     enabled?: boolean;
+     isRtl?: boolean;
+diff --git a/dist/cjs/index.d.cts b/dist/cjs/index.d.cts
+--- a/dist/cjs/index.d.cts
++++ b/dist/cjs/index.d.cts
+@@ -81,6 +81,8 @@
+     followOnAppend?: FollowOnAppend;
+     scrollEndThreshold?: number;
+     isScrollingResetDelay?: number;
++    /** Disable only when scrollToFn provides its own touch-safe compensation. */
++    useIOSScrollDeferral?: boolean;
+     useScrollendEvent?: boolean;
+     enabled?: boolean;
+     isRtl?: boolean;

@@ -49,8 +49,30 @@ correction, `scrollToFn` synchronously commits the current total to the sizer;
 otherwise a growing last row can clamp the scroll against the old DOM extent.
 Viewport and inset changes explicitly scroll to the end only if previously pinned.
 The offset observer distinguishes instant programmatic scrolls from user scrolling,
-so iOS does not replay deferred momentum adjustments after a navigation has already
-accounted for those measurements. Actual touch/momentum deferral remains in the core.
+so our own corrections do not prolong gesture compensation.
+
+Safari wheel scrolling and iOS touch scrolling use a separate logical offset while a gesture is
+active. Size and prepend corrections counter-shift the rows instead of writing
+`scrollTop`, which interrupts native momentum. Scroll observations and saved
+snapshots include that adjustment. After touch release and 150ms without input or scrolling,
+the adjustment is removed and committed to the DOM offset in the same task.
+The sizer retains its logical height and clips shifted overflow during this period.
+Reaching either scroll boundary releases the shifted origin; explicit message,
+reply, latest, and pinned viewport/inset navigation flush it before computing targets.
+Elastic overscroll must return in bounds before a correction is committed. Touch end
+and cancellation listeners stay on the original event target even if its row unmounts.
+The `@tanstack/virtual-core` patch adds `useIOSScrollDeferral`, enabled by default.
+This list disables it because core deferral updates row positions without applying
+the matching scroll correction, which jumps to unrelated messages during a prepend.
+Channel compensation keeps logical row positions and offsets synchronized instead.
+While compensation is active, remeasuring a row entirely above the viewport also
+preserves the anchor when scrolling upward. The core's default backward-scroll
+exception otherwise lets late-loading images move the message being read. A row
+that spans the viewport's top is not compensated when its lower content grows.
+
+Message images reserve a responsive box from attachment dimensions, with the loading
+placeholder overlaid inside it. Keep the border on the frame: a border on the image
+can change portrait/landscape sizing when intrinsic dimensions become available.
 
 Message IDs also key Solid's rendered components, preserving editors and expanded
 threads across pagination. `Key` owns each row's virtual-item accessor; a shared
