@@ -143,7 +143,7 @@ export default defineDoc({
       'Pick from the named palette when content needs identity rather than meaning.',
     ],
     dont: [
-      'Do not use raw Tailwind colors (`text-gray-500`, `bg-blue-600`) — they ignore the theme.',
+      'Do not use raw Tailwind colors (`text-gray-500`, `bg-blue-600`) — they ignore the theme.', // tailwind-check-ignore -- prohibited utilities shown as documentation
       'Do not hardcode hex or oklch values in components.',
       'Do not use `ink-extra-muted` in new code; it is a temporary compatibility alias.',
     ],

@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { execFileSync } from 'child_process';
-import { extname } from 'path';
+import { readFileSync } from 'fs';
+import { extname, resolve } from 'path';
 
 interface Violation {
   file: string;
@@ -18,10 +19,14 @@ interface ChangedLine {
 
 const PROHIBITED_TAILWIND_REGEX =
   /\b((bg|border|text|fill|caret|outline|shadow|ring|stroke)(-(white|black|(?:red|blue|green|yellow|purple|pink|indigo|gray|grey|orange|teal|cyan|emerald|lime|amber|violet|fuchsia|rose|sky|slate|zinc|neutral|stone)-\d{2,3}))|font-(berkeley|inter))\b/g;
+const IGNORE_DIRECTIVE = 'tailwind-check-ignore';
 
 const FILE_EXTENSIONS = ['.tsx', '.ts', '.jsx', '.js'];
+const REPOSITORY_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+  encoding: 'utf8',
+}).trim();
 
-function getChangedLines(baseBranch: string = 'origin/dev'): ChangedLine[] {
+function getChangedLines(baseBranch: string = 'origin/main'): ChangedLine[] {
   // Limit the diff at the source so a large repository migration cannot fill
   // Node's output buffer before the relevant app lines are parsed. Using an
   // argument array also keeps the CI-provided base branch out of a shell.
@@ -29,9 +34,7 @@ function getChangedLines(baseBranch: string = 'origin/dev'): ChangedLine[] {
     'git',
     ['diff', '--unified=0', `${baseBranch}...HEAD`, '--', 'apps/web/src'],
     {
-      cwd: execFileSync('git', ['rev-parse', '--show-toplevel'], {
-        encoding: 'utf8',
-      }).trim(),
+      cwd: REPOSITORY_ROOT,
       encoding: 'utf8',
       maxBuffer: 128 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -95,8 +98,32 @@ function getChangedLines(baseBranch: string = 'origin/dev'): ChangedLine[] {
 
 function checkChangedLines(changedLines: ChangedLine[]): Violation[] {
   const violations: Violation[] = [];
+  const currentFiles = new Map<string, string[]>();
 
   for (const changedLine of changedLines) {
+    // Documentation sometimes needs to name a prohibited utility as a
+    // negative example. Keep docs files in scope, but allow those individual
+    // lines to opt out rather than exempting an entire file.
+    let currentLines = currentFiles.get(changedLine.file);
+    if (!currentLines) {
+      try {
+        currentLines = readFileSync(
+          resolve(REPOSITORY_ROOT, changedLine.file),
+          'utf8'
+        ).split('\n');
+      } catch {
+        currentLines = [];
+      }
+      currentFiles.set(changedLine.file, currentLines);
+    }
+    const currentLine = currentLines[changedLine.lineNumber - 1] ?? '';
+    if (
+      changedLine.content.includes(IGNORE_DIRECTIVE) ||
+      currentLine.includes(IGNORE_DIRECTIVE)
+    ) {
+      continue;
+    }
+
     const matches = [
       ...changedLine.content.matchAll(PROHIBITED_TAILWIND_REGEX),
     ];
@@ -162,10 +189,11 @@ async function main(): Promise<void> {
   );
 
   try {
-    // Get the base branch from environment variable (for CI) or default to origin/dev
+    // CI supplies the PR base branch. Local checks compare against this
+    // repository's default branch.
     const baseBranch = process.env.GITHUB_BASE_REF
       ? `origin/${process.env.GITHUB_BASE_REF}`
-      : 'origin/dev';
+      : 'origin/main';
     const changedLines = getChangedLines(baseBranch);
 
     if (changedLines.length === 0) {
