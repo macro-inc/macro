@@ -693,7 +693,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
 /**
  * The creatable-block entries a create menu renders, with feature gating
  * applied — the single source of truth shared by the desktop menus and the
- * mobile dock's Create menu, so they cannot drift. Callers with a custom
+ * mobile page create actions, so they cannot drift. Callers with a custom
  * block list (e.g. the onboarding sandbox launcher) pass it as `source` to
  * run it through the same gating.
  */

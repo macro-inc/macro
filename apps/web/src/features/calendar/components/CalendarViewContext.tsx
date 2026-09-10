@@ -22,6 +22,7 @@ interface CalendarDisplaySettings {
 
 interface CalendarPreferences {
   periodView: CalendarPeriodView;
+  mobilePeriodView: CalendarPeriodView;
   hiddenSourceIds: string[];
   showWeekends: boolean;
   weekStartsOn: CalendarWeekStart;
@@ -58,7 +59,8 @@ function createCalendarEventSelection() {
 export const [CalendarViewContextProvider, useCalendarView] =
   createAssertedContextProvider('CalendarViewContext', () => {
     const defaultPreferences: CalendarPreferences = {
-      periodView: isMobile() ? 'timeGridDay' : 'timeGridWeek',
+      periodView: 'timeGridWeek',
+      mobilePeriodView: 'timeGridDay',
       hiddenSourceIds: [],
       showWeekends: true,
       weekStartsOn: 0,
@@ -87,7 +89,9 @@ export const [CalendarViewContextProvider, useCalendarView] =
     const selection = createCalendarEventSelection();
     const displaySettings: CalendarDisplaySettings = {
       get periodView() {
-        return preferences.periodView;
+        return isMobile()
+          ? preferences.mobilePeriodView
+          : preferences.periodView;
       },
       get showWeekends() {
         return preferences.showWeekends;
@@ -130,7 +134,10 @@ export const [CalendarViewContextProvider, useCalendarView] =
       selectedEvent: selection.event,
       selectedEventAnchor: selection.anchor,
       setPeriodView: (periodView: CalendarPeriodView) =>
-        setPreferences('periodView', periodView),
+        setPreferences(
+          isMobile() ? 'mobilePeriodView' : 'periodView',
+          periodView
+        ),
       setShowWeekends: (showWeekends: boolean) =>
         setPreferences('showWeekends', showWeekends),
       setWeekStartsOn: (weekStartsOn: CalendarWeekStart) =>

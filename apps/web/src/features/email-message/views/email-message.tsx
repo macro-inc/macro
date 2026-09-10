@@ -121,7 +121,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
               </div>
             }
           />
-          <div class="ph-no-capture text-sm text-ink pr-4">
+          <div class="ph-no-capture text-sm text-ink pr-4 mobile:pr-0">
             <EmailMessageBody
               message={props.message}
               isPersonal={props.isPersonal}

@@ -563,7 +563,13 @@ function Gutter(props: GutterProps) {
     >
       {/* The always-on 1px divider between the two panels. Touch layouts keep
           their own spacing and do not draw it. */}
-      <div class="absolute bg-edge touch:hidden" style={barStyle('1px')} />
+      <div
+        class={cn(
+          'absolute border-thread-rail touch:hidden',
+          horizontal() ? 'border-l-[1px]' : 'border-t-[1px]'
+        )}
+        style={barStyle('1px')}
+      />
       {/* Hover, focus and drag feedback paints over the divider. */}
       <Show when={props.resizable}>
         <div

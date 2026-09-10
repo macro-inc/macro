@@ -1,7 +1,7 @@
 import type { EventContentArg } from '@fullcalendar/core';
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
 import { cn } from '@ui';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import {
   formatCompactCalendarTime,
@@ -39,7 +39,6 @@ export function EventContent(props: EventContentProps) {
   const isRenderedAllDay = () => props.renderProps.event.allDay;
   const isMonthView = () => props.renderProps.view.type === 'dayGridMonth';
   const showsMonthDot = () => isMonthView() && !isRenderedAllDay();
-  const showsColorBar = () => !isMonthView() || isRenderedAllDay();
   const isCompact = () => isRenderedAllDay() || isMonthView();
   const showLocation = () =>
     !isRenderedAllDay() && props.renderProps.view.type === 'timeGridDay';
@@ -77,28 +76,10 @@ export function EventContent(props: EventContentProps) {
       class={cn(
         'calendar-event-content w-full min-w-0 overflow-hidden',
         !isCompact() && 'h-full min-h-0',
-        showsColorBar() && 'calendar-event-content-with-color-bar',
         props.isSelected && 'calendar-event-content-selected'
       )}
       data-response-status={selfResponseStatus()}
-      style={{
-        '--calendar-event-color-bar-count': String(
-          props.event.visibleCalendars.length
-        ),
-      }}
     >
-      <Show when={showsColorBar()}>
-        <span class="calendar-event-color-bars" aria-hidden="true">
-          <For each={props.event.visibleCalendars}>
-            {(calendar) => (
-              <span
-                class="calendar-event-color-bar"
-                style={{ background: calendar.color }}
-              />
-            )}
-          </For>
-        </span>
-      </Show>
       <div
         class={cn(
           'calendar-event-content-layout flex w-full min-h-0 flex-col overflow-hidden',

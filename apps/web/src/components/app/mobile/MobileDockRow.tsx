@@ -4,24 +4,20 @@ import {
   MobileSearchInput,
 } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
+import { useOpenEventComposer } from '@block-calendar/components/use-open-event-composer';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
-import { openFilePicker } from '@core/util/upload';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
-import IconGear from '@icon/macro-gear.svg';
-import CreateIcon from '@icon/square-pen-create.svg';
-import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedEmailIcon } from '@icon/wide-email';
-import { AnimatedSearchIcon } from '@icon/wide-search';
-import BellIcon from '@phosphor/bell-simple.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import IconGear from '@phosphor/gear.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
+import CreateIcon from '@phosphor/plus.svg';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { FloatRegion } from './float-regions/FloatRegion';
 import { MobileDockIsland } from './MobileDockIsland';
 import { MobileBottomEdgeFade } from './MobileEdgeFade';
 import {
@@ -29,6 +25,7 @@ import {
   MobileTouchMenu,
 } from './MobileTouchMenu';
 import { useMobileDockViews } from './mobile-dock-views';
+import { mobilePageCreateLabel } from './mobile-page-create-action';
 import { pressPulse } from './pressPulse';
 import {
   type MobileDockNavId,
@@ -39,61 +36,44 @@ import {
 // Keeps the directive import from being tree-shaken / lint-flagged.
 false && pressPulse;
 
-function CreateMenu() {
+function MobilePageCreateButton() {
+  const foregroundView = useForegroundMobileView();
   const createBlocks = useCreateMenuBlocks();
-  const handleFileUpload = useHandleFileUpload();
-
-  // The desktop create menus are the source of truth (useCreateMenuBlocks);
-  // rows render top → bottom ending at the thumb, so reverse to keep the
-  // desktop order's first entries nearest it.
-  const blocks = () => [...createBlocks()].reverse();
+  const openEventComposer = useOpenEventComposer();
+  const action = () => {
+    if (foregroundView() === 'calendar') {
+      return { label: 'New event', run: () => openEventComposer() };
+    }
+    const label = mobilePageCreateLabel(foregroundView());
+    if (!label) return undefined;
+    const block = createBlocks().find((entry) => entry.label === label);
+    if (!block?.keyDownHandler) return undefined;
+    return { label: `New ${label.toLowerCase()}`, run: block.keyDownHandler };
+  };
 
   return (
-    <MobileDockIsland class="shrink-0 flex justify-center items-center">
-      <MobileTouchMenu>
-        <MobileTouchMenu.Trigger
-          icon={CreateIcon}
-          class="size-(--mobile-chrome-button-size)"
-          iconClass="size-(--mobile-chrome-icon-size) [&_svg]:size-(--mobile-chrome-icon-size)"
-        />
-        <MobileTouchMenu.Content>
-          <MobileTouchMenu.Item
-            id="upload-file"
-            icon={UploadIcon}
-            animateIcon={false}
-            onSelect={() => {
-              openFilePicker({ multiple: true }, async (files) => {
-                await handleFileUpload(files, false);
-              });
-            }}
-          >
-            Upload file
-          </MobileTouchMenu.Item>
-          {/* Labels key the rows: 'Message' and 'Channel' share a
-              blockName. */}
-          <For each={blocks()}>
-            {(block) => {
-              const useAnimatedIcon =
-                ENABLE_ANIMATED_ICONS && block.animatedIcon;
-              return (
-                <MobileTouchMenu.Item
-                  id={block.label}
-                  icon={useAnimatedIcon ? block.animatedIcon : block.icon}
-                  animateIcon={!!useAnimatedIcon}
-                  // The block's own action, exactly as the desktop menus
-                  // invoke it (e.g. Channel opens the new-channel modal).
-                  onSelect={() => block.keyDownHandler?.()}
-                >
-                  {block.label}
-                </MobileTouchMenu.Item>
-              );
-            }}
-          </For>
-          <MobileTouchMenu.Separator />
-          <MobileTouchMenu.Footer>Create</MobileTouchMenu.Footer>
-        </MobileTouchMenu.Content>
-      </MobileTouchMenu>
-    </MobileDockIsland>
+    <FloatRegion
+      region="accessory"
+      priority={-1}
+      active={() =>
+        !!action() && !SearchState.isOpen() && !virtualKeyboardVisible()
+      }
+    >
+      <Show when={action()}>
+        {(create) => (
+          <div class="flex justify-end px-(--mobile-chrome-gutter)">
+            <MobileDockIsland>
+              <MobileDockButton
+                icon={CreateIcon}
+                animateIcon={false}
+                ariaLabel={create().label}
+                onClick={() => create().run()}
+              />
+            </MobileDockIsland>
+          </div>
+        )}
+      </Show>
+    </FloatRegion>
   );
 }
 
@@ -158,8 +138,9 @@ function MoreViewsMenu(props: {
   return (
     <MobileTouchMenu>
       <MobileTouchMenu.Trigger
+        ariaLabel="More views"
         icon={CaretUpIcon}
-        class="size-(--mobile-chrome-button-size)"
+        class="h-(--mobile-chrome-button-size) w-0 min-w-0 flex-1"
         iconClass="size-(--mobile-chrome-icon-size) [&_svg]:size-(--mobile-chrome-icon-size)"
       />
       <MobileTouchMenu.Content>
@@ -173,9 +154,12 @@ function MoreViewsMenu(props: {
           Settings
         </MobileTouchMenu.Item>
         <MobileTouchMenu.Separator />
-        {/* Rows render top → bottom ending at the thumb: reverse the shared
-            canonical order so Notifications lands nearest it. */}
-        <For each={[...dockViews()].reverse()}>
+        {/* Only views outside the compact dock belong in the overflow menu. */}
+        <For
+          each={dockViews()
+            .filter((view) => !view.compact)
+            .reverse()}
+        >
           {(view) => (
             <MobileTouchMenu.Item
               id={view.id}
@@ -197,37 +181,29 @@ function MoreViewsMenu(props: {
 
 /**
  * The compact dock — the default bottom row everywhere: one wide island
- * grouping Notifications, Email, Channels, Search, and the Views menu — with
- * Create on its own island. Pressing Search flips the row to the search
+ * grouping the primary views and More, with Search on its own island.
+ * Pressing Search flips the row to the search
  * layout (see MobileDockRow); the current view's button shows in accent.
  */
 function MobileCompactDockRow() {
   const navigate = useMobileNavNavigate();
   const foregroundView = useForegroundMobileView();
 
-  const navButtons = (): Array<{
-    id: MobileDockNavId;
-    label: string;
-    icon: MobileTouchIconComponent;
-    animateIcon?: boolean;
-  }> => [
-    {
-      id: 'inbox',
-      label: 'Notifications',
-      icon: BellIcon,
-      animateIcon: false,
-    },
-    { id: 'mail', label: 'Email', icon: AnimatedEmailIcon },
-    { id: 'channels', label: 'Channels', icon: AnimatedChannelIcon },
-  ];
+  const dockViews = useMobileDockViews();
+  const navButtons = () => dockViews().filter((view) => view.compact);
 
   return (
-    <div class="flex w-full justify-between">
-      <MobileDockIsland class="h-(--mobile-chrome-button-size) min-w-0 justify-between gap-(--mobile-chrome-gap)">
+    <div class="flex w-full min-w-0 gap-(--mobile-chrome-gutter)">
+      <MobileDockIsland class="h-(--mobile-chrome-button-size) min-w-0 flex-1 justify-between">
         <For each={navButtons()}>
           {(button) => (
             <MobileDockButton
-              icon={button.icon}
+              icon={
+                foregroundView() === button.id
+                  ? (button.iconActive ?? button.icon)
+                  : button.icon
+              }
+              class="w-0 min-w-0 flex-1 shrink"
               ariaLabel={button.label}
               animateIcon={button.animateIcon}
               active={foregroundView() === button.id}
@@ -235,8 +211,15 @@ function MobileCompactDockRow() {
             />
           )}
         </For>
+        <MoreViewsMenu
+          isActive={(id) => foregroundView() === id}
+          onNavigate={navigate}
+        />
+      </MobileDockIsland>
+      <MobileDockIsland class="shrink-0">
         <MobileDockButton
-          icon={AnimatedSearchIcon}
+          icon={SearchIcon}
+          animateIcon={false}
           ariaLabel="Search"
           onClick={() => {
             // Focus synchronously inside the tap so iOS lets the keyboard
@@ -249,12 +232,7 @@ function MobileCompactDockRow() {
             navigate('search');
           }}
         />
-        <MoreViewsMenu
-          isActive={(id) => foregroundView() === id}
-          onNavigate={navigate}
-        />
       </MobileDockIsland>
-      <CreateMenu />
     </div>
   );
 }
@@ -280,6 +258,7 @@ export function MobileDockRow(props: MobileDockRowProps) {
       )}
     >
       <MobileBottomEdgeFade />
+      <MobilePageCreateButton />
       <Show when={SearchState.isOpen()} fallback={<MobileCompactDockRow />}>
         <MobileSearchInput />
         <MobileAskAiButton />

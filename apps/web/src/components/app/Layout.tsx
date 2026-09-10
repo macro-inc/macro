@@ -526,7 +526,7 @@ function LayoutInner(props: RouteSectionProps) {
           {/* The sidebar column and the panes share one flat surface, so a
               1px divider is the only thing that separates them. */}
           <Show when={sidebarDividerVisible()}>
-            <div class="w-px shrink-0 self-stretch bg-edge" />
+            <div class="w-px shrink-0 self-stretch border-l-[1px] border-thread-rail" />
           </Show>
           <Show when={sidebarCollapsed()}>
             <div

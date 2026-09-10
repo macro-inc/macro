@@ -149,6 +149,10 @@
   --glass-shade-base: 40%;
   --glass-rim-strong-base: 13.5%;
   --glass-rim-soft-base: 9%;
+  /* Mobile chrome has a continuous rim with two diagonal reflections. */
+  --island-rim-strong: 28%;
+  --island-rim-soft: 12%;
+  --island-rim-faint: 4%;
 
   /* Depth-0 defaults for content rendered outside a Layer marker. */
   --layer-surface: var(--color-surface-0);
@@ -173,6 +177,9 @@ html[data-theme-light='true'] {
   --glass-shade-base: 8%;
   --glass-rim-strong-base: 52.5%;
   --glass-rim-soft-base: 30%;
+  --island-rim-strong: 75%;
+  --island-rim-soft: 40%;
+  --island-rim-faint: 16%;
 }
 
 html[data-platform='ios'],
@@ -533,6 +540,25 @@ html[data-theme-light='false'] {
   /* The glass rim and cast shadow replace the old ring + light-mode shadow:
      Tailwind rings are box-shadows and would fight the glass box-shadow. */
   @apply min-h-[40px] min-w-[40px] bg-chrome text-ink glass;
+  --color-chrome: color-mix(in oklch, var(--color-surface-2) 82%, transparent);
+  --glass-blur: 18px;
+  --glass-saturate: 1.5;
+
+  /* A quiet continuous edge, with broad reflections at the upper-left and
+     lower-right. Unlike desktop glass, the rim never disappears entirely
+     between the highlights. Reuse glass's mask so the center stays clear. */
+  &::after {
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 0%,
+      color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 18%,
+      color-mix(in oklch, var(--glass-tint) var(--island-rim-faint), transparent) 42%,
+      color-mix(in oklch, var(--glass-tint) var(--island-rim-faint), transparent) 58%,
+      color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 82%,
+      color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 100%
+    );
+  }
 }
 
 /* Apple-style glass chrome: backdrop blur, a bright inner top edge, a dark
@@ -541,8 +567,8 @@ html[data-theme-light='false'] {
    length). Shape and background come from the consumer, so this composes with
    any radius — the rim inherits it — and with variants (`mobile:glass`).
 
-   One strength everywhere — the marketing site's hero-ring geometry — so a
-   button, a menu, a dialog and a mobile island all read as the same material.
+   Desktop glass uses the marketing site's hero-ring geometry. Mobile islands
+   layer their own continuous rim, translucent fill and stronger blur on top.
    Only geometry tokens are set here (see the `--glass-*` block in :root for
    why the palette lives there). */
 @utility glass {

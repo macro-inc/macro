@@ -1,6 +1,8 @@
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -151,30 +153,70 @@ function PopoverSplitModal(props: {
     },
   });
 
+  const useBottomSheet = () =>
+    isTouchDevice() &&
+    props.popover.content.type === 'component' &&
+    ['task-compose', 'calendar-event-compose'].includes(
+      props.popover.content.id
+    );
+  const attachPanel = (element: HTMLElement) => {
+    setPanelRef(element);
+    bindHotKeyDom(element);
+  };
+  const onOpenChange = (open: boolean) => {
+    if (!open) props.onClose();
+  };
+  const Content = () => (
+    <SplitPanelContext.Provider value={stubPanelContext}>
+      <SoupContextProvider>
+        <Show when={props.popover.mount}>
+          <Panel.Body>
+            <Dynamic component={props.popover.mount.element} />
+          </Panel.Body>
+        </Show>
+      </SoupContextProvider>
+    </SplitPanelContext.Provider>
+  );
+
   return (
-    <Dialog
-      open={props.popover.isOpen}
-      onOpenChange={(open) => {
-        if (!open) {
-          props.onClose();
-        }
-      }}
-      contentRef={(r) => {
-        setPanelRef(r);
-        bindHotKeyDom(r);
-      }}
+    <Show
+      when={useBottomSheet()}
+      fallback={
+        <Dialog
+          open={props.popover.isOpen}
+          onOpenChange={onOpenChange}
+          contentRef={attachPanel}
+        >
+          <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
+            <Content />
+          </Panel>
+        </Dialog>
+      }
     >
-      <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
-        <SplitPanelContext.Provider value={stubPanelContext}>
-          <SoupContextProvider>
-            <Show when={props.popover.mount}>
-              <Panel.Body>
-                <Dynamic component={props.popover.mount.element} />
-              </Panel.Body>
-            </Show>
-          </SoupContextProvider>
-        </SplitPanelContext.Provider>
-      </Panel>
-    </Dialog>
+      <MobileDrawer
+        side="bottom"
+        open={props.popover.isOpen}
+        onOpenChange={onOpenChange}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay" />
+          <MobileDrawer.Content
+            ref={attachPanel}
+            class="bg-dialog"
+            aria-label={
+              props.popover.content.id === 'task-compose'
+                ? 'New task'
+                : 'Calendar event'
+            }
+            maxHeight={92}
+          >
+            <MobileDrawer.Handle />
+            <MobileDrawer.ScrollBody>
+              <Content />
+            </MobileDrawer.ScrollBody>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </Show>
   );
 }
