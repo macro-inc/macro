@@ -446,6 +446,17 @@ impl CacheState {
             .expect("callable cache state contains an engine"))
     }
 
+    /// Keep stored notification associations out of writes that will reset the
+    /// cache. The engine still owns the identity reset and operation invalidation.
+    async fn can_reuse_stored_identity(&mut self, identity: Option<&str>) -> Result<bool, JsValue> {
+        let Some(observed) = identity else {
+            return Ok(true);
+        };
+        let result = self.engine_mut()?.current_identity().await;
+        let bound = self.engine_result(result)?;
+        Ok(bound.as_deref().is_none_or(|bound| bound == observed))
+    }
+
     fn engine_result<T>(
         &mut self,
         result: Result<T, EngineError<TursoStorageError>>,
@@ -1112,17 +1123,19 @@ impl CacheEngine {
             let mut projections =
                 authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
-            projections.extend(
-                notification_projection_updates(
-                    state.engine_mut()?.storage(),
-                    &query,
-                    operation_name.as_deref(),
-                    &vars,
-                    &data,
-                )
-                .await
-                .map_err(err_js)?,
-            );
+            if state.can_reuse_stored_identity(identity.as_deref()).await? {
+                projections.extend(
+                    notification_projection_updates(
+                        state.engine_mut()?.storage(),
+                        &query,
+                        operation_name.as_deref(),
+                        &vars,
+                        &data,
+                    )
+                    .await
+                    .map_err(err_js)?,
+                );
+            }
             let result = state
                 .engine_mut()?
                 .write_query_with_registration_and_projections(
@@ -1169,17 +1182,19 @@ impl CacheEngine {
             let mut projections =
                 authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
-            projections.extend(
-                notification_projection_updates(
-                    state.engine_mut()?.storage(),
-                    &query,
-                    operation_name.as_deref(),
-                    &variables,
-                    &data,
-                )
-                .await
-                .map_err(err_js)?,
-            );
+            if state.can_reuse_stored_identity(identity.as_deref()).await? {
+                projections.extend(
+                    notification_projection_updates(
+                        state.engine_mut()?.storage(),
+                        &query,
+                        operation_name.as_deref(),
+                        &variables,
+                        &data,
+                    )
+                    .await
+                    .map_err(err_js)?,
+                );
+            }
             let result = state
                 .engine_mut()?
                 .hydrate_query_with_projections(
@@ -1240,17 +1255,20 @@ impl CacheEngine {
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
             let mut projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
-            projection_mutations.extend(optimistic_notification_updates(
-                notification_projection_updates(
-                    state.engine_mut()?.storage(),
-                    &query,
-                    operation_name.as_deref(),
-                    &vars,
-                    &data,
+            projection_mutations.extend(
+                optimistic_notification_updates(
+                    notification_projection_updates(
+                        state.engine_mut()?.storage(),
+                        &query,
+                        operation_name.as_deref(),
+                        &vars,
+                        &data,
+                    )
+                    .await
+                    .map_err(err_js)?,
                 )
-                .await
                 .map_err(err_js)?,
-            ));
+            );
             let claim = MutationClaimRequest {
                 owner: lease_owner,
                 now_ms: parse_timestamp(now_ms, "claim timestamp")?,

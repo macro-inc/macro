@@ -23,4 +23,13 @@ test('notification state memberships survive optimistic rollback and authoritati
     'Rollback restores only first notification: 1'
   );
   await expect(page.locator('#result')).toContainText('DONE: network-only');
+  await expect(page.locator('#result')).toContainText(
+    'Write identity switch discards old associations: 1'
+  );
+  await expect(page.locator('#result')).toContainText(
+    'Hydration identity switch discards old associations: 1'
+  );
+  await expect(page.locator('#result')).toContainText(
+    'Identity-only notification cannot inherit a parent: 0'
+  );
 });

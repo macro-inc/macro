@@ -108,7 +108,8 @@ async fn mark_done<S: Storage>(engine: &mut Engine<S>, id: &str, uuid: &str) -> 
         notification_projection_updates(engine.storage(), UPDATE, None, &vars, &data)
             .await
             .unwrap(),
-    );
+    )
+    .unwrap();
     assert_eq!(updates.len(), 1);
     engine
         .begin_optimistic_write_with_projections(
@@ -347,7 +348,7 @@ async fn unhydrated_parents<S: PredicateIndexStorage>(storage: S) {
             .await
             .unwrap();
             assert!(updates.is_empty(), "ID-only {kind} update: {state}");
-            assert!(optimistic_notification_updates(updates).is_empty());
+            assert!(optimistic_notification_updates(updates).unwrap().is_empty());
             write(&mut engine, UPDATE, &data).await;
         }
         let keys = vec![format!("GraphqlNotification:{A}")];
@@ -491,6 +492,75 @@ fn nonmatching_notification_parent_projections_real_turso() {
         )
         .await
     });
+}
+
+#[test]
+fn optimistic_notification_conversion_preserves_member_edits_and_invalidation() {
+    let key = RecordKey::new(format!("GraphqlSoupDocument:{D}")).unwrap();
+    let partition = vocabulary::document_partition();
+    let id = uuid::Uuid::parse_str(A).unwrap();
+    assert!(optimistic_notification_updates(vec![]).unwrap().is_empty());
+    assert_eq!(
+        optimistic_notification_updates(vec![
+            change(key.clone(), partition.clone(), id, Some("SEEN")),
+            change(key.clone(), partition.clone(), id, Some("INVALID")),
+        ])
+        .unwrap(),
+        vec![
+            OptimisticProjectionMutation::PatchExact {
+                record_key: key.clone(),
+                profile: vocabulary::profile_v4(),
+                partition: partition.clone(),
+                remove: vec![
+                    member(vocabulary::notification_unseen(), id),
+                    member(vocabulary::notification_seen(), id),
+                ],
+                insert: vec![member(vocabulary::notification_seen(), id)],
+            },
+            OptimisticProjectionMutation::Unknown {
+                record_key: key,
+                profile: vocabulary::profile_v4(),
+                partition,
+                affected_attributes: vec![
+                    vocabulary::notification_unseen(),
+                    vocabulary::notification_seen(),
+                ],
+            },
+        ]
+    );
+}
+
+#[test]
+fn optimistic_notification_conversion_rejects_unsupported_mutations() {
+    let mutations = authoritative_projection_mutations(SNAPSHOT, None, &snapshot(vec![])).unwrap();
+    let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
+        panic!("complete snapshot")
+    };
+    for unsupported in [
+        ProjectionMutation::Replace(document.clone()),
+        ProjectionMutation::Patch {
+            record_key: document.record_key.clone(),
+            profile: document.profile.clone(),
+            partition: document.partition.clone(),
+            exact: vec![],
+            integers: vec![],
+            sorts: vec![],
+        },
+        ProjectionMutation::Delete(document.record_key.clone()),
+    ] {
+        // A supported prefix must not hide an unsupported mutation in the batch.
+        let supported = change(
+            document.record_key.clone(),
+            document.partition.clone(),
+            uuid::Uuid::parse_str(A).unwrap(),
+            Some("DONE"),
+        );
+        let error = optimistic_notification_updates(vec![supported, unsupported]).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "notification updates must be member edits or invalidation"
+        );
+    }
 }
 
 #[test]

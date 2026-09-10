@@ -343,9 +343,11 @@ pub async fn notification_projection_updates<S: Storage>(
 }
 
 /// Convert deterministic notification contributions into durable optimistic edits.
+///
+/// Returns an error for mutations other than member edits or invalidation.
 pub fn optimistic_notification_updates(
     updates: Vec<ProjectionMutation>,
-) -> Vec<OptimisticProjectionMutation> {
+) -> Result<Vec<OptimisticProjectionMutation>, SoupFilterCacheAdapterError> {
     updates
         .into_iter()
         .map(|update| match update {
@@ -355,19 +357,19 @@ pub fn optimistic_notification_updates(
                 partition,
                 remove,
                 insert,
-            } => OptimisticProjectionMutation::PatchExact {
+            } => Ok(OptimisticProjectionMutation::PatchExact {
                 record_key,
                 profile,
                 partition,
                 remove,
                 insert,
-            },
+            }),
             ProjectionMutation::MarkIncomplete {
                 record_key,
                 profile,
                 partition,
                 ..
-            } => OptimisticProjectionMutation::Unknown {
+            } => Ok(OptimisticProjectionMutation::Unknown {
                 record_key,
                 profile,
                 partition,
@@ -375,8 +377,12 @@ pub fn optimistic_notification_updates(
                     vocabulary::notification_unseen(),
                     vocabulary::notification_seen(),
                 ],
-            },
-            _ => unreachable!("notification updates are member edits or invalidation"),
+            }),
+            ProjectionMutation::Replace(_)
+            | ProjectionMutation::Patch { .. }
+            | ProjectionMutation::Delete(_) => Err(SoupFilterCacheAdapterError(
+                "notification updates must be member edits or invalidation".to_owned(),
+            )),
         })
         .collect()
 }

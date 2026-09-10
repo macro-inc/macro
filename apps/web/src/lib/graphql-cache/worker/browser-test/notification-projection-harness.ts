@@ -71,33 +71,36 @@ const authority = (id: string, state: string) =>
     variables: variables(id, 'MARK_DONE'),
     data: { updateNotifications: [notification(id, state)] },
   });
-const seed = () =>
-  host.writeQuery({
-    query: snapshotQuery,
-    identity: 'notification-projection-viewer',
-    data: {
-      user: {
-        id: 'notification-projection-viewer',
-        soup: {
-          items: [
-            {
-              __typename: 'GraphqlSoupProject',
-              id: projectId,
-              cacheProjection: null,
-              ownerId: 'macro|viewer@example.com',
-              parentId: null,
-              createdAt: '2025-01-01T00:00:00Z',
-              updatedAt: '2025-01-02T00:00:00Z',
-              notifications: [
-                ...ids.map((id) => notification(id, 'UNSEEN')),
-                ...unhydratedNotifications,
-              ],
-            },
-          ],
-        },
+const snapshot = (
+  identity = 'notification-projection-viewer',
+  entityId = projectId
+) => ({
+  query: snapshotQuery,
+  identity,
+  data: {
+    user: {
+      id: identity,
+      soup: {
+        items: [
+          {
+            __typename: 'GraphqlSoupProject',
+            id: entityId,
+            cacheProjection: null,
+            ownerId: 'macro|viewer@example.com',
+            parentId: null,
+            createdAt: '2025-01-01T00:00:00Z',
+            updatedAt: '2025-01-02T00:00:00Z',
+            notifications: [
+              ...ids.map((id) => ({ ...notification(id, 'UNSEEN'), entityId })),
+              ...unhydratedNotifications,
+            ],
+          },
+        ],
       },
     },
-  });
+  },
+});
+const seed = () => host.writeQuery(snapshot());
 const markDone = (id: string) =>
   host.enqueueOptimisticMutation(
     {
@@ -198,6 +201,39 @@ try {
   });
   if (done.kind !== 'unsupported') throw new Error('DONE must fall back');
   report.push('DONE: network-only');
+  // Reused notification IDs must not carry old-parent removals across viewers.
+  // A complete snapshot establishes only the new viewer's parent projection.
+  await host.writeQuery(
+    snapshot('write-viewer', '00000000-0000-0000-0000-000000000002')
+  );
+  await expectCount(
+    'Write identity switch discards old associations',
+    'UNSEEN',
+    1
+  );
+  await host.hydrateQuery(
+    snapshot('hydrate-viewer', '00000000-0000-0000-0000-000000000003')
+  );
+  await expectCount(
+    'Hydration identity switch discards old associations',
+    'UNSEEN',
+    1
+  );
+  await host.writeQuery({
+    query: updateQuery,
+    identity: 'id-only-viewer',
+    variables: variables(ids[0], 'MARK_DONE'),
+    data: {
+      updateNotifications: [
+        { __typename: 'GraphqlNotification', id: ids[0], state: 'DONE' },
+      ],
+    },
+  });
+  await expectCount(
+    'Identity-only notification cannot inherit a parent',
+    'UNSEEN',
+    0
+  );
   node.dataset.status = 'passed';
   node.textContent = report.join('\n');
 } catch (error) {
