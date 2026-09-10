@@ -10,7 +10,12 @@ async fn mail_metadata_excludes_trashed_messages(pool: Pool<Postgres>) -> anyhow
     let repo = EmailPgRepo::new(pool);
     let draft = uuid::uuid!("20000008-0000-0000-0000-000000000008");
     let trash = uuid::uuid!("20000009-0000-0000-0000-000000000009");
-    let rows = repo.thread_metadata_by_ids(macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user1@test.com")?, &[draft, trash]).await?;
+    let rows = repo
+        .thread_metadata_by_ids(
+            macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user1@test.com")?,
+            &[draft, trash],
+        )
+        .await?;
     assert!(
         rows.iter()
             .find(|row| row.thread_id == draft)
@@ -81,7 +86,10 @@ async fn thread_metadata_by_ids_returns_canonical_rows(pool: Pool<Postgres>) -> 
     let canonical_link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     let mut metadata = repo
-        .thread_metadata_by_ids(macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user1@test.com")?, &[first_id, missing_id, second_id])
+        .thread_metadata_by_ids(
+            macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user1@test.com")?,
+            &[first_id, missing_id, second_id],
+        )
         .await?;
     metadata.sort_by_key(|row| row.thread_id);
 

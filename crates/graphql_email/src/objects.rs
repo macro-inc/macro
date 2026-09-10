@@ -49,9 +49,15 @@ pub struct GraphqlMailPreviewMessage {
 
 impl From<email::domain::models::EmailPreview> for GraphqlMailPreviewMessage {
     fn from(preview: email::domain::models::EmailPreview) -> Self {
-        Self { id: ID(preview.id.to_string()), subject: preview.subject, snippet: preview.snippet,
-            is_draft: preview.is_draft, sender_email: preview.sender_email,
-            sender_name: preview.sender_name, sender_photo_url: preview.sender_photo_url }
+        Self {
+            id: ID(preview.id.to_string()),
+            subject: preview.subject,
+            snippet: preview.snippet,
+            is_draft: preview.is_draft,
+            sender_email: preview.sender_email,
+            sender_name: preview.sender_name,
+            sender_photo_url: preview.sender_photo_url,
+        }
     }
 }
 

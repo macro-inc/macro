@@ -89,7 +89,7 @@ export type EntityFilterCacheArgs = {
   /** Omit for exact evaluation; even an empty array requests reconciliation. */
   baseline?: Array<{ key: string; sortTimestamp: string }>;
   /** Explicit cached-Mail pagination, independent of server cursors. */
-  mail?: { view: 'ALL' | 'INBOX'; cursor?: string };
+  mail?: { view: 'ALL' | 'INBOX' | 'DRAFTS' | 'SENT'; cursor?: string };
 };
 
 export type EntityFilterCacheResult =

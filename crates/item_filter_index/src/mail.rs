@@ -66,9 +66,18 @@ pub fn compile(
     }
     let mut sharing = Vec::new();
     collect_sharing(ast.email_filter.tree.as_deref(), &mut sharing);
-    if sharing.windows(2).any(|pair| pair[0] != pair[1]) { return Ok(unsupported()); }
-    let sharing = sharing.first().copied().unwrap_or(&SharedEmailFilter::Exclude);
-    let sort = token(match view { "INBOX" => "mail-inbox-ts", "SENT" => "mail-sent-ts", _ => "mail-all-ts" });
+    if sharing.windows(2).any(|pair| pair[0] != pair[1]) {
+        return Ok(unsupported());
+    }
+    let sharing = sharing
+        .first()
+        .copied()
+        .unwrap_or(&SharedEmailFilter::Exclude);
+    let sort = token(match view {
+        "INBOX" => "mail-inbox-ts",
+        "SENT" => "mail-sent-ts",
+        _ => "mail-all-ts",
+    });
     let mut predicate = compile_expr(ast.email_filter.tree.as_deref(), |literal| {
         Ok(match literal {
             EmailLiteral::ThreadId(id) => exact_uuid(vocabulary::id(), id),
@@ -92,11 +101,21 @@ pub fn compile(
     let scope = if links.is_empty() {
         // Soup currently skips the entire email leg when no readable inbox exists.
         PredicateExpr::None
-    } else { match sharing {
-        SharedEmailFilter::Exclude => owned_scope,
-        SharedEmailFilter::Include => PredicateExpr::Or(Box::new(owned_scope),Box::new(shared_scope)),
-        SharedEmailFilter::Only => PredicateExpr::And(Box::new(shared_scope), Box::new(PredicateExpr::Not(Box::new(exact_utf8(token("mail-owner"),viewer)?)))),
-    }};
+    } else {
+        match sharing {
+            SharedEmailFilter::Exclude => owned_scope,
+            SharedEmailFilter::Include => {
+                PredicateExpr::Or(Box::new(owned_scope), Box::new(shared_scope))
+            }
+            SharedEmailFilter::Only => PredicateExpr::And(
+                Box::new(shared_scope),
+                Box::new(PredicateExpr::Not(Box::new(exact_utf8(
+                    token("mail-owner"),
+                    viewer,
+                )?))),
+            ),
+        }
+    };
     for gate in [scope, boolean("mail-has-message", true)] {
         predicate = PredicateExpr::And(Box::new(predicate), Box::new(gate));
     }
@@ -114,10 +133,24 @@ pub fn compile(
         );
     }
     if matches!(view, "DRAFTS" | "SENT") {
-        let attribute = token(if view == "DRAFTS" { "mail-draft-message" } else { "mail-sent-message" });
-        predicate = PredicateExpr::And(Box::new(predicate), Box::new(PredicateExpr::ExactExists {attribute}));
+        let attribute = token(if view == "DRAFTS" {
+            "mail-draft-message"
+        } else {
+            "mail-sent-message"
+        });
+        predicate = PredicateExpr::And(
+            Box::new(predicate),
+            Box::new(PredicateExpr::ExactExists { attribute }),
+        );
         if view == "SENT" {
-            predicate = PredicateExpr::And(Box::new(predicate), Box::new(PredicateExpr::I64Range {attribute: sort.clone(),lower:None,upper:None}));
+            predicate = PredicateExpr::And(
+                Box::new(predicate),
+                Box::new(PredicateExpr::I64Range {
+                    attribute: sort.clone(),
+                    lower: None,
+                    upper: None,
+                }),
+            );
         }
     }
     Ok(LocalCompileOutcome::Supported(ValidatedIndexQuery::new(
@@ -143,11 +176,17 @@ pub fn boolean(attribute: &str, value: bool) -> PredicateExpr {
     }
 }
 
-fn collect_sharing<'a>(expr: Option<&'a Expr<EmailLiteral>>, modes: &mut Vec<&'a SharedEmailFilter>) {
+fn collect_sharing<'a>(
+    expr: Option<&'a Expr<EmailLiteral>>,
+    modes: &mut Vec<&'a SharedEmailFilter>,
+) {
     match expr {
-        Some(Expr::And(a,b)) => {collect_sharing(Some(a),modes); collect_sharing(Some(b),modes);}
+        Some(Expr::And(a, b)) => {
+            collect_sharing(Some(a), modes);
+            collect_sharing(Some(b), modes);
+        }
         Some(Expr::Literal(EmailLiteral::Shared(mode))) => modes.push(mode),
-        _ => {},
+        _ => {}
     }
 }
 

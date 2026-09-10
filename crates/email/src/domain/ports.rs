@@ -409,7 +409,7 @@ pub trait EmailThreadMetadataService: Send + Sync + 'static {
     fn get_email_thread_metadata(
         &self,
         viewer: MacroUserIdStr<'static>,
-        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>, 
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr>> + Send;
 }
 

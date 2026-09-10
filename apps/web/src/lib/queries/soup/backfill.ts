@@ -18,6 +18,7 @@ import {
   getGraphqlSoupCacheHost,
   hydrateGraphqlSoup,
 } from '@service-storage/graphql-soup';
+import { createSharedMailBackfillFetcher } from '@service-storage/shared-mail-backfill';
 import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
@@ -25,7 +26,7 @@ import { createEffect, createSignal, onCleanup } from 'solid-js';
 
 // Bump when a default backfill input or completion guarantee changes so
 // persisted cursors cannot retain an older hydration contract.
-const BACKFILL_VERSION = 10;
+const BACKFILL_VERSION = 11;
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
@@ -53,6 +54,10 @@ export type SoupBackfillParams = {
   checkpointId: string;
   /** Optional network fetcher; defaults to the standard Soup operation. */
   fetchPage?: SoupBackfillFetchPage;
+  /** Allocate per-scan membership evidence (never shared across users or retries). */
+  createFetchPage?: (userId: string) => Promise<SoupBackfillFetchPage>;
+  /** Access-scope reconciliation requires a fresh full scan after interruption. */
+  restartOnRun?: boolean;
   /** Soup input shared by every page. The backfill manages the cursor. */
   input: GraphqlSoupInitialInput;
   /** Delay between successful pages. Defaults to two seconds. */
@@ -123,6 +128,20 @@ export const EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
   input: { ...EMAIL_SOUP_BACKFILL_LANE.input, limit: PAGE_LIMIT },
 };
 
+/** Shared grants are separate from owned/delegated inbox scope. A complete scan
+ * invalidates omitted old proof; interrupted scans preserve last-known evidence. */
+export const SHARED_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
+  checkpointId: 'shared-email-filter-metadata',
+  createFetchPage: createSharedMailBackfillFetcher,
+  refreshAll: true,
+  restartOnRun: true,
+  input: { ...EMAIL_FILTER_BACKFILL_LANE.input,
+    filters: { ...EMAIL_FILTER_BACKFILL_LANE.input.filters,
+      emailFilter: { tree: { literal: { shared: 'ONLY' } } },
+    },
+  },
+};
+
 /** Backfills CRM companies and foreign entities. */
 export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'auxiliary-entities',
@@ -148,6 +167,7 @@ export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 export const DEFAULT_SOUP_BACKFILL_LANES = [
   CORE_SOUP_BACKFILL_LANE,
   EMAIL_FILTER_BACKFILL_LANE,
+  SHARED_EMAIL_FILTER_BACKFILL_LANE,
   EMAIL_SOUP_BACKFILL_LANE,
   AUXILIARY_SOUP_BACKFILL_LANE,
 ] as const satisfies readonly SoupBackfillParams[];
@@ -359,6 +379,9 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   let checkpoint = yield* Effect.sync(() =>
     loadSoupBackfillCheckpoint(userId, params.checkpointId)
   );
+  if (params.restartOnRun) {
+    checkpoint = { ...checkpoint, nextCursor: null, completed: false, pagesFetched: 0, scanStartedAt: null };
+  }
   // Only a never-completed full scan needs the additional watermark pass. An
   // interrupted catch-up already has updatedSince and resumes normally.
   let catchUpPassPending =
@@ -380,7 +403,9 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     yield* Effect.sync(startPass);
   }
 
-  const fetchPage = params.fetchPage ?? fetchSoupPage;
+  const fetchPage = params.createFetchPage
+    ? yield* Effect.tryPromise(() => params.createFetchPage!(userId))
+    : params.fetchPage ?? fetchSoupPage;
 
   while (true) {
     const passInput = withUpdatedSince(

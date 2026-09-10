@@ -361,33 +361,61 @@ where
     }
 
     /// Canonical Sent timestamp, independent of the currently selected preview.
-    async fn latest_outbound_message_ts(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<String>> {
-        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id).await?.latest_outbound_message_ts.map(|ts|ts.to_rfc3339()))
+    async fn latest_outbound_message_ts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<String>> {
+        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id)
+            .await?
+            .latest_outbound_message_ts
+            .map(|ts| ts.to_rfc3339()))
     }
 
     /// Authoritative calendar attachment classification used by the Calendar tab.
     async fn has_calendar_attachment(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id).await?.has_calendar_attachment)
+        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id)
+            .await?
+            .has_calendar_attachment)
     }
 
     /// Whether the viewer has a thread share grant through their user, team or active channel.
     async fn has_thread_share(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
-        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id).await?.has_thread_share)
+        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id)
+            .await?
+            .has_thread_share)
     }
 
     /// Latest eligible message for ALL, INBOX, Calendar and Shared, without bodies.
-    async fn mail_all_preview(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
-        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id).await?.all_preview.map(Into::into))
+    async fn mail_all_preview(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
+        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id)
+            .await?
+            .all_preview
+            .map(Into::into))
     }
 
     /// Latest eligible draft, even when a newer non-draft exists in the thread.
-    async fn mail_draft_preview(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
-        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id).await?.draft_preview.map(Into::into))
+    async fn mail_draft_preview(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
+        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id)
+            .await?
+            .draft_preview
+            .map(Into::into))
     }
 
     /// Latest eligible sent message, without bodies.
-    async fn mail_sent_preview(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
-        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id).await?.sent_preview.map(Into::into))
+    async fn mail_sent_preview(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
+        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id)
+            .await?
+            .sent_preview
+            .map(Into::into))
     }
 
     /// A page of messages in this thread, newest first.

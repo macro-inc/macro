@@ -69,7 +69,9 @@ fn uuid_fact(attribute: &str, value: &str) -> Option<ExactFact> {
 fn preview_ref(record: &Record, field: &str) -> Option<Option<uuid::Uuid>> {
     match record.fields.get(field)? {
         CacheValue::Null => Some(None),
-        CacheValue::Ref(key) => Some(Some(uuid::Uuid::parse_str(key.as_ref().strip_prefix("GraphqlMailPreviewMessage:")?).ok()?)),
+        CacheValue::Ref(key) => Some(Some(
+            uuid::Uuid::parse_str(key.as_ref().strip_prefix("GraphqlMailPreviewMessage:")?).ok()?,
+        )),
         _ => None,
     }
 }
@@ -77,9 +79,14 @@ fn preview_ref(record: &Record, field: &str) -> Option<Option<uuid::Uuid>> {
 fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
     let id = key.as_str().strip_prefix(&format!("{TYPE}:"))?;
     let owner = string(record, "ownerId")?;
-    if owner.is_empty() { return None; }
+    if owner.is_empty() {
+        return None;
+    }
     let mut facts = vec![
-        ExactFact {attribute:vocabulary::token("mail-owner"),value:ExactValue::utf8(owner).ok()?},
+        ExactFact {
+            attribute: vocabulary::token("mail-owner"),
+            value: ExactValue::utf8(owner).ok()?,
+        },
         bool_fact(record, "hasCalendarAttachment", "mail-calendar")?,
         bool_fact(record, "hasThreadShare", "mail-shared")?,
         uuid_fact("id", id)?,
@@ -89,12 +96,22 @@ fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
         bool_fact(record, "isSignal", "mail-signal")?,
         bool_fact(record, "hasNonTrashedMessages", "mail-has-message")?,
     ];
-    let all = preview_ref(record,"mailAllPreview")?;
-    let draft = preview_ref(record,"mailDraftPreview")?;
-    let sent = preview_ref(record,"mailSentPreview")?;
-    if record.fields.get("hasNonTrashedMessages") != Some(&CacheValue::Bool(all.is_some())) || (all.is_none() && (draft.is_some() || sent.is_some())) {return None;}
-    for (attribute,id) in [("mail-all-message",all),("mail-draft-message",draft),("mail-sent-message",sent)] {
-        if let Some(id) = id {facts.push(uuid_fact(attribute,&id.to_string())?);}
+    let all = preview_ref(record, "mailAllPreview")?;
+    let draft = preview_ref(record, "mailDraftPreview")?;
+    let sent = preview_ref(record, "mailSentPreview")?;
+    if record.fields.get("hasNonTrashedMessages") != Some(&CacheValue::Bool(all.is_some()))
+        || (all.is_none() && (draft.is_some() || sent.is_some()))
+    {
+        return None;
+    }
+    for (attribute, id) in [
+        ("mail-all-message", all),
+        ("mail-draft-message", draft),
+        ("mail-sent-message", sent),
+    ] {
+        if let Some(id) = id {
+            facts.push(uuid_fact(attribute, &id.to_string())?);
+        }
     }
     let updated = timestamp(record, "updatedAt")??;
     let all = timestamp(record, "latestNonSpamMessageTs")?.unwrap_or(updated);
@@ -108,8 +125,11 @@ fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
             value: inbound,
         });
     }
-    if let Some(outbound) = timestamp(record,"latestOutboundMessageTs")? {
-        times.push(IntegerFact {attribute:vocabulary::token("mail-sent-ts"),value:outbound});
+    if let Some(outbound) = timestamp(record, "latestOutboundMessageTs")? {
+        times.push(IntegerFact {
+            attribute: vocabulary::token("mail-sent-ts"),
+            value: outbound,
+        });
     }
     Some(IndexDocument {
         record_key: key,
@@ -219,10 +239,31 @@ pub async fn projection_updates_for_write<S: Storage>(
                 "mail-inbox-ts" => changed.contains("latestInboundMessageTs"),
                 _ => false,
             };
-            let exact = ["mail-link-id","mail-owner","mail-read","mail-inbox","mail-signal","mail-has-message","mail-calendar","mail-shared","mail-all-message","mail-draft-message","mail-sent-message"].into_iter()
-                .filter(|attr|affected(attr)).map(|attr|ExactAttributePatch {
-                    attribute:vocabulary::token(attr), values:document.exact_facts.iter().filter(|fact|fact.attribute==vocabulary::token(attr)).map(|fact|fact.value.clone()).collect(),
-                }).collect();
+            let exact = [
+                "mail-link-id",
+                "mail-owner",
+                "mail-read",
+                "mail-inbox",
+                "mail-signal",
+                "mail-has-message",
+                "mail-calendar",
+                "mail-shared",
+                "mail-all-message",
+                "mail-draft-message",
+                "mail-sent-message",
+            ]
+            .into_iter()
+            .filter(|attr| affected(attr))
+            .map(|attr| ExactAttributePatch {
+                attribute: vocabulary::token(attr),
+                values: document
+                    .exact_facts
+                    .iter()
+                    .filter(|fact| fact.attribute == vocabulary::token(attr))
+                    .map(|fact| fact.value.clone())
+                    .collect(),
+            })
+            .collect();
             let integers = ["mail-all-ts", "mail-inbox-ts", "mail-sent-ts"]
                 .into_iter()
                 .filter(|attr| affected(attr))

@@ -46,6 +46,18 @@ query SoupMailBackfill($input: SoupInput!) {
 	}
 }
 
+query SoupSharedMailBackfill($input: SoupInput!) {
+	user {
+		id @cacheOnly
+		emailLinks @cacheOnly { id emailAddress photoUrl }
+		soup(input: $input) {
+			items @cacheOnly { ...SoupItemFields }
+			scopeIds: items { __typename id }
+			nextCursor
+		}
+	}
+}
+
 query MailAccounts {
 	user {
 		id

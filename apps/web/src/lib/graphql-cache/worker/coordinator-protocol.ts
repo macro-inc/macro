@@ -570,7 +570,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         (request.mail === undefined ||
           (isRecord(request.mail) &&
             hasOnlyKeys(request.mail, ['view', 'cursor']) &&
-            (request.mail.view === 'ALL' || request.mail.view === 'INBOX') &&
+            ['ALL', 'INBOX', 'DRAFTS', 'SENT'].includes(request.mail.view as string) &&
             request.limit < 500 &&
             request.baseline === undefined &&
             (request.mail.cursor === undefined ||
