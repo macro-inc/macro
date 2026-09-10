@@ -86,10 +86,8 @@ export function buildTaskSearchRequest(options: {
   facets: FacetSelection;
   facetContext?: TaskFacetContext;
 }): SearchSoupQueryArgs {
-  const propertyFilters = selectedPropertyFilters(
-    options.facets,
-    options.facetContext ?? EMPTY_TASK_FACET_CONTEXT
-  );
+  const facetContext = options.facetContext ?? EMPTY_TASK_FACET_CONTEXT;
+  const propertyFilters = selectedPropertyFilters(options.facets, facetContext);
 
   if (options.tab === 'my-tasks') {
     propertyFilters.push({
@@ -100,7 +98,10 @@ export function buildTaskSearchRequest(options: {
   }
 
   const owners = selectedCreators(options.facets, options.tab, options.userId);
-  const tagOptionIds = [...new Set(options.facets.tags ?? [])];
+  // Like the list query, a selected tag that no longer exists stops filtering.
+  const tagOptionIds = [...new Set(options.facets.tags ?? [])].filter((id) =>
+    facetContext.tagPropertyDefinitionByOptionId.has(id)
+  );
 
   return {
     params: { cursor: null, page_size: 100 },
