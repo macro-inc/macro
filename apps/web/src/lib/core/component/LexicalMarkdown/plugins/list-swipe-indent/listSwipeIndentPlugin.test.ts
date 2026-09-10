@@ -1,17 +1,23 @@
+import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import {
   $createListItemNode,
   $createListNode,
   $isListItemNode,
+  $isListNode,
   ListItemNode,
   ListNode,
+  type ListType,
   registerList,
 } from '@lexical/list';
 import { registerRichText } from '@lexical/rich-text';
 import {
   $createTextNode,
   $getRoot,
+  $getSelection,
   createEditor,
   type LexicalEditor,
+  REDO_COMMAND,
+  UNDO_COMMAND,
 } from 'lexical';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -60,8 +66,11 @@ function createTestEditor(): LexicalEditor {
   return editor;
 }
 
-function $buildList(items: Array<{ text: string; indent?: number }>) {
-  const list = $createListNode('bullet');
+function $buildList(
+  items: Array<{ text: string; indent?: number }>,
+  listType: ListType = 'bullet'
+) {
+  const list = $createListNode(listType);
   const nodes = items.map((item) => {
     const node = $createListItemNode();
     node.append($createTextNode(item.text));
@@ -143,6 +152,7 @@ async function swipe(
       pointerType,
     })
   );
+  const beforeMove = editor.getRootElement()?.innerHTML;
   document.dispatchEvent(
     pointerEvent('pointermove', {
       clientX: startX + dx,
@@ -150,6 +160,8 @@ async function swipe(
       pointerType,
     })
   );
+  // The entire group stays visually unchanged until the finger is released.
+  expect(editor.getRootElement()?.innerHTML).toBe(beforeMove);
   document.dispatchEvent(
     pointerEvent('pointerup', {
       clientX: startX + dx,
@@ -179,17 +191,15 @@ describe('$indentListItem / $outdentListItem', () => {
     expect(readIndents(editor)).toEqual([0, 1]);
   });
 
-  it('does not indent the first item or past the previous sibling', async () => {
+  it('indents the only item in a list', async () => {
     const editor = createTestEditor();
+    registerList(editor);
     await update(editor, () => {
-      $buildList([{ text: 'one' }, { text: 'two', indent: 1 }]);
-      const [one, two] = $getRoot()
-        .getAllTextNodes()
-        .map((node) => node.getParent());
-      if ($isListItemNode(one)) expect($indentListItem(one)).toBe(false);
-      if ($isListItemNode(two)) expect($indentListItem(two)).toBe(false);
+      $buildList([{ text: 'one' }]);
+      const one = $getRoot().getAllTextNodes()[0].getParent();
+      if ($isListItemNode(one)) expect($indentListItem(one)).toBe(true);
     });
-    expect(readIndents(editor)).toEqual([0, 1]);
+    expect(readIndents(editor)).toEqual([1]);
   });
 
   it('outdents a nested item', async () => {
@@ -272,14 +282,17 @@ describe('list swipe indent gesture', () => {
     expect(readIndents(editor)).toEqual([0, 0]);
   });
 
-  it('does not indent the first item in a list', async () => {
+  it('indents the first item without moving the following sibling', async () => {
     const editor = createTestEditor();
+    registerList(editor);
     await update(editor, () => {
       $buildList([{ text: 'one' }, { text: 'two' }]);
     });
 
     await swipe(editor, 'one', 50);
 
+    expect(readIndents(editor)).toEqual([1, 0]);
+    await swipe(editor, 'one', -50);
     expect(readIndents(editor)).toEqual([0, 0]);
   });
 
@@ -297,6 +310,170 @@ describe('list swipe indent gesture', () => {
 });
 
 describe('list swipe indent with registerList', () => {
+  it('creates a nested list for the group and undoes the move as one edit', async () => {
+    const editor = createTestEditor();
+    registerList(editor);
+    registerHistory(editor, createEmptyHistoryState(), 400);
+    await update(editor, () =>
+      $buildList([
+        { text: 'before' },
+        { text: 'parent' },
+        { text: 'child', indent: 1 },
+        { text: 'grandchild', indent: 2 },
+        { text: 'after' },
+      ])
+    );
+
+    await swipe(editor, 'parent', 50);
+    expect(readIndents(editor)).toEqual([0, 1, 2, 3, 0]);
+    editor.dispatchCommand(UNDO_COMMAND, undefined);
+    await Promise.resolve();
+    expect(readIndents(editor)).toEqual([0, 0, 1, 2, 0]);
+    editor.dispatchCommand(REDO_COMMAND, undefined);
+    await Promise.resolve();
+    expect(readIndents(editor)).toEqual([0, 1, 2, 3, 0]);
+  });
+
+  it.each(['bullet', 'number', 'check'] as const)(
+    'moves descendants with their parent in a %s list',
+    async (listType) => {
+      const editor = createTestEditor();
+      registerList(editor);
+      const items = [
+        { text: 'before' },
+        { text: 'existing child', indent: 1 },
+        { text: 'parent' },
+        { text: 'child', indent: 1 },
+        { text: 'grandchild', indent: 2 },
+        { text: 'another child', indent: 1 },
+        { text: 'after' },
+        { text: 'unrelated child', indent: 1 },
+      ];
+      let selectedKey = '';
+      await update(editor, () => {
+        $buildList(items, listType);
+        const grandchild = $getRoot().getAllTextNodes()[4];
+        selectedKey = grandchild.getKey();
+        grandchild.select(2, 5);
+        if (listType === 'check') {
+          const child = $getRoot().getAllTextNodes()[3].getParent();
+          if ($isListItemNode(child)) child.setChecked(true);
+        }
+      });
+      expect(readIndents(editor)).toEqual([0, 1, 0, 1, 2, 1, 0, 1]);
+
+      await swipe(editor, 'parent', 50);
+      expect(readIndents(editor)).toEqual([0, 1, 1, 2, 3, 2, 0, 1]);
+      editor.read(() => {
+        expect($getSelection()).toMatchObject({
+          anchor: { key: selectedKey, offset: 2 },
+          focus: { key: selectedKey, offset: 5 },
+        });
+      });
+
+      await swipe(editor, 'parent', -50);
+      expect(readIndents(editor)).toEqual([0, 1, 0, 1, 2, 1, 0, 1]);
+      editor.read(() => {
+        const textNodes = $getRoot().getAllTextNodes();
+        expect(textNodes.map((node) => node.getTextContent())).toEqual(
+          items.map((item) => item.text)
+        );
+        for (const node of textNodes) {
+          const list = node.getParentOrThrow().getParent();
+          expect($isListNode(list) && list.getListType()).toBe(listType);
+        }
+        expect($getSelection()).toMatchObject({
+          anchor: { key: selectedKey, offset: 2 },
+          focus: { key: selectedKey, offset: 5 },
+        });
+        if (listType === 'check') {
+          const child = textNodes[3].getParent();
+          expect($isListItemNode(child) && child.getChecked()).toBe(true);
+        }
+      });
+    }
+  );
+
+  it.each(['first', 'middle', 'last'] as const)(
+    'outdents a %s sibling with its descendants',
+    async (position) => {
+      const editor = createTestEditor();
+      registerList(editor);
+      const preceding =
+        position === 'first' ? [] : [{ text: 'before', indent: 1 }];
+      const following =
+        position === 'last' ? [] : [{ text: 'after', indent: 1 }];
+      await update(editor, () =>
+        $buildList([
+          { text: 'root' },
+          ...preceding,
+          { text: 'parent', indent: 1 },
+          { text: 'child', indent: 2 },
+          { text: 'grandchild', indent: 3 },
+          ...following,
+          { text: 'next root' },
+        ])
+      );
+
+      await swipe(editor, 'parent', -50);
+      expect(readIndents(editor)).toEqual([
+        0,
+        ...preceding.map(() => 1),
+        0,
+        1,
+        2,
+        ...following.map(() => 1),
+        0,
+      ]);
+      editor.read(() => {
+        expect(
+          $getRoot()
+            .getAllTextNodes()
+            .map((node) => node.getTextContent())
+        ).toEqual([
+          'root',
+          ...preceding.map((item) => item.text),
+          'parent',
+          'child',
+          'grandchild',
+          ...following.map((item) => item.text),
+          'next root',
+        ]);
+      });
+    }
+  );
+
+  it.each(['bullet', 'number', 'check'] as const)(
+    'indents and outdents the first %s item with its descendants',
+    async (listType) => {
+      const editor = createTestEditor();
+      registerList(editor);
+      await update(editor, () =>
+        $buildList(
+          [
+            { text: 'parent' },
+            { text: 'child', indent: 1 },
+            { text: 'grandchild', indent: 2 },
+            { text: 'after' },
+          ],
+          listType
+        )
+      );
+      const before = editor.getEditorState().toJSON();
+
+      await swipe(editor, 'parent', -50);
+      expect(editor.getEditorState().toJSON()).toEqual(before);
+      await swipe(editor, 'parent', 50);
+      expect(readIndents(editor)).toEqual([1, 2, 3, 0]);
+      await swipe(editor, 'parent', 50);
+      expect(readIndents(editor)).toEqual([2, 3, 4, 0]);
+      await swipe(editor, 'parent', -50);
+      expect(readIndents(editor)).toEqual([1, 2, 3, 0]);
+      await swipe(editor, 'parent', -50);
+      expect(editor.getEditorState().toJSON()).toEqual(before);
+    }
+  );
+
   it('indents and outdents after list transforms run', async () => {
     const editor = createTestEditor();
     registerList(editor);

@@ -2,10 +2,11 @@
  * @file Apple Notes-style swipe indent for list items on touch.
  *
  * A mostly-horizontal finger swipe on a list row indents (right) or outdents
- * (left) that item one level, taking nested children with it. Vertical pans
- * stay scrolling; taps and mouse drags are left alone. The same depth limit
- * as tab indentation applies: at most one level deeper than the previous
- * sibling, and the first item in a list cannot indent (nothing to nest under).
+ * (left) that item one level on release, taking nested children with it.
+ * Items stay still while the finger is down. Vertical pans
+ * stay scrolling; taps and mouse drags are left alone. The first item can
+ * indent without a preceding sibling; other items keep the same sibling
+ * depth limit as tab indentation.
  */
 import {
   $createListNode,
@@ -27,16 +28,13 @@ import { $collectNestedGroup } from '../draggable-block/draggableBlockPlugin';
 const SLOP_PX = 12;
 /** Release past this distance commits one indent/outdent. */
 const COMMIT_PX = 40;
-/** Visual slide cap while the finger is down. */
-const MAX_TRANSLATE_PX = 48;
 /** Ignore swipes that start on the iOS back-gesture edge. */
 const EDGE_GUARD_PX = 16;
-const RUBBER_BAND = 0.25;
-const SNAP_BACK_MS = 150;
 
 export function $canIndentListItem(item: ListItemNode): boolean {
   if (!item.canIndent()) return false;
   const prev = item.getPreviousSibling();
+  if (prev === null) return true;
   if (!$isElementNode(prev)) return false;
   return item.getIndent() < prev.getIndent() + 1;
 }
@@ -89,27 +87,49 @@ function $unnestFromParentList(item: ListItemNode): boolean {
   return true;
 }
 
-/** Indent one list item, falling back to a nest-under-previous rewrite. */
+/** Keep child-list wrappers out of Lexical's single-item split/merge operation. */
+function $moveWithNestedGroup(
+  item: ListItemNode,
+  move: () => boolean
+): boolean {
+  const parent = item.getParent();
+  if (!$isListNode(parent)) return false;
+  const nested = $collectNestedGroup(item).slice(1);
+  if (nested.length === 0) return move();
+
+  // Moving into a temporary list preserves the nodes and their selection points.
+  // Leaving wrappers beside the item lets setIndent merge their children into
+  // the destination list as siblings, losing their relationship to this item.
+  $createListNode(parent.getListType()).append(...nested);
+  const moved = move();
+  let anchor = item;
+  for (const node of nested) {
+    anchor.insertAfter(node);
+    anchor = node;
+  }
+  return moved;
+}
+
+/** Indent a list item and its nested group by one level. */
 export function $indentListItem(item: ListItemNode): boolean {
   const target = $unwrapNestedListItem(item);
   if (!$canIndentListItem(target)) return false;
-  const before = target.getIndent();
-  target.setIndent(before + 1);
-  if (target.getIndent() > before) return true;
-  return $nestUnderPreviousSibling(target);
+  return $moveWithNestedGroup(target, () => {
+    const before = target.getIndent();
+    target.setIndent(before + 1);
+    return target.getIndent() > before || $nestUnderPreviousSibling(target);
+  });
 }
 
-/**
- * Outdent one list item. Nested children come along because Lexical's
- * ListItemNode.setIndent rewrites the tree (same path as Shift+Tab).
- */
+/** Outdent a list item and its nested group by one level. */
 export function $outdentListItem(item: ListItemNode): boolean {
   const target = $unwrapNestedListItem(item);
   if (!$canOutdentListItem(target)) return false;
-  const before = target.getIndent();
-  target.setIndent(before - 1);
-  if (target.getIndent() < before) return true;
-  return $unnestFromParentList(target);
+  return $moveWithNestedGroup(target, () => {
+    const before = target.getIndent();
+    target.setIndent(before - 1);
+    return target.getIndent() < before || $unnestFromParentList(target);
+  });
 }
 
 function listItemFromTarget(target: EventTarget | null): ListItemNode | null {
@@ -121,42 +141,6 @@ function listItemFromTarget(target: EventTarget | null): ListItemNode | null {
     : $findMatchingParent(nearest, $isListItemNode);
   if (!item) return null;
   return $unwrapNestedListItem(item);
-}
-
-function groupElements(
-  editor: LexicalEditor,
-  item: ListItemNode
-): HTMLElement[] {
-  const elems: HTMLElement[] = [];
-  for (const node of $collectNestedGroup(item)) {
-    const elem = editor.getElementByKey(node.getKey());
-    if (elem) elems.push(elem);
-  }
-  return elems;
-}
-
-function setTranslate(elems: HTMLElement[], dx: number) {
-  const value = `translateX(${dx}px)`;
-  for (const elem of elems) {
-    elem.style.transform = value;
-  }
-}
-
-function clearTranslate(elems: HTMLElement[], animate: boolean) {
-  for (const elem of elems) {
-    if (animate) {
-      elem.style.transition = `transform ${SNAP_BACK_MS}ms ease-out`;
-    } else {
-      elem.style.transition = '';
-    }
-    elem.style.transform = '';
-  }
-  if (!animate) return;
-  window.setTimeout(() => {
-    for (const elem of elems) {
-      elem.style.transition = '';
-    }
-  }, SNAP_BACK_MS);
 }
 
 function registerListSwipeIndent(editor: LexicalEditor): () => void {
@@ -174,26 +158,17 @@ function registerListSwipeIndent(editor: LexicalEditor): () => void {
       endGesture?.();
 
       let itemKey: NodeKey | null = null;
-      let elems: HTMLElement[] = [];
       let canIndent = false;
       let canOutdent = false;
-
-      const fallbackLi =
-        eventTarget instanceof Element
-          ? eventTarget.closest('li')
-          : eventTarget.parentElement?.closest('li');
 
       editor.read(() => {
         const item = listItemFromTarget(eventTarget);
         if (!item) return;
         itemKey = item.getKey();
-        elems = groupElements(editor, item);
         canIndent = $canIndentListItem(item);
         canOutdent = $canOutdentListItem(item);
       });
       if (itemKey == null) return;
-      if (elems.length === 0 && fallbackLi) elems = [fallbackLi];
-      if (elems.length === 0) return;
 
       const { clientX: startX, clientY: startY, pointerId } = down;
       let claimed = false;
@@ -202,14 +177,9 @@ function registerListSwipeIndent(editor: LexicalEditor): () => void {
       const cleanup = () => {
         document.removeEventListener('pointermove', onMove);
         document.removeEventListener('pointerup', onUp);
-        document.removeEventListener('pointercancel', onCancel);
+        document.removeEventListener('pointercancel', cleanup);
         document.removeEventListener('touchmove', blockScroll);
         endGesture = null;
-      };
-
-      const onCancel = () => {
-        if (claimed) clearTranslate(elems, true);
-        cleanup();
       };
 
       const blockScroll = (event: TouchEvent) => event.preventDefault();
@@ -223,13 +193,6 @@ function registerListSwipeIndent(editor: LexicalEditor): () => void {
         } catch {
           // synthetic pointers cannot be captured
         }
-      };
-
-      const visualDx = (dx: number) => {
-        let next = dx;
-        if (dx > 0 && !canIndent) next = dx * RUBBER_BAND;
-        if (dx < 0 && !canOutdent) next = dx * RUBBER_BAND;
-        return Math.max(-MAX_TRANSLATE_PX, Math.min(MAX_TRANSLATE_PX, next));
       };
 
       const onMove = (move: PointerEvent) => {
@@ -246,7 +209,6 @@ function registerListSwipeIndent(editor: LexicalEditor): () => void {
           }
           claim();
         }
-        setTranslate(elems, visualDx(dx));
       };
 
       const onUp = (up: PointerEvent) => {
@@ -256,12 +218,8 @@ function registerListSwipeIndent(editor: LexicalEditor): () => void {
 
         const commitIndent = lastDx >= COMMIT_PX && canIndent;
         const commitOutdent = lastDx <= -COMMIT_PX && canOutdent;
-        if (!commitIndent && !commitOutdent) {
-          clearTranslate(elems, true);
-          return;
-        }
+        if (!commitIndent && !commitOutdent) return;
 
-        clearTranslate(elems, false);
         const key = itemKey;
         const apply = commitIndent ? $indentListItem : $outdentListItem;
         // Apply after the pointer event so Lexical isn't mid-selection update.
@@ -276,8 +234,8 @@ function registerListSwipeIndent(editor: LexicalEditor): () => void {
 
       document.addEventListener('pointermove', onMove);
       document.addEventListener('pointerup', onUp);
-      document.addEventListener('pointercancel', onCancel);
-      endGesture = onCancel;
+      document.addEventListener('pointercancel', cleanup);
+      endGesture = cleanup;
     };
 
     // Capture on document so a parent stopPropagation cannot hide the swipe.
