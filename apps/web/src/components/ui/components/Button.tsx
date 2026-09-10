@@ -141,14 +141,15 @@ function isIconSize(size: ButtonSize): boolean {
 
 // The glass treatment (see the `glass` utility in index.css) — the same
 // material as the app's menus and dialogs. Every variant carries it; `ghost`
-// is the one exception, and only because it has no surface of its own to
-// catch the light: a persistent rim and drop shadow would put a chip around
-// every bare toolbar icon in the app. It picks the glass up on hover, where
-// it does have a scrim.
+// is the one exception because it has no surface of its own to catch the
+// light: a rim and drop shadow would put a chip around every bare toolbar
+// icon in the app, and a rim that only appears on hover reads as the icon
+// popping out rather than as a state change, so ghost stays flat throughout
+// and its hover scrim alone marks the state.
 // Literal class strings only — Tailwind's scanner can't see classes built
 // from template strings.
 const glassClass = (variant: ButtonVariant): string => {
-  if (variant === 'ghost') return 'not-disabled:hover:glass';
+  if (variant === 'ghost') return '';
   // The glass rim is the edge. `outline` is the one variant with a hard
   // border of its own, and under the rim it reads as a double line — so the
   // border goes transparent and the tinted fill plus rim carry the shape.

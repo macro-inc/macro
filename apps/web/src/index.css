@@ -539,7 +539,7 @@ html[data-theme-light='false'] {
    inner bottom edge, a soft drop shadow, and a specular rim drawn as a 1px
    gradient masked to the border box (a plain `border` can't fade along its
    length). Shape and background come from the consumer, so this composes with
-   any radius — the rim inherits it — and with variants (`hover:glass`).
+   any radius — the rim inherits it — and with variants (`mobile:glass`).
 
    One strength everywhere — the marketing site's hero-ring geometry — so a
    button, a menu, a dialog and a mobile island all read as the same material.

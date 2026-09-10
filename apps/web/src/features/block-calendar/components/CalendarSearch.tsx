@@ -366,7 +366,7 @@ function CalendarSearchControl() {
             }}
             onKeyDown={handleContentKeyDown}
           >
-            <div class="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl bg-surface text-ink shadow-menu ring ring-edge-muted">
+            <div class="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl glass bg-menu-glass text-ink">
               <Show
                 when={previewTarget()}
                 fallback={

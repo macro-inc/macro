@@ -38,11 +38,11 @@ const groupVariantStyles: Record<ButtonVariant, string> = {
 
 /* Mirrors the glass rule in Button.tsx: the group carries the glass for the
    whole row, and a `ghost` group — a bare toolbar cluster with no surface of
-   its own — only picks it up on hover. Kept local rather than imported so the
+   its own — stays flat, hover included. Kept local rather than imported so the
    Button <-> ButtonGroup dependency stays type-only. Literal class strings
    only — Tailwind's scanner can't see template-built classes. */
 const glassClass = (variant: ButtonVariant): string => {
-  if (variant === 'ghost') return 'hover:glass';
+  if (variant === 'ghost') return '';
   // The rim is the edge, so `outline` drops its hard border rather than
   // drawing a second line under it.
   return variant === 'outline' ? 'glass border-transparent' : 'glass';

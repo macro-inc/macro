@@ -223,12 +223,65 @@
 	--fc-event-bg-color: var(--color-panel);
 	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
 	--fc-event-text-color: var(--color-ink-muted);
+	/* The hover / focus ring slots in ahead of the glass edges so both paint. */
+	--calendar-event-ring: 0 0 0 0 transparent;
 	border-color: var(--fc-event-border-color);
 	background-color: var(--fc-event-bg-color);
 	color: var(--fc-event-text-color);
 	transition:
 		box-shadow 120ms ease-out,
 		opacity 120ms ease-out;
+}
+
+/* Event chips are the same material as menus and buttons: the `glass`
+   utility's bright inner top edge, dark inner bottom edge, soft cast shadow
+   and 135deg specular rim, drawn from the shared --glass-* palette. It is
+   restated here rather than applied because the utility pins
+   `position: relative`, which would unseat FullCalendar's absolutely
+   positioned timegrid events, and because opaque chips packed on a grid have
+   nothing to blur — so the backdrop filter is left off. Mirrors, selection
+   previews and month-view dot events keep their own flat treatment. */
+.calendar-view
+	.fc
+	.fc-event:not(.fc-event-mirror):not(
+		.calendar-multi-day-selection-preview-event
+	):not(.fc-daygrid-dot-event) {
+	--glass-scale: 1;
+	box-shadow:
+		var(--calendar-event-ring),
+		inset 0 1px 0
+			color-mix(in oklch, var(--glass-tint) calc(var(--glass-highlight-base) * var(--glass-scale)), transparent),
+		inset 0 -1px 0
+			color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-shade-base) * var(--glass-scale)), transparent),
+		0 14px 32px -22px oklch(0 0 0 / calc(var(--glass-shadow-alpha) * var(--glass-scale)));
+}
+
+.calendar-view
+	.fc
+	.fc-event:not(.fc-event-mirror):not(
+		.calendar-multi-day-selection-preview-event
+	):not(.fc-daygrid-dot-event)::after {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	padding: 1px;
+	background: linear-gradient(
+		135deg,
+		color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-strong-base) * var(--glass-scale)), transparent) 0%,
+		transparent 24%,
+		transparent 76%,
+		color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale)), transparent) 100%
+	);
+	-webkit-mask:
+		linear-gradient(#000 0 0) content-box,
+		linear-gradient(#000 0 0);
+	-webkit-mask-composite: xor;
+	mask:
+		linear-gradient(#000 0 0) content-box,
+		linear-gradient(#000 0 0);
+	mask-composite: exclude;
+	content: "";
+	pointer-events: none;
 }
 
 .calendar-view .fc .fc-event.fc-event-draggable {
@@ -574,7 +627,7 @@
 .calendar-view .fc .fc-event:focus-visible {
 	z-index: 4;
 	outline: none;
-	box-shadow: 0 0 0 1px var(--color-ink-muted);
+	--calendar-event-ring: 0 0 0 1px var(--color-ink-muted);
 }
 
 .calendar-view .fc .fc-event:focus-visible::after {
@@ -599,7 +652,7 @@
 			var(--color-panel)
 		);
 		--fc-event-text-color: var(--color-ink);
-		box-shadow:
+		--calendar-event-ring:
 			0 0 0 1px
 			color-mix(
 				in oklch,
@@ -615,7 +668,7 @@
 		.fc-event.calendar-event-out-of-office:hover:not(
 			:has(.calendar-event-content-selected)
 		) {
-		box-shadow:
+		--calendar-event-ring:
 			0 0 0 1px
 			color-mix(
 				in oklch,

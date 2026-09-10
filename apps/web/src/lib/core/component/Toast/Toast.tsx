@@ -304,7 +304,8 @@ function ToastBodyWrapper(props: {
       fallback={
         <Surface
           highlightColor={props.accentColor}
-          class="relative w-[90vw] sm:w-md p-2 sm:p-3 rounded-xl bg-toast shadow-lg shadow-drop-shadow"
+          hideBorder
+          class="relative w-[90vw] sm:w-md p-2 sm:p-3 rounded-xl glass bg-toast"
         >
           {props.children}
         </Surface>

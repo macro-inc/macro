@@ -364,8 +364,10 @@ function Section(
       order: props.order,
       component: () => (
         <Accordion.Item value={props.id}>
+          {/* One step above the pane rather than two: the sections read as
+              grouped content on the surface, not as raised cards. */}
           <Panel
-            depth={2}
+            depth={1}
             style={{ height: 'auto' }}
             class="rounded-xl bg-surface"
           >

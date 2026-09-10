@@ -389,7 +389,7 @@ export function ColorPickerPopover(props: {
           <Popover.Content class="z-modal">
             <Popover.Arrow class="fill-surface" />
             <div
-              class="flex w-[34rem] max-w-[calc(100vw-2rem)] flex-col gap-4 rounded-xl border border-edge-muted bg-surface p-4 shadow-lg"
+              class="flex w-[34rem] max-w-[calc(100vw-2rem)] flex-col gap-4 rounded-xl glass bg-menu-glass p-4"
               role="dialog"
               aria-label={props.ariaLabel}
             >

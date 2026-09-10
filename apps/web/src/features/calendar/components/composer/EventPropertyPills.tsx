@@ -829,7 +829,7 @@ export function EventComposerDeclineMessagePill(
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-2 shadow-menu menu-open-animation"
+            class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-2 glass menu-open-animation"
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               queueMicrotask(() => input?.focus());

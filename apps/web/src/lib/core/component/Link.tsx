@@ -33,7 +33,7 @@ export function LinkHoverCard(props: LinkHoverCardProps) {
   const title = () => props.unfurled.title || domain;
 
   return (
-    <div class="flex w-80 max-w-[calc(100vw-1rem)] items-start gap-1 rounded-xl border border-edge p-2 text-left shadow-menu bg-menu">
+    <div class="flex w-80 max-w-[calc(100vw-1rem)] items-start gap-1 rounded-xl glass bg-menu-glass p-2 text-left">
       <div class="flex size-6 shrink-0 items-center justify-center">
         <Show
           when={props.unfurled.favicon_url}

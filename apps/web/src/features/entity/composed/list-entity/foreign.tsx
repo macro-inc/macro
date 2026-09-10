@@ -405,8 +405,9 @@ export function GithubPullRequestChecksIndicator(props: {
           onClick={(event) => event.stopPropagation()}
         >
           <Surface
-            class="flex items-stretch justify-start rounded-xl w-full"
+            class="flex items-stretch justify-start rounded-xl w-full glass bg-menu-glass"
             depth={3}
+            hideBorder
           >
             <GithubPullRequestChecksPopover entity={props.entity} />
           </Surface>
