@@ -239,6 +239,9 @@ fn push_include_types_filter(
                 .then_some("n.event_item_type = 'reminder'"),
             include_types.contains(&NotificationCategory::Calendar)
                 .then_some("n.event_item_type = 'calendar_event'"),
+            include_types.contains(&NotificationCategory::Agent).then_some(
+                "n.notification_event_type IN ('agent_session_settled', 'agent_session_waiting_for_input', 'agent_session_mentioned')",
+            ),
         ]
         .into_iter()
         .flatten()
