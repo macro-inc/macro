@@ -23,7 +23,7 @@ export function Thought(props: ThoughtProps) {
     <div class="relative text-xs leading-5 text-ink-extra-muted">
       <button
         type="button"
-        class="flex min-h-7 cursor-pointer items-center gap-1 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
+        class="flex min-h-7 items-center gap-1 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
         onClick={() => setExpanded((prev) => !prev)}
       >
         <CaretRight

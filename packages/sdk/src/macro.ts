@@ -22,6 +22,7 @@ import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
 export type { MacroOpts } from './config';
+export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
   type Interpolation,
@@ -53,9 +54,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   readonly teams: TeamNamespace;
   readonly users: UserNamespace;
   readonly webhooks: WebhooksNamespace;
-  declare readonly events: T extends { webhookSecret: string }
-    ? MacroEvents
-    : undefined;
+  readonly events: MacroEvents;
   /** Base URL of the Macro web app, used to build entity URLs. */
   readonly webAppUrl: string;
   /** Direct access to the underlying hey-api service clients. */
@@ -84,7 +83,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
     this.webhooks = new WebhooksNamespace(client);
-    (this as { events?: MacroEvents }).events = client.events;
+    this.events = client.events;
     this.webAppUrl = client.webAppUrl;
   }
 

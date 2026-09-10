@@ -711,6 +711,34 @@ describe('createResizeSolver', () => {
 
       dispose();
     });
+
+    it('holds a single split at full width when the zone measures zero', async () => {
+      const [size, setSize] = createSignal(1000);
+      const { solver, dispose } = createRoot((dispose) => ({
+        dispose,
+        solver: createResizeSolver({
+          direction: 'horizontal',
+          gutter: () => 0,
+          size,
+          panels: [],
+        }),
+      }));
+
+      await Promise.resolve();
+
+      solver.addPanel({ id: 'A', minSize: 400 });
+      expect(solver.solve().sizes.get('A')).toBe(1000);
+
+      // Zone momentarily reports 0 (unmeasured / hidden under a popover).
+      setSize(0);
+      expect(solver.solve().sizes.get('A')).toBe(1000);
+
+      // A real measurement still re-solves normally.
+      setSize(800);
+      expect(solver.solve().sizes.get('A')).toBe(800);
+
+      dispose();
+    });
   });
 
   describe('canFitPanel', () => {

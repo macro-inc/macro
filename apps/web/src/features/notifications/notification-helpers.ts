@@ -1,5 +1,9 @@
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { Entity, EntityType } from '@core/types';
+import { isMutedItem } from '@entity/utils/notification';
 import { queryClient } from '@queries/client';
 import {
   toNotificationEntityRef,
@@ -198,7 +202,7 @@ export async function markNotificationsForEntityAsRead(
   entity: Entity
 ): Promise<void> {
   const entityRef = toNotificationEntityRef(entity);
-  if (ENABLE_GRAPHQL_SOUP() && entityRef) {
+  if (isFeatureEnabled(enableGraphqlSoup) && entityRef) {
     await updateNotificationsForEntities({
       entities: [entityRef],
       operation: 'MARK_SEEN',
@@ -222,9 +226,9 @@ export function useNotificationsMutedForEntity(
   entity: Entity
 ): Accessor<boolean> {
   return createMemo(() =>
-    notificationSource.mutedEntities().includes({
-      item_type: entity.type,
+    isMutedItem(notificationSource.mutedEntities(), {
       item_id: entity.id,
+      item_type: entity.type,
     })
   );
 }

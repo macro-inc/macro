@@ -3,10 +3,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { DocumentMention } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_TASK_DUPLICATES_FLAG,
-  ENABLE_TASK_DUPLICATES_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableTaskDuplicates } from '@core/constant/featureFlags';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import WarningIcon from '@phosphor/warning.svg';
 import {
@@ -18,9 +15,7 @@ import { Button, cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
 
 export function TaskDuplicateMatchPill() {
-  const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG, {
-    enabledOverride: ENABLE_TASK_DUPLICATES_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableTaskDuplicates);
   const matches = useTaskDuplicateMatches();
   const [open, setOpen] = createSignal(false);
 
@@ -58,9 +53,7 @@ export function TaskDuplicateMatchPill() {
 }
 
 export function TaskDuplicateMatchesSidePanelSection() {
-  const flag = useFeatureFlag(ENABLE_TASK_DUPLICATES_FLAG, {
-    enabledOverride: ENABLE_TASK_DUPLICATES_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableTaskDuplicates);
   const matches = useTaskDuplicateMatches();
 
   return (

@@ -33,12 +33,15 @@ model_file_type = { path = "../model_file_type" }
 models_grouping = { path = "../models_grouping" }
 models_pagination = { path = "../models_pagination" }
 models_soup = { path = "../models_soup" }
+predicate-index = { path = "../predicate_index" }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
+soup-filter-projection = { path = "../soup_filter_projection" }
 soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"] }
 tokio = { workspace = true }
+tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

@@ -2,12 +2,12 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
-  ENABLE_GRAPHQL_SOUP,
-  ENABLE_GRAPHQL_SOUP_FLAG,
-  ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  enableGraphqlSoup,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
@@ -85,7 +85,7 @@ function flattenThreadPages(
 export async function fetchAndCacheThread(
   threadId: string
 ): ReturnType<typeof emailClient.getThread> {
-  if (!ENABLE_GRAPHQL_SOUP()) {
+  if (!isFeatureEnabled(enableGraphqlSoup)) {
     const result = await catchToResult(() =>
       queryClient.fetchInfiniteQuery(threadQueryOptions(threadId))
     );
@@ -184,9 +184,7 @@ export function useThreadQuery<TData = ThreadQueryData>(
   threadId: Accessor<string>,
   options?: Accessor<UseThreadQueryOptions<TData>>
 ): ThreadQueryResult<TData> {
-  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
-    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
-  });
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const queryEnabled = () => options?.().enabled !== false;
   const usesGraphql = () => graphqlSoupFlag().enabled;
   const select = () =>
@@ -564,21 +562,35 @@ export function useSendMessageMutation(
     ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
         onSuccess: (data, vars) => {
-          analytics.track('email_message_sent');
-          const threadID = data.message.thread_db_id;
-          if (threadID) {
-            queryClient.invalidateQueries({
-              queryKey: emailKeys.threadMessages(threadID).queryKey,
-            });
-            // Refresh the thread's soup item so inbox views stop showing it
-            // as a draft once the message is sent.
-            if (!vars.skipSoupRefetch) {
-              refetchSoupEntity(threadID, 'emailThread');
-            }
+          try {
+            analytics.track('email_message_sent');
+          } catch (error) {
+            Telemetry.error(error);
           }
-          queryClient.invalidateQueries({
-            queryKey: emailKeys.previews._def,
-          });
+          try {
+            const threadID = data.message.thread_db_id;
+            if (threadID) {
+              void queryClient
+                .invalidateQueries({
+                  queryKey: emailKeys.threadMessages(threadID).queryKey,
+                })
+                .catch(Telemetry.error);
+              // Refresh the thread's soup item so inbox views stop showing it
+              // as a draft once the message is sent.
+              if (!vars.skipSoupRefetch) {
+                void refetchSoupEntity(threadID, 'emailThread').catch(
+                  Telemetry.error
+                );
+              }
+            }
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.previews._def,
+              })
+              .catch(Telemetry.error);
+          } catch (error) {
+            Telemetry.error(error);
+          }
         },
       },
       callbacks
@@ -656,9 +668,15 @@ export function useUnscheduleMessageMutation(
     ...withCallbacks<void, Error, UnscheduleMessageParams>(
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({
-            queryKey: emailKeys.previews._def,
-          });
+          try {
+            void queryClient
+              .invalidateQueries({
+                queryKey: emailKeys.previews._def,
+              })
+              .catch(Telemetry.error);
+          } catch (error) {
+            Telemetry.error(error);
+          }
         },
       },
       callbacks

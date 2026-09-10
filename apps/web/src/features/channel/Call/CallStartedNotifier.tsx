@@ -226,8 +226,8 @@ function startRingingLoop(
  *
  * Also resolves the ring remotely: `call_answered` (sent to just this user
  * when they join the call on any device, e.g. answering on iPhone) and
- * `call_ended` both stop the ring; `call_answered` additionally closes the
- * incoming-call notification since the user is already in the call.
+ * `call_ended` both stop the ring and close the incoming-call notification —
+ * the user is already in the call, or there is no longer a call to answer.
  *
  * This component is the sole bridge from those one-shot websocket events to
  * published call resolutions (`call-resolution.ts`) — resolution consumers
@@ -268,6 +268,11 @@ export function CallStartedNotifier() {
     }
 
     stopCallRinger(resolution.callId);
+    // Close the toast too, not just the ring. It is `requireInteraction`, so
+    // an ended call's notification otherwise sits on screen until clicked —
+    // and clicking it deep-links into a join, which for a call that is over
+    // means get-or-create starts a brand-new one in the channel.
+    closeCallNotification(resolution.callId);
     setActiveCallEndedCache({
       channelId: resolution.channelId,
       callId: resolution.callId,
@@ -340,6 +345,13 @@ async function emitCallStartedNotification(args: {
   if (notif === 'not-supported') return;
 
   const pending = { cancelled: false };
+  // Cancel any earlier attempt for this call before taking its slot. The map
+  // holds one entry per call id, so an attempt that was replaced would never
+  // see a later `closeCallNotification` and could still register its toast
+  // once it resolved — leaving a requireInteraction notification up for a call
+  // that has already ended.
+  const superseded = pendingCallNotifications.get(callId);
+  if (superseded) superseded.cancelled = true;
   pendingCallNotifications.set(callId, pending);
   try {
     const callerName =

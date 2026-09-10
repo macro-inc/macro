@@ -56,7 +56,7 @@ export async function setupMiniflare() {
       INTERNAL_API_SECRET_KEY: "INTERNAL_API_SECRET",
       INTERNAL_API_SECRET,
       SPS_API_SECRET_KEY: "local",
-      SPS_URL:"http://localhost:8090",
+      SPS_URL: "http://localhost:8092",
       local:true,
     },
     compatibilityDate: '2025-03-05'

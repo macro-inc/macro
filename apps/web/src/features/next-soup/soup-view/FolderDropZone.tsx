@@ -35,7 +35,7 @@ export function FolderDropZone() {
                 handleFileUpload(files);
               },
             }}
-            class="cursor-pointer border-0 bg-transparent p-0 font-inherit text-inherit underline"
+            class="border-0 bg-transparent p-0 font-[inherit] text-inherit underline"
           >
             Upload files
           </button>{' '}
@@ -47,7 +47,7 @@ export function FolderDropZone() {
                 await handleFolderSelect(files, handleFileUpload);
               },
             }}
-            class="cursor-pointer border-0 bg-transparent p-0 font-inherit text-inherit underline"
+            class="border-0 bg-transparent p-0 font-[inherit] text-inherit underline"
           >
             Upload folders
           </button>

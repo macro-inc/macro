@@ -14,7 +14,10 @@ use crate::domain::{
     ports::SoupRealtimeService,
     service::SoupRealtimeServiceImpl,
 };
-use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
+use channels::domain::{
+    broker_events::{ChannelMacroEvent, ChannelTopicEvent},
+    models::ReferencedShareItemType,
+};
 use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
 use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
@@ -63,13 +66,22 @@ fn delete(entity_type: EntityType, entity_id: impl ToString) -> SoupRealtimePatc
     SoupRealtimePatch::for_entity(Patch::Deleted(entity(entity_type, entity_id)))
 }
 
-fn push_unique_patch(patches: &mut Vec<SoupRealtimePatch>, patch: Patch<Entity<'static>>) {
+fn push_unique_patch_with_access_source(
+    patches: &mut Vec<SoupRealtimePatch>,
+    patch: Patch<Entity<'static>>,
+    access_source: Entity<'static>,
+) {
     if patch.value().entity_id.is_empty()
         || patches.iter().any(|candidate| candidate.patch == patch)
     {
         return;
     }
-    patches.push(SoupRealtimePatch::for_entity(patch));
+    patches.push(SoupRealtimePatch::new(patch, access_source));
+}
+
+fn push_unique_patch(patches: &mut Vec<SoupRealtimePatch>, patch: Patch<Entity<'static>>) {
+    let access_source = patch.value().clone();
+    push_unique_patch_with_access_source(patches, patch, access_source);
 }
 
 fn push_unique_update(
@@ -296,16 +308,54 @@ fn channel_and_thread_entities(
     ]
 }
 
+fn soup_entity_type_from_channel_reference(entity_type: &str) -> Option<EntityType> {
+    match ReferencedShareItemType::from_raw(entity_type)? {
+        ReferencedShareItemType::Document => Some(EntityType::Document),
+        ReferencedShareItemType::Chat => Some(EntityType::Chat),
+        ReferencedShareItemType::Project => Some(EntityType::Project),
+        ReferencedShareItemType::EmailThread => Some(EntityType::EmailThread),
+        ReferencedShareItemType::Call => Some(EntityType::Call),
+    }
+}
+
+fn push_channel_reference_update(
+    patches: &mut Vec<SoupRealtimePatch>,
+    channel: &Entity<'static>,
+    entity_type: &str,
+    entity_id: &str,
+) {
+    let Some(entity_type) = soup_entity_type_from_channel_reference(entity_type) else {
+        return;
+    };
+    push_unique_patch_with_access_source(
+        patches,
+        Patch::Updated(entity(entity_type, entity_id)),
+        channel.clone(),
+    );
+}
+
 fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatch> {
     match event {
         ChannelTopicEvent::Updated(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
-        ChannelTopicEvent::MessagePosted(metadata) => channel_and_thread_entities(
-            metadata.channel_id,
-            metadata.message_id,
-            metadata.thread_id,
-        ),
+        ChannelTopicEvent::MessagePosted(metadata) => {
+            let mut patches = channel_and_thread_entities(
+                metadata.channel_id,
+                metadata.message_id,
+                metadata.thread_id,
+            );
+            let channel = entity(EntityType::Channel, metadata.channel_id);
+            for mention in &metadata.mentions {
+                push_channel_reference_update(
+                    &mut patches,
+                    &channel,
+                    &mention.entity_type,
+                    &mention.entity_id,
+                );
+            }
+            patches
+        }
         ChannelTopicEvent::MessagePatched(metadata) => channel_and_thread_entities(
             metadata.channel_id,
             metadata.message_id,
@@ -323,7 +373,19 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
             ]
         }
         ChannelTopicEvent::MessageAttachmentCreated(metadata) => {
-            vec![update(EntityType::Channel, metadata.channel_id)]
+            let channel = entity(EntityType::Channel, metadata.channel_id);
+            let mut patches = vec![SoupRealtimePatch::for_entity(Patch::Updated(
+                channel.clone(),
+            ))];
+            for attachment in &metadata.attachments {
+                push_channel_reference_update(
+                    &mut patches,
+                    &channel,
+                    &attachment.entity_type,
+                    &attachment.entity_id,
+                );
+            }
+            patches
         }
         ChannelTopicEvent::MessageAttachmentRemoved(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]

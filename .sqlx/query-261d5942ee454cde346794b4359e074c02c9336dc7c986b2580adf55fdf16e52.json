@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT live.id AS replica_id, live.address\n            FROM agent_session\n            JOIN harness_replica live ON live.id = agent_session.manager_replica_id\n            WHERE agent_session.id = $1\n              AND live.last_heartbeat_at > now() - make_interval(secs => $2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "replica_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "address",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "261d5942ee454cde346794b4359e074c02c9336dc7c986b2580adf55fdf16e52"
+}

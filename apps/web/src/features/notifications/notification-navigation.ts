@@ -17,8 +17,9 @@ import {
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
 import {
-  ENABLE_CALENDAR_UI,
-  ENABLE_REMINDERS,
+  enableCalendarUi,
+  enableReminders,
+  isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
 import type { EntityType, NotificationType } from '@core/types';
@@ -345,7 +346,7 @@ function getSupportedHandler(
         // A reminder created before the flag closed still has a live
         // notification; opening it would reach reminder surfaces the user is
         // no longer meant to have.
-        if (!ENABLE_REMINDERS()) return;
+        if (!isFeatureEnabled(enableReminders)) return;
         const reminder = await getReminderById(notification.entity_id);
         const entityType = reminder?.entityType;
         const entityId = reminder?.entityId;
@@ -371,7 +372,7 @@ function getSupportedHandler(
         // A reminder delivered before the flag closed still has a live
         // notification; opening it must not reach a surface the user is no
         // longer meant to have.
-        if (!ENABLE_CALENDAR_UI()) return;
+        if (!isFeatureEnabled(enableCalendarUi)) return;
         const content = meta.content;
         const time = content.startsAt
           ? {

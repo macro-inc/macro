@@ -45,7 +45,7 @@ function ParticipantTileWrapper(props: {
     <div
       class={cn(
         'relative flex items-center justify-center rounded-lg overflow-hidden bg-message min-h-30 border border-edge-muted',
-        props.isSpeaking && 'ring-inset ring-2 ring-accent-2',
+        props.isSpeaking && 'ring-inset ring-2 ring-accent',
         props.isConnecting && 'animate-pulse',
         props.class
       )}

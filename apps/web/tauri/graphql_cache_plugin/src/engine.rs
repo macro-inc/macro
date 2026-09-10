@@ -13,13 +13,16 @@
 
 use cache_core::deps::OpId;
 use cache_core::engine::{
-    BeginOptimisticWrite, Engine, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
-    WriteResult,
+    BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
+    InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
+    RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, QueryInspection};
-use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
+use cache_core::queue::{
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationUpsertKind,
+};
 use cache_core::record_selection::{RecordSelection, SelectedRecord};
 use cache_core::revision::CacheRevision;
 use cache_core::search::{SearchPage, SearchRequest};
@@ -49,6 +52,8 @@ pub enum ReadResultWire {
 pub struct WriteResultWire {
     /// Effective-view revision installed by this logical mutation.
     pub revision: String,
+    /// Whether this write advanced `revision`.
+    pub revision_advanced: bool,
     /// Entity keys whose records changed.
     pub changed: Vec<String>,
     /// Registered operation ids affected by the change (origin excluded).
@@ -97,11 +102,49 @@ pub struct EnqueueOptimisticMutationResultWire {
     /// Engine-assigned id; settle with commit/rollback. A string because JS
     /// numbers lose precision past 2^53 (same as the wasm shell).
     pub transaction_id: String,
+    /// How the caller UUID changed the queue.
+    pub upsert_kind: MutationUpsertKindWire,
     /// Visible composed-view changes caused by the new optimistic layer.
     #[serde(flatten)]
     pub result: WriteResultWire,
     /// Claim outcome determined before cache-change events are emitted.
     pub initial_claim: InitialMutationClaimWire,
+}
+
+/// Queue collision outcome serialized for the webview.
+#[derive(Debug, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum MutationUpsertKindWire {
+    /// A new UUID was appended.
+    Inserted,
+    /// A pending row was removed and replaced at the tail.
+    ReplacedPending {
+        /// Removed queue transaction.
+        removed_transaction_id: String,
+    },
+    /// A live row was retained and superseded.
+    AppendedAfterActive {
+        /// Still-active queue transaction.
+        active_transaction_id: String,
+    },
+}
+
+impl From<MutationUpsertKind> for MutationUpsertKindWire {
+    fn from(kind: MutationUpsertKind) -> Self {
+        match kind {
+            MutationUpsertKind::Inserted => Self::Inserted,
+            MutationUpsertKind::ReplacedPending { removed_id } => Self::ReplacedPending {
+                removed_transaction_id: removed_id.to_string(),
+            },
+            MutationUpsertKind::AppendedAfterActive { active_id } => Self::AppendedAfterActive {
+                active_transaction_id: active_id.to_string(),
+            },
+        }
+    }
 }
 
 /// Tagged outcome of the initial strict-head claim attempt.
@@ -128,6 +171,10 @@ pub enum InitialMutationClaimWire {
 pub struct ClaimedMutationWire {
     /// Durable mutation id.
     pub transaction_id: String,
+    /// Caller coalescing UUID.
+    pub uuid: String,
+    /// Whether a newer current row superseded this request.
+    pub superseded: bool,
     /// Claim generation required for settlement.
     pub lease_generation: String,
     /// GraphQL mutation document.
@@ -142,6 +189,74 @@ pub struct ClaimedMutationWire {
     pub attempt_count: u32,
 }
 
+/// Tagged result of deferring or discarding a failed queue attempt.
+#[derive(Debug, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum DeferOptimisticWriteResultWire {
+    /// Retry state was retained normally.
+    Deferred,
+    /// A superseded row was discarded instead of retried.
+    DiscardedSuperseded {
+        /// Current transaction carrying the newer intent.
+        replacement_transaction_id: String,
+        /// Cache changes caused by discarding the old layer.
+        #[serde(flatten)]
+        result: WriteResultWire,
+    },
+}
+
+/// Tagged result of committing a current or superseded queue attempt.
+#[derive(Debug, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum CommitOptimisticWriteResultWire {
+    /// The current mutation committed normally.
+    Committed {
+        /// Cache changes caused by commit.
+        #[serde(flatten)]
+        result: WriteResultWire,
+    },
+    /// The response committed beneath a newer optimistic replacement.
+    CommittedSuperseded {
+        /// Current transaction carrying the newer intent.
+        replacement_transaction_id: String,
+        /// Cache changes caused by commit.
+        #[serde(flatten)]
+        result: WriteResultWire,
+    },
+}
+
+/// Tagged result of permanently failing or superseding a queue attempt.
+#[derive(Debug, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum RollbackOptimisticWriteResultWire {
+    /// The current mutation permanently failed.
+    RolledBack {
+        /// Cache changes caused by rollback.
+        #[serde(flatten)]
+        result: WriteResultWire,
+    },
+    /// A superseded attempt was accepted and discarded.
+    DiscardedSuperseded {
+        /// Current transaction carrying the newer intent.
+        replacement_transaction_id: String,
+        /// Cache changes caused by discarding the old layer.
+        #[serde(flatten)]
+        result: WriteResultWire,
+    },
+}
+
 impl TryFrom<ClaimedMutation> for ClaimedMutationWire {
     type Error = String;
 
@@ -149,6 +264,8 @@ impl TryFrom<ClaimedMutation> for ClaimedMutationWire {
         let request = claimed.queued.mutation.request;
         Ok(Self {
             transaction_id: claimed.queued.id.to_string(),
+            uuid: claimed.queued.uuid.to_string(),
+            superseded: claimed.queued.superseded,
             lease_generation: claimed.lease_generation.to_string(),
             query: request.query,
             operation_name: request.operation_name,
@@ -237,6 +354,7 @@ pub struct EngineHandle {
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
         revision: result.revision.to_string(),
+        revision_advanced: result.revision_advanced,
         changed: result
             .changed
             .into_iter()
@@ -475,6 +593,7 @@ impl EngineHandle {
     pub async fn enqueue_optimistic_mutation(
         &self,
         origin_op_id: Option<String>,
+        uuid: String,
         query: String,
         operation_name: Option<String>,
         variables: Variables,
@@ -493,6 +612,7 @@ impl EngineHandle {
             .enqueue_optimistic_mutation(
                 origin,
                 BeginOptimisticWrite {
+                    uuid: &uuid,
                     query: &query,
                     operation_name: operation_name.as_deref(),
                     variables: &variables,
@@ -520,6 +640,7 @@ impl EngineHandle {
         };
         Ok(EnqueueOptimisticMutationResultWire {
             transaction_id: result.transaction_id.to_string(),
+            upsert_kind: result.upsert_kind.into(),
             result: wire_write_result(ops, result.write_result),
             initial_claim,
         })
@@ -554,19 +675,27 @@ impl EngineHandle {
         lease_generation: String,
         next_attempt_at_ms: i64,
         error: String,
-    ) -> Result<(), String> {
+    ) -> Result<DeferOptimisticWriteResultWire, String> {
         let transaction = parse_transaction_id(&transaction_id)?;
         let claim = MutationClaimToken {
             owner: lease_owner,
             generation: parse_u64(&lease_generation, "lease generation")?,
         };
-        self.inner
-            .lock()
-            .await
-            .engine
+        let mut state = self.inner.lock().await;
+        let EngineState { engine, ops } = &mut *state;
+        match engine
             .defer_optimistic_write(transaction, claim, next_attempt_at_ms, error)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?
+        {
+            DeferOptimisticWriteResult::Deferred => Ok(DeferOptimisticWriteResultWire::Deferred),
+            DeferOptimisticWriteResult::DiscardedSuperseded(result) => {
+                Ok(DeferOptimisticWriteResultWire::DiscardedSuperseded {
+                    replacement_transaction_id: result.replacement_transaction_id.to_string(),
+                    result: wire_write_result(ops, result.write_result),
+                })
+            }
+        }
     }
 
     /// Replaces a claimed optimistic layer with the real network response.
@@ -579,7 +708,7 @@ impl EngineHandle {
         operation_name: Option<String>,
         variables: Variables,
         data: serde_json::Value,
-    ) -> Result<WriteResultWire, String> {
+    ) -> Result<CommitOptimisticWriteResultWire, String> {
         let transaction = parse_transaction_id(&transaction_id)?;
         let claim = MutationClaimToken {
             owner: lease_owner,
@@ -587,8 +716,8 @@ impl EngineHandle {
         };
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
-        engine
-            .commit_optimistic_write(
+        match engine
+            .commit_optimistic_write_with_outcome(
                 transaction,
                 claim,
                 &query,
@@ -597,8 +726,20 @@ impl EngineHandle {
                 &data,
             )
             .await
-            .map(|result| wire_write_result(ops, result))
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?
+        {
+            CommitOptimisticWriteResult::Committed(result) => {
+                Ok(CommitOptimisticWriteResultWire::Committed {
+                    result: wire_write_result(ops, result),
+                })
+            }
+            CommitOptimisticWriteResult::CommittedSuperseded(result) => {
+                Ok(CommitOptimisticWriteResultWire::CommittedSuperseded {
+                    replacement_transaction_id: result.replacement_transaction_id.to_string(),
+                    result: wire_write_result(ops, result.write_result),
+                })
+            }
+        }
     }
 
     /// Permanently fails a claimed mutation and drops its optimistic layer.
@@ -607,7 +748,7 @@ impl EngineHandle {
         transaction_id: String,
         lease_owner: String,
         lease_generation: String,
-    ) -> Result<WriteResultWire, String> {
+    ) -> Result<RollbackOptimisticWriteResultWire, String> {
         let transaction = parse_transaction_id(&transaction_id)?;
         let claim = MutationClaimToken {
             owner: lease_owner,
@@ -615,11 +756,23 @@ impl EngineHandle {
         };
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
-        engine
-            .rollback_optimistic_write(transaction, claim)
+        match engine
+            .rollback_optimistic_write_with_outcome(transaction, claim)
             .await
-            .map(|result| wire_write_result(ops, result))
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?
+        {
+            RollbackOptimisticWriteResult::RolledBack(result) => {
+                Ok(RollbackOptimisticWriteResultWire::RolledBack {
+                    result: wire_write_result(ops, result),
+                })
+            }
+            RollbackOptimisticWriteResult::DiscardedSuperseded(result) => {
+                Ok(RollbackOptimisticWriteResultWire::DiscardedSuperseded {
+                    replacement_transaction_id: result.replacement_transaction_id.to_string(),
+                    result: wire_write_result(ops, result.write_result),
+                })
+            }
+        }
     }
 
     /// Evicts records by entity key; returns the affected registered op ids.

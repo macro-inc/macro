@@ -249,6 +249,10 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
             repo_url: Some(args.repo_url.clone()),
             workspace: args.workspace.clone(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            // A recording is replayed, not run; nothing reads instructions.
+            instructions: None,
+            mcp_servers: Default::default(),
+            egress_token_hash: None,
         },
     )
     .await

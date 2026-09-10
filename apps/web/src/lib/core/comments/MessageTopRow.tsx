@@ -3,10 +3,11 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { idToDisplayName } from '@core/user';
 import { type DateValue, formatDate } from '@core/util/date';
 import Check from '@phosphor/check.svg';
+import DotsThreeIcon from '@phosphor/dots-three.svg';
 import Link from '@phosphor/link.svg';
 import NotePencil from '@phosphor/note-pencil.svg';
 import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
-import { Button, cn } from '@ui';
+import { Button, cn, Dropdown } from '@ui';
 import { type ParentProps, Show, useContext } from 'solid-js';
 import { CommentsContext } from './Thread';
 
@@ -26,6 +27,8 @@ function MessageRow(
     hideBottomMargin?: boolean;
     nameSlot?: any;
     isActive: boolean;
+    actionsVisible?: boolean;
+    largeAvatar?: boolean;
   }>
 ) {
   return (
@@ -35,6 +38,8 @@ function MessageRow(
       hideBottomMargin={props.hideBottomMargin}
       nameSlot={props.nameSlot}
       isActive={props.isActive}
+      actionsVisible={props.actionsVisible}
+      largeAvatar={props.largeAvatar}
       children={props.children}
     />
   );
@@ -48,6 +53,10 @@ function MessageRowUI(
     nameSlot?: any;
     hideBubble?: boolean;
     isActive: boolean;
+    /** Keep the actions slot permanently visible instead of hover-revealed. */
+    actionsVisible?: boolean;
+    /** size-8 avatar instead of the compact size-4. */
+    largeAvatar?: boolean;
   }>
 ) {
   const displayName = () => {
@@ -62,25 +71,31 @@ function MessageRowUI(
     >
       <div
         class={cn(
-          'flex w-full flex-row gap-2 group-hover:truncate',
+          'flex items-center w-full flex-row gap-2 group-hover:truncate',
           props.isActive && 'truncate'
         )}
       >
         {!props.hideBubble && (
           <div
-            class={`size-4 relative flex items-center justify-center shrink-0 rounded-xs`}
+            class={cn(
+              'relative flex items-center justify-center shrink-0 rounded-xs',
+              props.largeAvatar ? 'size-8' : 'size-4'
+            )}
           >
             <UserIcon
-              size="sm"
+              // Avatar has no size-8 variant; "fill" adopts the wrapper size.
+              size={props.largeAvatar ? 'fill' : 'sm'}
               suppressClick={true}
               id={props.authorId}
               isDeleted={false}
             />
           </div>
         )}
-        <div class="text-xs text-ink truncate grow">{displayName()}</div>
+        <div class="text-xs touch:text-sm text-ink truncate grow">
+          {displayName()}
+        </div>
         <Show when={props.date}>
-          <div class="text-xs text-ink-placeholder">
+          <div class="text-xs touch:text-sm text-ink-placeholder">
             {formatDate(props.date)}
           </div>
         </Show>
@@ -88,8 +103,10 @@ function MessageRowUI(
       <Show when={props.children}>
         <div
           class={cn(
-            'items-center flex group-hover:opacity-100',
-            isMobileWidth() && props.isActive ? 'opacity-100' : 'opacity-0'
+            'items-center flex self-center group-hover:opacity-100',
+            props.actionsVisible || (isMobileWidth() && props.isActive)
+              ? 'opacity-100'
+              : 'opacity-0'
           )}
         >
           {props.children}
@@ -112,8 +129,74 @@ export function MessageTopRow(props: {
   isOwned: boolean;
   isActive: boolean;
   isEditing?: boolean;
+  /**
+   * Render the actions as an always-visible ellipsis dropdown at the row's
+   * end instead of the hover-revealed overlay (the touch comment drawer,
+   * where there is no hover).
+   */
+  actionsDropdown?: boolean;
 }) {
   const { canComment, isDocumentOwner } = useContext(CommentsContext);
+
+  const showEdit = () =>
+    canComment() && props.isOwned && props.enableEditing != null;
+  const showDelete = () =>
+    canComment() &&
+    !props.isEditing &&
+    (props.isOwned || isDocumentOwner()) &&
+    props.deleteMessage != null;
+
+  if (props.actionsDropdown) {
+    return (
+      <MessageRow
+        nameSlot={props.isNew && <NewTag />}
+        authorId={props.authorId}
+        date={props.date}
+        hideBottomMargin={props.hideBottomMargin}
+        isActive={props.isActive}
+        actionsVisible
+        largeAvatar
+      >
+        <Show when={props.copyLink != null || showEdit() || showDelete()}>
+          <Dropdown>
+            <Dropdown.Trigger
+              variant="ghost"
+              size="icon-sm"
+              class="-my-1"
+              aria-label="Comment actions"
+            >
+              <DotsThreeIcon />
+            </Dropdown.Trigger>
+            <Dropdown.Content portalScope="local">
+              <Dropdown.Group>
+                <Show when={props.copyLink}>
+                  <Dropdown.Item onSelect={props.copyLink}>
+                    <Link class="size-4" />
+                    Copy link
+                  </Dropdown.Item>
+                </Show>
+                <Show when={showEdit()}>
+                  <Dropdown.Item onSelect={props.enableEditing}>
+                    <NotePencil class="size-4" />
+                    Edit comment
+                  </Dropdown.Item>
+                </Show>
+                <Show when={showDelete()}>
+                  <Dropdown.Item
+                    class="text-failure-ink"
+                    onSelect={props.deleteMessage}
+                  >
+                    <Trash class="size-4" />
+                    Delete comment
+                  </Dropdown.Item>
+                </Show>
+              </Dropdown.Group>
+            </Dropdown.Content>
+          </Dropdown>
+        </Show>
+      </MessageRow>
+    );
+  }
 
   return (
     <MessageRow

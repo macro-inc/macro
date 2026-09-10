@@ -78,6 +78,7 @@ pub async fn handler(
         document_id,
         access_level,
         state.config.document_permission_jwt.as_ref(),
+        None,
     )
     .map_err(|e| {
         tracing::error!(error=?e, "unable to encode jwt");

@@ -706,7 +706,11 @@ async fn get_user_team_workspace_id_returns_team_membership(pool: PgPool) -> any
     let repo = PgRepository::new(pool);
 
     assert_eq!(
-        repo.get_user_team_workspace_id(user_id()).await?,
+        WebhookRepo::get_user_team_workspace_id(&repo, user_id()).await?,
+        Some(TEAM_ID.to_string())
+    );
+    assert_eq!(
+        WebhookWorkspaceResolver::get_user_team_workspace_id(&repo, user_id()).await?,
         Some(TEAM_ID.to_string())
     );
     Ok(())

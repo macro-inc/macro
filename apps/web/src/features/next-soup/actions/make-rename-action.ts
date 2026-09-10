@@ -1,8 +1,8 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import type { SoupState } from '../create-soup-state';
 import { restoreSoupFocus } from '../utils';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeRenameOptions = {
   userId: () => string | undefined;
@@ -38,7 +38,10 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
     });
   };
 
-  const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    soup: EntityActionListState
+  ) => {
     const firstEntity = entities[0];
 
     openBulkEditModal({

@@ -4,10 +4,40 @@
 //! transcript, so "which session owns this" is a correctness question about
 //! that session's durable history.
 
+use std::time::Duration;
+
 use super::*;
+use agent_runtime_protocol::domain::channel::Channel;
+use agent_runtime_protocol::domain::schema::v0::ModelProbeResult;
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 
 const OTHER: AgentSessionId = AgentSessionId::TEST_B;
+
+#[test]
+fn mapping_an_attachment_preserves_activation_and_handshake() {
+    use crate::domain::model::{ManagerFence, ReplicaId};
+    let claim = SessionClaim {
+        session: OTHER,
+        replica: ReplicaId::from_uuid(macro_uuid::Uuid::from_u128(2)),
+        fence: ManagerFence(7),
+    };
+    let called = Arc::new(AtomicBool::new(false));
+    let observed = called.clone();
+    let attachment = RuntimeAttachment::solo(1).on_activate(Box::new(move |actual| {
+        assert_eq!(actual.session, claim.session);
+        assert_eq!(actual.replica, claim.replica);
+        assert_eq!(actual.fence, claim.fence);
+        observed.store(true, Ordering::SeqCst);
+        Ok(())
+    }));
+    let handshake = attachment.handshake.clone();
+    let mut mapped = attachment.map_transport(|n| n.to_string());
+    assert_eq!(mapped.connector, "1");
+    assert!(mapped.handshake.same_channel(&handshake));
+    mapped.activation.take().unwrap()(claim).unwrap();
+    assert!(mapped.activation.is_none());
+    assert!(called.load(Ordering::SeqCst));
+}
 
 fn request(id: &str, method: &str, params: serde_json::Value) -> ToServerMessage {
     ToServerMessage::Acp(AcpMessage(
@@ -118,6 +148,20 @@ fn system_events_belong_to_the_connection() {
 
     // Every session needs to see the runtime come up; only one acts on it.
     assert_eq!(routes.route(&ready()), Routed::Connection);
+}
+
+#[test]
+fn model_probe_responses_belong_to_the_connection_waiters() {
+    let mut routes = Routes::default();
+
+    assert_eq!(
+        routes.route(&ToServerMessage::ModelProbeResponse {
+            result: ModelProbeResult::Available {
+                config_options: Vec::new(),
+            },
+        }),
+        Routed::Probe
+    );
 }
 
 #[test]
@@ -315,4 +359,128 @@ async fn a_resumed_session_owns_the_updates_that_follow() {
         connection.routes.lock().await.route(&update),
         Routed::Session(AgentSessionId::TEST_A)
     );
+}
+
+#[tokio::test]
+async fn a_model_probe_answer_reaches_the_waiter_and_no_session() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let attachment = connection.bind(AgentSessionId::TEST_A).await;
+    let (_session_outbound, mut session_inbound) = attachment.connector.split();
+    let probing = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.probe_models().await })
+    };
+    assert!(matches!(
+        runtime.rx.recv().await,
+        Some(ToRuntimeMessage::ModelProbeRequest)
+    ));
+
+    runtime
+        .tx
+        .send(ToServerMessage::ModelProbeResponse {
+            result: ModelProbeResult::Available {
+                config_options: Vec::new(),
+            },
+        })
+        .expect("response should send");
+
+    assert!(
+        probing
+            .await
+            .expect("probe task")
+            .expect("the answer should succeed")
+            .is_empty()
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), session_inbound.recv())
+            .await
+            .is_err(),
+        "probe responses must not be broadcast into a session transcript"
+    );
+}
+
+/// Concurrent probes ask one parameterless question of one harness, so a
+/// single answer is the truth for all of them.
+#[tokio::test]
+async fn one_model_probe_answer_serves_every_concurrent_waiter() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let probes = (0..2)
+        .map(|_| {
+            let connection = Arc::clone(&connection);
+            tokio::spawn(async move { connection.probe_models().await })
+        })
+        .collect::<Vec<_>>();
+    for _ in 0..2 {
+        assert!(matches!(
+            runtime.rx.recv().await,
+            Some(ToRuntimeMessage::ModelProbeRequest)
+        ));
+    }
+
+    runtime
+        .tx
+        .send(ToServerMessage::ModelProbeResponse {
+            result: ModelProbeResult::Available {
+                config_options: Vec::new(),
+            },
+        })
+        .expect("response should send");
+
+    for probe in probes {
+        assert!(
+            tokio::time::timeout(Duration::from_secs(1), probe)
+                .await
+                .expect("probe should not hang")
+                .expect("probe task")
+                .expect("the one answer should serve this waiter")
+                .is_empty()
+        );
+    }
+}
+
+#[tokio::test]
+async fn an_evicted_connection_stops_waiting_probes() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let probing = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.probe_models().await })
+    };
+    assert!(matches!(
+        runtime.rx.recv().await,
+        Some(ToRuntimeMessage::ModelProbeRequest)
+    ));
+
+    connection.evict();
+
+    assert!(matches!(
+        tokio::time::timeout(Duration::from_secs(1), probing)
+            .await
+            .expect("an evicted probe should not hang")
+            .expect("probe task"),
+        Err(ModelProbeError::Closed)
+    ));
+}
+
+#[tokio::test]
+async fn pending_model_probe_ends_when_the_connection_closes() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let probing = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.probe_models().await })
+    };
+
+    assert!(matches!(
+        runtime.rx.recv().await,
+        Some(ToRuntimeMessage::ModelProbeRequest)
+    ));
+    drop(runtime);
+
+    assert!(matches!(
+        probing.await.expect("probe task"),
+        Err(ModelProbeError::Closed)
+    ));
 }

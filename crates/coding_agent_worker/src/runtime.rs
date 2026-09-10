@@ -1,15 +1,17 @@
 //! This daemon's one connection to the harness service, and the one harness
 //! process behind it.
 //!
-//! A daemon serves a single bot, and a bot's runtime is a single connection:
-//! ACP initializes per connection and tags every session-scoped message with a
-//! `sessionId`, so one socket and one harness process carry every session this
-//! bot is running. The service decides which sessions those are - it binds a
-//! session when work arrives for it - so nothing here is per-session at all.
+//! A daemon serves a single registered harness, and a harness's runtime is a
+//! single connection: ACP initializes per connection and tags every
+//! session-scoped message with a `sessionId`, so one socket and one harness
+//! process carry every session of every agent bound to this harness. The
+//! service decides which sessions those are - it binds a session when work
+//! arrives for it - so nothing here is per-session or per-bot at all.
 //!
 //! What that buys: a harness starts once per daemon rather than once per
 //! session, so only the first mention after boot pays for a cold agent.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -19,7 +21,7 @@ use tokio_retry::RetryIf;
 use tokio_retry::strategy::{ExponentialBackoff, FixedInterval};
 use tokio_tungstenite::tungstenite;
 
-use crate::config::{Harness, MacroApi};
+use crate::config::{Harness, HarnessCredentials, MacroApi};
 use crate::harness;
 use crate::outbound::link;
 
@@ -35,24 +37,33 @@ const DIAL_RETRY_DELAY: Duration = Duration::from_millis(500);
 /// rebuild itself forever. Nobody is waiting on these, so they back off.
 const REBUILD_ATTEMPTS: usize = 4;
 
-/// The daemon's connection to its bot's sessions.
+/// The daemon's connection to its harness's sessions.
 ///
 /// At most one is live. The flag is the claim on it: a delivery that finds it
 /// unset dials, and the task serving the connection clears it on the way out,
 /// so "set" always means "somebody is serving, or about to be".
 pub struct Runtime {
-    macro_api: MacroApi,
+    gateway_url: String,
+    token: String,
     harness: Harness,
+    cwd: PathBuf,
     live: Arc<AtomicBool>,
 }
 
 impl Runtime {
     /// A runtime that dials with the given credentials and spawns the given
     /// harness.
-    pub fn new(macro_api: MacroApi, harness: Harness) -> Self {
+    pub fn new(
+        macro_api: &MacroApi,
+        credentials: &HarnessCredentials,
+        harness: Harness,
+        cwd: &Path,
+    ) -> Self {
         Self {
-            macro_api,
+            gateway_url: macro_api.gateway_url(),
+            token: credentials.token.clone(),
             harness,
+            cwd: cwd.to_owned(),
             live: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -69,8 +80,7 @@ impl Runtime {
             return Ok(());
         }
 
-        let url = self.macro_api.gateway_url();
-        let channel = match dial(&self.macro_api, &url, dial_strategy()).await {
+        let channel = match dial(&self.token, &self.gateway_url, dial_strategy()).await {
             Ok(channel) => channel,
             Err(error) => {
                 self.live.store(false, Ordering::Release);
@@ -79,10 +89,11 @@ impl Runtime {
         };
 
         tokio::spawn(serve(
-            url,
+            self.gateway_url.clone(),
             channel,
-            self.macro_api.clone(),
+            self.token.clone(),
             self.harness.clone(),
+            self.cwd.clone(),
             Arc::clone(&self.live),
         ));
         Ok(())
@@ -96,18 +107,19 @@ impl Runtime {
 async fn serve(
     gateway_url: String,
     channel: RuntimeChannel,
-    macro_api: MacroApi,
+    token: String,
     harness: Harness,
+    cwd: PathBuf,
     live: Arc<AtomicBool>,
 ) {
     tracing::info!("harness bridge starting");
     // A bridge that ends cleanly is a runtime that is done being asked for
     // anything; the next delivery dials again.
-    match harness::bridge(&harness, channel).await {
+    match harness::bridge(&harness, &cwd, channel).await {
         Ok(()) => tracing::info!("harness bridge ended"),
         Err(error) => {
             tracing::warn!(error = ?error, "harness bridge ended with an error");
-            rebuild(&gateway_url, &macro_api, &harness).await;
+            rebuild(&gateway_url, &token, &harness, &cwd).await;
         }
     }
     live.store(false, Ordering::Release);
@@ -115,15 +127,15 @@ async fn serve(
 
 /// Dial and serve again, as one retried operation: ending cleanly stops it, as
 /// does a gateway verdict no retry can change.
-async fn rebuild(gateway_url: &str, macro_api: &MacroApi, harness: &Harness) {
+async fn rebuild(gateway_url: &str, token: &str, harness: &Harness, cwd: &Path) {
     let outcome = RetryIf::start(
         rebuild_strategy(),
         || async {
-            let channel = dial(macro_api, gateway_url, dial_strategy())
+            let channel = dial(token, gateway_url, dial_strategy())
                 .await
                 .map_err(ServeError::Dial)?;
             tracing::info!("harness bridge restarting");
-            harness::bridge(harness, channel)
+            harness::bridge(harness, cwd, channel)
                 .await
                 .map_err(ServeError::Bridge)
         },
@@ -160,26 +172,31 @@ fn worth_rebuilding(error: &ServeError) -> bool {
 
 /// Dial the gateway, retrying on the failures a retry can fix.
 async fn dial(
-    macro_api: &MacroApi,
+    token: &str,
     gateway_url: &str,
     strategy: impl IntoIterator<Item = Duration>,
 ) -> Result<RuntimeChannel, tungstenite::Error> {
-    RetryIf::start(
-        strategy,
-        || link::dial(gateway_url, &macro_api.bot_token, &macro_api.bot_scope),
-        worth_redialing,
-    )
-    .await
+    RetryIf::start(strategy, || link::dial(gateway_url, token), worth_redialing).await
 }
 
 /// Whether dialing again could plausibly answer differently. A 4xx is the
-/// gateway's verdict on this bot - not an agent bot, credentials refused - and
+/// gateway's verdict on this harness - credentials refused or revoked - and
 /// asking again only repeats it.
 fn worth_redialing(error: &tungstenite::Error) -> bool {
-    !matches!(
-        error,
-        tungstenite::Error::Http(response) if response.status().is_client_error()
-    )
+    if let tungstenite::Error::Http(response) = error
+        && response.status().is_client_error()
+    {
+        if response.status() == tungstenite::http::StatusCode::UNAUTHORIZED
+            || response.status() == tungstenite::http::StatusCode::FORBIDDEN
+        {
+            tracing::error!(
+                status = %response.status(),
+                "the gateway refused this harness's credentials; press p to re-pair"
+            );
+        }
+        return false;
+    }
+    true
 }
 
 fn dial_strategy() -> impl Iterator<Item = Duration> {

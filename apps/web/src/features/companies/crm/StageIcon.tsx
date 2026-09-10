@@ -9,6 +9,7 @@
 
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
+import { getHashedPaletteColor } from '@ui/utils/palette';
 import { Show } from 'solid-js';
 import { twMerge } from 'tailwind-merge';
 
@@ -26,24 +27,17 @@ const STAGE_TINT_PALETTE = [
   'text-failure-ink',
 ] as const;
 
-/** Stable non-negative hash so untinted custom stages keep their color. */
-function hashOptionId(optionId: string): number {
-  let hash = 0;
-  for (let i = 0; i < optionId.length; i++) {
-    hash = (hash * 31 + optionId.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
-}
-
 export function CrmStageIcon(props: {
   optionId: string;
   index?: number;
   class?: string;
 }) {
   const tint = () =>
-    STAGE_TINT_PALETTE[
-      (props.index ?? hashOptionId(props.optionId)) % STAGE_TINT_PALETTE.length
-    ];
+    props.index === undefined
+      ? getHashedPaletteColor(props.optionId, {
+          palette: STAGE_TINT_PALETTE,
+        })
+      : STAGE_TINT_PALETTE[props.index % STAGE_TINT_PALETTE.length];
 
   return (
     <Show

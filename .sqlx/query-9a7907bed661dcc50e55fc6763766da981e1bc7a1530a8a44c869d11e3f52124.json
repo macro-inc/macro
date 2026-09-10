@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT access_level FROM (\n            -- Source 1: entity_access source_id match\n            SELECT\n                access_level::text FROM entity_access\n            WHERE entity_id = $1\n            AND entity_type = 'document'\n            AND source_id = ANY($2)\n\n            UNION ALL\n            -- Source 2: document link share permission\n            SELECT\n                share_permission.\"linkShareAccessLevel\"::text AS access_level\n            FROM \"Document\" document\n            JOIN \"DocumentPermission\" document_permission\n              ON document_permission.\"documentId\" = document.id\n            JOIN \"SharePermission\" share_permission\n              ON share_permission.id = document_permission.\"sharePermissionId\"\n            WHERE document.id = $3\n              AND share_permission.\"linkShareAccessLevel\" IS NOT NULL\n              AND (\n                  share_permission.\"linkShare\" = 'PUBLIC'\n                  OR (\n                      share_permission.\"linkShare\" = 'TEAM'\n                      AND EXISTS (\n                          SELECT 1\n                          FROM team_user owner_team\n                          WHERE owner_team.user_id = document.owner\n                            AND owner_team.team_id::text = ANY($2)\n                      )\n                  )\n              )\n\n            UNION ALL\n            -- Source 3: email-attachment documents inherit access from any\n            -- linked thread the caller can reach. Owning or being delegated\n            -- the thread's inbox (macro_user_links) grants Edit, mirroring\n            -- calendar-event delegation. A thread-level entity_access grant\n            -- inherits as View regardless of its level: a SHA-deduped document\n            -- can back attachments in other threads with different audiences,\n            -- so a per-thread share must not confer write access to it.\n            SELECT CASE\n                WHEN l.macro_id = $4\n                  OR EXISTS (\n                      SELECT 1\n                      FROM macro_user_links mul\n                      WHERE mul.link_id = l.id\n                        AND mul.primary_macro_id = $4\n                  )\n                THEN 'edit'\n                ELSE 'view'\n            END AS access_level\n            FROM document_email de\n            JOIN email_attachments ea ON ea.id = de.email_attachment_id\n            JOIN email_messages em ON em.id = ea.message_id\n            JOIN email_threads t ON t.id = em.thread_id\n            JOIN email_links l ON l.id = t.link_id\n            WHERE de.document_id = $3\n              AND (\n                  l.macro_id = $4\n                  OR EXISTS (\n                      SELECT 1\n                      FROM macro_user_links mul\n                      WHERE mul.link_id = l.id\n                        AND mul.primary_macro_id = $4\n                  )\n                  OR EXISTS (\n                      SELECT 1\n                      FROM entity_access thread_access\n                      WHERE thread_access.entity_id = t.id\n                        AND thread_access.entity_type = 'email_thread'\n                        AND thread_access.source_id = ANY($2)\n                  )\n              )\n        ) AS combined_access\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9a7907bed661dcc50e55fc6763766da981e1bc7a1530a8a44c869d11e3f52124"
+}

@@ -22,9 +22,9 @@ function CalloutShell(props: CalloutShellProps) {
   return (
     <Layer depth={2}>
       <div class="flex items-center gap-3 rounded-md bg-surface px-4 py-3 border border-edge-muted">
-        <span class="text-sm text-muted">{props.leader}</span>
+        <span class="text-sm text-ink-muted">{props.leader}</span>
         <div class="flex items-center gap-2.5">{props.children}</div>
-        <span class="text-sm text-muted">{props.label}</span>
+        <span class="text-sm text-ink-muted">{props.label}</span>
         <Show when={props.completed}>
           <div class="bg-accent text-surface size-5 rounded-xs flex items-center justify-center ml-auto">
             <CheckIcon class="size-4" />
@@ -151,7 +151,7 @@ export function HotkeyCallout(props: HotkeyCalloutProps) {
           return (
             <>
               {i() > 0 && props.separator && (
-                <span class="text-sm text-muted">{props.separator}</span>
+                <span class="text-sm text-ink-muted">{props.separator}</span>
               )}
               <span
                 ref={keyRef}

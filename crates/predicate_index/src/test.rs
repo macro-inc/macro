@@ -237,3 +237,61 @@ fn rejects_empty_ranges_duplicate_partitions_and_duplicate_sort_facts() {
     });
     assert_eq!(document.validate(), Err(ValidationError::DuplicateSortFact));
 }
+
+#[test]
+fn uncertainty_can_clear_exact_fields_after_a_wildcard() {
+    let owner = token("owner");
+    let updated_at = token("updated-at");
+    let mut uncertainty = OptimisticUncertainty::default();
+
+    uncertainty.mark(&[]);
+    assert!(uncertainty.affects(&owner));
+    assert!(uncertainty.affects(&updated_at));
+
+    uncertainty.clear([owner.clone()]);
+    assert!(!uncertainty.affects(&owner));
+    assert!(uncertainty.affects(&updated_at));
+
+    uncertainty.mark(std::slice::from_ref(&owner));
+    assert!(uncertainty.affects(&owner));
+    uncertainty.clear([owner.clone(), updated_at]);
+    assert!(!uncertainty.affects(&owner));
+}
+
+#[test]
+fn canonical_documents_are_deterministic_and_deduplicate_membership_facts() {
+    let mut document = document("Document:1", "user-1", 10);
+    document.exact_facts.push(document.exact_facts[0].clone());
+    document
+        .integer_facts
+        .push(document.integer_facts[0].clone());
+    document.exact_facts.push(ExactFact {
+        attribute: token("file-type"),
+        value: exact("pdf"),
+    });
+    document.exact_facts.reverse();
+
+    document.canonicalize();
+
+    assert_eq!(document.exact_facts.len(), 2);
+    assert_eq!(document.integer_facts.len(), 1);
+    assert!(document.validate().is_ok());
+    assert_eq!(document.exact_facts, {
+        let mut expected = document.exact_facts.clone();
+        expected.sort();
+        expected
+    });
+}
+
+#[test]
+fn effective_projection_rejects_an_unassigned_owner() {
+    let projection = EffectiveOptimisticProjection {
+        owner: 0,
+        state: OptimisticProjectionState::Complete(document("Document:1", "user-1", 10)),
+        uncertainty: OptimisticUncertainty::default(),
+    };
+    assert_eq!(
+        projection.validate(),
+        Err(ValidationError::InvalidOptimisticOwner)
+    );
+}

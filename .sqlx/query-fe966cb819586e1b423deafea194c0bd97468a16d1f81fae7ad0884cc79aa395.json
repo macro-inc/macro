@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                u.id,\n                u.macro_user_id AS \"fusion_user_id?\",\n                u.\"organizationId\" AS \"organization_id?\"\n            FROM \"UserApiKey\" k\n            JOIN \"User\" u ON u.id = k.user_id\n            WHERE k.hash = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "fusion_user_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "organization_id?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "fe966cb819586e1b423deafea194c0bd97468a16d1f81fae7ad0884cc79aa395"
+}

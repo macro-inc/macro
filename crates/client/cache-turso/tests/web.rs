@@ -34,6 +34,7 @@ fn healthy_close(outcome: TursoStorageCloseOutcome) -> HealthyTursoStorageClosed
 
 fn queued() -> NewQueuedMutation {
     NewQueuedMutation {
+        uuid: uuid::Uuid::new_v4(),
         mutation: StoredMutation::new(
             MutationRequest {
                 query: "mutation Browser { update { id } }".into(),

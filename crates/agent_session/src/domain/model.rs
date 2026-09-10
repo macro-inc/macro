@@ -15,6 +15,123 @@ pub use agent_fold::domain::model::{
     Author, AuthorKind, FoldEvent, MessageId, OwnedFoldEvent, TurnId,
 };
 
+/// Identity of one harness participant, minted fresh at construction.
+///
+/// A restarted process is a new replica: whatever the old identity claimed is
+/// released by its heartbeat going stale, never inherited.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ReplicaId(Uuid);
+
+impl ReplicaId {
+    /// Mint a fresh replica identity.
+    #[must_use]
+    pub fn mint() -> Self {
+        Self(Uuid::new_v4())
+    }
+
+    /// The raw uuid, for persistence.
+    #[must_use]
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+
+    /// Rebuild an identity from its persisted uuid.
+    #[must_use]
+    pub fn from_uuid(id: Uuid) -> Self {
+        Self(id)
+    }
+}
+
+impl std::fmt::Display for ReplicaId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// A replica's own base URL, as peers should dial it for command forwarding.
+///
+/// Private-network address discovered by the replica itself at boot (the ECS
+/// task metadata endpoint in deployments), published with its heartbeat.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplicaAddress(String);
+
+impl ReplicaAddress {
+    /// Wrap a base URL, e.g. `http://10.0.1.7:8100`.
+    #[must_use]
+    pub fn new(address: impl Into<String>) -> Self {
+        Self(address.into())
+    }
+
+    /// The base URL as a string.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for ReplicaAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// The live manager of a session, as read from the lease.
+#[derive(Debug, Clone)]
+pub struct SessionManager {
+    /// The replica holding the claim.
+    pub replica: ReplicaId,
+    /// Where to forward its commands, when the replica has published one.
+    /// `None` means the manager is live but unreachable - hold the error
+    /// rather than execute somewhere the actor is not.
+    pub address: Option<ReplicaAddress>,
+}
+
+/// Where a session's live actor runs, from one service instance's viewpoint.
+#[derive(Debug, Clone)]
+pub enum SessionManagement {
+    /// No live replica manages the session; this instance may claim it by
+    /// attaching, so commands execute locally.
+    Unmanaged,
+    /// This instance's replica manages it; commands execute locally.
+    Ours,
+    /// A live peer manages it; commands belong at its address.
+    Peer(SessionManager),
+}
+
+/// A session's takeover counter, bumped by every successful claim.
+///
+/// Carried by the claim holder into each live-actor write; the store rejects
+/// writes whose fence has been superseded, so a stale holder is neutralized
+/// by the same statement that would have written (a fencing token).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ManagerFence(pub i64);
+
+/// Proof that this replica claimed a session's live management.
+///
+/// Obtained only from [`SessionOwnership::claim`](super::ports::SessionOwnership::claim);
+/// holding one is what entitles an actor to attach and write the session's
+/// log under its fence.
+#[derive(Debug, Clone, Copy)]
+pub struct SessionClaim {
+    /// The claimed session.
+    pub session: AgentSessionId,
+    /// The replica holding the claim.
+    pub replica: ReplicaId,
+    /// The fence this claim writes under.
+    pub fence: ManagerFence,
+}
+
+/// What claiming a session yielded.
+#[derive(Debug, Clone, Copy)]
+pub enum ClaimOutcome {
+    /// This replica now manages the session.
+    Claimed(SessionClaim),
+    /// A replica with a fresh heartbeat already manages it. Until command
+    /// forwarding exists this surfaces as an error; with it, commands are
+    /// routed to the named replica instead.
+    ManagedElsewhere(ReplicaId),
+}
+
 /// Display name assigned to a newly created agent session.
 pub const DEFAULT_AGENT_SESSION_NAME: &str = "Agent Session";
 
@@ -32,6 +149,13 @@ pub enum SessionStatus {
     /// The session disconnected without sending a closed event.
     Disconnected,
 }
+
+/// Which Pipedream MCP servers a session is handed: the agent's own choice,
+/// snapshotted onto the session at creation like `instructions`. The ACP
+/// agent is given its server list once per attach and cannot refresh it, so
+/// the snapshot is what every later attach re-advertises; editing the agent
+/// applies to its next session.
+pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
 
 /// Caller-provided values required to create an agent session.
 #[derive(Debug, Clone)]
@@ -56,6 +180,23 @@ pub struct CreateAgentSessionParams {
     pub workspace: String,
     /// Compute tier the managed sandbox was spawned with.
     pub sandbox_size: SandboxSize,
+    /// Instructions the session's runtime works under, when any were stated.
+    ///
+    /// Snapshotted here rather than resolved per turn because they are the
+    /// runtime's system prompt: how a harness is handed them differs by
+    /// provider, but every provider needs the same answer for the session's
+    /// whole life.
+    pub instructions: Option<String>,
+    /// Which MCP servers the session is handed; see [`AgentMcpServers`].
+    pub mcp_servers: AgentMcpServers,
+    /// SHA-256 hex of the opaque token the session's sandbox presents to the
+    /// egress proxy, or `None` for a session that never gets one.
+    ///
+    /// The hash and never the token: this row is the only durable record of
+    /// the credential, and a database dump must not yield a live one. A session
+    /// replayed from a recording, or created without a sandbox, has nothing to
+    /// store here.
+    pub egress_token_hash: Option<String>,
 }
 
 /// A running or historical agent coding session.
@@ -90,6 +231,12 @@ pub struct AgentSession {
     pub workspace: String,
     /// Compute tier of the managed sandbox, snapshotted at spawn.
     pub sandbox_size: SandboxSize,
+    /// Instructions the session's runtime works under, snapshotted at
+    /// creation. Immutable for the session's life; `None` when none were
+    /// stated.
+    pub instructions: Option<String>,
+    /// Which MCP servers the session is handed, snapshotted at creation.
+    pub mcp_servers: AgentMcpServers,
     /// ACP session if we have one
     pub acp_session_id: Option<SessionId>,
     /// The provider-side identity, when an external provider serves this
@@ -127,6 +274,8 @@ pub struct ExternalSession {
     pub external_name: Option<String>,
     /// The agent's page on the provider's site, for opening it there.
     pub external_url: Option<String>,
+    /// The last provider run whose output was delivered to this session.
+    pub last_run_id: Option<String>,
 }
 
 /// The agent behind a session, as much of it as rendering a message needs.
@@ -142,9 +291,50 @@ pub struct SessionBot {
     pub avatar_url: Option<String>,
 }
 
+/// One action waiting in a session's queue.
+///
+/// Clients deserialize this, so both derives are used.
+// Domain-owned because the queue GET endpoint and the realtime snapshot
+// serialize this type byte-identically; that identity is the client contract.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct QueuedActionDto {
+    /// The id the action was accepted under.
+    pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
+    /// What kind of action waits - `prompt` or `compact`; only
+    /// turn-occupying actions are ever queued.
+    pub kind: String,
+    /// The prompt's raw text, present for prompts only. What an edit
+    /// replaces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    /// The user who queued it, absent when a bot acted on nobody's behalf.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_user_id: Option<String>,
+    /// When it was accepted.
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<super::ports::QueuedControl> for QueuedActionDto {
+    fn from(queued: super::ports::QueuedControl) -> Self {
+        use agent_runtime_protocol::domain::action::AgentAction;
+        let prompt = match &queued.action {
+            AgentAction::Prompt(action) => Some(action.prompt.clone()),
+            _ => None,
+        };
+        Self {
+            action_id: queued.action_id,
+            kind: queued.action.as_ref().to_owned(),
+            prompt,
+            actor_user_id: queued.actor.map(|actor| actor.to_string()),
+            created_at: queued.created_at,
+        }
+    }
+}
+
 /// One frame appended to a live session's log, for anyone watching.
 ///
-/// The streaming counterpart of [`SessionLog`]: that is the whole log
+/// The streaming counterpart of [`SessionLog`]: that is the selected history window
 /// for a reader arriving late, this is one frame for a reader already here.
 /// Both carry the same entry shape, so a client folds them the same way -
 /// catching up on the log and then following it is one fold, not two.
@@ -170,13 +360,17 @@ pub struct LogAppended {
 /// a session's messages against anything else still has something to order by.
 #[derive(Debug, Clone)]
 pub struct StoredAgentSessionLog {
+    /// Durable row identity, used to select a replay history boundary.
+    pub id: Uuid,
     /// When the entry was appended to the log.
     pub created_at: DateTime<Utc>,
     /// The frame, exactly as the log stored it.
     pub entry: AgentSessionLog,
 }
 
-/// A session's raw protocol log.
+/// A session's effective ACP history, from its latest successful load initialization.
+/// With no successful load, history starts at the beginning. Failed attempts
+/// remain in the stream and must be staged/discarded by fold consumers.
 ///
 /// Served rather than the messages it derives: the reader folds it. The web
 /// client runs the same fold compiled to WASM, so a streamed session and a
@@ -210,4 +404,12 @@ pub enum ChannelSession {
     None,
     /// The bot's session was created from the incoming thread.
     CreatedFromThread(AgentSession),
+}
+
+/// Initialization selected by a matching successful load in the session machine.
+/// Persistence must append the response and select this row in one fenced transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryBoundary {
+    /// Initialization row in this session's log.
+    pub initialization_log_id: Uuid,
 }

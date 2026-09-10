@@ -631,7 +631,7 @@ function EditingEntityPreview(props: { entities: PropertyEditorEntity[] }) {
         }}
       </For>
       <Show when={remainingCount() > 0}>
-        <div class="text-muted-foreground text-xs px-2 py-1">
+        <div class="text-ink-muted text-xs px-2 py-1">
           +{remainingCount()} more
         </div>
       </Show>
@@ -1355,7 +1355,7 @@ function PropertyValueEditor(props: {
         />
       </Match>
       <Match when={propertyType() === 'LINK'}>
-        <div class="p-4 text-center text-muted-foreground">
+        <div class="p-4 text-center text-ink-muted">
           Link editing not yet implemented
         </div>
       </Match>

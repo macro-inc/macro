@@ -5,7 +5,7 @@ use axum::{
 use macro_authorization::{MacroAuthorizationExtractor, UserOnly};
 use utoipa::ToSchema;
 
-use super::{CursorApiKeyError, CursorApiKeyStatus, require_macro_staff};
+use super::{CursorApiKeyError, CursorApiKeyStatus};
 use crate::api::context::{ApiContext, AuthorizationService};
 
 /// The model the user chose for their sessions.
@@ -43,7 +43,6 @@ pub async fn handler(
     extract::Json(req): extract::Json<PutCursorDefaultModelRequest>,
 ) -> Result<Json<CursorApiKeyStatus>, CursorApiKeyError> {
     let user_id = &user_context.authorization.macro_user_id;
-    require_macro_staff(user_id)?;
 
     let updated = cursor_api_key::store::set_default_model_id(
         &ctx.db,

@@ -16,6 +16,7 @@ mod self_knowledge;
 pub mod serde_utils;
 mod subagent;
 mod tool_context;
+pub mod user_tool_review;
 
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
@@ -108,22 +109,68 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
         .add_subtoolset::<AnthropicToolContext>(anthropic_toolset())
 }
 
-/// These are actually sent to the AI provider
-pub fn all_tools() -> ToolSetWithPrompt {
+/// The host a toolset is assembled for.
+///
+/// Hosts differ on two axes. First, whether something finishes a deferred
+/// user tool for them: [`AiHost::Chat`] has the composer card after the
+/// turn and [`AiHost::AgentSession`] the review elicitation in it, so those
+/// two register `SendEmail` and the deferring `CreateCalendarEvent` — on any
+/// other host those registrations would return `PendingUserExecution`
+/// forever while reading to the model as success. Second, whether the host
+/// runs the chat frontend's tool discovery and display tools.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AiHost {
+    /// The AI chat, and any host whose conversation is stored as a chat the
+    /// frontend can render (scheduled agents, memory generation): composer
+    /// cards finish deferred user tools there, after the turn.
+    Chat,
+    /// Macro's in-process agent serving an agent session: the same toolset
+    /// as [`AiHost::Chat`], but its user tools are reviewed in the turn - the
+    /// agent loop's finisher puts the call to the user over ACP and the tool
+    /// returns the outcome - so the prompt describes a review card the agent
+    /// waits on, never a pending composer.
+    AgentSession,
+    /// The channel-mention bot: no composer, so `CreateCalendarEvent`
+    /// executes directly in the agent loop and `SendEmail` is omitted.
+    ChannelBot,
+    /// The MCP server: like [`AiHost::ChannelBot`] for user tools — MCP
+    /// clients apply their own confirmation policy from tool annotations —
+    /// and without the chat frontend's discovery/display tools.
+    Mcp,
+}
+
+/// Assemble the toolset and tool-use prompt for a host. These are actually
+/// sent to the AI provider.
+pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
-        .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset())
-        .add_subtoolset::<ToolEmailToolContext>(email_toolset())
-        .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset())
+        .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset());
+    let toolset = match host {
+        AiHost::Chat | AiHost::AgentSession => toolset
+            .add_subtoolset::<ToolEmailToolContext>(email_toolset())
+            .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset()),
+        AiHost::ChannelBot | AiHost::Mcp => toolset
+            .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
+            .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset()),
+    };
+    let toolset = toolset
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
-        .add_tool::<Subagent, ToolServiceContext>()
-        .add_tool::<SearchTools, ToolServiceContext>()
-        .add_tool::<LoadTools, ToolServiceContext>()
-        .add_tool::<DisplayResults, ToolServiceContext>();
-    let toolset = Arc::new(toolset);
+        .add_tool::<Subagent, ToolServiceContext>();
+    let toolset = match host {
+        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
+            .add_tool::<SearchTools, ToolServiceContext>()
+            .add_tool::<LoadTools, ToolServiceContext>()
+            .add_tool::<DisplayResults, ToolServiceContext>(),
+        AiHost::Mcp => toolset,
+    };
+    let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
+        AiHost::Chat => Box::new(&prompt::TOOL_USE_PROMPT),
+        AiHost::AgentSession => Box::new(&prompt::SESSION_TOOL_USE_PROMPT),
+        AiHost::ChannelBot | AiHost::Mcp => Box::new(&prompt::DIRECT_TOOL_USE_PROMPT),
+    };
     ToolSetWithPrompt {
-        toolset,
-        prompt: Box::new(&prompt::TOOL_USE_PROMPT),
+        toolset: Arc::new(toolset),
+        prompt,
     }
 }
 
@@ -133,25 +180,9 @@ pub fn all_tools() -> ToolSetWithPrompt {
 /// sent to AI providers.
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
-        .merge(&all_tools())
+        .merge(&tools_for(AiHost::Chat))
         .merge(&read::read_thread())
         .build()
-}
-
-/// Toolset for the MCP server — excludes chat-deferred user tools.
-pub fn mcp_tools() -> ToolSetWithPrompt {
-    let toolset = subagent_toolset()
-        .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
-        .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset())
-        .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
-        .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset())
-        .add_subtoolset::<ToolImportToolContext>(import_toolset())
-        .add_tool::<Subagent, ToolServiceContext>();
-    let toolset = Arc::new(toolset);
-    ToolSetWithPrompt {
-        toolset,
-        prompt: Box::new(&prompt::TOOL_USE_PROMPT),
-    }
 }
 
 pub fn no_tools() -> ToolSetWithPrompt {

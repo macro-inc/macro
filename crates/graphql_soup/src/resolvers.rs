@@ -1,4 +1,4 @@
-use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
+use std::{collections::HashSet, future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 
 use async_graphql::Context;
 use axum::extract::FromRef;
@@ -19,7 +19,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::TypeEraseCursor;
 use soup::domain::{models::grouping::NestedSoupGroups, ports::SoupService};
-use soup_realtime::domain::ports::SoupRealtimeSubscriptionService;
+use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},
@@ -46,16 +46,31 @@ where
 {
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let mut receiver = service.subscribe(macro_user_id.clone());
+    let loader = ctx.data_opt::<SoupItemDataLoader>().cloned();
     const BUFFER_SIZE: usize = 10;
     let mut buf = Vec::with_capacity(BUFFER_SIZE);
 
     Ok(async_stream::stream! {
         while let x @ 1.. = receiver.recv_many(&mut buf, BUFFER_SIZE).await {
-            let patches = buf
-                .drain(..x)
-                .map(|patch| SoupPatch::new(macro_user_id.clone(), patch))
-                .collect();
-            yield patches;
+            let mut seen = HashSet::with_capacity(x);
+            let mut patches = buf.drain(..x).rev()
+                .filter(|patch| seen.insert(patch.value().clone()))
+                .collect::<Vec<_>>();
+            patches.reverse();
+            let hydrated = futures::future::try_join_all(patches.into_iter().map(|patch| {
+                let user_id = macro_user_id.clone();
+                let loader = loader.as_ref();
+                async move {
+                    match patch {
+                        Patch::Updated(entity) => SoupPatch::hydrate_updated(user_id, entity, loader).await,
+                        Patch::Deleted(entity) => SoupPatch::deleted(entity).map(Some),
+                    }
+                }
+            })).await.map(|patches| patches.into_iter().flatten().collect::<Vec<_>>());
+            match hydrated {
+                Ok(patches) if patches.is_empty() => continue,
+                result => yield result,
+            }
         }
     })
 }
@@ -102,7 +117,7 @@ where
         return Ok(None);
     };
 
-    match GraphqlSoupEntity::<Edges>::new(item) {
+    match GraphqlSoupEntity::<Edges>::new_with_projection(item) {
         GraphqlSoupEntity::EmailThread(thread) => Ok(Some(thread)),
         _ => Err(async_graphql::Error::new(
             "Soup returned a non-email entity for an email-thread request",
@@ -171,11 +186,15 @@ where
 
     if include_frecency {
         let page = service
-            .get_user_soup_with_frecency(request, team_receipt)
+            .get_user_soup_with_frecency_and_projection(request, team_receipt)
             .await?;
-        Ok(SoupPage::new_from_enriched(page.type_erase()))
+        Ok(SoupPage::new_from_enriched_with_projection(
+            page.type_erase(),
+        ))
     } else {
-        let page = service.get_user_soup(request, team_receipt).await?;
-        Ok(SoupPage::new(page.type_erase()))
+        let page = service
+            .get_user_soup_with_projection(request, team_receipt)
+            .await?;
+        Ok(SoupPage::new_with_projection(page.type_erase()))
     }
 }

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calendars\n            SET last_sync_error = $3,\n                last_sync_error_at = now(),\n                consecutive_sync_failures = consecutive_sync_failures + 1,\n                updated_at = now()\n            WHERE id = $1\n              AND account_id = $2\n              AND NOT is_deleted\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "707e3644cb7cc2292b4b3415aee2802d5ea1c34c434b854b8bccd877e57cdcd4"
+}

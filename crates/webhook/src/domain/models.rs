@@ -277,6 +277,17 @@ pub struct WebhookFilter {
     pub ids: Option<Vec<String>>,
 }
 
+impl WebhookFilter {
+    /// Return whether this filter accepts an event name and entity id.
+    pub fn accepts(&self, event_name: &str, entity_id: &str) -> bool {
+        self.events.iter().any(|event| event == event_name)
+            && self
+                .ids
+                .as_ref()
+                .is_none_or(|ids| ids.iter().any(|id| id == entity_id))
+    }
+}
+
 /// Collection of webhook filters used to decide delivery eligibility.
 pub type WebhookFilters = Vec<WebhookFilter>;
 
@@ -319,10 +330,14 @@ impl std::str::FromStr for WebhookStatus {
 
 /// Scope that owns a newly-created webhook.
 ///
-/// Clients serialize this, so both derives are used.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Clients serialize this, so both derives are used. `Display`/`FromStr`
+/// spell the same names as serde, for query strings and config values.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum WebhookScope {
     /// The authenticated user's personal workspace.
     User,

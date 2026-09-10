@@ -14,6 +14,10 @@ export {
   ListEntityMetadataQueryProvider,
   ListEntityNoopMetadataProvider,
 } from './composed/list-entity/list-entity-metadata-provider';
+export {
+  EntitySelectionToolbar,
+  type EntitySelectionToolbarProps,
+} from './EntitySelectionToolbar';
 export { Entity } from './entity';
 export { EntityIcon as EntityRowIcon } from './extractors/entity-icon';
 export { EntityTitle as EntityRowTitle } from './extractors/entity-title';

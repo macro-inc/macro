@@ -838,22 +838,11 @@ async fn test_dynamic_query_with_importance_filter(pool: Pool<Postgres>) -> anyh
     Ok(())
 }
 
-// KNOWN LIMITATION (pinned, not desired): an OR mixing a message-level
-// literal (Sender) with a thread-level literal (Importance) broadens to
-// match-everything. The thread stage maps Sender to TRUE and the lateral
-// maps Importance to TRUE, so `(TRUE OR t.is_signal)` / `(sender OR TRUE)`
-// both collapse. The correct result here would be the 6 signal threads
-// (john's threads 1/2/5 are all signal), but noise threads 6 and 7 leak in.
-// This predates the is_signal flip for every other thread-level literal
-// (CalendarOnly, ProjectId, dates); Importance joined the risk surface when
-// it moved thread-level. The FE and AI toolset only emit AND-shaped
-// importance filters, so no caller hits this today. If this test starts
-// failing with 6, cross-level OR was fixed — delete this test with joy.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
-async fn test_mixed_or_sender_importance_broadens_known_limitation(
+async fn test_mixed_or_sender_importance_preserves_both_branches(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     sync_all_signal_flags(&pool).await?;
@@ -876,11 +865,11 @@ async fn test_mixed_or_sender_importance_broadens_known_limitation(
     let result_ids: std::collections::HashSet<String> =
         results.iter().map(|r| r.id.to_string()).collect();
 
-    // Broadened: every thread with a surfaceable message (1-8), including
-    // noise threads 6 and 7 that match neither OR branch.
-    assert_eq!(results.len(), 8, "mixed OR currently broadens to all");
-    assert!(result_ids.contains("20000006-0000-0000-0000-000000000006"));
-    assert!(result_ids.contains("20000007-0000-0000-0000-000000000007"));
+    // Threads 6 and 7 match neither branch. The other six surfaceable
+    // threads are signal threads, including all three John threads.
+    assert_eq!(results.len(), 6, "mixed OR must preserve both predicates");
+    assert!(!result_ids.contains("20000006-0000-0000-0000-000000000006"));
+    assert!(!result_ids.contains("20000007-0000-0000-0000-000000000007"));
 
     Ok(())
 }
@@ -2816,6 +2805,120 @@ async fn test_viewed_at_sort_orders_by_view_history(pool: Pool<Postgres>) -> any
     assert_eq!(top.viewed_at, Some(viewed_7));
     // effective_ts == viewed_at on this path (the inline CASE).
     assert_eq!(top.sort_ts, viewed_7);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_viewed_at_filter_uses_view_history_with_updated_sort(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::ast::date::DateLiteral;
+
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let cutoff = Utc.with_ymd_and_hms(2024, 5, 15, 0, 0, 0).unwrap();
+    let viewed_7 = Utc.with_ymd_and_hms(2024, 6, 1, 0, 0, 0).unwrap();
+    let viewed_4 = Utc.with_ymd_and_hms(2024, 5, 1, 0, 0, 0).unwrap();
+    record_view(&pool, link_id, THREAD_7, viewed_7).await?;
+    record_view(&pool, link_id, THREAD_4, viewed_4).await?;
+
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let filter = Arc::new(Expr::Literal(EmailLiteral::ViewedAt(
+        DateLiteral::GreaterThanOrEqual(cutoff),
+    )));
+    let results = dynamic::dynamic_email_thread_cursor(
+        &pool,
+        &[link_id],
+        50,
+        &view,
+        Query::new(None, SimpleSortMethod::UpdatedAt, filter),
+        "",
+        None,
+    )
+    .await?;
+
+    let ids: Vec<String> = results.iter().map(|row| row.id.to_string()).collect();
+    assert_eq!(ids, vec![THREAD_7.to_string()]);
+    assert_eq!(results[0].viewed_at, Some(viewed_7));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn test_mixed_sender_or_viewed_at_and_not_preserve_semantics(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::ast::date::DateLiteral;
+
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let cutoff = Utc.with_ymd_and_hms(2024, 5, 15, 0, 0, 0).unwrap();
+    let older_view = Utc.with_ymd_and_hms(2024, 5, 1, 0, 0, 0).unwrap();
+    let recent_view = Utc.with_ymd_and_hms(2024, 6, 1, 0, 0, 0).unwrap();
+    for thread_id in [THREAD_1, THREAD_4, THREAD_5] {
+        record_view(&pool, link_id, thread_id, older_view).await?;
+    }
+    record_view(&pool, link_id, THREAD_7, recent_view).await?;
+
+    let sender_or_viewed = Expr::or(
+        Expr::Literal(EmailLiteral::Sender(Email::Complete(
+            EmailStr::parse_from_str("john@example.com")?.into_owned(),
+        ))),
+        Expr::Literal(EmailLiteral::ViewedAt(DateLiteral::GreaterThanOrEqual(
+            cutoff,
+        ))),
+    );
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let results = dynamic::dynamic_email_thread_cursor(
+        &pool,
+        &[link_id],
+        50,
+        &view,
+        Query::new(
+            None,
+            SimpleSortMethod::UpdatedAt,
+            Arc::new(sender_or_viewed.clone()),
+        ),
+        "",
+        None,
+    )
+    .await?;
+    let ids: std::collections::HashSet<String> =
+        results.iter().map(|row| row.id.to_string()).collect();
+    assert_eq!(
+        ids,
+        [THREAD_1, THREAD_5, THREAD_7]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        "OR must include John threads and the recently viewed Jane thread"
+    );
+
+    let results = dynamic::dynamic_email_thread_cursor(
+        &pool,
+        &[link_id],
+        50,
+        &view,
+        Query::new(
+            None,
+            SimpleSortMethod::UpdatedAt,
+            Arc::new(Expr::is_not(sender_or_viewed)),
+        ),
+        "",
+        None,
+    )
+    .await?;
+    let ids: Vec<String> = results.iter().map(|row| row.id.to_string()).collect();
+    assert_eq!(
+        ids,
+        vec![THREAD_4.to_string()],
+        "NOT must exclude every message matching either inner branch"
+    );
 
     Ok(())
 }

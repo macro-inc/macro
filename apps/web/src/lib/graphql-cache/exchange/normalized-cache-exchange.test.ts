@@ -1,3 +1,4 @@
+import { executeGraphqlSetFavoriteMutation } from '@service-storage/graphql-favorites';
 import {
   type Client,
   CombinedError,
@@ -21,6 +22,7 @@ import type { CacheHost } from '../host/types';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type ClaimedMutation,
+  type CommitOptimisticWriteResult,
   type EnqueueOptimisticMutationResult,
   INITIAL_CACHE_REVISION,
   type MutationClaim,
@@ -34,7 +36,10 @@ import {
   normalizedCacheExchange,
   normalizedCacheResultMetadata,
 } from './normalized-cache-exchange';
-import { optimisticMutationDispositionOf } from './optimistic';
+import {
+  optimisticContextOf,
+  optimisticMutationDispositionOf,
+} from './optimistic';
 
 const QUERY = gql`
   query Soup($input: SoupInput!) {
@@ -219,6 +224,8 @@ function makeFakeHost(): FakeHost {
     host.claims.push(head.transactionId);
     return {
       transactionId: head.transactionId,
+      uuid: head.args.uuid,
+      superseded: false,
       leaseGeneration: String(head.attemptCount),
       query: head.args.query,
       operationName: head.args.operationName,
@@ -286,6 +293,7 @@ function makeFakeHost(): FakeHost {
       host.cacheActions.push({ kind: 'write', value: args.data });
       return {
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -315,9 +323,11 @@ function makeFakeHost(): FakeHost {
       return {
         transactionId,
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
+        upsertKind: { kind: 'inserted' },
         initialClaim: mutation
           ? { kind: 'claimed', mutation }
           : { kind: 'not-runnable' },
@@ -347,26 +357,31 @@ function makeFakeHost(): FakeHost {
         head.leased = false;
         head.nextAttemptAtMs = nextAttemptAtMs;
       }
+      return { kind: 'deferred' };
     },
     async commitOptimisticWrite(
       transactionId,
       _claim,
       args
-    ): Promise<WriteResult> {
+    ): Promise<CommitOptimisticWriteResult> {
       host.commits.push({ transactionId, query: args.query, data: args.data });
       if (queue[0]?.transactionId === transactionId) queue.shift();
       return {
+        kind: 'committed',
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
       };
     },
-    async rollbackOptimisticWrite(transactionId, _claim): Promise<WriteResult> {
+    async rollbackOptimisticWrite(transactionId, _claim) {
       host.rollbacks.push(transactionId);
       if (queue[0]?.transactionId === transactionId) queue.shift();
       return {
+        kind: 'rolled-back' as const,
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -466,7 +481,12 @@ function makeMutationOp(key: number, optimisticResponse?: unknown): Operation {
       suspense: false,
       ...(optimisticResponse === undefined
         ? {}
-        : { normalizedCacheOptimistic: { optimisticResponse } }),
+        : {
+            normalizedCacheOptimistic: {
+              uuid: crypto.randomUUID(),
+              optimisticResponse,
+            },
+          }),
     } as never
   );
 }
@@ -709,6 +729,7 @@ describe('normalizedCacheExchange', () => {
       cacheContainsDocument = true;
       return {
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -1349,6 +1370,7 @@ describe('normalizedCacheExchange', () => {
       cached = args.data;
       return {
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -1537,8 +1559,76 @@ describe('normalizedCacheExchange', () => {
   describe('mutations', () => {
     const optimistic = { setEntityProperty: { id: 'prop-1' } };
 
+    it.each([false, true])(
+      'rolls back rejected favorites rather than committing list patches (replay=%s)',
+      async (replay) => {
+        let submitted: Operation | undefined;
+        const capturingClient = {
+          mutation: (
+            query: Operation['query'],
+            variables: Operation['variables'],
+            context: Operation['context']
+          ) => {
+            submitted = makeOperation(
+              'mutation',
+              createRequest(query, variables),
+              {
+                ...context,
+                url: 'http://test',
+                requestPolicy: 'network-only',
+              }
+            );
+            return { toPromise: async () => ({}) };
+          },
+        } as unknown as Client;
+        await executeGraphqlSetFavoriteMutation(
+          capturingClient,
+          {
+            entityType: 'document',
+            entityId: 'document-1',
+          },
+          true,
+          0
+        );
+        if (!submitted) throw new Error('expected favorite submission');
+        const context = optimisticContextOf(submitted)!;
+        expect(context.linkPatches).toHaveLength(1);
+        if (replay) {
+          host.seedQueued({
+            uuid: context.uuid,
+            query: stringifyDocument(submitted.query),
+            operationName: 'SetFavorite',
+            variables: submitted.variables ?? undefined,
+            data: context.optimisticResponse,
+            linkPatches: context.linkPatches,
+            revalidations: context.revalidations,
+          });
+        }
+        // setFavorite emits GraphQL errors at the transport level, not an error
+        // union nested inside data. Replay needs no mounted mutation hook.
+        const error = new CombinedError({
+          graphQLErrors: [new Error('not authorized to update favorites')],
+        });
+        const { ops, client } = harness(host, () => ({
+          data: undefined,
+          error,
+        }));
+        if (replay) {
+          vi.mocked(client.mutation).mockReturnValue({
+            toPromise: async () => ({ error }),
+          } as never);
+        } else {
+          ops.next(submitted);
+        }
+        await tick();
+        expect(host.commits).toEqual([]);
+        expect(host.rollbacks).toEqual([replay ? 'restored-1' : 'txn-1']);
+      }
+    );
+
     it('replays a persisted mutation when the exchange starts', async () => {
       host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000001',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
         variables: { input: {} },
@@ -1556,6 +1646,7 @@ describe('normalizedCacheExchange', () => {
 
     it('rolls back when a persisted replay resolves with an urql error', async () => {
       host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000002',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
         variables: { input: {} },
@@ -1704,6 +1795,7 @@ describe('normalizedCacheExchange', () => {
       const operation = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: optimistic,
           linkPatches: [
             {
@@ -1734,6 +1826,7 @@ describe('normalizedCacheExchange', () => {
 
     it('replays an older returned claim and reports the new caller as queued', async () => {
       host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000003',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
         variables: { input: { restored: true } },
@@ -1819,6 +1912,7 @@ describe('normalizedCacheExchange', () => {
       const op = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: optimistic,
           linkPatches: [patch],
           revalidations: [],
@@ -1836,6 +1930,7 @@ describe('normalizedCacheExchange', () => {
       const op = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: optimistic,
           linkPatches: [
             {
@@ -1930,6 +2025,26 @@ describe('normalizedCacheExchange', () => {
       expect(host.writes).toHaveLength(0);
     });
 
+    it('does not expose a stale response when commit lands beneath a replacement', async () => {
+      const commit = host.commitOptimisticWrite.bind(host);
+      host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+        ...(await commit(transactionId, claim, args)),
+        kind: 'committed-superseded',
+        replacementTransactionId: 'txn-2',
+      });
+      const { ops, results } = harness(host);
+
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+
+      expect(host.commits[0]?.data).toEqual({ from: 'network' });
+      expect(results[0]?.data).toBeUndefined();
+      expect(optimisticMutationDispositionOf(results[0])).toEqual({
+        kind: 'queued',
+        transactionId: 'txn-2',
+      });
+    });
+
     it('replays mixed explicit cache effects in order after an optimistic commit', async () => {
       const deletion = {
         __typename: 'GraphqlCacheDeletion',
@@ -1958,6 +2073,7 @@ describe('normalizedCacheExchange', () => {
       const operation = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: {
             renameEntities: { results: [] },
           },
@@ -1991,6 +2107,68 @@ describe('normalizedCacheExchange', () => {
         },
       ]);
       expect(results[0]?.data).toBe(data);
+    });
+
+    it('skips stale explicit effects and revalidations for a superseded commit', async () => {
+      const deletion = {
+        __typename: 'GraphqlCacheDeletion',
+        graphqlTypeName: 'GraphqlSoupDocument',
+        entityId: 'document-1',
+      };
+      const update = {
+        __typename: 'SoupUpdated',
+        item: {
+          __typename: 'GraphqlSoupDocument',
+          id: 'document-1',
+          displayName: 'Stale rename',
+        },
+      };
+      const data = {
+        renameEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              effects: [deletion, update],
+            },
+          ],
+        },
+      };
+      const commit = host.commitOptimisticWrite.bind(host);
+      host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+        ...(await commit(transactionId, claim, args)),
+        kind: 'committed-superseded',
+        replacementTransactionId: 'txn-2',
+        revalidations: [
+          {
+            query: stringifyDocument(QUERY),
+            operationName: 'Soup',
+            variablesJson: '{"input":{"limit":2}}',
+          },
+        ],
+      });
+      const base = makeRenameMutationOp(11);
+      const operation = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
+          optimisticResponse: { renameEntities: { results: [] } },
+        },
+      });
+      const { ops, results, client } = harness(host, (op) =>
+        op.kind === 'mutation' ? { data } : {}
+      );
+
+      ops.next(operation);
+      await tick();
+
+      expect(host.commits).toHaveLength(1);
+      expect(host.cacheActions).toEqual([]);
+      expect(vi.mocked(client.query)).not.toHaveBeenCalled();
+      expect(results[0]?.data).toBeUndefined();
+      expect(optimisticMutationDispositionOf(results[0])).toEqual({
+        kind: 'queued',
+        transactionId: 'txn-2',
+      });
     });
 
     it('fires commit revalidations with network-only policy', async () => {

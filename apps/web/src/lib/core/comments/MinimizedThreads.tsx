@@ -18,18 +18,27 @@ export function MinimizedThread(props: {
   isActive: boolean;
   theme?: EditorThemeClasses;
   maxHeight?: number;
+  /**
+   * When false, tapping only activates the thread instead of expanding the
+   * floating card in place — for hosts that present the active thread
+   * elsewhere (the touch comment drawer).
+   */
+  expandable?: boolean;
 }) {
   const [expanded, setExpanded] = createSignal<boolean>(false);
   const [expandedThreadRef, setExpandedThreadRef] = createSignal<
     HTMLDivElement | undefined
   >(undefined);
 
-  if (props.comment.isNew) {
+  const expandable = () => props.expandable !== false;
+
+  if (props.comment.isNew && expandable()) {
     setExpanded(true);
   }
 
-  const { highlightedCommentId } = useContext(CommentsContext);
+  const { highlightedCommentId, setActiveThread } = useContext(CommentsContext);
   createEffect(() => {
+    if (!expandable()) return;
     const hId = highlightedCommentId();
     if (hId === null) return;
     if (hId === props.comment.id || props.comment.children.includes(hId)) {
@@ -68,7 +77,11 @@ export function MinimizedThread(props: {
 
   const commentCount = () => 1 + props.comment.children.length;
   const clickHandler = () => {
-    setExpanded(true);
+    if (expandable()) {
+      setExpanded(true);
+    } else {
+      setActiveThread(props.comment.threadId);
+    }
   };
 
   return (
@@ -105,7 +118,7 @@ export function MinimizedThread(props: {
             <div
               class={cn('inline-flex items-center gap-1 px-1 rounded-lg', {
                 'group-hover:bg-hover': !props.isActive,
-                'bg-yellow/10 group-hover:bg-yellow/20': props.isActive,
+                'bg-comment/10 group-hover:bg-comment/20': props.isActive,
               })}
             >
               <ChatTeardrop class="size-4" onClick={clickHandler} />

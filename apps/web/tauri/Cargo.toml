@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "callkit_plugin",
+  "edit_menu_plugin",
   "graphql_cache_plugin",
   "input_accessory_plugin",
   "logger",

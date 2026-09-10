@@ -185,7 +185,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
         // callback so the inbox panel shows it immediately on return rather
         // than flashing a stale list until its own refetch lands.
         await query.refetch();
-        toast.success('Inbox connected');
+        toast.success('Account connected');
         navigateAfterLink(linkId);
       },
       async (err) => {

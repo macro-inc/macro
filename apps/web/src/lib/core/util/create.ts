@@ -66,7 +66,10 @@ export async function createMarkdownFile(
     name: args?.title ?? '',
     fileType: 'md',
   });
-  refetchSoupEntity(documentId, 'document', { ownTouch: true });
+  refetchSoupEntity(documentId, 'document', {
+    ownTouch: true,
+    refreshGraphql: true,
+  });
 
   analytics.track('create_entity', {
     entityType: 'md',
@@ -162,7 +165,10 @@ async function createTaskResponse(args?: CreateTaskArgs) {
     fileType: 'md',
     subType: { type: 'task', is_completed: false },
   });
-  refetchSoupEntity(documentId, 'document', { ownTouch: true });
+  refetchSoupEntity(documentId, 'document', {
+    ownTouch: true,
+    refreshGraphql: true,
+  });
 
   analytics.track('create_entity', {
     entityType: 'task',
@@ -221,7 +227,10 @@ export async function createSnippet(
     fileType: 'md',
     subType: { type: 'snippet' },
   });
-  refetchSoupEntity(documentId, 'document', { ownTouch: true });
+  refetchSoupEntity(documentId, 'document', {
+    ownTouch: true,
+    refreshGraphql: true,
+  });
 
   analytics.track('create_entity', {
     entityType: 'snippet',
@@ -269,7 +278,10 @@ export async function createSkill(
     fileType: 'md',
     subType: { type: 'skill' },
   });
-  refetchSoupEntity(documentId, 'document', { ownTouch: true });
+  refetchSoupEntity(documentId, 'document', {
+    ownTouch: true,
+    refreshGraphql: true,
+  });
 
   analytics.track('create_entity', {
     entityType: 'skill',
@@ -363,6 +375,7 @@ export async function createCodeFileFromText({
   });
   refetchSoupEntity(document.metadata.documentId, 'document', {
     ownTouch: true,
+    refreshGraphql: true,
   });
 
   analytics.track('create_entity', {
@@ -413,7 +426,10 @@ export async function createCanvasFileFromJsonString(args: {
     name: title ?? 'New Canvas',
     fileType: 'canvas',
   });
-  refetchSoupEntity(canvas.metadata.documentId, 'document', { ownTouch: true });
+  refetchSoupEntity(canvas.metadata.documentId, 'document', {
+    ownTouch: true,
+    refreshGraphql: true,
+  });
 
   analytics.track('create_entity', {
     entityType: 'canvas',
@@ -450,7 +466,10 @@ export async function createChat(
     itemType: 'chat',
     name: args?.name ?? DEFAULT_CHAT_NAME,
   });
-  refetchSoupEntity(chat.id, 'chat', { ownTouch: true });
+  refetchSoupEntity(chat.id, 'chat', {
+    ownTouch: true,
+    refreshGraphql: true,
+  });
 
   analytics.track('create_entity', {
     entityType: 'chat',

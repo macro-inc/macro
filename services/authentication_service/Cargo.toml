@@ -79,7 +79,9 @@ jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
 loops_client = { path = "../../crates/loops_client" }
 macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization" }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "postgres",
+] }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_cache_client = { path = "../../crates/macro_cache_client", default-features = false, features = [
   "auth",

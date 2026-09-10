@@ -80,7 +80,7 @@ export const PropertyValueIcon: Component<PropertyValueIconProps> = (props) => {
       </Match>
       <Match when={props.optionId === PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS}>
         <StatusInProgress
-          class={twMerge('size-3', props.class, 'text-yellow')}
+          class={twMerge('size-3', props.class, 'text-warning')}
         />
       </Match>
       <Match when={props.optionId === PROPERTY_OPTION_IDS.STATUS.IN_REVIEW}>

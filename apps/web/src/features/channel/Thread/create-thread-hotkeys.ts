@@ -10,6 +10,7 @@ import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThrea
 import { type Accessor, onCleanup } from 'solid-js';
 import type { MessageSelection } from '../Channel/create-message-selection';
 import type { MessageActions, MessageData } from '../Message';
+import { getMessageReplyPreviewTexts } from '../Message/browser-selection';
 import { scrollMessageIntoView } from '../scroll-utils';
 import { isBotMessage } from './utils/message-actions';
 
@@ -179,7 +180,10 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       if (event?.repeat) return true;
       const parentMsg = options.parentMessage();
       const actions = options.getMessageActions(parentMsg);
-      actions?.onReply?.({ message: parentMsg });
+      actions?.onReply?.({
+        message: parentMsg,
+        ...getMessageReplyPreviewTexts(parentMsg.id),
+      });
       return true;
     },
   }).withGroup(group);

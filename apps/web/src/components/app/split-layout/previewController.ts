@@ -43,6 +43,11 @@ const PREVIEW_CONTROLLER_CONTENT_CONFIG: readonly PreviewControllerContentConfig
     },
     {
       type: 'component',
+      id: LIST_VIEW_ID.inbox,
+      redistributionWidth: { preferredPx: 360 },
+    },
+    {
+      type: 'component',
       id: LIST_VIEW_ID.channels,
       redistributionWidth: { preferredPx: 300 },
     },

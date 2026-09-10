@@ -153,6 +153,14 @@ describe('cache worker message validators', () => {
         kind: 'mutation-settled',
         settlement: {
           transactionId: '4',
+          status: 'superseded',
+          replacementTransactionId: '5',
+        },
+      },
+      {
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '6',
           status: 'permanently-failed',
           error: 'denied',
         },
@@ -183,6 +191,10 @@ describe('cache worker message validators', () => {
     {
       kind: 'mutation-settled',
       settlement: { transactionId: '4', status: 'permanently-failed' },
+    },
+    {
+      kind: 'mutation-settled',
+      settlement: { transactionId: '5', status: 'superseded' },
     },
   ])('rejects malformed or extended worker message %#', (value) => {
     expect(isWorkerMessage(value)).toBe(false);

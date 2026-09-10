@@ -1263,14 +1263,14 @@ export function createSplitLayout(
           }
         }
       },
-      meta: () =>
-        currentSplit.mount.kind === 'component'
-          ? currentSplit.mount.meta
-          : undefined,
-      updateMeta:
-        currentSplit.mount.kind === 'component'
-          ? currentSplit.mount.updateMeta
-          : undefined,
+      meta: () => {
+        const mount = findSplitById(currentSplit.id)?.mount;
+        return mount?.kind === 'component' ? mount.meta : undefined;
+      },
+      get updateMeta() {
+        const mount = findSplitById(currentSplit.id)?.mount;
+        return mount?.kind === 'component' ? mount.updateMeta : undefined;
+      },
       referredFrom: () => s()?.referredFrom ?? null,
       lastNavigationCause: () => s()?.lastNavigationCause ?? 'fresh',
       registerEntryStateCaptor: (key: string, getter: () => unknown) => {

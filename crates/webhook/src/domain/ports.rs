@@ -96,6 +96,13 @@ pub trait WebhookWorkspaceResolver: Clone + Send + Sync + 'static {
         &self,
         people: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
+    /// The caller's team workspace, matching persisted-webhook create/list:
+    /// highest `team_role`, one team.
+    fn get_user_team_workspace_id(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
 /// Port for enqueueing one normalized event for one matched webhook.

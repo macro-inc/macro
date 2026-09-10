@@ -67,9 +67,15 @@ impl PreRegisteredProviders {
     }
 
     /// Look up pre-registered credentials for a server URL.
+    ///
+    /// A trailing slash does not change which server a URL names, and these
+    /// providers are exactly the ones that cannot register a client on the
+    /// fly: missing the match sends the flow to DCR, which they refuse, so
+    /// `https://api.githubcopilot.com/mcp/` would fail with "Dynamic client
+    /// registration not supported" while `.../mcp` connected fine.
     pub fn get(&self, server_url: &str) -> Option<PreRegisteredCredentials> {
         let env = self.env.as_ref()?;
-        match server_url {
+        match server_url.trim_end_matches('/') {
             SLACK_SERVER_URL => Some(PreRegisteredCredentials {
                 client_id: env.slack_mcp_client_id.to_string(),
                 client_secret: env.slack_mcp_client_secret.to_string(),
@@ -95,8 +101,13 @@ impl PreRegisteredProviders {
 /// leaving the recorded approval and the granted access out of sync and the
 /// flow failing after the user approves. Requesting explicit scopes keeps
 /// both sides consistent.
+///
+/// Trailing slash insensitive, on the same grounds as
+/// [`PreRegisteredProviders::get`]: it does not change which server the URL
+/// names, and missing the match here is what leaves the recorded approval and
+/// the granted access out of sync.
 pub fn dcr_default_scopes(server_url: &str) -> Vec<String> {
-    match server_url {
+    match server_url.trim_end_matches('/') {
         LINEAR_SERVER_URL => vec!["read".to_string(), "write".to_string()],
         _ => vec![],
     }

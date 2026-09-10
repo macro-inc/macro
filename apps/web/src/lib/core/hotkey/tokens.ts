@@ -60,6 +60,7 @@ export const TOKENS = {
       copyBranchName: 'entity.action.copyBranchName',
       copyEntityId: 'entity.action.copyEntityId',
       favorite: 'entity.action.favorite',
+      mute: 'entity.action.mute',
       createReminder: 'entity.action.createReminder',
       properties: 'entity.action.properties',
       tags: 'entity.action.tags',
@@ -76,6 +77,7 @@ export const TOKENS = {
   code: {
     toggleComment: 'code.toggleComment',
     escape: 'code.escape',
+    find: 'code.find',
   },
 
   // calendar
@@ -90,6 +92,7 @@ export const TOKENS = {
       next: 'calendar.period.next',
       today: 'calendar.period.today',
     },
+    search: 'calendar.search',
   },
 
   // global

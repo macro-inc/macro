@@ -1,4 +1,4 @@
-import { UnfurlLink } from '@core/component/Link';
+import { LinkHoverCard } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import clickOutside from '@core/directive/clickOutside';
@@ -379,31 +379,25 @@ export function FloatingLinkMenu(props: {
           {(link) => (
             <ScopedPortal>
               <div
-                class="fixed top-0 left-0 z-modal-content w-80 max-w-[calc(100vw-1rem)]"
+                class="fixed top-0 left-0 z-modal-content"
                 use:floatWithElement={{
                   element: () => link().linkRef,
                   useBlockBoundary: true,
                 }}
               >
-                <Surface
-                  depth={2}
-                  class="rounded-xl p-1.5 shadow-lg shadow-drop-shadow"
+                <Show
+                  when={unfurledDetails()}
+                  fallback={
+                    <LinkHoverCard
+                      unfurled={{
+                        url: link().url ?? '',
+                        title: link().linkText ?? '',
+                      }}
+                    />
+                  }
                 >
-                  <Show
-                    when={unfurledDetails()}
-                    fallback={
-                      <UnfurlLink
-                        size="sm"
-                        unfurled={{
-                          url: link().url ?? '',
-                          title: link().linkText ?? '',
-                        }}
-                      />
-                    }
-                  >
-                    {(details) => <UnfurlLink size="sm" unfurled={details()} />}
-                  </Show>
-                </Surface>
+                  {(details) => <LinkHoverCard unfurled={details()} />}
+                </Show>
               </div>
             </ScopedPortal>
           )}

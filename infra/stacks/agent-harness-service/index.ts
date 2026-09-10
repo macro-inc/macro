@@ -1,8 +1,11 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import {
+  config,
   getAiToolsInfra,
   getMacroApiToken,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -25,6 +28,19 @@ const tags = {
 
 const jwtSecretKeyArn = aws.secretsmanager
   .getSecretVersionOutput({ secretId: `fusionauth-jwt-secret-${stack}` })
+  .apply((secret) => secret.arn);
+
+// The egress proxy mints GitHub App installation tokens and Macro API tokens
+// inline, so the task role needs the App's PEM and the signing key - both
+// held as Secrets Manager secret names the service resolves at runtime.
+const githubSyncAppPemArn = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: config.require('github_sync_app_pem') })
+  .apply((secret) => secret.arn);
+
+const macroApiTokenPrivateKeyArn = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: config.require('macro_api_token_private_secret_key'),
+  })
   .apply((secret) => secret.arn);
 
 const MACRO_API_TOKENS = getMacroApiToken();
@@ -71,13 +87,15 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
   tags,
   platform: { family: 'linux', architecture: 'amd64' },
   serviceContainerPort: 8101,
+  egressContainerPort: 8102,
   healthCheckPath: '/health',
-  isPrivate: false,
   ecsClusterArn: cloudStorageClusterArn,
   cloudStorageClusterName,
   secretKeyArns: [
     jwtSecretKeyArn,
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
+    macroApiTokenPrivateKeyArn,
+    githubSyncAppPemArn,
     ...aiTools.secretArns,
   ],
   queueArns:
@@ -102,5 +120,8 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
   ],
 });
 
-export const agentHarnessServiceUrl = pulumi.interpolate`${service.domain}`;
+export const agentHarnessServiceUrl = getServiceUrl(
+  ServiceUrl.AGENT_HARNESS_SERVICE_URL
+);
+export const agentHarnessEgressUrl = pulumi.interpolate`${service.egressDomain}`;
 export const agentHarnessServiceRoleArn = service.role.arn;

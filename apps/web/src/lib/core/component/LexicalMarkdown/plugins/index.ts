@@ -44,4 +44,5 @@ export * from './tab-indentation';
 export * from './tables';
 export * from './tags';
 export * from './text-paste';
+export * from './trailing-paragraph';
 export * from './wordcount';

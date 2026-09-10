@@ -1,5 +1,8 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { ENABLE_CALENDAR_UI } from '@core/constant/featureFlags';
+import {
+  enableCalendarUi,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import {
   type CalendarBlockEventTime,
   createCalendarBlockRange,
@@ -38,7 +41,7 @@ export function eventTimeFromOccurrenceKey(
  * opens re-aim the already-open split instead of stacking another calendar.
  */
 export async function openCalendarEventSplit(target: CalendarEventOpenTarget) {
-  if (!ENABLE_CALENDAR_UI()) return;
+  if (!isFeatureEnabled(enableCalendarUi)) return;
   const splitManager = globalSplitManager();
   if (!splitManager) return;
 

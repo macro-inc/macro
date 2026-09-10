@@ -24,7 +24,9 @@ const {
   createGraphqlMutationMock,
   createGraphqlQueryMock,
   executeGraphqlMutationMock,
+  graphqlCacheEnabledMock,
   graphqlSoupEnabledMock,
+  refreshActiveSoupQueriesMock,
   restMarkDoneMock,
   restMarkSeenMock,
   restUserNotificationsMock,
@@ -33,7 +35,9 @@ const {
   createGraphqlMutationMock: vi.fn(),
   createGraphqlQueryMock: vi.fn(),
   executeGraphqlMutationMock: vi.fn(),
+  graphqlCacheEnabledMock: vi.fn(() => true),
   graphqlSoupEnabledMock: vi.fn(() => true),
+  refreshActiveSoupQueriesMock: vi.fn(async () => undefined),
   restMarkDoneMock: vi.fn(),
   restMarkSeenMock: vi.fn(),
   restUserNotificationsMock: vi.fn(),
@@ -41,7 +45,8 @@ const {
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_GRAPHQL_SOUP: graphqlSoupEnabledMock,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  isFeatureEnabled: graphqlSoupEnabledMock,
 }));
 
 vi.mock('@service-notification/client', () => ({
@@ -65,16 +70,28 @@ vi.mock('@service-storage/graphql-notifications', () => ({
   updateNotifications: vi.fn(),
 }));
 
+vi.mock('@queries/soup/graphql/active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: refreshActiveSoupQueriesMock,
+}));
+
 vi.mock('@queries/soup/normalized-cache', () => ({
+  bumpSoupEntityNotifiedAt: vi.fn(),
   optimisticUpdateSoupItemUpdatedAt: vi.fn(),
   hasSoupEntity: vi.fn(() => false),
   refetchSoupEntity: vi.fn(),
+  restoreSoupEntityToDoneFilteredQueries: vi.fn(),
+}));
+
+vi.mock('@service-storage/graphql-soup', () => ({
+  graphqlCacheEnabled: graphqlCacheEnabledMock,
 }));
 
 import {
+  bumpSoupEntityNotifiedAt,
   hasSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
   refetchSoupEntity,
+  restoreSoupEntityToDoneFilteredQueries,
 } from '@queries/soup/normalized-cache';
 
 const mockOptimisticUpdateSoupItemUpdatedAt = vi.mocked(
@@ -108,6 +125,7 @@ type GraphqlMutationOptions = {
 };
 
 beforeEach(() => {
+  graphqlCacheEnabledMock.mockReturnValue(true);
   graphqlSoupEnabledMock.mockReturnValue(true);
   restUserNotificationsMock.mockResolvedValue(
     ok({ items: [], next_cursor: null })
@@ -431,7 +449,26 @@ describe('notification mutations', () => {
       const notifications = getNotificationsFromCache();
       expect(typeof notifications[0].viewed_at).toBe('string');
       expect(notifications[1].viewed_at).toBe(null);
+      expect(refreshActiveSoupQueriesMock).not.toHaveBeenCalled();
 
+      cleanup();
+    });
+
+    it('refreshes active Soup queries when the GraphQL cache is unavailable', async () => {
+      graphqlCacheEnabledMock.mockReturnValue(false);
+      executeGraphqlMutationMock.mockResolvedValue([]);
+
+      let mutatePromise: Promise<unknown> | undefined;
+      const TestComponent = () => {
+        const mutation = useMarkNotificationsAsSeenMutation();
+        mutatePromise = mutation.mutateAsync({ notificationIds: ['n1'] });
+        return null;
+      };
+      const cleanup = renderWithClient(TestComponent);
+
+      await mutatePromise;
+
+      expect(refreshActiveSoupQueriesMock).toHaveBeenCalledOnce();
       cleanup();
     });
 
@@ -675,6 +712,16 @@ describe('optimisticInsertNotification', () => {
       'document',
       newNotification.created_at
     );
+    // The inbox's notified_at order moves the row up on arrival.
+    expect(vi.mocked(bumpSoupEntityNotifiedAt)).toHaveBeenCalledWith(
+      newNotification.entity_id,
+      newNotification.created_at
+    );
+    // A row marked done was removed from the done-filtered feeds; the merge
+    // above can't restore page membership, so the insert path re-adds it.
+    expect(
+      vi.mocked(restoreSoupEntityToDoneFilteredQueries)
+    ).toHaveBeenCalledWith(newNotification.entity_id);
     expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
   });
 
@@ -690,6 +737,61 @@ describe('optimisticInsertNotification', () => {
     expect(notifications).toHaveLength(2);
     expect(notifications[0].id).toBe('n1');
     expect(notifications[1].id).toBe('n2');
+  });
+
+  it('stamps the thread row for a thread-scoped channel notification', () => {
+    // The channel row is cached, the thread row is not.
+    mockHasSoupEntity.mockImplementation((id) => id === 'channel-1');
+    seedQueryCache([createMockNotificationPage([])]);
+
+    const mention = createMockNotification({
+      entity_type: 'channel',
+      entity_id: 'channel-1',
+      created_at: '2024-01-01T00:00:00.000Z',
+      notification_event_type: 'channel_mention',
+      notification_metadata: {
+        tag: 'channel_mention',
+        content: {
+          messageContent: 'hey @you',
+          messageId: 'msg-1',
+          threadId: 'thread-1',
+        },
+      },
+    } as unknown as Partial<UnifiedNotification>);
+
+    optimisticInsertNotification(mention);
+
+    // The channel row still tracks recency, but the notification belongs to
+    // the thread row, which is what the inbox's notified_at order keys on.
+    expect(mockOptimisticUpdateSoupItemUpdatedAt).toHaveBeenCalledWith(
+      'channel-1',
+      'channel',
+      '2024-01-01T00:00:00.000Z'
+    );
+    expect(vi.mocked(bumpSoupEntityNotifiedAt)).toHaveBeenCalledWith(
+      'thread-1',
+      '2024-01-01T00:00:00.000Z'
+    );
+    expect(vi.mocked(bumpSoupEntityNotifiedAt)).not.toHaveBeenCalledWith(
+      'channel-1',
+      expect.anything()
+    );
+    expect(mockRefetchSoupEntity).toHaveBeenCalledWith(
+      'thread-1',
+      'channelThread'
+    );
+    expect(mockRefetchSoupEntity).not.toHaveBeenCalledWith(
+      'channel-1',
+      expect.anything()
+    );
+    // The feed row for a thread-scoped notification is the thread, so that is
+    // the row restored into the done-filtered feeds.
+    expect(
+      vi.mocked(restoreSoupEntityToDoneFilteredQueries)
+    ).toHaveBeenCalledWith('thread-1');
+    expect(
+      vi.mocked(restoreSoupEntityToDoneFilteredQueries)
+    ).not.toHaveBeenCalledWith('channel-1');
   });
 
   it('should bump the updatedAt of an already-cached email thread', () => {

@@ -5,11 +5,25 @@ use tokio::sync::mpsc;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
 
+/// Models advertised by shared test engines.
+pub(crate) const TEST_MODELS: &[&str] = &["test-model", "other-model"];
+
 /// An engine that plays back a script of parts for every turn.
 pub(crate) struct ScriptedEngine {
     script: Vec<StreamPart>,
-    /// `(model, message texts)` per turn the engine has been asked to run.
-    requests: std::sync::Mutex<Vec<(String, Vec<String>)>>,
+    /// One entry per turn the engine has been asked to run.
+    requests: std::sync::Mutex<Vec<RecordedTurn>>,
+}
+
+/// What one turn asked of the engine, as far as tests care.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RecordedTurn {
+    /// Model the turn was to run on.
+    pub(crate) model: String,
+    /// The conversation, flattened to text per message.
+    pub(crate) messages: Vec<String>,
+    /// The session's instructions, as handed to the engine.
+    pub(crate) instructions: Option<String>,
 }
 
 impl ScriptedEngine {
@@ -20,21 +34,29 @@ impl ScriptedEngine {
         }
     }
 
-    pub(crate) fn requests(&self) -> Vec<(String, Vec<String>)> {
+    pub(crate) fn requests(&self) -> Vec<RecordedTurn> {
         self.requests.lock().expect("requests lock").clone()
     }
 }
 
 impl TurnEngine for ScriptedEngine {
+    fn supported_models(&self) -> &[&str] {
+        TEST_MODELS
+    }
+
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
-        self.requests.lock().expect("requests lock").push((
-            request.model.clone(),
-            request
-                .messages
-                .iter()
-                .map(|message| message.content.message_text_with_tools())
-                .collect(),
-        ));
+        self.requests
+            .lock()
+            .expect("requests lock")
+            .push(RecordedTurn {
+                model: request.model.clone(),
+                messages: request
+                    .messages
+                    .iter()
+                    .map(|message| message.content.message_text_with_tools())
+                    .collect(),
+                instructions: request.instructions.clone(),
+            });
         let (parts, receiver) = mpsc::channel(64);
         let script = self.script.clone();
         tokio::spawn(async move {
@@ -52,6 +74,10 @@ impl TurnEngine for ScriptedEngine {
 pub(crate) struct HangingEngine;
 
 impl TurnEngine for HangingEngine {
+    fn supported_models(&self) -> &[&str] {
+        TEST_MODELS
+    }
+
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
         let (parts, receiver) = mpsc::channel(1);
         tokio::spawn(async move {

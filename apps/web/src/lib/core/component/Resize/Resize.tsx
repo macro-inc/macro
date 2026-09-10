@@ -6,7 +6,6 @@ import {
   createMemo,
   createSignal,
   Index,
-  on,
   onCleanup,
   type ParentProps,
   Show,
@@ -128,6 +127,42 @@ function Zone(props: ParentProps<ZoneProps>) {
     return layouts().filter((layout) => !solver.isHidden(layout.id));
   });
 
+  const sizeChangeEndHandlers = new Map<PanelId, (size: number) => void>();
+  let sizesBeforeChange: ReadonlyMap<PanelId, number> | undefined;
+
+  const registerSizeChangeEndHandler: ResizeZoneCtx['registerSizeChangeEndHandler'] =
+    (id, handler) => {
+      sizeChangeEndHandlers.set(id, handler);
+      return () => {
+        if (sizeChangeEndHandlers.get(id) === handler) {
+          sizeChangeEndHandlers.delete(id);
+        }
+      };
+    };
+
+  const beginResizeChange = () => {
+    sizesBeforeChange = new Map(solver.solve().sizes);
+  };
+
+  const endResizeChange = () => {
+    const before = sizesBeforeChange;
+    sizesBeforeChange = undefined;
+    if (!before) return;
+
+    const after = solver.solve().sizes;
+    for (const [id, handler] of sizeChangeEndHandlers) {
+      const previousSize = before.get(id);
+      const size = after.get(id);
+      if (
+        previousSize !== undefined &&
+        size !== undefined &&
+        previousSize !== size
+      ) {
+        handler(size);
+      }
+    }
+  };
+
   const offsetOf = (id: PanelId) =>
     createMemo(() => solver.solve().offsets.get(id) ?? 0);
 
@@ -143,6 +178,7 @@ function Zone(props: ParentProps<ZoneProps>) {
     size: zoneSize,
     offsetOf,
     sizeOf,
+    registerSizeChangeEndHandler,
     canFit: solver.canFitPanel,
     swap: solver.swap,
     hide: solver.hide,
@@ -180,6 +216,8 @@ function Zone(props: ParentProps<ZoneProps>) {
                     offset={panel().offset + panel().size}
                     index={actualIndex}
                     nudge={solver.moveHandle}
+                    onChangeStart={beginResizeChange}
+                    onChangeEnd={endResizeChange}
                     root={root}
                   />
                 </Show>
@@ -235,6 +273,8 @@ type PanelProps = {
   /** The index position for this panel in the layout order */
   index?: number;
   persistent?: boolean;
+  /** Called with the solved panel size after a drag or keyboard resize. */
+  onSizeChangeEnd?: (size: number) => void;
 };
 
 /**
@@ -276,83 +316,47 @@ function Panel(props: ParentProps<PanelProps>) {
     return props.target;
   };
 
-  let registered = false;
-  createEffect(
-    on(ctx.size, (size) => {
-      if (size <= 0 || registered || props.collapsed?.() === false) return;
-
-      registered = true;
-
-      ctx.register(
-        {
-          id: props.id,
-          minSize: props.minSize,
-          maxSize: props.maxSize ?? Infinity,
-          redistributionPreferredSize: props.redistributionPreferredSize,
-          shareGroup: props.shareGroup,
-          target: getTarget(),
-        },
-        props.index
-      );
-    })
-  );
+  const config = (): PanelConfig => ({
+    id: props.id,
+    minSize: props.minSize,
+    maxSize: props.maxSize ?? Infinity,
+    redistributionPreferredSize: props.redistributionPreferredSize,
+    shareGroup: props.shareGroup,
+    target: getTarget(),
+  });
 
   createEffect(() => {
-    ctx.update(props.id, {
-      minSize: props.minSize,
-      maxSize: props.maxSize ?? Infinity,
-      redistributionPreferredSize: props.redistributionPreferredSize,
-      shareGroup: props.shareGroup,
+    const next = config();
+    const collapsed = props.collapsed?.() ?? false;
+    const hidden = props.hidden?.() ?? false;
+
+    if (collapsed || (hidden && !props.persistent)) {
+      ctx.unregister(next.id);
+      return;
+    }
+
+    if (ctx.size() <= 0) return;
+
+    ctx.register(next, props.index);
+    ctx.update(next.id, {
+      minSize: next.minSize,
+      maxSize: next.maxSize,
+      redistributionPreferredSize: next.redistributionPreferredSize,
+      shareGroup: next.shareGroup,
     });
-  });
 
-  createEffect(() => {
-    const collapsed = props.collapsed?.();
-    if (collapsed === undefined) return;
-    if (collapsed) {
-      ctx.unregister(props.id);
+    if (hidden) {
+      ctx.hide(next.id);
     } else {
-      ctx.register(
-        {
-          id: props.id,
-          minSize: props.minSize,
-          maxSize: props.maxSize ?? Infinity,
-          redistributionPreferredSize: props.redistributionPreferredSize,
-          shareGroup: props.shareGroup,
-          target: getTarget(),
-        },
-        props.index
-      );
+      ctx.show(next.id);
     }
   });
 
   createEffect(() => {
-    const hidden = props.hidden?.();
-    if (hidden === undefined) return;
+    const handler = props.onSizeChangeEnd;
+    if (!handler) return;
 
-    if (props.persistent) {
-      if (hidden) {
-        ctx.hide(props.id);
-      } else {
-        ctx.show(props.id);
-      }
-    } else {
-      if (hidden) {
-        ctx.unregister(props.id);
-      } else {
-        ctx.register(
-          {
-            id: props.id,
-            minSize: props.minSize,
-            maxSize: props.maxSize ?? Infinity,
-            redistributionPreferredSize: props.redistributionPreferredSize,
-            shareGroup: props.shareGroup,
-            target: getTarget(),
-          },
-          props.index
-        );
-      }
-    }
+    onCleanup(ctx.registerSizeChangeEndHandler(props.id, handler));
   });
 
   onCleanup(() => ctx.unregister(props.id));
@@ -407,6 +411,8 @@ type GutterProps = {
   offset: number;
   index: number;
   nudge: (index: number, amt: number) => void;
+  onChangeStart: () => void;
+  onChangeEnd: () => void;
   root: () => HTMLDivElement | undefined;
 };
 
@@ -455,6 +461,7 @@ function Gutter(props: GutterProps) {
 
   function onPointerDown(ev: PointerEvent) {
     if (ev.button !== 0) return;
+    props.onChangeStart();
     (ev.currentTarget as HTMLElement).setPointerCapture?.(ev.pointerId);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp, { once: true });
@@ -480,6 +487,7 @@ function Gutter(props: GutterProps) {
     window.removeEventListener('pointercancel', onPointerUp);
     lastPointerPosition = undefined;
     setPtrDown(false);
+    props.onChangeEnd();
   }
 
   function onKeyDown(ev: KeyboardEvent) {
@@ -494,6 +502,7 @@ function Gutter(props: GutterProps) {
     ev.stopImmediatePropagation();
 
     const step = ev.shiftKey ? 100 : 20;
+    props.onChangeStart();
     if (ctx?.direction() === 'horizontal') {
       const sign = ev.key === 'ArrowLeft' ? -1 : 1;
       props.nudge(props.index, sign * step);
@@ -501,6 +510,7 @@ function Gutter(props: GutterProps) {
       const sign = ev.key === 'ArrowUp' ? -1 : 1;
       props.nudge(props.index, sign * step);
     }
+    queueMicrotask(props.onChangeEnd);
   }
 
   return (

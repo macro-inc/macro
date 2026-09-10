@@ -26,11 +26,13 @@ where
     let cors = macro_cors::cors_layer();
 
     let env = state.environment;
-    let app = api_router(unfurl_state)
-        .with_state(state)
-        .merge(health::router())
+    let app = app_router(state, unfurl_state)
         .layer(cors)
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(
+            SwaggerUi::new("/unfurl/docs")
+                .url("/unfurl/api-doc/openapi.json", swagger::ApiDoc::openapi()),
+        );
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -55,6 +57,17 @@ where
     Router::new()
         .nest("/unfurl", unfurl::router(unfurl_state))
         .nest("/proxy", proxy::router())
+}
+
+fn app_router<F>(state: ApiContext, unfurl_state: UnfurlRouterState<UnfurlServiceImpl<F>>) -> Router
+where
+    F: UnfurlFetcher,
+    anyhow::Error: From<F::Err>,
+{
+    let inner = api_router(unfurl_state)
+        .with_state(state)
+        .merge(health::router());
+    Router::new().merge(inner.clone()).nest("/unfurl", inner)
 }
 
 #[cfg(test)]
@@ -103,6 +116,63 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         let body = response.into_body().collect().await.unwrap().to_bytes();
         assert!(body.is_empty());
+    }
+
+    async fn health_body(app: Router, uri: &str) -> (StatusCode, String) {
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .method("GET")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = response.status();
+        let body = String::from_utf8(
+            response
+                .into_body()
+                .collect()
+                .await
+                .unwrap()
+                .to_bytes()
+                .to_vec(),
+        )
+        .unwrap();
+        (status, body)
+    }
+
+    #[tokio::test]
+    async fn test_health_is_served_at_root_and_gateway_prefix() {
+        let (root_status, root_body) =
+            health_body(app_router(test_state(), test_unfurl_state()), "/health").await;
+        assert_eq!(root_status, StatusCode::OK);
+        assert_eq!(root_body, "healthy");
+
+        let (prefixed_status, prefixed_body) = health_body(
+            app_router(test_state(), test_unfurl_state()),
+            "/unfurl/health",
+        )
+        .await;
+        assert_eq!(prefixed_status, StatusCode::OK);
+        assert_eq!(prefixed_body, "healthy");
+    }
+
+    #[tokio::test]
+    async fn test_gateway_prefixed_unfurl_path_is_reachable() {
+        let api = app_router(test_state(), test_unfurl_state());
+
+        let response = api
+            .oneshot(
+                Request::builder()
+                    .uri("/unfurl/unfurl?url=https://doesnotexist.com")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[tokio::test]

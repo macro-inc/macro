@@ -10,7 +10,7 @@ function Badge(props: ParentProps<{ class?: string; title?: string }>) {
   return (
     <div
       class={cn(
-        'font-mono font-medium user-select-none uppercase flex items-center p-0.5 gap-1 text-xxs rounded-full border',
+        'font-mono font-medium select-none uppercase flex items-center p-0.5 gap-1 text-xxs rounded-full border',
         props.class
       )}
       title={props.title}
@@ -81,7 +81,7 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
 }
 
 export function DraftBadge() {
-  return <Badge class="text-yellow border-edge-muted px-2">draft</Badge>;
+  return <Badge class="text-warning border-edge-muted px-2">draft</Badge>;
 }
 
 function _ImportantBadge() {
@@ -106,7 +106,7 @@ function getCallStatusBadgeConfig(status: CallStatus): CallStatusBadgeConfig {
       };
     case 'MISSED':
       return {
-        class: 'text-yellow border-edge-muted px-2',
+        class: 'text-warning border-edge-muted px-2',
         label: 'missed',
       };
     case 'UNATTENDED':

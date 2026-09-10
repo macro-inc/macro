@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM harness_replica WHERE last_heartbeat_at < now() - interval '7 days'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "8b9476b82011c40253d7dd36078e92e9fc4e0e295c9031b76879a8b472bb2aa5"
+}

@@ -144,16 +144,24 @@ fn parse_part(part: &MessagePart, message_id: &str, parsed: &mut ParsedGmailPayl
     }
 }
 
-/// Decodes part bytes honoring the part's declared `charset`, so non-UTF-8
-/// bodies (e.g. ISO-8859-1, Windows-1252, Shift_JIS) are not mangled by a
-/// blind lossy UTF-8 conversion. Unknown or missing charsets fall back to
-/// lossy UTF-8.
+/// Decodes part bytes using UTF-8 when valid, otherwise honoring the part's
+/// declared `charset`.
+///
+/// Some senders emit UTF-8 bytes while incorrectly declaring a legacy
+/// single-byte charset. Trusting that declaration turns a bullet (`•`) into
+/// mojibake (`â€¢`). Valid UTF-8 is therefore preferred over a conflicting
+/// single-byte declaration. Multi-byte encodings still take precedence, and
+/// unknown or missing charsets fall back to lossy UTF-8.
 fn decode_part_text(bytes: &[u8], part: &MessagePart) -> String {
     let encoding = find_header(&part.headers, "Content-Type")
         .and_then(content_type_charset)
         .and_then(|label| encoding_rs::Encoding::for_label(label.as_bytes()));
 
     match encoding {
+        Some(encoding) if encoding.is_single_byte() => match str::from_utf8(bytes) {
+            Ok(text) => text.to_owned(),
+            Err(_) => encoding.decode(bytes).0.into_owned(),
+        },
         Some(encoding) => encoding.decode(bytes).0.into_owned(),
         None => String::from_utf8_lossy(bytes).into_owned(),
     }

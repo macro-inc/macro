@@ -2,6 +2,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { isBotPrincipalId, isMacroAgentId } from '@core/constant/macroAgent';
 import { isMacroCoderId } from '@core/constant/macroCoder';
+import { isMacroNewId } from '@core/constant/macroNew';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
@@ -173,7 +174,13 @@ export function UserIcon(props: UserIconProps) {
 
   return (
     <Switch>
-      <Match when={isMacroAgentId(props.id) || isMacroCoderId(props.id)}>
+      <Match
+        when={
+          isMacroAgentId(props.id) ||
+          isMacroCoderId(props.id) ||
+          isMacroNewId(props.id)
+        }
+      >
         <Avatar
           size={size()}
           class={cn('bg-surface text-accent ring ring-edge-muted', props.class)}
@@ -189,9 +196,16 @@ export function UserIcon(props: UserIconProps) {
           size={size()}
           class={cn('bg-surface text-accent ring ring-edge-muted', props.class)}
         >
-          <Avatar.Fallback>
-            <RobotIcon class="size-[62%]" />
-          </Avatar.Fallback>
+          <Show
+            when={props.photoUrl}
+            fallback={
+              <Avatar.Fallback>
+                <RobotIcon class="size-[62%]" />
+              </Avatar.Fallback>
+            }
+          >
+            {(photoUrl) => <Avatar.Image src={photoUrl()} alt="" />}
+          </Show>
         </Avatar>
       </Match>
 

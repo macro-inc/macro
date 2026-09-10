@@ -18,27 +18,69 @@ const macro = new Macro({ }); // uses MACRO_API_KEY env var
 
 ### Authenticating
 
-The SDK can authenticate as a **user** (a Macro API token, sent as an
-`Authorization` bearer) or as a **bot** (an `mbot_` API key, created under
-Settings → Bots in the web app). With no explicit `auth`, the SDK falls back
-to the `MACRO_API_KEY` (user) or `MACRO_BOT_TOKEN` (bot) env var.
+Every request the SDK sends carries exactly one Macro credential. There are three kinds.
+
+| Credential | Minted in | Prefix | Acts as |
+| --- | --- | --- | --- |
+| API key | Settings → API Keys | `mak_` | the user who minted it |
+| Bot token | Settings → Bots | `mbot_` | the bot, optionally on behalf of a user |
+| Bearer token | a signed-in session | none (JWT) | the signed-in user |
+
+#### API key
+
+The default for scripts and integrations. Put the key in `MACRO_API_KEY` and construct with no options.
 
 ```ts
-const asUser = new Macro({ auth: { type: 'user', token: myApiToken } });
-const asBot = new Macro({ auth: { type: 'bot', token: myBotKey } });
+import { Macro } from '@macro/sdk';
+
+const macro = new Macro({});
+const me = await macro.users.me();
 ```
 
-A bot can act on behalf of a user it's authorized for (its owner, or a member
-of its owning team):
+Or pass it in code. `token` accepts an API key or a bearer token. The SDK picks the header from the prefix.
 
 ```ts
+const macro = new Macro({ token: process.env.MACRO_API_KEY });
+```
+
+The explicit form names the credential kind. Use it when the key is not from an env var, or when it predates the `mak_` prefix.
+
+```ts
+const macro = new Macro({
+  auth: { type: 'user', apiKey: process.env.MACRO_API_KEY },
+});
+```
+
+An API key always acts as the user who minted it. `requestedAs` is bot-only.
+
+#### Bot token
+
+```ts
+const asBot = new Macro({ auth: { type: 'bot', token: process.env.MACRO_BOT_TOKEN } });
 const asWolf = asBot.requestedAs('macro|wolf@macro.com');
 ```
 
-Bot requests carry an access scope: `user` (the requested-as user's access —
-the default whenever `requestedAs` is used) or `team` (the owning team's
-access, for team-owned bots — the default otherwise). Pass
-`auth: { type: 'bot', token, scope: ... }` to override.
+Bot requests carry an access scope. `user` uses the requested-as user's access, and is the default when `requestedAs` is set. `team` uses the owning team's access, for team-owned bots, and is the default otherwise. Pass `auth: { type: 'bot', token, scope: ... }` to override.
+
+#### Bearer token
+
+A session token, for code running with a signed-in user. Sent as `Authorization: Bearer`. The function form refreshes it.
+
+```ts
+const macro = new Macro({ auth: { type: 'user', token: () => session.accessToken() } });
+```
+
+#### Which header goes out
+
+The backend rejects a request carrying two credentials with `400 ambiguous credentials`. The SDK sets exactly one.
+
+| You passed | Header sent |
+| --- | --- |
+| `apiKey: '…'` | `x-macro-user-api-key: …` |
+| `token: 'mak_…'` or `MACRO_API_KEY=mak_…` | `x-macro-user-api-key: mak_…` |
+| `token: '<jwt>'` or `MACRO_API_KEY=<jwt>` | `Authorization: Bearer <jwt>` |
+| `token: 'mbot_…'` | throws. Use `auth: { type: 'bot', token }` or `MACRO_BOT_TOKEN`. |
+| `type: 'bot'` | `x-macro-bot-token` plus `x-macro-bot-scope` |
 
 ### Accessing our API
 
@@ -130,11 +172,42 @@ await macro.channels
   .send(msg`Deploy ${sha} finished. ${here}`);
 ```
 
-# Webhook Events
+# Events
 
-Pass a `webhookSecret` (or set `MACRO_WEBHOOK_SECRET`) to receive events. You
-should use a framework like Hono or Express to handle the webhook request and
-pass it to the SDK which will handle verification and dispatching.
+`macro.events` is always available. The default transport is a live SSE
+stream — no public URL, persisted webhook, or signing secret required.
+
+```ts
+const macro = new Macro({
+  token: process.env.MACRO_API_KEY,
+});
+
+const me = await macro.users.me();
+
+macro.events.on('channel.message_posted', async ({ metadata, message }) => {
+  if (metadata.sender === me.id) return; // don't reply to ourselves
+  await message.reply('hi!');
+});
+
+const stop = await macro.events.listen();
+// later: stop();
+```
+
+`listen()` opens `GET /webhook/events/stream` with the same `WebhookFilters`
+model as persisted webhooks. If you omit `filters`, it derives one filter from
+the event names already registered with `.on()`. Pass `scope: 'team'` for a
+team workspace (defaults to `'user'`). Delivery is best-effort: there is no
+replay if you disconnect.
+
+Handlers receive the same hydrated payloads as webhook deliveries — ORM
+handles for every entity the event names.
+
+### Persisted webhooks
+
+To receive the same events as HTTPS POSTs instead of (or in addition to) SSE,
+register a webhook and pass a `webhookSecret` (or set `MACRO_WEBHOOK_SECRET`).
+Use a framework like Hono or Express to handle the request; the SDK verifies
+the signature and dispatches.
 
 ```ts
 const macro = new Macro({
@@ -142,10 +215,8 @@ const macro = new Macro({
   webhookSecret: process.env.MACRO_WEBHOOK_SECRET,
 });
 
-const me = await macro.users.me();
-
 macro.events.on('channel.message_posted', async ({ metadata, message }) => {
-  if (metadata.sender === me.id) return; // don't reply to ourselves
+  if (metadata.sender === me.id) return;
   await message.reply('hi!');
 });
 
@@ -170,8 +241,9 @@ support by adding a wrapper to the appropriate model. There is CI to ensure that
 we don't forget to add coverage or explicitly skip coverage for new generated
 functions (endpoints).
 
-## Webhook events
+## Events
 
 Event names and payloads are **generated from the backend**: the Rust webhook
 crate exposes a `WebhookEvent` union in the storage OpenAPI spec, and
-`src/events/types.ts` derives `EventName` / `EventPayload` from it.
+`src/events/types.ts` derives `EventName` / `EventPayload` from it. SSE
+(`listen()`) and persisted webhooks (`webhook()`) dispatch the same union.

@@ -91,13 +91,13 @@ function Label(props: {
     <div
       class="absolute top-0 left-0 size-full flex items-center justify-center overflow-clip"
       classList={{
-        'user-select-none': !hasFocus(),
+        'select-none': !hasFocus(),
         'pointer-events-auto': hasFocus(),
       }}
     >
       <span
         ref={labelRef}
-        class="text-center font-semibold word-break-break-all min-w-0 max-w-[calc(100%-2rem)]"
+        class="text-center font-semibold break-all min-w-0 max-w-[calc(100%-2rem)]"
         style={labelStyle()}
         contentEditable={canEdit()}
         on:focus={handleFocus}

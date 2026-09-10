@@ -1,4 +1,6 @@
+import * as Duration from 'effect/Duration';
 import * as Effect from 'effect/Effect';
+import * as Schedule from 'effect/Schedule';
 import { match } from 'ts-pattern';
 import type { CacheResponse } from '../protocol';
 import {
@@ -75,6 +77,22 @@ type EngineRoute = {
 const DEFAULT_ACTIVATION_TIMEOUT_MS = 20_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
+const RECOVERY_RETRY_LIMIT = 5;
+const RECOVERY_RETRY_BASE_DELAY_MS = 100;
+
+const recoveryRetryDelayMs = (failureCount: number): number =>
+  Effect.runSync(
+    Effect.gen(function* () {
+      const step = yield* Schedule.toStep(
+        Schedule.exponential(Duration.millis(RECOVERY_RETRY_BASE_DELAY_MS))
+      );
+      let delay = Duration.zero;
+      for (let index = 0; index < failureCount; index += 1) {
+        [, delay] = yield* step(index, undefined);
+      }
+      return Duration.toMillis(delay);
+    })
+  );
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -189,6 +207,8 @@ export class CoordinatorRouter {
   >();
   private nextRecoveryResetReason: CacheResetReason | undefined;
   private readonly resetRequiredEpochs = new Set<number>();
+  private recoveryAttemptCount = 0;
+  private recoveryRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now = (): number =>
     globalThis.performance?.now() ?? Date.now();
 
@@ -568,6 +588,7 @@ export class CoordinatorRouter {
               startedAt === undefined ? undefined : this.now() - startedAt,
           });
           this.clearActivationTimer();
+          this.resetRecoveryRetries();
           this.scheduleHeartbeat(message.ownerEpoch);
         }
         break;
@@ -791,11 +812,7 @@ export class CoordinatorRouter {
           this.removeTabConnection(action.tabId);
           break;
         case 'schedule-reset-activation':
-          this.queueMicrotaskFn(() => {
-            if (this.coreValue) {
-              this.applyActions(this.coreValue.resumeAfterLoss());
-            }
-          });
+          this.scheduleResetActivation();
           break;
         case 'broadcast-engine-replaced':
           this.telemetry.record({
@@ -839,8 +856,52 @@ export class CoordinatorRouter {
             })
           );
           break;
+        case 'terminal-failure':
+          this.broadcast(
+            envelope<CoordinatorToTabEnvelope>({
+              kind: 'terminal-error',
+              error: action.error,
+            })
+          );
+          break;
       }
     }
+  }
+
+  private scheduleResetActivation(): void {
+    const core = this.coreValue;
+    if (!core || core.state.kind !== 'resetting-after-loss') return;
+    if (this.recoveryAttemptCount >= RECOVERY_RETRY_LIMIT) {
+      const reason = `cache recovery failed after ${RECOVERY_RETRY_LIMIT} attempts: ${core.state.reason}`;
+      this.clearRecoveryRetryTimer();
+      this.applyActions(core.terminalFailure(reason));
+      return;
+    }
+
+    this.recoveryAttemptCount += 1;
+    const activate = () => {
+      this.recoveryRetryTimer = undefined;
+      if (this.coreValue) {
+        this.applyActions(this.coreValue.resumeAfterLoss());
+      }
+    };
+    if (this.recoveryAttemptCount === 1) {
+      this.queueMicrotaskFn(activate);
+      return;
+    }
+    const delayMs = recoveryRetryDelayMs(this.recoveryAttemptCount - 1);
+    this.recoveryRetryTimer = this.setTimeoutFn(activate, delayMs);
+  }
+
+  private resetRecoveryRetries(): void {
+    this.recoveryAttemptCount = 0;
+    this.clearRecoveryRetryTimer();
+  }
+
+  private clearRecoveryRetryTimer(): void {
+    if (this.recoveryRetryTimer === undefined) return;
+    this.clearTimeoutFn(this.recoveryRetryTimer);
+    this.recoveryRetryTimer = undefined;
   }
 
   private failOwner(
@@ -906,6 +967,7 @@ export class CoordinatorRouter {
     const isCurrentOwner =
       state.kind !== 'waiting-for-tab' &&
       state.kind !== 'resetting-after-loss' &&
+      state.kind !== 'failed' &&
       state.tabId === tabId &&
       state.ownerEpoch === ownerEpoch;
     const actions = core.departForNavigation(tabId, ownerEpoch, reason);
@@ -951,6 +1013,7 @@ export class CoordinatorRouter {
     if (
       state.kind !== 'waiting-for-tab' &&
       state.kind !== 'resetting-after-loss' &&
+      state.kind !== 'failed' &&
       state.tabId === tabId
     ) {
       this.activationStarted.delete(state.ownerEpoch);
@@ -1063,6 +1126,7 @@ export class CoordinatorRouter {
       state &&
         state.kind !== 'waiting-for-tab' &&
         state.kind !== 'resetting-after-loss' &&
+        state.kind !== 'failed' &&
         state.tabId === tabId &&
         state.ownerEpoch === ownerEpoch
     );

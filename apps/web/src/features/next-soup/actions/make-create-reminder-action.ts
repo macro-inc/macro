@@ -1,8 +1,8 @@
 import { openReminderComposer } from '@app/features/reminders/reminder-composer';
-import { ENABLE_REMINDERS } from '@core/constant/featureFlags';
+import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import { reminderTarget } from '@queries/reminders/reminders';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 import type { makeMarkDoneAction } from './make-mark-done-action';
 
 /**
@@ -15,7 +15,7 @@ import type { makeMarkDoneAction } from './make-mark-done-action';
  * done is a thing this list does.
  */
 export type ReminderCreatedList = {
-  soup: SoupState;
+  soup: EntityActionListState;
   advances: boolean;
 };
 
@@ -49,7 +49,7 @@ export const makeCreateReminderAction = (
   options?: MakeCreateReminderOptions
 ) => {
   const canExecute = (entity: EntityData): boolean =>
-    ENABLE_REMINDERS() && reminderTarget(entity) !== undefined;
+    isFeatureEnabled(enableReminders) && reminderTarget(entity) !== undefined;
 
   const execute = (entities: EntityData[]) => {
     const [entity] = entities;
@@ -61,7 +61,7 @@ export const makeCreateReminderAction = (
 
   const executeWithSoup = async (
     entities: EntityData[],
-    soup: SoupState,
+    soup: EntityActionListState,
     /** Whether the list moves on once the row is marked done. */
     opts: { advances: boolean }
   ) => {

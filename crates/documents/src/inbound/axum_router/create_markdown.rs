@@ -79,6 +79,7 @@ pub async fn create_markdown_handler<
         document_id.clone(),
         AccessLevel::Edit,
         &state.document_permission_jwt_secret,
+        None,
     )
     .map_err(|e| {
         tracing::error!(error=?e, "failed to encode permission token");

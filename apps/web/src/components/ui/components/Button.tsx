@@ -55,7 +55,7 @@ export const buttonVariants = createVariants(
       'icon-md':
         "size-9 aspect-square p-1.5 [&>svg:not([class*='size-'])]:size-6",
       'icon-sm':
-        "size-6 aspect-square p-0.5 [&>svg:not([class*='size-'])]:size-5",
+        "size-6 aspect-square p-1 [&>svg:not([class*='size-'])]:size-4",
     },
   },
   {

@@ -25,9 +25,7 @@ use chat::domain::ports::ChatService;
 use documents_hex::domain::ports::DocumentService;
 use email::domain::ports::EmailService;
 use entity_access::domain::{
-    models::{
-        AccessError, EditAccessLevel, EntityAccessReceipt, RequiredPermission, ViewAccessLevel,
-    },
+    models::{AccessError, EditAccessLevel, EntityAccessReceipt, RequiredPermission},
     ports::EntityAccessService,
 };
 use entity_mutation::{
@@ -37,7 +35,6 @@ use entity_mutation::{
     RestoreEntity, TrashEntity, UpdateEntitySharePolicy, UpdateEntitySharePolicyRequest,
     capability::MoveEntityRequest as CapabilityMoveEntityRequest,
 };
-use favorites::domain::{models::FavoritesError, ports::FavoritesService};
 use futures::{StreamExt, stream};
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
@@ -119,24 +116,6 @@ fn target_project_failure(error: AccessError) -> EntityMutationErrorCode {
     access_failure(error)
 }
 
-/// Map a favorites-domain failure onto the public vocabulary.
-fn favorites_failure(error: FavoritesError) -> EntityMutationErrorCode {
-    match error {
-        error @ FavoritesError::NotFound => {
-            EntityMutationErrorCode::not_found(rootcause::report!(error))
-        }
-        error @ FavoritesError::BadRequest(_) => {
-            EntityMutationErrorCode::invalid(rootcause::report!(error))
-        }
-        error @ FavoritesError::Unauthorized => {
-            EntityMutationErrorCode::forbidden(rootcause::report!(error))
-        }
-        error @ FavoritesError::Internal(_) => {
-            EntityMutationErrorCode::internal(rootcause::report!(error))
-        }
-    }
-}
-
 /// Map a lifecycle-port failure onto the public vocabulary.
 fn lifecycle_failure(error: LifecycleError) -> EntityMutationErrorCode {
     match error {
@@ -164,35 +143,6 @@ fn success(effects: Vec<EntityMutationEffect>) -> EntityMutationResult {
     Ok(EntityMutationSuccess { effects })
 }
 
-/// Entity kinds whose favorite mutation can return a Soup update effect.
-///
-/// The REST favorites domain remains broader; this capability surface accepts
-/// only entities representable by the GraphQL Soup contract. Exhaustiveness
-/// makes each new [`EntityType`] an explicit decision.
-fn favoritable(entity_type: EntityType) -> bool {
-    match entity_type {
-        EntityType::Document
-        | EntityType::Project
-        | EntityType::Chat
-        | EntityType::Channel
-        | EntityType::EmailThread
-        | EntityType::Call
-        | EntityType::ForeignEntity
-        | EntityType::CrmCompany => true,
-        EntityType::User
-        | EntityType::Team
-        | EntityType::ChannelMessage
-        | EntityType::StaticFile
-        | EntityType::CrmContact
-        | EntityType::CalendarEvent
-        // Reminders are managed through the reminders API, not favorites.
-        | EntityType::Reminder
-        | EntityType::Skill
-        // Agent sessions are not entity-mutation targets.
-        | EntityType::AgentSession => false,
-    }
-}
-
 async fn collect_ordered<F>(futures: impl IntoIterator<Item = F>) -> Vec<EntityMutationResult>
 where
     F: Future<Output = EntityMutationResult>,
@@ -205,7 +155,7 @@ where
 
 /// Unified entity mutation router wired from the domain services.
 #[derive(Clone)]
-pub struct DssEntityMutationService<D, H, C, K, E, P, A, F, L> {
+pub struct DssEntityMutationService<D, H, C, K, E, P, A, L> {
     documents: Arc<D>,
     chats: Arc<H>,
     channels: Arc<C>,
@@ -213,11 +163,10 @@ pub struct DssEntityMutationService<D, H, C, K, E, P, A, F, L> {
     email: Arc<E>,
     projects: Arc<P>,
     access: Arc<A>,
-    favorites: Arc<F>,
     lifecycle: Arc<L>,
 }
 
-impl<D, H, C, K, E, P, A, F, L> DssEntityMutationService<D, H, C, K, E, P, A, F, L> {
+impl<D, H, C, K, E, P, A, L> DssEntityMutationService<D, H, C, K, E, P, A, L> {
     /// Compose the unified mutation router from domain services.
     #[expect(
         clippy::too_many_arguments,
@@ -231,7 +180,6 @@ impl<D, H, C, K, E, P, A, F, L> DssEntityMutationService<D, H, C, K, E, P, A, F,
         email: Arc<E>,
         projects: Arc<P>,
         access: Arc<A>,
-        favorites: Arc<F>,
         lifecycle: Arc<L>,
     ) -> Self {
         Self {
@@ -242,13 +190,12 @@ impl<D, H, C, K, E, P, A, F, L> DssEntityMutationService<D, H, C, K, E, P, A, F,
             email,
             projects,
             access,
-            favorites,
             lifecycle,
         }
     }
 }
 
-impl<D, H, C, K, E, P, A, F, L> DssEntityMutationService<D, H, C, K, E, P, A, F, L>
+impl<D, H, C, K, E, P, A, L> DssEntityMutationService<D, H, C, K, E, P, A, L>
 where
     D: DocumentService
         + RenameEntity
@@ -275,7 +222,6 @@ where
         + RestoreEntity
         + DeleteEntityPermanently,
     A: EntityAccessService,
-    F: FavoritesService,
     L: EntityLifecycleService,
 {
     /// Resolve the access receipt a capability impl requires.
@@ -754,33 +700,10 @@ where
         };
         result.and_then(success)
     }
-
-    async fn set_favorite_one(
-        &self,
-        actor: &EntityMutationActor,
-        entity: &Entity<'static>,
-        favorite: bool,
-    ) -> Result<(), EntityMutationErrorCode> {
-        if favorite {
-            // The view receipt both proves visibility and carries the actor
-            // and entity for the favorites domain.
-            let receipt = self.receipt::<ViewAccessLevel>(actor, entity).await?;
-            self.favorites
-                .add_favorite(&receipt)
-                .await
-                .map_err(favorites_failure)?;
-        } else {
-            self.favorites
-                .remove_favorite_by_entity(&actor.user_id, entity)
-                .await
-                .map_err(favorites_failure)?;
-        }
-        Ok(())
-    }
 }
 
-impl<D, H, C, K, E, P, A, F, L> EntityMutationService
-    for DssEntityMutationService<D, H, C, K, E, P, A, F, L>
+impl<D, H, C, K, E, P, A, L> EntityMutationService
+    for DssEntityMutationService<D, H, C, K, E, P, A, L>
 where
     D: DocumentService
         + RenameEntity
@@ -807,7 +730,6 @@ where
         + RestoreEntity
         + DeleteEntityPermanently,
     A: EntityAccessService,
-    F: FavoritesService,
     L: EntityLifecycleService,
 {
     async fn rename_entities(
@@ -896,21 +818,5 @@ where
                 .map(|request| self.duplicate_one(&actor, request)),
         )
         .await
-    }
-
-    #[tracing::instrument(skip_all, fields(entity_type = %entity.entity_type, entity_id = %entity.entity_id))]
-    async fn set_favorite(
-        &self,
-        actor: EntityMutationActor,
-        entity: Entity<'static>,
-        favorite: bool,
-    ) -> EntityMutationResult {
-        if !favoritable(entity.entity_type) {
-            return unsupported(entity, "favorites");
-        }
-        match self.set_favorite_one(&actor, &entity, favorite).await {
-            Ok(()) => success(vec![EntityMutationEffect::updated(entity)]),
-            Err(error) => Err(error),
-        }
     }
 }

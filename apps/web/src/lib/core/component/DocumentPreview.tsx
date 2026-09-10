@@ -42,10 +42,6 @@ import SparkleIcon from '@phosphor/sparkle.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
 import UsersIcon from '@phosphor/users.svg';
-import { Property } from '@property';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { useEntityProperties } from '@property/hooks';
-import { getEntityValues, hasValue } from '@property/utils';
 import {
   isAccessiblePreviewItem,
   isCalendarEventPreviewItem,
@@ -58,13 +54,12 @@ import { blockNameToItemType } from '@service-storage/client';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
-import { Badge, cn, Layer, Surface, Tooltip } from '@ui';
+import { cn, Surface, Tooltip } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   Match,
   onCleanup,
   Show,
@@ -76,6 +71,7 @@ import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 import { useItemPreviewData } from './ItemPreview';
+import { TaskPropertiesPreview } from './TaskPropertiesPreview';
 
 /**
  * Container for displaying mentions with optional collapsing
@@ -241,7 +237,7 @@ function PopupIconButton(props: {
         }}
         class="rounded-md py-1 hover:bg-hover transition flex items-center gap-1.5"
       >
-        <div class="w-fit flex justify-right items-center m-0.5 text-xs font-normal text-current/90">
+        <div class="w-fit flex justify-end items-center m-0.5 text-xs font-normal text-current/90">
           <PopupIcon icon={props.icon} />
         </div>
       </button>
@@ -260,7 +256,8 @@ function MetadataInfo(props: {
   return (
     <div
       class={cn(
-        props.align === 'right' ? 'justify-right' : 'justify-left',
+        'flex',
+        props.align === 'right' ? 'justify-end' : 'justify-start',
         'mt-2',
         props.align === 'left' && 'w-fit max-w-[66%]',
         'text-ink-muted',
@@ -281,7 +278,7 @@ function MetadataInfo(props: {
 function UserInfo(props: { userId: string }) {
   const displayName = () => getDisplayName(tryMacroId(props.userId));
   return (
-    <div class="justify-left mt-2 w-fit max-w-[66%] text-ink-muted truncate flex items-center gap-1.5">
+    <div class="justify-start mt-2 w-fit max-w-[66%] text-ink-muted truncate flex items-center gap-1.5">
       <UserIconComponent
         id={props.userId}
         size="sm"
@@ -379,84 +376,6 @@ function ImageCoverStrip(props: {
         </Show>
       </Suspense>
     </div>
-  );
-}
-
-const TASK_PREVIEW_PROPERTIES = [
-  SYSTEM_PROPERTY_IDS.STATUS,
-  SYSTEM_PROPERTY_IDS.PRIORITY,
-  SYSTEM_PROPERTY_IDS.ASSIGNEES,
-];
-
-export function TaskPropertiesPreview(props: { taskId: string }) {
-  const { properties, isLoading } = useEntityProperties(
-    props.taskId,
-    'TASK',
-    false
-  );
-
-  const previewProperties = createMemo(() =>
-    TASK_PREVIEW_PROPERTIES.flatMap((id) => {
-      const p = properties().find((p) => p.propertyDefinitionId === id);
-      return p && hasValue(p) ? [p] : [];
-    })
-  );
-
-  return (
-    <Show when={!isLoading() && previewProperties().length > 0}>
-      <div class="px-2 pb-2 flex flex-row flex-wrap gap-1 text-xs justify-start">
-        <For each={previewProperties()}>
-          {(property) => <PreviewPropertyPill property={property} />}
-        </For>
-      </div>
-    </Show>
-  );
-}
-
-/**
- * Compact read-only pill for the document preview popup. The popup itself is
- * already a tooltip-like surface, so there's no edit trigger or hover-card.
- * Visually matches the side-panel Properties pills.
- */
-function PreviewPropertyPill(props: {
-  property: import('@property/types').Property;
-}) {
-  const isMultiUser = () =>
-    props.property.valueType === 'ENTITY' &&
-    props.property.specificEntityType === 'USER' &&
-    getEntityValues(props.property).length > 1;
-
-  const isUserEntity = () =>
-    props.property.valueType === 'ENTITY' &&
-    props.property.specificEntityType === 'USER';
-
-  return (
-    <Property.Root property={props.property}>
-      <Layer depth={2}>
-        <Badge
-          variant="ghost"
-          size="sm"
-          class="min-w-0 max-w-full gap-1.5 text-left"
-        >
-          <Switch
-            fallback={
-              <Property.Icon
-                property={props.property}
-                class="size-3 shrink-0"
-              />
-            }
-          >
-            <Match when={isMultiUser()}>
-              <Property.UserStack property={props.property} maxUsers={2} />
-            </Match>
-            <Match when={isUserEntity()}>
-              <Property.Icon property={props.property} />
-            </Match>
-          </Switch>
-          <Property.Text property={props.property} class="truncate" />
-        </Badge>
-      </Layer>
-    </Property.Root>
   );
 }
 
@@ -596,7 +515,8 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     return { id: props.documentInfo.id, type, messageId };
   };
 
-  const { item, ItemEntityIcon } = useItemPreviewData(itemPreviewEntity);
+  const { item, ItemEntityIcon, documentProperties } =
+    useItemPreviewData(itemPreviewEntity);
 
   // Resolve the caller-provided type against the item's actual subType so
   // that e.g. a markdown doc with `subType: { type: 'task' }` routes to the
@@ -960,7 +880,11 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
               {/* Task properties: status, priority, assignees */}
               <Show when={props.documentInfo.type === 'task'}>
                 <Suspense fallback={<div class="w-full bg-active h-4 m-2" />}>
-                  <TaskPropertiesPreview taskId={props.documentInfo.id} />
+                  <TaskPropertiesPreview
+                    taskId={props.documentInfo.id}
+                    taskName={accessibleItem().name}
+                    previewProperties={documentProperties()}
+                  />
                 </Suspense>
               </Show>
 

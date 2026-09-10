@@ -12,7 +12,7 @@ import {
   type ParentProps,
 } from 'solid-js';
 import type { CalendarOccurrenceData } from '../hooks/use-calendar-occurrence-data';
-import type { CalendarPeriodView } from '../types';
+import type { CalendarEvent, CalendarPeriodView } from '../types';
 import { timeGridScroller } from '../utils/time-grid-scroller';
 
 export const CALENDAR_PAGE_IDS = ['previous', 'current', 'next'] as const;
@@ -24,6 +24,10 @@ interface CalendarPageHandle {
   dateInfo: Accessor<DatesSetArg | undefined>;
   element: Accessor<HTMLDivElement | undefined>;
   data: CalendarOccurrenceData;
+  /** Teammate out-of-office events overlaid on the page, when the surface
+   * renders them. Kept out of `data` so occurrence-derived consumers (e.g.
+   * availability) never mix in other people's events. */
+  teamEvents?: Accessor<CalendarEvent[]>;
 }
 
 const shiftedDateForView = (
@@ -285,6 +289,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     activePage,
     activeData,
     activeDateInfo,
+    activeTeamEvents: () => activePage()?.teamEvents?.() ?? [],
     visibleRange: () => activeData()?.range(),
     initialDateFor: (id: CalendarPageId) => initialDates[id],
     isActive: (id: CalendarPageId) => activePageId() === id,

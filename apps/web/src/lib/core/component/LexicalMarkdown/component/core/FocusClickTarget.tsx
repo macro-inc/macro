@@ -28,9 +28,6 @@ export function FocusClickTarget(
           e.preventDefault();
         }
       }}
-      classList={{
-        'invisible-focus-target': true,
-      }}
       onClick={(e: MouseEvent) => {
         e.preventDefault();
         if (!local.editor.isEditable()) return;

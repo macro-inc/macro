@@ -15,6 +15,8 @@ import type {
   CachedQueryVariantWire,
   CacheRevision,
   ClaimedMutation,
+  CommitOptimisticWriteResult,
+  DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   HydrationResult,
   MutationClaim,
@@ -22,6 +24,7 @@ import type {
   ReadRecordsByKeysArgs,
   ReadRecordsByKeysResult,
   ReadResult,
+  RollbackOptimisticWriteResult,
   SearchCacheArgs,
   SearchCachePage,
   WriteResult,
@@ -247,6 +250,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         'graphql_cache_enqueue_optimistic_mutation',
         {
           originOpId: args.opKey === undefined ? undefined : opId(args.opKey),
+          uuid: args.uuid,
           query: args.query,
           operationName: args.operationName,
           variables: args.variables,
@@ -308,24 +312,27 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       claim: MutationClaim,
       nextAttemptAtMs: number,
       error: string
-    ): Promise<void> {
+    ): Promise<DeferOptimisticWriteResult> {
       await ready;
-      await request('graphql_cache_defer_optimistic_write', {
-        transactionId,
-        leaseOwner: claim.owner,
-        leaseGeneration: claim.generation,
-        nextAttemptAtMs,
-        error,
-      });
+      return await request<DeferOptimisticWriteResult>(
+        'graphql_cache_defer_optimistic_write',
+        {
+          transactionId,
+          leaseOwner: claim.owner,
+          leaseGeneration: claim.generation,
+          nextAttemptAtMs,
+          error,
+        }
+      );
     },
 
     async commitOptimisticWrite(
       transactionId: string,
       claim: MutationClaim,
       args: CacheWriteArgs
-    ): Promise<WriteResult> {
+    ): Promise<CommitOptimisticWriteResult> {
       await ready;
-      return await request<WriteResult>(
+      return await request<CommitOptimisticWriteResult>(
         'graphql_cache_commit_optimistic_write',
         {
           transactionId,
@@ -343,9 +350,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       transactionId: string,
       claim: MutationClaim,
       error: string
-    ): Promise<WriteResult> {
+    ): Promise<RollbackOptimisticWriteResult> {
       await ready;
-      return await request<WriteResult>(
+      return await request<RollbackOptimisticWriteResult>(
         'graphql_cache_rollback_optimistic_write',
         {
           transactionId,

@@ -28,21 +28,35 @@ mod tests {
     use http_body_util::BodyExt; // for `collect`
     use tower::ServiceExt;
 
+    fn dual_mounted_health() -> Router {
+        let health = router();
+        Router::new()
+            .merge(health.clone())
+            .nest("/notification", health)
+    }
+
     #[tokio::test]
     async fn test_health_check() {
-        let api = router();
+        let api = dual_mounted_health();
 
-        let response = api
-            .oneshot(
-                Request::builder()
-                    .uri("/health")
-                    .method("GET")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        for uri in ["/health", "/notification/health"] {
+            let response = api
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .uri(uri)
+                        .method("GET")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
 
-        assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "health at {uri} should be 200"
+            );
+        }
     }
 }

@@ -1,3 +1,4 @@
+import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { Entity } from '../../entity';
 import {
@@ -7,12 +8,14 @@ import {
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
+import { CalendarEventWhen } from './calendar';
 import {
   ChannelActiveCallBadge,
   ChannelJoinButton,
   ChannelMessageSingleLine,
 } from './channel';
 import { EmailIdentity, EmailInboxChip } from './email';
+import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
 
 /**
@@ -28,9 +31,13 @@ import { type LayoutProps, RowIndicator } from './shared';
 export function NarrowSingleLineLayout(props: LayoutProps) {
   return (
     <Entity.Layout
-      class="w-full gap-x-1 items-center text-sm pr-2 pl-1 grid"
+      class={cn(
+        SOUP_ROW_CLASS.narrow,
+        'w-full gap-x-(--soup-row-column-gap) items-center text-sm pr-2 pl-(--soup-row-padding-l) grid'
+      )}
       style={{
-        'grid-template-columns': 'auto 1fr max-content',
+        'grid-template-columns':
+          'var(--soup-row-indicator-width) 1fr max-content',
         'grid-template-rows': '44px',
         'grid-template-areas': '"indicator title timestamp"',
       }}
@@ -104,18 +111,20 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
           placement="timestamp"
           class="text-xs text-right text-ink-extra-muted font-light"
         >
-          <Show
-            when={!isTaskEntity(props.entity)}
-            fallback={
+          <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
+            <Match when={isTaskEntity(props.entity)}>
               <Entity.Properties
                 entity={props.entity}
                 maxUserStackUsers={0}
                 showCaret={false}
               />
-            }
-          >
-            <Entity.Timestamp entity={props.entity} />
-          </Show>
+            </Match>
+            <Match
+              when={props.entity.type === 'calendar_event' && props.entity}
+            >
+              {(entity) => <CalendarEventWhen entity={entity()} />}
+            </Match>
+          </Switch>
         </Entity.Slot>
       </Show>
     </Entity.Layout>

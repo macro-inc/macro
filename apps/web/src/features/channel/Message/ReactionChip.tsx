@@ -50,7 +50,7 @@ function ReactionTooltipContent(props: {
   return (
     <span>
       {formatReactorNames(props.users, props.currentUserId)} reacted with{' '}
-      <span class="text-md">{props.emoji}</span>
+      <span class="text-base">{props.emoji}</span>
     </span>
   );
 }

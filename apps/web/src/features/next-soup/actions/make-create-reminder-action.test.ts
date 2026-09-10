@@ -1,21 +1,38 @@
 import type { EntityData } from '@entity';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  openReminderComposer: vi.fn(),
-  remindersEnabled: true,
-}));
+const mocks = vi.hoisted(() => {
+  const store: Record<string, string> = {};
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store[key] ?? null,
+      setItem: (key: string, value: string) => {
+        store[key] = value;
+      },
+      removeItem: (key: string) => {
+        delete store[key];
+      },
+      clear: () => {
+        for (const key of Object.keys(store)) delete store[key];
+      },
+    },
+  });
+  return {
+    openReminderComposer: vi.fn(),
+    remindersEnabled: true,
+  };
+});
 
 vi.mock('@app/features/reminders/reminder-composer', () => ({
   openReminderComposer: mocks.openReminderComposer,
 }));
 
-// Spread the original so the other flags in this module keep working; only the
-// reminders gate is driven by the tests. Under vitest MODE is not
-// 'development', so the real ENABLE_REMINDERS would resolve to false.
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  ENABLE_REMINDERS: () => mocks.remindersEnabled,
+vi.mock('@core/constant/featureFlags', () => ({
+  ENABLE_BEARER_TOKEN_AUTH: false,
+  enableReminders: { key: 'enable-reminders' },
+  isFeatureEnabled: (flag: { key?: string }) =>
+    flag.key === 'enable-reminders' ? mocks.remindersEnabled : false,
 }));
 
 import type { SoupState } from '../create-soup-state';

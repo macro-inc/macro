@@ -1,6 +1,9 @@
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { GroupSoupMembershipDocument } from '@service-storage/graphql/generated/graphql';
+import type { Client } from '@urql/core';
 import { describe, expect, it } from 'vitest';
 import {
+  executeOptimisticMutation,
   prependUnique,
   remove,
   removeEmbeddedLink,
@@ -145,5 +148,29 @@ describe('typed optimistic graph updates', () => {
     };
 
     expect(typeAssertions).toBeTypeOf('function');
+  });
+});
+
+describe('executeOptimisticMutation UUID validation', () => {
+  const client = {} as Client;
+  const document = {} as TypedDocumentNode<unknown, Record<string, never>>;
+
+  it('rejects an invalid caller UUID before invoking the client', () => {
+    expect(() =>
+      executeOptimisticMutation(client, document, {}, {}, { uuid: 'invalid' })
+    ).toThrow(TypeError);
+  });
+
+  it('rejects missing options at runtime', () => {
+    expect(() =>
+      (
+        executeOptimisticMutation as unknown as (
+          client: Client,
+          document: TypedDocumentNode<unknown, Record<string, never>>,
+          variables: Record<string, never>,
+          data: unknown
+        ) => unknown
+      )(client, document, {}, {})
+    ).toThrow(TypeError);
   });
 });

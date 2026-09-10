@@ -9,11 +9,10 @@ import {
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
 import {
-  DISABLE_AUTO_UPDATE_UI_FLAG,
-  ENABLE_AUTO_UPDATE_UI_OVERRIDE,
-  ENABLE_NOTIFICATION_SETTINGS_FLAG,
-  ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
+  disableAutoUpdateUi,
   ENABLE_PROFILE_PICTURES,
+  enableAutoUpdateUiOverride,
+  enableNotificationSettings,
 } from '@core/constant/featureFlags';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { useEmail, useUserId } from '@core/context/user';
@@ -221,7 +220,7 @@ function ProfilePictureRow(props: { userId: string }) {
                 role="button"
                 aria-label="Upload profile picture"
                 onClick={pickProfilePicture}
-                class="flex size-full cursor-pointer items-center justify-center rounded-full bg-edge text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                class="flex size-full items-center justify-center rounded-full bg-edge text-ink-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <IconUpload class="size-5" />
               </span>
@@ -234,7 +233,7 @@ function ProfilePictureRow(props: { userId: string }) {
                 as="div"
                 tabindex="0"
                 aria-label="Edit profile picture"
-                class="group block size-full cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                class="group block size-full rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <div class="size-full overflow-hidden rounded-full">
                   <UserIcon
@@ -316,16 +315,11 @@ export function Account() {
   const email = useEmail();
   const userId = useUserId();
   const logout = useLogout();
-  const disableAutoUpdateUIFlag = useFeatureFlag(DISABLE_AUTO_UPDATE_UI_FLAG);
+  const disableAutoUpdateUIFlag = useFeatureFlag(disableAutoUpdateUi);
   const autoUpdateUIEnabled = createMemo(
-    () => ENABLE_AUTO_UPDATE_UI_OVERRIDE ?? !disableAutoUpdateUIFlag().enabled
+    () => enableAutoUpdateUiOverride ?? !disableAutoUpdateUIFlag().enabled
   );
-  const notificationSettingsFlag = useFeatureFlag(
-    ENABLE_NOTIFICATION_SETTINGS_FLAG,
-    {
-      enabledOverride: ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
-    }
-  );
+  const notificationSettingsFlag = useFeatureFlag(enableNotificationSettings);
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] =
     createSignal<boolean>(false);

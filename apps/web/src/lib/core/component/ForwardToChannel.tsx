@@ -20,7 +20,10 @@ import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
 import CheckIcon from '@phosphor/check.svg?component-solid';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
-import { blockNameToItemType } from '@service-storage/client';
+import {
+  blockNameToItemType,
+  itemTypeToReferenceEntityType,
+} from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
 import { Button, cn, Hotkey } from '@ui';
@@ -278,11 +281,13 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
   const blockName = useMaybeBlockAliasedName() ?? props.blockName;
   const blockId = useMaybeBlockId() ?? props.blockId;
+  const itemType = () =>
+    blockName != null ? blockNameToItemType(blockName) : undefined;
+
   const asAttachment = () => {
-    const itemType =
-      blockName != null ? blockNameToItemType(blockName) : undefined;
+    const type = itemType();
     return {
-      entity_type: itemType ?? 'unknown',
+      entity_type: type ? itemTypeToReferenceEntityType(type) : 'unknown',
       entity_id: blockId ?? '',
     };
   };
@@ -290,7 +295,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   const trackForwardShare = (targetType: 'channel' | 'user') => {
     const attachment = asAttachment();
     analytics.track('share_entity', {
-      entityType: attachment.entity_type,
+      entityType: itemType() ?? attachment.entity_type,
       entityId: attachment.entity_id || undefined,
       shareMethod: 'forward',
       targetType,

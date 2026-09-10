@@ -3,11 +3,14 @@
 #[cfg(test)]
 mod test;
 
+mod app_jwt;
 mod installation_state;
 mod link;
 mod pull_request;
 mod sync;
 
+pub use app_jwt::AppJwt;
+pub(crate) use app_jwt::app_jwt;
 pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,
 };
@@ -61,4 +64,13 @@ pub enum GithubError {
     /// setup state was minted for.
     #[error("GitHub account is not linked to the Macro user who started setup")]
     SetupUserNotLinked,
+    /// Our App has no installation covering the requested repository, or the
+    /// installation it has belongs to neither the requesting user nor any team
+    /// they are on.
+    ///
+    /// One variant for both because a caller must not be able to tell them
+    /// apart: "installed, but not yours" and "not installed" differ only in
+    /// what they report about other people's accounts.
+    #[error("no GitHub App installation for this user and repository")]
+    RepositoryUnavailable,
 }

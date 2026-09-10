@@ -96,7 +96,7 @@ export function NotificationStackRow(props: {
     <ContextMenu>
       <ContextMenu.Trigger class="size-full">
         <div
-          class="group/notif flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden cursor-pointer"
+          class="group/notif flex items-center gap-2.5 px-3 py-2 hover:bg-ink-muted/6 min-w-0 overflow-hidden"
           onClick={handleClick}
           role="button"
           tabIndex={0}

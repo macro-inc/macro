@@ -1,7 +1,7 @@
 //! Module defines the [MacroUserId] and the methods to read the email
 use crate::{
     cowlike::{ArcCowStr, CowLike},
-    email::{Email, email},
+    email::{Email, ReadEmailParts, email},
     error::ParseErr,
     lowercased::Lowercase,
 };
@@ -267,6 +267,15 @@ where
     pub fn email_str(&self) -> &str {
         let id_str = self.user_id.as_ref();
         &id_str[self.email_part_offset..]
+    }
+
+    /// True when this user belongs to the `macro.com` staff domain.
+    ///
+    /// Plus-aliases such as `name+tag@macro.com` still match.
+    pub fn is_macro_staff(&self) -> bool {
+        self.email_part()
+            .domain_part()
+            .eq_ignore_ascii_case("macro.com")
     }
 }
 

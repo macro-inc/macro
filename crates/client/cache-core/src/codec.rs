@@ -22,7 +22,7 @@ pub const CACHE_FORMAT_VERSION: u32 = 2;
 /// fields, so older records remain usable until a newly selected field is
 /// fetched. Bump this epoch for incompatible changes to normalized identity,
 /// field storage shape, or other schema-derived cache semantics.
-pub const CACHE_SCHEMA_COMPATIBILITY_EPOCH: u32 = 1;
+pub const CACHE_SCHEMA_COMPATIBILITY_EPOCH: u32 = 2;
 
 #[derive(Debug, Error)]
 pub enum CodecError {
@@ -141,7 +141,7 @@ mod tests {
     fn namespace_uses_schema_compatibility_epoch_not_schema_hash() {
         assert_eq!(
             cache_namespace("client-token-1"),
-            "graphql-cache:client-token-1:s1:v2"
+            "graphql-cache:client-token-1:s2:v2"
         );
     }
 }

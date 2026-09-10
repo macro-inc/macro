@@ -10,7 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 agent_session = { path = "../../crates/agent_session" }
-agent_trigger = { path = "../../crates/agent_trigger" }
+agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 ai_usage = { path = "../../crates/ai_usage" }
 anyhow = { workspace = true }
 bots = { path = "../../crates/bots", default-features = false, features = ["outbound", "ports"] }

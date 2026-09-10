@@ -3,7 +3,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   EMAIL_DIGEST_NOTIFICATION_TYPE,
-  mutedEntityTypeLabel,
   NOTIFICATION_EVENT_GROUPS,
 } from '@notifications/notification-event-catalog';
 import { useNotificationSettings } from '@notifications/notification-settings';
@@ -18,6 +17,7 @@ import {
 } from '@queries/notification/unsubscribes';
 import { ToggleSwitch } from '@ui';
 import { For, Show } from 'solid-js';
+import { MutedItemRow } from './MutedItemRow';
 import {
   SettingsCard,
   SettingsPage,
@@ -163,18 +163,10 @@ export function Notifications() {
           >
             <For each={mutedEntities()}>
               {(item) => (
-                <SettingsRow
-                  label={mutedEntityTypeLabel(item.item_type)}
-                  description={item.item_id}
-                >
-                  <button
-                    type="button"
-                    class="text-sm text-ink-muted hover:text-ink"
-                    onClick={() => unmuteEntity(item)}
-                  >
-                    Unmute
-                  </button>
-                </SettingsRow>
+                <MutedItemRow
+                  item={item}
+                  onUnmute={() => void unmuteEntity(item)}
+                />
               )}
             </For>
           </Show>

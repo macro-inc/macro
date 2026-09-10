@@ -27,6 +27,7 @@ import {
 } from './email';
 import {
   activeAgentFilter,
+  calendarFilter,
   callsFilter,
   channelsFilter,
   crmCompanyActiveFilter,
@@ -38,6 +39,7 @@ import {
   firedRemindersFilter,
   foldersFilter,
   inFolderFilter,
+  notDoneRemindersFilter,
   notTaskFilter,
   remindersFilter,
   scheduledRemindersFilter,
@@ -91,6 +93,7 @@ export const SOUP_FILTERS = [
   notTaskFilter,
   documentOrFileFilter,
   activeTaskFilter,
+  calendarFilter,
   callsFilter,
   crmCompanyFilter,
   crmCompanyActiveFilter,
@@ -102,6 +105,7 @@ export const SOUP_FILTERS = [
   remindersFilter,
   firedRemindersFilter,
   scheduledRemindersFilter,
+  notDoneRemindersFilter,
   doneRemindersFilter,
   searchSupportedFilter,
   ...ENTITY_TYPE_FILTERS,

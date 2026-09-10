@@ -23,6 +23,12 @@ export type EntityBase = {
    * helpers may bump it optimistically.
    */
   touchedAt?: DateValue | null;
+  /**
+   * When the viewer was last notified about this entity, present only on
+   * rows from `notified_at` pages. The inbox sorts and date-buckets on it,
+   * and incoming notifications bump it optimistically.
+   */
+  notifiedAt?: DateValue | null;
   createdAt?: DateValue | null;
   updatedAt?: DateValue | null;
   viewedAt?: DateValue | null;
@@ -367,6 +373,15 @@ export type CalendarEventEntity = EntityBase & {
    * than the master's original start; soup rows leave it unset.
    */
   occurrenceKey?: string;
+  /** Whether the series carries a recurrence rule, so a row can flag it
+   * without parsing the rules. Only search rows populate it. */
+  isRecurring?: boolean;
+  /** The event's organizer (its creator, in Google's model), when named.
+   * Only search rows populate it. */
+  organizer?: { name?: string; email?: string };
+  /** Free-text description, when the event carries one. May contain HTML from
+   * the source. Only search rows populate it. */
+  description?: string;
   /** Direct join URL when known. */
   conferenceUrl?: string;
   /** Whether the canonical source prohibits mutation. */

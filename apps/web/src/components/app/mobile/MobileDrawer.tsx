@@ -87,10 +87,17 @@ function MobileDrawerContent(
         }}
         class={cn(
           'portal-scope',
-          'bottom-(--virtual-keyboard-height,0) fixed inset-x-0 z-modal bg-surface rounded-t-2xl flex flex-col max-h-(--drawer-max-h) data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
+          'bottom-0 fixed inset-x-0 z-modal bg-surface rounded-t-2xl flex flex-col max-h-(--drawer-max-h) data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
           targetHeight() != null ? 'h-(--drawer-h)' : 'h-fit',
           virtualKeyboardVisible()
-            ? 'pb-0 max-h-[calc(var(--drawer-max-h)-var(--virtual-keyboard-height))] overflow-y-auto'
+            ? [
+                'pb-(--virtual-keyboard-height) max-h-[calc(100vh-var(--safe-top))] overflow-y-auto',
+                // A fixed-height drawer grows by the keyboard so its content
+                // keeps its designed height; a fit-content drawer has no
+                // --drawer-h and just clamps.
+                targetHeight() != null &&
+                  'h-[min(calc(100vh-var(--safe-top)),calc(var(--drawer-h)+var(--virtual-keyboard-height)))]',
+              ]
             : 'pb-(--safe-bottom) has-[[data-drawer-scroll-body]]:pb-0',
           local.class
         )}

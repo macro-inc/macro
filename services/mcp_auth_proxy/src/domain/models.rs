@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::{fmt, time::SystemTime};
 
 /// Upstream OAuth access token.
 #[derive(Clone, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -85,6 +85,17 @@ impl fmt::Debug for RefreshToken {
     }
 }
 
+/// A token grant obtained from the upstream OAuth provider.
+#[derive(Debug)]
+pub struct UpstreamTokens {
+    /// The upstream access token.
+    pub access_token: AccessToken,
+    /// The upstream refresh token.
+    pub refresh_token: RefreshToken,
+    /// Seconds until `access_token` expires, as reported by the provider.
+    pub expires_in: u64,
+}
+
 /// A pending OAuth authorization flow initiated by the client.
 #[derive(Clone)]
 pub struct PendingAuthorization {
@@ -108,6 +119,9 @@ pub struct IssuedAuthorizationCode {
     /// The redirect URI from the authorization request, used for exact-match
     /// validation during token exchange.
     pub redirect_uri: String,
+    /// When `access_token` expires. `None` for codes issued before the broker
+    /// started tracking upstream token lifetimes.
+    pub access_token_expires_at: Option<SystemTime>,
 }
 
 /// OAuth authorize request from the MCP client.
@@ -181,4 +195,8 @@ pub struct TokenResponse {
     pub refresh_token: RefreshToken,
     /// OAuth token type.
     pub token_type: &'static str,
+    /// Seconds until `access_token` expires, so clients can refresh before it
+    /// does. Omitted when the upstream lifetime is unknown.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_in: Option<u64>,
 }

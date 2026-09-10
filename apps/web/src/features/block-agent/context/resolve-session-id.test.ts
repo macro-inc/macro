@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 const create = vi.hoisted(() => ({
   resolve: undefined as ((id: string) => void) | undefined,
   reject: undefined as (() => void) | undefined,
+  control: vi.fn(),
 }));
 
 vi.mock('@service-agent-harness/client', () => ({
@@ -23,6 +24,7 @@ vi.mock('@service-agent-harness/client', () => ({
           create.reject = () => resolve({ isErr: () => true });
         })
     ),
+    control: create.control,
   },
 }));
 
@@ -71,6 +73,28 @@ describe('a placeholder', () => {
 
       expect(resolved.failed()).toBe(true);
       expect(resolved.sessionId()).toBeUndefined();
+      dispose();
+    });
+  });
+
+  it('applies a model override before delivering the first prompt', async () => {
+    create.control.mockResolvedValue({ isErr: () => false });
+    const placeholder = startPendingSession({
+      botId: 'persona-1',
+      modelOverride: 'model-2',
+      prompt: 'Fix the tests',
+    });
+    await createRoot(async (dispose) => {
+      const resolved = resolveSessionId(() => placeholder);
+      create.resolve?.('session-10');
+      await flush();
+      await flush();
+
+      expect(create.control.mock.calls).toEqual([
+        ['session-10', { type: 'setModel', model: 'model-2' }],
+        ['session-10', { type: 'prompt', prompt: 'Fix the tests' }],
+      ]);
+      expect(resolved.sessionId()).toBe('session-10');
       dispose();
     });
   });

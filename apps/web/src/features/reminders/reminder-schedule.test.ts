@@ -1,20 +1,16 @@
-import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { EntityData } from '@entity';
 import { describe, expect, it } from 'vitest';
 
 import {
-  defaultRepeatParts,
   describeReminderSchedule,
-  futureDateOptions,
+  describeReminderWhen,
   isRecurring,
   onceSchedule,
   REMINDER_DEFAULT_TIME,
   REMINDER_DESCRIPTION_MAX_LENGTH,
   recurringSchedule,
-  reminderDefaultOptions,
   reminderDescriptionFor,
   reminderDescriptionForReference,
-  reminderEditOptions,
   reminderEditPatch,
   repeatPartsFromDate,
   repeatPartsFromSchedule,
@@ -24,41 +20,6 @@ import {
   sameSchedule,
 } from './reminder-schedule';
 
-const option = (id: string, date: Date): DateOption => ({
-  id,
-  displayText: id,
-  date,
-  type: 'preset',
-});
-
-describe('futureDateOptions', () => {
-  const now = new Date('2026-07-29T12:00:00.000Z');
-
-  it('keeps options after now and drops ones already past', () => {
-    const kept = option('later', new Date('2026-07-30T09:00:00.000Z'));
-    const dropped = option('earlier', new Date('2026-07-28T09:00:00.000Z'));
-
-    expect(futureDateOptions([dropped, kept], now)).toEqual([kept]);
-  });
-
-  // The API rejects a remindAt that is not strictly in the future, so an option
-  // landing exactly on "now" has to go too.
-  it('drops an option exactly at now', () => {
-    expect(futureDateOptions([option('now', new Date(now))], now)).toEqual([]);
-  });
-
-  it('preserves the order of the options it keeps', () => {
-    const first = option('first', new Date('2026-07-30T09:00:00.000Z'));
-    const second = option('second', new Date('2026-07-31T09:00:00.000Z'));
-    const past = option('past', new Date('2026-07-01T09:00:00.000Z'));
-
-    expect(futureDateOptions([first, past, second], now)).toEqual([
-      first,
-      second,
-    ]);
-  });
-});
-
 describe('onceSchedule', () => {
   it('builds a one-shot schedule at the given instant', () => {
     const date = new Date('2026-07-30T13:00:00.000Z');
@@ -67,83 +28,6 @@ describe('onceSchedule', () => {
       type: 'once',
       remindAt: '2026-07-30T13:00:00.000Z',
     });
-  });
-});
-
-describe('reminderDefaultOptions', () => {
-  // A Wednesday afternoon, so every entry is still ahead of "now".
-  const wednesdayAfternoon = new Date(2026, 6, 29, 16, 37, 52, 400);
-
-  it('offers the four reminder defaults in order', () => {
-    expect(
-      reminderDefaultOptions(wednesdayAfternoon).map((o) => o.displayText)
-    ).toEqual(['In 1 hour', 'In 2 hours', 'Tomorrow', 'In 1 week']);
-  });
-
-  it('offsets the hour entries from now, keeping the time of day', () => {
-    const [oneHour, twoHours] = reminderDefaultOptions(wednesdayAfternoon);
-
-    expect(oneHour.date.getHours()).toBe(17);
-    expect(oneHour.date.getMinutes()).toBe(37);
-    expect(twoHours.date.getHours()).toBe(18);
-    expect(twoHours.date.getMinutes()).toBe(37);
-  });
-
-  // Seconds dropped so the stored instant is a whole minute.
-  it('rounds the hour entries down to the minute', () => {
-    const hourEntries = reminderDefaultOptions(wednesdayAfternoon).slice(0, 2);
-
-    for (const option of hourEntries) {
-      expect(option.date.getSeconds()).toBe(0);
-      expect(option.date.getMilliseconds()).toBe(0);
-    }
-  });
-
-  it('puts the day-scale entries at the default time', () => {
-    for (const option of reminderDefaultOptions(wednesdayAfternoon).slice(2)) {
-      expect(option.date.getHours()).toBe(REMINDER_DEFAULT_TIME.hours);
-      expect(option.date.getMinutes()).toBe(REMINDER_DEFAULT_TIME.minutes);
-    }
-  });
-
-  it('dates the day-scale entries a day and a week out', () => {
-    const [, , tomorrow, oneWeek] = reminderDefaultOptions(wednesdayAfternoon);
-
-    expect(tomorrow.date.getDate()).toBe(30);
-    expect(oneWeek.date.getDate()).toBe(5);
-  });
-
-  // No two presets can currently land on the same instant, so this guards the
-  // list as it grows rather than a case it has today.
-  it('never offers the same instant under two labels', () => {
-    for (const now of [
-      new Date(2026, 7, 1, 13, 0, 0),
-      new Date(2026, 7, 2, 20, 0, 0),
-      wednesdayAfternoon,
-    ]) {
-      const options = reminderDefaultOptions(now);
-      expect(new Set(options.map((o) => o.date.getTime())).size).toBe(
-        options.length
-      );
-    }
-  });
-
-  // The API rejects a firing that is not strictly in the future, and every
-  // preset is now offset forward from `now` — so this holds whenever it runs.
-  it('only ever offers times in the future', () => {
-    for (const now of [new Date(2026, 7, 2, 23, 59, 0), wednesdayAfternoon]) {
-      for (const option of reminderDefaultOptions(now)) {
-        expect(option.date.getTime()).toBeGreaterThan(now.getTime());
-      }
-    }
-  });
-
-  it('describes each entry with a concrete date and time', () => {
-    const [oneHour] = reminderDefaultOptions(wednesdayAfternoon);
-
-    // Matched rather than compared: the time is rendered with the runtime
-    // locale's hour cycle, so an exact string pins the test to en-US.
-    expect(oneHour.secondaryText).toMatch(/^Today, \d{1,2}:\d{2}/);
   });
 });
 
@@ -323,50 +207,6 @@ describe('REMINDER_DEFAULT_TIME', () => {
   // is easy to miss, so this is deliberately a morning.
   it('is 9am', () => {
     expect(REMINDER_DEFAULT_TIME).toEqual({ hours: 9, minutes: 0 });
-  });
-});
-
-describe('reminderEditOptions', () => {
-  // A Wednesday afternoon, so every default entry is still ahead of "now".
-  const wednesdayAfternoon = new Date(2026, 6, 29, 16, 37, 52, 400);
-  const current = new Date(2026, 7, 3, 9, 0, 0, 0);
-
-  it('leads with keeping the current time, then the defaults', () => {
-    expect(
-      reminderEditOptions(current, wednesdayAfternoon).map((o) => o.displayText)
-    ).toEqual([
-      'Keep current time',
-      'In 1 hour',
-      'In 2 hours',
-      'Tomorrow',
-      'In 1 week',
-    ]);
-  });
-
-  it('keeps the exact instant the reminder already has', () => {
-    const [keep] = reminderEditOptions(current, wednesdayAfternoon);
-
-    expect(keep.date.getTime()).toBe(current.getTime());
-  });
-
-  // Both would submit the same instant, so offering them separately would read
-  // as two different choices with one outcome.
-  it('drops a default that lands on the current time', () => {
-    const tomorrowMorning = new Date(2026, 6, 30, 9, 0, 0, 0);
-    const options = reminderEditOptions(tomorrowMorning, wednesdayAfternoon);
-
-    expect(options.map((o) => o.displayText)).not.toContain('Tomorrow');
-    expect(options[0].displayText).toBe('Keep current time');
-  });
-
-  // An overdue reminder still has to be renamable, and keeping its time sends
-  // no schedule at all — so the future filter must not remove the keep option.
-  it('offers keeping a time that has already passed', () => {
-    const overdue = new Date(2026, 6, 20, 9, 0, 0, 0);
-    const [keep] = reminderEditOptions(overdue, wednesdayAfternoon);
-
-    expect(keep.displayText).toBe('Keep current time');
-    expect(keep.date.getTime()).toBe(overdue.getTime());
   });
 });
 
@@ -599,18 +439,6 @@ describe('repeatPartsFromDate', () => {
   });
 });
 
-describe('defaultRepeatParts', () => {
-  it('starts a new recurrence at the reminder morning default', () => {
-    // Not the current time: a repeat picked at 4pm should still default to the
-    // morning, the same way a bare date does.
-    const parts = defaultRepeatParts(new Date('2026-08-17T16:42:00'));
-
-    expect(parts.time).toBe(
-      `${String(REMINDER_DEFAULT_TIME.hours).padStart(2, '0')}:${String(REMINDER_DEFAULT_TIME.minutes).padStart(2, '0')}`
-    );
-  });
-});
-
 describe('recurringSchedule', () => {
   it('builds a cron schedule carrying the timezone it was built in', () => {
     const schedule = recurringSchedule(
@@ -677,6 +505,33 @@ describe('describeReminderSchedule', () => {
     expect(
       describeReminderSchedule(onceSchedule(new Date('2026-08-10T09:00:00')))
     ).toBeUndefined();
+  });
+});
+
+describe('describeReminderWhen', () => {
+  it('reads a one-shot as its firing date and time', () => {
+    // Built from local components and formatted in local time, so the string is
+    // the same wherever the test runs. The current year keeps it in
+    // `formatDateAndTime`'s same-year "MMM d" branch rather than the numeric one.
+    const year = new Date().getFullYear();
+    expect(
+      describeReminderWhen({
+        scheduleType: 'once',
+        nextRunAt: new Date(year, 7, 10, 9, 0),
+      })
+    ).toBe('Aug 10, 9:00 AM');
+  });
+
+  it('reads a recurring reminder as its cadence, not its next firing', () => {
+    const when = describeReminderWhen({
+      scheduleType: 'recurring',
+      cron: '0 0 9 * * 2-6',
+      timezone: 'UTC',
+      nextRunAt: new Date(2026, 7, 10, 9, 0),
+    });
+
+    expect(when).toMatch(/^Weekdays at /);
+    expect(when).not.toContain('Aug');
   });
 });
 

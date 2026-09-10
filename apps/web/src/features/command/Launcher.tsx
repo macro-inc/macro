@@ -1,8 +1,9 @@
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
+import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
+import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
-import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
 import {
   endTrackedDocumentSpan,
   registerDocumentSpan,
@@ -15,14 +16,11 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
-  ENABLE_CHAT_V3_AGENTS,
-  ENABLE_CHAT_V3_AGENTS_FLAG,
-  ENABLE_CHAT_V3_AGENTS_OVERRIDE,
-  ENABLE_REMINDERS,
-  ENABLE_REMINDERS_FLAG,
-  ENABLE_REMINDERS_OVERRIDE,
-  ENABLE_SNIPPETS_FLAG,
-  ENABLE_SNIPPETS_OVERRIDE,
+  enableAgentSessionComposer,
+  enableChatV3Agents,
+  enableReminders,
+  enableSnippets,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import {
@@ -240,13 +238,18 @@ const createComponent = async (spec: {
   componentId: string;
   shouldInsert?: boolean;
   asPopover?: boolean;
+  params?: Record<string, unknown>;
 }) => {
   const { openWithSplit, popoverSplit } = useSplitLayout();
 
   // For popovers, create the popover BEFORE closing launcher
   // so the popover can acquire the focus lock while launcher still owns rootFocusElement
   if (spec.asPopover) {
-    popoverSplit({ type: 'component', id: spec.componentId });
+    popoverSplit({
+      type: 'component',
+      id: spec.componentId,
+      params: spec.params,
+    });
     setCreateMenuOpen(false, false);
     return;
   }
@@ -411,21 +414,42 @@ export function runCreateAction(
     // A reminder has no block to open: the composer asks what and when, and the
     // reminder lives in the Reminders lists from there.
     case 'reminder':
-      if (!ENABLE_REMINDERS()) return;
+      if (!isFeatureEnabled(enableReminders)) return;
       setCreateMenuOpen(false, false);
       openStandaloneReminderComposer();
       return;
-    // Nothing to ask for: a managed session's bot, repository and workspace
-    // are all deployment configuration, so this opens one straight away.
-    //
-    // Opened against a placeholder rather than awaited: the create does not
-    // answer until its sandbox has booted and cloned the repo, and no one
-    // should watch a spinner for that. The block mounts now — composer live,
-    // prompts queueing — and adopts the real id when it lands
-    // (`block-agent/context/pending-session.ts`).
     case 'agent': {
+      if (isFeatureEnabled(enableAgentSessionComposer)) {
+        createComponent({
+          componentId: 'agent-session-compose',
+          asPopover: true,
+          // The popover itself is not split-placed; the session it creates
+          // is, so the new-split intent rides along for the composer to honor.
+          params: { preferNewSplit: shouldInsert },
+        });
+        return;
+      }
+      // Without the composer there is nothing to ask for: a managed session's
+      // bot, repository and workspace are all deployment configuration, so
+      // this opens one straight away.
+      //
+      // Opened against a placeholder rather than awaited: the create does not
+      // answer until its sandbox has booted and cloned the repo, and no one
+      // should watch a spinner for that. The block mounts now — composer live,
+      // prompts queueing — and adopts the real id when it lands
+      // (`block-agent/context/pending-session.ts`).
       const { openWithSplit } = useSplitLayout();
       setCreateMenuOpen(false, false);
+      // On mobile the agent input doesn't autofocus on mount, so arm focus
+      // within this gesture (iOS only raises the keyboard for a synchronous
+      // focus). The block mounts asynchronously, so this waits for the input.
+      if (isMobile()) {
+        triggerFocusInput(() =>
+          document
+            .getElementById(AGENT_INPUT_TEXT_AREA_ID)
+            ?.querySelector<HTMLElement>('[contenteditable="true"]')
+        );
+      }
       openWithSplit(
         { type: 'agent', id: startPendingSession() },
         { referredFrom: 'launcher', preferNewSplit: shouldInsert }
@@ -455,7 +479,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     // The pre-agent-session chat, kept on `a` for anyone the new agent flag
-    // has not reached. Mutually exclusive with the Coding Agent entry below:
+    // has not reached. Mutually exclusive with the Agent entry below:
     // both bind `a`, and exactly one is ever enabled.
     label: 'Agent',
     icon: WideStar,
@@ -471,7 +495,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     // pick between them by condition; the default 'override' would let the
     // later one silently replace the earlier.
     registrationType: 'add',
-    enabled: () => !ENABLE_CHAT_V3_AGENTS(),
+    enabled: () => !isFeatureEnabled(enableChatV3Agents),
     keyDownHandler: () => {
       runCreateAction('chat', { shouldInsert: pressedKeys().has('shift') });
       return true;
@@ -492,17 +516,17 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Coding Agent',
+    label: 'Agent',
     icon: Robot,
     description: 'Create agent session',
-    launcherHint: 'Sandboxed coding session',
+    launcherHint: 'Dedicated Agent Session',
     keywords: ['new', 'make', 'add', 'agent', 'code', 'coder', 'session'],
     blockName: 'agent',
     hotkeyToken: TOKENS.create.agent,
     altHotkeyToken: TOKENS.create.agentNewSplit,
     hotkey: 'a',
     registrationType: 'add',
-    enabled: () => ENABLE_CHAT_V3_AGENTS(),
+    enabled: () => isFeatureEnabled(enableChatV3Agents),
     keyDownHandler: () => {
       runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
       return true;
@@ -563,7 +587,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     // No `altHotkeyToken`: a reminder opens no split, so there is no
     // shift-variant to bind.
     hotkey: 'r',
-    enabled: () => ENABLE_REMINDERS(),
+    enabled: () => isFeatureEnabled(enableReminders),
     keyDownHandler: () => {
       runCreateAction('reminder');
       return true;
@@ -676,18 +700,12 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
 export function useCreateMenuBlocks(
   source: () => CreatableBlock[] = () => CREATABLE_BLOCKS
 ): Accessor<CreatableBlock[]> {
-  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
-    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
-  });
+  const snippetsFlag = useFeatureFlag(enableSnippets);
   // Subscribed to rather than left to the block's own `enabled`, which reads
   // PostHog without tracking it: this memo has no other reason to re-run, so a
   // flag that resolves after mount would leave the menu as it was until reload.
-  const remindersFlag = useFeatureFlag(ENABLE_REMINDERS_FLAG, {
-    enabledOverride: ENABLE_REMINDERS_OVERRIDE,
-  });
-  const agentsFlag = useFeatureFlag(ENABLE_CHAT_V3_AGENTS_FLAG, {
-    enabledOverride: ENABLE_CHAT_V3_AGENTS_OVERRIDE,
-  });
+  const remindersFlag = useFeatureFlag(enableReminders);
+  const agentsFlag = useFeatureFlag(enableChatV3Agents);
   return createMemo(() => {
     remindersFlag();
     agentsFlag();

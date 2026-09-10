@@ -102,3 +102,21 @@ fn debug_output_is_simple_string() {
     let id_str = MacroUserIdStr::parse_from_str("macro|hutch@macro.com").unwrap();
     assert_eq!(format!("{:?}", id_str), "macro|hutch@macro.com");
 }
+
+#[test]
+fn macro_com_users_are_staff() {
+    let id = MacroUserIdStr::parse_from_str("macro|teo@macro.com").unwrap();
+    assert!(id.is_macro_staff());
+}
+
+#[test]
+fn macro_com_plus_aliases_are_staff() {
+    let id = MacroUserIdStr::parse_from_str("macro|teo+notify@macro.com").unwrap();
+    assert!(id.is_macro_staff());
+}
+
+#[test]
+fn non_macro_domains_are_not_staff() {
+    let id = MacroUserIdStr::parse_from_str("macro|teo@example.com").unwrap();
+    assert!(!id.is_macro_staff());
+}

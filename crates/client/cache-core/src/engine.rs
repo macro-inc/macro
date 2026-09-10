@@ -20,16 +20,26 @@ use crate::normalize::{
     DependencyCompleteness, NormalizeError, RecordUpdates, normalize, normalize_with_dependencies,
     project_hydration_response,
 };
-use crate::predicate::{PredicateIndexStorage, PredicateQueryResult, ProjectionMutation};
+use crate::predicate::reconciliation::{
+    MAX_RECONCILIATION_BASELINE, PredicateBaselineEntry, PredicateReconciliation,
+};
+use crate::predicate::{
+    OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
+    PredicateQueryResult, ProjectionMutation, ProjectionMutationLayer, ProjectionState,
+    StagedOptimisticProjection, StagedOptimisticProjectionOwner,
+    apply_authoritative_projection_mutations, apply_authoritative_projection_patch,
+    compose_effective_optimistic_projection,
+};
 use crate::query_inspection::{
     CachedQueryInstance, CachedQueryVariant, OwnerResolution, QueryInspection,
     QueryInspectionError, matches_variable_filters, prepare, recover_variants, resolve_owner,
     selected_result_value,
 };
 use crate::queue::{
-    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationRequest,
-    NewQueuedMutation, OptimisticSource, PersistedOptimisticLayer, QueuedMutation, StoredMutation,
-    decode_optimistic_source, encode_optimistic_source,
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationQueueSnapshot,
+    MutationRequest, MutationUpsertKind, NewQueuedMutation, OptimisticSource,
+    PersistedOptimisticLayer, QueuedMutation, StoredMutation, decode_optimistic_source,
+    encode_optimistic_source,
 };
 use crate::record_selection::{
     MAX_RECORD_SELECTION_KEYS, RecordSelection, RecordSelectionError, SelectedRecord,
@@ -43,13 +53,13 @@ use crate::store::{QueueDiagnostics, Storage};
 use crate::value::{EntityKey, Record, canonical_json};
 use lru::LruCache;
 use predicate_index::{
-    IndexDocument, MAX_OPTIMISTIC_RECORDS_PER_QUERY, MAX_QUERY_LIMIT, OptimisticProjectionMutation,
-    RecordKey as PredicateRecordKey, ValidatedIndexQuery, evaluate_reference,
+    OptimisticProjectionMutation, RecordKey as PredicateRecordKey, ValidatedIndexQuery,
 };
 use serde_json::Value as Json;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::num::NonZeroUsize;
 use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum EngineError<S: std::error::Error + 'static> {
@@ -80,6 +90,10 @@ pub enum EngineError<S: std::error::Error + 'static> {
     },
     #[error("invalid optimistic projection: {0}")]
     InvalidOptimisticProjection(String),
+    #[error("invalid optimistic mutation UUID `{0}`")]
+    InvalidMutationUuid(String),
+    #[error("durable optimistic queue changed while staging UUID upsert")]
+    StaleOptimisticUpsert,
     #[error("storage: {0}")]
     Storage(#[source] S),
     #[error("cache revision overflow")]
@@ -124,6 +138,8 @@ pub struct QueryRegistration<'a> {
 pub struct WriteResult {
     /// Revision installed after this logical cache mutation.
     pub revision: CacheRevision,
+    /// Whether this write advanced [`Self::revision`].
+    pub revision_advanced: bool,
     /// Records whose contents changed.
     pub changed: BTreeSet<EntityKey<'static>>,
     /// Active operations depending on changed records (host re-executes
@@ -165,14 +181,54 @@ pub enum InitialClaimOutcome<E> {
 pub struct EnqueueOptimisticMutationResult<E> {
     /// Engine-assigned id of the newly enqueued optimistic mutation.
     pub transaction_id: OptimisticTransactionId,
+    /// How the caller UUID changed the queue.
+    pub upsert_kind: MutationUpsertKind,
     /// Visible cache changes caused by the newly published optimistic layer.
     pub write_result: WriteResult,
     /// Outcome of the claim attempt made before hosts publish cache changes.
     pub initial_claim: InitialClaimOutcome<E>,
 }
 
+/// Cache change and replacement identity produced by settling superseded work.
+#[derive(Debug)]
+pub struct SupersededMutationResult {
+    /// Cache changes caused by settling the superseded layer.
+    pub write_result: WriteResult,
+    /// Current transaction carrying the caller's newer intent.
+    pub replacement_transaction_id: OptimisticTransactionId,
+}
+
+/// Tagged commit result used by transport adapters for settlement fanout.
+#[derive(Debug)]
+pub enum CommitOptimisticWriteResult {
+    /// A current mutation committed normally.
+    Committed(WriteResult),
+    /// The response committed beneath a newer optimistic replacement.
+    CommittedSuperseded(SupersededMutationResult),
+}
+
+/// Result of attempting to defer a failed queue attempt.
+#[derive(Debug)]
+pub enum DeferOptimisticWriteResult {
+    /// The current mutation retained its optimistic layer and retry state.
+    Deferred,
+    /// The attempt was superseded, so it was discarded instead of retried.
+    DiscardedSuperseded(SupersededMutationResult),
+}
+
+/// Tagged rollback result used by transport adapters for settlement fanout.
+#[derive(Debug)]
+pub enum RollbackOptimisticWriteResult {
+    /// A current mutation permanently failed normally.
+    RolledBack(WriteResult),
+    /// A superseded attempt was accepted and discarded.
+    DiscardedSuperseded(SupersededMutationResult),
+}
+
 /// Borrowed inputs for atomically beginning one optimistic mutation.
 pub struct BeginOptimisticWrite<'a> {
+    /// Caller-supplied RFC UUID used only for safe coalescing.
+    pub uuid: &'a str,
     /// GraphQL mutation document.
     pub query: &'a str,
     /// Selected operation name.
@@ -200,10 +256,18 @@ pub type OptimisticTransactionId = MutationId;
 #[derive(Clone)]
 struct OptimisticLayer {
     id: OptimisticTransactionId,
+    uuid: Uuid,
+    superseded: bool,
     updates: RecordUpdates,
     link_patches: Vec<OptimisticLinkPatch>,
     revalidations: Vec<QueryRevalidation>,
     projection_mutations: Vec<OptimisticProjectionMutation>,
+}
+
+struct BegunOptimisticWrite {
+    transaction_id: OptimisticTransactionId,
+    upsert_kind: MutationUpsertKind,
+    write_result: WriteResult,
 }
 
 /// Reserved storage key holding the identity bound to this cache. The
@@ -337,6 +401,7 @@ impl<S: Storage> Engine<S> {
         let revision = self.advance_revision()?;
         Ok(WriteResult {
             revision,
+            revision_advanced: true,
             changed,
             affected_ops,
             reset: false,
@@ -347,6 +412,15 @@ impl<S: Storage> Engine<S> {
     async fn rebuild_queued_layers(
         &mut self,
         queued: Vec<QueuedMutation>,
+    ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
+        self.rebuild_queued_layers_with_strict_tail(queued, None)
+            .await
+    }
+
+    async fn rebuild_queued_layers_with_strict_tail(
+        &mut self,
+        queued: Vec<QueuedMutation>,
+        strict_tail: Option<MutationId>,
     ) -> Result<Vec<OptimisticLayer>, EngineError<S::Error>> {
         let mut layers = Vec::with_capacity(queued.len());
         for queued in queued {
@@ -384,8 +458,14 @@ impl<S: Storage> Engine<S> {
             let mut effective = present_records(composed);
             merge_updates_into_effective(&mut effective, &updates);
             // Missing query fields after a format wipe are intentionally not
-            // recreated from stale recipes during hydration.
-            apply_link_patches(&mut effective, &mut updates, &patches, true)?;
+            // recreated from stale recipes during hydration. A newly submitted
+            // tail remains strict so invalid caller patches cannot be persisted.
+            apply_link_patches(
+                &mut effective,
+                &mut updates,
+                &patches,
+                strict_tail != Some(queued.id),
+            )?;
             let revalidations = deduplicate_revalidations(
                 source.revalidations.iter().cloned().chain(
                     source
@@ -396,6 +476,8 @@ impl<S: Storage> Engine<S> {
             );
             layers.push(OptimisticLayer {
                 id: queued.id,
+                uuid: queued.uuid,
+                superseded: queued.superseded,
                 updates,
                 link_patches: patches,
                 revalidations,
@@ -1026,7 +1108,12 @@ impl<S: Storage> Engine<S> {
         candidates.extend(updates.keys().cloned());
         let bases_before = self.load_bases(&candidates).await?;
         let before = effective_records(&bases_before, &self.optimistic, &candidates);
-        let (changed, revision) = self.persist_updates(updates, projections).await?;
+        let (changed, mut revision, mut revision_advanced) =
+            self.persist_updates(updates, projections).await?;
+        if reset && !revision_advanced {
+            revision = self.advance_revision()?;
+            revision_advanced = true;
+        }
 
         if !self.optimistic.is_empty() {
             let queued = self
@@ -1065,6 +1152,7 @@ impl<S: Storage> Engine<S> {
         }
         Ok(WriteResult {
             revision,
+            revision_advanced,
             changed,
             affected_ops,
             reset,
@@ -1144,7 +1232,7 @@ impl<S: Storage> Engine<S> {
         &mut self,
         updates: RecordUpdates,
         projections: Vec<ProjectionMutation>,
-    ) -> Result<(BTreeSet<EntityKey<'static>>, CacheRevision), EngineError<S::Error>> {
+    ) -> Result<(BTreeSet<EntityKey<'static>>, CacheRevision, bool), EngineError<S::Error>> {
         // Load current values (hot tier, then storage) so merges detect real
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
         // larger than the hot capacity would otherwise evict its own
@@ -1196,13 +1284,51 @@ impl<S: Storage> Engine<S> {
         // Persist every touched record (idempotent for unchanged ones —
         // keeps storage authoritative even if the hot tier evicted them
         // between loads).
+        let revision_advanced = if changed.is_empty() {
+            self.projection_mutations_change(&projections).await?
+        } else {
+            true
+        };
         self.storage
             .put_batch_with_projections(to_persist.clone(), projections)
             .await
             .map_err(EngineError::Storage)?;
-        let revision = self.advance_revision()?;
+        let revision = if revision_advanced {
+            self.advance_revision()?
+        } else {
+            self.revision
+        };
         self.update_loaded_search_catalogs(&to_persist);
-        Ok((changed, revision))
+        Ok((changed, revision, revision_advanced))
+    }
+
+    async fn projection_mutations_change(
+        &self,
+        mutations: &[ProjectionMutation],
+    ) -> Result<bool, EngineError<S::Error>> {
+        if mutations.is_empty() {
+            return Ok(false);
+        }
+        let keys = mutations
+            .iter()
+            .map(ProjectionMutation::record_key)
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let states = self
+            .storage
+            .load_projection_states(&keys)
+            .await
+            .map_err(EngineError::Storage)?;
+        let mut projected = keys
+            .into_iter()
+            .zip(states)
+            .filter_map(|(key, state)| state.map(|state| (key, state)))
+            .collect::<HashMap<_, _>>();
+        let before = projected.clone();
+        apply_authoritative_projection_mutations(&mut projected, mutations);
+        Ok(projected != before)
     }
 
     /// Atomically enqueues a mutation together with its optimistic layer.
@@ -1224,8 +1350,23 @@ impl<S: Storage> Engine<S> {
         input: BeginOptimisticWrite<'_>,
         projection_mutations: Vec<OptimisticProjectionMutation>,
     ) -> Result<(OptimisticTransactionId, WriteResult), EngineError<S::Error>> {
+        let begun = self
+            .upsert_optimistic_write(origin_op, input, projection_mutations)
+            .await?;
+        Ok((begun.transaction_id, begun.write_result))
+    }
+
+    async fn upsert_optimistic_write(
+        &mut self,
+        origin_op: Option<OpId>,
+        input: BeginOptimisticWrite<'_>,
+        projection_mutations: Vec<OptimisticProjectionMutation>,
+    ) -> Result<BegunOptimisticWrite, EngineError<S::Error>> {
+        let uuid = Uuid::parse_str(input.uuid)
+            .map_err(|_| EngineError::InvalidMutationUuid(input.uuid.to_owned()))?;
         self.ensure_revision_can_advance()?;
         let BeginOptimisticWrite {
+            uuid: _,
             query,
             operation_name,
             variables,
@@ -1235,9 +1376,35 @@ impl<S: Storage> Engine<S> {
             created_at_ms,
         } = input;
         self.hydrate_optimistic().await?;
-        let doc = Self::document(&mut self.docs, query)?;
-        let op = doc.operation(operation_name)?;
-        let mut updates = normalize(op, variables, data)?;
+
+        let queued = self
+            .storage
+            .load_mutation_queue()
+            .await
+            .map_err(EngineError::Storage)?;
+        let expected_queue = queued
+            .iter()
+            .map(MutationQueueSnapshot::from)
+            .collect::<Vec<_>>();
+        let old_layers = self.rebuild_queued_layers(queued.clone()).await?;
+        let collision = queued
+            .iter()
+            .find(|queued| queued.uuid == uuid && !queued.superseded)
+            .map(|queued| {
+                (
+                    queued.id,
+                    queued
+                        .mutation
+                        .lease_expires_at_ms
+                        .is_some_and(|expiry| expiry > created_at_ms),
+                )
+            });
+        let expected_kind = match collision {
+            None => MutationUpsertKind::Inserted,
+            Some((active_id, true)) => MutationUpsertKind::AppendedAfterActive { active_id },
+            Some((removed_id, false)) => MutationUpsertKind::ReplacedPending { removed_id },
+        };
+
         let patches = deduplicate_patches(link_patches)?;
         let revalidations = deduplicate_revalidations(
             revalidations
@@ -1245,81 +1412,166 @@ impl<S: Storage> Engine<S> {
                 .cloned()
                 .chain(patches.iter().map(OptimisticLinkPatch::revalidation)),
         );
-
-        let candidates: BTreeSet<EntityKey<'static>> = updates.keys().cloned().collect();
-        let optimistic = self.optimistic.clone();
-        let (candidates, bases) = self
-            .load_link_patch_bases(candidates, &optimistic, &updates, &patches)
-            .await?;
-        let before = effective_records(&bases, &self.optimistic, &candidates);
-        let mut effective = present_records(before.clone());
-        merge_updates_into_effective(&mut effective, &updates);
-        // This stages on clones internally, so no part of an invalid patch
-        // set can become visible or durable.
-        apply_link_patches(&mut effective, &mut updates, &patches, false)?;
-
-        let identity = match self.bound_identity().await? {
-            IdentityState::Bound(identity) => Some(identity),
-            IdentityState::NotHydrated | IdentityState::Missing => None,
-        };
         for mutation in &projection_mutations {
             mutation
                 .validate()
                 .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;
         }
+        let identity = match self.bound_identity().await? {
+            IdentityState::Bound(identity) => Some(identity),
+            IdentityState::NotHydrated | IdentityState::Missing => None,
+        };
         let source = OptimisticSource {
             mutation_data: data.clone(),
-            link_patches: patches.clone(),
-            revalidations: revalidations.clone(),
-            projection_mutations: projection_mutations.clone(),
-        };
-        let id = self
-            .storage
-            .enqueue_mutation(NewQueuedMutation {
-                mutation: StoredMutation::new(
-                    MutationRequest {
-                        query: query.to_string(),
-                        operation_name: operation_name.map(str::to_string),
-                        variables_json: canonical_json(&Json::Object(variables.clone())),
-                        identity,
-                    },
-                    created_at_ms,
-                ),
-                optimistic: PersistedOptimisticLayer {
-                    optimistic_data_json: encode_optimistic_source(&source),
-                    normalized_updates: updates.clone(),
-                },
-            })
-            .await
-            .map_err(EngineError::Storage)?;
-        self.optimistic.push(OptimisticLayer {
-            id,
-            updates,
             link_patches: patches,
             revalidations,
             projection_mutations,
-        });
+        };
+        let mut entry = NewQueuedMutation {
+            uuid,
+            mutation: StoredMutation::new(
+                MutationRequest {
+                    query: query.to_string(),
+                    operation_name: operation_name.map(str::to_string),
+                    variables_json: canonical_json(&Json::Object(variables.clone())),
+                    identity,
+                },
+                created_at_ms,
+            ),
+            optimistic: PersistedOptimisticLayer {
+                optimistic_data_json: encode_optimistic_source(&source),
+                normalized_updates: RecordUpdates::default(),
+            },
+        };
 
-        let after = effective_records(&bases, &self.optimistic, &candidates);
-        let changed: BTreeSet<EntityKey<'static>> = candidates
+        let mut proposed_queue = queued.clone();
+        match expected_kind {
+            MutationUpsertKind::Inserted => {}
+            MutationUpsertKind::ReplacedPending { removed_id } => {
+                proposed_queue.retain(|queued| queued.id != removed_id);
+            }
+            MutationUpsertKind::AppendedAfterActive { active_id } => {
+                proposed_queue
+                    .iter_mut()
+                    .find(|queued| queued.id == active_id)
+                    .expect("collision was loaded")
+                    .superseded = true;
+            }
+        }
+        proposed_queue.push(QueuedMutation {
+            id: MutationId::MAX,
+            uuid,
+            superseded: false,
+            mutation: entry.mutation.clone(),
+            optimistic: entry.optimistic.clone(),
+        });
+        let mut proposed_layers = self
+            .rebuild_queued_layers_with_strict_tail(proposed_queue, Some(MutationId::MAX))
+            .await?;
+        entry.optimistic.normalized_updates = proposed_layers
+            .last()
+            .expect("proposed queue contains the new tail")
+            .updates
+            .clone();
+
+        let mut candidates = layer_keys(&old_layers);
+        candidates.extend(layer_keys(&proposed_layers));
+        let bases = self.load_bases(&candidates).await?;
+        let before = effective_records(&bases, &old_layers, &candidates);
+        let after = effective_records(&bases, &proposed_layers, &candidates);
+
+        let affected_projection_keys = old_layers
+            .iter()
+            .chain(&proposed_layers)
+            .flat_map(|layer| &layer.projection_mutations)
+            .map(|mutation| mutation.record_key().clone())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let authoritative = self
+            .storage
+            .load_projection_states(&affected_projection_keys)
+            .await
+            .map_err(EngineError::Storage)?;
+        if authoritative.len() != affected_projection_keys.len() {
+            return Err(EngineError::InvalidOptimisticProjection(
+                "storage returned misaligned authoritative projection states".to_owned(),
+            ));
+        }
+        let projection_layers = proposed_layers
+            .iter()
+            .map(|layer| ProjectionMutationLayer {
+                owner: layer.id,
+                mutations: &layer.projection_mutations,
+            })
+            .collect::<Vec<_>>();
+        let replacements = affected_projection_keys
+            .iter()
+            .zip(authoritative.iter())
+            .filter_map(|(key, authoritative)| {
+                compose_effective_optimistic_projection(
+                    key,
+                    authoritative.as_ref(),
+                    &projection_layers,
+                )
+                .transpose()
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?
+            .into_iter()
+            .map(|projection| StagedOptimisticProjection {
+                owner: if projection.owner == MutationId::MAX {
+                    StagedOptimisticProjectionOwner::Enqueued
+                } else {
+                    StagedOptimisticProjectionOwner::Existing(projection.owner)
+                },
+                state: projection.state,
+                uncertainty: projection.uncertainty,
+            })
+            .collect();
+        let upsert = self
+            .storage
+            .upsert_mutation_with_shadow(
+                entry,
+                created_at_ms,
+                OptimisticUpsertReconciliation {
+                    expected_queue: Some(expected_queue),
+                    affected_keys: affected_projection_keys,
+                    replacements,
+                },
+            )
+            .await
+            .map_err(EngineError::Storage)?;
+        if upsert.kind != expected_kind {
+            return Err(EngineError::StaleOptimisticUpsert);
+        }
+        proposed_layers
+            .last_mut()
+            .expect("proposed queue contains the new tail")
+            .id = upsert.id;
+        self.optimistic = proposed_layers;
+
+        let changed = candidates
             .into_iter()
             .filter(|key| before.get(key) != after.get(key))
-            .collect();
+            .collect::<BTreeSet<_>>();
         let mut affected_ops = self.deps.ops_for_keys(changed.iter());
         if let Some(origin) = origin_op {
             affected_ops.remove(&origin);
         }
         let revision = self.advance_revision()?;
-        Ok((
-            id,
-            WriteResult {
+        Ok(BegunOptimisticWrite {
+            transaction_id: upsert.id,
+            upsert_kind: upsert.kind,
+            write_result: WriteResult {
                 revision,
+                revision_advanced: true,
                 changed,
                 affected_ops,
                 reset: false,
                 revalidations: Vec::new(),
             },
-        ))
+        })
     }
 
     /// Durably enqueues a mutation and publishes its optimistic layer, then
@@ -1344,8 +1596,8 @@ impl<S: Storage> Engine<S> {
         claim: MutationClaimRequest,
         projection_mutations: Vec<OptimisticProjectionMutation>,
     ) -> Result<EnqueueOptimisticMutationResult<EngineError<S::Error>>, EngineError<S::Error>> {
-        let (transaction_id, write_result) = self
-            .begin_optimistic_write_with_projections(origin_op, input, projection_mutations)
+        let begun = self
+            .upsert_optimistic_write(origin_op, input, projection_mutations)
             .await?;
         let initial_claim = match self.claim_next_mutation(claim).await {
             Ok(Some(claimed)) => InitialClaimOutcome::Claimed(Box::new(claimed)),
@@ -1353,8 +1605,9 @@ impl<S: Storage> Engine<S> {
             Err(error) => InitialClaimOutcome::Failed(error),
         };
         Ok(EnqueueOptimisticMutationResult {
-            transaction_id,
-            write_result,
+            transaction_id: begun.transaction_id,
+            upsert_kind: begun.upsert_kind,
+            write_result: begun.write_result,
             initial_claim,
         })
     }
@@ -1372,15 +1625,35 @@ impl<S: Storage> Engine<S> {
             .map_err(EngineError::Storage)
     }
 
-    /// Releases a retryable mutation while retaining its optimistic layer.
+    /// Releases a retryable mutation, or discards it when a newer UUID match exists.
     pub async fn defer_optimistic_write(
         &mut self,
         transaction: OptimisticTransactionId,
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
-    ) -> Result<(), EngineError<S::Error>> {
+    ) -> Result<DeferOptimisticWriteResult, EngineError<S::Error>> {
         self.hydrate_optimistic().await?;
+        let layer = self
+            .optimistic
+            .iter()
+            .find(|layer| layer.id == transaction)
+            .ok_or(EngineError::UnknownTransaction(transaction))?;
+        if layer.superseded {
+            let replacement_transaction_id = self
+                .optimistic
+                .iter()
+                .find(|candidate| candidate.uuid == layer.uuid && !candidate.superseded)
+                .map(|candidate| candidate.id)
+                .ok_or(EngineError::UnknownTransaction(transaction))?;
+            let write_result = self.rollback_optimistic_write(transaction, claim).await?;
+            return Ok(DeferOptimisticWriteResult::DiscardedSuperseded(
+                SupersededMutationResult {
+                    write_result,
+                    replacement_transaction_id,
+                },
+            ));
+        }
         if !self
             .storage
             .defer_mutation(transaction, claim, next_attempt_at_ms, error)
@@ -1389,7 +1662,137 @@ impl<S: Storage> Engine<S> {
         {
             return Err(EngineError::StaleMutationClaim(transaction));
         }
-        Ok(())
+        Ok(DeferOptimisticWriteResult::Deferred)
+    }
+
+    async fn stage_shadow_reconciliation(
+        &self,
+        transaction: OptimisticTransactionId,
+        authoritative_mutations: &[ProjectionMutation],
+    ) -> Result<OptimisticShadowReconciliation, EngineError<S::Error>> {
+        let expected_queue = self
+            .optimistic
+            .iter()
+            .map(|layer| layer.id)
+            .collect::<Vec<_>>();
+        let settled = self
+            .optimistic
+            .iter()
+            .find(|layer| layer.id == transaction)
+            .ok_or(EngineError::UnknownTransaction(transaction))?;
+        let affected_keys = settled
+            .projection_mutations
+            .iter()
+            .map(|mutation| mutation.record_key().clone())
+            .chain(
+                authoritative_mutations
+                    .iter()
+                    .map(|mutation| mutation.record_key().clone()),
+            )
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let loaded = self
+            .storage
+            .load_projection_states(&affected_keys)
+            .await
+            .map_err(EngineError::Storage)?;
+        if loaded.len() != affected_keys.len() {
+            return Err(EngineError::InvalidOptimisticProjection(
+                "storage returned misaligned authoritative projection states".to_owned(),
+            ));
+        }
+        let mut authoritative = affected_keys
+            .iter()
+            .cloned()
+            .zip(loaded)
+            .collect::<BTreeMap<_, _>>();
+        for mutation in authoritative_mutations {
+            match mutation {
+                ProjectionMutation::Replace(document) => {
+                    let mut document = document.clone();
+                    document.canonicalize();
+                    document.validate().map_err(|error| {
+                        EngineError::InvalidOptimisticProjection(error.to_string())
+                    })?;
+                    authoritative.insert(
+                        document.record_key.clone(),
+                        Some(ProjectionState::Complete(document)),
+                    );
+                }
+                ProjectionMutation::Patch {
+                    record_key,
+                    profile,
+                    partition,
+                    exact,
+                    integers,
+                    sorts,
+                } => {
+                    let state = apply_authoritative_projection_patch(
+                        authoritative.get(record_key).and_then(Option::as_ref),
+                        record_key,
+                        profile,
+                        partition,
+                        exact,
+                        integers,
+                        sorts,
+                    );
+                    authoritative.insert(record_key.clone(), Some(state));
+                }
+                ProjectionMutation::MarkIncomplete {
+                    record_key,
+                    profile,
+                    partition,
+                    kind,
+                } => {
+                    authoritative.insert(
+                        record_key.clone(),
+                        Some(ProjectionState::Incomplete {
+                            record_key: record_key.clone(),
+                            profile: profile.clone(),
+                            partition: partition.clone(),
+                            kind: *kind,
+                        }),
+                    );
+                }
+                ProjectionMutation::Delete(record_key) => {
+                    authoritative.insert(record_key.clone(), None);
+                }
+            }
+        }
+        let remaining_layers = self
+            .optimistic
+            .iter()
+            .filter(|layer| layer.id != transaction)
+            .map(|layer| ProjectionMutationLayer {
+                owner: layer.id,
+                mutations: &layer.projection_mutations,
+            })
+            .collect::<Vec<_>>();
+        let replacements = affected_keys
+            .iter()
+            .filter_map(|key| {
+                compose_effective_optimistic_projection(
+                    key,
+                    authoritative.get(key).and_then(Option::as_ref),
+                    &remaining_layers,
+                )
+                .transpose()
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;
+        let reconciliation = OptimisticShadowReconciliation {
+            expected_queue,
+            affected_keys,
+            replacements,
+        };
+        if reconciliation.expected_queue.first().copied() != Some(transaction) {
+            return Err(EngineError::StaleMutationClaim(transaction));
+        }
+        reconciliation
+            .validate(transaction)
+            .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;
+        Ok(reconciliation)
     }
 
     /// Replaces the claimed head's optimistic contribution with the real
@@ -1414,6 +1817,80 @@ impl<S: Storage> Engine<S> {
             Vec::new(),
         )
         .await
+    }
+
+    /// Commits an optimistic write and reports whether a newer UUID match superseded it.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn commit_optimistic_write_with_outcome(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        data: &Json,
+    ) -> Result<CommitOptimisticWriteResult, EngineError<S::Error>> {
+        self.commit_optimistic_write_with_projections_outcome(
+            transaction,
+            claim,
+            query,
+            operation_name,
+            variables,
+            data,
+            Vec::new(),
+        )
+        .await
+    }
+
+    /// Commits an optimistic write with projections and reports supersession.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn commit_optimistic_write_with_projections_outcome(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        data: &Json,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<CommitOptimisticWriteResult, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
+        let layer = self
+            .optimistic
+            .iter()
+            .find(|layer| layer.id == transaction)
+            .ok_or(EngineError::UnknownTransaction(transaction))?;
+        let replacement_transaction_id = if layer.superseded {
+            Some(
+                self.optimistic
+                    .iter()
+                    .find(|candidate| candidate.uuid == layer.uuid && !candidate.superseded)
+                    .map(|candidate| candidate.id)
+                    .ok_or(EngineError::UnknownTransaction(transaction))?,
+            )
+        } else {
+            None
+        };
+        let write_result = self
+            .commit_optimistic_write_with_projections(
+                transaction,
+                claim,
+                query,
+                operation_name,
+                variables,
+                data,
+                projections,
+            )
+            .await?;
+        match replacement_transaction_id {
+            Some(replacement_transaction_id) => Ok(
+                CommitOptimisticWriteResult::CommittedSuperseded(SupersededMutationResult {
+                    write_result,
+                    replacement_transaction_id,
+                }),
+            ),
+            None => Ok(CommitOptimisticWriteResult::Committed(write_result)),
+        }
     }
 
     /// Settles an optimistic write with atomic generic projection replacement.
@@ -1455,9 +1932,18 @@ impl<S: Storage> Engine<S> {
         merge_updates_into_effective(&mut effective, &updates);
         apply_link_patches(&mut effective, &mut updates, &recipes, true)?;
         let (durable_changed, entries) = stage_updates(&bases, updates);
+        let reconciliation = self
+            .stage_shadow_reconciliation(transaction, &projections)
+            .await?;
         if !self
             .storage
-            .complete_mutation_with_projections(transaction, claim, entries.clone(), projections)
+            .complete_mutation_with_shadow(
+                transaction,
+                claim,
+                entries.clone(),
+                projections,
+                reconciliation,
+            )
             .await
             .map_err(EngineError::Storage)?
         {
@@ -1489,11 +1975,47 @@ impl<S: Storage> Engine<S> {
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
         Ok(WriteResult {
             revision,
+            revision_advanced: true,
             changed: durable_changed,
             affected_ops,
             reset: false,
             revalidations,
         })
+    }
+
+    /// Permanently fails the claimed head with an explicit supersession outcome.
+    pub async fn rollback_optimistic_write_with_outcome(
+        &mut self,
+        transaction: OptimisticTransactionId,
+        claim: MutationClaimToken,
+    ) -> Result<RollbackOptimisticWriteResult, EngineError<S::Error>> {
+        self.hydrate_optimistic().await?;
+        let layer = self
+            .optimistic
+            .iter()
+            .find(|layer| layer.id == transaction)
+            .ok_or(EngineError::UnknownTransaction(transaction))?;
+        let replacement_transaction_id = if layer.superseded {
+            Some(
+                self.optimistic
+                    .iter()
+                    .find(|candidate| candidate.uuid == layer.uuid && !candidate.superseded)
+                    .map(|candidate| candidate.id)
+                    .ok_or(EngineError::UnknownTransaction(transaction))?,
+            )
+        } else {
+            None
+        };
+        let write_result = self.rollback_optimistic_write(transaction, claim).await?;
+        match replacement_transaction_id {
+            Some(replacement_transaction_id) => Ok(
+                RollbackOptimisticWriteResult::DiscardedSuperseded(SupersededMutationResult {
+                    write_result,
+                    replacement_transaction_id,
+                }),
+            ),
+            None => Ok(RollbackOptimisticWriteResult::RolledBack(write_result)),
+        }
     }
 
     /// Permanently fails the claimed head, atomically removing its queue row
@@ -1512,9 +2034,10 @@ impl<S: Storage> Engine<S> {
         let mut candidates = layer_keys(&self.optimistic);
         let bases = self.load_bases(&candidates).await?;
         let before = effective_records(&bases, &self.optimistic, &candidates);
+        let reconciliation = self.stage_shadow_reconciliation(transaction, &[]).await?;
         if !self
             .storage
-            .discard_mutation(transaction, claim)
+            .discard_mutation_with_shadow(transaction, claim, reconciliation)
             .await
             .map_err(EngineError::Storage)?
         {
@@ -1538,6 +2061,7 @@ impl<S: Storage> Engine<S> {
         let affected_ops = self.deps.ops_for_keys(visible_changed.iter());
         Ok(WriteResult {
             revision,
+            revision_advanced: true,
             changed: BTreeSet::new(),
             affected_ops,
             reset: false,
@@ -1825,13 +2349,15 @@ impl<S: PredicateIndexStorage> Engine<S> {
         for (key, record) in entries {
             updates.entry(key).or_default().merge(record);
         }
-        let (changed, revision) = self.persist_updates(updates, projections).await?;
+        let (changed, revision, revision_advanced) =
+            self.persist_updates(updates, projections).await?;
         let mut affected_ops = self.deps.ops_for_keys(changed.iter());
         if let Some(origin_op) = origin_op {
             affected_ops.remove(&origin_op);
         }
         Ok(WriteResult {
             revision,
+            revision_advanced,
             changed,
             affected_ops,
             reset: false,
@@ -1891,6 +2417,27 @@ impl<S: PredicateIndexStorage> Engine<S> {
         Ok(self.revisioned(affected))
     }
 
+    /// Reconcile server-page membership and local candidates at one engine revision.
+    pub async fn reconcile_predicate_index(
+        &mut self,
+        query: &ValidatedIndexQuery,
+        baseline: &[PredicateBaselineEntry],
+    ) -> Result<Revisioned<PredicateReconciliation>, EngineError<S::Error>> {
+        if baseline.len() > MAX_RECONCILIATION_BASELINE {
+            return Err(RecordSelectionError::TooManyKeys {
+                count: baseline.len(),
+                max: MAX_RECONCILIATION_BASELINE,
+            }
+            .into());
+        }
+        let value = self
+            .storage
+            .reconcile_predicate_index(query, baseline)
+            .await
+            .map_err(EngineError::Storage)?;
+        Ok(self.revisioned(value))
+    }
+
     /// Execute a complete generic exact-index query over authoritative and optimistic projections.
     pub async fn query_predicate_index(
         &mut self,
@@ -1904,171 +2451,10 @@ impl<S: PredicateIndexStorage> Engine<S> {
         &mut self,
         query: &ValidatedIndexQuery,
     ) -> Result<PredicateQueryResult, EngineError<S::Error>> {
-        self.hydrate_optimistic().await?;
-        let projection_mutations = self
-            .optimistic
-            .iter()
-            .flat_map(|layer| layer.projection_mutations.iter())
-            .filter(|mutation| query.includes_scope(mutation.profile(), mutation.partition()))
-            .cloned()
-            .collect::<Vec<_>>();
-        if projection_mutations.is_empty() {
-            return self
-                .storage
-                .query_predicate_index(query)
-                .await
-                .map_err(EngineError::Storage);
-        }
-        for mutation in &projection_mutations {
-            mutation
-                .validate()
-                .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;
-        }
-        let mut uncertain = BTreeSet::new();
-        for mutation in &projection_mutations {
-            match mutation {
-                OptimisticProjectionMutation::Unknown { record_key, .. }
-                    if mutation.makes_query_uncertain(query) =>
-                {
-                    uncertain.insert(record_key.clone());
-                }
-                OptimisticProjectionMutation::Replace(document) => {
-                    uncertain.remove(&document.record_key);
-                }
-                OptimisticProjectionMutation::Patch { .. } => {}
-                OptimisticProjectionMutation::Delete { record_key, .. } => {
-                    uncertain.remove(record_key);
-                }
-                OptimisticProjectionMutation::Unknown { .. } => {}
-            }
-        }
-        if !uncertain.is_empty() {
-            return Ok(PredicateQueryResult::Incomplete);
-        }
-
-        let touched = projection_mutations
-            .iter()
-            .map(|mutation| mutation.record_key().clone())
-            .collect::<BTreeSet<_>>();
-        if touched.len() > MAX_OPTIMISTIC_RECORDS_PER_QUERY {
-            return Ok(PredicateQueryResult::Incomplete);
-        }
-        let requested_limit = usize::from(query.as_query().limit);
-        let expanded_limit = requested_limit.saturating_add(touched.len());
-        if expanded_limit > usize::from(MAX_QUERY_LIMIT) {
-            return Ok(PredicateQueryResult::Incomplete);
-        }
-        let expanded_query = query
-            .with_limit(u16::try_from(expanded_limit).expect("bounded predicate query limit"))
-            .expect("an increased bounded limit preserves query validity");
-        let base_keys = match self
-            .storage
-            .query_predicate_index(&expanded_query)
+        self.storage
+            .query_predicate_index(query)
             .await
-            .map_err(EngineError::Storage)?
-        {
-            PredicateQueryResult::Complete(keys) | PredicateQueryResult::Optimistic(keys) => keys,
-            PredicateQueryResult::Incomplete => return Ok(PredicateQueryResult::Incomplete),
-        };
-
-        let base_keys = base_keys.into_iter().collect::<BTreeSet<_>>();
-        let mut keys = base_keys.clone();
-        keys.extend(touched.iter().cloned());
-        let keys = keys.into_iter().collect::<Vec<_>>();
-        let loaded = self
-            .storage
-            .get_index_documents(&keys)
-            .await
-            .map_err(EngineError::Storage)?;
-        if loaded.len() != keys.len() {
-            return Ok(PredicateQueryResult::Incomplete);
-        }
-        if keys
-            .iter()
-            .zip(&loaded)
-            .any(|(key, document)| base_keys.contains(key) && document.is_none())
-        {
-            return Ok(PredicateQueryResult::Incomplete);
-        }
-        let mut documents = keys
-            .into_iter()
-            .zip(loaded)
-            .filter_map(|(key, document)| document.map(|document| (key, document)))
-            .collect::<BTreeMap<_, _>>();
-
-        for mutation in projection_mutations {
-            match mutation {
-                OptimisticProjectionMutation::Replace(document) => {
-                    documents.insert(document.record_key.clone(), document);
-                }
-                OptimisticProjectionMutation::Patch {
-                    record_key,
-                    profile,
-                    partition,
-                    exact,
-                    integers,
-                    sorts,
-                } => {
-                    let Some(document) = documents.get_mut(&record_key) else {
-                        return Ok(PredicateQueryResult::Incomplete);
-                    };
-                    if document.profile != profile || document.partition != partition {
-                        return Ok(PredicateQueryResult::Incomplete);
-                    }
-                    for patch in exact {
-                        document
-                            .exact_facts
-                            .retain(|fact| fact.attribute != patch.attribute);
-                        document
-                            .exact_facts
-                            .extend(patch.values.into_iter().map(|value| {
-                                predicate_index::ExactFact {
-                                    attribute: patch.attribute.clone(),
-                                    value,
-                                }
-                            }));
-                    }
-                    for patch in integers {
-                        document
-                            .integer_facts
-                            .retain(|fact| fact.attribute != patch.attribute);
-                        document
-                            .integer_facts
-                            .extend(patch.values.into_iter().map(|value| {
-                                predicate_index::IntegerFact {
-                                    attribute: patch.attribute.clone(),
-                                    value,
-                                }
-                            }));
-                    }
-                    for fact in sorts {
-                        document
-                            .sort_facts
-                            .retain(|existing| existing.attribute != fact.attribute);
-                        document.sort_facts.push(fact);
-                    }
-                    if document.validate().is_err() {
-                        return Ok(PredicateQueryResult::Incomplete);
-                    }
-                }
-                OptimisticProjectionMutation::Delete { record_key, .. } => {
-                    documents.remove(&record_key);
-                }
-                OptimisticProjectionMutation::Unknown { .. } => {
-                    // Query-irrelevant uncertainty was filtered above and does
-                    // not alter any known effective facts.
-                }
-            }
-        }
-        Ok(PredicateQueryResult::Optimistic(
-            evaluate_reference(
-                query,
-                &documents.into_values().collect::<Vec<IndexDocument>>(),
-            )
-            .into_iter()
-            .map(|hit| hit.record_key)
-            .collect(),
-        ))
+            .map_err(EngineError::Storage)
     }
 }
 

@@ -6,6 +6,7 @@
  */
 import type { AgentSessionResponseAcpSessionId } from './agentSessionResponseAcpSessionId';
 import type { AgentSessionResponseExternal } from './agentSessionResponseExternal';
+import type { AgentSessionResponseInstructions } from './agentSessionResponseInstructions';
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
 import type { AgentSessionResponseRepoUrl } from './agentSessionResponseRepoUrl';
 import type { AgentSessionResponseThreadChannelId } from './agentSessionResponseThreadChannelId';
@@ -30,6 +31,9 @@ export interface AgentSessionResponse {
   harness: string;
   /** The session id. */
   id: string;
+  /** Instructions the session's runtime works under, when any were stated
+at creation. Absent otherwise, so existing payloads are unchanged. */
+  instructions?: AgentSessionResponseInstructions;
   /** Model slug. */
   model: string;
   /** When the session was last modified. */

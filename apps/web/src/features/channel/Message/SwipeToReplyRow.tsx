@@ -6,6 +6,7 @@ import { triggerFocusInput } from '@core/directive/focusInput';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import { type ParentProps, Show, useContext } from 'solid-js';
+import { getMessageReplyPreviewTexts } from './browser-selection';
 import type { MessageActions, MessageData } from './types';
 
 /**
@@ -54,7 +55,10 @@ export function MaybeSwipeToReplyRow(
         `[data-input-id="thread-reply-input-${threadId}"] [contenteditable]`
       )
     );
-    void onReply({ message: props.message });
+    void onReply({
+      message: props.message,
+      ...getMessageReplyPreviewTexts(props.message.id),
+    });
   };
 
   return (

@@ -1,7 +1,7 @@
 import type { EventContentArg } from '@fullcalendar/core';
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
 import { cn } from '@ui';
-import { Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import {
   formatCompactCalendarTime,
@@ -81,9 +81,23 @@ export function EventContent(props: EventContentProps) {
         props.isSelected && 'calendar-event-content-selected'
       )}
       data-response-status={selfResponseStatus()}
+      style={{
+        '--calendar-event-color-bar-count': String(
+          props.event.visibleCalendars.length
+        ),
+      }}
     >
       <Show when={showsColorBar()}>
-        <span class="calendar-event-color-bar" aria-hidden="true" />
+        <span class="calendar-event-color-bars" aria-hidden="true">
+          <For each={props.event.visibleCalendars}>
+            {(calendar) => (
+              <span
+                class="calendar-event-color-bar"
+                style={{ background: calendar.color }}
+              />
+            )}
+          </For>
+        </span>
       </Show>
       <div
         class={cn(

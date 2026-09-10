@@ -242,7 +242,7 @@ export function useAddInboxFlow() {
     await initEmailLink({ linkId, forceShare }).match(
       async () => {
         await query.refetch();
-        toast.success('Inbox connected');
+        toast.success('Account connected');
       },
       async (error) => {
         if (error.tag === 'AlreadyInitialized') {

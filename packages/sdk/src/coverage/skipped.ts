@@ -23,8 +23,9 @@ import type { Sdk as StaticFilesSdk } from '../../generated/static-files/sdk.gen
 import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
-export const agentHarnessExcluded =
-  [] as const satisfies readonly (keyof AgentHarnessSdk)[];
+export const agentHarnessExcluded = [
+  'loadAgentModelsHandler',
+] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =
   [] as const satisfies readonly (keyof AgentHarnessSdk)[];
@@ -309,13 +310,21 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
+  'approveHarnessPairing',
+  'claimHarnessPairing',
+  'createAgent',
   'createAnchor',
   'createDocument',
   'createEntityMention',
+  'createHarnessPairing',
   'createReminder',
+  'createUserApiKey',
   'deleteAnchor',
   'deleteEntityMention',
+  'deleteHarness',
+  'deleteSelfHarness',
   'deleteReminder',
+  'deleteUserApiKey',
   'editAnchor',
   'editCallTranscript',
   'editThreadV2',
@@ -328,14 +337,23 @@ export const storageBacklog = [
   'getEntityPermission',
   'getProjectPermissionsV2',
   'getProjectUserAccessLevel',
+  'getHarnessPairing',
+  'getSelfHarness',
   'getReminder',
+  'listAgents',
+  'listHarnessAgents',
+  'listHarnessSessions',
+  'listHarnesses',
   'listOccurrences',
   'listReminders',
+  'listTeamOutOfOffice',
+  'listUserApiKeys',
   'postActivity',
   'presaveDocumentHandler',
   'saveDocumentHandler',
   'simpleSave',
   'toggleShareWithTeam',
+  'updateAgent',
   'updateReminder',
   'validateDocumentPermissionsToken',
 ] as const satisfies readonly (keyof StorageSdk)[];

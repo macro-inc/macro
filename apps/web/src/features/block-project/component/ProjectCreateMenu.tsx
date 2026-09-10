@@ -222,7 +222,7 @@ function ProjectCreateDialog(props: {
       <Surface depth={2} class="rounded-xl">
         <div class="*:max-h-[75vh]">
           <div class="p-2">
-            <Dialog.Title class="text-md font-semibold text-ink pb-3">
+            <Dialog.Title class="text-base font-semibold text-ink pb-3">
               Create in {props.name}
             </Dialog.Title>
             <For each={BLOCK_CREATE_SPECS}>

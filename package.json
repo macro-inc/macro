@@ -65,6 +65,7 @@
 		"packages": [
 			"apps/web",
 			"packages/observability",
+			"packages/email-renderer",
 			"packages/collaboration",
 			"packages/loro-mirror",
 			"packages/lexical-core",

@@ -1,4 +1,7 @@
-/* Variables for x-axis alignment of mobile soup inbox Entities */
+/* Variables for x-axis alignment of mobile soup inbox Entities. Also declared
+   on the list container so the soup group headers, which sit beside rows rather
+   than inside one, inherit them. */
+.soup-list,
 .soup-list-entity {
   --soup-inbox-unread-indicator-diameter: 11px;
   --soup-inbox-unread-indicator-padding-x: 7px;
@@ -27,4 +30,70 @@
     var(--soup-inbox-left-of-content) - var(--soup-stack-row-padding-l) -
       var(--soup-stack-row-border-l)
   );
+}
+
+/* Row geometry. These are the source of truth for a row's leading edge: the row
+   layouts below consume them for their own margin, padding, indicator column
+   and column gap, and --soup-row-content-inset (their sum) is what the soup
+   group headers pad by to line their label up with row content. Change a number
+   here, not in the layout.
+
+   The family class goes on whatever needs the geometry — each row, and the
+   soup group headers, which are siblings of the rows inside the virtualizer and
+   so can't read a row's own variables. Soup's per-view registry names the
+   family and hands it to the header; the `row` family splits into wide and
+   narrow by container width, which rows and headers take from the same
+   `isWide` signal. */
+.soup-row-wide,
+.soup-row-narrow,
+.soup-row-card {
+  --soup-row-content-inset: calc(
+    var(--soup-row-gutter) + var(--soup-row-padding-l) +
+      var(--soup-row-indicator-width) + var(--soup-row-column-gap)
+  );
+}
+
+/* The `row` family, wide: WideLayout inside ListEntity. */
+.soup-row-wide {
+  --soup-row-gutter: 0.25rem;
+  --soup-row-padding-l: 0.5rem;
+  --soup-row-indicator-width: 1rem;
+  --soup-row-column-gap: 0.5rem;
+}
+
+/* The `row` family, narrow: NarrowLayout, NarrowCondensedLayout and
+   NarrowSingleLineLayout share one leading edge; on touch they give way to
+   NarrowInboxLayout's rail below. */
+.soup-row-narrow {
+  --soup-row-gutter: 0.25rem;
+  --soup-row-padding-l: 0.25rem;
+  --soup-row-indicator-width: 1rem;
+  --soup-row-column-gap: 0.25rem;
+}
+
+/* The `card` family: InboxCard reserves its checkbox gutter as plain left
+   padding and positions the checkbox inside it, so it has no indicator column
+   of its own. */
+.soup-row-card {
+  --soup-row-gutter: 0.5rem;
+  --soup-row-padding-l: 2.25rem;
+  --soup-row-indicator-width: 0px;
+  --soup-row-column-gap: 0px;
+}
+
+/* Full-frame mobile: rows go full-bleed and lead with the unread rail, which
+   each family builds differently — the card as its own left padding, the narrow
+   rows as the indicator cell that holds the dot. */
+@media (max-width: 639px) {
+  html[data-touch-device='true'] .soup-row-card {
+    --soup-row-gutter: 0px;
+    --soup-row-padding-l: var(--soup-inbox-unread);
+  }
+
+  html[data-touch-device='true'] .soup-row-narrow {
+    --soup-row-gutter: 0px;
+    --soup-row-padding-l: 0px;
+    --soup-row-indicator-width: var(--soup-inbox-unread);
+    --soup-row-column-gap: 0px;
+  }
 }

@@ -56,6 +56,24 @@ fn run_local_defaults_onboarding_off() {
 }
 
 #[test]
+fn run_local_defaults_cf_tunnels_off() {
+    let cli = Cli::try_parse_from(["cargo-x", "run-local"]).unwrap();
+    let Cmd::RunLocal(args) = cli.command else {
+        panic!("expected run-local command");
+    };
+    assert!(!args.with_cf_tunnel);
+}
+
+#[test]
+fn run_local_accepts_with_cf_tunnel() {
+    let cli = Cli::try_parse_from(["cargo-x", "run-local", "--with-cf-tunnel"]).unwrap();
+    let Cmd::RunLocal(args) = cli.command else {
+        panic!("expected run-local command");
+    };
+    assert!(args.with_cf_tunnel);
+}
+
+#[test]
 fn run_local_accepts_enable_onboarding() {
     let cli = Cli::try_parse_from(["cargo-x", "run-local", "--enable-onboarding"]).unwrap();
     let Cmd::RunLocal(args) = cli.command else {

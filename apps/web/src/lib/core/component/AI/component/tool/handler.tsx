@@ -3,6 +3,7 @@ import {
   deserializeToolResponse,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
+import { createMemo } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import {
@@ -215,18 +216,47 @@ export function RenderTool(props: ToolProps) {
     isComplete: props.isComplete,
   };
 
-  const response = () => {
-    if (!props.response) return undefined;
+  /*
+   Every streamed character rebuilds the message parts (and the response map),
+   giving `props.response` a fresh object identity even though its `json`
+   payload is reference-stable once the tool result has arrived. Compare by
+   field identity so the expensive parse below only re-runs when the response
+   actually changes.
+  */
+  const responseInput = createMemo(
+    () =>
+      props.response
+        ? {
+            id: props.tool_id,
+            json: props.response.json,
+            name: props.response.name,
+          }
+        : undefined,
+    undefined,
+    {
+      equals: (a, b) =>
+        a?.id === b?.id && a?.json === b?.json && a?.name === b?.name,
+    }
+  );
+
+  /*
+   Deserializing runs a full zod parse of the tool payload. Unmemoized, it
+   re-ran per read site in every tool component on each streamed character,
+   which made streaming crawl on messages with completed tool calls.
+  */
+  const response = createMemo(() => {
+    const input = responseInput();
+    if (!input) return undefined;
 
     const maybeResponse = deserializeToolResponse({
-      id: props.tool_id,
-      json: props.response.json,
-      name: props.response.name as ToolName,
+      id: input.id,
+      json: input.json,
+      name: input.name as ToolName,
     });
 
     if (maybeResponse.isErr()) return undefined;
     return maybeResponse.value;
-  };
+  });
 
   return (
     <ToolErrorContext.Provider

@@ -1,6 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { MOBILE_WEB_SIGNUP_LEAD_VALUE } from '@app/lib/analytics/leadValues';
-import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { getWebOrigin } from '@core/util/webOrigin';
 import LogoIcon from '@icon/macro-logo.svg';
 import { onMount } from 'solid-js';
@@ -34,20 +33,6 @@ export default function MobileWebSignupSent(props: Props) {
 
   return (
     <div class="flex flex-col size-full p-6 overflow-hidden relative">
-      <div class="inset-0 absolute text-edge bg-surface opacity-10 -z-1">
-        <PcNoiseGrid
-          cellSize={30}
-          warp={0}
-          crunch={0.2}
-          freq={0.001}
-          size={[0, 0.3]}
-          rounding={0}
-          fill={0}
-          stroke={1}
-          speed={[0.017, 0.209]}
-        />
-      </div>
-
       <div class="flex flex-col items-start gap-4 w-full max-w-md mx-auto mt-6">
         <LogoIcon class="size-16 text-accent self-center" />
         <h2 class="text-3xl font-semibold text-ink mt-3">

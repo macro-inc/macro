@@ -41,6 +41,8 @@ const mocks = vi.hoisted(() => {
   const plainClient = { kind: 'plain' };
   const realtimeClient = { kind: 'realtime' };
   const replaceSubscriptions = vi.fn();
+  const platformFetch = vi.fn();
+  const toastFailure = vi.fn();
   return {
     get enabled() {
       return enabled;
@@ -79,6 +81,8 @@ const mocks = vi.hoisted(() => {
     plainClient,
     realtimeClient,
     replaceSubscriptions,
+    platformFetch,
+    toastFailure,
     createWorkerCacheHost: vi.fn(
       (options: { onInitializationError?: (error: Error) => void }) => {
         initializationErrorHandler = options.onInitializationError;
@@ -89,16 +93,22 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.toastFailure },
+}));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_BEARER_TOKEN_AUTH: false,
-  ENABLE_GRAPHQL_SOUP: () => mocks.graphqlEnabled,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'document-storage-service': 'http://dss.test' },
 }));
 vi.mock('@core/util/fetchWithToken', () => ({ fetchToken: vi.fn() }));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.tauri }));
-vi.mock('@core/util/platformFetch', () => ({ platformFetch: vi.fn() }));
+vi.mock('@core/util/platformFetch', () => ({
+  platformFetch: mocks.platformFetch,
+}));
 vi.mock('@graphql-cache/rollout', () => ({
   getBrowserTursoCacheRolloutDecision: (): BrowserTursoCacheRolloutDecision => {
     const enabled = mocks.tauri ? mocks.graphqlEnabled : mocks.enabled;
@@ -129,7 +139,6 @@ vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
   normalizedCacheExchange: (host: unknown) => ({ kind: 'cache', host }),
 }));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
-vi.mock('graphql', () => ({ print: () => 'mutation Test' }));
 vi.mock('graphql-ws', () => ({
   createClient: () => ({ subscribe: vi.fn(), dispose: vi.fn() }),
 }));
@@ -183,11 +192,107 @@ describe('GraphQL Soup browser cache session gate', () => {
     mocks.graphqlEnabled = true;
     mocks.tauri = false;
     mocks.resetQueue();
+    mocks.platformFetch.mockReset();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
+
+  it('keeps an old client compatible with a server that has the additive field', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ data: { user: { soup: { items: [] } } } }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
+    );
+    const soup = await import('./graphql-soup');
+    const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'query LegacySoup { user { soup { items { __typename id } } } }',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.platformFetch).toHaveBeenCalledOnce();
+    expect(soup.graphqlSoupProjectionSupported()).toBe(true);
+  });
+
+  it('strips client-only directives from GraphQL transport documents', async () => {
+    mocks.platformFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: { user: { id: 'user-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    const soup = await import('./graphql-soup');
+    const query = `query Soup($includeId: Boolean!) {
+      user {
+        id @include(if: $includeId)
+        soup { items { cacheProjection @cacheOnly } }
+      }
+    }`;
+    await soup.dssGraphqlFetch('http://dss.test/graphql', {
+      method: 'POST',
+      body: JSON.stringify({ query, variables: { includeId: true } }),
+    });
+
+    expect(mocks.platformFetch).toHaveBeenCalledOnce();
+    const transport = mocks.platformFetch.mock.calls[0]?.[1] as RequestInit;
+    const payload = JSON.parse(transport.body as string) as {
+      query: string;
+      variables: { includeId: boolean };
+    };
+    expect(payload.query).not.toContain('@cacheOnly');
+    expect(payload.query).toContain('cacheProjection');
+    expect(payload.query).toContain('@include');
+    expect(payload.variables).toEqual({ includeId: true });
+  });
+
+  it.each([
+    'Cannot query field "cacheProjection" on type "GraphqlSoupEntity".',
+    'Unknown field "cacheProjection" on type "GraphqlSoupEntity".',
+  ])(
+    'retries a new client against an old server without projection local authority: %s',
+    async (validationMessage) => {
+      mocks.platformFetch
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({ errors: [{ message: validationMessage }] }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          )
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({ data: { user: { soup: { items: [] } } } }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }
+          )
+        );
+      const soup = await import('./graphql-soup');
+      const query = `query Soup {
+        user { soup { items { __typename id cacheProjection @cacheOnly } } }
+      }`;
+      const response = await soup.dssGraphqlFetch('http://dss.test/graphql', {
+        method: 'POST',
+        body: JSON.stringify({ query }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(mocks.platformFetch).toHaveBeenCalledTimes(2);
+      const retry = mocks.platformFetch.mock.calls[1]?.[1] as RequestInit;
+      expect(JSON.parse(retry.body as string).query).not.toContain(
+        'cacheProjection'
+      );
+      expect(soup.graphqlSoupProjectionSupported()).toBe(false);
+    }
+  );
 
   it('keeps GraphQL notification subscriptions active when the cache is disabled', async () => {
     mocks.enabled = false;
@@ -235,6 +340,9 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
     expect(soup.graphqlCacheEnabled()).toBe(false);
     expect(mocks.cleanupOrder()).toEqual(['subscriptions', 'host']);
+    expect(mocks.toastFailure).toHaveBeenCalledWith('Local cache unavailable', {
+      subtext: 'Macro will continue without local caching for this session.',
+    });
     expect(warn).toHaveBeenCalledWith(
       'graphql cache async init failed; using uncached client',
       expect.objectContaining({ message: 'injected initialization failure' })

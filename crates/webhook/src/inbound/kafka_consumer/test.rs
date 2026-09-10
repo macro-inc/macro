@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{
-    events::{WebhookDeletedMetadata, WebhookTopicEvent},
+    events::{WebhookDeletedMetadata, WebhookMacroEvent, WebhookTopicEvent},
     ingestion::WebhookEventIngestionError,
 };
 use channel_sender::ChannelSender;
@@ -41,6 +41,8 @@ fn document_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
         document_id: "doc_1".to_string(),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         project_id: None,
     }))
 }

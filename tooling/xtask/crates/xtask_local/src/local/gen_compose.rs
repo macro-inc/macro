@@ -26,6 +26,11 @@ use super::instance::{Instance, Port};
 use super::inventory::services_for_mode;
 use super::{Mode, repo_root};
 
+/// The one Rust service with a second listener: the agent egress proxy inside
+/// `agent_harness_service`, on the container port `EGRESS_PORT` defaults to.
+const EGRESS_SERVICE: &str = "agent_harness_service";
+const EGRESS_CONTAINER_PORT: u16 = 8102;
+
 pub const LOCALSTACK_IMAGE: &str = "localstack/localstack:4";
 pub const MAILPIT_IMAGE: &str = "axllent/mailpit:v1.20";
 pub const CADDY_IMAGE: &str = "caddy:2-alpine";
@@ -79,11 +84,26 @@ pub fn generate(
         // Named instances need their own host ports (replacing the base ports —
         // emitted as `!override` in apply_tags). Only the self-contained local
         // stacks remap; dev inherits the base-compose ports.
+        let mut ports = Vec::new();
         if mode.spec().runs_local_infra
             && !instance.is_default()
             && let Some(port) = svc.host_port
         {
-            s.ports = dct::Ports::Short(vec![format!("{}:8080", instance.port(port))]);
+            ports.push(format!("{}:8080", instance.port(port)));
+        }
+        // The agent egress proxy is the harness's second listener, and the one
+        // service port a party outside the compose network has to reach: the
+        // egress tunnel forwards Cursor's cloud to this host port. Published on
+        // every local instance, default included - the base compose publishes
+        // nothing for the harness.
+        if mode.spec().runs_local_infra && svc.compose_name == EGRESS_SERVICE {
+            ports.push(format!(
+                "{}:{EGRESS_CONTAINER_PORT}",
+                instance.port(Port::AgentHarnessEgress)
+            ));
+        }
+        if !ports.is_empty() {
+            s.ports = dct::Ports::Short(ports);
         }
         services.insert(svc.compose_name.to_string(), Some(s));
     }

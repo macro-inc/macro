@@ -9,9 +9,13 @@ use agent_session::domain::error::Result;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ChannelSession};
 use agent_session::domain::ports::AgentSessionRepo;
 use bot_id::BotId;
+use bots::domain::models::{Agent, AgentChannelScope, Bot, BotKind, BotOwner};
 use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use channels::domain::side_effects::bot_mention_ids;
 
+use channel_sender::ChannelSender;
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use crate::domain::broker_events::{AgentSessionMacroEvent, ChannelEventMetadata, ChannelKind};
@@ -33,17 +37,66 @@ const TRANSCRIPT_CAP: usize = 40;
 /// Bot facts required to decide whether a mention may start an agent session.
 #[cfg_attr(test, mockall::automock)]
 pub trait AgentBotLookup: Send + Sync + 'static {
-    /// Whether this bot is configured with an agent.
-    fn has_agent(&self, bot_id: BotId) -> impl Future<Output = Result<bool>> + Send;
+    /// Get an active persisted agent by bot id.
+    fn get_agent(&self, bot_id: BotId) -> impl Future<Output = Result<Option<Agent>>> + Send;
+
+    /// Get an active bot, including a fixed system bot, by id.
+    fn get_bot(&self, bot_id: BotId) -> impl Future<Output = Result<Option<Bot>>> + Send;
 }
 
-/// Detects whether a message is composed as a quote-reply - a leading
-/// blockquote followed by the reply itself, the shape the editor produces
-/// when replying to a message.
+/// Team-membership facts, for agents shared with their owning team.
+///
+/// Its own port rather than a bot fact: membership belongs to the teams
+/// domain, and the trigger domain only ever asks this one question of it.
 #[cfg_attr(test, mockall::automock)]
-pub trait ReplyDetector: Send + Sync + 'static {
-    /// Whether this markdown is a quote-reply.
-    fn is_quote_reply(&self, markdown: &str) -> impl Future<Output = Result<bool>> + Send;
+pub trait TeamMembershipLookup: Send + Sync + 'static {
+    /// Check whether a user belongs to a team.
+    fn user_has_team(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool>> + Send;
+}
+
+/// Channel-participation facts, for agents scoped to selected channels.
+///
+/// Its own port rather than a bot fact: participation belongs to the channels
+/// domain, and the trigger domain only ever asks this one question of it.
+#[cfg_attr(test, mockall::automock)]
+pub trait ChannelParticipationLookup: Send + Sync + 'static {
+    /// Check whether a bot is an active channel participant.
+    fn bot_active_in_channel(
+        &self,
+        channel_id: Uuid,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<bool>> + Send;
+}
+
+/// The leading reply-target of an explicit reply: who the author answered,
+/// and which message they pointed at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtractedExplicitReply {
+    /// Channel containing the targeted message.
+    pub channel_id: String,
+    /// Targeted channel message.
+    pub target_message_id: String,
+    /// Thread containing the targeted message.
+    pub target_thread_id: String,
+    /// Static one-line preview rendered by the reply target.
+    pub display_text: String,
+    /// Sender of the targeted message — who the author replied to.
+    pub sender_id: String,
+}
+
+/// Extracts the leading reply-target from markdown composed as an explicit
+/// reply: a `ReplyTargetNode` followed by the author's response.
+#[cfg_attr(test, mockall::automock)]
+pub trait ExplicitReplyExtractor: Send + Sync + 'static {
+    /// The leading reply-target when this markdown is an explicit reply.
+    fn extract_explicit_reply(
+        &self,
+        markdown: &str,
+    ) -> impl Future<Output = Result<Option<ExtractedExplicitReply>>> + Send;
 }
 
 /// Reads whole threads, so an unmentioned message can be judged against the
@@ -73,26 +126,34 @@ pub trait ImplicitTriggerJudge: Send + Sync + 'static {
 }
 
 /// Looks up the session context for a channel message and evaluates its trigger rule.
-pub struct AgentTriggerService<Repo, Bots, Replies, Judge, History> {
+pub struct AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, History> {
     sessions: Repo,
     bots: Bots,
+    teams: Teams,
+    channels: Channels,
     replies: Replies,
     judge: Judge,
     history: History,
 }
 
-impl<Repo, Bots, Replies, Judge, History> AgentTriggerService<Repo, Bots, Replies, Judge, History>
+impl<Repo, Bots, Teams, Channels, Replies, Judge, History>
+    AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, History>
 where
     Repo: AgentSessionRepo,
     Bots: AgentBotLookup,
-    Replies: ReplyDetector,
+    Teams: TeamMembershipLookup,
+    Channels: ChannelParticipationLookup,
+    Replies: ExplicitReplyExtractor,
     Judge: ImplicitTriggerJudge,
     History: ThreadHistory,
 {
-    /// Creates a trigger service backed by session and bot lookups.
+    /// Creates a trigger service backed by session, bot, membership, and
+    /// participation lookups.
     pub const fn new(
         sessions: Repo,
         bots: Bots,
+        teams: Teams,
+        channels: Channels,
         replies: Replies,
         judge: Judge,
         history: History,
@@ -100,9 +161,61 @@ where
         Self {
             sessions,
             bots,
+            teams,
+            channels,
             replies,
             judge,
             history,
+        }
+    }
+
+    /// Whether `posted` may address `bot_id` under the bot's current scope.
+    ///
+    /// System agents are global. Persisted all-channel agents are private to
+    /// their owner or shared with their owning team. Selected agents and
+    /// legacy agent-backed bots use explicit channel participation.
+    async fn agent_is_available(
+        &self,
+        posted: &ChannelMessagePostedMetadata,
+        bot_id: BotId,
+    ) -> Result<bool> {
+        let Some(caller) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+            return Ok(false);
+        };
+
+        if let Some(agent) = self.bots.get_agent(bot_id).await? {
+            if !agent.bot.has_agent {
+                return Ok(false);
+            }
+            return match agent.channel_scope {
+                AgentChannelScope::All => match agent.bot.owner {
+                    Some(BotOwner::User { user_id }) => Ok(user_id == caller.as_ref()),
+                    Some(BotOwner::Team { team_id }) => {
+                        self.teams.user_has_team(caller, team_id).await
+                    }
+                    None => Ok(false),
+                },
+                AgentChannelScope::Selected => {
+                    self.channels
+                        .bot_active_in_channel(posted.channel_id, bot_id)
+                        .await
+                }
+            };
+        }
+
+        let Some(bot) = self.bots.get_bot(bot_id).await? else {
+            return Ok(false);
+        };
+        if !bot.has_agent {
+            return Ok(false);
+        }
+        match bot.kind {
+            BotKind::System => Ok(true),
+            BotKind::Owned => {
+                self.channels
+                    .bot_active_in_channel(posted.channel_id, bot_id)
+                    .await
+            }
         }
     }
 
@@ -185,8 +298,8 @@ where
             ChannelSession::CreatedFromThread(session) => Some(session.bot_id),
             ChannelSession::None => mentioned_bot,
         };
-        let has_agent = match bot {
-            Some(bot_id) => self.bots.has_agent(bot_id).await?,
+        let available = match bot {
+            Some(bot_id) => self.agent_is_available(posted, bot_id).await?,
             None => false,
         };
 
@@ -195,7 +308,7 @@ where
             existing: &existing,
             mentioned_bot,
         };
-        match yield_event(&message, has_agent) {
+        match yield_event(&message, available) {
             AgentSessionEventDecision::Event(event) => {
                 let outcome = match existing {
                     ChannelSession::None => "top_level_mentioned",
@@ -213,13 +326,16 @@ where
     }
 
     /// Evaluates an unmentioned message against the sessions rooted at its
-    /// thread: a quote-reply is forwarded outright, anything else only when
-    /// the judge reads it as addressed to the agent.
+    /// thread: an explicit reply that targets a live session's bot, or that
+    /// session's originating message, is forwarded outright. Anything else
+    /// only when the judge reads it as addressed to the agent.
     ///
-    /// Only fires when exactly one agent is live in the thread; picking among
-    /// several by recency would route on nothing the author meant.
+    /// An extracted reply names who and which message it answers, so it can
+    /// pick among several live agents. The inferred path still only fires when
+    /// exactly one agent is live; picking among several by recency would route
+    /// on nothing the author meant.
     ///
-    /// Detector and judge failures are treated as "no" rather than propagated:
+    /// Extractor and judge failures are treated as "no" rather than propagated:
     /// implicit triggering is best-effort, and an outage must not wedge the
     /// channel firehose or fabricate forwards.
     async fn evaluate_implicit(
@@ -236,10 +352,23 @@ where
         }
         let mut candidates = Vec::new();
         for session in self.sessions.find_all_for_thread(thread_id).await? {
-            if self.bots.has_agent(session.bot_id).await? {
+            if self.agent_is_available(posted, session.bot_id).await? {
                 candidates.push(session);
             }
         }
+
+        if !candidates.is_empty()
+            && let Some(session) = self.explicit_reply_session(posted, &candidates).await
+        {
+            // The reply-target says who it answers on its face, so it needs no
+            // thread read at all.
+            return Ok(Some(channel_event(
+                session,
+                ChannelKind::ExplicitReply,
+                posted,
+            )));
+        }
+
         let session = match candidates.as_slice() {
             [] => return Ok(None),
             [session] => session.clone(),
@@ -255,44 +384,43 @@ where
             }
         };
 
-        let kind = if self.is_quote_reply(posted).await {
-            // A quote-reply says who it answers on its face, so it needs no
-            // thread read at all.
-            ChannelKind::QuoteReply
-        } else if self
+        if self
             .is_addressed_to_agent(posted, &self.transcript(posted, thread_id, &session).await)
             .await
         {
-            ChannelKind::Inferred
-        } else {
-            log_no_event(
-                posted,
-                None,
-                NoEventReason::NotAddressedToAgent {
-                    session_id: session.id,
-                },
-            );
-            return Ok(None);
-        };
+            return Ok(Some(channel_event(session, ChannelKind::Inferred, posted)));
+        }
 
-        Ok(Some(AgentSessionMacroEvent::channel_event(
-            ChannelEventMetadata {
-                bot_id: session.bot_id,
+        log_no_event(
+            posted,
+            None,
+            NoEventReason::NotAddressedToAgent {
                 session_id: session.id,
-                kind,
-                message: posted.clone(),
             },
-        )))
+        );
+        Ok(None)
     }
 
-    async fn is_quote_reply(&self, posted: &ChannelMessagePostedMetadata) -> bool {
-        self.replies
-            .is_quote_reply(&posted.content)
+    /// The live session the extracted reply-target names: either its bot, or
+    /// uniquely its originating message.
+    async fn explicit_reply_session(
+        &self,
+        posted: &ChannelMessagePostedMetadata,
+        candidates: &[AgentSession],
+    ) -> Option<AgentSession> {
+        let reply = self
+            .replies
+            .extract_explicit_reply(&posted.content)
             .await
             .inspect_err(|error| {
-                tracing::warn!(error = ?error, "quote-reply detection failed; treating as not a reply");
+                tracing::warn!(
+                    error = ?error,
+                    "explicit reply extraction failed; treating as not a reply"
+                );
             })
-            .unwrap_or(false)
+            .ok()
+            .flatten()?;
+        session_targeted_by_reply(candidates, &reply).cloned()
     }
 
     /// The thread around the points where the agent took part: its own
@@ -371,4 +499,50 @@ fn session_id(session: &ChannelSession) -> Option<AgentSessionId> {
         ChannelSession::CreatedFromThread(session) => Some(session.id),
         ChannelSession::None => None,
     }
+}
+
+fn channel_event(
+    session: AgentSession,
+    kind: ChannelKind,
+    posted: &ChannelMessagePostedMetadata,
+) -> AgentSessionMacroEvent {
+    AgentSessionMacroEvent::channel_event(ChannelEventMetadata {
+        bot_id: session.bot_id,
+        session_id: session.id,
+        kind,
+        message: posted.clone(),
+    })
+}
+
+/// The live session the reply-target names: its bot as addressee, or uniquely
+/// the message that opened the session.
+fn session_targeted_by_reply<'a>(
+    candidates: &'a [AgentSession],
+    reply: &ExtractedExplicitReply,
+) -> Option<&'a AgentSession> {
+    if let Some(session) = session_named_by_bot(candidates, reply) {
+        return Some(session);
+    }
+    session_named_by_originating_message(candidates, reply)
+}
+
+fn session_named_by_bot<'a>(
+    candidates: &'a [AgentSession],
+    reply: &ExtractedExplicitReply,
+) -> Option<&'a AgentSession> {
+    let sender = ChannelSender::parse_from_str(&reply.sender_id).ok()?;
+    let bot_id = sender.as_bot()?.bot_id();
+    candidates.iter().find(|session| session.bot_id == bot_id)
+}
+
+fn session_named_by_originating_message<'a>(
+    candidates: &'a [AgentSession],
+    reply: &ExtractedExplicitReply,
+) -> Option<&'a AgentSession> {
+    let target = Uuid::parse_str(&reply.target_message_id).ok()?;
+    let mut matches = candidates
+        .iter()
+        .filter(|session| session.originating_message_id == Some(target));
+    let session = matches.next()?;
+    matches.next().is_none().then_some(session)
 }

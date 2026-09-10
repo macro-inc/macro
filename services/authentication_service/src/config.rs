@@ -1,6 +1,7 @@
 use std::sync::LazyLock;
 
 use anyhow::Context;
+use authentication_service::service::signup_policy::SignupPolicy;
 use database_env_vars::{DatabaseUrl, RedisUri};
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
@@ -60,6 +61,8 @@ maybe_env_vars! {
     pub struct PosthogApiKey;
     pub struct PosthogHost;
     pub struct LoopsApiKey;
+    /// JSON array of exact email addresses allowed to sign up in Develop.
+    pub struct DevelopmentSignupAllowlistJson;
 }
 
 /// The configuration parameters for the application.
@@ -140,6 +143,10 @@ pub struct Config {
     /// Loops API key (optional). When set, Macro sign-ups are added to our
     /// Loops audience.
     pub loops_api_key: LoopsApiKey,
+    /// JSON array of exact non-Macro email addresses allowed to sign up in Develop.
+    ///
+    /// All `@macro.com` email addresses are allowed by the Develop policy automatically.
+    pub development_signup_allowlist_json: DevelopmentSignupAllowlistJson,
     /// The stripe price id
     pub stripe_price_id: StripePriceId,
     /// The internal api key
@@ -196,6 +203,19 @@ impl Config {
             &self.microsoft_token_kms_key_id,
         )
     }
+
+    /// Resolves the signup policy for the configured environment.
+    pub(crate) fn signup_policy(&self) -> anyhow::Result<SignupPolicy> {
+        self.signup_policy_for_environment(self.environment)
+    }
+
+    /// Resolves the signup policy for an explicit environment.
+    pub(crate) fn signup_policy_for_environment(
+        &self,
+        environment: Environment,
+    ) -> anyhow::Result<SignupPolicy> {
+        resolve_signup_policy(environment, &self.development_signup_allowlist_json)
+    }
 }
 
 fn resolve_microsoft_credentials(
@@ -225,6 +245,21 @@ fn resolve_microsoft_credentials(
         _ => anyhow::bail!(
             "MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and MICROSOFT_TENANT_ID must all be set to nonblank values or all be unset"
         ),
+    }
+}
+
+fn resolve_signup_policy(
+    environment: Environment,
+    development_signup_allowlist_json: &DevelopmentSignupAllowlistJson,
+) -> anyhow::Result<SignupPolicy> {
+    match environment {
+        Environment::Production | Environment::Local => Ok(SignupPolicy::allow_all()),
+        Environment::Develop => {
+            let raw_allowlist = nonblank_value(development_signup_allowlist_json.value())
+                .context("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON is required in Develop")?;
+            SignupPolicy::from_allowlist_json(raw_allowlist)
+                .context("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON is invalid")
+        }
     }
 }
 

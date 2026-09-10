@@ -297,6 +297,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             db.clone(),
         ))),
+        lexical_client.clone(),
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(

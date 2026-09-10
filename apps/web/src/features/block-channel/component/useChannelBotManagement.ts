@@ -5,10 +5,7 @@ import {
 } from '@channel/Bots/botSettingsState';
 import { channelWebhookUrl } from '@channel/Bots/webhook';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  BOT_MANAGEMENT_FLAG,
-  BOT_MANAGEMENT_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { botManagement } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelType } from '@core/context/channels';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
@@ -29,9 +26,7 @@ export function useChannelBotManagement(
 ) {
   const { openSettings } = useSettingsState();
   const channelType = useChannelType(options.channelId);
-  const featureFlag = useFeatureFlag(BOT_MANAGEMENT_FLAG, {
-    enabledOverride: BOT_MANAGEMENT_OVERRIDE,
-  });
+  const featureFlag = useFeatureFlag(botManagement);
   const [inviteFocusRequest, setInviteFocusRequest] = createSignal(0);
 
   const enabled = () => featureFlag().enabled;

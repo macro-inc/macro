@@ -4,8 +4,8 @@ import { globalRemoveFromSplitHistory } from '@components/app/split-layout/layou
 import { toast } from '@core/component/Toast/Toast';
 import { createBulkDeleteDssItemsMutation, type EntityData } from '@entity';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import type { SoupState } from '../create-soup-state';
 import { restoreSoupFocus, trashEmails } from '../utils';
+import type { EntityActionListState } from './entity-action-context';
 
 type MakeDeleteOptions = {
   userId: () => string | undefined;
@@ -93,7 +93,10 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     });
   };
 
-  const executeWithSoup = async (entities: EntityData[], soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    soup: EntityActionListState
+  ) => {
     const currentIndex = soup.focus.index();
     const nextRow =
       soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);

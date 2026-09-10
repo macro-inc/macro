@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
-        EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst, SimpleQueryInner,
-        SoupErr, SoupItemWithProperties, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
-        TouchedQueryInner,
+        EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
+        NotifiedQueryInner, SimpleQueryInner, SoupErr, SoupItemWithProperties, SoupQuery,
+        SoupRequest, SoupSortDirection, SoupType, TouchedQueryInner,
         grouping::{GroupMeta, build_grouped_response},
     },
     ports::SoupService,
@@ -14,7 +14,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use axum_extra::either::Either3;
+use axum_extra::either::Either4;
 use cowlike::CowLike;
 use email::{
     domain::{
@@ -56,8 +56,8 @@ use model_entity::Entity;
 use model_error_response::ErrorResponse;
 use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
-    CursorWithValAndFilter, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, TouchedByMe,
-    TypeEraseCursor,
+    CursorWithValAndFilter, Frecency, NotifiedAt, PaginatedOpaqueCursor, SimpleSortMethod,
+    TouchedByMe, TypeEraseCursor,
 };
 use non_empty::IsEmpty;
 use recursion::CollapsibleExt;
@@ -84,7 +84,8 @@ pub struct Params {
     #[serde(default)]
     limit: Option<u16>,
     /// Sort method. Options are viewed_at, created_at, updated_at,
-    /// viewed_updated, frecency, touched_by_me. Defaults to viewed_at.
+    /// viewed_updated, frecency, touched_by_me, notified_at. Defaults to
+    /// viewed_at.
     #[serde(default)]
     sort_method: Option<SoupApiSort>,
     /// Sort direction. Options are asc, desc. Defaults to desc.
@@ -136,6 +137,12 @@ pub enum SoupApiSort {
     /// Both a filter and an ordering: views don't count, and entities the
     /// caller never touched are absent.
     TouchedByMe,
+    /// Only entities the caller holds a notification for, most recently
+    /// notified first. Both a filter and an ordering: entities the caller
+    /// was never notified about are absent. Thread-scoped channel
+    /// notifications surface as channel-thread rows; calls and CRM
+    /// companies never appear.
+    NotifiedAt,
 }
 
 impl SoupApiSort {
@@ -156,6 +163,7 @@ impl SoupApiSort {
             }
             SoupApiSort::Frecency => SoupQuery::new_sort_frecency(Frecency, filters),
             SoupApiSort::TouchedByMe => SoupQuery::new_sort_touched(filters),
+            SoupApiSort::NotifiedAt => SoupQuery::new_sort_notified(filters),
         }
     }
 }
@@ -552,23 +560,27 @@ where
         };
 
         let cursor: SoupQuery<R> = match cursor {
-            Either3::E1(l) => l
+            Either4::E1(l) => l
                 .map(SoupQuery::new_cursor_simple)
                 .unwrap_or_else(create_fallback),
-            Either3::E2(r) => r
+            Either4::E2(r) => r
                 .map(SoupQuery::new_cursor_frecency)
                 .unwrap_or_else(create_fallback),
-            Either3::E3(t) => t
+            Either4::E3(t) => t
                 .map(SoupQuery::new_cursor_touched)
+                .unwrap_or_else(create_fallback),
+            Either4::E4(n) => n
+                .map(SoupQuery::new_cursor_notified)
                 .unwrap_or_else(create_fallback),
         };
 
-        // Frecency pages are ordered by relevance score and touched pages by
-        // the caller's own latest mutation; neither branch applies the merged
-        // sort the direction would flip. Rejecting beats accepting the
-        // parameter and silently doing nothing with it. Checked against the
-        // resolved query so a frecency/touched *cursor* is caught too, not
-        // just an initial request naming the method.
+        // Frecency pages are ordered by relevance score, touched pages by the
+        // caller's own latest mutation and notified pages by their latest
+        // notification; none of those branches applies the merged sort the
+        // direction would flip. Rejecting beats accepting the parameter and
+        // silently doing nothing with it. Checked against the resolved query
+        // so a *cursor* of those kinds is caught too, not just an initial
+        // request naming the method.
         if sort_direction == SoupSortDirection::Asc {
             match &cursor {
                 SoupQuery::Frecency(_) => {
@@ -576,6 +588,9 @@ where
                 }
                 SoupQuery::Touched(_) => {
                     return Err(SoupHandlerErr::AscendingTouchedUnsupported);
+                }
+                SoupQuery::Notified(_) => {
+                    return Err(SoupHandlerErr::AscendingNotifiedUnsupported);
                 }
                 SoupQuery::Simple(_) => {}
             }
@@ -703,6 +718,11 @@ pub struct SoupApiItem {
     /// ordered on this value, so it can be bumped optimistically.
     #[serde(skip_serializing_if = "Option::is_none")]
     touched_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// When the caller was last notified about this entity, present only
+    /// when the page was ordered by `notified_at`. Clients keep the notified
+    /// feed ordered and date-bucketed on this value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    notified_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Whether the requesting user has favorited this entity.
     is_favorited: bool,
 }
@@ -713,6 +733,7 @@ impl SoupApiItem {
             item,
             frecency_score,
             touched_at,
+            notified_at,
             ..
         } = item;
         SoupApiItem {
@@ -721,6 +742,7 @@ impl SoupApiItem {
                 .map(|f| f.data.frecency_score)
                 .unwrap_or_default(),
             touched_at,
+            notified_at,
             is_favorited: false,
         }
     }
@@ -784,6 +806,12 @@ pub enum SoupHandlerErr {
     /// A touched-by-me query carried a filter kind the mode cannot evaluate.
     #[error("sort_method=touched_by_me does not support {0} filters")]
     TouchedUnsupportedFilter(&'static str),
+    /// Ascending order was requested for a notified-at query.
+    #[error("sort_direction=asc is not supported with sort_method=notified_at")]
+    AscendingNotifiedUnsupported,
+    /// A notified-at query carried a filter kind the mode cannot evaluate.
+    #[error("sort_method=notified_at does not support {0} filters")]
+    NotifiedUnsupportedFilter(&'static str),
 }
 
 impl From<SoupErr> for SoupHandlerErr {
@@ -794,6 +822,9 @@ impl From<SoupErr> for SoupHandlerErr {
             SoupErr::CrmAdminRequired => SoupHandlerErr::CrmAdminRequired,
             SoupErr::TouchedUnsupportedFilter(kind) => {
                 SoupHandlerErr::TouchedUnsupportedFilter(kind)
+            }
+            SoupErr::NotifiedUnsupportedFilter(kind) => {
+                SoupHandlerErr::NotifiedUnsupportedFilter(kind)
             }
             err => SoupHandlerErr::Internal(err),
         }
@@ -807,7 +838,9 @@ impl IntoResponse for SoupHandlerErr {
             | SoupHandlerErr::Expand
             | SoupHandlerErr::AscendingFrecencyUnsupported
             | SoupHandlerErr::AscendingTouchedUnsupported
-            | SoupHandlerErr::TouchedUnsupportedFilter(_) => StatusCode::BAD_REQUEST,
+            | SoupHandlerErr::TouchedUnsupportedFilter(_)
+            | SoupHandlerErr::AscendingNotifiedUnsupported
+            | SoupHandlerErr::NotifiedUnsupportedFilter(_) => StatusCode::BAD_REQUEST,
             SoupHandlerErr::CrmScopeForbidden | SoupHandlerErr::CrmAdminRequired => {
                 StatusCode::FORBIDDEN
             }
@@ -914,12 +947,15 @@ struct ApiSoupRequestInner<T> {
     email_view: PreviewView,
 }
 
-type SoupCursor<R> = Either3<
+type SoupCursor<R> = Either4<
     Option<CursorWithValAndFilter<Uuid, SimpleSortMethod, R>>,
     Option<CursorWithValAndFilter<Uuid, Frecency, R>>,
     // String id, not Uuid: the touched keyset compares the raw stored
     // entity id byte-for-byte, so the cursor must not canonicalize it.
     Option<CursorWithValAndFilter<String, TouchedByMe, R>>,
+    // Same value shape as the touched cursor; its `"notified_at"` sort
+    // marker (touched serializes `null`) is what keeps it out of arm 3.
+    Option<CursorWithValAndFilter<String, NotifiedAt, R>>,
 >;
 
 /// Gets the items the user has access to
@@ -1260,6 +1296,11 @@ impl IntoSoupReqAst for SoupRequest<ApiEntityFilterAst> {
             SoupQuery::Touched(TouchedQueryInner(query)) => SoupQuery::Touched(TouchedQueryInner(
                 query.try_map_filter(ApiEntityFilterAst::into_optional_entity_ast)?,
             )),
+            SoupQuery::Notified(NotifiedQueryInner(query)) => {
+                SoupQuery::Notified(NotifiedQueryInner(
+                    query.try_map_filter(ApiEntityFilterAst::into_optional_entity_ast)?,
+                ))
+            }
         };
 
         Ok(SoupRequest {

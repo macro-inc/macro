@@ -54,28 +54,59 @@ where
 {
     type Transport = RoutedTransport<Sandbox::Transport, Cursor::Transport>;
 
-    async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
+    async fn spawn(
+        &self,
+        command: SpawnContainer,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         match command.kind {
-            AgentKind::Cursor => Ok(RoutedTransport::Cursor(self.cursor.spawn(command).await?)),
+            AgentKind::Cursor => Ok(self
+                .cursor
+                .spawn(command)
+                .await?
+                .map_transport(RoutedTransport::Cursor)),
+            AgentKind::SandboxedCoder | AgentKind::InMemory => Ok(self
+                .sandbox
+                .spawn(command)
+                .await?
+                .map_transport(RoutedTransport::Sandbox)),
+            AgentKind::External => Err(external_is_unroutable()),
+        }
+    }
+
+    async fn resume(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
+        let row = self.sessions.get(session).await?;
+        match AgentKind::for_session(row.bot_id, &row.harness) {
+            AgentKind::Cursor => Ok(self
+                .cursor
+                .resume(session)
+                .await?
+                .map_transport(RoutedTransport::Cursor)),
+            AgentKind::SandboxedCoder | AgentKind::InMemory => Ok(self
+                .sandbox
+                .resume(session)
+                .await?
+                .map_transport(RoutedTransport::Sandbox)),
+            AgentKind::External => Err(external_is_unroutable()),
+        }
+    }
+
+    async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
+        let row = self.sessions.get(session).await?;
+        match AgentKind::for_session(row.bot_id, &row.harness) {
+            AgentKind::Cursor => self.cursor.session_token(session).await,
             AgentKind::SandboxedCoder | AgentKind::InMemory => {
-                Ok(RoutedTransport::Sandbox(self.sandbox.spawn(command).await?))
+                self.sandbox.session_token(session).await
             }
             AgentKind::External => Err(external_is_unroutable()),
         }
     }
 
-    async fn resume(&self, session: AgentSessionId) -> Result<Self::Transport> {
-        match AgentKind::of(self.sessions.get(session).await?.bot_id) {
-            AgentKind::Cursor => Ok(RoutedTransport::Cursor(self.cursor.resume(session).await?)),
-            AgentKind::SandboxedCoder | AgentKind::InMemory => Ok(RoutedTransport::Sandbox(
-                self.sandbox.resume(session).await?,
-            )),
-            AgentKind::External => Err(external_is_unroutable()),
-        }
-    }
-
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
-        match AgentKind::of(self.sessions.get(session).await?.bot_id) {
+        let row = self.sessions.get(session).await?;
+        match AgentKind::for_session(row.bot_id, &row.harness) {
             AgentKind::Cursor => self.cursor.teardown(session).await,
             AgentKind::SandboxedCoder | AgentKind::InMemory => self.sandbox.teardown(session).await,
             AgentKind::External => Err(external_is_unroutable()),
@@ -90,7 +121,8 @@ where
     }
 
     async fn resize(&self, session: AgentSessionId, size: SandboxSize) -> Result<()> {
-        match AgentKind::of(self.sessions.get(session).await?.bot_id) {
+        let row = self.sessions.get(session).await?;
+        match AgentKind::for_session(row.bot_id, &row.harness) {
             AgentKind::SandboxedCoder => self.sandbox.resize(session, size).await,
             AgentKind::Cursor => Err(HarnessError::Container(
                 "a cursor session has no sandbox to resize".to_owned(),

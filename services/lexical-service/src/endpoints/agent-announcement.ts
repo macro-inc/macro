@@ -10,7 +10,13 @@ import { handleEndpointError } from "../lib/error-handler";
 import { standardErrorResponses } from "../lib/schemas";
 
 const agentAnnouncementRequest = z.object({
-	promptMarkdown: z.string(),
+	replyTarget: z.object({
+		channelId: z.string(),
+		targetMessageId: z.string(),
+		targetThreadId: z.string(),
+		displayText: z.string(),
+		senderId: z.string(),
+	}),
 	chip: z.object({
 		agentSessionId: z.string(),
 		channelId: z.string().optional(),
@@ -28,9 +34,9 @@ const agentAnnouncementResponse = z.object({
 
 export class AgentAnnouncementEndpoint extends OpenAPIRoute {
 	schema = {
-		summary: "Compose a agent-harness bot respose",
+		summary: "Compose an agent-harness bot response",
 		description:
-			"Builds a response from the agent harness bot. Usually a simple quote + magic chip.",
+			"Builds an agent-harness announcement from a structured reply target and magic chip.",
 		request: {
 			body: {
 				content: {

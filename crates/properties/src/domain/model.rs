@@ -1,5 +1,8 @@
 //! Domain models for properties.
 
+#[cfg(test)]
+mod test;
+
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType,
     RequiredPermission, ViewAccessLevel,
@@ -11,6 +14,8 @@ use models_properties::service::property_option::{PropertyOption, PropertyOption
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityReference, EntityType, PropertyOwner};
 use uuid::Uuid;
+
+pub use system_properties::CRM_TEAM_STAGE_DEFINITION_NAME;
 
 /// Map an internal properties storage type to its canonical entity type.
 pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
@@ -24,6 +29,33 @@ pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
         EntityType::Channel => AccessEntityType::Channel,
         EntityType::Company => AccessEntityType::CrmCompany,
         EntityType::User => AccessEntityType::User,
+    }
+}
+
+/// Map a canonical entity type to its properties storage type.
+///
+/// Inverse of [`canonical_entity_type`]. `Document` covers task documents
+/// too; callers that need the task refinement resolve the document subtype
+/// themselves. `None` means the canonical type has no properties storage.
+pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> {
+    match entity_type {
+        AccessEntityType::CalendarEvent => Some(EntityType::CalendarEvent),
+        AccessEntityType::Document => Some(EntityType::Document),
+        AccessEntityType::Call => Some(EntityType::CallRecord),
+        AccessEntityType::Chat => Some(EntityType::Chat),
+        AccessEntityType::Project => Some(EntityType::Project),
+        AccessEntityType::EmailThread => Some(EntityType::Thread),
+        AccessEntityType::Channel => Some(EntityType::Channel),
+        AccessEntityType::CrmCompany => Some(EntityType::Company),
+        AccessEntityType::User => Some(EntityType::User),
+        AccessEntityType::ChannelMessage
+        | AccessEntityType::Team
+        | AccessEntityType::ForeignEntity
+        | AccessEntityType::StaticFile
+        | AccessEntityType::CrmContact
+        | AccessEntityType::Reminder
+        | AccessEntityType::Skill
+        | AccessEntityType::AgentSession => None,
     }
 }
 
@@ -281,6 +313,48 @@ pub enum EntityOptionUpdateOutcome {
         /// Why the delta was not applied.
         message: String,
     },
+}
+
+/// One option to rewrite in place during a replace.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PropertyOptionRewrite {
+    /// The option to rewrite; keeps its id.
+    pub option_id: Uuid,
+    /// Value after the replace.
+    pub value: PropertyOptionValue,
+    /// Display order after the replace.
+    pub display_order: i32,
+}
+
+/// One option to create during a replace.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PropertyOptionInsert {
+    /// Value of the new option.
+    pub value: PropertyOptionValue,
+    /// Display order of the new option.
+    pub display_order: i32,
+}
+
+/// A whole-set change to a definition's options, applied in one transaction.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PropertyOptionReplacePlan {
+    /// Options to delete, stripping their ids from entity values.
+    pub delete: Vec<Uuid>,
+    /// Options to rewrite in place.
+    pub rewrite: Vec<PropertyOptionRewrite>,
+    /// Options to create.
+    pub insert: Vec<PropertyOptionInsert>,
+}
+
+/// Outcome of a whole-set option replace.
+#[derive(Debug, Clone)]
+pub enum PropertyOptionReplaceOutcome {
+    /// Every change applied; carries the definition's options afterwards.
+    Replaced(Vec<PropertyOption>),
+    /// An option to delete or rewrite does not belong to the definition.
+    OptionNotFound,
+    /// Two options would share a value; nothing was applied.
+    DuplicateValue,
 }
 
 /// Outcome of an in-place property option update.

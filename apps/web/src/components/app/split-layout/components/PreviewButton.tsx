@@ -1,11 +1,10 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import EyeIcon from '@phosphor-icons/core/regular/eye.svg?component-solid';
 import EyeSlashIcon from '@phosphor-icons/core/regular/eye-slash.svg?component-solid';
-import { Button, Tooltip } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import { Show } from 'solid-js';
-import { useSplitPanelOrThrow } from '../layoutUtils';
+import { usePreviewToggle } from '../usePreviewToggle';
 
 /** Toggle Preview mode for eligible Controller content outside a Viewer. */
 export function PreviewButton(
@@ -15,64 +14,48 @@ export function PreviewButton(
     onEngage?: () => void;
     onOpenChange?: (open: boolean) => void;
     hideLabel?: boolean;
+    iconOnly?: boolean;
+    class?: string;
+    registerHotkey?: boolean;
   } = {}
 ) {
-  const panel = useSplitPanelOrThrow();
   const analytics = useAnalytics();
 
-  const isViewer = () => panel.handle.isViewerSplit();
-  const isController = () => panel.handle.isControllerSplit();
-  const canEngage = () => !props.disabled && panel.handle.canEngagePreview();
+  const preview = usePreviewToggle({
+    disabled: () => props.disabled ?? false,
+    onEngage: () => {
+      analytics.track('preview_panel_use');
+      props.onEngage?.();
+    },
+    onOpenChange: props.onOpenChange,
+    registerHotkey: props.registerHotkey ?? true,
+  });
+
   const unavailableLabel = () =>
     props.disabled
       ? (props.disabledLabel ?? 'Preview unavailable')
       : 'No space for preview';
 
-  const togglePreview = () => {
-    if (isController()) {
-      panel.handle.disengagePreview();
-      props.onOpenChange?.(false);
-      return;
-    }
-    if (!canEngage()) return;
-
-    analytics.track('preview_panel_use');
-    panel.handle.engagePreview();
-    if (panel.handle.isControllerSplit()) {
-      props.onOpenChange?.(true);
-      props.onEngage?.();
-    }
-  };
-
-  registerHotkey({
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
-    scopeId: panel.splitHotkeyScope,
-    description: 'Toggle preview',
-    condition: () => !isViewer() && canEngage(),
-    keyDownHandler: () => {
-      togglePreview();
-      return true;
-    },
-    hotkey: 'space',
-  });
-
   return (
-    <Show when={!isViewer()}>
+    <Show when={!preview.isViewer()}>
       <Tooltip
-        hotkey={canEngage() ? TOKENS.unifiedList.togglePreview : undefined}
-        label={canEngage() ? 'Preview' : unavailableLabel()}
+        hotkey={
+          preview.canToggle() ? TOKENS.unifiedList.togglePreview : undefined
+        }
+        label={preview.canToggle() ? 'Preview' : unavailableLabel()}
       >
         <Button
-          onClick={togglePreview}
+          onClick={preview.toggle}
           variant="outline"
-          size="sm"
+          size={props.iconOnly ? 'md' : 'sm'}
+          square={props.iconOnly}
           depth={2}
-          class="bg-surface"
-          disabled={!canEngage()}
-          aria-label={props.hideLabel ? 'Preview' : undefined}
+          class={cn('bg-surface', props.class)}
+          disabled={!preview.canToggle()}
+          aria-label={props.hideLabel || props.iconOnly ? 'Preview' : undefined}
         >
-          {isController() ? <EyeSlashIcon /> : <EyeIcon />}
-          <Show when={!props.hideLabel}>
+          {preview.isOpen() ? <EyeSlashIcon /> : <EyeIcon />}
+          <Show when={!props.hideLabel && !props.iconOnly}>
             <span>Preview</span>
           </Show>
         </Button>

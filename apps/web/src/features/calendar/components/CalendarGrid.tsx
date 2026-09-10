@@ -13,6 +13,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   type JSX,
@@ -30,6 +31,7 @@ import { isSameLocalDate } from '../utils/calendar-date';
 import {
   type CalendarEventTimeChange,
   calendarEventRenderId,
+  calendarEventRenderIds,
 } from '../utils/event-interaction';
 import {
   isMultiDaySelectionPreview,
@@ -41,6 +43,7 @@ import {
   formatCompactCalendarTime,
 } from '../utils/time-format';
 import { TIME_GRID_OPENING_SCROLL_TIME } from '../utils/time-grid-scroller';
+import { mergeWorkingLocationEvents } from '../utils/working-location-events';
 import { EventContent } from './EventContent';
 import '../calendar.css';
 
@@ -150,16 +153,28 @@ function CalendarGridHost(props: {
 /** Query-free, single-page calendar grid. */
 export function CalendarGrid(props: CalendarGridProps) {
   const mappedEvents = createMemo<EventInput[]>(() =>
-    props.events.map((event) => {
+    mergeWorkingLocationEvents(props.events).map(({ event, occurrenceIds }) => {
       const mapped = mapCalendarEventToFullCalendar(event);
-      const emphasized = props.emphasizedEventIds?.has(event.id);
+      const emphasized = occurrenceIds.some((id) =>
+        props.emphasizedEventIds?.has(id)
+      );
+      const classNames = [
+        ...(emphasized ? ['calendar-event-emphasized'] : []),
+        ...(event.eventType === 'out_of_office'
+          ? ['calendar-event-out-of-office']
+          : []),
+      ];
       return {
         ...mapped,
-        classNames: emphasized ? ['calendar-event-emphasized'] : undefined,
+        classNames: classNames.length > 0 ? classNames : undefined,
         startEditable: props.onEventTimeChange ? mapped.startEditable : false,
         durationEditable: props.onEventTimeChange
           ? mapped.durationEditable
           : false,
+        extendedProps:
+          occurrenceIds.length > 1
+            ? { ...mapped.extendedProps, mergedOccurrenceIds: occurrenceIds }
+            : mapped.extendedProps,
       };
     })
   );
@@ -187,6 +202,20 @@ export function CalendarGrid(props: CalendarGridProps) {
   const eventElements = new Map<string, HTMLElement>();
   const [chipMounts, notifyChipMount] = createSignal(undefined, {
     equals: false,
+  });
+
+  // A chip keeps its element across data changes, so a calendar color change
+  // recolors it here rather than through a remount. The map is read before
+  // the loop because the element map is empty on the first run and the
+  // effect would otherwise never subscribe.
+  createEffect(() => {
+    const eventsById = props.eventsById;
+    for (const [id, el] of eventElements) {
+      const event = eventsById.get(id);
+      if (event) {
+        el.style.setProperty('--event-calendar-color', event.calendar.color);
+      }
+    }
   });
 
   return (
@@ -274,9 +303,11 @@ export function CalendarGrid(props: CalendarGridProps) {
         }
         if (isMirror || isMultiDaySelectionPreview(event)) return;
 
-        eventElements.set(eventId, el);
-        if (props.selection.eventId === eventId) {
-          const selected = eventByRenderId(eventId);
+        const occurrenceIds = calendarEventRenderIds(event);
+        for (const id of occurrenceIds) eventElements.set(id, el);
+        const selectedId = props.selection.eventId;
+        if (selectedId !== undefined && occurrenceIds.includes(selectedId)) {
+          const selected = eventByRenderId(selectedId);
           if (selected) props.selection.onEventSelect?.(selected, el);
         }
         notifyChipMount();
@@ -284,9 +315,10 @@ export function CalendarGrid(props: CalendarGridProps) {
       eventWillUnmount={({ el, event, isMirror }) => {
         if (isMirror || isMultiDaySelectionPreview(event)) return;
 
-        const eventId = calendarEventRenderId(event);
-        if (eventElements.get(eventId) === el) {
-          eventElements.delete(eventId);
+        for (const id of calendarEventRenderIds(event)) {
+          if (eventElements.get(id) === el) {
+            eventElements.delete(id);
+          }
         }
       }}
       datesSet={(info) => props.onDatesSet?.(info)}
@@ -361,11 +393,15 @@ export function CalendarGrid(props: CalendarGridProps) {
           }
           if (!event) return null;
 
+          const selectedId = props.selection.eventId;
           return (
             <EventContent
               event={event}
               renderProps={renderProps}
-              isSelected={props.selection.eventId === event.id}
+              isSelected={
+                selectedId !== undefined &&
+                calendarEventRenderIds(renderProps.event).includes(selectedId)
+              }
               timeFormat={props.settings.timeFormat}
               isNarrow={props.settings.useNarrowEventContent}
             />

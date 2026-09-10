@@ -15,6 +15,11 @@ mod internal;
 pub(crate) mod context;
 mod swagger;
 
+#[cfg(test)]
+mod test;
+
+const GATEWAY_PATH_PREFIX: &str = "/search-processing";
+
 pub async fn setup_and_serve(
     state: ApiContext,
     shutdown_token: CancellationToken,
@@ -30,13 +35,17 @@ async fn serve(state: ApiContext, shutdown_token: CancellationToken) -> anyhow::
     let port = state.config.port;
     let env = state.config.environment;
     let backfill_jobs = state.backfill_jobs.clone();
-    let app = api_router()
+    let traced_api = api_router()
         .with_state(state)
         .layer(cors.clone())
-        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
-        // The health router is attached here so we don't attach the logging middleware to it
-        .merge(health::router().layer(cors))
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));
+    let health = health::router().layer(cors);
+    let app = mount_at_root_and_prefix(traced_api.merge(health))
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(SwaggerUi::new(format!("{GATEWAY_PATH_PREFIX}/docs")).url(
+            format!("{GATEWAY_PATH_PREFIX}/api-doc/openapi.json"),
+            swagger::ApiDoc::openapi(),
+        ));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -91,6 +100,12 @@ async fn shutdown_signal(
     tracing::info!("shutdown signal received; cancelling in-flight backfills on this pod");
     backfill_jobs.cancel_all_local();
     shutdown_token.cancel();
+}
+
+fn mount_at_root_and_prefix(inner: Router) -> Router {
+    Router::new()
+        .merge(inner.clone())
+        .nest(GATEWAY_PATH_PREFIX, inner)
 }
 
 fn api_router() -> Router<ApiContext> {

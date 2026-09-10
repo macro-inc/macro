@@ -20,7 +20,7 @@ use item_filters::{
 };
 use models_pagination::{Paginated, PaginatedCursor};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_soup::document::SoupDocument;
+use models_soup::{document::SoupDocument, item::SoupItem};
 use soup::domain::{
     models::{
         EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SoupErr, SoupPropertiesField,
@@ -381,8 +381,8 @@ async fn context_loader_does_not_cache_across_realtime_updates() {
         .expect("second load succeeds")
         .expect("second item exists");
 
-    assert!(matches!(first, SoupItem::Document(document) if document.name == "First"));
-    assert!(matches!(second, SoupItem::Document(document) if document.name == "Second"));
+    assert!(matches!(first.item, SoupItem::Document(document) if document.name == "First"));
+    assert!(matches!(second.item, SoupItem::Document(document) if document.name == "Second"));
     assert_eq!(calls.lock().expect("calls lock").len(), 2);
 }
 

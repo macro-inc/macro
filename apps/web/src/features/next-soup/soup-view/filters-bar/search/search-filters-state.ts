@@ -22,7 +22,8 @@ export type SearchIndexId =
   | 'email'
   | 'calls'
   | 'folders'
-  | 'agent';
+  | 'agent'
+  | 'calendar';
 
 export type SearchTypeValue = SearchIndexId | 'all';
 
@@ -53,6 +54,7 @@ export const SEARCH_INDEX_SEEDS: Record<SearchIndexId, Query> = {
   calls: defineQueryFilters({}, { skipTargets: ['callf'] }),
   folders: defineQueryFilters({ exclude: { folderId: [NIL_UUID] } }),
   agent: defineQueryFilters({ exclude: { chatId: [NIL_UUID] } }),
+  calendar: defineQueryFilters({}, { skipTargets: ['calf'] }),
 };
 
 export type SearchFiltersSections = {

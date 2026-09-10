@@ -15,19 +15,50 @@ export type AgentAction = (AgentPromptAction & {
     type: 'compact';
 } | {
     type: 'stop';
-};
+} | (AgentRespondElicitationAction & {
+    type: 'respondElicitation';
+});
 
 /**
  * Identifies one accepted [`AgentAction`] end to end: returned by the
  * control endpoint, written as the JSON-RPC request id on the action's wire
  * frame, and read back off that frame as `request_id` on the folded message
- * it derives. Correlation is string equality; the value is opaque.
+ * it derives.
  *
- * Minted only by the server at accept time, as `agent_session:{uuid}` - the
- * prefix is what lets [`Self::from_request_id`] tell our ids from ones other
- * clients picked.
+ * Minted only by the server at accept time, as a v7 uuid so ids sort by mint
+ * time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
+ * request id is the whole ownership test: the server is the only writer of
+ * runtime-bound frames. The machine's own handshake request ids
+ * (`agent_session:{session}:{n}`) are not uuids and stay `None`.
  */
 export type AgentActionId = string;
+
+/**
+ * One model picker option.
+ */
+export type AgentModelDto = {
+    /**
+     * Optional provider description.
+     */
+    description?: string | null;
+    /**
+     * Optional group heading supplied by the provider.
+     */
+    group?: string | null;
+    /**
+     * Provider model id.
+     */
+    id: string;
+    /**
+     * Display name.
+     */
+    name: string;
+};
+
+/**
+ * Model-selection availability returned over HTTP.
+ */
+export type AgentModelsStatusDto = 'available' | 'unsupported';
 
 /**
  * Ask the agent to work on something.
@@ -37,6 +68,17 @@ export type AgentPromptAction = {
      * What to tell the agent.
      */
     prompt: string;
+};
+
+/**
+ * Answer an elicitation the agent is waiting on.
+ */
+export type AgentRespondElicitationAction = ElicitationAnswer & {
+    /**
+     * The agent's `elicitation/create` request id - not an
+     * [`AgentActionId`], because the agent minted it.
+     */
+    requestId: ElicitationRequestId;
 };
 
 /**
@@ -65,6 +107,10 @@ export type AgentSessionLogEntryDto = LogFrameDto & {
      */
     createdAt: string;
     /**
+     * Durable transport row identity; together with `createdAt`, its order cursor.
+     */
+    id: string;
+    /**
      * The user whose action produced the frame, absent when no user did.
      *
      * Only prompts carry one, and only when the frame was attributed at the
@@ -90,9 +136,26 @@ export type AgentSessionLogResponse = {
      */
     bot: SessionBot;
     /**
-     * Every logged frame, oldest first. Folding depends on this order.
+     * Effective history in ascending `(createdAt, id)` order.
+     * The first row is the inclusive history boundary cursor: buffered rows
+     * before it are obsolete. Reconcile snapshot overlap by row ID, never content.
+     * An empty history has no boundary or overlapping rows.
      */
     entries: Array<AgentSessionLogEntryDto>;
+};
+
+/**
+ * Response body for a session's queue: everything waiting, oldest first.
+ *
+ * A wrapper rather than a bare array so that anything which is about the
+ * response rather than about an entry has somewhere to go later without
+ * breaking every client.
+ */
+export type AgentSessionQueueResponse = {
+    /**
+     * The waiting actions, in dispatch order.
+     */
+    entries: Array<QueuedActionDto>;
 };
 
 /**
@@ -122,6 +185,11 @@ export type AgentSessionResponse = {
      * The session id.
      */
     id: string;
+    /**
+     * Instructions the session's runtime works under, when any were stated
+     * at creation. Absent otherwise, so existing payloads are unchanged.
+     */
+    instructions?: string | null;
     /**
      * Model slug.
      */
@@ -187,31 +255,63 @@ export type BotId = string;
 export type ControlRequest = AgentAction;
 
 /**
+ * Response body for a control operation.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type ControlResponse = {
+    /**
+     * Matches `requestId` on the folded message this action derives once it
+     * dispatches, and names the queue entry until then.
+     */
+    actionId: AgentActionId;
+    /**
+     * Whether the action went out or waits in the queue.
+     */
+    status: ControlStatusDto;
+};
+
+/**
+ * What accepting a control operation did with it, on the wire.
+ */
+export type ControlStatusDto = 'sent' | 'queued';
+
+/**
  * Request body for `POST /agent-sessions`.
  *
  * Carries two shapes, told apart by `workspace`. Naming one asks for an
  * external session: the runtime is the bot operator's, so the caller has to
  * say which bot and which directory, and must own that bot. Omitting it asks
- * for a managed session, whose sandbox this deployment provisions from its
- * own configuration - which is why the fields describing someone else's
- * runtime must be omitted along with it rather than quietly ignored. Mixing
- * the two is refused rather than guessed at, so that no request can reach the
- * managed path carrying a bot the caller was never entitled to name.
+ * for a managed session, whose runtime this deployment provisions. A managed
+ * request may select an authorized persisted persona with `botId`; omitting
+ * it uses the deployment's default coding persona. Fields describing someone
+ * else's runtime must still be omitted rather than quietly ignored. Mixing
+ * the two shapes is refused rather than guessed at.
  *
  * Clients serialize this, so both derives are used.
  */
 export type CreateAgentSessionRequest = {
     /**
-     * Bot the session runs for. Bot callers may omit it (their own identity
-     * is used) and must not name another bot; user callers must supply a
-     * bot they own. External sessions only: a managed session runs as the
-     * bot its deployment is configured for.
+     * Bot the session runs for. On a managed request this optionally selects
+     * a persisted persona the user owns or may use through team membership;
+     * omitting it uses the deployment's default coding persona. On an
+     * external request, bot callers may omit it (their own identity is used)
+     * and must not name another bot; user callers must supply a bot they own.
      */
     botId?: string | null;
     /**
+     * Instructions the session's runtime works under, for its whole life.
+     *
+     * Recorded on the session whichever runtime serves it. Only the
+     * in-process one acts on them today; `agent_harness`'s `AgentKind`
+     * records what each of the others will need to.
+     */
+    instructions?: string | null;
+    /**
      * The user who owns the session. Ignored for user callers, who always
-     * own their own sessions; required for bot callers without verified
-     * acting-user claims.
+     * own their own sessions, and for harness callers, whose verified acting
+     * user (owner or confirmed team member) owns the session instead;
+     * required for bot callers without verified acting-user claims.
      *
      * For bot callers this is a claim, not a verified fact: it is scoped to
      * the bot's own sessions, but the named user owns the session on the
@@ -276,6 +376,58 @@ export type CreateSessionThread = {
 };
 
 /**
+ * Request body for editing a queued prompt.
+ */
+export type EditQueuedActionRequest = {
+    /**
+     * The new raw prompt text, replacing the old wholesale. Never blank: a
+     * prompt with nothing to say is a removal, and there is an endpoint for
+     * that.
+     */
+    prompt: string;
+};
+
+/**
+ * What the user decided about an elicitation. Mirrors ACP's three actions;
+ * there is no `Other` because we never originate an action we do not know.
+ */
+export type ElicitationAnswer = {
+    action: 'accept';
+    /**
+     * Form: the submitted values keyed by property. URL: omitted.
+     */
+    content?: {
+        [key: string]: ElicitationContentValue;
+    } | null;
+} | {
+    action: 'decline';
+} | {
+    action: 'cancel';
+};
+
+/**
+ * A value ACP accepts in an elicitation answer.
+ *
+ * Mirrors ACP's `ElicitationContentValue` so that the contract a caller
+ * answers against is the closed union ACP will accept, rather than arbitrary
+ * JSON narrowed on the way out. An object, a null, or a mixed array is
+ * refused when the request is deserialized - where the caller learns of it -
+ * instead of at send time, when the elicitation slot has already been
+ * released.
+ */
+export type ElicitationContentValue = string | boolean | number | number | Array<string>;
+
+/**
+ * The JSON-RPC id of an agent's `elicitation/create` request, carried whole
+ * so the answer echoes exactly what the agent sent.
+ *
+ * Agents pick these, not us: Claude Code counts from `0`, others use
+ * strings. `null` is not a legal id for a request that expects a response,
+ * so it is not representable here.
+ */
+export type ElicitationRequestId = number | string;
+
+/**
  * The provider-side identity of an externally-served session.
  */
 export type ExternalSessionResponse = {
@@ -291,6 +443,38 @@ export type ExternalSessionResponse = {
      * The agent's page on the provider's site, for a client to link out to.
      */
     url?: string | null;
+};
+
+/**
+ * HTTP request selecting one provider to probe.
+ */
+export type LoadAgentModelsRequest = {
+    /**
+     * Provider to probe.
+     */
+    harness: ModelHarnessDto;
+    /**
+     * Required for macrod and forbidden for other targets.
+     */
+    harnessId?: string | null;
+};
+
+/**
+ * Successful model-discovery response.
+ */
+export type LoadAgentModelsResponse = {
+    /**
+     * Current provider model, if model selection is available.
+     */
+    currentModel?: string | null;
+    /**
+     * Ordered model catalog.
+     */
+    models: Array<AgentModelDto>;
+    /**
+     * Model-selection availability.
+     */
+    status: AgentModelsStatusDto;
 };
 
 /**
@@ -319,6 +503,41 @@ export type LogFrameDto = {
      * Which way the frame travelled.
      */
     direction: LogDirectionDto;
+};
+
+/**
+ * Harness names accepted by the model discovery endpoint.
+ */
+export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
+
+/**
+ * One action waiting in a session's queue.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type QueuedActionDto = {
+    /**
+     * The id the action was accepted under.
+     */
+    actionId: AgentActionId;
+    /**
+     * The user who queued it, absent when a bot acted on nobody's behalf.
+     */
+    actorUserId?: string | null;
+    /**
+     * When it was accepted.
+     */
+    createdAt: string;
+    /**
+     * What kind of action waits - `prompt` or `compact`; only
+     * turn-occupying actions are ever queued.
+     */
+    kind: string;
+    /**
+     * The prompt's raw text, present for prompts only. What an edit
+     * replaces.
+     */
+    prompt?: string | null;
 };
 
 /**
@@ -382,6 +601,49 @@ export type SessionStatusDto = {
 } | {
     kind: 'disconnected';
 };
+
+export type LoadAgentModelsHandlerData = {
+    body: LoadAgentModelsRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-models/load';
+};
+
+export type LoadAgentModelsHandlerErrors = {
+    /**
+     * Invalid target
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Harness is not visible to caller
+     */
+    403: unknown;
+    /**
+     * Macrod runtime is disconnected
+     */
+    409: unknown;
+    /**
+     * Provider probe failed
+     */
+    502: unknown;
+    /**
+     * Macrod probe timed out
+     */
+    504: unknown;
+};
+
+export type LoadAgentModelsHandlerResponses = {
+    /**
+     * Fresh provider model catalog
+     */
+    200: LoadAgentModelsResponse;
+};
+
+export type LoadAgentModelsHandlerResponse = LoadAgentModelsHandlerResponses[keyof LoadAgentModelsHandlerResponses];
 
 export type GetAgentSandboxSizeData = {
     body?: never;
@@ -511,6 +773,7 @@ export type ControlAgentSessionData = {
 export type ControlAgentSessionErrors = {
     401: string;
     403: string;
+    422: string;
     500: string;
 };
 
@@ -518,9 +781,9 @@ export type ControlAgentSessionError = ControlAgentSessionErrors[keyof ControlAg
 
 export type ControlAgentSessionResponses = {
     /**
-     * Accepted; matches `requestId` on the folded message this action derives
+     * Accepted. `sent` reached the runtime; `queued` waits for the running turn to end and can be edited or removed meanwhile.
      */
-    200: AgentActionId;
+    200: ControlResponse;
 };
 
 export type ControlAgentSessionResponse = ControlAgentSessionResponses[keyof ControlAgentSessionResponses];
@@ -577,6 +840,104 @@ export type RenameAgentSessionResponses = {
 };
 
 export type RenameAgentSessionResponse = RenameAgentSessionResponses[keyof RenameAgentSessionResponses];
+
+export type GetAgentSessionQueueData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/queue';
+};
+
+export type GetAgentSessionQueueErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type GetAgentSessionQueueError = GetAgentSessionQueueErrors[keyof GetAgentSessionQueueErrors];
+
+export type GetAgentSessionQueueResponses = {
+    200: AgentSessionQueueResponse;
+};
+
+export type GetAgentSessionQueueResponse = GetAgentSessionQueueResponses[keyof GetAgentSessionQueueResponses];
+
+export type RemoveQueuedActionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+        /**
+         * ID the action was accepted under
+         */
+        action_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/queue/{action_id}';
+};
+
+export type RemoveQueuedActionErrors = {
+    401: string;
+    403: string;
+    /**
+     * Already dispatched or never queued
+     */
+    404: string;
+    500: string;
+};
+
+export type RemoveQueuedActionError = RemoveQueuedActionErrors[keyof RemoveQueuedActionErrors];
+
+export type RemoveQueuedActionResponses = {
+    204: void;
+};
+
+export type RemoveQueuedActionResponse = RemoveQueuedActionResponses[keyof RemoveQueuedActionResponses];
+
+export type EditQueuedActionData = {
+    body: EditQueuedActionRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+        /**
+         * ID the action was accepted under
+         */
+        action_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/queue/{action_id}';
+};
+
+export type EditQueuedActionErrors = {
+    401: string;
+    403: string;
+    /**
+     * Already dispatched or never queued
+     */
+    404: string;
+    /**
+     * The queued action carries no text
+     */
+    422: string;
+    500: string;
+};
+
+export type EditQueuedActionError = EditQueuedActionErrors[keyof EditQueuedActionErrors];
+
+export type EditQueuedActionResponses = {
+    204: void;
+};
+
+export type EditQueuedActionResponse = EditQueuedActionResponses[keyof EditQueuedActionResponses];
 
 export type PutAgentSessionSandboxSizeData = {
     body: SandboxSizeBody;

@@ -78,7 +78,7 @@ function BotList(props: { bots: ListedBot[] }) {
               <div class="flex min-w-0 items-center justify-between gap-3">
                 <div class="min-w-0">
                   <div class="truncate text-ink">{bot.name}</div>
-                  <div class="truncate text-2xs text-ink-extra-muted">
+                  <div class="truncate text-xxs text-ink-extra-muted">
                     @{bot.handle}
                   </div>
                 </div>

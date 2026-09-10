@@ -40,3 +40,7 @@ infra/local/generated/
 # Raw SSE captures from CURSOR_ACP_RECORD_DIR; sanitize into
 # crates/cursor_acp/fixtures/real/ before committing one.
 /recordings/
+
+# Per-developer macrod config contains this machine's harness bearer token.
+/macrod.toml
+/macrod.webhook-state.json

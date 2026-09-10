@@ -17,7 +17,6 @@ import {
   hasValue as propertyHasValue,
 } from '@property/utils';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { proxyResource } from '@service-unfurl/client';
 import {
   createSignal,
@@ -240,7 +239,7 @@ const EntityTooltipContent = (props: {
 const EntityValuePill = (props: { entity: EntityReference }) => {
   const { name, icon } = usePropertyEntityDisplay(
     () => props.entity.entity_id,
-    () => props.entity.entity_type as EntityType,
+    () => props.entity.entity_type,
     { fallbackIcon: null }
   );
 
@@ -255,7 +254,7 @@ const EntityValuePill = (props: { entity: EntityReference }) => {
 const UserEntityItem = (props: { entity: EntityReference }) => {
   const { name } = usePropertyEntityDisplay(
     () => props.entity.entity_id,
-    () => props.entity.entity_type as EntityType,
+    () => props.entity.entity_type,
     { fallbackIcon: null }
   );
 

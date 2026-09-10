@@ -88,11 +88,17 @@ export function InlineTaskProperties() {
           saveHandler={saveHandler}
         >
           <For each={inlineProperties()}>
-            {(property) => <InlinePropertyValue property={property} />}
+            {(property) => (
+              <InlinePropertyValue
+                property={property}
+                class="bg-surface-2 border border-edge"
+              />
+            )}
           </For>
           <InlineFetchedEntityTagsPill
             entityId={blockId}
             entityType={entityType}
+            class="bg-surface-2"
           />
           <Show when={blockName === 'task' && md.progressStats}>
             {(progressStats) => (

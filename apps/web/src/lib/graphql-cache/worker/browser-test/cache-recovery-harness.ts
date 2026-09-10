@@ -238,6 +238,7 @@ const enqueueRequest = (
   createdAtMs: number
 ): ProductionCacheRequestWithoutId => ({
   kind: 'enqueue-optimistic-mutation',
+  uuid: '00000000-0000-4000-8000-000000000011',
   query: MUTATION,
   operationName: 'SetEntityProperty',
   variables: MUTATION_VARIABLES,

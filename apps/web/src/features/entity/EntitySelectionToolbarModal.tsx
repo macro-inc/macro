@@ -26,7 +26,7 @@ export const EntitySelectionToolbarModal = (
             >
               <CloseIcon />
             </Button>
-            <span class="text-ink font-regular w-full whitespace-nowrap">
+            <span class="text-ink font-normal w-full whitespace-nowrap">
               {props.multiSelectEntities.length} selected
             </span>
             <Button

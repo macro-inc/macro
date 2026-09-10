@@ -5,8 +5,95 @@ pub use crate::testing::{InMemoryLog, TURN, parse_log, parse_log_as, test_sessio
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
+
+use agent_client_protocol::schema::v1::{Meta, ToolCallContent, ToolKind};
+use serde_json::{Value, json};
 use tracing::Level;
 use tracing::field::{Field, Visit};
+
+use crate::domain::harness::ToolFrame;
+use crate::domain::model::ToolStatus;
+
+/// An owned tool frame for tests to build a [`ToolFrame`] over: the fields
+/// a reader might look at, each set by a builder method, nothing else.
+#[derive(Debug, Default)]
+pub struct Frame {
+    meta: Option<Meta>,
+    title: Option<String>,
+    kind: Option<ToolKind>,
+    status: Option<ToolStatus>,
+    raw_input: Option<Value>,
+    raw_output: Option<Value>,
+    content: Option<Vec<ToolCallContent>>,
+}
+
+impl Frame {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// `_meta`, from a JSON object.
+    pub fn meta(mut self, meta: Value) -> Self {
+        self.meta = Some(match meta {
+            Value::Object(map) => map,
+            other => panic!("meta must be an object, got {other}"),
+        });
+        self
+    }
+
+    pub fn title(mut self, title: &str) -> Self {
+        self.title = Some(title.to_owned());
+        self
+    }
+
+    pub fn kind(mut self, kind: ToolKind) -> Self {
+        self.kind = Some(kind);
+        self
+    }
+
+    pub fn status(mut self, status: ToolStatus) -> Self {
+        self.status = Some(status);
+        self
+    }
+
+    pub fn raw_input(mut self, raw_input: Value) -> Self {
+        self.raw_input = Some(raw_input);
+        self
+    }
+
+    pub fn raw_output(mut self, raw_output: Value) -> Self {
+        self.raw_output = Some(raw_output);
+        self
+    }
+
+    /// One text content block - what a harness's completion prose arrives
+    /// as. Marks the frame completed too, since that is when readers take
+    /// content text as an answer.
+    pub fn text(mut self, text: &str) -> Self {
+        let block = json!({"type": "content", "content": {"type": "text", "text": text}});
+        self.content
+            .get_or_insert_with(Vec::new)
+            .push(serde_json::from_value(block).expect("a text content block"));
+        if self.status.is_none() {
+            self.status = Some(ToolStatus::Completed);
+        }
+        self
+    }
+
+    /// The borrowed view a reader takes.
+    pub fn view(&self) -> ToolFrame<'_> {
+        ToolFrame {
+            meta: self.meta.as_ref(),
+            title: self.title.as_deref(),
+            kind: self.kind,
+            status: self.status,
+            raw_input: self.raw_input.as_ref(),
+            raw_output: self.raw_output.as_ref(),
+            content: self.content.as_deref(),
+            locations: None,
+        }
+    }
+}
 
 /// Everything a captured `WARN` event carried, by field name.
 pub type CapturedFields = HashMap<String, String>;

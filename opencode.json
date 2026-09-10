@@ -4,6 +4,32 @@
     "@datadog/opencode-plugin"
   ],
   "mcp": {
+    "chrome-devtools": {
+      "type": "local",
+      "command": [
+        "bunx",
+        "-y",
+        "chrome-devtools-mcp@latest",
+        "--browser-url",
+        "http://127.0.0.1:9222"
+      ]
+    },
+    "grafana": {
+      "type": "local",
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "-i",
+        "--network",
+        "host",
+        "-e",
+        "GRAFANA_URL=http://localhost:3001",
+        "mcp/grafana",
+        "-t",
+        "stdio"
+      ]
+    },
     "datadog": {
       "type": "remote",
       "url": "https://mcp.us5.datadoghq.com/api/unstable/mcp-server/mcp?referrer_ide=opencode-plugin&plugin_version=0.7.13",

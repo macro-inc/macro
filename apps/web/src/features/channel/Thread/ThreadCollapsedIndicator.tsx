@@ -33,7 +33,7 @@ export function ThreadCollapsedIndicator(props: ThreadCollapsedIndicatorProps) {
       type="button"
       title="Expand thread"
       class={cn(
-        'flex items-center gap-2 text-xs w-fit h-8 touch:min-h-(--user-icon-width) border bg-surface hover:bg-hover py-1 pr-2 pl-1.5 mb-2 select-none outline-none focus-visible:bg-active rounded-full',
+        'flex items-center gap-2 text-xs w-fit h-8 touch:min-h-(--user-icon-width) border hover:bg-hover py-1 pr-2 pl-1.5 mb-2 select-none outline-none focus-visible:bg-active rounded-full',
         local.hasNewMessages ? 'border-accent/40' : 'border-thread-rail',
         local.class
       )}

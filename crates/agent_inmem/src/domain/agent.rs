@@ -9,36 +9,91 @@
 //! [`RuntimeAttachment::solo`]: agent_session::domain::connection::RuntimeAttachment::solo
 
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use agent::types::{AssistantMessagePart, ChatMessage};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, InitializeRequest,
-    InitializeResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
-    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionId,
-    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, StopReason, ToolCall as AcpToolCall, ToolCallStatus,
-    ToolCallUpdate, ToolCallUpdateFields, ToolKind,
+    AgentCapabilities, BooleanPropertySchema, CancelNotification, ContentBlock, ContentChunk,
+    CreateElicitationRequest, ElicitationAction, ElicitationFormMode, ElicitationPropertySchema,
+    ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
+    InitializeResponse, IntegerPropertySchema, Meta, NewSessionRequest, NewSessionResponse,
+    NumberPropertySchema, OtherElicitationPropertySchema, PromptRequest, PromptResponse,
+    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
+    SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason, StringFormat,
+    StringPropertySchema, ToolCall as AcpToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate,
+    ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
 };
 use agent_runtime_protocol::domain::action::{COMPACT_COMMAND, MODEL_CONFIG_ID};
 use agent_session::domain::model::AgentSessionId;
+use ai_tools::user_tool_review::{
+    ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
+};
+use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
+use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
+use crate::domain::user_input::{
+    SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
+    UserInputRequester,
+};
+use agent_client_protocol::schema::v1::McpServer as AcpMcpServer;
+use mcp_toolset::RemoteMcpToolSet;
 
 #[cfg(test)]
 mod test;
 
 /// A turn that produces nothing for this long is treated as hung and
 /// cancelled, so it cannot wedge the session's turn lock forever.
+///
+/// Time spent waiting on the user is not idleness: while a question the turn
+/// asked is outstanding ([`AwaitingUser`]), the timeout re-arms instead of
+/// cancelling, however long the user takes. The question ends with an answer,
+/// a stop, or the connection going away.
 const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// What this agent calls itself in the `initialize` response. The fold
+/// recognizes the harness by this name, so it is a contract, not a label.
+pub const AGENT_NAME: &str = "macro-inmem";
+
+/// The `_meta` namespace this agent writes its own keys under, mirroring
+/// Claude Code's `claudeCode` layout so the fold reads both the same way.
+pub const META_NAMESPACE: &str = "macro";
+
+/// The one tool in the Macro toolset that delegates to another agent.
+const SUBAGENT_TOOL: &str = "Subagent";
+
+/// Slash command that asks the user a question through `elicitation/create`
+/// instead of running the model: `/ask <question>` for free text, or
+/// `/ask <question> | option | option` for a single select.
+///
+/// A test rig, deliberately: the fastest way to drive the whole elicitation
+/// path (hold, render, answer, fold) end to end without an external agent or
+/// a model. Only handled when the host enables development commands; the
+/// model-callable `AskUser` tool does not depend on that setting.
+pub const ASK_COMMAND: &str = "/ask";
+
+/// The property the `/ask` form's one field is sent back under.
+const ASK_FIELD: &str = "answer";
+
+/// What one turn reads out of its session's state before running.
+struct TurnInput {
+    /// The conversation so far plus the prompt being answered.
+    messages: Vec<ChatMessage>,
+    /// Model the turn runs on.
+    model: String,
+    /// The session's instructions, for the engine's system prompt.
+    instructions: Option<String>,
+}
 
 /// Everything one agent task serves its session from.
 pub struct AgentState {
@@ -56,9 +111,39 @@ pub struct AgentState {
     /// Serializes turns: the client may queue prompts, the engine runs one at
     /// a time.
     pub turn_lock: tokio::sync::Mutex<()>,
+    /// Dials the MCP servers `session/new` and `session/resume` hand over.
+    pub mcp: Arc<dyn DynMcpToolConnector>,
+    /// The tools of those servers, once dialed; `None` until then or when
+    /// there were none.
+    pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
+    /// Whether the client advertised `elicitation.form` on `initialize`. The
+    /// protocol forbids asking a mode the client did not advertise.
+    pub client_renders_forms: AtomicBool,
+    /// Whether the host enables manual development commands such as `/ask`.
+    /// When disabled, their text is passed to the model as an ordinary prompt.
+    pub enable_dev_commands: bool,
 }
 
 impl AgentState {
+    /// Dial the servers a session request carried and keep their tools for
+    /// every turn that follows. Done at `session/new`/`session/resume`, the
+    /// same moment a sandboxed harness connects its servers, so the first
+    /// turn already has them.
+    async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
+        let tools = self.mcp.connect_dyn(dialable_servers(servers)).await;
+        *self
+            .mcp_tools
+            .lock()
+            .expect("mcp tools lock should not be poisoned") = tools;
+    }
+
+    fn current_mcp_tools(&self) -> Option<RemoteMcpToolSet> {
+        self.mcp_tools
+            .lock()
+            .expect("mcp tools lock should not be poisoned")
+            .clone()
+    }
+
     fn expect_session(&self, requested: &SessionId) -> Result<(), AcpError> {
         let matches = self
             .store
@@ -94,15 +179,31 @@ impl AgentState {
         }
     }
 
-    /// The messages and model for a turn answering `prompt`.
-    fn turn_input(&self, prompt: &str) -> (Vec<ChatMessage>, String) {
+    /// ACP model configuration backed by the engine's supported-model source
+    /// and this session's current selection.
+    fn model_config_options(&self) -> Vec<SessionConfigOption> {
+        let Some(session) = self.store.get(&self.session_id) else {
+            return Vec::new();
+        };
+        crate::domain::model_options::model_config_options(
+            &session.model,
+            self.engine.supported_models(),
+        )
+    }
+
+    /// Everything from the session's state that a turn answering `prompt`
+    /// runs from.
+    fn turn_input(&self, prompt: &str) -> TurnInput {
         self.store.get(&self.session_id).map_or_else(
-            || (messages_for_turn(&[], prompt), String::new()),
-            |state| {
-                (
-                    messages_for_turn(&state.history, prompt),
-                    state.model.clone(),
-                )
+            || TurnInput {
+                messages: messages_for_turn(&[], prompt),
+                model: String::new(),
+                instructions: None,
+            },
+            |state| TurnInput {
+                messages: messages_for_turn(&state.history, prompt),
+                model: state.model.clone(),
+                instructions: state.instructions.clone(),
             },
         )
     }
@@ -139,31 +240,286 @@ impl AgentState {
     }
 }
 
+/// How many questions a turn currently has out to the user. Shared between
+/// the turn's requester, which counts each question it is waiting on, and the
+/// turn loop, which reads it to tell "waiting on the user" from "hung".
+#[derive(Default)]
+struct AwaitingUser(AtomicUsize);
+
+impl AwaitingUser {
+    fn is_waiting(&self) -> bool {
+        self.0.load(Ordering::Acquire) > 0
+    }
+
+    /// Count one outstanding question until the guard drops - on an answer,
+    /// an error, or the asking future being cancelled.
+    fn begin(&self) -> AwaitingGuard<'_> {
+        self.0.fetch_add(1, Ordering::AcqRel);
+        AwaitingGuard(self)
+    }
+}
+
+struct AwaitingGuard<'a>(&'a AwaitingUser);
+
+impl Drop for AwaitingGuard<'_> {
+    fn drop(&mut self) {
+        self.0.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+/// ACP-backed user-input port for one connected session: the one place this
+/// agent sends `elicitation/create`, whether a tool is asking a question
+/// (`AskUser`, [`UserInputRequester`]) or a user tool wants its call reviewed
+/// ([`UserToolReviewer`]).
+struct AcpUserInputRequester {
+    connection: ConnectionTo<Client>,
+    session_id: SessionId,
+    awaiting: Arc<AwaitingUser>,
+}
+
+/// The key under `_meta.macro` naming the user tool an elicitation reviews,
+/// so a Macro client can render the tool's own composer instead of the form.
+const USER_TOOL_META_KEY: &str = "userTool";
+
+/// The custom property type carrying the whole edited draft as a JSON string
+/// (`_`-prefixed, as ACP reserves for implementation-specific extensions).
+const JSON_PROPERTY_TYPE: &str = "_macro/json";
+
+#[async_trait]
+impl UserToolReviewer for AcpUserInputRequester {
+    async fn review(&self, request: ReviewRequest) -> Result<ReviewOutcome, ReviewError> {
+        let _waiting = self.awaiting.begin();
+        let scope = ElicitationSessionScope::new(self.session_id.clone())
+            .tool_call_id(ToolCallId::new(request.tool_call_id.as_str()));
+        // The name lets a Macro client pick the tool's composer; the draft
+        // rides along so the fold has it even when the call the review is
+        // scoped to is not one it opened.
+        let mut ours = serde_json::Map::new();
+        ours.insert(
+            USER_TOOL_META_KEY.to_owned(),
+            serde_json::json!({ "name": request.tool_name, "draft": request.draft }),
+        );
+        let mut meta = Meta::new();
+        meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
+        let elicitation = CreateElicitationRequest::new(
+            ElicitationFormMode::new(scope, review_form_schema(&request.form)),
+            request.message,
+        )
+        .meta(meta);
+
+        let response = self
+            .connection
+            .send_request(elicitation)
+            .block_task()
+            .await
+            .map_err(|error| ReviewError::Unavailable(error.to_string()))?;
+        Ok(match response.action {
+            ElicitationAction::Accept(accept) => ReviewOutcome::Accepted(
+                accept
+                    .content
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|(name, value)| {
+                        serde_json::to_value(value).ok().map(|value| (name, value))
+                    })
+                    .collect(),
+            ),
+            ElicitationAction::Decline => ReviewOutcome::Declined,
+            ElicitationAction::Cancel => ReviewOutcome::Cancelled,
+            _ => {
+                return Err(ReviewError::Failed(
+                    "the client returned an unknown elicitation action".to_owned(),
+                ));
+            }
+        })
+    }
+}
+
+/// A review form as ACP's restricted schema. Fields are the draft's flat
+/// arguments with their current values as defaults; the draft field is the
+/// `_macro/json` extension a Macro client fills from its own composer.
+fn review_form_schema(form: &ReviewForm) -> ElicitationSchema {
+    let mut schema = ElicitationSchema::new().title(form.title.clone());
+    for field in &form.fields {
+        let required = form.required.contains(&field.name);
+        let property: ElicitationPropertySchema = match &field.kind {
+            ReviewFieldKind::Text { default, format } => StringPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(default.clone())
+                .format(format.as_deref().and_then(string_format))
+                .into(),
+            ReviewFieldKind::Boolean { default } => BooleanPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(*default)
+                .into(),
+            ReviewFieldKind::Number { default } => NumberPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(*default)
+                .into(),
+            ReviewFieldKind::Integer { default } => IntegerPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(*default)
+                .into(),
+            ReviewFieldKind::Choice { options, default } => StringPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .enum_values(options.clone())
+                .default_value(default.clone())
+                .into(),
+            ReviewFieldKind::Json => {
+                let mut fields = std::collections::BTreeMap::new();
+                fields.insert(
+                    "title".to_owned(),
+                    serde_json::Value::String(field.name.clone()),
+                );
+                if let Some(description) = &field.description {
+                    fields.insert(
+                        "description".to_owned(),
+                        serde_json::Value::String(description.clone()),
+                    );
+                }
+                ElicitationPropertySchema::Other(OtherElicitationPropertySchema::new(
+                    JSON_PROPERTY_TYPE,
+                    fields,
+                ))
+            }
+        };
+        schema = schema.property(field.name.clone(), property, required);
+    }
+    schema
+}
+
+/// ACP's string format for a JSON Schema `format`, for the ones it names.
+fn string_format(format: &str) -> Option<StringFormat> {
+    match format {
+        "email" => Some(StringFormat::Email),
+        "uri" => Some(StringFormat::Uri),
+        "date" => Some(StringFormat::Date),
+        "date-time" => Some(StringFormat::DateTime),
+        _ => None,
+    }
+}
+
+#[async_trait]
+impl UserInputRequester for AcpUserInputRequester {
+    async fn ask(&self, request: UserInputRequest) -> Result<UserInputOutcome, UserInputError> {
+        let _waiting = self.awaiting.begin();
+        let options = request.options;
+        let mut field = StringPropertySchema::new().title("Answer");
+        if !options.is_empty() {
+            field = field.one_of(
+                options
+                    .iter()
+                    .map(|option| EnumOption::new(option.clone(), option.clone()))
+                    .collect::<Vec<_>>(),
+            );
+        }
+        let schema = ElicitationSchema::new().property(ASK_FIELD, field, true);
+        let request = CreateElicitationRequest::new(
+            ElicitationFormMode::new(
+                ElicitationSessionScope::new(self.session_id.clone()),
+                schema,
+            ),
+            request.question,
+        );
+
+        let response = self
+            .connection
+            .send_request(request)
+            .block_task()
+            .await
+            .map_err(|error| UserInputError::RequestFailed(error.to_string()))?;
+        match response.action {
+            ElicitationAction::Accept(accept) => {
+                let answer = accept
+                    .content
+                    .as_ref()
+                    .and_then(|content| content.get(ASK_FIELD))
+                    .and_then(|value| serde_json::to_value(value).ok())
+                    .ok_or(UserInputError::MissingAnswer)?;
+                let serde_json::Value::String(answer) = answer else {
+                    return Err(UserInputError::InvalidAnswer(
+                        "the answer was not a string".to_owned(),
+                    ));
+                };
+                if !options.is_empty() && !options.contains(&answer) {
+                    return Err(UserInputError::InvalidAnswer(format!(
+                        "{answer:?} was not one of the offered options"
+                    )));
+                }
+                Ok(UserInputOutcome::Answered(answer))
+            }
+            ElicitationAction::Decline => Ok(UserInputOutcome::Declined),
+            ElicitationAction::Cancel => Ok(UserInputOutcome::Cancelled),
+            _ => Err(UserInputError::RequestFailed(
+                "the client returned an unknown elicitation action".to_owned(),
+            )),
+        }
+    }
+}
+
+/// The turn's way of reaching the user, when the client can show a form.
+/// `None` means no question and no review can be asked this turn: `AskUser`
+/// is not offered, and a user tool's pending answer stays pending.
+fn user_input_requester(
+    state: &AgentState,
+    connection: &ConnectionTo<Client>,
+    session_id: SessionId,
+    awaiting: &Arc<AwaitingUser>,
+) -> Option<Arc<AcpUserInputRequester>> {
+    state.client_renders_forms.load(Ordering::Relaxed).then(|| {
+        Arc::new(AcpUserInputRequester {
+            connection: connection.clone(),
+            session_id,
+            awaiting: Arc::clone(awaiting),
+        })
+    })
+}
+
 /// Serve this session's agent on `acp` until the connection closes.
 pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpError> {
     Agent
         .builder()
         .name("macro-inmem")
         .on_receive_request(
-            async move |request: InitializeRequest, responder, _connection| {
-                responder.respond(
-                    InitializeResponse::new(request.protocol_version).agent_capabilities(
-                        AgentCapabilities::new().session_capabilities(
-                            SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
-                        ),
-                    ),
-                )
+            {
+                let state = Arc::clone(&state);
+                async move |request: InitializeRequest, responder, _connection| {
+                    let renders_forms = request
+                        .client_capabilities
+                        .elicitation
+                        .as_ref()
+                        .is_some_and(|elicitation| elicitation.form.is_some());
+                    state
+                        .client_renders_forms
+                        .store(renders_forms, Ordering::Relaxed);
+                    responder.respond(
+                        InitializeResponse::new(request.protocol_version)
+                            .agent_capabilities(AgentCapabilities::new().session_capabilities(
+                                SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                            ))
+                            .agent_info(Implementation::new(AGENT_NAME, env!("CARGO_PKG_VERSION"))),
+                    )
+                }
             },
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
             {
                 let state = Arc::clone(&state);
-                async move |_request: NewSessionRequest, responder, _connection| {
+                async move |request: NewSessionRequest, responder, _connection| {
                     let state = Arc::clone(&state);
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
-                    responder.respond(NewSessionResponse::new(acp_id))
+                    state.connect_mcp(request.mcp_servers).await;
+                    responder.respond(
+                        NewSessionResponse::new(acp_id)
+                            .config_options(state.model_config_options()),
+                    )
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -178,6 +534,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     // attach replayed the frame log back into it (see
                     // `domain::replay`).
                     state.bind_acp_session(request.session_id, true);
+                    state.connect_mcp(request.mcp_servers).await;
                     responder.respond(ResumeSessionResponse::new())
                 }
             },
@@ -203,6 +560,29 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             )),
                         ));
                         return responder.respond(PromptResponse::new(StopReason::EndTurn));
+                    }
+                    if state.enable_dev_commands
+                        && let Some(question) = prompt.trim().strip_prefix(ASK_COMMAND)
+                    {
+                        let question = question.trim().to_owned();
+                        let cancel = state.begin_turn();
+                        connection.spawn({
+                            let connection = connection.clone();
+                            async move {
+                                let stop = run_ask(
+                                    &state,
+                                    &connection,
+                                    request.session_id,
+                                    prompt,
+                                    question,
+                                    cancel,
+                                )
+                                .await;
+                                let _ = responder.respond(PromptResponse::new(stop));
+                                Ok(())
+                            }
+                        })?;
+                        return Ok(());
                     }
 
                     let cancel = state.begin_turn();
@@ -275,16 +655,29 @@ async fn run_turn(
     cancel: CancellationToken,
 ) -> StopReason {
     let _turn = state.turn_lock.lock().await;
-    let (messages, model) = state.turn_input(&prompt);
+    let TurnInput {
+        messages,
+        model,
+        instructions,
+    } = state.turn_input(&prompt);
+    let awaiting = Arc::new(AwaitingUser::default());
+    let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
         owner: state.owner.clone(),
         model,
+        instructions,
         messages,
+        mcp_tools: state.current_mcp_tools(),
         cancel: cancel.clone(),
+        user_input: requester
+            .clone()
+            .map(|requester| requester as SharedUserInputRequester),
+        reviewer: requester.map(|requester| requester as Arc<dyn UserToolReviewer>),
     });
 
     let mut accumulator = StreamAccumulator::new();
     let mut failure = None;
+    let mut was_cancelled = false;
     loop {
         match tokio::time::timeout(TURN_IDLE_TIMEOUT, parts.recv()).await {
             Ok(Some(Ok(part))) => {
@@ -299,10 +692,18 @@ async fn run_turn(
                 accumulator.push(part);
             }
             Ok(Some(Err(error))) => {
-                failure = Some(error.to_string());
+                if error.was_cancelled() {
+                    was_cancelled = true;
+                } else {
+                    failure = Some(error.to_string());
+                }
                 break;
             }
             Ok(None) => break,
+            // Silence while a question is out is the user thinking, not the
+            // turn hanging; the tool that asked resumes the stream when they
+            // answer.
+            Err(_) if awaiting.is_waiting() => continue,
             Err(_) => {
                 failure = Some(format!(
                     "the turn produced nothing for {} seconds and was stopped",
@@ -334,11 +735,84 @@ async fn run_turn(
     }
     state.push_turn(prompt, turn_parts);
 
+    if was_cancelled || cancel.is_cancelled() {
+        StopReason::Cancelled
+    } else {
+        StopReason::EndTurn
+    }
+}
+
+/// Run an `/ask` turn: send the question as a form elicitation, wait for the
+/// client's answer, and say back what it was.
+///
+/// Runs inside a spawned connection task, outside the dispatch loop, which is
+/// what makes `block_task` safe here - the loop stays free to deliver the
+/// answer (and a `session/cancel`, which the session machine turns into a
+/// `cancel` answer before the notification arrives).
+async fn run_ask(
+    state: &AgentState,
+    connection: &ConnectionTo<Client>,
+    acp_session_id: SessionId,
+    prompt: String,
+    question: String,
+    cancel: CancellationToken,
+) -> StopReason {
+    let _turn = state.turn_lock.lock().await;
+
+    let say = |text: String| {
+        let _ = connection.send_notification(SessionNotification::new(
+            acp_session_id.clone(),
+            SessionUpdate::AgentMessageChunk(ContentChunk::new(ContentBlock::from(text.clone()))),
+        ));
+        text
+    };
+
+    if !state.client_renders_forms.load(Ordering::Relaxed) {
+        let text = say(
+            "This client did not advertise form elicitation, so there is no way to ask.".to_owned(),
+        );
+        state.push_turn(prompt, vec![AssistantMessagePart::Text { text }]);
+        return StopReason::EndTurn;
+    }
+
+    let (question, options) = parse_ask(&question);
+    let requester = AcpUserInputRequester {
+        connection: connection.clone(),
+        session_id: acp_session_id.clone(),
+        // `/ask` has no idle timeout to hold off: it waits on the answer
+        // directly rather than through the turn loop.
+        awaiting: Arc::new(AwaitingUser::default()),
+    };
+    let text = match requester.ask(UserInputRequest { question, options }).await {
+        Ok(UserInputOutcome::Answered(value)) => format!("You answered: {value}"),
+        Ok(UserInputOutcome::Declined) => "You declined to answer.".to_owned(),
+        Ok(UserInputOutcome::Cancelled) => "The question was cancelled.".to_owned(),
+        Err(error) => error.to_string(),
+    };
+    let text = say(text);
+    state.push_turn(prompt, vec![AssistantMessagePart::Text { text }]);
+
     if cancel.is_cancelled() {
         StopReason::Cancelled
     } else {
         StopReason::EndTurn
     }
+}
+
+/// Split `/ask`'s argument into the question and its options: everything
+/// before the first `|` is the question, each `|`-separated piece after it
+/// an option. No `|` means free text.
+fn parse_ask(question: &str) -> (String, Vec<String>) {
+    let mut pieces = question
+        .split('|')
+        .map(str::trim)
+        .filter(|piece| !piece.is_empty());
+    let message = pieces
+        .next()
+        .map(str::to_owned)
+        .unwrap_or_else(|| "What would you like?".to_owned());
+    let options = pieces.map(str::to_owned).collect();
+    (message, options)
 }
 
 /// The `session/update` a stream part renders as, if any.
@@ -360,7 +834,8 @@ fn update_for_part(part: &StreamPart) -> Option<SessionUpdate> {
                 AcpToolCall::new(call.id.clone(), title)
                     .kind(tool_kind(&call.name))
                     .status(ToolCallStatus::InProgress)
-                    .raw_input(call.json.clone()),
+                    .raw_input(call.json.clone())
+                    .meta(tool_call_meta(call)),
             ))
         }
         StreamPart::ToolResponse(ToolResponse::Json { id, json, .. }) => {
@@ -382,6 +857,25 @@ fn update_for_part(part: &StreamPart) -> Option<SessionUpdate> {
         // Recorded by the loop's usage recorder; nothing to render.
         StreamPart::Usage(_) => None,
     }
+}
+
+/// The `_meta` this agent stamps on a tool call so the fold can read it by
+/// name rather than guess from the title: `macro.toolName` (an MCP tool as
+/// `mcp__<server>__<tool>`, the convention Claude Code set) and
+/// `macro.subagent` on a delegation.
+fn tool_call_meta(call: &agent::ToolCall) -> Meta {
+    let tool_name = match &call.mcp {
+        Some(mcp) => format!("mcp__{}__{}", mcp.service, mcp.tool_name),
+        None => call.name.clone(),
+    };
+    let mut ours = serde_json::Map::new();
+    ours.insert("toolName".to_owned(), serde_json::Value::String(tool_name));
+    if call.mcp.is_none() && call.name == SUBAGENT_TOOL {
+        ours.insert("subagent".to_owned(), serde_json::Value::Bool(true));
+    }
+    let mut meta = Meta::new();
+    meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
+    meta
 }
 
 /// A coarse [`ToolKind`] for a Macro tool name, for client iconography only.

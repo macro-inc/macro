@@ -8,7 +8,7 @@ import { ThreadReplyChannelInput } from '../Thread/ThreadReplyChannelInput';
 /**
  * Thread-reply face of the unified-input mode. Registers into the same
  * `ThreadState` slots and persistence keys as the inline `ThreadReplyInput`,
- * so drafts and the `openReplyInput`/`openQuoteReplyInput` flows are shared
+ * so drafts and the reply-reference insertion flow are shared
  * between inline and unified-input modes.
  */
 export function UnifiedReplyInput(props: {
@@ -16,7 +16,7 @@ export function UnifiedReplyInput(props: {
   threadId: string;
   state: ThreadState;
   /**
-   * The message the reply is bound to — a specific reply for quote-replies,
+   * The message the reply is bound to — a specific referenced reply,
    * otherwise the thread root.
    */
   getTargetMessage: () => MessageData | undefined;

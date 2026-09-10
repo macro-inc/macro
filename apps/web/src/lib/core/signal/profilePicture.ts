@@ -53,7 +53,14 @@ async function fetchProfilePictures(
   });
   if (result.isErr()) {
     console.error('Failed to fetch user profile pictures');
-    return [];
+    // Mark as not-loading with an expired timestamp so the next access
+    // retries the fetch instead of getting stuck forever (see
+    // `useProfilePictureUrl`'s `cacheExpired` check).
+    return ids.map((id) => ({
+      _createdAt: new Date(0),
+      id,
+      loading: false,
+    }));
   }
 
   const { pictures } = result.value;

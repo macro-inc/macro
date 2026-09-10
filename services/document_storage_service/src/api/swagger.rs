@@ -135,6 +135,8 @@ use soup::inbound::axum_router::{
     PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort,
     SoupPage,
 };
+use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
+use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -146,6 +148,7 @@ use utoipa::OpenApi;
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
         calendar_events::inbound::axum_router::mention_previews,
+        calendar_events::inbound::axum_router::list_team_out_of_office,
 
         // annotations
         annotations::get::get_document_comments_handler,
@@ -252,7 +255,22 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_activity_handler,
         channels::inbound::axum_router::post_activity_handler,
 
+        // harnesses
+        harnesses::inbound::axum_router::create_pairing_handler,
+        harnesses::inbound::axum_router::get_pairing_handler,
+        harnesses::inbound::axum_router::approve_pairing_handler,
+        harnesses::inbound::axum_router::claim_pairing_handler,
+        harnesses::inbound::axum_router::list_harnesses_handler,
+        harnesses::inbound::axum_router::delete_harness_handler,
+        harnesses::inbound::axum_router::list_bound_agents_handler,
+        harnesses::inbound::axum_router::get_self_harness_handler,
+        harnesses::inbound::axum_router::delete_self_harness_handler,
+        harnesses::inbound::axum_router::list_harness_sessions_handler,
+
         // bots
+        bots::inbound::axum_router::create_agent_handler,
+        bots::inbound::axum_router::list_agents_handler,
+        bots::inbound::axum_router::update_agent_handler,
         bots::inbound::axum_router::get_self_bot_handler,
         bots::inbound::axum_router::list_bot_channels_handler,
         bots::inbound::axum_router::remove_bot_channel_handler,
@@ -277,6 +295,7 @@ use utoipa::OpenApi;
         webhook::inbound::axum_router::list_webhooks,
         webhook::inbound::axum_router::patch_webhook,
         webhook::inbound::axum_router::validate_webhook,
+        webhook::inbound::stream_router::stream_events,
         call::inbound::axum_router::ring_status_handler,
         call::inbound::axum_router::transcript_handler,
 
@@ -309,6 +328,11 @@ use utoipa::OpenApi;
         favorites::inbound::axum_router::add_favorite_handler,
         favorites::inbound::axum_router::remove_favorite_by_entity_handler,
         favorites::inbound::axum_router::reorder_favorites_handler,
+
+        // user api keys
+        user_api_key::inbound::axum_router::create_user_api_key_handler,
+        user_api_key::inbound::axum_router::list_user_api_keys_handler,
+        user_api_key::inbound::axum_router::delete_user_api_key_handler,
 
         // reminders
         reminders::inbound::axum_router::list_reminders_handler,
@@ -360,6 +384,8 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::comments::delete_handler,
         crm::inbound::axum_router::team_settings::get_handler,
         crm::inbound::axum_router::team_settings::update_handler,
+        crm::inbound::axum_router::stages::replace_handler,
+        crm::inbound::axum_router::stages::reset_handler,
     ),
     components(
         schemas(
@@ -444,6 +470,8 @@ use utoipa::OpenApi;
             calendar_events::inbound::axum_router::CalendarMentionPreviewResponse,
             calendar_events::inbound::axum_router::CalendarMentionPreviewItem,
             calendar_events::inbound::axum_router::CalendarMentionPreviewKind,
+            calendar_events::inbound::axum_router::TeamOutOfOfficeItem,
+            calendar_events::inbound::axum_router::TeamOutOfOfficeResponse,
             calendar_events::domain::models::CalendarMentionEvent,
             calendar_events::domain::models::CalendarSyncStatus,
             SoupItemWithProperties,
@@ -456,6 +484,10 @@ use utoipa::OpenApi;
             ForeignEntity,
             Favorite,
             FavoritesList,
+            CreatedUserApiKey,
+            CreateUserApiKeyRequest,
+            UserApiKeyInfo,
+            UserApiKeysList,
             AddFavoriteRequest,
             FavoriteEntityRef,
             ReorderFavoritesRequest,
@@ -550,7 +582,27 @@ use utoipa::OpenApi;
             ApiActivity,
             PostActivityRequest,
 
+            // Harnesses
+            harnesses::domain::models::Harness,
+            harnesses::domain::models::HarnessOwner,
+            harnesses::domain::models::HarnessAgent,
+            harnesses::domain::models::HarnessSession,
+            harnesses::domain::models::RequestedHarnessScope,
+            harnesses::domain::models::CreatePairingRequest,
+            harnesses::domain::models::CreatedPairing,
+            harnesses::domain::models::PairingDetails,
+            harnesses::domain::models::ApprovePairingRequest,
+            harnesses::domain::models::ClaimPairingRequest,
+            harnesses::domain::models::ClaimedPairing,
+            harnesses::inbound::axum_router::PendingClaimResponse,
+
             // Bots
+            bots::domain::models::Agent,
+            bots::domain::models::AgentChannelScope,
+            bots::domain::models::AgentMcpServers,
+            bots::domain::models::AgentMcpServer,
+            bots::domain::models::CreateAgentRequest,
+            bots::domain::models::UpdateAgentRequest,
             bots::domain::models::Bot,
             bots::domain::models::BotKind,
             bots::domain::models::BotOwner,
@@ -675,6 +727,10 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::create_contact::CreateCrmContactRequest,
             crm::inbound::axum_router::comments::CreateCrmCommentRequest,
             crm::inbound::axum_router::comments::EditCrmCommentRequest,
+            crm::inbound::axum_router::stages::ReplaceCrmStagesRequest,
+            crm::inbound::axum_router::stages::CrmStageInput,
+            crm::inbound::axum_router::stages::CrmStagesResponse,
+            crm::inbound::axum_router::stages::CrmStageResponse,
             crm::domain::comment::CrmCommentEntityType,
             crm::domain::comment::CrmThread,
             crm::domain::comment::CrmComment,

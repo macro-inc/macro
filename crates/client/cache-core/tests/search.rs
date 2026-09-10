@@ -252,6 +252,7 @@ fn optimistic_records_explicitly_overlay_the_durable_search_catalog() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000020",
                     query: RENAME,
                     operation_name: Some("Rename"),
                     variables: &rename_variables,

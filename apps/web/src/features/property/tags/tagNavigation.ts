@@ -41,10 +41,11 @@ export function buildTaggedItemsSplitContent(
   return {
     type: 'component',
     id: 'search',
-    preserveParams: true,
-    params: {
-      initialFilters: buildTaggedItemsQuery(tag),
-      initialClientFilters: searchPreset?.clientFilters,
+    // Entry state outranks the user's persisted Search filters during Soup
+    // initialization, so this explicit navigation always opens on the tag.
+    state: {
+      'search.filters': buildTaggedItemsQuery(tag),
+      'search.predicates': searchPreset?.clientFilters,
     },
   };
 }

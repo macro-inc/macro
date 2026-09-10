@@ -10,6 +10,7 @@ import type { LexicalEditor } from 'lexical';
 import { registerTableListTab } from './tableListTab';
 import { registerTableSelectAll } from './tableSelectAll';
 import { registerTableTabInsertRow } from './tableTabInsertRow';
+import { registerTableTouchDragGuard } from './tableTouchDragGuard';
 
 interface TablePluginProps {
   // When `false` (default `true`), merged cell support (colspan and rowspan) will be disabled and all
@@ -32,6 +33,10 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
 
     // Register the table selection observer
     registerTableSelectionObserver(editor, props.hasTabHandler ?? true),
+
+    // Keep the observer's pointer drag from turning a scroll into a cell
+    // selection on touch (see tableTouchSelection for the touch gesture)
+    registerTableTouchDragGuard(editor),
 
     // Let list items claim Tab for indentation before cell navigation
     (props.hasTabHandler ?? true) ? registerTableListTab(editor) : () => {},

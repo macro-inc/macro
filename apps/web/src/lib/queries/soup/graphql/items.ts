@@ -1,7 +1,8 @@
 /*
  * Reactive urql-backed Soup items. Every loaded page remains subscribed to
- * its normalized GraphQL cache operation so cache writes update the list
- * directly. The public REST/GraphQL facade lives in ../items.ts.
+ * its normalized GraphQL cache operation. Supported flat queries reconcile
+ * server membership with local evidence without replacing the server cursor
+ * chain. The public REST/GraphQL facade lives in ../items.ts.
  */
 
 import {
@@ -19,10 +20,14 @@ import {
   type SoupQuery,
   type SoupQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import type { GraphqlSoupInput } from '@service-storage/graphql-soup';
+import type {
+  GraphqlSoupInput,
+  GraphqlSoupItem,
+} from '@service-storage/graphql-soup';
 import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
+  graphqlSoupProjectionSupported,
   mapGraphqlSoupItem,
   mapGraphqlSoupPage,
 } from '@service-storage/graphql-soup';
@@ -40,6 +45,12 @@ import {
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { mapSoupPageToEntityList } from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
+import {
+  materializeReconciledSoup,
+  soupItemKey,
+  soupReconciliationBaseline,
+  unreconciledServerRecords,
+} from './reconciliation';
 
 export type GraphqlSoupAstItemsQueryArgs = {
   params: SoupAstParams;
@@ -91,10 +102,16 @@ export function createGraphqlSoupAstItemsQuery(
 
   const firstPageInput = createMemo(() => inputForCursor(null));
   const isSupported = () => firstPageInput() !== undefined;
-  type LocalProjection = {
-    revision: CacheRevision;
+  type ServerProjection = {
     data: SoupAstItemsData;
-    optimistic: boolean;
+    records: GraphqlSoupItem[];
+  };
+  type LocalProjection = {
+    input: GraphqlSoupInput;
+    generation: number;
+    baselineKeys: ReadonlySet<string>;
+    displayedKeys: ReadonlySet<string>;
+    data: SoupAstItemsData;
   };
   const [currentCacheRevision, setCurrentCacheRevision] = createSignal<
     CacheRevision | undefined
@@ -105,11 +122,15 @@ export function createGraphqlSoupAstItemsQuery(
   const [localProjection, setLocalProjection] = createSignal<
     LocalProjection | undefined
   >();
+  const [localEvaluationTrigger, setLocalEvaluationTrigger] = createSignal(0);
   const soupItemSelection = selectRecords(SoupItemFieldsFragmentDoc);
   let localRequest = 0;
+  let localEvaluationRunning = false;
+  let localEvaluationPending = false;
   let cacheGeneration = 0;
-  let resetContinuationPages: (() => void) | undefined;
+  const [baselineGeneration, setBaselineGeneration] = createSignal<number>();
   let previousInitialInput: GraphqlSoupInput | undefined;
+  let networkAuthorityInput: GraphqlSoupInput | undefined;
   let staleFallbackSpan: ReturnType<typeof Telemetry.span> | undefined;
 
   const recordAuthority = (source: 'network' | 'local' | 'stale-fallback') => {
@@ -132,6 +153,7 @@ export function createGraphqlSoupAstItemsQuery(
       setCurrentCacheRevision(undefined);
       setNetworkAuthorityRevision(undefined);
       setLocalProjection(undefined);
+      setBaselineGeneration(undefined);
     };
     const observeCurrentRevision = () => {
       const observedGeneration = cacheGeneration;
@@ -176,32 +198,57 @@ export function createGraphqlSoupAstItemsQuery(
   });
 
   createEffect(() => {
+    localEvaluationTrigger();
     const revision = currentCacheRevision();
     const input = firstPageInput();
     const queryOptions = options();
     const host = getGraphqlSoupCacheHost();
+    const records = serverRecords();
     const requestId = ++localRequest;
+    const requestGeneration = cacheGeneration;
     if (input !== previousInitialInput) {
       previousInitialInput = input;
       setLocalProjection(undefined);
     }
     if (
       revision === undefined ||
-      networkAuthorityRevision() === revision ||
+      (networkAuthorityInput === input &&
+        networkAuthorityRevision() === revision) ||
       !queryOptions.enabled ||
+      !graphqlSoupProjectionSupported() ||
       !input ||
       !host ||
       !('initial' in input)
     ) {
+      localEvaluationPending = false;
       return;
     }
     const initial = input.initial;
-    if (!initial) return;
+    if (!initial) {
+      localEvaluationPending = false;
+      return;
+    }
     const filters = initial.filters ?? {};
     const sortMethod = initial.sortMethod;
-    if (!sortMethod || sortMethod === 'VIEWED_AT') return;
+    if (sortMethod !== 'CREATED_AT' && sortMethod !== 'UPDATED_AT') {
+      localEvaluationPending = false;
+      return;
+    }
+    const baseline = soupReconciliationBaseline(records, sortMethod);
+    if (!baseline) {
+      setLocalProjection(undefined);
+      localEvaluationPending = false;
+      return;
+    }
     const sortDirection = initial.sortDirection ?? 'DESC';
     const limit = initial.limit ?? 20;
+
+    if (localEvaluationRunning) {
+      localEvaluationPending = true;
+      return;
+    }
+    localEvaluationRunning = true;
+    localEvaluationPending = false;
 
     void (async () => {
       const span = Telemetry.span('graphql_cache.soup_local_evaluation');
@@ -216,24 +263,36 @@ export function createGraphqlSoupAstItemsQuery(
             sortMethod,
             sortDirection,
             limit,
+            baseline,
           });
-          if (result.kind !== 'complete') return;
+          if (result.kind !== 'reconciled') return;
           if (requestId !== localRequest) {
             discarded = true;
             return;
           }
-          const selected = await readRecordsByKeys(
-            host,
-            soupItemSelection,
-            result.keys
-          );
+          // Loaded server pages may exceed the bounded fragment-read API.
+          // Every chunk must still belong to the same reconciliation revision.
+          const chunks = [];
+          for (
+            let offset = 0;
+            offset < Math.max(1, result.keys.length);
+            offset += 500
+          ) {
+            chunks.push(
+              await readRecordsByKeys(
+                host,
+                soupItemSelection,
+                result.keys.slice(offset, offset + 500)
+              )
+            );
+          }
           const latestRevision = await host.currentRevision();
           if (requestId !== localRequest) {
             discarded = true;
             return;
           }
           if (
-            result.revision !== selected.revision ||
+            chunks.some((chunk) => result.revision !== chunk.revision) ||
             result.revision !== latestRevision ||
             result.revision !== expectedRevision
           ) {
@@ -243,15 +302,20 @@ export function createGraphqlSoupAstItemsQuery(
             setCurrentCacheRevision(latestRevision);
             continue;
           }
-          if (selected.records.length !== result.keys.length) return;
-          const items = selected.records.flatMap(({ record }) => {
+          const reconciledRecords = materializeReconciledSoup(
+            result.keys,
+            chunks.flatMap((chunk) => chunk.records),
+            records
+          );
+          const items = reconciledRecords.flatMap((record) => {
             const item = mapGraphqlSoupItem(record);
             return item ? [item] : [];
           });
-          if (items.length !== result.keys.length) return;
           setLocalProjection({
-            revision: latestRevision,
-            optimistic: result.optimistic,
+            input,
+            generation: requestGeneration,
+            baselineKeys: new Set(records.map(soupItemKey)),
+            displayedKeys: new Set(reconciledRecords.map(soupItemKey)),
             data: {
               entities: mapSoupPageToEntityList(
                 { items, next_cursor: undefined },
@@ -267,7 +331,7 @@ export function createGraphqlSoupAstItemsQuery(
           outcome = 'success';
           recordAuthority('local');
           finishStaleFallback('local');
-          resetContinuationPages?.();
+          span.setAttr('evaluation.retained_count', result.retainedKeys.length);
           return;
         }
       } catch {
@@ -279,6 +343,11 @@ export function createGraphqlSoupAstItemsQuery(
         span.setAttr('evaluation.retry_count', retryCount);
         span.setAttr('evaluation.discarded', discarded);
         span.end();
+        localEvaluationRunning = false;
+        if (localEvaluationPending) {
+          localEvaluationPending = false;
+          setLocalEvaluationTrigger((trigger) => trigger + 1);
+        }
       }
     })();
   });
@@ -287,7 +356,7 @@ export function createGraphqlSoupAstItemsQuery(
     SoupQuery,
     SoupQueryVariables,
     string | null,
-    SoupAstItemsData
+    ServerProjection
   >(() => {
     const firstInput = firstPageInput();
     const queryOptions = options();
@@ -311,9 +380,11 @@ export function createGraphqlSoupAstItemsQuery(
       requestPolicy: 'cache-and-network',
       keepPreviousData: false,
       onResult: (result, page) => {
+        if (result.data) setBaselineGeneration(cacheGeneration);
         if (page.pageIndex !== 0) return;
         const metadata = normalizedCacheResultMetadata(result);
         if (metadata?.source !== 'live-network' || !metadata.revision) return;
+        networkAuthorityInput = firstInput;
         batch(() => {
           setCurrentCacheRevision(metadata.revision);
           setNetworkAuthorityRevision(metadata.revision);
@@ -323,27 +394,86 @@ export function createGraphqlSoupAstItemsQuery(
         finishStaleFallback('network');
       },
       select: ({ pages }) => ({
-        entities: pages.flatMap((page) =>
-          mapSoupPageToEntityList(mapGraphqlSoupPage(page), {
-            instructionsIdQuery,
-            showSupportedForeignEntities,
-          })
-        ),
-        groups: undefined,
+        records: pages.flatMap((page) => page.user.soup.items),
+        data: {
+          entities: pages.flatMap((page) =>
+            mapSoupPageToEntityList(mapGraphqlSoupPage(page), {
+              instructionsIdQuery,
+              showSupportedForeignEntities,
+            })
+          ),
+          groups: undefined,
+        },
       }),
     };
   });
 
-  resetContinuationPages = query.resetToInitialPage;
+  // Snapshot the reactive normalized rows: their object identities may remain
+  // stable across writes, but baseline membership/sort evidence must not mutate
+  // beneath an in-flight reconciliation.
+  const serverRecords = createMemo(() =>
+    baselineGeneration() === cacheGeneration
+      ? (query.data?.records ?? []).map((record) => ({ ...record }))
+      : []
+  );
 
-  const authoritativeLocalProjection = (): LocalProjection | undefined => {
+  const serverRecordKeys = createMemo(
+    () => new Set(serverRecords().map(soupItemKey))
+  );
+
+  // Retain same-query rows across revisions and page additions, not across a
+  // query/generation change or removal of the baseline they were built from.
+  // Publishing a replacement still requires all the revision checks above.
+  const displayLocalProjection = (): LocalProjection | undefined => {
     const local = localProjection();
-    const revision = currentCacheRevision();
-    return local?.revision === revision ? local : undefined;
+    if (
+      !local ||
+      local.input !== firstPageInput() ||
+      local.generation !== cacheGeneration
+    )
+      return undefined;
+    const keys = serverRecordKeys();
+    for (const key of local.baselineKeys) {
+      if (!keys.has(key)) return undefined;
+    }
+    return local;
   };
   const networkIsAuthoritative = (): boolean =>
+    networkAuthorityInput === firstPageInput() &&
     networkAuthorityRevision() !== undefined &&
     networkAuthorityRevision() === currentCacheRevision();
+
+  // An overlay covers only the server rows that existed when it was evaluated.
+  // New server pages must render immediately, even if the next evaluation stalls
+  // or fails. Preserve covered decisions and local additions, then append new
+  // rows in server-page order until a successful reconciliation orders the union.
+  const displayData = createMemo((): SoupAstItemsData | undefined => {
+    if (networkIsAuthoritative()) return query.data?.data;
+    const local = displayLocalProjection();
+    if (!local) return query.data?.data;
+    const additions = unreconciledServerRecords(
+      serverRecords(),
+      local.baselineKeys,
+      local.displayedKeys
+    ).flatMap((record) => {
+      const item = mapGraphqlSoupItem(record);
+      return item ? [item] : [];
+    });
+    if (additions.length === 0) return local.data;
+    const entities = mapSoupPageToEntityList(
+      { items: additions, next_cursor: undefined },
+      {
+        instructionsIdQuery,
+        showSupportedForeignEntities: options().showSupportedForeignEntities,
+      }
+    );
+    return entities.length === 0
+      ? local.data
+      : {
+          ...local.data,
+          entities: [...local.data.entities, ...entities],
+        };
+  });
 
   const error = (): CombinedError | undefined => query.error ?? undefined;
   createComputed(
@@ -355,25 +485,20 @@ export function createGraphqlSoupAstItemsQuery(
   );
 
   return {
-    data: () => {
-      if (networkIsAuthoritative()) return query.data;
-      const local = authoritativeLocalProjection();
-      return local?.data ?? query.data ?? localProjection()?.data;
-    },
+    data: displayData,
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
-    isLoading: () =>
-      query.isLoading && authoritativeLocalProjection() === undefined,
+    isLoading: () => query.isLoading && displayLocalProjection() === undefined,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () => query.isFetchingNextPage,
-    isPlaceholderData: () =>
-      !networkIsAuthoritative() && authoritativeLocalProjection() !== undefined,
+    // Current-query cache results are usable data, not previous-tab
+    // placeholders. In particular, local recomputation must not animate the
+    // mobile tab-loading bar or make the view report that it has no data.
+    isPlaceholderData: () => false,
     hasNextPage: () => query.hasNextPage,
     fetchNextPage: async () => {
-      // Local predicate pagination is not revision-safe yet. Return to the
-      // stale server page chain before requesting its continuation cursor.
-      setLocalProjection(undefined);
+      // The display overlay never owns or resets the server cursor chain.
       await query.fetchNextPage();
     },
     resetToInitialPage: query.resetToInitialPage,

@@ -80,11 +80,18 @@ export function floatWithSelection(
     if (anchor) {
       setCurrentAnchor(anchor);
       const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
+      const floatingOptions = accessor()?.floatingOptions ?? {};
+      const preferredPlacement = floatingOptions.placement ?? 'bottom-start';
       const { placement } = await computePosition(anchor, floatingEl, {
-        placement: 'bottom-start',
+        placement: preferredPlacement,
         middleware: [
           flip({
-            fallbackPlacements: ['top-start'],
+            // Default menus sit below the caret and flip above. A caller that
+            // asked for another side (e.g. `placement: 'top'`) should flip to
+            // the opposite side instead of being stuck on `top-start`.
+            ...(preferredPlacement === 'bottom-start'
+              ? { fallbackPlacements: ['top-start'] as const }
+              : {}),
             boundary,
             padding: iosSafePadding(spacing),
           }),
@@ -92,6 +99,7 @@ export function floatWithSelection(
           shift({ padding: spacing, boundary }),
           hide(),
         ],
+        ...floatingOptions,
       });
 
       decidedPlacement = placement;

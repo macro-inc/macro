@@ -1,7 +1,10 @@
 //! Minimal storage-neutral predicate-index intermediate representation.
 #![deny(missing_docs)]
 
-use std::{cmp::Ordering, collections::HashSet};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeSet, HashSet},
+};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -201,7 +204,7 @@ impl PredicateExpr {
 }
 
 /// One exact fact in an index document.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ExactFact {
     /// Fact vocabulary token.
     pub attribute: Token,
@@ -210,7 +213,7 @@ pub struct ExactFact {
 }
 
 /// One ordered integer fact in an index document.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct IntegerFact {
     /// Fact vocabulary token.
     pub attribute: Token,
@@ -236,6 +239,15 @@ pub struct IndexDocument {
 }
 
 impl IndexDocument {
+    /// Put facts in deterministic order and remove duplicate membership facts.
+    pub fn canonicalize(&mut self) {
+        self.exact_facts.sort();
+        self.exact_facts.dedup();
+        self.integer_facts.sort();
+        self.integer_facts.dedup();
+        self.sort_facts.sort();
+    }
+
     /// Validate bounded fact counts and unique sort attributes.
     pub fn validate(&self) -> Result<(), ValidationError> {
         let facts = self.exact_facts.len() + self.integer_facts.len() + self.sort_facts.len();
@@ -381,6 +393,191 @@ impl ValidatedIndexQuery {
         };
         self.0.sort_attribute == *attribute
             || expression_depends_on(&candidate.predicate, attribute)
+    }
+
+    /// Collect predicate and sort attributes inspected in one selected partition.
+    pub fn dependent_attributes(&self, partition: &Token) -> BTreeSet<Token> {
+        let mut attributes = BTreeSet::from([self.0.sort_attribute.clone()]);
+        if let Some(candidate) = self
+            .0
+            .partitions
+            .iter()
+            .find(|candidate| candidate.partition == *partition)
+        {
+            collect_expression_attributes(&candidate.predicate, &mut attributes);
+        }
+        attributes
+    }
+}
+
+/// Why a known projection is not currently safe to query.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProjectionIncompleteKind {
+    /// An update may have changed indexed facts.
+    Dirty,
+    /// A supported normalized record arrived without its required projection.
+    Missing,
+    /// The record carries a projection version this client cannot interpret.
+    IncompatibleVersion,
+}
+
+/// Current effective uncertainty after composing optimistic projection changes.
+///
+/// `AllExcept` is needed so an exact later patch can make one attribute known
+/// after a wildcard unknown mutation without incorrectly clearing uncertainty
+/// for every other possible profile attribute.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OptimisticUncertainty {
+    /// Only the listed attributes are uncertain.
+    Attributes(BTreeSet<Token>),
+    /// Every attribute except the listed attributes is uncertain.
+    AllExcept(BTreeSet<Token>),
+}
+
+impl Default for OptimisticUncertainty {
+    fn default() -> Self {
+        Self::Attributes(BTreeSet::new())
+    }
+}
+
+impl OptimisticUncertainty {
+    /// Whether no attribute is uncertain.
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::Attributes(attributes) if attributes.is_empty())
+    }
+
+    /// Whether one attribute remains uncertain.
+    pub fn affects(&self, attribute: &Token) -> bool {
+        match self {
+            Self::Attributes(attributes) => attributes.contains(attribute),
+            Self::AllExcept(certain) => !certain.contains(attribute),
+        }
+    }
+
+    /// Mark listed attributes uncertain, or every attribute when the slice is empty.
+    pub fn mark(&mut self, attributes: &[Token]) {
+        if attributes.is_empty() {
+            *self = Self::AllExcept(BTreeSet::new());
+            return;
+        }
+        match self {
+            Self::Attributes(uncertain) => uncertain.extend(attributes.iter().cloned()),
+            Self::AllExcept(certain) => {
+                for attribute in attributes {
+                    certain.remove(attribute);
+                }
+            }
+        }
+    }
+
+    /// Mark attributes exact after a deterministic replacement patch.
+    pub fn clear(&mut self, attributes: impl IntoIterator<Item = Token>) {
+        match self {
+            Self::Attributes(uncertain) => {
+                for attribute in attributes {
+                    uncertain.remove(&attribute);
+                }
+            }
+            Self::AllExcept(certain) => certain.extend(attributes),
+        }
+    }
+}
+
+/// Current fully composed optimistic projection for one record key.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OptimisticProjectionState {
+    /// Complete effective facts.
+    Complete(IndexDocument),
+    /// Effective tombstone. Authoritative facts remain suppressed.
+    Deleted {
+        /// Normalized record key.
+        record_key: RecordKey,
+        /// Projection profile.
+        profile: Profile,
+        /// Entity partition.
+        partition: Token,
+    },
+    /// Authority is suppressed, but exact effective facts cannot be proven.
+    Incomplete {
+        /// Normalized record key.
+        record_key: RecordKey,
+        /// Projection profile.
+        profile: Profile,
+        /// Entity partition.
+        partition: Token,
+        /// Why exact composition failed.
+        kind: ProjectionIncompleteKind,
+    },
+}
+
+impl OptimisticProjectionState {
+    /// Read the affected normalized record key.
+    pub fn record_key(&self) -> &RecordKey {
+        match self {
+            Self::Complete(document) => &document.record_key,
+            Self::Deleted { record_key, .. } | Self::Incomplete { record_key, .. } => record_key,
+        }
+    }
+
+    /// Read the effective profile.
+    pub fn profile(&self) -> &Profile {
+        match self {
+            Self::Complete(document) => &document.profile,
+            Self::Deleted { profile, .. } | Self::Incomplete { profile, .. } => profile,
+        }
+    }
+
+    /// Read the effective partition.
+    pub fn partition(&self) -> &Token {
+        match self {
+            Self::Complete(document) => &document.partition,
+            Self::Deleted { partition, .. } | Self::Incomplete { partition, .. } => partition,
+        }
+    }
+
+    /// Validate complete facts when this state contains a document.
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        match self {
+            Self::Complete(document) => document.validate(),
+            Self::Deleted { .. } | Self::Incomplete { .. } => Ok(()),
+        }
+    }
+}
+
+/// Effective shadow value whose owner already has a durable mutation ID.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EffectiveOptimisticProjection {
+    /// Greatest active mutation ID affecting this record.
+    pub owner: u64,
+    /// Fully composed projection, tombstone, or incomplete marker.
+    pub state: OptimisticProjectionState,
+    /// Uncertainty still effective after all active mutations.
+    pub uncertainty: OptimisticUncertainty,
+}
+
+impl EffectiveOptimisticProjection {
+    /// Validate owner and effective projection bounds.
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        if self.owner == 0 {
+            return Err(ValidationError::InvalidOptimisticOwner);
+        }
+        self.state.validate()
+    }
+}
+
+/// Effective shadow value awaiting the mutation ID assigned during enqueue.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingOptimisticProjection {
+    /// Fully composed projection, tombstone, or incomplete marker.
+    pub state: OptimisticProjectionState,
+    /// Uncertainty still effective after applying the new mutation.
+    pub uncertainty: OptimisticUncertainty,
+}
+
+impl PendingOptimisticProjection {
+    /// Validate effective projection bounds.
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        self.state.validate()
     }
 }
 
@@ -579,6 +776,9 @@ pub enum ValidationError {
     /// A query limit is zero or too large.
     #[error("invalid index query limit {0}")]
     Limit(u16),
+    /// A durable effective optimistic projection has no active owner.
+    #[error("effective optimistic projection owner must be non-zero")]
+    InvalidOptimisticOwner,
 }
 
 /// Pure reference result used for adapter conformance tests.
@@ -653,6 +853,20 @@ fn expression_depends_on(expr: &PredicateExpr, attribute: &Token) -> bool {
         }
         PredicateExpr::Not(expr) => expression_depends_on(expr, attribute),
         PredicateExpr::All | PredicateExpr::None => false,
+    }
+}
+
+fn collect_expression_attributes(expr: &PredicateExpr, attributes: &mut BTreeSet<Token>) {
+    match expr {
+        PredicateExpr::Exact { attribute, .. } | PredicateExpr::I64Range { attribute, .. } => {
+            attributes.insert(attribute.clone());
+        }
+        PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
+            collect_expression_attributes(left, attributes);
+            collect_expression_attributes(right, attributes);
+        }
+        PredicateExpr::Not(expr) => collect_expression_attributes(expr, attributes),
+        PredicateExpr::All | PredicateExpr::None => {}
     }
 }
 

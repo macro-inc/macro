@@ -18,10 +18,10 @@ import {
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
-  ENABLE_HISTORY_COMPONENT,
   ENABLE_MARKDOWN_COMMENTS,
-  INLINE_AI_EDITING_FLAG,
-  INLINE_AI_EDITING_OVERRIDE,
+  enableHistoryComponent,
+  enableInlineAiEditing,
+  isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useIsMacroTeam } from '@core/context/team';
@@ -132,9 +132,7 @@ export function Notebook(props: {
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const documentId = props.documentId;
   const canEdit = useCanEdit();
-  const inlineAiEditing = useFeatureFlag(INLINE_AI_EDITING_FLAG, {
-    enabledOverride: INLINE_AI_EDITING_OVERRIDE,
-  });
+  const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -159,7 +157,10 @@ export function Notebook(props: {
     if (!ENABLE_MARKDOWN_COMMENTS) return false;
     return Object.keys(comments).length > 0;
   });
-  const showComments = () => hasComment() && !history.isOpen();
+  // On phones the margin is hidden entirely (no minimized rail); the touch
+  // comment drawer is the only comment surface. CommentMargin stays mounted
+  // inside the hidden wrapper — it hosts the drawer.
+  const showComments = () => hasComment() && !history.isOpen() && !isMobile();
 
   const currentEditorState = () => {
     const editor = md.editor;
@@ -191,8 +192,13 @@ export function Notebook(props: {
     observe(notebookRef);
   });
 
+  // Component scope on purpose: the hook registers an onCleanup that ends
+  // its pending wait-for-mark. Called inside the createEffect below, that
+  // cleanup would belong to the effect's computation and run on every
+  // re-run — tying the deep-link scroll's lifetime to re-run ordering.
+  const goToTempRedirect = useGoToTempRedirect();
+
   createEffect(() => {
-    const goToTempRedirect = useGoToTempRedirect();
     const recentState = tempRedirectLocation();
     if (!recentState) return;
 
@@ -401,7 +407,7 @@ export function Notebook(props: {
                 setShowLexicalStateDebugger(false)
               }
             />
-            <Show when={ENABLE_HISTORY_COMPONENT()}>
+            <Show when={isFeatureEnabled(enableHistoryComponent)}>
               <HistoryOverlay
                 currentState={currentEditorState}
                 selectedAt={history.selectedAt()}

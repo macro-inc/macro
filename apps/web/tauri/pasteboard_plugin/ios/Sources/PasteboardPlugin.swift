@@ -7,6 +7,16 @@ private struct StagePasteboardImagePayload: Decodable {
 }
 
 class PasteboardPlugin: Plugin {
+    @objc public func readPasteboardText(_ invoke: Invoke) throws {
+        DispatchQueue.main.async {
+            if let text = UIPasteboard.general.string {
+                invoke.resolve(["text": text])
+            } else {
+                invoke.resolve(["text": NSNull()])
+            }
+        }
+    }
+
     @objc public func stagePasteboardImage(_ invoke: Invoke) throws {
         let payload = try invoke.parseArgs(StagePasteboardImagePayload.self)
         let stagingDirectory = URL(

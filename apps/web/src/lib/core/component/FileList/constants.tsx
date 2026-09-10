@@ -33,7 +33,7 @@ export const FILE_LIST_SPACER_WIDTH = {
 
 const _FILE_LIST_TEXT_SIZE = {
   [FILE_LIST_SIZE.sm]: 'text-sm',
-  [FILE_LIST_SIZE.md]: 'text-md',
+  [FILE_LIST_SIZE.md]: 'text-base',
   [FILE_LIST_SIZE.lg]: 'text-lg',
 } as const;
 

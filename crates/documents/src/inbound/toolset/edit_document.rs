@@ -120,6 +120,7 @@ where
             self.document_id.clone(),
             AccessLevel::Edit,
             &ctx.document_permission_jwt_secret,
+            Some(ctx.actor.into_storage_id().to_string()),
         )
         .map_err(|e| ToolCallError {
             description: "failed to mint document token".to_string(),

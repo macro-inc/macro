@@ -569,6 +569,7 @@ where
                 team_id,
             },
         );
+        let attribution = args.resolved_attribution();
 
         let mut response = self
             .document_service
@@ -596,6 +597,7 @@ where
                             property_values,
                             share_with_team,
                         },
+                        &attribution,
                     )
                     .await?;
             }

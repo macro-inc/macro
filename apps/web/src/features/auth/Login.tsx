@@ -128,7 +128,7 @@ function LoginPicker(props: {
         autofocus
         onClick={() => startSsoLogin(GOOGLE_GMAIL_IDP)}
       >
-        <IconGoogle class="size-5" />
+        <IconGoogle class="size-fit" />
         Continue with Google
       </Button>
 
@@ -139,7 +139,7 @@ function LoginPicker(props: {
           class="bg-surface"
           onClick={() => startSsoLogin('Apple')}
         >
-          <IconApple class="size-5" />
+          <IconApple class="size-fit" />
           Continue with Apple
         </Button>
       </Show>

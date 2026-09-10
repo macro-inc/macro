@@ -1,3 +1,4 @@
+use super::ElicitationContentValue as ContentValue;
 use agent_client_protocol::schema::v1::{ClientRequest, ContentBlock, SessionId};
 
 use super::*;
@@ -119,33 +120,207 @@ fn compact_becomes_opencodes_compact_prompt() {
 }
 
 #[test]
-fn action_ids_survive_the_trip_through_a_request_id() {
-    let id = AgentActionId::mint();
+fn non_uuid_request_ids_are_not_action_ids() {
+    // The harness's own handshake counters and numeric ids were not minted by
+    // the control plane. (A foreign client's bare uuid is indistinguishable
+    // from ours by design: only this side writes ToRuntime frames in
+    // production, so uuid-shaped is treated as ours.)
+    let handshake = RequestId::Str(format!(
+        "agent_session:{}:0",
+        macro_uuid::generate_uuid_v7()
+    ));
+    assert_eq!(AgentActionId::from_request_id(&handshake), None);
     assert_eq!(
-        AgentActionId::from_request_id(&id.to_request_id()),
-        Some(id)
+        AgentActionId::from_request_id(&RequestId::Number(7)),
+        None,
+        "numeric ids are never ours"
+    );
+    let counter = RequestId::Str("harness:prompt:0".to_owned());
+    assert_eq!(AgentActionId::from_request_id(&counter), None);
+}
+
+#[test]
+fn only_prompt_shaped_actions_occupy_a_turn() {
+    assert!(AgentAction::prompt("keep going").occupies_turn());
+    assert!(AgentAction::Compact.occupies_turn());
+    assert!(!AgentAction::set_model("opus").occupies_turn());
+    assert!(!AgentAction::Stop.occupies_turn());
+    assert!(
+        !AgentAction::respond_elicitation(
+            ElicitationRequestId::Number(0),
+            ElicitationAnswer::Cancel
+        )
+        .occupies_turn(),
+        "an answer rides alongside the turn that is waiting on it"
     );
 }
 
 #[test]
-fn foreign_request_ids_are_not_action_ids() {
-    // Zed's bare uuids, the harness's own counters, numeric ids: none of
-    // them were minted by the control plane.
-    let foreign = RequestId::Str("813ea7f3-b8e1-4af3-b2f4-44f4f445637a".to_owned());
-    assert_eq!(AgentActionId::from_request_id(&foreign), None);
+fn an_elicitation_answer_is_a_response_on_the_agents_own_id() {
+    use agent_client_protocol::schema::v1::{
+        CreateElicitationResponse, ElicitationAction, ElicitationContentValue, Response,
+    };
+
+    let session_id = SessionId::new("acp-abc");
+    let content = BTreeMap::from([
+        (
+            "strategy".to_owned(),
+            ContentValue::Text("balanced".to_owned()),
+        ),
+        ("port".to_owned(), ContentValue::Integer(3000)),
+        ("ratio".to_owned(), ContentValue::Number(0.5)),
+        ("logging".to_owned(), ContentValue::Boolean(true)),
+        (
+            "colours".to_owned(),
+            ContentValue::Strings(vec!["red".to_owned(), "blue".to_owned()]),
+        ),
+    ]);
+    let translated = AgentAction::respond_elicitation(
+        ElicitationRequestId::Number(0),
+        ElicitationAnswer::Accept {
+            content: Some(content),
+        },
+    )
+    .to_runtime(
+        &session_id,
+        RequestId::Str("agent_session:ignored".to_owned()),
+    )
+    .unwrap();
+
+    // Claude Code numbers its elicitations from 0; the answer must echo that
+    // id exactly, not the minted action id.
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(Response::Result {
+        id,
+        result,
+    }))) = translated
+    else {
+        panic!("an elicitation answer translates to a JSON-RPC result");
+    };
+    assert_eq!(id, RequestId::Number(0));
+
+    let response: CreateElicitationResponse = serde_json::from_value(result).unwrap();
+    let ElicitationAction::Accept(accept) = response.action else {
+        panic!("accept round-trips as accept, got {:?}", response.action);
+    };
+    let content = accept.content.unwrap();
+    assert_eq!(
+        content["strategy"],
+        ElicitationContentValue::String("balanced".to_owned())
+    );
+    assert_eq!(content["port"], ElicitationContentValue::Integer(3000));
+    assert_eq!(content["ratio"], ElicitationContentValue::Number(0.5));
+    assert_eq!(content["logging"], ElicitationContentValue::Boolean(true));
+    assert_eq!(
+        content["colours"],
+        ElicitationContentValue::StringArray(vec!["red".to_owned(), "blue".to_owned()])
+    );
 }
 
 #[test]
-fn action_ids_serialize_as_their_bare_string() {
-    let id = AgentActionId::mint();
-    let json = serde_json::to_string(&id).unwrap();
-    assert_eq!(json, format!("\"{id}\""));
+fn decline_and_cancel_carry_no_content_and_string_ids_survive() {
+    use agent_client_protocol::schema::v1::Response;
+
+    for (answer, action) in [
+        (ElicitationAnswer::Decline, "decline"),
+        (ElicitationAnswer::Cancel, "cancel"),
+    ] {
+        let translated =
+            AgentAction::respond_elicitation(ElicitationRequestId::Str("el-7".to_owned()), answer)
+                .to_runtime(
+                    &SessionId::new("acp-abc"),
+                    RequestId::Str("unused".to_owned()),
+                )
+                .unwrap();
+        let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(Response::Result {
+            id,
+            result,
+        }))) = translated
+        else {
+            panic!("an elicitation answer translates to a JSON-RPC result");
+        };
+        assert_eq!(id, RequestId::Str("el-7".to_owned()));
+        assert_eq!(result, serde_json::json!({ "action": action }));
+    }
+}
+
+/// A value ACP cannot express is refused where the caller finds out about it -
+/// reading the control request - rather than on the way to the wire, by which
+/// point the session has already released the elicitation slot and the agent
+/// would wait on a request nothing can answer.
+#[test]
+fn content_acp_cannot_express_is_refused_when_the_request_is_read() {
+    for unrepresentable in [
+        serde_json::json!({ "a": 1 }),
+        serde_json::json!(null),
+        serde_json::json!(["a", 1]),
+    ] {
+        let body = serde_json::json!({
+            "type": "respondElicitation",
+            "requestId": 1,
+            "action": "accept",
+            "content": { "field": unrepresentable },
+        });
+        assert!(
+            serde_json::from_value::<AgentAction>(body).is_err(),
+            "{unrepresentable} is not an ACP content value"
+        );
+    }
 }
 
 #[test]
-fn only_stop_supersedes_what_is_already_queued() {
-    assert!(AgentAction::Stop.supersedes_queued());
-    assert!(!AgentAction::prompt("keep going").supersedes_queued());
-    assert!(!AgentAction::set_model("opus").supersedes_queued());
-    assert!(!AgentAction::Compact.supersedes_queued());
+fn the_control_body_for_an_answer_reads_as_documented() {
+    let action: AgentAction = serde_json::from_value(serde_json::json!({
+        "type": "respondElicitation",
+        "requestId": 43,
+        "action": "accept",
+        "content": { "strategy": "balanced" }
+    }))
+    .unwrap();
+    assert_eq!(
+        action,
+        AgentAction::respond_elicitation(
+            ElicitationRequestId::Number(43),
+            ElicitationAnswer::Accept {
+                content: Some(BTreeMap::from([(
+                    "strategy".to_owned(),
+                    ContentValue::Text("balanced".to_owned())
+                )])),
+            },
+        )
+    );
+
+    let action: AgentAction = serde_json::from_value(serde_json::json!({
+        "type": "respondElicitation",
+        "requestId": "el-7",
+        "action": "decline"
+    }))
+    .unwrap();
+    assert_eq!(
+        action,
+        AgentAction::respond_elicitation(
+            ElicitationRequestId::Str("el-7".to_owned()),
+            ElicitationAnswer::Decline,
+        )
+    );
+    assert_eq!(
+        serde_json::to_value(&action).unwrap(),
+        serde_json::json!({ "type": "respondElicitation", "requestId": "el-7", "action": "decline" })
+    );
+}
+
+#[test]
+fn elicitation_ids_round_trip_and_null_is_unanswerable() {
+    assert_eq!(
+        ElicitationRequestId::from_request_id(&RequestId::Number(0)),
+        Some(ElicitationRequestId::Number(0))
+    );
+    assert_eq!(
+        ElicitationRequestId::from_request_id(&RequestId::Str("x".to_owned()))
+            .map(|id| id.to_request_id()),
+        Some(RequestId::Str("x".to_owned()))
+    );
+    assert_eq!(
+        ElicitationRequestId::from_request_id(&RequestId::Null),
+        None
+    );
 }

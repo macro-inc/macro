@@ -1,4 +1,4 @@
-import { UnfurlLink } from '@core/component/Link';
+import { LinkHoverCard } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useUnfurl } from '@core/signal/unfurl';
@@ -10,13 +10,13 @@ import { floatWithElement } from '../../directive/floatWithElement';
 
 false && floatWithElement;
 
-type UnfurlLinkProps = ParentProps<{
+type LinkWithPreviewProps = ParentProps<{
   url: string;
   title?: string;
   class?: string;
 }>;
 
-export function LinkWithPreview(props: UnfurlLinkProps) {
+export function LinkWithPreview(props: LinkWithPreviewProps) {
   const [previewOpen, setPreviewOpen] = createSignal(false);
   const debouncedSetPreviewOpen = debounce((val: boolean) => {
     setPreviewOpen(val);
@@ -57,7 +57,7 @@ export function LinkWithPreview(props: UnfurlLinkProps) {
       <Show when={previewOpen()}>
         <ScopedPortal>
           <div
-            class="absolute bg-surface rounded-xs border border-edge-muted left-0 z-10 shadow-lg max-w-72"
+            class="absolute left-0 z-10"
             style={{
               transform: 'translateY(0)',
             }}
@@ -66,10 +66,10 @@ export function LinkWithPreview(props: UnfurlLinkProps) {
             {(() => {
               const data = unfurlData();
               if (data?.type === 'success') {
-                return <UnfurlLink unfurled={data.data} />;
+                return <LinkHoverCard unfurled={data.data} />;
               }
               return (
-                <UnfurlLink
+                <LinkHoverCard
                   unfurled={{
                     url: props.url,
                     title: props.title ?? '',

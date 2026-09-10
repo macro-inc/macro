@@ -1,5 +1,5 @@
 [package]
-description = "xtask nextest-filter: nextest rdeps package filter for a set of changed files"
+description = "xtask nextest-filter: affected Cargo packages for a set of changed files"
 edition = "2024"
 name = "xtask_nextest_filter"
 publish = false
@@ -11,5 +11,8 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+determinator = { workspace = true }
 guppy = { workspace = true }
+tempfile = { workspace = true }
 xtask_graph = { path = "../xtask_graph" }
+xtask_paths = { path = "../xtask_paths" }

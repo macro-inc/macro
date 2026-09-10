@@ -132,7 +132,7 @@ export function SplitDrawer(
             <div class={getGradientMaskClasses()} />
             <div class="flex items-center justify-start gap-2 shrink-0 px-2">
               <Show when={props.title}>
-                <h3 class="text-md font-medium text-content-secondary shrink truncate my-3">
+                <h3 class="text-base font-medium text-ink-muted shrink truncate my-3">
                   {props.title}
                 </h3>
               </Show>

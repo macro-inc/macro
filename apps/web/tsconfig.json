@@ -47,12 +47,6 @@
       "@sandbox-sizes": [
         "../../crates/agent_harness/sandbox_sizes.json"
       ],
-      "loro-crdt": [
-        "../../node_modules/loro-crdt"
-      ],
-      "loro-crdt/*": [
-        "../../node_modules/loro-crdt/*"
-      ],
       "@graphql-cache/*": [
         "./src/lib/graphql-cache/*"
       ],
@@ -76,6 +70,9 @@
       ],
       "@phosphor/*": [
         "../../node_modules/@phosphor-icons/core/assets/regular/*"
+      ],
+      "@phosphor-fill/*": [
+        "../../node_modules/@phosphor-icons/core/assets/fill/*"
       ],
       "@block-canvas/*": [
         "./src/features/block-canvas/*"
@@ -202,12 +199,6 @@
       ],
       "@service-contacts/*": [
         "./src/lib/service-clients/service-contacts/*"
-      ],
-      "@baby-gl": [
-        "./src/lib/baby-gl/"
-      ],
-      "@baby-gl/*": [
-        "./src/lib/baby-gl/*"
       ],
       "@notifications": [
         "./src/features/notifications/"

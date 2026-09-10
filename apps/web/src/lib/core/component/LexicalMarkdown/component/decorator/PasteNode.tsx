@@ -20,8 +20,9 @@ import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAn
 /**
  * Block-level decorator for a {@link PasteNode}. Renders a compact collapsed
  * monospace preview that looks like a code fence and fades to the background
- * color at the bottom, with a "pasted" pill in the bottom-left and a hamburger
- * menu floating in the top-right (Convert to text / Delete). Clicking the node
+ * color at the bottom, with a "pasted" / "referenced" pill in the bottom-left
+ * and a hamburger menu floating in the top-right (Convert to text / Delete).
+ * Clicking the node
  * opens the full text styled like a code fence: a scrollable popup on desktop
  * and a bottom drawer on mobile, both dismissable with `esc` or by clicking
  * outside. Mirrors the DocumentCard.
@@ -33,6 +34,11 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
 
   const [open, setOpen] = createSignal(false);
   const [menuOpen, setMenuOpen] = createSignal(false);
+
+  // The origin value doubles as the pill label: "pasted" or "referenced".
+  const origin = () => props.origin ?? 'pasted';
+  const originTitle = () =>
+    origin() === 'referenced' ? 'Referenced text' : 'Pasted text';
 
   const isSelectedAsNode = () => {
     const sel = selection();
@@ -63,7 +69,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
   const copyText = () => {
     try {
       navigator.clipboard.writeText(props.content);
-      toast.success('Copied pasted text to clipboard');
+      toast.success(`Copied ${origin()} text to clipboard`);
     } catch (e) {
       console.error('Failed to copy pasted text to clipboard', e);
     }
@@ -90,7 +96,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
       <div
         contentEditable={false}
         class={cn(
-          'relative my-2 w-full rounded border border-edge bg-surface no-select-children select-none overflow-hidden cursor-pointer',
+          'relative my-2 w-full rounded border border-edge bg-surface no-select-children select-none overflow-hidden',
           isSelectedAsNode() && 'bg-active outline-edge outline-4'
         )}
         on:click={(e) => {
@@ -112,9 +118,10 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
           <div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent to-message" />
         </div>
 
-        {/* "pasted" pill floating bottom-left. */}
+        {/* Origin pill floating bottom-left: "pasted" for clipboard dumps,
+            "referenced" for quote-replies from selected conversation text. */}
         <span class="absolute bottom-2 left-2 inline-flex items-center px-2 py-1 text-xs leading-none rounded-full border border-edge bg-surface">
-          pasted
+          {origin()}
         </span>
 
         {/* Hamburger menu floating top-right. Hidden in static / read-only
@@ -163,7 +170,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
             class="rounded-lg border border-edge bg-surface shadow-lg"
           >
             <div class="flex items-center justify-between px-4 py-2 border-b border-edge text-xs text-ink-muted">
-              <span>Pasted text</span>
+              <span>{originTitle()}</span>
               <div class="flex items-center gap-2">
                 <span>{lineLabel()}</span>
                 <Button
@@ -184,10 +191,10 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
         <MobileDrawer side="bottom" open={open()} onOpenChange={setOpen}>
           <MobileDrawer.Portal>
             <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
-            <MobileDrawer.Content aria-label="Pasted text">
+            <MobileDrawer.Content aria-label={originTitle()}>
               <MobileDrawer.Handle />
               <div class="flex items-center justify-between px-4 pb-2 text-xs text-ink-muted shrink-0">
-                <span>Pasted text</span>
+                <span>{originTitle()}</span>
                 <div class="flex items-center gap-2">
                   <span>{lineLabel()}</span>
                   <Button

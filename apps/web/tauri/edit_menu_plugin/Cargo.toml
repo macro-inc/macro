@@ -1,0 +1,15 @@
+[package]
+name = "tauri-plugin-edit-menu"
+version = "0.1.0"
+edition = "2024"
+links = "tauri-plugin-edit-menu"
+
+[build-dependencies]
+tauri-plugin = { version = "2.4", features = ["build"] }
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+tauri = { workspace = true }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { workspace = true, features = ["wry"] }

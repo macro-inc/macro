@@ -21,14 +21,9 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::{
-    events::WebhookMacroEvent,
-    ingestion::{WebhookEventIngestionError, WebhookEventIngestionService},
-};
-use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
+use crate::domain::ingestion::{WebhookEventIngestionError, WebhookEventIngestionService};
+use crate::topics::DeclaredMacroEvent;
 use anyhow::Context as _;
-use channels::domain::broker_events::ChannelMacroEvent;
-use documents::domain::events::DocumentMacroEvent;
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
@@ -50,13 +45,6 @@ impl GroupName for WebhookEventIngestionConsumerGroup {
 type WebhookKafkaAdapter =
     KafkaConsumerAdapter<WebhookEventIngestionConsumerGroup, DeclaredMacroEvent>;
 type WebhookKafkaConsumer = MacroEventConsumerService<DeclaredMacroEvent, WebhookKafkaAdapter>;
-
-macro_event_broker::declare_topics!(
-    DeclaredMacroEvent: DocumentMacroEvent,
-    ChannelMacroEvent,
-    WebhookMacroEvent,
-    AgentSessionMacroEvent,
-);
 
 /// Maximum in-process ingestion attempts per event before the consumer bails
 /// out and lets a restart redeliver from the last committed offset.

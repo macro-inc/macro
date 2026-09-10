@@ -21,12 +21,9 @@ import {
 describe('GraphQL Soup websocket auth', () => {
   it('maps HTTP protocols and appends encoded bearer auth', () => {
     expect(
-      buildGraphqlSoupWebSocketUrl(
-        'https://cloud-storage.macro.com',
-        'token+/='
-      )
+      buildGraphqlSoupWebSocketUrl('https://gateway.macro.com/dss', 'token+/=')
     ).toBe(
-      'wss://cloud-storage.macro.com/items/soup/graphql/ws?macro-api-token=token%2B%2F%3D'
+      'wss://gateway.macro.com/dss/items/soup/graphql/ws?macro-api-token=token%2B%2F%3D'
     );
     expect(buildGraphqlSoupWebSocketUrl('http://localhost:8086')).toBe(
       'ws://localhost:8086/items/soup/graphql/ws'
@@ -37,14 +34,14 @@ describe('GraphQL Soup websocket auth', () => {
     const refreshCookieAuth = vi.fn().mockResolvedValue(undefined);
     const getApiToken = vi.fn();
     const resolveUrl = createGraphqlSoupWebSocketUrlResolver({
-      dssHost: 'https://cloud-storage.macro.com',
+      dssHost: 'https://gateway.macro.com/dss',
       bearerTokenAuth: false,
       getApiToken,
       refreshCookieAuth,
     });
 
     await expect(resolveUrl()).resolves.toBe(
-      'wss://cloud-storage.macro.com/items/soup/graphql/ws'
+      'wss://gateway.macro.com/dss/items/soup/graphql/ws'
     );
     expect(refreshCookieAuth).toHaveBeenCalledOnce();
     expect(getApiToken).not.toHaveBeenCalled();
@@ -57,7 +54,7 @@ describe('GraphQL Soup websocket auth', () => {
       .mockResolvedValueOnce('second');
     const refreshCookieAuth = vi.fn();
     const resolveUrl = createGraphqlSoupWebSocketUrlResolver({
-      dssHost: 'https://cloud-storage.macro.com',
+      dssHost: 'https://gateway.macro.com/dss',
       bearerTokenAuth: true,
       getApiToken,
       refreshCookieAuth,

@@ -22,6 +22,7 @@ import {
   COMMAND_PRIORITY_EDITOR,
   createCommand,
   type LexicalEditor,
+  type LexicalNode,
   type NodeKey,
 } from 'lexical';
 import { v7 } from 'uuid';
@@ -39,6 +40,39 @@ interface CommentOperations {
   remove: (markId: string, markNodeKey: string) => void;
   setActiveIds: (markIds: string[]) => void;
   init: () => void;
+}
+
+/**
+ * The comment mark ids a caret position sits in, covering the boundaries
+ * `$getMarkIDs` misses: it looks forward from a text node's end to a
+ * following mark, but never backward from a text node's start — yet a caret
+ * placed immediately after a commented range lands at offset 0 of the next
+ * node. From a reader's perspective both positions touch the comment, so
+ * both resolve to it. Must run inside an editor read/update.
+ */
+export function $getMarkIdsAtCaret(
+  anchorNode: LexicalNode,
+  offset: number
+): string[] | null {
+  if ($isTextNode(anchorNode)) {
+    const markIds = $getMarkIDs(anchorNode, offset);
+    if (markIds != null) return markIds;
+    if (offset === 0) {
+      const prevSibling = anchorNode.getPreviousSibling();
+      if ($isTextNode(prevSibling)) {
+        // Check to see if last position of previous text node has marks
+        return $getMarkIDs(prevSibling, prevSibling.getTextContentSize());
+      }
+      if ($isCommentNode(prevSibling)) {
+        return prevSibling.getIDs();
+      }
+    }
+    return null;
+  }
+  if ($isCommentNode(anchorNode)) {
+    return anchorNode.getIDs();
+  }
+  return null;
 }
 
 export const CREATE_DRAFT_COMMENT_COMMAND = createCommand<void>(
@@ -247,40 +281,13 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
         let newActiveIds: string[] | undefined;
 
         if ($isRangeSelection(selection)) {
-          const anchorNode = selection.anchor.getNode();
-
-          if ($isTextNode(anchorNode)) {
-            const markIds = $getMarkIDs(anchorNode, selection.anchor.offset);
-            if (markIds != null) {
-              newActiveIds = markIds;
-              hasActiveIds = true;
-            }
-            if (markIds === null && selection.anchor.offset === 0) {
-              const prevSibling = anchorNode.getPreviousSibling();
-              if ($isTextNode(prevSibling)) {
-                // Check to see if last position of previous text node has marks
-                const markIds = $getMarkIDs(
-                  prevSibling,
-                  prevSibling.getTextContentSize()
-                );
-                if (markIds != null) {
-                  newActiveIds = markIds;
-                  hasActiveIds = true;
-                }
-              } else if ($isCommentNode(prevSibling)) {
-                const markIds = prevSibling.getIDs();
-                if (markIds != null) {
-                  newActiveIds = markIds;
-                  hasActiveIds = true;
-                }
-              }
-            }
-          } else if ($isCommentNode(anchorNode)) {
-            const markIds = anchorNode.getIDs();
-            if (markIds != null) {
-              newActiveIds = markIds;
-              hasActiveIds = true;
-            }
+          const markIds = $getMarkIdsAtCaret(
+            selection.anchor.getNode(),
+            selection.anchor.offset
+          );
+          if (markIds != null) {
+            newActiveIds = markIds;
+            hasActiveIds = true;
           }
         }
 

@@ -3,9 +3,8 @@ import { useChannelMessagesByIdsQuery } from '@queries/channel/channel-messages'
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
-import { createSignal, type ParentProps, Show } from 'solid-js';
+import { createSignal, type ParentProps } from 'solid-js';
 import { createFocusRequest } from '../Thread/focus-request';
-import { ThreadRail } from '../Thread/ThreadRail';
 import { DEFAULT_VISIBLE_REPLY_COUNT } from '../Thread/utils/thread-reply-indicator-helpers';
 import { StandaloneThreadContext } from './context';
 
@@ -69,12 +68,7 @@ function RootInner(props: RootProps) {
         replyInputFocusRequest,
       }}
     >
-      <div class="relative">
-        <Show when={hasReplies() || isReplying()}>
-          <ThreadRail />
-        </Show>
-        {props.children}
-      </div>
+      <div class="relative isolate z-0">{props.children}</div>
     </StandaloneThreadContext.Provider>
   );
 }

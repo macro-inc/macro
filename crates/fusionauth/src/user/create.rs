@@ -31,6 +31,20 @@ pub(crate) struct CreateUserRequest<'a> {
     pub user: User<'a>,
 }
 
+impl<'a> CreateUserRequest<'a> {
+    pub(crate) fn new(
+        application_id: Cow<'a, str>,
+        skip_verification: bool,
+        user: User<'a>,
+    ) -> Self {
+        Self {
+            application_id,
+            skip_verification,
+            user,
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct UserResponse<'a> {
@@ -38,8 +52,6 @@ pub(crate) struct UserResponse<'a> {
     pub id: Cow<'a, str>,
     /// The email address of the user
     pub email: Cow<'a, str>,
-    /// The additional data associated with the user
-    pub data: Option<serde_json::Value>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

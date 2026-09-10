@@ -63,6 +63,8 @@ fn sync_content_updated_serializes_to_the_exact_envelope() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: None,
+            actor: None,
+            on_behalf_of: None,
         }),
     );
 
@@ -116,6 +118,8 @@ fn optional_document_versions_support_present_and_absent_values() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: Some("snapshot-7".to_string()),
+            actor: None,
+            on_behalf_of: None,
         }),
     ];
 
@@ -162,6 +166,8 @@ fn search_event_constructors_use_the_document_key_and_schema_v1() {
         document_id: DOCUMENT_ID.to_string(),
         file_type: FileType::Md,
         document_version_id: None,
+        actor: None,
+        on_behalf_of: None,
     };
     let sync_content_updated =
         DocumentMacroEvent::sync_content_updated(DOCUMENT_ID, sync_metadata.clone());
@@ -242,4 +248,17 @@ fn existing_v1_document_events_still_decode() {
             reason: InteractionReason::Edited,
         })
     );
+}
+
+#[test]
+fn sync_extract_drops_invalid_attribution_strings() {
+    let metadata = DocumentSyncContentUpdatedMetadata::from_extract(
+        DOCUMENT_ID.to_string(),
+        FileType::Md,
+        None,
+        Some("not-an-actor".to_string()),
+        Some("also-not-a-user".to_string()),
+    );
+    assert_eq!(metadata.actor, None);
+    assert_eq!(metadata.on_behalf_of, None);
 }

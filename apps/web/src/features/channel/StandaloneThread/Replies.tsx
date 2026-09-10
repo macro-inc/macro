@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, For, type ParentProps, Show } from 'solid-js';
 import { Message, type MessageActions, type MessageData } from '../Message';
 import { Thread } from '../Thread';
 import { buildThreadReplyListMeta } from '../Thread/reply-list-meta';
@@ -11,12 +11,12 @@ import {
 } from '../Thread/utils/thread-reply-indicator-helpers';
 import { useStandaloneThread } from './context';
 
-type RepliesProps = {
+type RepliesProps = ParentProps<{
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   onClickMessage?: (messageId: string, e: MouseEvent) => void;
   class?: string;
   showReplyButton?: boolean;
-};
+}>;
 
 export function Replies(props: RepliesProps) {
   const ctx = useStandaloneThread();
@@ -53,13 +53,28 @@ export function Replies(props: RepliesProps) {
     !ctx.isReplying() &&
     !shouldShowCollapsedIndicator();
 
+  const hasTrailingRailTarget = () =>
+    props.children !== undefined ||
+    shouldShowCollapsedIndicator() ||
+    shouldShowReplyButton();
+
+  const finalReplyBranchIndex = createMemo(() => {
+    const replies = ctx.displayReplies();
+    for (let index = replies.length - 1; index >= 0; index -= 1) {
+      if (!listMetaByReplyId()[replies[index].id]?.isGroupedWithPrevious) {
+        return index;
+      }
+    }
+    return -1;
+  });
+
   return (
     <Show when={ctx.hasReplies() || ctx.isReplying()}>
       <div class="relative w-full">
-        <Thread.ReplyRailDecorations />
+        <Thread.RepliesBridgeRail />
         <Thread.RepliesContainer>
           <For each={ctx.displayReplies()}>
-            {(reply) => {
+            {(reply, index) => {
               const replyMessage = () =>
                 ({ ...reply, thread_id: ctx.messageId() }) as MessageData;
               const meta = () => listMetaByReplyId()[reply.id];
@@ -67,7 +82,13 @@ export function Replies(props: RepliesProps) {
                 props.getMessageActions?.(replyMessage());
               return (
                 <div class="relative">
-                  <ThreadReplyRail grouped={meta()?.isGroupedWithPrevious} />
+                  <ThreadReplyRail
+                    grouped={meta()?.isGroupedWithPrevious}
+                    terminal={
+                      !hasTrailingRailTarget() &&
+                      index() >= finalReplyBranchIndex()
+                    }
+                  />
                   <Message.Root
                     message={replyMessage()}
                     actions={replyActions()}
@@ -126,6 +147,7 @@ export function Replies(props: RepliesProps) {
               );
             }}
           </For>
+          {props.children}
           <Show
             when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}
           >
@@ -152,6 +174,9 @@ export function Replies(props: RepliesProps) {
             </Thread.ActionsFooter>
           </Show>
         </Thread.RepliesContainer>
+        <Show when={shouldShowCollapsedIndicator() || shouldShowReplyButton()}>
+          <Thread.TerminalRail />
+        </Show>
       </div>
     </Show>
   );

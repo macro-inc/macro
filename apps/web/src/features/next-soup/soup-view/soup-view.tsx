@@ -3,9 +3,9 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
 import {
   makeMarkDoneAction,
+  resolveEntityActionViewContext,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
-import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
 import type {
   GroupHeaderProps,
   SoupRow,
@@ -15,6 +15,7 @@ import type { Query } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
+import { DateGroupHeader } from '@app/features/next-soup/soup-view/date-group-header';
 import { registerDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
 import {
   EmptyState,
@@ -24,9 +25,7 @@ import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inb
 import { SoupFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { MaybeSoupEntityActionDrawerManager } from '@app/features/next-soup/soup-view/SoupEntityActionDrawerManager';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
-import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
 import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
@@ -46,18 +45,22 @@ import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
 import { CrmDefaultViewLoader } from '@app/features/next-soup/soup-view/views/companies/CrmDefaultView';
-import { DateGroupHeader } from '@app/features/next-soup/soup-view/views/inbox/date-group-header';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
-  markChannelTargetSeenOnOpen,
+  markChannelNotificationsSeenOnOpen,
   markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
+  restoreSoupFocus,
 } from '@app/features/next-soup/utils';
+import {
+  MaybeSoupEntityActionDrawerManager,
+  SoupEntityContextMenu,
+} from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
 import { useDealStages } from '@companies/crm/deal-stages';
@@ -97,6 +100,7 @@ import {
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
+import type { SoupRowFamily } from '@entity/composed/list-entity/row-geometry';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
@@ -210,6 +214,36 @@ const MobileTabLoadingBar = () => (
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
 const DEFAULT_PREVIEW_VIEWS = new Set(['inbox', 'channels']);
+/** The row components a soup view can render. */
+type SoupRowComponent =
+  | typeof ListEntity
+  | typeof InboxListEntity
+  | typeof TaskListEntity
+  | typeof CompanyListEntity;
+
+type SoupRowEntry = {
+  component: SoupRowComponent;
+  /**
+   * The --soup-row-* geometry the component renders with (ListEntity.css).
+   * SoupList stamps it on the list container so group headers can line their
+   * label up with row content.
+   */
+  family: SoupRowFamily;
+};
+
+/**
+ * Per-view row config. A view absent from the table gets DEFAULT_SOUP_ROW.
+ * Adding a row component means adding it here — the entry can't omit its
+ * geometry family, so the two can't drift apart.
+ */
+const SOUP_ROW_BY_VIEW: Partial<Record<ListView, SoupRowEntry>> = {
+  inbox: { component: InboxListEntity, family: 'card' },
+  tasks: { component: TaskListEntity, family: 'row' },
+  companies: { component: CompanyListEntity, family: 'row' },
+};
+
+const DEFAULT_SOUP_ROW: SoupRowEntry = { component: ListEntity, family: 'row' };
+
 const CONDENSED_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
   'channels',
 ]);
@@ -263,6 +297,7 @@ interface SoupViewProps {
 export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
   const soupView = useSoupView();
   const isInboxView = useIsInboxView();
   const openFocusedEntityInPreview = () => {
@@ -276,6 +311,7 @@ export const SoupView = (props: SoupViewProps) => {
     }
     void openEntityInSplitFromUnifiedList(focusedRow.original, {
       splitHandle: panel.handle,
+      notificationSource,
     });
   };
   const hasPreviewItems = useSoupPreviewAvailability({
@@ -368,10 +404,11 @@ export const SoupView = (props: SoupViewProps) => {
         : (persistedGroupBy ?? props.initialGroupBy);
 
       // The inbox exposes no sort control on either desktop (the toolbar
-      // hides SoupViewContextSort) or mobile, so its order is always
-      // updated_at. Ignore any sort persisted back when the control was
-      // reachable: honoring it would pin the list to an order the user can
-      // no longer change.
+      // hides SoupViewContextSort) or mobile, so its order is fixed: update
+      // recency, which the Signal and Noise presets override with the
+      // notified order they serve (see `clientSort`). Ignore any sort
+      // persisted back when the control was reachable: honoring it would pin
+      // the list to an order the user can no longer change.
       let initialSortIds =
         contentId === 'inbox'
           ? ['updated_at']
@@ -709,7 +746,14 @@ export const SoupView = (props: SoupViewProps) => {
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
-          <Show when={!isBoardMode()} fallback={<CompanyKanban />}>
+          <Show
+            when={!isBoardMode()}
+            fallback={
+              <MaybeSoupEntityActionDrawerManager>
+                <CompanyKanban />
+              </MaybeSoupEntityActionDrawerManager>
+            }
+          >
             <SoupViewList />
           </Show>
         </Suspense>
@@ -763,6 +807,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     isSearchServiceLoading,
     isLocalSearchSettling,
     activeTab,
+    clientSort,
     fetchNextGroupPage,
     isFetchingGroupPage,
   } = useSoupView();
@@ -874,6 +919,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
 
   const scopeId = createMemo(() => props.scopeId ?? panel.splitHotkeyScope);
+  const entityActionViewContext = () =>
+    resolveEntityActionViewContext({
+      activeListView: panel.handle.content().id,
+      activeTab: activeTab(),
+    });
 
   // Register navigation hotkeys on the active list scope (usually the split
   // scope). Most handlers are disposed with SoupViewList, but j/k intentionally
@@ -893,22 +943,22 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // Register entity action hotkeys
   useEntityActionHotkeys({
     scopeId: scopeId(),
-    soup,
-    activeSoupViewTab: activeTab,
+    list: soup,
+    selectedEntities: soup.selection.selected,
+    focusedEntity: soup.focus.item,
+    restoreFocus: restoreSoupFocus,
+    viewContext: entityActionViewContext,
     splitHandle: panel.handle,
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   const { applyTabPreset } = useApplyPreset();
 
-  const isInboxView = useIsInboxView();
-
-  // The per-row component depends on the active view.
-  const listEntityComponent = () => {
-    if (currentView() === 'tasks') return TaskListEntity;
-    if (currentView() === 'companies') return CompanyListEntity;
-    if (isInboxView()) return InboxListEntity;
-    return ListEntity;
+  // The row component and its geometry family both come from one per-view
+  // lookup, so the list container can't disagree with the rows it renders.
+  const rowEntry = (): SoupRowEntry => {
+    const view = currentView();
+    return (view && SOUP_ROW_BY_VIEW[view]) ?? DEFAULT_SOUP_ROW;
   };
 
   const groupHeaderComponent = () => {
@@ -972,7 +1022,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       // Join button (or, in preview, the Viewer's Join prompt) is the only
       // affordance.
       if (!isNonMemberChannelEntity(entity)) {
-        markChannelTargetSeenOnOpen(entity, notificationSource);
+        markChannelNotificationsSeenOnOpen(entity, notificationSource);
         openEntityInNewTab({ entity, location });
       }
       return;
@@ -999,9 +1049,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       // Single click: focus the row AND open it in the Preview Pair's Viewer.
       // The openWithSplit redirect keeps the Viewer unfocused so keyboard
       // navigation stays in this list.
-      if (!isNonMemberChannelEntity(entity)) {
-        markChannelTargetSeenOnOpen(entity, notificationSource);
-      }
       if (args.rowIndex !== undefined) soup.focus.setIndex(args.rowIndex);
       else soup.focus.set(entity.id);
 
@@ -1010,15 +1057,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         splitHandle: panel.handle,
         replacePreview: event.altKey,
         referredFrom: currentView(),
+        notificationSource,
       });
       return;
     }
 
     const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
-
-    if (!isNonMemberChannelEntity(entity)) {
-      markChannelTargetSeenOnOpen(entity, notificationSource);
-    }
 
     try {
       await openEntityInSplitFromUnifiedList(entity, {
@@ -1026,6 +1070,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         location,
         splitHandle: panel.handle,
         referredFrom: currentView(),
+        notificationSource,
       });
     } finally {
       finishTouchHighlight?.();
@@ -1173,7 +1218,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   );
 
   const isProjectList = panel.handle.content().type === 'project';
-  const contentId = panel.handle.content().id;
 
   const readListEntryState = () =>
     panel.handle.currentEntryState()?.[SOUP_LIST_STATE_ENTRY_KEY] as
@@ -1349,13 +1393,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         const entity = entityById().get(entityId);
                         if (!entity) return false;
 
-                        const tab = activeTab();
-
-                        if (
-                          !isListViewID(contentId) ||
-                          (tab && !canExecuteMarkDoneOnView(contentId, tab))
-                        )
+                        if (!entityActionViewContext().supportsMarkDone) {
                           return false;
+                        }
 
                         return markDoneAction.canExecute(entity.original);
                       }}
@@ -1382,9 +1422,18 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                       >
                         {(row, i) => {
                           const timestamp = () => {
+                            const sort_ = clientSort();
+                            // The notified order shows when you were told,
+                            // ahead of the row's own recency stamp.
+                            if (
+                              sort_[0]?.id === 'notified_at' &&
+                              row.original.notifiedAt
+                            ) {
+                              return row.original.notifiedAt;
+                            }
+
                             if (row.original.sortTs) return row.original.sortTs;
 
-                            const sort_ = soup.sort.active();
                             if (!sort_.length) return;
 
                             switch (sort_[0].id) {
@@ -1427,6 +1476,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                       }
                                       group={group()}
                                       highlighted={row.isFocused()}
+                                      isFirst={row.index === 0}
+                                      rowFamily={rowEntry().family}
                                     />
                                   )}
                                 </Match>
@@ -1497,9 +1548,14 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                 <Match
                                   when={!row.group || row.group?.isExpanded()}
                                 >
-                                  <SoupEntityContextMenu entity={row.original}>
+                                  <SoupEntityContextMenu
+                                    entity={row.original}
+                                    list={soup}
+                                    selectedEntities={soup.selection.selected}
+                                    viewContext={entityActionViewContext()}
+                                  >
                                     <Dynamic
-                                      component={listEntityComponent()}
+                                      component={rowEntry().component}
                                       entity={row.original}
                                       timestamp={timestamp()}
                                       highlighted={row.isFocused()}
@@ -1655,6 +1711,7 @@ const SoupList = (props: SoupListProps) => {
     createSignal<VirtualizerHandle>();
 
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
+
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
 
@@ -1695,8 +1752,11 @@ const SoupList = (props: SoupListProps) => {
   return (
     <div
       ref={props.ref}
+      // `soup-list` scopes the --soup-inbox-* metrics (ListEntity.css) for
+      // everything in the list; the row geometry itself travels with the rows
+      // and the group headers, which each carry their own family class.
       class={cn(
-        'unified-table-body w-full flex-1 min-h-0 relative',
+        'soup-list unified-table-body w-full flex-1 min-h-0 relative',
         props.class
       )}
     >

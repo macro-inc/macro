@@ -58,9 +58,8 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_GRAPHQL_SOUP: graphqlSoupEnabledMock,
-  ENABLE_GRAPHQL_SOUP_FLAG: 'enable-graphql-soup',
-  ENABLE_GRAPHQL_SOUP_OVERRIDE: undefined,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  isFeatureEnabled: graphqlSoupEnabledMock,
 }));
 
 vi.mock('@entity/extractors-property/property-helpers', () => ({
@@ -364,8 +363,8 @@ describe('useEntityPropertiesQuery transport', () => {
     getRestEntityPropertiesMock.mockResolvedValue(ok({ properties: [] }));
     renderEntityQuery(false);
     expect(graphqlExecutions).toHaveLength(1);
-    expect(useFeatureFlagMock).toHaveBeenCalledWith('enable-graphql-soup', {
-      enabledOverride: undefined,
+    expect(useFeatureFlagMock).toHaveBeenCalledWith({
+      key: 'enable-graphql-soup',
     });
 
     setGraphqlFlagEnabled(false);

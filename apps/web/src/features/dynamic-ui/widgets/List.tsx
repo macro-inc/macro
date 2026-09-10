@@ -7,6 +7,7 @@ import {
 import type { FieldFilters } from '@app/features/next-soup/filters/filter-store/types';
 import { soupItemMatchesQuery } from '@app/features/next-soup/filters/query-filters';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { CollapsibleList } from '@entity/components/CollapsibleList';
 import { ListEntity, ListLayoutProvider } from '@entity/composed/ListEntity';
@@ -118,11 +119,16 @@ const GROUP_BY_BY_NAME: Record<
  * `email` included.
  */
 function Row(props: { entity: EntityData }) {
+  const notificationSource = useGlobalNotificationSource();
   return (
     <ListEntity
       entity={props.entity as WithNotification<EntityData>}
       hideCheckbox
-      onClick={() => openEntityInSplitFromUnifiedList(props.entity, {})}
+      onClick={() =>
+        openEntityInSplitFromUnifiedList(props.entity, {
+          notificationSource,
+        })
+      }
     />
   );
 }

@@ -16,8 +16,11 @@ describe('clearRegisteredCaches', () => {
     vi.unstubAllGlobals();
   });
 
-  it('preserves the scope when every cache clears', async () => {
+  it('preserves the scope and clears external cursors when every cache clears', async () => {
     localStorage.setItem('graphql-cache:scope', 'current-scope');
+    localStorage.setItem('graphql-soup-backfill:v6:user-1:core', '{}');
+    localStorage.setItem('graphql-soup-backfill:v7:user-1:email', '{}');
+    localStorage.setItem('unrelated', 'keep');
     const clear = vi.fn().mockResolvedValue(undefined);
     const { clearRegisteredCaches, registerCacheHost } = await import(
       './lifecycle'
@@ -28,6 +31,13 @@ describe('clearRegisteredCaches', () => {
 
     expect(clear).toHaveBeenCalledOnce();
     expect(localStorage.getItem('graphql-cache:scope')).toBe('current-scope');
+    expect(localStorage.getItem('graphql-soup-backfill:v6:user-1:core')).toBe(
+      null
+    );
+    expect(localStorage.getItem('graphql-soup-backfill:v7:user-1:email')).toBe(
+      null
+    );
+    expect(localStorage.getItem('unrelated')).toBe('keep');
   });
 
   it('awaits the serialized scope rotation before logout clearing resolves', async () => {

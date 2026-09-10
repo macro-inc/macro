@@ -33,6 +33,12 @@ pub struct CalendarEventSearchInfo {
     pub is_recurring: bool,
     /// Direct conference join URL.
     pub conference_url: Option<String>,
+    /// Organizer email, when the source names one.
+    pub organizer_email: Option<String>,
+    /// Organizer display name, when the source names one.
+    pub organizer_name: Option<String>,
+    /// Free-text event description, when the source carries one.
+    pub description: Option<String>,
     /// Whether the canonical source prohibits mutation.
     pub is_read_only: bool,
     pub created_at: DateTime<Utc>,
@@ -87,6 +93,9 @@ pub async fn get_calendar_events_for_search(
             event.time_zone,
             (cardinality(event.recurrence_lines) > 0) AS "is_recurring!",
             event.conference_url,
+            event.organizer_email,
+            event.organizer_name,
+            event.description,
             event.is_read_only AS "is_read_only!",
             event.created_at AS "created_at!",
             event.updated_at AS "updated_at!",
@@ -154,6 +163,9 @@ pub async fn get_calendar_events_for_search(
                     time_zone: row.time_zone,
                     is_recurring: row.is_recurring,
                     conference_url: row.conference_url,
+                    organizer_email: row.organizer_email,
+                    organizer_name: row.organizer_name,
+                    description: row.description,
                     is_read_only: row.is_read_only,
                     created_at: row.created_at,
                     updated_at: row.updated_at,

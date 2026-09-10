@@ -27,7 +27,9 @@ export function useSystemSkillsQuery() {
     refetchOnWindowFocus: false,
   }));
 
-  const skills = createMemo<SystemSkillSummary[]>(() => query.data ?? []);
+  const skills = createMemo<SystemSkillSummary[]>(() =>
+    query.isSuccess ? (query.data ?? []) : []
+  );
   const byId = createMemo(
     () => new Map(skills().map((skill) => [skill.id, skill]))
   );

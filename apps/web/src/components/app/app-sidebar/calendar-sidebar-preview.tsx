@@ -7,11 +7,13 @@ import type { CalendarGridHandle } from '@app/features/calendar/components/Calen
 import { CalendarGridSkeleton } from '@app/features/calendar/components/CalendarGridSkeleton';
 import { useCalendarOccurrenceData } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarSources } from '@app/features/calendar/hooks/use-calendar-sources';
-import type {
-  CalendarEvent,
-  CalendarTimeFormat,
+import {
+  type CalendarEvent,
+  type CalendarTimeFormat,
+  isCalendarEventVisible,
 } from '@app/features/calendar/types';
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { groupCalendarSourcesByAccount } from '@app/features/calendar/utils/calendar-source-groups';
 import {
   formatCalendarTime,
   getDefaultCalendarTimeFormat,
@@ -163,9 +165,17 @@ function EventSummary(props: {
         <div class="flex min-w-0 items-start gap-2">
           <span
             aria-hidden="true"
-            class="mt-0.5 size-3 shrink-0 rounded-sm"
-            style={{ 'background-color': props.event.calendar.color }}
-          />
+            class="mt-0.5 flex size-3 shrink-0 gap-px overflow-hidden rounded-sm"
+          >
+            <For each={props.event.visibleCalendars}>
+              {(calendar) => (
+                <span
+                  class="min-w-0 flex-1"
+                  style={{ 'background-color': calendar.color }}
+                />
+              )}
+            </For>
+          </span>
           <div class="min-w-0">
             <h3 class="truncate text-sm font-semibold text-ink">
               {props.event.title}
@@ -228,7 +238,12 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
       else next.add(sourceId);
       return next;
     });
-    if (!visible && selectedEvent()?.calendar.id === sourceId) {
+    const selected = selectedEvent();
+    if (
+      !visible &&
+      selected &&
+      !isCalendarEventVisible(selected, isSourceVisible)
+    ) {
       setSelectedEventId(undefined);
     }
   };
@@ -303,6 +318,7 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
         <ScrollIndicators
           scrollRef={scrollElement}
           appearance="gradient"
+          gradientColor="panel"
           noBorderStart
           noBorderEnd
         />
@@ -350,22 +366,21 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
                       class="max-h-52 w-56 overflow-y-auto"
                     >
                       <Dropdown.Group>
-                        <For each={sources()}>
-                          {(source) => (
+                        <For each={groupCalendarSourcesByAccount(sources())}>
+                          {(group) => (
                             <Dropdown.CheckboxItem
-                              checked={isSourceVisible(source.id)}
+                              checked={group.calendars.every((source) =>
+                                isSourceVisible(source.id)
+                              )}
                               closeOnSelect={false}
-                              onChange={(visible) =>
-                                setSourceVisibility(source.id, visible)
-                              }
+                              onChange={(visible) => {
+                                for (const source of group.calendars) {
+                                  setSourceVisibility(source.id, visible);
+                                }
+                              }}
                             >
-                              <span
-                                aria-hidden="true"
-                                class="size-2.5 shrink-0 rounded-sm"
-                                style={{ 'background-color': source.color }}
-                              />
                               <span class="min-w-0 flex-1 truncate">
-                                {source.name}
+                                {group.emailAddress}
                               </span>
                             </Dropdown.CheckboxItem>
                           )}

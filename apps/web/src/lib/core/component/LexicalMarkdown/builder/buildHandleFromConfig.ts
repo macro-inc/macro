@@ -27,6 +27,7 @@ import {
   tabIndentationPlugin,
   tagsPlugin,
   textPastePlugin,
+  trailingParagraphPlugin,
 } from '../plugins';
 import { checkboxToTaskPlugin } from '../plugins/checkbox-to-task';
 import { normalizeEnterPlugin } from '../plugins/normalize-enter';
@@ -125,6 +126,10 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       .markdownShortcuts()
       .delete()
       .state<string>(setMarkdownState, 'markdown');
+  }
+
+  if (config.type !== 'plain-text' && !config.singleLine) {
+    plugins.use(trailingParagraphPlugin());
   }
 
   // History

@@ -1,6 +1,6 @@
 #![cfg(not(target_arch = "wasm32"))]
 
-use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
+use cache_core::engine::{BeginOptimisticWrite, Engine, EngineError, ReadResult};
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::RecordSelection;
 use cache_core::store::Storage;
@@ -203,6 +203,7 @@ fn optimistic_hydration_retry_complete_and_reopen_run_over_turso() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000001008",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("doing"),
@@ -297,6 +298,105 @@ fn optimistic_hydration_retry_complete_and_reopen_run_over_turso() {
 }
 
 #[test]
+fn stale_local_head_and_storage_settlement_races_report_stale_claims() {
+    block_on(async {
+        let database = TursoMemoryDatabase::new("engine-stale-head.db");
+        let mut advancing = Engine::new(database.open("engine-stale-head").unwrap());
+        advancing
+            .write_query(
+                None,
+                QUERY,
+                Some("Soup"),
+                &query_vars(),
+                &page("Status", "todo", "user-1"),
+                None,
+            )
+            .await
+            .unwrap();
+        let (first, _) = advancing
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000001009",
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("first"),
+                    data: &mutation_response("Status", "first"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
+            )
+            .await
+            .unwrap();
+        let (second, _) = advancing
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000001010",
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &mutation_vars("second"),
+                    data: &mutation_response("Status", "second"),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 2,
+                },
+            )
+            .await
+            .unwrap();
+
+        let mut stale = Engine::new(database.open("engine-stale-head").unwrap());
+        let claimed_first = stale
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 3,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(claimed_first.queued.id, first);
+        let first_claim = MutationClaimToken {
+            owner: "runner".into(),
+            generation: claimed_first.lease_generation,
+        };
+        advancing
+            .rollback_optimistic_write(first, first_claim.clone())
+            .await
+            .unwrap();
+
+        let error = stale
+            .rollback_optimistic_write(first, first_claim)
+            .await
+            .unwrap_err();
+        assert!(matches!(error, EngineError::StaleMutationClaim(id) if id == first));
+
+        let claimed_second = stale
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 4,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(claimed_second.queued.id, second);
+        let error = stale
+            .rollback_optimistic_write(
+                second,
+                MutationClaimToken {
+                    owner: "runner".into(),
+                    generation: claimed_second.lease_generation,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, EngineError::StaleMutationClaim(id) if id == second));
+    });
+}
+
+#[test]
 fn optimistic_discard_restores_durable_base_over_turso() {
     block_on(async {
         let storage = TursoStorage::open_in_memory("engine-discard").unwrap();
@@ -316,6 +416,7 @@ fn optimistic_discard_restores_durable_base_over_turso() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000001011",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("bad"),

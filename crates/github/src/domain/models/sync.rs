@@ -98,12 +98,40 @@ pub struct GithubUserInstallationsPage {
 }
 
 /// GitHub App installation access token response
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct GithubInstallationAccessToken {
     /// The installation access token
     pub token: String,
-    /// When the token expires
+    /// When the token expires, as GitHub sent it (RFC 3339).
     pub expires_at: String,
+}
+
+impl std::fmt::Debug for GithubInstallationAccessToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GithubInstallationAccessToken")
+            .field("token", &"[REDACTED]")
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
+}
+
+impl GithubInstallationAccessToken {
+    /// When this token expires.
+    ///
+    /// Parsed here rather than by callers: the field is a string because that
+    /// is how GitHub sends it, and a caller that has to know the format in
+    /// order to cache the token would be the second place that knowledge
+    /// lives.
+    pub fn expires_at(&self) -> Result<chrono::DateTime<chrono::Utc>, GithubError> {
+        chrono::DateTime::parse_from_rfc3339(&self.expires_at)
+            .map(|expiry| expiry.with_timezone(&chrono::Utc))
+            .map_err(|error| {
+                GithubError::Internal(anyhow::anyhow!(
+                    "github sent an unparseable token expiry {:?}: {error}",
+                    self.expires_at
+                ))
+            })
+    }
 }
 
 /// Source that grants a GitHub App installation access to Macro sync data.

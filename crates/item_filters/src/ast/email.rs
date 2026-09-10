@@ -73,6 +73,9 @@ pub enum EmailLiteral {
     /// Filter by thread updated_at timestamp (view-dependent field)
     #[serde(rename = "ua")]
     UpdatedAt(DateLiteral),
+    /// Filter by the viewer's per-thread viewed_at timestamp.
+    #[serde(rename = "va")]
+    ViewedAt(DateLiteral),
     /// Thread-level entity-property condition, checked against
     /// `entity_properties` keyed on the thread id. Injected by the soup
     /// service when a request carries a properties filter; never produced

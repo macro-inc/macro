@@ -1,3 +1,4 @@
+import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import {
@@ -25,6 +26,7 @@ import XIcon from '@phosphor/x.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
+import { createCallback } from '@solid-primitives/rootless';
 import { Avatar, Button, cn } from '@ui';
 import {
   type Accessor,
@@ -37,6 +39,10 @@ import {
 import { Dynamic } from 'solid-js/web';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import { isSameLocalDate, parseLocalDate } from '../utils/calendar-date';
+import {
+  parseMacroAppLink,
+  sanitizeCalendarDescription,
+} from '../utils/calendar-description';
 import {
   type CalendarPerson,
   eventAttribution,
@@ -374,7 +380,7 @@ function EventRemindersItem(props: {
     resolveReminderOverrides(
       props.event.reminders,
       props.defaultReminders,
-      props.event.eventType
+      props.event.reminderEventType ?? props.event.eventType
     ).toSorted((a, b) => a.minutes - b.minutes)
   );
 
@@ -500,6 +506,20 @@ export function EventDetails(props: {
   const originalTimeZone = createMemo(() =>
     formatOriginalTimeZone(props.event, props.timeFormat)
   );
+  const descriptionHtml = createMemo(() =>
+    sanitizeCalendarDescription(props.event.description ?? '')
+  );
+  const openDescriptionLink = createCallback((event: MouseEvent) => {
+    const anchor = (event.target as Element | null)?.closest('a[href]');
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    event.preventDefault();
+    const target = parseMacroAppLink(anchor.href);
+    if (target) {
+      openDocument(target.blockName, target.documentId);
+      return;
+    }
+    openExternalUrl(anchor.href);
+  });
   const recurrenceDescription = createMemo(() => {
     const description = formatRecurrenceDescription(
       props.event.recurrenceLines
@@ -518,10 +538,16 @@ export function EventDetails(props: {
         aria-hidden="true"
         class="mt-0.5 flex size-5 items-center justify-center sm:size-4"
       >
-        <span
-          class="size-4 rounded-sm sm:size-3"
-          style={{ 'background-color': props.event.calendar.color }}
-        />
+        <span class="flex size-4 gap-px overflow-hidden rounded-sm sm:size-3">
+          <For each={props.event.visibleCalendars}>
+            {(calendar) => (
+              <span
+                class="min-w-0 flex-1"
+                style={{ 'background-color': calendar.color }}
+              />
+            )}
+          </For>
+        </span>
       </span>
       <div class="flex min-w-0 flex-col gap-1">
         <div class="select-text text-lg font-semibold leading-snug text-ink sm:text-base">
@@ -530,6 +556,11 @@ export function EventDetails(props: {
         <div class="select-text text-sm text-ink-muted sm:text-xs">
           {formatEventSchedule(props.event, props.timeFormat)}
         </div>
+        <Show when={props.event.eventType === 'out_of_office'}>
+          <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
+            Out of office
+          </div>
+        </Show>
         <Show when={recurrenceDescription()}>
           {(description) => (
             <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
@@ -569,13 +600,15 @@ export function EventDetails(props: {
         {(location) => <EventLocationItem location={location()} />}
       </Show>
 
-      <Show when={props.event.description}>
-        {(description) => (
+      <Show when={descriptionHtml()}>
+        {(html) => (
           <div class="contents">
             <TextAlignLeftIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
-            <p class="select-text leading-relaxed text-ink-muted">
-              {description()}
-            </p>
+            <div
+              class="select-text leading-relaxed text-ink-muted [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+              innerHTML={html()}
+              onClick={openDescriptionLink}
+            />
           </div>
         )}
       </Show>

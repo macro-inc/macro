@@ -14,6 +14,15 @@ pub(crate) mod swagger;
 #[cfg(test)]
 mod test;
 
+/// Path prefix the shared gateway ALB forwards unmodified.
+const GATEWAY_PATH_PREFIX: &str = "/image-proxy";
+
+fn mount_at_root_and_prefix(inner: Router) -> Router {
+    Router::new()
+        .merge(inner.clone())
+        .nest(GATEWAY_PATH_PREFIX, inner)
+}
+
 pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<()> {
     let env = state.environment;
     let app = app(state);
@@ -36,12 +45,18 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
 fn app(state: ApiContext) -> Router {
     let cors = macro_cors::cors_layer();
 
-    api_router()
+    let inner = api_router()
         .with_state(state)
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
         .merge(health::router())
-        .layer(cors)
+        .layer(cors);
+
+    mount_at_root_and_prefix(inner)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(SwaggerUi::new("/image-proxy/docs").url(
+            "/image-proxy/api-doc/openapi.json",
+            swagger::ApiDoc::openapi(),
+        ))
 }
 
 fn api_router() -> Router<ApiContext> {

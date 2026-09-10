@@ -1,12 +1,9 @@
 import { openExternalUrl } from '@core/util/url';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import GlobeIcon from '@phosphor/globe-simple.svg';
 import LinkIcon from '@phosphor/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { cn } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 function extractDomain(url: string) {
@@ -23,6 +20,50 @@ type UnfurlLinkProps = {
   unfurled: GetUnfurlResponse;
   size?: 'xs' | 'sm';
 };
+
+type LinkHoverCardProps = {
+  unfurled: GetUnfurlResponse;
+};
+
+/**
+ * The shared card shown when hovering a link in rendered or editable Markdown.
+ */
+export function LinkHoverCard(props: LinkHoverCardProps) {
+  const domain = extractDomain(props.unfurled.url);
+  const title = () => props.unfurled.title || domain;
+
+  return (
+    <div class="flex w-80 max-w-[calc(100vw-1rem)] items-start gap-1 rounded-xl border border-edge p-2 text-left shadow-menu bg-menu">
+      <div class="flex size-6 shrink-0 items-center justify-center">
+        <Show
+          when={props.unfurled.favicon_url}
+          fallback={<LinkIcon class="size-4 text-ink-muted" />}
+        >
+          {(icon) => (
+            <Show
+              when={!badLinks[icon()]}
+              fallback={<LinkIcon class="size-4 text-ink-muted" />}
+            >
+              <img
+                src={proxyResource(icon())}
+                class="size-5 rounded-md object-cover"
+                crossorigin="anonymous"
+                alt=""
+                on:error={() => {
+                  setBadLinks(icon(), true);
+                }}
+              />
+            </Show>
+          )}
+        </Show>
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="truncate text-sm/6 font-medium text-ink">{title()}</div>
+        <div class="truncate text-xs text-ink-muted">{domain}</div>
+      </div>
+    </div>
+  );
+}
 
 export function UnfurlLink(props: UnfurlLinkProps) {
   const domain = extractDomain(props.unfurled.url);
@@ -72,72 +113,6 @@ export function UnfurlLink(props: UnfurlLinkProps) {
             {domain}
           </h2>
         </div>
-      </div>
-    </div>
-  );
-}
-
-interface UnfurledLinkCollection {
-  collapsed?: boolean;
-  links: GetUnfurlResponse[];
-}
-
-function _UnfurledLinkCollection(props: UnfurledLinkCollection) {
-  const [isCollapsed, setIsCollapsed] = createSignal(props.collapsed ?? true);
-
-  return (
-    <div class="border border-edge rounded-lg w-full text-sm cursor-default select-none">
-      <div
-        class={cn(
-          'flex justify-between items-center hover:bg-hover transition-colors hover:transition-none py-1 px-2',
-          isCollapsed() ? 'rounded-lg' : 'rounded-t-lg'
-        )}
-        onClick={() => setIsCollapsed((p) => !p)}
-      >
-        <div>
-          <div class="flex items-center gap-2">
-            <GlobeIcon class="size-6" />
-            <div>
-              <div class="flex items-center gap-1 font-medium">Sources</div>
-              <div class="flex gap-1 text-xs">
-                <p class="font-medium text-ink-muted">
-                  {props.links.length > 0
-                    ? extractDomain(
-                        typeof props.links[0] === 'string'
-                          ? props.links[0]
-                          : props.links[0].url
-                      )
-                    : ''}
-                </p>
-                <Show when={props.links.length > 1}>
-                  <p class="font-medium text-accent">
-                    +{props.links.length - 1} More
-                  </p>
-                </Show>
-              </div>
-            </div>
-          </div>
-        </div>
-        <Show
-          when={isCollapsed()}
-          fallback={<CaretDown width={20} height={20} />}
-        >
-          <CaretRight width={20} height={20} />
-        </Show>
-      </div>
-      <div
-        class={cn(
-          'flex flex-col divide-y divide-edge transition-all duration-150 ease-in-out overflow-clip',
-          isCollapsed() ? 'collapse max-h-0' : 'visible max-h-480'
-        )}
-      >
-        <For each={props.links}>
-          {(link) => (
-            <div class="first:border-edge first:border-t last:rounded-b-md overflow-clip">
-              <UnfurlLink unfurled={link} />
-            </div>
-          )}
-        </For>
       </div>
     </div>
   );

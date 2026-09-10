@@ -1,4 +1,5 @@
-import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
+import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
+import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
@@ -6,9 +7,7 @@ import {
 import { SidePanel } from '@components/app/side-panel';
 import { References } from '@core/component/References';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
-import type { ItemType } from '@service-storage/client';
 import { Show, Suspense } from 'solid-js';
-import { useEmailContext } from '../EmailContext';
 
 interface EmailSidePanelSectionsProps {
   threadId: string;
@@ -16,7 +15,7 @@ interface EmailSidePanelSectionsProps {
 }
 
 export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
-  const emailCtx = useEmailContext();
+  const emailCtx = useEmailThreadState();
   const canEdit = () => emailCtx.permissions().isOwner;
 
   return (
@@ -54,15 +53,10 @@ export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
   );
 }
 
-// Email threads are stored as the "thread" entity type in the references
-// system (ReferencedShareItemType::EmailThread -> "thread" and the mentions
-// plugin maps email -> thread), so query/render with "thread", not "email".
-const EMAIL_REFERENCE_ENTITY_TYPE = 'thread' as ItemType;
-
 function ReferencesSectionConditional(props: { threadId: string }) {
   const references = useAttachmentReferencesQuery(
     () => props.threadId,
-    () => EMAIL_REFERENCE_ENTITY_TYPE
+    () => 'email'
   );
 
   const count = () => references.data?.length ?? 0;
@@ -76,10 +70,7 @@ function ReferencesSectionConditional(props: { threadId: string }) {
       >
         <Suspense fallback={<SidePanel.Loading />}>
           <div class="text-xs">
-            <References
-              documentId={props.threadId}
-              entityType={EMAIL_REFERENCE_ENTITY_TYPE}
-            />
+            <References documentId={props.threadId} entityType="email" />
           </div>
         </Suspense>
       </SidePanel.Section>

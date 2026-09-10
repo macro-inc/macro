@@ -7,7 +7,12 @@
  */
 
 export { ActionLine, type ActionLineProps } from './ActionLine';
-export { AgentInput, type AgentInputProps } from './AgentInput';
+export {
+  AGENT_INPUT_TEXT_AREA_ID,
+  AgentInput,
+  type AgentInputProps,
+  type QuoteInsert,
+} from './AgentInput';
 export { AgentModelSelector } from './AgentModelSelector';
 export { AnimatedNumber } from './AnimatedNumber';
 export {
@@ -16,6 +21,10 @@ export {
 } from './ComposerNotice';
 export { type CountItem, CountSummary } from './CountSummary';
 export { DiffChanges, type DiffChangesProps } from './DiffChanges';
+export {
+  ElicitationForm,
+  type ElicitationFormProps,
+} from './ElicitationForm';
 export { FoldedAnsiText } from './FoldedAnsiText';
 export { FoldedOutput } from './FoldedOutput';
 export { FoldedPathList } from './FoldedPathList';
@@ -23,14 +32,10 @@ export { FoldedTerminal } from './FoldedTerminal';
 export { PierreDiff } from './PierreDiff';
 export { QuestionAnswers, type QuestionAnswersProps } from './QuestionAnswers';
 export {
-  QueuedPromptList,
-  type QueuedPromptListProps,
-} from './QueuedPromptList';
-export {
-  type SandboxSize,
-  SandboxSizeSelector,
-  type SandboxSizeSelectorProps,
-} from './SandboxSizeSelector';
+  type QueuedPromptItem,
+  QueuedPrompts,
+  type QueuedPromptsProps,
+} from './QueuedPrompts';
 export {
   type SessionStatusLike,
   SessionStatusPill,
@@ -51,3 +56,5 @@ export {
   type TodoItem,
   type ToolStatus,
 } from './types';
+export { WorkingLine } from './WorkingLine';
+export { createVerbDraw, WORKING_LABEL } from './working-verbs';

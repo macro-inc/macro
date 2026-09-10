@@ -517,12 +517,14 @@
 
       localStackDeployServiceNames = [
         "agent-harness-service"
+        "agent-schedule-service"
         "connection-gateway"
         "contacts-service"
         "document-cognition-service"
         "document-storage-service"
         "email-service"
         "image-proxy-service"
+        "mcp-server"
         "notification-service"
         "static-file-service"
         "unfurl-service"
@@ -828,6 +830,9 @@
           nsc
           parallel
           docker-compose
+          # `just run_local` opens a quick tunnel to the agent egress proxy so
+          # Cursor cloud agents can dial a local stack's MCP servers.
+          cloudflared
           curl
           openssh
           wget

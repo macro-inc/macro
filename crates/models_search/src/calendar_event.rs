@@ -73,6 +73,19 @@ pub struct CalendarEventSearchOccurrence {
     pub time: CalendarEventSearchTime,
 }
 
+/// The event's organizer — its creator, in Google's model. Either field can be
+/// absent when the source does not name it.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEventOrganizer {
+    /// Display name, when the source provided one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Organizer email address, when known.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+}
+
 /// A single response item, part of the CalendarEventSearchResponse object
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct CalendarEventSearchResponseItem {
@@ -113,6 +126,13 @@ pub struct CalendarEventMetadata {
     pub conference_url: Option<String>,
     /// Whether the canonical source prohibits mutation.
     pub is_read_only: bool,
+    /// The event's organizer (creator), when the source names one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub organizer: Option<CalendarEventOrganizer>,
+    /// Free-text description, when the event carries one. May contain HTML from
+    /// the source; clients render a plain-text preview.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 /// CalendarEventSearchResponseItem with metadata fetched from macrodb.

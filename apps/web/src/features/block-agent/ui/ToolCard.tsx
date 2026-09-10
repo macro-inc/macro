@@ -106,9 +106,7 @@ export function ToolCard(props: ToolCardProps) {
           defaultOpen={props.defaultOpen}
           onOpenChange={props.onOpenChange}
         >
-          <Collapsible.Trigger
-            class={`group cursor-pointer hover:bg-hover ${ROW_CLASS}`}
-          >
+          <Collapsible.Trigger class={`group hover:bg-hover ${ROW_CLASS}`}>
             {row(true)}
           </Collapsible.Trigger>
           <Collapsible.Content class="data-closed:hidden">

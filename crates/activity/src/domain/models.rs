@@ -62,6 +62,15 @@ impl Attribution {
         Self::Delegated { actor, subject }
     }
 
+    /// Delegated to `on_behalf_of` when set, otherwise direct. Mirrors how
+    /// events carry attribution as an actor plus an optional subject.
+    pub fn new(actor: Actor<'static>, on_behalf_of: Option<MacroUserIdStr<'static>>) -> Self {
+        match on_behalf_of {
+            Some(subject) => Self::Delegated { actor, subject },
+            None => Self::Direct { actor },
+        }
+    }
+
     /// Who mechanically acted.
     pub fn actor(&self) -> Actor<'static> {
         match self {

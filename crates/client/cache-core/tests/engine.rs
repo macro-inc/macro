@@ -143,6 +143,7 @@ fn revision_tracks_logical_mutations_only_within_one_engine_generation() {
             .await
             .unwrap();
         assert_eq!(first.revision.to_string(), "1");
+        assert!(first.revision_advanced);
         assert_eq!(engine.current_revision(), first.revision);
 
         engine
@@ -151,14 +152,14 @@ fn revision_tracks_logical_mutations_only_within_one_engine_generation() {
             .unwrap();
         assert_eq!(engine.current_revision(), first.revision);
 
-        // Conservative advancement: an idempotent logical write still makes
-        // older observations stale.
+        // An idempotent authoritative write preserves existing observations.
         let second = engine
             .write_query(None, QUERY, Some("Soup"), &vars(10), &data, None)
             .await
             .unwrap();
         assert!(second.changed.is_empty());
-        assert_eq!(second.revision.to_string(), "2");
+        assert!(!second.revision_advanced);
+        assert_eq!(second.revision, first.revision);
 
         let storage = engine.storage().clone();
         let mut replacement = Engine::new(storage);

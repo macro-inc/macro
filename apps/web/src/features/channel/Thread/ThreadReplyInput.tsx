@@ -27,6 +27,8 @@ type ThreadReplyInputProps = {
    * (standalone threads, discussions); channels have no inner rail.
    */
   connector?: boolean;
+  /** Rail column from which the optional connector should originate. */
+  connectorRail?: 'inner' | 'thread';
   /** Optional layout-specific horizontal anchor for the composer. */
   offsetX?: string;
 };
@@ -61,7 +63,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
       data-reply-input
     >
       <Show when={props.connector !== false}>
-        <ThreadReplyInputConnector />
+        <ThreadReplyInputConnector rail={props.connectorRail} />
       </Show>
       {(() => {
         const droppable = entityDropZone.droppable;

@@ -49,6 +49,7 @@ struct FakeRepoState {
     claimed: Vec<Uuid>,
     released: Vec<Uuid>,
     completed: Vec<Uuid>,
+    fired: Vec<(Uuid, DateTime<Utc>)>,
 }
 
 #[derive(Clone, Default)]
@@ -118,6 +119,15 @@ impl CalendarReminderDispatchRepo for FakeRepo {
         firing: &CalendarReminderFiring,
     ) -> Result<(), Report> {
         self.0.lock().unwrap().completed.push(firing.event_id);
+        Ok(())
+    }
+
+    async fn record_reminder_fired(
+        &self,
+        event_id: Uuid,
+        fired_at: DateTime<Utc>,
+    ) -> Result<(), Report> {
+        self.0.lock().unwrap().fired.push((event_id, fired_at));
         Ok(())
     }
 }
@@ -261,6 +271,8 @@ async fn deliver_claims_notifies_and_completes() {
     assert_eq!(state.claimed, vec![uuid(1)]);
     assert_eq!(state.completed, vec![uuid(1)]);
     assert!(state.released.is_empty());
+    assert_eq!(state.fired.len(), 1);
+    assert_eq!(state.fired[0].0, uuid(1));
     assert_eq!(*notifier.notified.lock().unwrap(), vec![uuid(1)]);
 }
 
@@ -298,4 +310,5 @@ async fn failed_notification_releases_the_claim_and_errors() {
     assert_eq!(state.claimed, vec![uuid(1)]);
     assert_eq!(state.released, vec![uuid(1)]);
     assert!(state.completed.is_empty());
+    assert!(state.fired.is_empty());
 }

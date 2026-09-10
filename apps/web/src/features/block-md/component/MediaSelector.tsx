@@ -144,7 +144,7 @@ export function MediaSelector(props: MediaSelectorProps) {
                 }}
               >
                 <div
-                  class="w-full mt-0 p-2 m-1 bg-surface text-ink flex justify-center items-center gap-2 rounded hover:bg-hover hover-transition-bg hover:text-accent @container"
+                  class="w-full mt-0 mx-1 mb-1 p-2 bg-surface text-ink flex justify-center items-center gap-2 rounded hover:bg-hover hover-transition-bg hover:text-accent @container"
                   use:fileSelector={{
                     acceptedFileExtensions: acceptedFileExtensions(),
                     acceptedMimeTypes: acceptedMimeTypes(),

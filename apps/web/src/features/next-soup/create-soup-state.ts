@@ -13,6 +13,7 @@ import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
+import type { SoupRowFamily } from '@entity/composed/list-entity/row-geometry';
 import { batch, createMemo, createSignal, type JSX } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 
@@ -32,6 +33,13 @@ export type SoupEntity = WithNotification<EntityData | WithSearch<EntityData>>;
 export type GroupHeaderProps = {
   group: GroupMeta;
   highlighted?: boolean;
+  /** True for the header at the very top of the list (row index 0). */
+  isFirst?: boolean;
+  /**
+   * The geometry family of the rows this header sits among, so it can line its
+   * label up with their content. See SoupRowFamily.
+   */
+  rowFamily?: SoupRowFamily;
 };
 
 export type GroupMeta = {

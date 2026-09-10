@@ -6,7 +6,7 @@ import {
   useMarkThreadAsUnreadMutation,
 } from '@queries/email/thread';
 import { refetchSoupEntity } from '@queries/soup/cache';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 /**
  * Marks read email threads as unread. Rows stay in place — only the soup
@@ -49,7 +49,10 @@ export const makeMarkUnreadAction = () => {
 
   /** Signature parity with the mark-done actions — no navigation or
    *  collapse: the rows stay in place. */
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 
@@ -99,7 +102,10 @@ export const makeMarkReadAction = () => {
 
   /** Signature parity with the mark-done actions — no navigation or
    *  collapse: the rows stay in place. */
-  const executeWithSoup = async (entities: EntityData[], _soup: SoupState) => {
+  const executeWithSoup = async (
+    entities: EntityData[],
+    _soup: EntityActionListState
+  ) => {
     await execute(entities);
   };
 

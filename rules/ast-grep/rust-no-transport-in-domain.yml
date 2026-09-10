@@ -15,6 +15,12 @@ ignores:
   - '**/tests.rs'
   - '**/test/**'
   - '**/tests/**'
+  # agent_egress is a credential-stamping HTTP proxy: its domain's subject
+  # matter IS the http request passing through, so `http` (the I/O-free
+  # vocabulary crate axum and reqwest both speak) is its domain language,
+  # not transport leakage. What this rule exists to catch — IntoResponse
+  # impls and status-code mapping — stays in that crate's inbound adapter.
+  - 'crates/agent_egress/src/domain/**'
 rule:
   any:
     - kind: scoped_identifier

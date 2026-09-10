@@ -3,12 +3,12 @@
  *
  * The builtin Stage property is a system definition whose options cannot be
  * modified through the API, so team customization works by giving the team
- * its own team-scoped `Stage` property definition (created from CRM
- * settings). When that definition exists, every stage surface — kanban
- * columns, list cells, filters, grouping, the company panel — reads and
- * writes it instead of the system property; otherwise the seeded system
- * stages apply. `useDealStages` is the single source of truth for which set
- * is active.
+ * its own team-scoped `Deal Stage` property definition, written only through
+ * `PUT /crm/stages` from CRM settings. When that definition exists, every
+ * stage surface (kanban columns, list cells, filters, grouping, the company
+ * panel) reads and writes it instead of the system property; otherwise the
+ * seeded system stages apply. `useDealStages` is the single source of truth
+ * for which set is active.
  */
 
 // Imports come from the concrete @entity modules, not the barrel: this
@@ -32,6 +32,7 @@ import type { PropertyDefinitionResponse } from '@service-properties/generated/s
 import type { PropertyDefinitionWithOptions } from '@service-properties/generated/schemas/propertyDefinitionWithOptions';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
 import { type Accessor, createMemo } from 'solid-js';
+import { useTeamCrmConfig } from './team-crm-config';
 
 // Canonical home is `@property/constants` (property pickers filter on it);
 // re-exported here for the CRM-side callers.
@@ -64,13 +65,16 @@ export type DealStages = {
   /**
    * The company's stage within the active set. When the team has custom
    * stages, legacy values stored on the system Stage property are mapped
-   * onto the custom set by label so boards/lists don't blank out after
-   * customizing; moving a card writes the value to the team definition.
+   * onto the custom set (recorded map first, then label) so boards/lists
+   * don't blank out after customizing; moving a card writes the value to
+   * the team definition.
    */
   resolveStage: (entity: CompanyLike) => string | undefined;
   /** Label for an option id in the active set (legacy system ids included). */
   stageLabel: (optionId: string) => string | undefined;
   isLoading: Accessor<boolean>;
+  /** The definitions failed to load and nothing is cached. */
+  isError: Accessor<boolean>;
 };
 
 /** Minimal company shape needed to read stage values. */
@@ -214,6 +218,7 @@ export function useDealStages(): DealStages {
     scope: 'team',
     includeOptions: true,
   }));
+  const teamCrmConfig = useTeamCrmConfig();
 
   const teamStageDefinition = createMemo(() =>
     findTeamStageDefinition(teamDefinitionsQuery.data)
@@ -268,12 +273,12 @@ export function useDealStages(): DealStages {
     if (direct && stageIds().has(direct)) return direct;
     if (stageDefinitionId() === SYSTEM_PROPERTY_IDS.STAGE) return direct;
 
-    // Legacy value on the system Stage property → map by label onto the
-    // custom set (the customize flow seeds the same labels).
     const legacy = getCompanyStageOptionId(
       entity as Parameters<typeof getCompanyStageOptionId>[0]
     );
     if (!legacy) return undefined;
+    const mapped = teamCrmConfig.config().legacyStageIds?.[legacy];
+    if (mapped && stageIds().has(mapped)) return mapped;
     const legacyLabel = getPropertyOptionLabel(legacy)?.toLowerCase();
     if (!legacyLabel) return undefined;
     return stages().find((stage) => stage.label.toLowerCase() === legacyLabel)
@@ -291,6 +296,9 @@ export function useDealStages(): DealStages {
     stageProperty,
     resolveStage,
     stageLabel,
-    isLoading: () => teamDefinitionsQuery.isLoading,
+    isLoading: () =>
+      teamDefinitionsQuery.isLoading || teamCrmConfig.isLoading(),
+    isError: () =>
+      teamDefinitionsQuery.isError && teamDefinitionsQuery.data === undefined,
   };
 }

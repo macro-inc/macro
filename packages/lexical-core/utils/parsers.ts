@@ -70,6 +70,20 @@ export function parsePullRequestMentions(text: string): string {
   });
 }
 
+/** `<m-connect-app>` chips read as their call to action. */
+export function parseConnectApps(text: string): string {
+  return text.replace(/<m-connect-app>(.*?)<\/m-connect-app>/g, (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return typeof data.name === 'string' && data.name
+        ? `Connect ${data.name}`
+        : '';
+    } catch {
+      return '';
+    }
+  });
+}
+
 export function parseTagMentions(text: string): string {
   return text.replace(/<m-tag>(.*?)<\/m-tag>/g, (_, json) => {
     try {
@@ -113,6 +127,21 @@ export function parseDocumentCards(text: string): string {
       try {
         const data = JSON.parse(json);
         return data.documentName || '';
+      } catch {
+        return '';
+      }
+    }
+  );
+}
+
+/** Replace reply-target nodes with their user-visible preview text. */
+export function parseReplyTargets(text: string): string {
+  return text.replace(
+    /<m-reply-target>(.*?)<\/m-reply-target>/gs,
+    (_, json) => {
+      try {
+        const data = JSON.parse(json);
+        return data.displayText || '';
       } catch {
         return '';
       }
@@ -168,27 +197,26 @@ export function stripAgentContext(text: string): string {
  * - Snapshots: documentName (base64-encoded payload)
  * - Group mentions: @groupAlias (e.g., @here)
  * - Links: text (fallback to url)
+ * - Reply targets: displayText
  */
 export function markdownToPlainText(markdown: string): string {
-  return stripAgentContext(
-    parseLinks(
-      parseDocumentCards(
-        parseSnapshots(
-          parseTagMentions(
-            parsePullRequestMentions(
-              parseDocumentMentions(
-                parseGroupMentions(
-                  parseDateMentions(
-                    parseContactMentions(parseUserMentions(markdown))
-                  )
-                )
-              )
-            )
-          )
-        )
-      )
-    )
-  );
+  const transforms: Array<(text: string) => string> = [
+    parseUserMentions,
+    parseContactMentions,
+    parseDateMentions,
+    parseGroupMentions,
+    parseDocumentMentions,
+    parsePullRequestMentions,
+    parseTagMentions,
+    parseConnectApps,
+    parseSnapshots,
+    parseDocumentCards,
+    parseLinks,
+    parseReplyTargets,
+    stripAgentContext,
+  ];
+
+  return transforms.reduce((text, transform) => transform(text), markdown);
 }
 
 /**
@@ -211,6 +239,7 @@ type MentionTagPayload = {
   emailOrDomain?: string;
   displayFormat?: string;
   groupAlias?: string;
+  displayText?: string;
   equation?: string;
 };
 
@@ -368,7 +397,15 @@ export function markdownToEmbeddingText(markdown: string): string {
     data.name ? `#${data.name}` : ''
   );
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
+  text = replaceJsonTag(text, 'm-connect-app', (data) =>
+    data.name ? `Connect ${data.name}` : ''
+  );
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');
+  text = replaceJsonTag(
+    text,
+    'm-reply-target',
+    (data) => data.displayText || ''
+  );
   text = replaceJsonTag(text, 'm-watermark', () => '');
 
   // Anything still tagged is an unrecognized m-* node: drop it entirely so

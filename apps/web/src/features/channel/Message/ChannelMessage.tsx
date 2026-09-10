@@ -197,8 +197,6 @@ export function ChannelMessage(props: ChannelMessageProps) {
         ref={(el) =>
           touchHandler(el, () => ({
             touchClassName: 'channel-message-long-press-highlight',
-            // Yield to the native image callout when long-pressing an image.
-            skipSelectors: ['img'],
             onLongPress: () =>
               drawerManager?.open(props.message, props.actions),
           }))

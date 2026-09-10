@@ -1,7 +1,7 @@
-# Two recipes, one per sandbox provider. Each publishes `container/` in
-# whatever form its provider wants, then boots an agent in it with a prompt -
-# so both exercise our image, not a stock one. `.env` next to this justfile (or
-# any parent) can supply DAYTONA_API_KEY / NSC_TOKEN / GITHUB_TOKEN.
+# Publishing `container/` in whatever form a sandbox provider wants, then
+# booting an agent in it with a prompt - so what runs is our image, not a stock
+# one. `.env` next to this justfile (or any parent) can supply
+# DAYTONA_API_KEY.
 #
 # Override the prompt with `just boot-daytona "your prompt"`.
 #
@@ -15,12 +15,10 @@
 # All recipes skip the image build when the image already exists, which is
 # wrong whenever `container/` has changed - a stale image is reused silently and
 # the failure shows up much later, inside the sandbox. Use `just rebuild-daytona`
-# / `rebuild-namespace` / `build-local --force` after touching the Dockerfile
-# or the sidecar.
+# / `build-local --force` after touching the Dockerfile or the sidecar.
 set dotenv-load := true
 
-# What the image is called on both providers: a Daytona snapshot, and a
-# repository in Namespace's nscr.io workspace registry.
+# What the image is called: a Daytona snapshot, and a local Docker tag.
 image_name := env_var_or_default("AGENT_HARNESS_IMAGE", "macro-agent-harness")
 
 # Snapshot bake size from sandbox_sizes.json. Override with DAYTONA_SNAPSHOT_*.
@@ -101,40 +99,6 @@ rebuild-daytona prompt=default_prompt:
       exit 1
     fi
     just boot-daytona {{ quote(prompt) }}
-
-# Push the image to nscr.io if needed, then boot an agent in an instance
-boot-namespace prompt=default_prompt:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # Namespace bearer tokens expire, so unlike the Daytona key this is minted
-    # per run unless the environment already carries one.
-    if [ -n "${NSC_TOKEN:-}" ]; then
-      echo "using NSC_TOKEN from the environment"
-    else
-      echo "minting a dev token (run 'nsc login' first if this fails)"
-      NSC_TOKEN="$(nsc auth generate-dev-token)"
-      export NSC_TOKEN
-    fi
-    # Namespace pulls an ordinary OCI reference, so container/ is built by a
-    # Namespace remote builder and pushed to the workspace registry. Set
-    # NAMESPACE_IMAGE_REF to skip the build and boot an already-pushed image.
-    if [ -z "${NAMESPACE_IMAGE_REF:-}" ]; then
-      echo "building container/ in a Namespace remote builder and pushing to nscr.io"
-      build_log="$(mktemp)"
-      trap 'rm -f "$build_log"' EXIT
-      nsc build container --name {{image_name}} --push 2>&1 | tee "$build_log"
-      # nsc reports the pushed reference in its output; scraping it beats
-      # reassembling nscr.io/<workspace>/<name>:<tag> by hand.
-      NAMESPACE_IMAGE_REF="$(grep -oE 'nscr\.io/[^[:space:]]+' "$build_log" | tail -1)"
-      if [ -z "$NAMESPACE_IMAGE_REF" ]; then
-        echo "could not find the pushed nscr.io reference in the build output;" >&2
-        echo "set NAMESPACE_IMAGE_REF to it and re-run" >&2
-        exit 1
-      fi
-      export NAMESPACE_IMAGE_REF
-    fi
-    echo "booting $NAMESPACE_IMAGE_REF"
-    cargo run -p agent_harness --bin boot_agent -- namespace {{ quote(prompt) }}
 
 # Build the image for the local Docker provider if missing
 build-local force="":

@@ -6,9 +6,9 @@ use macro_db_client::calendar_event::get_events_for_search::{
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::{EntityReference, EntityType};
 use models_search::calendar_event::{
-    CalendarEventMetadata, CalendarEventSearchOccurrence, CalendarEventSearchResponseItem,
-    CalendarEventSearchResponseItemWithMetadata, CalendarEventSearchResult,
-    CalendarEventSearchTime,
+    CalendarEventMetadata, CalendarEventOrganizer, CalendarEventSearchOccurrence,
+    CalendarEventSearchResponseItem, CalendarEventSearchResponseItemWithMetadata,
+    CalendarEventSearchResult, CalendarEventSearchTime,
 };
 use models_soup::SoupProperty;
 use sqlx::types::Uuid;
@@ -118,6 +118,17 @@ fn to_occurrence(info: &CalendarEventSearchInfo) -> Option<CalendarEventSearchOc
     })
 }
 
+/// Build the organizer payload when the source named a name or an email.
+fn to_organizer(info: &CalendarEventSearchInfo) -> Option<CalendarEventOrganizer> {
+    if info.organizer_name.is_none() && info.organizer_email.is_none() {
+        return None;
+    }
+    Some(CalendarEventOrganizer {
+        name: info.organizer_name.clone(),
+        email: info.organizer_email.clone(),
+    })
+}
+
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     events: HashMap<Uuid, CalendarEventSearchInfo>,
@@ -163,6 +174,8 @@ pub fn construct_search_result(
                     occurrence: to_occurrence(info),
                     conference_url: info.conference_url.clone(),
                     is_read_only: info.is_read_only,
+                    organizer: to_organizer(info),
+                    description: info.description.clone(),
                 }),
                 properties: properties_map
                     .remove(&entity_id.to_string())

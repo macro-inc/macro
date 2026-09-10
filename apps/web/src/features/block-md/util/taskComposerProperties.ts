@@ -15,7 +15,6 @@ import type {
 } from '@property/types';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useTagsQuery } from '@queries/properties/tags';
-import { refetchSoupEntity } from '@queries/soup/cache';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
@@ -91,10 +90,7 @@ export async function createTaskWithProperties(
     return null;
   }
 
-  // refetchSoupEntity is already called inside createTask — just upsert to history
-  refetchSoupEntity(createdTask.documentId, 'document');
-
-  // Upsert the new task to history
+  // createTaskWithInitialSnapshot already revalidates Soup; just update history.
   upsertToHistory({
     itemId: createdTask.documentId,
     itemType: 'document',

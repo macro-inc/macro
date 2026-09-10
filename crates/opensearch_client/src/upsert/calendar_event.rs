@@ -22,6 +22,10 @@ pub struct UpsertCalendarEventArgs {
     /// other flat index uses for its title.
     #[serde(rename = "name")]
     pub title: String,
+    /// The title of every provider copy of the event, the canonical one
+    /// included. A shared calendar's re-import of a member's event carries
+    /// its own title, and a search for either must find the entity.
+    pub source_names: Vec<String>,
     /// Owner of this per-user event projection
     pub owner_id: String,
     /// The inbox link the canonical source belongs to. Delegated access is

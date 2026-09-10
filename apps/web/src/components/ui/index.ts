@@ -116,10 +116,11 @@ export { SendButton } from './components/SendButton';
 export { SideNav } from './components/SideNav';
 export { Surface } from './components/Surface';
 export { TabbedControl } from './components/TabbedControl';
+export type { TabItem, TabsProps } from './components/Tabs';
+export { Tabs } from './components/Tabs';
 export type { ToggleSwitchProps } from './components/ToggleSwitch';
 export { ToggleSwitch } from './components/ToggleSwitch';
 export { Tooltip } from './components/Tooltip';
-
 export { cn } from './utils/classname';
 export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';
 export {
@@ -129,5 +130,12 @@ export {
   highlightFirstMenuItemOnOpen,
   wrapIndex,
 } from './utils/menuKeyboardNavigation';
+export {
+  type GetHashedPaletteColorOptions,
+  getHashedPaletteColor,
+  type NonEmptyPalette,
+  PALETTE_COLORS,
+  type PaletteColor,
+} from './utils/palette';
 export type { VariantProps } from './utils/variants';
 export { createVariants } from './utils/variants';

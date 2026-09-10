@@ -1,4 +1,4 @@
-use super::error::Result;
+use super::error::{AgentSessionError, Result};
 use super::model::*;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
@@ -28,14 +28,116 @@ pub struct BotFacts {
     /// bots' sessions are opened by the trigger pipeline, never over HTTP,
     /// and nothing may dial in for them.
     pub is_managed: bool,
+    /// Whether this is a first-party system bot rather than a user- or
+    /// team-owned persona. System bots belong to everyone.
+    pub is_system: bool,
     /// The user who owns the bot, when it is user-owned.
     pub owner_user_id: Option<MacroUserIdStr<'static>>,
+    /// Team that owns the bot, when it is team-owned.
+    pub owner_team_id: Option<Uuid>,
+    /// The registered harness this bot's agent is bound to, when it is one.
+    pub harness_id: Option<harness_id::HarnessId>,
+    /// Runtime profile for a persisted agent. Fixed system bots have no
+    /// persisted profile and use deployment defaults instead.
+    pub managed_profile: Option<ManagedAgentProfile>,
+}
+
+/// Runtime settings snapshotted when a managed persona opens a session.
+#[derive(Debug, Clone)]
+pub struct ManagedAgentProfile {
+    /// Model configured as this persona's default.
+    pub model: String,
+    /// Harness serving this persona.
+    pub harness: String,
+    /// Instructions configured for this persona.
+    pub instructions: String,
+    /// MCP servers this persona may use.
+    pub mcp_servers: AgentMcpServers,
+}
+
+/// A managed persona selected for one managed session.
+#[derive(Debug, Clone)]
+pub struct SelectedManagedPersona {
+    /// Bot identity used by the session.
+    pub bot_id: BotId,
+    /// Runtime settings resolved from a persisted persona. `None` for a fixed
+    /// system bot, whose sessions run on the deployment's defaults for it.
+    pub profile: Option<ManagedAgentProfile>,
 }
 
 /// Read-only lookup of the bots sessions may be opened for.
 pub trait BotDirectory: Send + Sync + 'static {
     /// Fetch a bot's facts; `None` when no such bot exists.
     fn bot_facts(&self, bot: BotId) -> impl Future<Output = Result<Option<BotFacts>>> + Send;
+
+    /// Whether a user belongs to a team that owns a persona.
+    fn user_has_team(
+        &self,
+        user: MacroUserIdStr<'static>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool>> + Send;
+}
+
+/// Why a user cannot select a bot as a managed session persona.
+#[derive(Debug)]
+pub enum ManagedPersonaError {
+    /// No active bot has this id.
+    Unknown,
+    /// The bot has no agent runtime.
+    NotAgent,
+    /// The bot is served by an external runtime.
+    External,
+    /// The user does not own or belong to the persona's owner.
+    Forbidden,
+    /// Looking up the persona or its owner failed.
+    Lookup(AgentSessionError),
+}
+
+/// Resolve and authorize a managed persona for a user.
+///
+/// Ownership policy lives in the domain: private personas belong to their
+/// owner, team personas are available to team members, and managed system
+/// bots (the deployment's own coders) are available to everyone, exactly as
+/// they are when mentioned in a channel.
+pub async fn managed_persona_for_user<Bots: BotDirectory>(
+    bots: &Bots,
+    bot_id: BotId,
+    user: &MacroUserIdStr<'static>,
+) -> std::result::Result<SelectedManagedPersona, ManagedPersonaError> {
+    let facts = bots
+        .bot_facts(bot_id)
+        .await
+        .map_err(ManagedPersonaError::Lookup)?
+        .ok_or(ManagedPersonaError::Unknown)?;
+    if !facts.has_agent {
+        return Err(ManagedPersonaError::NotAgent);
+    }
+    if !facts.is_managed {
+        return Err(ManagedPersonaError::External);
+    }
+    if facts.is_system {
+        return Ok(SelectedManagedPersona {
+            bot_id,
+            profile: None,
+        });
+    }
+    let authorized = if let Some(owner) = facts.owner_user_id {
+        owner.as_ref() == user.as_ref()
+    } else if let Some(team_id) = facts.owner_team_id {
+        bots.user_has_team(user.clone(), team_id)
+            .await
+            .map_err(ManagedPersonaError::Lookup)?
+    } else {
+        false
+    };
+    if !authorized {
+        return Err(ManagedPersonaError::Forbidden);
+    }
+    let profile = facts.managed_profile.ok_or(ManagedPersonaError::NotAgent)?;
+    Ok(SelectedManagedPersona {
+        bot_id,
+        profile: Some(profile),
+    })
 }
 
 /// The mention that triggered a session, when one did.
@@ -73,6 +175,8 @@ pub struct OpenExternalAgentSession {
     pub owner: MacroUserIdStr<'static>,
     /// The thread whose mention triggered the session, when one did.
     pub thread: Option<SessionThread>,
+    /// Instructions the session's runtime works under, when any were stated.
+    pub instructions: Option<String>,
 }
 
 /// Everything needed to open a session the server hosts itself.
@@ -88,6 +192,12 @@ pub struct OpenManagedSession {
     /// First prompt to deliver once the sandbox is attached. `None` opens an
     /// idle session its owner prompts from the session's own surface.
     pub prompt: Option<String>,
+    /// A selected persona's authoritative runtime profile. `None` uses the
+    /// deployment's default managed coding persona.
+    pub profile: Option<SelectedManagedPersona>,
+    /// Ad-hoc instructions for the default managed persona. Ignored when a
+    /// persisted persona profile is selected.
+    pub instructions: Option<String>,
 }
 
 /// Opens sessions, however they are served. Implemented by the harness, which
@@ -141,6 +251,23 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// The session a sandbox's egress token stands for, if any still does.
+    ///
+    /// `egress_token_hash` is the SHA-256 hex of the token as presented, never
+    /// the token: implementations match on the stored hash, so the comparison
+    /// happens in an index rather than over secret-derived bytes in memory.
+    ///
+    /// `None` rather than an error when nothing matches - a token we never
+    /// minted and a token whose session has since been deleted are the same
+    /// fact, and the caller refuses both the same way. The whole session comes
+    /// back because everything the token entitles its holder to is on the row:
+    /// the owner whose credentials it spends, the repository its git traffic is
+    /// pinned to, and whether the session is still open.
+    fn find_by_egress_token_hash(
+        &self,
+        egress_token_hash: &str,
+    ) -> impl Future<Output = Result<Option<AgentSession>>> + Send;
 
     /// Find the session associated with an incoming channel context.
     ///
@@ -250,6 +377,62 @@ pub trait ExternalSessionRepo: Send + Sync + 'static {
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// How often a replica refreshes its heartbeat row.
+pub const REPLICA_HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How stale a replica's heartbeat may be before its claims are up for
+/// grabs. Three missed heartbeats: long enough that one slow write does not
+/// get a live replica's sessions stolen, short enough that a crashed
+/// replica's sessions resume on the next prompt rather than minutes later.
+pub const REPLICA_STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The session-management lease: which replica holds a session's live actor.
+///
+/// Implemented by the same store that persists the session log, never
+/// separately - the fence a claim carries is checked by that store's fenced
+/// appends, and minting fences in one place while checking them in another
+/// is the mis-wiring this coupling forbids.
+///
+/// Claiming is a single conditional update (compare-and-swap): it succeeds
+/// when the session is unmanaged, already ours, or held by a replica whose
+/// heartbeat has gone stale, and every success increments the session's
+/// fence. There are deliberately no explicit locks anywhere in the contract -
+/// see [`ManagerFence`](super::model::ManagerFence) for why a fence, not a
+/// lock, is what neutralizes a stale holder.
+pub trait SessionOwnership: Send + Sync + 'static {
+    /// Claim live management of a session for `replica`, registering the
+    /// replica's heartbeat as a side effect so a claim can never dangle on a
+    /// replica the store has not seen.
+    fn claim(
+        &self,
+        session: AgentSessionId,
+        replica: ReplicaId,
+    ) -> impl Future<Output = Result<ClaimOutcome>> + Send;
+
+    /// Release a claim this replica holds. Conditional on the claim's fence
+    /// still being current: releasing after having been superseded is a
+    /// no-op, never a theft of the successor's claim. A session already
+    /// released (or deleted) is in the asked-for state, so this succeeds.
+    fn release(&self, claim: &SessionClaim) -> impl Future<Output = Result<()>> + Send;
+
+    /// Refresh this replica's heartbeat, upserting its row and publishing
+    /// `address` - the base URL peers forward this replica's sessions'
+    /// commands to - when one is known.
+    fn heartbeat(
+        &self,
+        replica: ReplicaId,
+        address: Option<&ReplicaAddress>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The live manager of a session, if a replica with a fresh heartbeat
+    /// holds its lease. `None` covers both an unclaimed session and one whose
+    /// holder has gone stale - either way the session is claimable.
+    fn manager_of(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<SessionManager>>> + Send;
+}
+
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 pub trait AgentSessionLogRepo: Send + Sync + 'static {
     /// Append a log entry and project any system event onto the session status.
@@ -258,7 +441,35 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
         log: AgentSessionLog,
     ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
 
-    /// List all log entries for a session, in chronological order.
+    /// [`create`](Self::create), conditioned on `claim` still holding the
+    /// session's current fence.
+    ///
+    /// This is the write half of the fencing contract: the check and the
+    /// append are one atomic operation, so a replica that stalled past its
+    /// heartbeat and was superseded cannot interleave frames no matter when
+    /// it wakes - its append matches nothing and fails with
+    /// [`FencedOut`](super::error::AgentSessionError::FencedOut), which the
+    /// actor treats as its cue to tear down.
+    fn create_fenced(
+        &self,
+        log: AgentSessionLog,
+        claim: &SessionClaim,
+    ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
+
+    /// Append a successful load response and select its initialization atomically,
+    /// under the current ownership fence. The boundary must belong to this session.
+    fn create_fenced_with_boundary(
+        &self,
+        log: AgentSessionLog,
+        claim: &SessionClaim,
+        boundary: Option<HistoryBoundary>,
+    ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
+
+    /// List effective ACP history in deterministic `(created_at, id)` order.
+    /// Starts at the latest successfully loaded initialization, or the beginning.
+    /// Raw failed/partial replay frames remain; consumers must stage load attempts.
+    /// The first returned row is the inclusive transport reconciliation cursor;
+    /// buffered rows ordered before it are obsolete. An empty result has none.
     ///
     /// Entries come back stamped with when the log recorded them: the frame
     /// itself carries no time, and a reader ordering or merging a session's
@@ -272,7 +483,29 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
 /// Sequential live log writer owned by one session actor.
 pub trait AgentSessionLogWriter: Send + 'static {
     /// Persist and fold one frame into this connection's live projection.
-    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
+    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Uuid>> + Send {
+        self.append_with_boundary(log, None)
+    }
+
+    /// Persist a frame and optional successful-load boundary in one transaction.
+    /// Returns its durable row identity before the actor continues.
+    fn append_with_boundary(
+        &mut self,
+        log: AgentSessionLog,
+        boundary: Option<HistoryBoundary>,
+    ) -> impl Future<Output = Result<Uuid>> + Send;
+}
+
+/// A session's queue changed; this is the whole queue as it stands now.
+///
+/// A snapshot rather than a delta so that any one event is self-sufficient:
+/// a viewer applies the newest one it has seen and needs nothing else.
+#[derive(Debug, Clone)]
+pub struct AgentSessionQueueChanged {
+    /// The session whose queue this is.
+    pub agent_session_id: AgentSessionId,
+    /// Everything waiting, oldest (next to dispatch) first.
+    pub entries: Vec<QueuedControl>,
 }
 
 /// Pushing a live session's frames to whoever is watching it.
@@ -297,6 +530,95 @@ pub trait AgentSessionRealtime {
         _event: AgentSessionRenamed,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
         async { Ok(()) }
+    }
+
+    /// Publish a session's changed queue - the whole queue, every time - to
+    /// its viewers.
+    fn publish_queue_changed(
+        &self,
+        _event: AgentSessionQueueChanged,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+}
+
+/// Told when a session's turn ends and when its live actor stops.
+///
+/// What the harness gates its prompt queue on: a turn ending means the agent
+/// can take the next queued prompt, an actor stopping means no turn is in
+/// flight anymore however the last one looked. Both fire from the actor's own
+/// task, so implementations must only hand the fact off - enqueue, notify -
+/// never do the resulting work inline.
+///
+/// Object-safe and synchronous on purpose: the service stores it erased so
+/// wiring it is not another type parameter, and the one production
+/// implementation admits work to a queue synchronously.
+pub trait SessionTurnObserver: Send + Sync + 'static {
+    /// The runtime answered the session's in-flight turn.
+    fn turn_ended(&self, id: AgentSessionId);
+
+    /// The session's live actor is gone - disconnect, teardown, or crash. Any
+    /// in-flight turn went with it, without [`Self::turn_ended`] firing.
+    fn session_stopped(&self, id: AgentSessionId);
+}
+
+impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> {
+    fn turn_ended(&self, id: AgentSessionId) {
+        (**self).turn_ended(id);
+    }
+
+    fn session_stopped(&self, id: AgentSessionId) {
+        (**self).session_stopped(id);
+    }
+}
+
+/// A [`SessionTurnObserver`] for services with no queue above them: tests,
+/// offline tooling, and replay.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoOpTurnObserver;
+
+impl SessionTurnObserver for NoOpTurnObserver {
+    fn turn_ended(&self, _id: AgentSessionId) {}
+
+    fn session_stopped(&self, _id: AgentSessionId) {}
+}
+
+/// A [`SessionTurnObserver`] bound after construction, for the composition
+/// root's chicken-and-egg: the session service wants its observer at build
+/// time, and the observer (the harness) is built *from* the session service.
+///
+/// Events before `bind` are dropped. That window is the instants between the
+/// two constructions, before anything serves traffic - nothing turns then.
+#[derive(Default)]
+pub struct LateBoundTurnObserver {
+    observer: std::sync::OnceLock<Box<dyn SessionTurnObserver>>,
+}
+
+impl LateBoundTurnObserver {
+    /// An observer awaiting its target.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Attach the real observer. A second bind is a wiring bug; the first
+    /// stays authoritative and the duplicate is dropped.
+    pub fn bind(&self, observer: impl SessionTurnObserver) {
+        let _ = self.observer.set(Box::new(observer));
+    }
+}
+
+impl SessionTurnObserver for LateBoundTurnObserver {
+    fn turn_ended(&self, id: AgentSessionId) {
+        if let Some(observer) = self.observer.get() {
+            observer.turn_ended(id);
+        }
+    }
+
+    fn session_stopped(&self, id: AgentSessionId) {
+        if let Some(observer) = self.observer.get() {
+            observer.session_stopped(id);
+        }
     }
 }
 
@@ -351,6 +673,42 @@ pub struct ControlEvent {
     pub actor: Option<MacroUserIdStr<'static>>,
 }
 
+/// What accepting a control operation did with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControlDisposition {
+    /// The action reached the agent's runtime.
+    Sent,
+    /// A turn was running, so the action waits in the session's queue and
+    /// dispatches when that turn ends. Until then it can be listed, edited,
+    /// and removed under its action id.
+    Queued,
+}
+
+/// A control operation the recipient accepted: the id a caller correlates
+/// with, and what became of it.
+#[derive(Debug, Clone)]
+pub struct AcceptedControl {
+    /// Matches `requestId` on the folded message the action derives once it
+    /// dispatches, and names the queue entry until then.
+    pub action_id: AgentActionId,
+    /// Whether it went out or waits.
+    pub disposition: ControlDisposition,
+}
+
+/// One action waiting in a session's queue, as a reader sees it.
+#[derive(Debug, Clone)]
+pub struct QueuedControl {
+    /// The id the action was accepted under.
+    pub action_id: AgentActionId,
+    /// What will be delivered - a prompt's text is the raw user text, which
+    /// is what editing replaces.
+    pub action: AgentAction,
+    /// The user who queued it, absent when a bot acted on nobody's behalf.
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// When it was accepted.
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// Whoever holds a session's live resources, told when the durable session
 /// changes in a way those resources have to follow.
 ///
@@ -364,12 +722,44 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     fn session_deleted(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
     /// A control operation the live connection has to be told about. Returns
-    /// the action id the caller correlates against the fold stream.
+    /// the action id the caller correlates against the fold stream, and
+    /// whether the action went out or waits in the session's queue.
     fn control_event(
         &self,
         id: AgentSessionId,
         event: ControlEvent,
-    ) -> impl Future<Output = Result<AgentActionId>> + Send;
+    ) -> impl Future<Output = Result<AcceptedControl>> + Send;
+
+    /// The actions waiting in this session's queue, oldest first.
+    fn queued_controls(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<QueuedControl>>> + Send;
+
+    /// Replace a queued prompt's text. [`AgentSessionError::QueuedControlNotFound`]
+    /// once it has dispatched; [`AgentSessionError::QueuedControlNotEditable`]
+    /// for a queued action that carries no text.
+    ///
+    /// `actor` is the user responsible, judged by the same gates as sending:
+    /// whoever may not prompt a session may not rewrite what it is about to
+    /// be prompted with.
+    fn edit_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        prompt: String,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Remove a queued action before it dispatches.
+    /// [`AgentSessionError::QueuedControlNotFound`] once it has. `actor` as
+    /// on [`Self::edit_queued_control`].
+    fn remove_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Resize this session's sandbox and remember `size` as the owner's default.
     fn set_sandbox_size(
@@ -377,4 +767,16 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         id: AgentSessionId,
         size: SandboxSize,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The harness currently bound to serve this session, resolved through its
+    /// bot's binding. `None` for a managed session or an unbound bot.
+    ///
+    /// The control routes use it to confine a harness caller to the sessions
+    /// its own daemon serves: ownership alone would let a harness that merely
+    /// acts for a user drive or delete sessions another harness serves for the
+    /// same user.
+    fn session_harness(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<harness_id::HarnessId>>> + Send;
 }

@@ -27,6 +27,11 @@ pub struct SessionState {
     pub acp_session_id: Option<SessionId>,
     /// Model id turns run on; `session/set_config_option` moves it.
     pub model: String,
+    /// Instructions every turn runs under, snapshotted from the session row
+    /// at attach. Nothing moves them: they are the session's system prompt,
+    /// and a conversation whose system prompt changed halfway is one the
+    /// agent never agreed to.
+    pub instructions: Option<String>,
     /// The conversation so far, oldest first.
     pub history: Vec<HistoryEntry>,
 }
@@ -38,6 +43,7 @@ impl SessionState {
         Self {
             acp_session_id: None,
             model,
+            instructions: None,
             history: Vec::new(),
         }
     }

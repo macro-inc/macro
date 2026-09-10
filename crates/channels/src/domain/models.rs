@@ -833,7 +833,7 @@ impl ReferencedShareItemType {
             "document" => Some(Self::Document),
             "chat" => Some(Self::Chat),
             "project" => Some(Self::Project),
-            "thread" => Some(Self::EmailThread),
+            "thread" | "email" | "email_thread" => Some(Self::EmailThread),
             "call" => Some(Self::Call),
             _ => None,
         }
@@ -847,6 +847,21 @@ impl ReferencedShareItemType {
             Self::Project => "project",
             Self::EmailThread => "thread",
             Self::Call => "call",
+        }
+    }
+
+    /// Entity-type strings that should match when looking up references.
+    ///
+    /// Mentions store email threads as `"thread"`. The share menu historically
+    /// stored `"email"`, so lookups treat those aliases as the same entity.
+    pub fn reference_lookup_types(entity_type: &str) -> Vec<String> {
+        match Self::from_raw(entity_type) {
+            Some(Self::EmailThread) => vec![
+                "thread".to_string(),
+                "email".to_string(),
+                "email_thread".to_string(),
+            ],
+            _ => vec![entity_type.to_string()],
         }
     }
 }
@@ -1455,3 +1470,6 @@ pub struct DeleteEntityMentionResponse {
     /// Whether the mention was deleted.
     pub deleted: bool,
 }
+
+#[cfg(test)]
+mod test;

@@ -7,8 +7,9 @@ version = "0.1.0"
 [dependencies]
 dotenvy = { workspace = true }
 macro_env = { path = "../macro_env" }
-opentelemetry = { workspace = true, features = ["trace"] }
-opentelemetry_sdk = { workspace = true, features = ["rt-tokio", "trace"] }
+opentelemetry = { workspace = true, features = ["logs", "trace"] }
+opentelemetry_sdk = { workspace = true, features = ["logs", "rt-tokio", "trace"] }
+opentelemetry-appender-tracing = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 rootcause = { workspace = true }
 rootcause-tracing = { workspace = true }

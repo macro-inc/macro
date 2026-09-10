@@ -132,7 +132,7 @@ function InlineTextEditorResult(props: {
           props.content.type === 'text_editor_code_execution_tool_result_error'
         }
       >
-        <span class="text-ink-error">Failed</span>
+        <span class="text-failure">Failed</span>
       </Match>
       <Match
         when={props.content.type === 'text_editor_code_execution_view_result'}

@@ -16,7 +16,11 @@ type TabsInsetProps = {
   value?: string;
   defaultValue?: string;
   class?: string;
+  trackClass?: string;
+  itemClass?: string;
+  labelClass?: string;
   depth?: 0 | 1 | 2 | 3 | 4;
+  fullWidth?: boolean;
 } & Omit<SegmentedControlRootProps, 'defaultValue'>;
 
 export const TabsInset = (props: TabsInsetProps) => {
@@ -26,7 +30,11 @@ export const TabsInset = (props: TabsInsetProps) => {
     'defaultValue',
     'disabled',
     'class',
+    'trackClass',
+    'itemClass',
+    'labelClass',
     'depth',
+    'fullWidth',
   ]);
 
   // The track sits at the control's depth (matching the panel it's on); the
@@ -41,20 +49,35 @@ export const TabsInset = (props: TabsInsetProps) => {
       defaultValue={local.defaultValue ?? local.list[0]?.value}
       disabled={local.disabled}
       {...rootProps}
-      class={cn('h-full flex items-center', local.class)}
+      class={cn(
+        'h-full flex items-center',
+        local.fullWidth && 'w-full',
+        local.class
+      )}
     >
       <Layer depth={trackDepth()}>
-        <div class="relative flex items-center border border-edge-muted bg-surface rounded-lg p-0.5 has-focus-visible:ring-2 has-focus-visible:ring-accent/20">
+        <div
+          class={cn(
+            'relative flex items-center border border-edge-muted bg-surface rounded-lg p-0.5 has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
+            local.fullWidth && 'w-full',
+            local.trackClass
+          )}
+        >
           <For each={local.list}>
             {(item) => (
               <Layer depth={itemDepth()}>
                 <KSegmentedControl.Item
                   value={item.value}
                   disabled={local.disabled}
+                  class={cn(local.fullWidth && 'flex-1', local.itemClass)}
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
                   <KSegmentedControl.ItemLabel
-                    class="flex items-center px-2.5 py-1 text-xs font-medium data-checked:ring data-checked:ring-edge-muted ring-inset rounded-md text-ink-extra-muted hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                    class={cn(
+                      'flex items-center px-2.5 py-1 text-xs font-medium data-checked:ring data-checked:ring-edge-muted ring-inset rounded-md text-ink-extra-muted hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
+                      local.fullWidth && 'w-full justify-center',
+                      local.labelClass
+                    )}
                     onPointerDown={(e) => {
                       if (isTouchDevice()) e.preventDefault();
                     }}

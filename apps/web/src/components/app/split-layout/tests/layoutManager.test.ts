@@ -355,6 +355,36 @@ describe('layoutManager', () => {
     });
   });
 
+  describe('component metadata', () => {
+    it('updates the current mount through a retained split handle', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        const handle = manager.getSplit(manager.splits()[0].id)!;
+        const inboxMeta = handle.meta()!;
+
+        handle.updateMeta?.({ splitPanelLayout: 'legacy' });
+        handle.replace({ next: { type: 'component', id: 'tasks' } });
+
+        const tasksMeta = handle.meta()!;
+        expect(tasksMeta).not.toBe(inboxMeta);
+
+        handle.updateMeta?.({ splitPanelLayout: 'composable' });
+
+        expect(tasksMeta.splitPanelLayout).toBe('composable');
+        expect(inboxMeta.splitPanelLayout).toBe('legacy');
+
+        handle.replace({ next: { type: 'md', id: 'document-1' } });
+
+        expect(handle.meta()).toBeUndefined();
+        expect(handle.updateMeta).toBeUndefined();
+
+        dispose();
+      });
+    });
+  });
+
   describe('navigation params', () => {
     const channelWithTarget = {
       type: 'channel',
@@ -726,7 +756,7 @@ describe('layoutManager', () => {
         const { manager, controllerId } = setup();
         manager.engagePreviewMode(controllerId);
 
-        expect(manager.previewControllerWidth(controllerId)).toBe(440);
+        expect(manager.previewControllerWidth(controllerId)).toBe(360);
         expect(manager.splits()).toHaveLength(2);
         const viewerId = manager.splits()[1].id;
         expect(manager.viewerOf(controllerId)).toBe(viewerId);
@@ -992,7 +1022,7 @@ describe('layoutManager', () => {
         expect(manager.splits()).toHaveLength(2);
         expect(manager.viewerOf(controllerId)).toBe(viewerId);
         expect(manager.controllerOf(viewerId)).toBe(controllerId);
-        expect(manager.previewControllerWidth(controllerId)).toBe(440);
+        expect(manager.previewControllerWidth(controllerId)).toBe(360);
         expect(manager.activeSplitId()).toBe(controllerId);
 
         dispose();

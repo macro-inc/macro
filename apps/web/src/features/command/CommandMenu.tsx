@@ -727,7 +727,7 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
         }}
       </For>
       <Show when={remainingCount() > 0}>
-        <div class="text-muted-foreground text-xs px-2 py-1">
+        <div class="text-ink-muted text-xs px-2 py-1">
           +{remainingCount()} more
         </div>
       </Show>
