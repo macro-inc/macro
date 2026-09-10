@@ -89,7 +89,7 @@ impl PgCursorJournal {
                     // waited, so report it exactly like a lost fence.
                     rootcause::report!("Cursor journal writer fenced out")
                 } else {
-                    rootcause::report!(e)
+                    rootcause::report!("{e}")
                 }
             })?
             .ok_or_else(|| rootcause::report!("Cursor journal writer fenced out"))?;

@@ -2,6 +2,9 @@ pub mod error;
 pub mod model;
 /// Fresh model discovery without creating an agent session.
 pub mod model_load;
+/// A shared record of sessions with a command admitted but not yet resolved,
+/// consulted by container managers' idle reapers.
+pub mod pending;
 pub mod ports;
 /// The per-session queue of turn-occupying actions awaiting their turn.
 pub mod queue;

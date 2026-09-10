@@ -39,6 +39,7 @@ use super::keys::CursorApiKeys;
 use super::pipe::PipeTransport;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
+use crate::domain::pending::PendingCommands;
 use crate::domain::ports::ContainerManager;
 use crate::domain::sandbox::SandboxResizeEffect;
 use agent_session::domain::model::SandboxSize;
@@ -85,8 +86,8 @@ const CURSOR_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 /// for reclaiming two idle tasks is nothing.
 const CURSOR_IDLE_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 
-fn should_reap_cursor_pipe(idle: std::time::Duration, active_turn: bool) -> bool {
-    idle >= CURSOR_IDLE_TIMEOUT && !active_turn
+fn should_reap_cursor_pipe(idle: std::time::Duration, active_turn: bool, pending: bool) -> bool {
+    idle >= CURSOR_IDLE_TIMEOUT && !active_turn && !pending
 }
 
 /// The ref new agents start their work from.
@@ -127,6 +128,10 @@ pub struct CursorContainerManager<Sessions, Keys> {
     repo: CursorRepoUrl,
     sessions: Sessions,
     journal_storage: JournalStorage,
+    /// Sessions the harness has a command in flight for right now, shared
+    /// with `AgentHarnessService` so the idle reaper below never closes a
+    /// pipe a command is already on its way to.
+    pending: PendingCommands,
 }
 
 /// Hosted sessions always use durable storage; tests select memory explicitly.
@@ -169,6 +174,7 @@ where
         sessions: Sessions,
         pool: sqlx::PgPool,
         replica: ReplicaId,
+        pending: PendingCommands,
     ) -> Self {
         Self {
             keys,
@@ -176,6 +182,7 @@ where
             repo,
             sessions,
             journal_storage: JournalStorage::Postgres { pool, replica },
+            pending,
         }
     }
 
@@ -192,6 +199,7 @@ where
             repo,
             sessions,
             journal_storage: JournalStorage::Memory,
+            pending: PendingCommands::new(),
         }
     }
 
@@ -295,6 +303,12 @@ where
             );
         }
         let pipe_closed = tokio_util::sync::CancellationToken::new();
+        // Cloned before the tasks below move `pipe_closed` itself: the
+        // attachment built at the end of this function hands this same
+        // signal to the session actor's command wait, so a command sent
+        // right as - or just after - this pipe dies fails at once instead
+        // of riding out its own separate timeout for nothing.
+        let attachment_closed = pipe_closed.clone();
         let shutdown = tokio_util::sync::CancellationToken::new();
         let sync_service = Arc::clone(&service);
         let on_pipe_close = pipe_closed.clone();
@@ -313,6 +327,7 @@ where
         let last_activity = Arc::new(std::sync::Mutex::new(tokio::time::Instant::now()));
         let observed = Arc::clone(&last_activity);
         let reaper_shutdown = shutdown.clone();
+        let pending = self.pending.clone();
         tokio::spawn(async move {
             let mut mirror = interval_from_now(FOREIGN_SYNC_INTERVAL);
             let mut reaper = interval_from_now(CURSOR_IDLE_CHECK_INTERVAL);
@@ -324,6 +339,12 @@ where
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
                         let active_turn = sync_service.has_active_turn();
+                        // Checked alongside `active_turn`: a command already
+                        // admitted for this session but not yet turn-active
+                        // (the harness marks this at admission, before
+                        // dispatch - see `queue::enqueue_then_dispatch`) is
+                        // exactly the case `active_turn` alone cannot see.
+                        let pending_command = pending.is_pending(session_id);
                         let activity = last_activity
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -333,7 +354,11 @@ where
                         let raced = *activity != observed_at;
                         let idle_ms = activity.elapsed().as_millis();
                         let reaped = !raced
-                            && should_reap_cursor_pipe(activity.elapsed(), active_turn);
+                            && should_reap_cursor_pipe(
+                                activity.elapsed(),
+                                active_turn,
+                                pending_command,
+                            );
                         // Every tick, not just the reaping one. The inputs to
                         // this decision are what tell a pipe that died of
                         // idleness apart from one pulled out from under a
@@ -345,6 +370,7 @@ where
                             %session_id,
                             agent.pipe.idle_ms = idle_ms as u64,
                             agent.pipe.active_turn = active_turn,
+                            agent.pipe.pending_command = pending_command,
                             agent.pipe.activity_raced = raced,
                             agent.pipe.reaped = reaped,
                             "cursor pipe idle check"
@@ -377,7 +403,8 @@ where
             shutdown,
             Some(reload_rx),
         );
-        let mut attachment = agent_session::domain::connection::RuntimeAttachment::solo(transport);
+        let mut attachment = agent_session::domain::connection::RuntimeAttachment::solo(transport)
+            .with_closed(attachment_closed);
         if let Some(binding) = owner_binding {
             attachment = attachment.on_activate(binding);
         }

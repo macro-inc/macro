@@ -247,6 +247,14 @@ async fn run() -> anyhow::Result<()> {
         replica,
     );
 
+    // Sessions with a command admitted but not yet resolved - shared with
+    // every provider whose idle reaper closes a session's transport on its
+    // own schedule, so a reaper never pulls the transport out from under a
+    // command already on its way in. Built before the container managers
+    // below (which read it) and handed to the harness after them (which
+    // marks and clears it); nothing else needs to know its type.
+    let pending_commands = agent_harness::domain::pending::PendingCommands::new();
+
     // Containers: the sandbox provider (local Docker when a developer has
     // opted in, Daytona otherwise) plus Cursor cloud agents for the `@cursor`
     // bot, routed per session.
@@ -285,12 +293,15 @@ async fn run() -> anyhow::Result<()> {
                 "DAYTONA_API_KEY is unset: Daytona-backed sandboxes are unarmed; external agent sessions are unaffected"
             );
         }
-        HarnessContainers::Daytona(DaytonaContainerManager::new(DaytonaSettings {
-            api_url: config.daytona_api_url.clone(),
-            api_key: DaytonaApiKeySecret::new(config.daytona_api_key.clone()),
-            snapshot: Snapshot::new(config.daytona_snapshot.clone()),
-            anthropic_api_key,
-        }))
+        HarnessContainers::Daytona(DaytonaContainerManager::new(
+            DaytonaSettings {
+                api_url: config.daytona_api_url.clone(),
+                api_key: DaytonaApiKeySecret::new(config.daytona_api_key.clone()),
+                snapshot: Snapshot::new(config.daytona_snapshot.clone()),
+                anthropic_api_key,
+            },
+            pending_commands.clone(),
+        ))
     };
     let container_shutdown = sandbox.clone();
 
@@ -418,6 +429,7 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         pool.clone(),
         replica,
+        pending_commands.clone(),
     );
     // Fixed system agents retain their deployment defaults. User/team agents
     // are resolved from agent_configs for every trigger so newly-created or
@@ -549,6 +561,7 @@ async fn run() -> anyhow::Result<()> {
         RedisCommandForwarder::new(redis.clone()),
         defaults,
         Arc::clone(&lifecycle_publisher),
+        pending_commands,
     ));
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.

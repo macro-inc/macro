@@ -313,7 +313,7 @@ where
                 action_id: fold_action_id,
                 ..
             }) => {
-                let ended = self.busy.remove(&session_id).map(|(_, turn)| turn);
+                let ended = self.busy.take(session_id);
                 // A turn end with no record: this replica restarted mid-turn
                 // and the in-memory mark went with it, or the fold closed a
                 // turn nobody here prompted. The queue still drains; only the
@@ -372,7 +372,7 @@ where
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::SessionStopped { reason } => {
-                let in_flight = self.busy.remove(&session_id).map(|(_, turn)| turn);
+                let in_flight = self.busy.take(session_id);
                 self.publish_lifecycle(session_id, |identity| {
                     AgentSessionLifecycleEvent::Stopped(SessionStoppedMetadata {
                         identity,
@@ -384,7 +384,7 @@ where
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Turn(TurnSignal::ElicitationRaised { question, .. }) => {
-                let Some(turn) = self.busy.get(&session_id).map(|turn| turn.clone()) else {
+                let Some(turn) = self.busy.turn(session_id) else {
                     tracing::warn!(%session_id, "elicitation raised with no in-flight record");
                     return Ok(CommandOutcome::Completed);
                 };
@@ -401,7 +401,7 @@ where
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Turn(TurnSignal::ElicitationCleared { .. }) => {
-                let Some(turn) = self.busy.get(&session_id).map(|turn| turn.clone()) else {
+                let Some(turn) = self.busy.turn(session_id) else {
                     tracing::warn!(%session_id, "elicitation cleared with no in-flight record");
                     return Ok(CommandOutcome::Completed);
                 };
@@ -427,7 +427,7 @@ where
                 // session's entries will never dispatch, and leaving them
                 // would leak them for the life of the process. The published
                 // empty snapshot is the viewers' goodbye.
-                self.busy.remove(&session_id);
+                self.busy.clear(session_id);
                 self.queues.drop_session(session_id);
                 self.publish_queue(session_id).await;
                 match identity {
@@ -477,10 +477,24 @@ where
             session_id,
         )?;
 
-        let dispatched = if self.busy.contains_key(&session_id) {
+        let dispatched = if self.busy.is_pending(session_id) {
             Ok(())
         } else {
-            self.dispatch_next(session_id).await.map(drop)
+            // Marked before dispatching, not only once `dispatch_next`'s own
+            // delivery succeeds: this closes the window between "a command
+            // was just handed off for this session" and "the runtime
+            // visibly started a turn", which a reaper watching only the
+            // latter cannot see. The turn itself is unknowable this early -
+            // `dispatch_next` fills it in with `mark_turn` once delivery
+            // names one - so this records only that something is coming. On
+            // failure nothing actually started, so the mark comes back off
+            // rather than sticking to a session with nothing running.
+            self.busy.admit(session_id);
+            let result = self.dispatch_next(session_id).await.map(drop);
+            if result.is_err() {
+                self.busy.clear(session_id);
+            }
+            result
         };
         self.publish_queue(session_id).await;
         dispatched?;
@@ -599,7 +613,7 @@ where
                     actor: entry.actor,
                     announcement_message_id: entry.announced,
                 };
-                self.busy.insert(session_id, turn.clone());
+                self.busy.mark_turn(session_id, turn.clone());
                 self.publish_lifecycle(session_id, |identity| {
                     AgentSessionLifecycleEvent::TurnStarted(TurnStartedMetadata {
                         identity,

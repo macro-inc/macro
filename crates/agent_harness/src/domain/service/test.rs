@@ -345,6 +345,7 @@ fn harness_with_signals(
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
         },
         lifecycle.clone(),
+        crate::domain::pending::PendingCommands::new(),
     );
     let (ended, ended_rx) = mpsc::unbounded_channel();
     turn_observer.bind(SignallingTurnObserver {
@@ -1863,6 +1864,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         )
         .with_managed_bot(inmem_bot),
         NoopLifecyclePublisher,
+        crate::domain::pending::PendingCommands::new(),
     );
 
     let session = service
@@ -2308,6 +2310,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
         },
         NoopLifecyclePublisher,
+        crate::domain::pending::PendingCommands::new(),
     );
 
     service
@@ -2356,6 +2359,7 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
         },
         NoopLifecyclePublisher,
+        crate::domain::pending::PendingCommands::new(),
     );
     let session = service
         .open_external_session(open_external_request("/srv/agent"))
