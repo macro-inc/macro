@@ -59,6 +59,9 @@ pub struct ChannelMessageFilters {
     /// When set, only return top-level messages created at or after this timestamp.
     #[serde(default)]
     pub created_after: Option<DateTime<Utc>>,
+    /// When set, only return top-level messages created strictly after this timestamp.
+    #[serde(default)]
+    pub created_after_exclusive: Option<DateTime<Utc>>,
     /// When set, only return top-level messages created before this timestamp.
     #[serde(default)]
     pub created_before: Option<DateTime<Utc>>,

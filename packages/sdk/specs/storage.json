@@ -3637,6 +3637,115 @@
         }
       }
     },
+    "/channels/{channel_id}/messages/catch-up": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/{channel_id}/messages/catch-up`.",
+        "operationId": "get_channel_messages_catch_up",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Exclusive RFC3339 lower bound. Messages at this instant are omitted.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for older messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "previous_cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for newer messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelMessagesPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/messages/{message_id}/context": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
@@ -15834,6 +15943,11 @@
             "type": ["string", "null"],
             "format": "date-time",
             "description": "When set, only return top-level messages created at or after this timestamp."
+          },
+          "created_after_exclusive": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When set, only return top-level messages created strictly after this timestamp."
           },
           "created_before": {
             "type": ["string", "null"],
