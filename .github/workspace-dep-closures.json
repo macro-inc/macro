@@ -1939,6 +1939,7 @@
       "crates/authentication_service_client",
       "crates/bot_id",
       "crates/bot_token",
+      "crates/bots",
       "crates/broadcast",
       "crates/call",
       "crates/channel_sender",
