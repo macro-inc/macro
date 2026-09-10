@@ -16,7 +16,7 @@ import { composeEmail } from '../compose-email';
 import { EMAIL_TAB_IDS, EMAIL_TABS, type EmailTabItem } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailTab } from '../types';
-import { EmailInboxSelector } from './EmailInboxSelector';
+import { EmailInboxList } from './EmailInboxSelector';
 
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   important: AnimatedSignalIcon,
@@ -95,7 +95,7 @@ export function EmailSidebar() {
       </ViewSidebar.Header>
 
       <ViewSidebar.Content class="flex flex-col gap-3 pt-1">
-        <EmailInboxSelector variant="sidebar" />
+        <EmailInboxList />
         <EmailNavigation />
       </ViewSidebar.Content>
     </ViewSidebar.Root>

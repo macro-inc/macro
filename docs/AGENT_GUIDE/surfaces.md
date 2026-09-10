@@ -87,10 +87,12 @@ With the new app views enabled, mobile and tablet Email use a floating, horizont
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the
 view is the email list, which scrolls beneath the header and supports pull to refresh
 and swiping left to mark emails done in Signal and Noise. The filter button opens a
-bottom drawer for status, done, attachment and calendar filters, plus the inbox
-selector when available. `Clear all`
-resets those filters and the inbox selection. Desktop keeps its sidebar, search field,
-filter menu and preview control.
+bottom drawer for status, done, attachment and calendar filters, plus an `Inbox`
+section when the user can pick one: `All inboxes` or a single address, never several.
+`Clear all` resets those filters and the inbox selection. Desktop keeps its sidebar,
+search field, filter menu and preview control. The sidebar lists the inboxes above the
+tabs as plain rows; clicking one shows only that inbox, and the `+` beside
+`All inboxes` (`Connect another account`) starts the add-inbox flow.
 
 ## Search
 

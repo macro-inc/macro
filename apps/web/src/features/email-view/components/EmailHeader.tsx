@@ -8,7 +8,7 @@ import { createSignal } from 'solid-js';
 import { composeEmail } from '../compose-email';
 import { useEmailView } from '../email-view-context';
 import { EmailControls } from './EmailControls';
-import { EmailInboxSelector } from './EmailInboxSelector';
+import { EmailInboxMenu } from './EmailInboxSelector';
 import { EmailNavigation } from './EmailSidebar';
 
 export type EmailHeaderProps = {
@@ -79,7 +79,7 @@ export function EmailHeader(props: EmailHeaderProps) {
           Email
         </h1>
         <div class="ml-auto flex shrink-0 items-center gap-2">
-          <EmailInboxSelector variant="compact" />
+          <EmailInboxMenu />
           <Button
             type="button"
             variant="cta"
