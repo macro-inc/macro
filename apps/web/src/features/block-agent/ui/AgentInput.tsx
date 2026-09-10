@@ -168,7 +168,11 @@ export function AgentInput(props: AgentInputProps) {
       </Show>
       {/* h-auto beats Surface's size-full so the in-flow controls are not
           clipped over the editor (that was Auto sitting on the placeholder). */}
-      <Surface class="rounded-xl touch:rounded-2xl h-auto" depth={2} solid>
+      <Surface
+        class="rounded-xl touch:rounded-2xl h-auto bg-menu-glass glass-input"
+        depth={2}
+        solid
+      >
         {/* Desktop: one row, send right of the text. Touch: the text gets
             the whole width and the controls drop to a footer row (model
             left, send right) — the chat-tall / channel footer shape. */}

@@ -32,8 +32,11 @@ export const buttonVariants = createVariants(
     variant: {
       danger:
         'bg-failure-bg text-failure dark:bg-failure-bg not-disabled:hover:bg-failure/25 not-disabled:active:bg-failure/30',
+      // Tinted rather than transparent so the glass treatment has a substrate
+      // to blur: a backdrop-filter over a fully transparent button has nothing
+      // to separate the button from the surface behind it.
       outline:
-        'bg-transparent text-ink-muted border-edge-muted not-disabled:hover:bg-hover not-disabled:hover:text-ink not-disabled:active:bg-active',
+        'bg-lift/70 text-ink-muted border-edge-muted not-disabled:hover:overlay-hover not-disabled:hover:text-ink not-disabled:active:overlay-active',
       accent: 'bg-accent-bg not-disabled:hover:overlay-accent-bg text-accent',
       success:
         'bg-success-bg not-disabled:hover:overlay-success-bg text-success',
@@ -136,6 +139,22 @@ function isIconSize(size: ButtonSize): boolean {
   return size.startsWith('icon-');
 }
 
+// The glass treatment (see the `glass` utility in index.css) — the same
+// material as the app's menus and dialogs. Every variant carries it; `ghost`
+// is the one exception, and only because it has no surface of its own to
+// catch the light: a persistent rim and drop shadow would put a chip around
+// every bare toolbar icon in the app. It picks the glass up on hover, where
+// it does have a scrim.
+// Literal class strings only — Tailwind's scanner can't see classes built
+// from template strings.
+const glassClass = (variant: ButtonVariant): string => {
+  if (variant === 'ghost') return 'not-disabled:hover:glass';
+  // The glass rim is the edge. `outline` is the one variant with a hard
+  // border of its own, and under the rim it reads as a double line — so the
+  // border goes transparent and the tinted fill plus rim carry the shape.
+  return variant === 'outline' ? 'glass border-transparent' : 'glass';
+};
+
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
     'tooltipPlacement',
@@ -161,14 +180,20 @@ export const Button = (props: ButtonProps) => {
   const size = () => local.size ?? group?.size ?? 'md';
 
   const cls = () =>
-    buttonClasses({
-      variant: variant(),
-      size: size(),
-      fullWidth: local.fullWidth,
-      noTouchResize: local.noTouchResize,
-      square: local.square,
-      class: local.class,
-    });
+    cn(
+      buttonClasses({
+        variant: variant(),
+        size: size(),
+        fullWidth: local.fullWidth,
+        noTouchResize: local.noTouchResize,
+        square: local.square,
+      }),
+      // Inside a ButtonGroup the group owns the frame (it strips per-button
+      // borders and rounding), so it carries the glass for the whole row —
+      // one pane of glass instead of one per segment.
+      group === undefined && glassClass(variant()),
+      local.class
+    );
 
   const placement = () => local.tooltipPlacement ?? 'bottom';
 
