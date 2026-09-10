@@ -71,12 +71,10 @@ function isBetween(target: number, a: number, b: number) {
 }
 
 function shouldIgnoreNodeType(type: string) {
-  const ignoredTypes = [
-    'document-mention',
-    'user-mention',
-    'horizontalrule',
-    'equation',
-  ];
+  // Document mentions (task chips, doc/channel refs, …) stay searchable via
+  // getTextContent() so Ctrl+F matches their visible titles. Replace still
+  // no-ops on them because they are not TextNodes.
+  const ignoredTypes = ['user-mention', 'horizontalrule', 'equation'];
   return ignoredTypes.includes(type);
 }
 

@@ -3,12 +3,12 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import MenuIcon from '@phosphor/list.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { Button, Dropdown } from '@ui';
+import { Button, Dropdown, pressHandlers } from '@ui';
 import { createSignal } from 'solid-js';
 import { composeEmail } from '../compose-email';
 import { useEmailView } from '../email-view-context';
 import { EmailControls } from './EmailControls';
-import { EmailInboxSelector } from './EmailInboxSelector';
+import { EmailInboxMenu } from './EmailInboxSelector';
 import { EmailNavigation } from './EmailSidebar';
 
 export type EmailHeaderProps = {
@@ -79,13 +79,13 @@ export function EmailHeader(props: EmailHeaderProps) {
           Email
         </h1>
         <div class="ml-auto flex shrink-0 items-center gap-2">
-          <EmailInboxSelector variant="compact" />
+          <EmailInboxMenu />
           <Button
             type="button"
             variant="cta"
             size="md"
-            class="rounded-lg px-3"
-            onClick={composeEmail}
+            class="rounded-lg px-3 transition-none"
+            {...pressHandlers(() => composeEmail())}
           >
             <PlusIcon class="size-4 shrink-0" />
             New

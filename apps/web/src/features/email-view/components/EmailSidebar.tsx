@@ -9,14 +9,14 @@ import FileIcon from '@phosphor/file.svg';
 import ComposeIcon from '@phosphor/note-pencil.svg';
 import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
-import { Button } from '@ui';
+import { Button, pressHandlers } from '@ui';
 import { type Component, For } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TAB_IDS, EMAIL_TABS, type EmailTabItem } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailTab } from '../types';
-import { EmailInboxSelector } from './EmailInboxSelector';
+import { EmailInboxList } from './EmailInboxSelector';
 
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   important: AnimatedSignalIcon,
@@ -34,10 +34,10 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
   return (
     <ViewSidebar.Item
       active={state.tab === props.item.id}
-      onClick={() => {
+      {...pressHandlers(() => {
         setTab(props.item.id);
         props.onNavigate?.();
-      }}
+      })}
     >
       <span aria-hidden="true" class="flex size-4 shrink-0 items-center">
         <Dynamic component={TAB_ICONS[props.item.id]} class="size-4" />
@@ -84,13 +84,13 @@ export function EmailSidebar() {
 
       <ViewSidebar.Content class="flex flex-col gap-6">
         <div class="flex flex-col gap-3">
-          <EmailInboxSelector variant="sidebar" />
+          <EmailInboxList />
           <Button
             type="button"
             variant="ghost"
             depth={2}
             class="h-10 shrink-0 justify-start gap-3 rounded-xl bg-surface px-3"
-            onClick={composeEmail}
+            {...pressHandlers(() => composeEmail())}
           >
             <ComposeIcon class="size-4 shrink-0" />
             Compose
