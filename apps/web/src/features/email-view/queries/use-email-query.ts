@@ -114,6 +114,9 @@ export function useEmailDataSource(
   // every search result comes from the search service.
   const search = createSearchState({
     text: () => state.search,
+    // Held back with the list query so a tag selection is not stripped from
+    // the request before the sets that resolve it have loaded.
+    enabled: facetsReady,
     disableLocalSearch: () => true,
     buildRequest: (request) => buildEmailSearchRequest(queryContext(), request),
   });
