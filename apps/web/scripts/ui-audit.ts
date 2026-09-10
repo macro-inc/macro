@@ -14,8 +14,8 @@
  * routinely formatted across several lines and imports get renamed
  * (`Calendar as MiniCalendar`), both of which quietly wreck regex counts.
  *
- * Raw Tailwind palette classes are deliberately not checked here —
- * `check-tailwind.ts` already guards those on changed lines in CI.
+ * Raw Tailwind palette classes are deliberately not checked here — the
+ * repository's FE-25 ast-grep convention is the enforcement point.
  *
  *   bun run ui-audit                       # ranked report
  *   bun run ui-audit --sites Button        # call sites for one component
