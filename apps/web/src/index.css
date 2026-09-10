@@ -351,7 +351,12 @@ body.tauri-ios {
   --color-email:       var(--color-default);
 
   /* Font families */
-  --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  /* Apple devices get the system font (SF): `-apple-system` and
+     `BlinkMacSystemFont` only resolve on Apple platforms, so everywhere else
+     falls straight through to the bundled Inter. `system-ui` and "Segoe UI"
+     are deliberately absent so Windows never renders text in Segoe; the Segoe
+     entries at the end are emoji/symbol fallbacks only. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-serif: "Playfair Display Variable", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: "Roboto Mono Variable",  monospace;
   --text-xxs: 0.625rem;
