@@ -84,5 +84,17 @@ with floating mobile insets. Later size changes belong to ResizeObserver.
 `targetId` keeps the pending thread mounted for precise navigation to nested replies;
 only the list translates that ID into a virtual index. Snapshot
 restoration pairs the offset with `takeSnapshot()`.
-Pagination callbacks require user scroll intent; measurement corrections alone
-must not fetch more history.
+Native scroll events extend existing user intent through momentum, rather than
+expiring 300ms after finger release. History requests start within three viewport
+heights (at least 800px) on other browsers and still require user intent there.
+Safari/iOS proactively fill six viewport heights of older history, including after
+initial positioning and explicit navigation, so idle-time prepends establish native
+scroll headroom before the next gesture. Each new oldest key rearms the request if
+the buffer is still short; once full, loading stops. The paginator guards against
+concurrent requests and stops at the actual beginning of history.
+
+This retains the normal top-origin scroller and its bottom-pinning behavior. It
+reduces pagination stops, but a fling can still exhaust the native headroom that
+existed when it started: prepends during momentum remain visually compensated
+until idle or the boundary. This is a bounded preloading strategy, not a guarantee
+of uninterrupted scrolling through arbitrarily many pages.

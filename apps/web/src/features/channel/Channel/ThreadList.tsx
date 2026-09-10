@@ -99,6 +99,8 @@ type ThreadListProps = {
 };
 
 const NEAR_TOP_THRESHOLD = 800;
+const HISTORY_BUFFER_VIEWPORTS = 3;
+const WEBKIT_HISTORY_BUFFER_VIEWPORTS = 6;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
 const clamp = (value: number, min: number, max: number) =>
@@ -134,7 +136,7 @@ export function ThreadList(props: ThreadListProps) {
   );
   let programmaticOffset: number | undefined;
   let stateQueued = false;
-  let nearTopFired = false;
+  let nearTopKey: string | undefined;
   let nearBottomFired = false;
   let previousScrollOffset = snapshot?.scrollOffset ?? 0;
   let explicitScrollDownDistance = 0;
@@ -161,6 +163,9 @@ export function ThreadList(props: ThreadListProps) {
           },
         })
       : undefined;
+  const historyBufferViewports = scrollCompensation
+    ? WEBKIT_HISTORY_BUFFER_VIEWPORTS
+    : HISTORY_BUFFER_VIEWPORTS;
   const logicalScrollOffset = (offset: number) =>
     scrollCompensation?.logicalOffset(offset) ?? offset;
 
@@ -307,6 +312,7 @@ export function ThreadList(props: ThreadListProps) {
           programmaticOffset !== undefined &&
           Math.abs(offset - programmaticOffset) < 1.5;
         programmaticOffset = undefined;
+        if (isScrolling && !isOwnScroll) scrollIntent.observeScroll();
         const logicalOffset =
           scrollCompensation?.observeOffset(
             offset,
@@ -430,7 +436,12 @@ export function ThreadList(props: ThreadListProps) {
     lifecycle.send('layout');
     const distanceFromTop = logicalScrollOffset(el.scrollTop);
     const distanceFromBottom = virtualizer.getDistanceFromEnd();
-    const nearTop = distanceFromTop <= NEAR_TOP_THRESHOLD;
+    // WebKit cannot move the native top boundary during a fling without a
+    // scroll write. Fill a bounded history buffer ahead of the next gesture,
+    // including after initial positioning or navigation into older messages.
+    const nearTop =
+      distanceFromTop <=
+      Math.max(NEAR_TOP_THRESHOLD, el.clientHeight * historyBufferViewports);
     const nearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
     const hasUserIntent = scrollIntent.isUserInteracting();
     const delta = distanceFromTop - previousScrollOffset;
@@ -460,10 +471,14 @@ export function ThreadList(props: ThreadListProps) {
       : undefined;
     props.onScroll?.(state, snapshot);
     if (!lifecycle.isReady()) return;
-    if (nearTop && !nearTopFired && hasUserIntent) {
-      nearTopFired = true;
+    if (
+      nearTop &&
+      (hasUserIntent || scrollCompensation) &&
+      nearTopKey !== props.keys()[0]
+    ) {
+      nearTopKey = props.keys()[0];
       props.onScrollNearTop?.();
-    } else if (!nearTop) nearTopFired = false;
+    } else if (!nearTop) nearTopKey = undefined;
     if (nearBottom && !nearBottomFired && hasUserIntent) {
       nearBottomFired = true;
       props.onScrollNearBottom?.();
