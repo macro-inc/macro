@@ -14,7 +14,7 @@ use thiserror::Error;
 
 /// Bump when the stored representation of [`Record`]/[`CacheValue`]
 /// (or anything else persisted) changes incompatibly.
-pub const CACHE_FORMAT_VERSION: u32 = 2;
+pub const CACHE_FORMAT_VERSION: u32 = 3;
 
 /// Bump when a GraphQL schema change makes existing normalized records unsafe.
 ///
@@ -141,7 +141,7 @@ mod tests {
     fn namespace_uses_schema_compatibility_epoch_not_schema_hash() {
         assert_eq!(
             cache_namespace("client-token-1"),
-            "graphql-cache:client-token-1:s2:v2"
+            "graphql-cache:client-token-1:s2:v3"
         );
     }
 }

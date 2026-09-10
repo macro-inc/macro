@@ -22,7 +22,7 @@ import { createEffect, createSignal, onCleanup } from 'solid-js';
 
 // Bump when a default backfill input or completion guarantee changes so
 // persisted cursors cannot retain an older hydration contract.
-const BACKFILL_VERSION = 8;
+const BACKFILL_VERSION = 9;
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;

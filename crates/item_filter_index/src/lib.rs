@@ -32,6 +32,8 @@ pub const SOUP_FLAT_V1: &str = "soup-flat-v1";
 pub const SOUP_FLAT_V2: &str = "soup-flat-v2";
 /// Stable server-minted profile containing viewer-relative task facts.
 pub const SOUP_FLAT_V3: &str = "soup-flat-v3";
+/// Browser-composed profile with complete active-notification membership.
+pub const SOUP_FLAT_V4: &str = "soup-flat-v4";
 
 // Keep this lightweight crate wasm-compatible instead of depending on the
 // native `system_properties` crate. A native test locks this stable UUID to
@@ -62,6 +64,17 @@ pub mod vocabulary {
     pub fn profile_v3() -> Profile {
         Profile::new(token(SOUP_FLAT_V3))
     }
+
+    /// Browser-composed active-notification profile.
+    pub fn profile_v4() -> Profile {
+        Profile::new(token(super::SOUP_FLAT_V4))
+    }
+
+    /// IDs of unseen notifications for the viewer and primary entity.
+    pub fn notification_unseen() -> Token { token("notification-unseen") }
+
+    /// IDs of seen, still-active notifications for the viewer and primary entity.
+    pub fn notification_seen() -> Token { token("notification-seen") }
 
     /// Document partition.
     pub fn document_partition() -> Token {
@@ -196,17 +209,17 @@ pub enum CompileError {
 
 /// Check the complete materialized forest against the direct-field v1 profile.
 pub fn check_soup_flat_v1(ast: &EntityFilterAst, request: SoupFlatRequest) -> Eligibility {
-    check_soup_flat(ast, request, supported_document_literal_v1, false)
+    check_soup_flat(ast, request, supported_document_literal_v1, false, false)
 }
 
 /// Check the complete materialized forest against the server-minted v2 profile.
 pub fn check_soup_flat_v2(ast: &EntityFilterAst, request: SoupFlatRequest) -> Eligibility {
-    check_soup_flat(ast, request, supported_document_literal_v2, false)
+    check_soup_flat(ast, request, supported_document_literal_v2, false, false)
 }
 
 /// Check the complete materialized forest against the server-minted v3 profile.
 pub fn check_soup_flat_v3(ast: &EntityFilterAst, request: SoupFlatRequest) -> Eligibility {
-    check_soup_flat(ast, request, supported_document_literal_v3, true)
+    check_soup_flat(ast, request, supported_document_literal_v3, true, false)
 }
 
 fn check_soup_flat(
@@ -214,6 +227,7 @@ fn check_soup_flat(
     request: SoupFlatRequest,
     supported_document_literal: impl Fn(&DocumentLiteral) -> bool + Copy,
     supports_status_properties: bool,
+    supports_notifications: bool,
 ) -> Eligibility {
     if request.has_cursor {
         return Eligibility::Unsupported(UnsupportedReason::Cursor);
@@ -306,10 +320,10 @@ fn check_soup_flat(
     {
         return Eligibility::Unsupported(UnsupportedReason::Literal("document"));
     }
-    if !supported_expr(ast.project_filter.as_deref(), supported_project_literal) {
+    if !supported_expr(ast.project_filter.as_deref(), |lit| supported_project_literal(lit) || (supports_notifications && matches!(lit, ProjectLiteral::NotificationState(state) if active_notification_state(state)))) {
         return Eligibility::Unsupported(UnsupportedReason::Literal("project"));
     }
-    if !supported_expr(ast.chat_filter.as_deref(), supported_chat_literal) {
+    if !supported_expr(ast.chat_filter.as_deref(), |lit| supported_chat_literal(lit) || (supports_notifications && matches!(lit, ChatLiteral::NotificationState(state) if active_notification_state(state)))) {
         return Eligibility::Unsupported(UnsupportedReason::Literal("chat"));
     }
 
@@ -328,6 +342,7 @@ pub fn compile_soup_flat_v1(
         supported_document_literal_v1,
         compile_document_literal_v1,
         None,
+        false,
     )
 }
 
@@ -343,6 +358,7 @@ pub fn compile_soup_flat_v2(
         supported_document_literal_v2,
         compile_document_literal_v2,
         None,
+        false,
     )
 }
 
@@ -358,7 +374,31 @@ pub fn compile_soup_flat_v3(
         supported_document_literal_v3,
         compile_document_literal_v3,
         Some(compile_status_property_literal),
+        false,
     )
+}
+
+/// Compile exact UNSEEN/SEEN notification predicates in addition to v3 literals.
+/// DONE is intentionally unsupported: the active edge contains no done history.
+pub fn compile_soup_flat_v4(ast: &EntityFilterAst, request: SoupFlatRequest) -> Result<LocalCompileOutcome, CompileError> {
+    compile_soup_flat(ast, request, vocabulary::profile_v4(),
+        |lit| supported_document_literal_v3(lit) || matches!(lit, DocumentLiteral::NotificationState(state) if active_notification_state(state)),
+        |lit| match lit {
+            DocumentLiteral::NotificationState(state) => Ok(notification_state_expr(state)),
+            _ => compile_document_literal_v3(lit),
+        }, Some(compile_status_property_literal), true)
+}
+
+fn active_notification_state(state: &item_filters::NotificationState) -> bool {
+    matches!(state, item_filters::NotificationState::Unseen | item_filters::NotificationState::Seen)
+}
+
+fn notification_state_expr(state: &item_filters::NotificationState) -> PredicateExpr {
+    PredicateExpr::ExactExists { attribute: match state {
+        item_filters::NotificationState::Unseen => vocabulary::notification_unseen(),
+        item_filters::NotificationState::Seen => vocabulary::notification_seen(),
+        item_filters::NotificationState::Done => unreachable!("eligibility excludes done history"),
+    } }
 }
 
 type PropertyLiteralCompiler = fn(&PropertiesLiteral) -> Result<PredicateExpr, CompileError>;
@@ -370,12 +410,14 @@ fn compile_soup_flat(
     supported_document_literal: impl Fn(&DocumentLiteral) -> bool + Copy,
     compile_document_literal: impl Fn(&DocumentLiteral) -> Result<PredicateExpr, CompileError> + Copy,
     compile_properties_literal: Option<PropertyLiteralCompiler>,
+    supports_notifications: bool,
 ) -> Result<LocalCompileOutcome, CompileError> {
     if let Eligibility::Unsupported(reason) = check_soup_flat(
         ast,
         request,
         supported_document_literal,
         compile_properties_literal.is_some(),
+        supports_notifications,
     ) {
         return Ok(LocalCompileOutcome::Unsupported(reason));
     }
@@ -408,11 +450,17 @@ fn compile_soup_flat(
             },
             PartitionPredicate {
                 partition: vocabulary::project_partition(),
-                predicate: compile_expr(ast.project_filter.as_deref(), compile_project_literal)?,
+                predicate: compile_expr(ast.project_filter.as_deref(), |lit| match lit {
+                    ProjectLiteral::NotificationState(state) if supports_notifications => Ok(notification_state_expr(state)),
+                    _ => compile_project_literal(lit),
+                })?,
             },
             PartitionPredicate {
                 partition: vocabulary::chat_partition(),
-                predicate: compile_expr(ast.chat_filter.as_deref(), compile_chat_literal)?,
+                predicate: compile_expr(ast.chat_filter.as_deref(), |lit| match lit {
+                    ChatLiteral::NotificationState(state) if supports_notifications => Ok(notification_state_expr(state)),
+                    _ => compile_chat_literal(lit),
+                })?,
             },
         ],
         sort_attribute,

@@ -174,6 +174,11 @@ pub enum PredicateExpr {
     Or(Box<Self>, Box<Self>),
     /// Subtract a result set from the profile/partition universe.
     Not(Box<Self>),
+    /// Match at least one value of an exact attribute.
+    ExactExists {
+        /// Fact vocabulary token.
+        attribute: Token,
+    },
 }
 
 impl PredicateExpr {
@@ -195,7 +200,7 @@ impl PredicateExpr {
                     stack.push((right, depth + 1));
                 }
                 Self::Not(expr) => stack.push((expr, depth + 1)),
-                Self::All | Self::None | Self::Exact { .. } | Self::I64Range { .. } => {}
+                Self::All | Self::None | Self::Exact { .. } | Self::I64Range { .. } | Self::ExactExists { .. } => {}
             }
         }
 
@@ -274,6 +279,7 @@ impl IndexDocument {
                 .exact_facts
                 .iter()
                 .any(|fact| &fact.attribute == attribute && &fact.value == value),
+            PredicateExpr::ExactExists { attribute } => self.exact_facts.iter().any(|fact| &fact.attribute == attribute),
             PredicateExpr::I64Range {
                 attribute,
                 lower,
@@ -624,6 +630,19 @@ pub enum OptimisticProjectionMutation {
         /// Potentially changed attributes. Empty means every attribute.
         affected_attributes: Vec<Token>,
     },
+    /// Edit individual set members without replacing other contributors.
+    PatchExact {
+        /// Normalized record key.
+        record_key: RecordKey,
+        /// Projection profile.
+        profile: Profile,
+        /// Entity partition.
+        partition: Token,
+        /// Members to remove before inserting replacements.
+        remove: Vec<ExactFact>,
+        /// Members to insert (idempotently).
+        insert: Vec<ExactFact>,
+    },
 }
 
 /// Complete replacement of one exact attribute's values.
@@ -657,6 +676,13 @@ impl OptimisticProjectionMutation {
             return match self {
                 Self::Replace(document) => document.validate(),
                 Self::Delete { .. } | Self::Unknown { .. } => Ok(()),
+                Self::PatchExact { remove, insert, .. } => {
+                    if remove.len() + insert.len() > MAX_FACTS_PER_DOCUMENT {
+                        Err(ValidationError::DocumentFacts)
+                    } else {
+                        Ok(())
+                    }
+                },
                 Self::Patch { .. } => unreachable!(),
             };
         };
@@ -688,7 +714,8 @@ impl OptimisticProjectionMutation {
             Self::Replace(document) => &document.record_key,
             Self::Patch { record_key, .. }
             | Self::Delete { record_key, .. }
-            | Self::Unknown { record_key, .. } => record_key,
+            | Self::Unknown { record_key, .. }
+            | Self::PatchExact { record_key, .. } => record_key,
         }
     }
 
@@ -698,7 +725,8 @@ impl OptimisticProjectionMutation {
             Self::Replace(document) => &document.profile,
             Self::Patch { profile, .. }
             | Self::Delete { profile, .. }
-            | Self::Unknown { profile, .. } => profile,
+            | Self::Unknown { profile, .. }
+            | Self::PatchExact { profile, .. } => profile,
         }
     }
 
@@ -708,7 +736,8 @@ impl OptimisticProjectionMutation {
             Self::Replace(document) => &document.partition,
             Self::Patch { partition, .. }
             | Self::Delete { partition, .. }
-            | Self::Unknown { partition, .. } => partition,
+            | Self::Unknown { partition, .. }
+            | Self::PatchExact { partition, .. } => partition,
         }
     }
 
@@ -847,7 +876,8 @@ fn expression_depends_on(expr: &PredicateExpr, attribute: &Token) -> bool {
         | PredicateExpr::I64Range {
             attribute: candidate,
             ..
-        } => candidate == attribute,
+        }
+        | PredicateExpr::ExactExists { attribute: candidate } => candidate == attribute,
         PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
             expression_depends_on(left, attribute) || expression_depends_on(right, attribute)
         }
@@ -858,7 +888,7 @@ fn expression_depends_on(expr: &PredicateExpr, attribute: &Token) -> bool {
 
 fn collect_expression_attributes(expr: &PredicateExpr, attributes: &mut BTreeSet<Token>) {
     match expr {
-        PredicateExpr::Exact { attribute, .. } | PredicateExpr::I64Range { attribute, .. } => {
+        PredicateExpr::Exact { attribute, .. } | PredicateExpr::I64Range { attribute, .. } | PredicateExpr::ExactExists { attribute } => {
             attributes.insert(attribute.clone());
         }
         PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
@@ -902,7 +932,7 @@ fn simplify(expr: PredicateExpr) -> Result<PredicateExpr, ValidationError> {
                 upper,
             }
         }
-        expr @ (PredicateExpr::All | PredicateExpr::None | PredicateExpr::Exact { .. }) => expr,
+        expr @ (PredicateExpr::All | PredicateExpr::None | PredicateExpr::Exact { .. } | PredicateExpr::ExactExists { .. }) => expr,
     })
 }
 

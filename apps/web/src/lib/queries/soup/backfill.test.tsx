@@ -393,7 +393,7 @@ describe('runSoupBackfills', () => {
 
   it('restarts from the beginning when the cache generation is replaced', async () => {
     localStorage.setItem(
-      'graphql-soup-backfill:v8:user-1:core-entities',
+      'graphql-soup-backfill:v9:user-1:core-entities',
       JSON.stringify({
         userId: 'user-1',
         nextCursor: 'stale-cursor',

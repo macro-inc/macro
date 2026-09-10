@@ -19,7 +19,7 @@ use thiserror::Error;
 mod profile;
 mod wire;
 
-pub use profile::{ProfileValidationError, validate_soup_flat_v2, validate_soup_flat_v3};
+pub use profile::{ProfileValidationError, validate_soup_flat_v2, validate_soup_flat_v3, validate_soup_flat_v4};
 pub use wire::{
     MAX_SOUP_CACHE_PROJECTION_BYTES, MAX_SOUP_CACHE_PROJECTION_ENCODED_BYTES,
     SOUP_CACHE_PROJECTION_WIRE_VERSION, SOUP_CACHE_PROJECTION_WIRE_VERSION_V1,
