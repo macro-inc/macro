@@ -2,6 +2,7 @@
 
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
 use agent_egress::domain::model::McpServerSlug;
+use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
@@ -211,30 +212,18 @@ pub enum HarnessCommand {
         /// The user responsible, as on [`Self::EditQueued`].
         actor: Option<MacroUserIdStr<'static>>,
     },
-    /// The session's runtime answered its in-flight turn: clear the busy
-    /// mark and dispatch the next queued action. Internal - enqueued by the
-    /// turn observer on the managing replica, never forwarded.
-    TurnEnded {
-        /// How the turn ended, as downstream sees it: the ACP stop reason,
-        /// or `error` for a refused prompt.
-        stop_reason: String,
-    },
+    /// The session's fold reported a turn fact: an ended turn clears the
+    /// busy mark and dispatches the next queued action; a raised or cleared
+    /// question is published as is. Internal - enqueued by the turn observer
+    /// on the managing replica, never forwarded.
+    Turn(TurnSignal),
     /// The session's live actor stopped: clear the busy mark and nothing
     /// more - resuming a dead runtime stays the next user action's job.
-    /// Internal, like [`Self::TurnEnded`].
+    /// Internal, like [`Self::Turn`].
     SessionStopped {
         /// Why the actor stopped.
         reason: String,
     },
-    /// The session's agent asked its owner a question. Internal, like
-    /// [`Self::TurnEnded`].
-    ElicitationRaised {
-        /// The question, as the agent phrased it.
-        question: String,
-    },
-    /// The held question was answered or withdrawn. Internal, like
-    /// [`Self::TurnEnded`].
-    ElicitationCleared,
     /// Change the session's sandbox size and the owner's default.
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.

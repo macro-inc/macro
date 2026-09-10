@@ -9,6 +9,7 @@ use agent_client_protocol::schema::v1::{
     AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
     ResumeSessionResponse, SessionCapabilities, SessionId, SessionResumeCapabilities,
 };
+use agent_fold::domain::model::TurnSignal;
 use agent_fold::domain::model::{AuthorKind, MessageId};
 use agent_fold::domain::service::FoldedMessageService;
 use agent_runtime_protocol::domain::{
@@ -24,7 +25,7 @@ use agent_session::domain::ports::{
     ControlEvent, NoOpRealtime, NoopLifecyclePublisher,
 };
 use agent_session::domain::service::AgentSessionServiceImpl;
-use agent_session::domain::session::{StopReason, TurnOutcome};
+use agent_session::domain::session::StopReason;
 use agent_session::testing::{InMemoryAgentSessionRepo, RecordingLifecyclePublisher};
 use agent_session_events::AgentSessionLifecycleEvent;
 use bot_id::BotId;
@@ -241,9 +242,12 @@ struct SignallingTurnObserver {
 }
 
 impl agent_session::domain::ports::SessionTurnObserver for SignallingTurnObserver {
-    fn turn_ended(&self, id: AgentSessionId, outcome: TurnOutcome) {
-        agent_session::domain::ports::SessionTurnObserver::turn_ended(&self.harness, id, outcome);
-        let _ = self.ended.send(id);
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        let ended = matches!(signal, TurnSignal::TurnEnded { .. });
+        agent_session::domain::ports::SessionTurnObserver::signal(&self.harness, id, signal);
+        if ended {
+            let _ = self.ended.send(id);
+        }
     }
 
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
@@ -252,18 +256,6 @@ impl agent_session::domain::ports::SessionTurnObserver for SignallingTurnObserve
             id,
             reason,
         );
-    }
-
-    fn elicitation_raised(&self, id: AgentSessionId, question: String) {
-        agent_session::domain::ports::SessionTurnObserver::elicitation_raised(
-            &self.harness,
-            id,
-            question,
-        );
-    }
-
-    fn elicitation_cleared(&self, id: AgentSessionId) {
-        agent_session::domain::ports::SessionTurnObserver::elicitation_cleared(&self.harness, id);
     }
 }
 
@@ -2555,6 +2547,52 @@ mod lifecycle_events {
             ),
             "answering clears the wait: {:#?}",
             turns.lifecycle()
+        );
+    }
+
+    /// The excerpt is the fold's last text for the turn - no refold, no
+    /// second read of the log - which is what the chip shows once done.
+    #[tokio::test]
+    async fn settled_carries_the_agents_last_text() {
+        let ((service, _, _, _, _), turns, id, container) = settled_session().await;
+        let agent = container.agent();
+        service
+            .execute(
+                id,
+                HarnessCommand::Deliver(forward_message("say something")),
+            )
+            .await
+            .expect("the prompt dispatches");
+        turns.lifecycle_published(5).await;
+
+        agent.sends_raw(
+            RawJsonRpcMessage::notification(
+                "session/update".to_owned(),
+                serde_json::json!({
+                    "sessionId": "acp-test",
+                    "update": {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": {"type": "text", "text": "Hello there."}
+                    }
+                }),
+            )
+            .expect("notification params are an object"),
+        );
+        agent.completes_prompt().await;
+        turns.lifecycle_published(7).await;
+
+        let events = turns.lifecycle();
+        assert!(
+            matches!(
+                &events[5..7],
+                [Lifecycle::TurnEnded(ended), Lifecycle::Settled(settled)]
+                    if ended.stop_reason == "end_turn"
+                        && settled.last_turn.as_ref().is_some_and(|turn| {
+                            turn.excerpt.as_deref() == Some("Hello there.")
+                                && turn.stop_reason == "end_turn"
+                        })
+            ),
+            "settled quotes the agent's last words: {events:#?}"
         );
     }
 

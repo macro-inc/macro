@@ -1,7 +1,8 @@
 //! A session after it is open: control events from the app, sandbox sizing,
 //! turn boundaries, and teardown.
 
-use agent_session::domain::session::{StopReason, TurnOutcome};
+use agent_fold::domain::model::TurnSignal;
+use agent_session::domain::session::StopReason;
 
 use super::*;
 
@@ -154,13 +155,8 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
 {
-    fn turn_ended(&self, id: AgentSessionId, outcome: TurnOutcome) {
-        drop(self.execute_here(
-            id,
-            HarnessCommand::TurnEnded {
-                stop_reason: outcome.wire_stop_reason(),
-            },
-        ));
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        drop(self.execute_here(id, HarnessCommand::Turn(signal)));
     }
 
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
@@ -170,14 +166,6 @@ where
                 reason: reason.to_string(),
             },
         ));
-    }
-
-    fn elicitation_raised(&self, id: AgentSessionId, question: String) {
-        drop(self.execute_here(id, HarnessCommand::ElicitationRaised { question }));
-    }
-
-    fn elicitation_cleared(&self, id: AgentSessionId) {
-        drop(self.execute_here(id, HarnessCommand::ElicitationCleared));
     }
 }
 

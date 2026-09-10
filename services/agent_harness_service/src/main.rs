@@ -801,10 +801,8 @@ async fn run() -> anyhow::Result<()> {
                                 // HTTP, and the turn signals are the harness's own.
                                 HarnessCommand::EditQueued { .. }
                                 | HarnessCommand::RemoveQueued { .. }
-                                | HarnessCommand::TurnEnded { .. }
-                                | HarnessCommand::SessionStopped { .. }
-                                | HarnessCommand::ElicitationRaised { .. }
-                                | HarnessCommand::ElicitationCleared => "agent_trigger.unexpected",
+                                | HarnessCommand::Turn(_)
+                                | HarnessCommand::SessionStopped { .. } => "agent_trigger.unexpected",
                             };
                             tracing::Span::current().record("macro.event.type", event_type);
                             let execution_span = tracing::info_span!(

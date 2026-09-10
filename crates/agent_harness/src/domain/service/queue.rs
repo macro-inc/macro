@@ -1,6 +1,7 @@
 //! The per-session command queue: admission, the worker that drains it one
 //! command at a time, and routing to the replica that holds the session.
 
+use agent_fold::domain::model::{StopReason, TurnSignal};
 use agent_session_events::{
     AgentSessionLifecycleEvent, InputReceivedMetadata, SessionDeletedMetadata,
     SessionSettledMetadata, SessionStoppedMetadata, TurnEndedMetadata, TurnStartedMetadata,
@@ -266,10 +267,8 @@ where
                 }
             }
             HarnessCommand::Open(_)
-            | HarnessCommand::TurnEnded { .. }
+            | HarnessCommand::Turn(_)
             | HarnessCommand::SessionStopped { .. }
-            | HarnessCommand::ElicitationRaised { .. }
-            | HarnessCommand::ElicitationCleared
             | HarnessCommand::SetSandboxSize(_)
             | HarnessCommand::Delete => {}
         }
@@ -308,14 +307,31 @@ where
                 self.publish_queue(session_id).await;
                 Ok(CommandOutcome::Completed)
             }
-            HarnessCommand::TurnEnded { stop_reason } => {
+            HarnessCommand::Turn(TurnSignal::TurnEnded {
+                stop,
+                last_text,
+                action_id: fold_action_id,
+                ..
+            }) => {
                 let ended = self.busy.remove(&session_id).map(|(_, turn)| turn);
                 // A turn end with no record: this replica restarted mid-turn
-                // and the in-memory mark went with it. The queue still
-                // drains; only the facts about *that* turn are unknowable.
+                // and the in-memory mark went with it, or the fold closed a
+                // turn nobody here prompted. The queue still drains; only the
+                // facts about *that* turn are unknowable.
                 if ended.is_none() {
                     tracing::info!(%session_id, "turn ended with no in-flight record");
                 }
+                if let (Some(turn), Some(fold_action_id)) = (&ended, fold_action_id)
+                    && turn.action_id != fold_action_id
+                {
+                    tracing::warn!(
+                        %session_id,
+                        dispatched = %turn.action_id,
+                        folded = %fold_action_id,
+                        "the fold closed a different turn than the one dispatched"
+                    );
+                }
+                let stop_reason = wire_stop_reason(&stop);
                 if let Some(turn) = &ended {
                     let turn = turn.clone();
                     let queued_remaining = self.queues.list(session_id).len();
@@ -341,13 +357,14 @@ where
                 let dispatched = dispatched?;
                 // Settled: the turn ended and nothing followed it. Emitted
                 // only with the turn's record, because "settled" without
-                // knowing what settled is a fact nobody can act on.
+                // knowing what settled is a fact nobody can act on. The
+                // excerpt is the fold's last text for the turn: the same
+                // passage the chip shows once it is done.
                 if let (Dispatch::QueueEmpty, Some(turn)) = (dispatched, ended) {
-                    let excerpt = self.settled_excerpt(session_id).await;
                     self.publish_lifecycle(session_id, |identity| {
                         AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
                             identity,
-                            last_turn: Some(turn.ended(stop_reason, excerpt)),
+                            last_turn: Some(turn.ended(stop_reason, last_text)),
                         })
                     })
                     .await;
@@ -366,7 +383,7 @@ where
                 .await;
                 Ok(CommandOutcome::Completed)
             }
-            HarnessCommand::ElicitationRaised { question } => {
+            HarnessCommand::Turn(TurnSignal::ElicitationRaised { question, .. }) => {
                 let Some(turn) = self.busy.get(&session_id).map(|turn| turn.clone()) else {
                     tracing::warn!(%session_id, "elicitation raised with no in-flight record");
                     return Ok(CommandOutcome::Completed);
@@ -383,7 +400,7 @@ where
                 .await;
                 Ok(CommandOutcome::Completed)
             }
-            HarnessCommand::ElicitationCleared => {
+            HarnessCommand::Turn(TurnSignal::ElicitationCleared { .. }) => {
                 let Some(turn) = self.busy.get(&session_id).map(|turn| turn.clone()) else {
                     tracing::warn!(%session_id, "elicitation cleared with no in-flight record");
                     return Ok(CommandOutcome::Completed);
@@ -600,6 +617,20 @@ where
                 Err(error)
             }
         }
+    }
+}
+
+/// The stop reason as downstream reads it: the ACP wire word for the reasons
+/// ACP names, `error` for a prompt the runtime refused.
+fn wire_stop_reason(stop: &StopReason) -> String {
+    match stop {
+        StopReason::EndTurn => "end_turn".to_owned(),
+        StopReason::MaxTokens => "max_tokens".to_owned(),
+        StopReason::MaxTurnRequests => "max_turn_requests".to_owned(),
+        StopReason::Refusal => "refusal".to_owned(),
+        StopReason::Cancelled => "cancelled".to_owned(),
+        StopReason::Other { reason } => reason.clone(),
+        StopReason::Failed { .. } => "error".to_owned(),
     }
 }
 

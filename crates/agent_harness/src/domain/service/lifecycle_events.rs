@@ -1,7 +1,5 @@
-//! Publishing a session's lifecycle facts: who the session is, and what the
-//! agent last said.
+//! Publishing a session's lifecycle facts: who the session is.
 
-use agent_fold::domain::model::{Author, MessagePart};
 use agent_session::domain::lifecycle::session_identity;
 use agent_session_events::{AgentSessionLifecycleEvent, SessionIdentity, SessionOpenedMetadata};
 
@@ -75,36 +73,5 @@ where
                 "skipping agent_session.opened: identity unavailable"
             ),
         }
-    }
-
-    /// The agent's last text in the session, whole, for `settled`.
-    ///
-    /// Not truncated: a consumer that needs a shorter form (a push
-    /// notification, a preview) cuts it to its own limit, and one that wants
-    /// the passage as the chip shows it gets exactly that.
-    ///
-    /// `None` when the agent wrote no prose, and when the log cannot be read:
-    /// the excerpt is a courtesy, and `settled` must still go out without it.
-    pub(super) async fn settled_excerpt(&self, session_id: AgentSessionId) -> Option<String> {
-        let messages = match self.sessions.folded_messages(session_id).await {
-            Ok(messages) => messages,
-            Err(error) => {
-                tracing::warn!(error = ?error, %session_id, "settled without an excerpt");
-                return None;
-            }
-        };
-        let last_agent_text = messages
-            .iter()
-            .rev()
-            .find(|message| matches!(message.author, Author::Agent))?
-            .parts
-            .iter()
-            .rev()
-            .find_map(|part| match part {
-                MessagePart::Text { text } => Some(text.trim()),
-                _ => None,
-            })
-            .filter(|text| !text.is_empty())?;
-        Some(last_agent_text.to_owned())
     }
 }
