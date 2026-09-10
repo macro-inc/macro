@@ -223,7 +223,14 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       expect(query.isLoading()).toBe(false);
       expect(query.hasNextPage()).toBe(true);
       await query.fetchNextPage();
-      expect(query.data()?.entities).toHaveLength(2);
+      expect(entityFilterMock.mock.calls.at(-1)?.[0].mail).toEqual({
+        view: 'ALL',
+        cursor: 'local-next',
+      });
+      expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+        'one',
+        'two',
+      ]);
       expect(query.hasNextPage()).toBe(false);
       expect(fake.executions).toHaveLength(1);
       expect(

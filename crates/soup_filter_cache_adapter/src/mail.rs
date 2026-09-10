@@ -1,7 +1,7 @@
 //! Canonical email facts and revision-bound pagination over synchronized Mail.
 use super::*;
 use cache_core::{
-    engine::Engine,
+    engine::{Engine, EngineError},
     normalize::normalize,
     predicate::{PredicateIndexStorage, ProjectionState},
     store::Storage,
@@ -188,8 +188,8 @@ pub async fn projection_updates_for_write<S: Storage>(
     Ok(updates
         .into_iter()
         .zip(bases)
-        .map(|((key, update), base)| {
-            let key = RecordKey::new(key.to_string()).expect("normalized bounded key");
+        .filter_map(|((key, update), base)| {
+            let key = RecordKey::new(key.to_string()).ok()?;
             let full = FIELDS
                 .iter()
                 .all(|field| update.fields.contains_key(*field));
@@ -203,13 +203,20 @@ pub async fn projection_updates_for_write<S: Storage>(
                 kind: ProjectionIncompleteKind::Missing,
             };
             if !supported_view {
-                return incomplete();
+                return Some(incomplete());
             }
             let Some(document) = project(key.clone(), &merged) else {
-                return incomplete();
+                return Some(incomplete());
             };
             if full {
-                return ProjectionMutation::Replace(document);
+                return Some(ProjectionMutation::Replace(document));
+            }
+            // Sort patches cannot express deletion. Suppress this projection until
+            // a full snapshot arrives rather than retaining a cleared inbox timestamp.
+            if changed.contains("latestInboundMessageTs")
+                && timestamp(&merged, "latestInboundMessageTs") == Some(None)
+            {
+                return Some(incomplete());
             }
             let affected = |attribute: &str| match attribute {
                 "mail-link-id" => changed.contains("linkId"),
@@ -245,7 +252,7 @@ pub async fn projection_updates_for_write<S: Storage>(
                         .collect(),
                 })
                 .collect();
-            ProjectionMutation::Patch {
+            Some(ProjectionMutation::Patch {
                 record_key: key,
                 profile: vocabulary::profile(),
                 partition: vocabulary::partition(),
@@ -256,7 +263,7 @@ pub async fn projection_updates_for_write<S: Storage>(
                     .into_iter()
                     .filter(|fact| affected(fact.attribute.as_str()))
                     .collect(),
-            }
+            })
         })
         .collect())
 }
@@ -394,6 +401,17 @@ pub enum PageResult {
     },
 }
 
+/// Mail page failures retain typed engine/storage errors for host recovery.
+#[derive(Debug, thiserror::Error)]
+pub enum PageError<S: std::error::Error + 'static> {
+    /// Cache failure, including storage errors that may require a physical reset.
+    #[error(transparent)]
+    Engine(#[from] EngineError<S>),
+    /// Invalid request or unsupported projection evidence.
+    #[error(transparent)]
+    Adapter(#[from] SoupFilterCacheAdapterError),
+}
+
 /// Evaluate a bounded local page without requiring this query to have a server baseline.
 pub async fn page<S: PredicateIndexStorage>(
     engine: &mut Engine<S>,
@@ -403,16 +421,24 @@ pub async fn page<S: PredicateIndexStorage>(
     direction: &str,
     limit: u16,
     request: PageRequest,
-) -> Result<PageResult, SoupFilterCacheAdapterError> {
+) -> Result<PageResult, PageError<S::Error>> {
     let revision = engine.current_revision().to_string();
     if limit == 0 || limit >= predicate_index::MAX_QUERY_LIMIT {
-        return Err(error("Mail page limit must be 1..499"));
+        return Err(error(format!(
+            "Mail page limit must be 1..{}",
+            predicate_index::MAX_QUERY_LIMIT - 1
+        ))
+        .into());
     }
-    let Some(viewer) = engine.current_identity().await.map_err(error)? else {
+    let Some(viewer) = engine.current_identity().await? else {
         return Ok(PageResult::Incomplete { revision });
     };
     let user = EntityKey(format!("GraphqlUser:{viewer}").into());
-    let records = engine.storage().get_batch(&[user]).await.map_err(error)?;
+    let records = engine
+        .storage()
+        .get_batch(&[user])
+        .await
+        .map_err(EngineError::Storage)?;
     let Some(Some(record)) = records.first() else {
         return Ok(PageResult::Incomplete { revision });
     };
@@ -440,7 +466,7 @@ pub async fn page<S: PredicateIndexStorage>(
     let direction = match direction {
         "ASC" => SortDirection::Asc,
         "DESC" => SortDirection::Desc,
-        _ => return Err(error("invalid sort direction")),
+        _ => return Err(error("invalid sort direction").into()),
     };
     let outcome = vocabulary::compile(
         &ast,
@@ -464,7 +490,7 @@ pub async fn page<S: PredicateIndexStorage>(
     .to_string();
     if let Some(cursor) = request.cursor {
         if cursor.len() > 4096 {
-            return Err(error("oversized Mail cursor"));
+            return Err(error("oversized Mail cursor").into());
         }
         let cursor: Cursor = serde_json::from_str(&cursor).map_err(error)?;
         if cursor.generation != generation
@@ -476,10 +502,7 @@ pub async fn page<S: PredicateIndexStorage>(
         query = query.after(cursor.value, cursor.key).map_err(error)?;
     }
     // Unknown rows never become fabricated matches; the UI labels this cached mail.
-    let result = engine
-        .reconcile_predicate_index(&query, &[])
-        .await
-        .map_err(error)?;
+    let result = engine.reconcile_predicate_index(&query, &[]).await?;
     let mut keys = result.value.keys;
     let more = keys.len() > usize::from(limit);
     keys.truncate(usize::from(limit));
@@ -487,12 +510,12 @@ pub async fn page<S: PredicateIndexStorage>(
         .storage()
         .load_projection_states(&keys)
         .await
-        .map_err(error)?;
+        .map_err(EngineError::Storage)?;
     let shadows = engine
         .storage()
         .load_optimistic_projections(&keys)
         .await
-        .map_err(error)?;
+        .map_err(EngineError::Storage)?;
     let values = bases
         .iter()
         .zip(&shadows)

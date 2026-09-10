@@ -1024,7 +1024,12 @@ impl CacheEngine {
                     mail,
                 )
                 .await
-                .map_err(err_js)?;
+                .map_err(|error| match error {
+                    soup_filter_cache_adapter::mail::PageError::Engine(error) => {
+                        state.engine_error(error)
+                    }
+                    soup_filter_cache_adapter::mail::PageError::Adapter(error) => err_js(error),
+                })?;
                 return to_js(&result);
             }
             let outcome = compile_filter_request(

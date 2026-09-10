@@ -328,6 +328,154 @@ fn identity_switch_does_not_read_old_mail_bases_but_keeps_incoming_snapshots() {
 }
 
 #[test]
+fn oversized_normalized_keys_are_skipped_without_losing_valid_rows() {
+    pollster::block_on(async {
+        let mut invalid = row(1);
+        invalid["id"] = json!("x".repeat(predicate_index::MAX_EXACT_VALUE_BYTES + 1));
+        let data = json!({"user":{"id":VIEWER,"soup":{"items":[invalid, row(4)]}}});
+        let updates = projection_updates(&InMemoryStorage::new(), QUERY, None, &Map::new(), &data)
+            .await
+            .unwrap();
+        let [ProjectionMutation::Replace(document)] = updates.as_slice() else {
+            panic!("only the valid row should be projected")
+        };
+        assert_eq!(document.record_key.as_str(), format!("{TYPE}:{}", id(4)));
+    });
+}
+
+#[test]
+fn page_limit_bounds_match_the_index_limit() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        write(&mut engine, QUERY, &seed()).await;
+        for limit in [
+            0,
+            1,
+            predicate_index::MAX_QUERY_LIMIT - 1,
+            predicate_index::MAX_QUERY_LIMIT,
+        ] {
+            let result = page(
+                &mut engine,
+                "generation",
+                filters(),
+                "UPDATED_AT",
+                "DESC",
+                limit,
+                PageRequest {
+                    view: "ALL".into(),
+                    cursor: None,
+                },
+            )
+            .await;
+            if limit == 0 || limit == predicate_index::MAX_QUERY_LIMIT {
+                let Err(PageError::Adapter(error)) = result else {
+                    panic!("invalid limits should be request errors")
+                };
+                assert_eq!(
+                    error.to_string(),
+                    format!(
+                        "Mail page limit must be 1..{}",
+                        predicate_index::MAX_QUERY_LIMIT - 1
+                    )
+                );
+            } else {
+                assert!(matches!(result, Ok(PageResult::MailPage { .. })));
+            }
+        }
+    });
+}
+
+async fn cleared_inbox_timestamp<S: PredicateIndexStorage>(storage: S) {
+    let mut engine = Engine::new(storage);
+    let mut data = seed();
+    data["user"]["soup"]["items"] = json!([row(4)]);
+    write(&mut engine, QUERY, &data).await;
+    let key = RecordKey::new(format!("{TYPE}:{}", id(4))).unwrap();
+    let PageResult::MailPage { keys, .. } = read(&mut engine, filters(), "INBOX", None).await
+    else {
+        panic!("initial inbox page")
+    };
+    assert_eq!(keys, [key.as_str()]);
+
+    let partial = json!({"user":{"id":VIEWER,"soup":{"items":[{
+        "__typename":TYPE,"id":id(4),"latestInboundMessageTs":null
+    }]}}});
+    let updates = projection_updates(engine.storage(), QUERY, None, &Map::new(), &partial)
+        .await
+        .unwrap();
+    assert!(matches!(
+        updates.as_slice(),
+        [ProjectionMutation::MarkIncomplete { .. }]
+    ));
+    assert!(matches!(
+        optimistic_updates(updates).as_slice(),
+        [OptimisticProjectionMutation::Unknown { .. }]
+    ));
+    write(&mut engine, QUERY, &partial).await;
+    assert!(
+        matches!(
+            engine
+                .storage()
+                .load_projection_states(std::slice::from_ref(&key))
+                .await
+                .unwrap()
+                .as_slice(),
+            [Some(ProjectionState::Incomplete { .. })]
+        ),
+        "cleared sort facts must not remain available to cursors or reference hits"
+    );
+    for view in ["ALL", "INBOX"] {
+        let PageResult::MailPage {
+            keys, next_cursor, ..
+        } = read(&mut engine, filters(), view, None).await
+        else {
+            panic!("cached page")
+        };
+        assert!(keys.is_empty());
+        assert!(next_cursor.is_none());
+    }
+
+    // A canonical full snapshot restores ALL coverage without resurrecting the
+    // old inbox sort timestamp, even across a cache restart.
+    data["user"]["soup"]["items"][0]["latestInboundMessageTs"] = Value::Null;
+    write(&mut engine, QUERY, &data).await;
+    let mut engine = Engine::new(engine.into_storage());
+    let states = engine
+        .storage()
+        .load_projection_states(std::slice::from_ref(&key))
+        .await
+        .unwrap();
+    let [Some(ProjectionState::Complete(document))] = states.as_slice() else {
+        panic!("full snapshot restores coverage")
+    };
+    assert!(
+        !document
+            .sort_facts
+            .iter()
+            .any(|fact| fact.attribute == vocabulary::token("mail-inbox-ts"))
+    );
+    for view in ["ALL", "INBOX"] {
+        let PageResult::MailPage { keys, .. } = read(&mut engine, filters(), view, None).await
+        else {
+            panic!("cached page")
+        };
+        assert_eq!(keys.len(), usize::from(view == "ALL"));
+    }
+}
+
+#[test]
+fn memory_cleared_inbox_timestamp_suppresses_stale_sort_facts() {
+    pollster::block_on(cleared_inbox_timestamp(InMemoryStorage::new()));
+}
+
+#[test]
+fn turso_cleared_inbox_timestamp_suppresses_stale_sort_facts() {
+    pollster::block_on(cleared_inbox_timestamp(
+        cache_turso::TursoStorage::open_in_memory("mail-cleared-timestamp-test").unwrap(),
+    ));
+}
+
+#[test]
 fn missing_proof_is_not_a_false_fact() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

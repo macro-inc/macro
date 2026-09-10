@@ -28,7 +28,12 @@ test('new Mail filter combinations and pagination work offline without bodies or
     await expect(page.locator('#rows li')).toHaveCount(0);
     await page.getByLabel('View', { exact: true }).selectOption('ALL');
     await expect(page.locator('#rows li')).toHaveCount(4);
-    await expect(page.locator('#rows')).toContainText('Done');
+    await expect(page.locator('#rows li')).toHaveText([
+      / — Done$/,
+      / — Done$/,
+      / — Done$/,
+      / — Done$/,
+    ]);
     await page.getByLabel('Read', { exact: true }).selectOption('true');
     await expect(page.locator('#rows li')).toHaveCount(0);
     await page.getByLabel('Read', { exact: true }).selectOption('false');

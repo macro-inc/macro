@@ -17,6 +17,9 @@ use std::sync::atomic::{AtomicU8, Ordering};
 pub(super) enum TestStorageFault {
     GetBatch = 1,
     ClaimNextMutation = 2,
+    ReconcilePredicateIndex = 3,
+    LoadProjectionStates = 4,
+    LoadOptimisticProjections = 5,
 }
 
 pub(super) struct BrowserStorage {
@@ -118,6 +121,7 @@ impl Storage for BrowserStorage {
         &self,
         keys: &[RecordKey],
     ) -> Result<Vec<Option<ProjectionState>>, Self::Error> {
+        self.take(TestStorageFault::LoadProjectionStates)?;
         self.inner.load_projection_states(keys).await
     }
 
@@ -125,6 +129,7 @@ impl Storage for BrowserStorage {
         &self,
         keys: &[RecordKey],
     ) -> Result<Vec<Option<EffectiveOptimisticProjection>>, Self::Error> {
+        self.take(TestStorageFault::LoadOptimisticProjections)?;
         self.inner.load_optimistic_projections(keys).await
     }
 
@@ -220,6 +225,7 @@ impl PredicateIndexStorage for BrowserStorage {
         query: &ValidatedIndexQuery,
         baseline: &[cache_core::predicate::reconciliation::PredicateBaselineEntry],
     ) -> Result<cache_core::predicate::reconciliation::PredicateReconciliation, Self::Error> {
+        self.take(TestStorageFault::ReconcilePredicateIndex)?;
         self.inner.reconcile_predicate_index(query, baseline).await
     }
 

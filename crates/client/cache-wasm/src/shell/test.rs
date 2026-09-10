@@ -1848,6 +1848,68 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
 }
 
 #[wasm_bindgen_test(async)]
+async fn mail_page_errors_preserve_reset_latching_and_recovery() {
+    const SCOPE: &str = "cache-wasm-mail-page-reset-latch";
+    let engine = fresh_engine(SCOPE).await;
+    let mut request = exact_document_filter("00000000-0000-0000-0000-000000000000");
+    request["filters"]
+        .as_object_mut()
+        .unwrap()
+        .remove("emailFilter");
+    request["mail"] = serde_json::json!({"view":"ALL"});
+
+    // Validation errors must not poison a healthy cache.
+    let mut invalid = request.clone();
+    invalid["limit"] = serde_json::json!(0);
+    let error = JsFuture::from(engine.entity_filter(js(invalid)))
+        .await
+        .expect_err("invalid limit");
+    assert!(
+        !js_sys::Reflect::get(&error, &JsValue::from_str(RESET_REQUIRED_MARKER))
+            .unwrap()
+            .is_truthy()
+    );
+    assert!(!engine.state.lock().await.reset_required);
+
+    // The first read hydrates identity through EngineError rather than reading
+    // the Mail catalog directly. It must preserve the same reset marker.
+    engine.arm_storage_fault(TestStorageFault::GetBatch).await;
+    assert_reset_required(engine.entity_filter(js(request.clone()))).await;
+    assert_reset_required(engine.bound_identity()).await;
+    resolved(engine.physical_reset()).await;
+
+    for fault in [
+        TestStorageFault::GetBatch,
+        TestStorageFault::ReconcilePredicateIndex,
+        TestStorageFault::LoadProjectionStates,
+        TestStorageFault::LoadOptimisticProjections,
+    ] {
+        resolved(engine.write_query(
+            write_context(None),
+            "query MailCatalog { user { id emailLinks { id } } }".into(),
+            Some("MailCatalog".into()),
+            js(serde_json::json!({})),
+            js(serde_json::json!({"user":{"id":"mail-viewer","emailLinks":[]}})),
+            Some("mail-viewer".into()),
+        ))
+        .await;
+        let page: serde_json::Value =
+            from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+        assert_eq!(page["kind"], "mail-page");
+
+        engine.arm_storage_fault(fault).await;
+        assert_reset_required(engine.entity_filter(js(request.clone()))).await;
+        assert_reset_required(engine.bound_identity()).await;
+        assert_reset_required(engine.clear()).await;
+        resolved(engine.physical_reset()).await;
+        let page: serde_json::Value =
+            from_js(resolved(engine.entity_filter(js(request.clone()))).await);
+        assert_eq!(page["kind"], "incomplete");
+    }
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
 async fn physical_reset_serializes_recreates_and_preserves_interner_registration() {
     const SCOPE: &str = "cache-wasm-wp07-physical-reset";
     let engine = fresh_engine(SCOPE).await;
