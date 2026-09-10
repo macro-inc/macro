@@ -135,8 +135,10 @@ export const SHARED_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
   createFetchPage: createSharedMailBackfillFetcher,
   refreshAll: true,
   restartOnRun: true,
-  input: { ...EMAIL_FILTER_BACKFILL_LANE.input,
-    filters: { ...EMAIL_FILTER_BACKFILL_LANE.input.filters,
+  input: {
+    ...EMAIL_FILTER_BACKFILL_LANE.input,
+    filters: {
+      ...EMAIL_FILTER_BACKFILL_LANE.input.filters,
       emailFilter: { tree: { literal: { shared: 'ONLY' } } },
     },
   },
@@ -380,7 +382,13 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     loadSoupBackfillCheckpoint(userId, params.checkpointId)
   );
   if (params.restartOnRun) {
-    checkpoint = { ...checkpoint, nextCursor: null, completed: false, pagesFetched: 0, scanStartedAt: null };
+    checkpoint = {
+      ...checkpoint,
+      nextCursor: null,
+      completed: false,
+      pagesFetched: 0,
+      scanStartedAt: null,
+    };
   }
   // Only a never-completed full scan needs the additional watermark pass. An
   // interrupted catch-up already has updatedSince and resumes normally.
@@ -405,7 +413,7 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
 
   const fetchPage = params.createFetchPage
     ? yield* Effect.tryPromise(() => params.createFetchPage!(userId))
-    : params.fetchPage ?? fetchSoupPage;
+    : (params.fetchPage ?? fetchSoupPage);
 
   while (true) {
     const passInput = withUpdatedSince(

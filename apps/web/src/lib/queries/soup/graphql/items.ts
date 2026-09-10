@@ -15,10 +15,10 @@ import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
+  type MailItemFieldsFragment,
+  MailItemFieldsFragmentDoc,
   SoupDocument,
   SoupItemFieldsFragmentDoc,
-  MailItemFieldsFragmentDoc,
-  type MailItemFieldsFragment,
   type SoupQuery,
   type SoupQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
@@ -268,10 +268,7 @@ export function createGraphqlSoupAstItemsQuery(
       return;
     }
     const baseline = soupReconciliationBaseline(records, sortMethod);
-    if (
-      !baseline &&
-      !isCachedMailView(initial.emailView)
-    ) {
+    if (!baseline && !isCachedMailView(initial.emailView)) {
       setLocalProjection(undefined);
       localEvaluationPending = false;
       return;
@@ -294,7 +291,9 @@ export function createGraphqlSoupAstItemsQuery(
       let outcome: 'success' | 'incomplete' | 'error' = 'incomplete';
       try {
         for (let attempt = 0; attempt < 3; attempt += 1) {
-          const mailView = isCachedMailView(initial.emailView) ? initial.emailView : undefined;
+          const mailView = isCachedMailView(initial.emailView)
+            ? initial.emailView
+            : undefined;
           let result = await host.entityFilter({
             filters,
             sortMethod,
@@ -332,7 +331,9 @@ export function createGraphqlSoupAstItemsQuery(
             chunks.push(
               await readRecordsByKeys(
                 host,
-                result.kind === 'mail-page' ? mailItemSelection : soupItemSelection,
+                result.kind === 'mail-page'
+                  ? mailItemSelection
+                  : soupItemSelection,
                 result.keys.slice(offset, offset + 500)
               )
             );
@@ -365,8 +366,13 @@ export function createGraphqlSoupAstItemsQuery(
             result.kind === 'mail-page' ? [] : records
           ).flatMap((record) => {
             const ts = timestamps?.get(soupItemKey(record));
-            if (!ts || !mailView || result.kind !== 'mail-page') return [record];
-            const projected = materializeMailView(record as MailItemFieldsFragment, mailView, ts);
+            if (!ts || !mailView || result.kind !== 'mail-page')
+              return [record];
+            const projected = materializeMailView(
+              record as MailItemFieldsFragment,
+              mailView,
+              ts
+            );
             return projected ? [projected] : [];
           });
           const items = reconciledRecords.flatMap((record) => {
@@ -590,12 +596,7 @@ export function createGraphqlSoupAstItemsQuery(
       const initial =
         'initial' in local.input ? local.input.initial : undefined;
       const host = getGraphqlSoupCacheHost();
-      if (
-        !initial ||
-        !host ||
-        !isCachedMailView(initial.emailView)
-      )
-        return;
+      if (!initial || !host || !isCachedMailView(initial.emailView)) return;
       const mailView = initial.emailView;
       setFetchingMailPage(true);
       try {
@@ -639,7 +640,11 @@ export function createGraphqlSoupAstItemsQuery(
         ).flatMap((record) => {
           const ts = timestamps.get(soupItemKey(record));
           if (!ts) return [record];
-          const projected = materializeMailView(record as MailItemFieldsFragment, mailView, ts);
+          const projected = materializeMailView(
+            record as MailItemFieldsFragment,
+            mailView,
+            ts
+          );
           return projected ? [projected] : [];
         });
         const items = records.flatMap((record) => {

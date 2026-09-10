@@ -1611,8 +1611,15 @@ export async function hydrateGraphqlSoup<
   if (!result.data) {
     throw new Error('GraphQL Soup hydration returned no cursor projection');
   }
-  const soup = result.data.user.soup as typeof result.data.user.soup & { scopeIds?: Array<{ id: string }> };
-  return { nextCursor: soup.nextCursor, ...(soup.scopeIds ? { entityIds: soup.scopeIds.map((item) => item.id) } : {}) };
+  const soup = result.data.user.soup as typeof result.data.user.soup & {
+    scopeIds?: Array<{ id: string }>;
+  };
+  return {
+    nextCursor: soup.nextCursor,
+    ...(soup.scopeIds
+      ? { entityIds: soup.scopeIds.map((item) => item.id) }
+      : {}),
+  };
 }
 
 /** Executes any Soup-shaped query and maps its result to the shared page type. */

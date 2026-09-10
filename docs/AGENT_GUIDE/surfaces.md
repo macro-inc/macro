@@ -77,7 +77,8 @@ connected account. Search is `Ctrl+F` within the surface.
 ### Cached Mail filtering
 
 With browser GraphQL caching enabled and the email metadata backfill synchronized,
-All, Signal, and Noise support new filter combinations while offline: account selection
+All, Signal, Noise, Drafts, Sent, Calendar, and Shared support tab changes and new
+filter combinations while offline: account selection
 (including delegated inboxes), read/unread, and archive-based Done/Not Done. Mail Done
 means `inboxVisible = false`; it is **not** notification lifecycle state. Signal/Noise
 retain their Inbox scope, so archived mail is found using All + Done.
@@ -88,18 +89,31 @@ page without a server cursor. Filter, revision, or engine-generation changes res
 the local page chain; online server results take over again when available. Account
 choices are cached in the viewer-scoped GraphQL catalog. Timestamp ordering and date
 headers use the selected Mail view's indexed timestamps, not a preview cached from
-another view.
+another view. Drafts and Sent display their latest eligible message snapshot, even
+when a newer normal message is the ALL preview; no message bodies are needed.
+Sent also requires a canonical outbound timestamp. Trashed messages cannot supply
+any preview. Calendar uses the authoritative thread calendar-attachment flag.
+
+Shared requires a last-known thread grant through the viewer, a team, or an active
+channel, plus the existing Mail UI rule excluding viewer-owned threads. Merely
+having a different owner or a delegated inbox does not qualify. Shared metadata has
+its own full-scan backfill before body hydration. A successful complete scan marks
+old entries it did not return incomplete (not deleted); a failed or cancelled scan
+preserves last-known evidence. Interrupted Shared scans restart at the beginning so
+scope reconciliation never mistakes a suffix for a full scan. Offline access is
+necessarily evaluated from the last synchronized grants.
 
 The lightweight metadata backfill runs before body hydration. Its refreshes scan all
 metadata: message-time watermarks alone miss archive/read changes on old threads.
 Filter availability therefore does not guarantee that opening every message body works offline. Missing
-projection proof is unknown, never false. Drafts, Sent, Shared, calendar/attachment,
-sender, property/tag refinements and non-created/updated sorts remain network-only
-or existing client refinements; durable offline sending/archiving is not added by
-this slice. No cache-format wipe is required: Mail uses a separate versioned profile
+projection proof is unknown, never false. Sender/recipient, attachment chips,
+property/tag refinements and non-created/updated sorts remain network-only or
+existing client refinements; durable offline sending/archiving is not added by this slice. No cache-format wipe is required: Mail uses a separate versioned profile
 and a new backfill checkpoint, preserving existing queued work. Deploy the backend
 schema additions before the client: it selects canonical message eligibility/recency
-fields and sends the new `inboxVisible` email literal.
+fields, body-free canonical preview references, and viewer-relative share facts.
+The `soup-mail-v2` profile and new backfill checkpoint rebuild Mail proof without
+changing the persisted mutation queue format.
 
 Threads open at `/app/email/<thread-id>`. Click a message header to expand or
 collapse it; `Show N hidden messages` reveals the collapsed middle of a longer

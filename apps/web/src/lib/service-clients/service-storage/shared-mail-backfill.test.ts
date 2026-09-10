@@ -1,14 +1,27 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { describe, expect, it, vi } from 'vitest';
 import { createSharedMailBackfillFetcher } from './shared-mail-backfill';
 
-vi.mock('./graphql-soup', () => ({ getGraphqlSoupCacheHost: vi.fn(), hydrateGraphqlSoup: vi.fn() }));
+vi.mock('./graphql-soup', () => ({
+  getGraphqlSoupCacheHost: vi.fn(),
+  hydrateGraphqlSoup: vi.fn(),
+}));
 const key = (id: string) => `GraphqlSoupEmailThread:${id}`;
 function host() {
   return {
-    readQuery: vi.fn(async () => ({kind:'hit',data:{user:{id:'viewer'}}})),
-    entityFilter: vi.fn(async () => ({kind:'mail-page',keys:[key('old'),key('kept')],nextCursor:null,sortTimestamps:[],revision:'1',optimistic:false})),
-    invalidate: vi.fn(async () => ({revision:'2',affectedOps:[]})),
+    readQuery: vi.fn(async () => ({
+      kind: 'hit',
+      data: { user: { id: 'viewer' } },
+    })),
+    entityFilter: vi.fn(async () => ({
+      kind: 'mail-page',
+      keys: [key('old'), key('kept')],
+      nextCursor: null,
+      sortTimestamps: [],
+      revision: '1',
+      optimistic: false,
+    })),
+    invalidate: vi.fn(async () => ({ revision: '2', affectedOps: [] })),
     deleteRecords: vi.fn(),
   };
 }
@@ -16,9 +29,16 @@ const input = { initial: { emailView: 'ALL' as const } };
 
 describe('Shared Mail scope refresh', () => {
   it('invalidates missing old proof only after a complete successful scan', async () => {
-    const cache=host();
-    const fetch=vi.fn().mockResolvedValueOnce({nextCursor:'page2',entityIds:['kept']}).mockResolvedValueOnce({nextCursor:null,entityIds:['new']});
-    const scan=await createSharedMailBackfillFetcher('viewer',cache as unknown as CacheHost,fetch);
+    const cache = host();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({ nextCursor: 'page2', entityIds: ['kept'] })
+      .mockResolvedValueOnce({ nextCursor: null, entityIds: ['new'] });
+    const scan = await createSharedMailBackfillFetcher(
+      'viewer',
+      cache as unknown as CacheHost,
+      fetch
+    );
     await scan(input);
     expect(cache.invalidate).not.toHaveBeenCalled();
     await scan(input);
@@ -26,23 +46,41 @@ describe('Shared Mail scope refresh', () => {
     expect(cache.deleteRecords).not.toHaveBeenCalled();
   });
   it('preserves last-known facts on failure, incomplete evidence, cancellation and account change', async () => {
-    for (const mode of ['failure','missing-ids','cancel','other-viewer']) {
-      const cache=host();
-      const fetch=vi.fn(async () => {
-        if (mode==='failure') throw new Error('offline');
-        if (mode==='other-viewer') cache.readQuery.mockResolvedValue({kind:'hit',data:{user:{id:'other'}}});
-        return mode==='missing-ids' ? {nextCursor:null} : {nextCursor:null,entityIds:[]};
+    for (const mode of ['failure', 'missing-ids', 'cancel', 'other-viewer']) {
+      const cache = host();
+      const fetch = vi.fn(async () => {
+        if (mode === 'failure') throw new Error('offline');
+        if (mode === 'other-viewer')
+          cache.readQuery.mockResolvedValue({
+            kind: 'hit',
+            data: { user: { id: 'other' } },
+          });
+        return mode === 'missing-ids'
+          ? { nextCursor: null }
+          : { nextCursor: null, entityIds: [] };
       });
-      const scan=await createSharedMailBackfillFetcher('viewer',cache as unknown as CacheHost,fetch);
-      const abort=new AbortController(); if(mode==='cancel')abort.abort();
-      await scan(input,{signal:abort.signal}).catch(()=>undefined);
+      const scan = await createSharedMailBackfillFetcher(
+        'viewer',
+        cache as unknown as CacheHost,
+        fetch
+      );
+      const abort = new AbortController();
+      if (mode === 'cancel') abort.abort();
+      await scan(input, { signal: abort.signal }).catch(() => undefined);
       expect(cache.invalidate).not.toHaveBeenCalled();
     }
   });
   it('a proven empty scope invalidates all old Shared membership', async () => {
-    const cache=host();
-    const scan=await createSharedMailBackfillFetcher('viewer',cache as unknown as CacheHost,async()=>({nextCursor:null,entityIds:[]}));
+    const cache = host();
+    const scan = await createSharedMailBackfillFetcher(
+      'viewer',
+      cache as unknown as CacheHost,
+      async () => ({ nextCursor: null, entityIds: [] })
+    );
     await scan(input);
-    expect(cache.invalidate).toHaveBeenCalledExactlyOnceWith([key('old'),key('kept')]);
+    expect(cache.invalidate).toHaveBeenCalledExactlyOnceWith([
+      key('old'),
+      key('kept'),
+    ]);
   });
 });
