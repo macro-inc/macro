@@ -3,6 +3,7 @@
 use super::*;
 use cache_core::{
     normalize::normalize,
+    predicate::ProjectionState,
     store::Storage,
     value::{CacheValue, EntityKey, Record},
 };
@@ -225,9 +226,62 @@ fn change(
     }
 }
 
-/// Derive per-notification set edits, resolving ID-only patches against durable
-/// normalized identity. No aggregate snapshot is stored in an optimistic layer:
-/// replay edits only this notification's contribution, even after another layer fails.
+/// Notification identity alone does not establish the parent's projection coverage.
+/// Inbox rows and secondary edges can refer to parents outside the hydrated set;
+/// emitting a patch or invalidation for them would introduce an incomplete marker
+/// and force unrelated local lists to fall back. Full snapshots establish coverage
+/// independently, including when they arrive in the same write as these rows.
+async fn retain_complete_parents<S: Storage>(
+    storage: &S,
+    mutations: Vec<ProjectionMutation>,
+) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
+    if mutations.is_empty() {
+        return Ok(mutations);
+    }
+    let keys = mutations
+        .iter()
+        .map(|mutation| mutation.record_key().clone())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let states = storage
+        .load_projection_states(&keys)
+        .await
+        .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
+    let states = keys.into_iter().zip(states).collect::<IndexMap<_, _>>();
+    Ok(mutations
+        .into_iter()
+        .filter(|mutation| {
+            let (ProjectionMutation::PatchExact {
+                record_key,
+                profile,
+                partition,
+                ..
+            }
+            | ProjectionMutation::MarkIncomplete {
+                record_key,
+                profile,
+                partition,
+                ..
+            }) = mutation
+            else {
+                unreachable!("notification updates are member edits or invalidation")
+            };
+            matches!(
+                states.get(record_key),
+                Some(Some(ProjectionState::Complete(document)))
+                    if document.record_key == *record_key
+                        && document.profile == *profile
+                        && document.partition == *partition
+            )
+        })
+        .collect())
+}
+
+/// Derive per-notification set edits for complete same-profile parents, resolving
+/// ID-only patches against durable normalized identity. No aggregate snapshot is
+/// stored in an optimistic layer: replay edits only this notification's
+/// contribution, even after another layer fails.
 pub async fn notification_projection_updates<S: Storage>(
     storage: &S,
     query: &str,
@@ -285,7 +339,7 @@ pub async fn notification_projection_updates<S: Storage>(
             mutations.push(change(key, partition, id, Some(state)));
         }
     }
-    Ok(mutations)
+    retain_complete_parents(storage, mutations).await
 }
 
 /// Convert deterministic notification contributions into durable optimistic edits.
@@ -327,7 +381,8 @@ pub fn optimistic_notification_updates(
         .collect()
 }
 
-/// Resolve notification deletion/invalidation targets before deleting their records.
+/// Resolve complete parent projections for notification deletion/invalidation
+/// before deleting the normalized notification records.
 pub async fn notification_deletion_updates<S: Storage>(
     storage: &S,
     keys: &[String],
@@ -345,7 +400,7 @@ pub async fn notification_deletion_updates<S: Storage>(
         .get_batch(&keys)
         .await
         .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
-    Ok(keys
+    let mutations = keys
         .into_iter()
         .zip(records)
         .filter_map(|(key, record)| {
@@ -362,5 +417,6 @@ pub async fn notification_deletion_updates<S: Storage>(
                 uuid::Uuid::parse_str(key.as_ref().strip_prefix("GraphqlNotification:")?).ok()?;
             Some(change(parent, partition, id, None))
         })
-        .collect())
+        .collect();
+    retain_complete_parents(storage, mutations).await
 }

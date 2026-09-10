@@ -10,6 +10,16 @@ test('notification state memberships survive optimistic rollback and authoritati
     { timeout: 60_000 }
   );
   await expect(page.locator('#result')).toContainText(
+    'Secondary edges preserve local filtering: 1'
+  );
+  for (const kind of ['DOCUMENT', 'PROJECT', 'CHAT']) {
+    for (const operation of ['inbox update', 'optimism', 'deletion']) {
+      await expect(page.locator('#result')).toContainText(
+        `Unhydrated ${kind} ${operation}: 1`
+      );
+    }
+  }
+  await expect(page.locator('#result')).toContainText(
     'Rollback restores only first notification: 1'
   );
   await expect(page.locator('#result')).toContainText('DONE: network-only');

@@ -29,6 +29,13 @@ const notification = (id: string, state: string) => ({
   entityType: 'PROJECT',
   state,
 });
+const unhydratedNotifications = ['DOCUMENT', 'PROJECT', 'CHAT'].map(
+  (entityType, index) => ({
+    ...notification(`00000000-0000-0000-0000-00000000002${index}`, 'UNSEEN'),
+    entityType,
+    entityId: '00000000-0000-0000-0000-000000000099',
+  })
+);
 const filters = (state: string) => ({
   calendarEventFilter: { literal: { id: nil } },
   documentFilter: { literal: { id: nil } },
@@ -81,7 +88,10 @@ const seed = () =>
               parentId: null,
               createdAt: '2025-01-01T00:00:00Z',
               updatedAt: '2025-01-02T00:00:00Z',
-              notifications: ids.map((id) => notification(id, 'UNSEEN')),
+              notifications: [
+                ...ids.map((id) => notification(id, 'UNSEEN')),
+                ...unhydratedNotifications,
+              ],
             },
           ],
         },
@@ -109,7 +119,29 @@ const markDone = (id: string) =>
 
 try {
   await seed();
-  await expectCount('Initial unseen project', 'UNSEEN', 1);
+  await expectCount('Secondary edges preserve local filtering', 'UNSEEN', 1);
+  for (const row of unhydratedNotifications) {
+    await host.writeQuery({
+      query: updateQuery,
+      variables: variables(row.id, 'MARK_SEEN'),
+      data: { updateNotifications: [{ ...row, state: 'SEEN' }] },
+    });
+    await expectCount(`Unhydrated ${row.entityType} inbox update`, 'UNSEEN', 1);
+    const pending = await markDone(row.id);
+    if (pending.initialClaim.kind !== 'claimed')
+      throw new Error('unhydrated-parent mutation not claimed');
+    await expectCount(`Unhydrated ${row.entityType} optimism`, 'UNSEEN', 1);
+    await host.rollbackOptimisticWrite(
+      pending.transactionId,
+      {
+        owner: 'notification-test',
+        generation: pending.initialClaim.mutation.leaseGeneration,
+      },
+      'intentional unhydrated-parent rollback'
+    );
+    await host.deleteRecords([`GraphqlNotification:${row.id}`]);
+    await expectCount(`Unhydrated ${row.entityType} deletion`, 'UNSEEN', 1);
+  }
   const first = await markDone(ids[0]);
   if (first.initialClaim.kind !== 'claimed')
     throw new Error('first mutation not claimed');

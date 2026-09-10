@@ -282,6 +282,217 @@ fn member_lifecycle_real_turso() {
     });
 }
 
+async fn unhydrated_parents<S: PredicateIndexStorage>(storage: S) {
+    let mut engine = Engine::new(storage);
+    let local_query = ValidatedIndexQuery::new(IndexQuery {
+        profile: vocabulary::profile_v4(),
+        partitions: [
+            vocabulary::document_partition(),
+            vocabulary::project_partition(),
+            vocabulary::chat_partition(),
+        ]
+        .into_iter()
+        .map(|partition| PartitionPredicate {
+            partition,
+            predicate: PredicateExpr::All,
+        })
+        .collect(),
+        sort_attribute: vocabulary::updated_at(),
+        sort_direction: SortDirection::Desc,
+        tie_break_direction: SortDirection::Desc,
+        limit: 20,
+    })
+    .unwrap();
+    let hydrated_key = RecordKey::new(format!("GraphqlSoupDocument:{D}")).unwrap();
+    for (kind, typename) in [
+        ("DOCUMENT", "GraphqlSoupDocument"),
+        ("PROJECT", "GraphqlSoupProject"),
+        ("CHAT", "GraphqlSoupChat"),
+    ] {
+        let parent_key = RecordKey::new(format!("{typename}:{B}")).unwrap();
+        let mut secondary = notification(A, "UNSEEN");
+        secondary["entityId"] = json!(B);
+        secondary["entityType"] = json!(kind);
+        // The display edge hydrates D, not this notification's primary parent.
+        write(&mut engine, SNAPSHOT, &snapshot(vec![secondary.clone()])).await;
+        assert_eq!(
+            engine
+                .query_predicate_index(&local_query)
+                .await
+                .unwrap()
+                .value,
+            PredicateQueryResult::Complete(vec![hydrated_key.clone()]),
+            "secondary {kind} must not force unrelated lists to fall back"
+        );
+        assert!(!matches(&mut engine, unseen()).await);
+
+        // A mixed inbox response must still patch hydrated primary parents.
+        write(
+            &mut engine,
+            UPDATE,
+            &json!({"updateNotifications":[secondary.clone(), notification(C, "SEEN")]}),
+        )
+        .await;
+        assert!(matches(&mut engine, seen()).await);
+        assert!(!matches(&mut engine, unseen()).await);
+        for state in ["DONE", "UNSEEN", "INVALID"] {
+            let data = json!({"updateNotifications":[{"__typename":"GraphqlNotification", "id":A, "state":state}]});
+            let updates = notification_projection_updates(
+                engine.storage(),
+                UPDATE,
+                None,
+                &variables(),
+                &data,
+            )
+            .await
+            .unwrap();
+            assert!(updates.is_empty(), "ID-only {kind} update: {state}");
+            assert!(optimistic_notification_updates(updates).is_empty());
+            write(&mut engine, UPDATE, &data).await;
+        }
+        let keys = vec![format!("GraphqlNotification:{A}")];
+        for invalidate in [false, true] {
+            assert!(
+                notification_deletion_updates(engine.storage(), &keys, invalidate)
+                    .await
+                    .unwrap()
+                    .is_empty(),
+                "deletion/invalidation must not introduce {kind} projection state"
+            );
+        }
+        assert_eq!(
+            engine
+                .storage()
+                .load_projection_states(&[parent_key])
+                .await
+                .unwrap(),
+            vec![None]
+        );
+        // Identity is retained: reassociation can add to and remove from D,
+        // without introducing a projection for the unhydrated next parent.
+        write(
+            &mut engine,
+            UPDATE,
+            &json!({"updateNotifications":[notification(A, "UNSEEN")]}),
+        )
+        .await;
+        assert!(matches(&mut engine, unseen()).await);
+        write(
+            &mut engine,
+            UPDATE,
+            &json!({"updateNotifications":[secondary]}),
+        )
+        .await;
+        assert!(!matches(&mut engine, unseen()).await);
+        assert!(matches(&mut engine, seen()).await);
+        let mut reopened = Engine::new(engine.into_storage());
+        assert_eq!(
+            reopened
+                .query_predicate_index(&local_query)
+                .await
+                .unwrap()
+                .value,
+            PredicateQueryResult::Complete(vec![hydrated_key.clone()])
+        );
+        engine = reopened;
+    }
+}
+
+#[test]
+fn unhydrated_notification_parents_in_memory() {
+    pollster::block_on(unhydrated_parents(InMemoryStorage::new()));
+}
+
+#[test]
+fn unhydrated_notification_parents_real_turso() {
+    pollster::block_on(async {
+        unhydrated_parents(
+            cache_turso::TursoStorage::open_in_memory("unhydrated-notification-parents").unwrap(),
+        )
+        .await
+    });
+}
+
+async fn nonmatching_parent_projections<S: Storage>(mut storage: S) {
+    let mutations = authoritative_projection_mutations(SNAPSHOT, None, &snapshot(vec![])).unwrap();
+    let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
+        panic!("complete base")
+    };
+    let mut old_profile = document.clone();
+    old_profile.profile = vocabulary::profile_v3();
+    let mut wrong_partition = document.clone();
+    wrong_partition.partition = vocabulary::project_partition();
+    let mut bases = vec![
+        ProjectionMutation::Replace(old_profile),
+        ProjectionMutation::Replace(wrong_partition),
+    ];
+    bases.extend(
+        [
+            ProjectionIncompleteKind::Missing,
+            ProjectionIncompleteKind::Dirty,
+            ProjectionIncompleteKind::IncompatibleVersion,
+        ]
+        .into_iter()
+        .map(|kind| ProjectionMutation::MarkIncomplete {
+            record_key: document.record_key.clone(),
+            profile: document.profile.clone(),
+            partition: document.partition.clone(),
+            kind,
+        }),
+    );
+    for base in bases {
+        storage
+            .put_batch_with_projections(vec![], vec![base])
+            .await
+            .unwrap();
+        let before = storage
+            .load_projection_states(std::slice::from_ref(&document.record_key))
+            .await
+            .unwrap();
+        let mut engine = Engine::new(storage);
+        write(
+            &mut engine,
+            UPDATE,
+            &json!({"updateNotifications":[notification(A, "UNSEEN")]}),
+        )
+        .await;
+        let keys = vec![format!("GraphqlNotification:{A}")];
+        for invalidate in [false, true] {
+            assert!(
+                notification_deletion_updates(engine.storage(), &keys, invalidate)
+                    .await
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+        assert_eq!(
+            engine
+                .storage()
+                .load_projection_states(std::slice::from_ref(&document.record_key))
+                .await
+                .unwrap(),
+            before,
+            "notification rows must neither promote incomplete parents nor overwrite other profiles/partitions"
+        );
+        storage = engine.into_storage();
+    }
+}
+
+#[test]
+fn nonmatching_notification_parent_projections_in_memory() {
+    pollster::block_on(nonmatching_parent_projections(InMemoryStorage::new()));
+}
+
+#[test]
+fn nonmatching_notification_parent_projections_real_turso() {
+    pollster::block_on(async {
+        nonmatching_parent_projections(
+            cache_turso::TursoStorage::open_in_memory("nonmatching-notification-parents").unwrap(),
+        )
+        .await
+    });
+}
+
 #[test]
 fn snapshot_completeness_aliases_primary_scope_and_bounds() {
     let data = snapshot(vec![notification(A, "UNSEEN"), notification(B, "SEEN")]);
