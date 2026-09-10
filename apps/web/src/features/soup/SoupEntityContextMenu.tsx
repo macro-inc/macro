@@ -15,6 +15,7 @@ import {
 } from '@property/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { cn } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -31,6 +32,7 @@ interface SoupEntityContextMenuProps {
   list: EntityActionListState;
   selectedEntities: Accessor<EntityData[]>;
   viewContext: EntityActionViewContext;
+  class?: string;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -88,7 +90,7 @@ export const SoupEntityContextMenu: FlowComponent<
     <Switch>
       <Match when={isMobile()}>
         <div
-          class="size-full"
+          class={cn('size-full', props.class)}
           data-soup-entity
           ref={(el) => {
             touchHandler(el, () => ({
@@ -109,7 +111,7 @@ export const SoupEntityContextMenu: FlowComponent<
       <Match when={true}>
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenu.Trigger
-            class="size-full group/cm-trigger"
+            class={cn('size-full group/cm-trigger', props.class)}
             on:contextmenu={(event: MouseEvent) =>
               setMenuPosition({ x: event.clientX, y: event.clientY })
             }

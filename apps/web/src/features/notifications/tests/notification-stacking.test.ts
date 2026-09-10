@@ -22,7 +22,7 @@ function createBaseNotification(
     updated_at: new Date(createdAt).toISOString(),
     viewed_at: null,
     deleted_at: null,
-    done: false,
+    state: 'unseen',
     sent: true,
     sender_id: 'user-1',
     notification_event_type: notificationMetadata.tag,

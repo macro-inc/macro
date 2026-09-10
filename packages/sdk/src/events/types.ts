@@ -4,6 +4,7 @@
 // `metadata`, handlers get ORM handles for every entity the payload names.
 
 import type { WebhookEvent } from '../../generated/storage/types.gen';
+import type { hydrateAgentSessionEvent } from './hydrate/agentSession';
 import type { hydrateChannelEvent } from './hydrate/channel';
 import type { hydrateDocumentEvent } from './hydrate/document';
 
@@ -27,6 +28,7 @@ export type EventPayload<E extends EventName> = Extract<
  * rather than restating the mapping.
  */
 type HydratedEvent =
+  | ReturnType<typeof hydrateAgentSessionEvent>
   | ReturnType<typeof hydrateChannelEvent>
   | ReturnType<typeof hydrateDocumentEvent>;
 

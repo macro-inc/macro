@@ -17,12 +17,15 @@
 
 use std::collections::VecDeque;
 
+use agent_fold::domain::model::TurnId;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_session::domain::events::{InFlightTurnSummary, TurnSummary};
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::ports::QueuedControl;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 
 use super::model::AnnounceOrigin;
 
@@ -47,12 +50,57 @@ pub struct QueuedEntry {
     /// Where to announce the prompt at dispatch, when it came from somewhere
     /// the session should answer back into.
     pub announce: Option<AnnounceOrigin>,
-    /// Whether the chip has been posted. Set by the dispatch that posts it,
-    /// and carried through a requeue, so a dispatch that fails *after*
+    /// The chip message, once posted. Set by the dispatch that posts it and
+    /// carried through a requeue, so a dispatch that fails *after*
     /// announcing retries without posting a second chip.
-    pub announced: bool,
+    pub announced: Option<Uuid>,
     /// When it was accepted.
     pub created_at: DateTime<Utc>,
+}
+
+/// The turn a session is running: what the busy mark remembers once the
+/// queued entry has been consumed by dispatch.
+///
+/// In-memory like the queue: a restart mid-turn forgets it, and that turn's
+/// end is then observed without a record. `turn` is the fold's next turn id
+/// at dispatch, which for a compaction (no user message) is the turn the
+/// fold would assign to the next prompt.
+#[derive(Debug, Clone)]
+pub struct InFlightTurn {
+    /// The action that opened the turn.
+    pub action_id: AgentActionId,
+    /// Position in the session's log.
+    pub turn: TurnId,
+    /// The user who prompted it, absent when a bot acted on nobody's behalf.
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// The chip message posted for this turn, when one was.
+    pub announcement_message_id: Option<Uuid>,
+}
+
+impl InFlightTurn {
+    /// This turn as a session that died underneath it reports it.
+    #[must_use]
+    pub fn summary(&self) -> InFlightTurnSummary {
+        InFlightTurnSummary {
+            turn: self.turn,
+            action_id: self.action_id,
+            actor: self.actor.clone(),
+            announcement_message_id: self.announcement_message_id,
+        }
+    }
+
+    /// This turn as a settled session reports it.
+    #[must_use]
+    pub fn ended(self, stop_reason: String, excerpt: Option<String>) -> TurnSummary {
+        TurnSummary {
+            turn: self.turn,
+            action_id: self.action_id,
+            actor: self.actor,
+            announcement_message_id: self.announcement_message_id,
+            stop_reason,
+            excerpt,
+        }
+    }
 }
 
 impl From<&QueuedEntry> for QueuedControl {

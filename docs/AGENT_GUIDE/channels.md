@@ -122,7 +122,9 @@ their own loaded pages and load more as their active list approaches the end.
 ## Channel tabs
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,
-plus a `Call` button. Clicking the radio input can time out — click the adjacent label text
+plus `Ask Macro` and `Call` buttons. `Ask Macro` opens a new chat pane with the channel
+already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
+`...` drawer instead. Clicking the radio input can time out — click the adjacent label text
 instead.
 
 `Participants` tab:

@@ -2,6 +2,7 @@
 //! This crate contains all filters for various item types to be used in soup/search.
 
 use non_empty::IsEmpty;
+pub use notification_state::NotificationState;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 
@@ -25,22 +26,34 @@ pub enum SearchOn {
 /// Notification-level filters that apply to an entity type.
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
 pub struct NotificationFilters {
-    /// Filter by notification done state.
-    /// None to ignore, true to include only done notifications, false to include only not-done notifications.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub done: Option<bool>,
+    /// Include entities with a non-deleted notification in any of these exact states.
+    /// Empty means no notification restriction. Active means `[unseen, seen]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub states: Vec<NotificationState>,
+}
 
-    /// Filter by notification seen state.
-    /// None to ignore, true to include only seen notifications, false to include only unseen notifications.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub seen: Option<bool>,
+impl NotificationFilters {
+    /// Whether no notification constraint is requested.
+    pub fn is_empty(&self) -> bool {
+        self.states.is_empty()
+    }
+
+    pub(crate) fn into_unique_states(self) -> Vec<NotificationState> {
+        let mut unique = Vec::with_capacity(3);
+        for state in self.states {
+            if !unique.contains(&state) {
+                unique.push(state);
+            }
+        }
+        unique
+    }
 }
 
 impl IsEmpty for NotificationFilters {
     fn is_empty(&self) -> bool {
-        let NotificationFilters { done, seen } = self;
-        done.is_none() && seen.is_none()
+        self.states.is_empty()
     }
 }
 
@@ -233,6 +246,10 @@ pub struct EmailFilters {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importance: Option<bool>,
 
+    /// Filter by the email thread's read flag, independently of notification state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_read: Option<bool>,
+
     /// Filter by email notification state.
     #[serde(default, skip_serializing_if = "NotificationFilters::is_empty")]
     pub notification_filters: NotificationFilters,
@@ -288,6 +305,7 @@ impl IsEmpty for EmailFilters {
             link_ids,
             project_ids,
             importance,
+            is_read,
             notification_filters,
             include_labels,
             exclude_labels,
@@ -304,6 +322,7 @@ impl IsEmpty for EmailFilters {
             && link_ids.is_empty()
             && project_ids.is_empty()
             && importance.is_none()
+            && is_read.is_none()
             && notification_filters.is_empty()
             && include_labels.is_empty()
             && exclude_labels.is_empty()

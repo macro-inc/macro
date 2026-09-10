@@ -263,25 +263,20 @@ fn test_partial_and_domain_emit_different_predicates_for_same_string() {
 
 #[test]
 fn test_has_thread_literals_true_when_notification_seen_present() {
-    let expr = Expr::Literal(EmailLiteral::NotificationSeen(false));
+    let expr = Expr::Literal(EmailLiteral::Read(false));
     assert!(has_thread_literals(&expr));
     assert!(!has_message_literals(&expr));
 }
 
 #[test]
 fn test_notification_seen_compiles_to_thread_is_read() {
-    let unread = build_thread_email_filter(
-        &Expr::Literal(EmailLiteral::NotificationSeen(false)),
-        DEFAULT_SORT_TS,
-    )
-    .to_debug_sql();
+    let unread =
+        build_thread_email_filter(&Expr::Literal(EmailLiteral::Read(false)), DEFAULT_SORT_TS)
+            .to_debug_sql();
     assert!(unread.contains("t.is_read = FALSE"));
 
-    let read = build_thread_email_filter(
-        &Expr::Literal(EmailLiteral::NotificationSeen(true)),
-        DEFAULT_SORT_TS,
-    )
-    .to_debug_sql();
+    let read = build_thread_email_filter(&Expr::Literal(EmailLiteral::Read(true)), DEFAULT_SORT_TS)
+        .to_debug_sql();
     assert!(read.contains("t.is_read = TRUE"));
 }
 
@@ -289,7 +284,7 @@ fn test_notification_seen_compiles_to_thread_is_read() {
 fn test_notification_seen_is_correlated_in_message_filter() {
     for seen in [true, false] {
         let result = build_message_email_filter(
-            &Expr::Literal(EmailLiteral::NotificationSeen(seen)),
+            &Expr::Literal(EmailLiteral::Read(seen)),
             &ResolvedFilters::empty(),
         );
         let debug = result.to_debug_sql();
@@ -301,22 +296,17 @@ fn test_notification_seen_is_correlated_in_message_filter() {
 #[test]
 fn test_full_query_notification_seen_filters_candidate_by_is_read() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
-    let unread = super::query::debug_build_query_sql(
-        &view,
-        &Expr::Literal(EmailLiteral::NotificationSeen(false)),
-    );
+    let unread =
+        super::query::debug_build_query_sql(&view, &Expr::Literal(EmailLiteral::Read(false)));
     assert!(
         unread.contains("t.is_read = FALSE"),
-        "unread NotificationSeen must land in the candidate WHERE: {unread}"
+        "unread Read must land in the candidate WHERE: {unread}"
     );
 
-    let read = super::query::debug_build_query_sql(
-        &view,
-        &Expr::Literal(EmailLiteral::NotificationSeen(true)),
-    );
+    let read = super::query::debug_build_query_sql(&view, &Expr::Literal(EmailLiteral::Read(true)));
     assert!(
         read.contains("t.is_read = TRUE"),
-        "read NotificationSeen must land in the candidate WHERE: {read}"
+        "read Read must land in the candidate WHERE: {read}"
     );
 }
 

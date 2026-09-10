@@ -590,13 +590,9 @@ input GraphqlCalendarEventLiteral @oneOf {
 	"""
 	organizer: String
 	"""
-	Notification done state for the requester.
+	Exact notification state for the requester.
 	"""
-	notificationDone: Boolean
-	"""
-	Notification seen state for the requester.
-	"""
-	notificationSeen: Boolean
+	notificationState: NotificationState
 }
 
 """
@@ -866,13 +862,9 @@ input GraphqlChannelLiteral @oneOf {
 	"""
 	isParticipant: Boolean
 	"""
-	The notification done option.
+	Exact notification state for the requester.
 	"""
-	notificationDone: Boolean
-	"""
-	The notification seen option.
-	"""
-	notificationSeen: Boolean
+	notificationState: NotificationState
 }
 
 """
@@ -1082,13 +1074,9 @@ input GraphqlChannelThreadLiteral @oneOf {
 	"""
 	participant: String
 	"""
-	The notification done option.
+	Exact notification state for the requester.
 	"""
-	notificationDone: Boolean
-	"""
-	The notification seen option.
-	"""
-	notificationSeen: Boolean
+	notificationState: NotificationState
 }
 
 """
@@ -1184,13 +1172,9 @@ input GraphqlChatLiteral @oneOf {
 	"""
 	importance: Boolean
 	"""
-	The notification done option.
+	Exact notification state for the requester.
 	"""
-	notificationDone: Boolean
-	"""
-	The notification seen option.
-	"""
-	notificationSeen: Boolean
+	notificationState: NotificationState
 	"""
 	The created at option.
 	"""
@@ -1414,13 +1398,9 @@ input GraphqlDocumentLiteral @oneOf {
 	"""
 	importance: Boolean
 	"""
-	The notification done option.
+	Exact notification state for the requester.
 	"""
-	notificationDone: Boolean
-	"""
-	The notification seen option.
-	"""
-	notificationSeen: Boolean
+	notificationState: NotificationState
 	"""
 	The include cbm atm nc option.
 	"""
@@ -1674,13 +1654,13 @@ input GraphqlEmailLiteral @oneOf {
 	"""
 	importance: Boolean
 	"""
-	The notification done option.
+	Exact notification state for the requester.
 	"""
-	notificationDone: Boolean
+	notificationState: NotificationState
 	"""
-	The notification seen option.
+	The email thread read flag, independent of notification state.
 	"""
-	notificationSeen: Boolean
+	read: Boolean
 	"""
 	The shared option.
 	"""
@@ -2223,13 +2203,9 @@ input GraphqlForeignEntityLiteral @oneOf {
 	"""
 	includesMe: Boolean
 	"""
-	The notification done option.
+	Exact notification state for the requester.
 	"""
-	notificationDone: Boolean
-	"""
-	The notification seen option.
-	"""
-	notificationSeen: Boolean
+	notificationState: NotificationState
 }
 
 """
@@ -2980,13 +2956,9 @@ type GraphqlNotification {
 	"""
 	sent: Boolean!
 	"""
-	Whether notification processing is complete.
+	The authoritative lifecycle state, independent of viewing timestamps.
 	"""
-	done: Boolean!
-	"""
-	Whether the recipient has seen the notification.
-	"""
-	seen: Boolean!
+	state: NotificationState!
 	"""
 	The notification creation time in RFC 3339 format.
 	"""
@@ -3121,13 +3093,9 @@ input GraphqlProjectLiteral @oneOf {
 	"""
 	importance: Boolean
 	"""
-	The notification done option.
+	Exact notification state for the requester.
 	"""
-	notificationDone: Boolean
-	"""
-	The notification seen option.
-	"""
-	notificationSeen: Boolean
+	notificationState: NotificationState
 	"""
 	The created at option.
 	"""
@@ -5532,6 +5500,24 @@ input NotificationEntityInput {
 	Canonical entity identifier.
 	"""
 	entityId: ID!
+}
+
+"""
+The notification state as represented by GraphQL variables and responses.
+"""
+enum NotificationState {
+	"""
+	Not yet acknowledged.
+	"""
+	UNSEEN
+	"""
+	Acknowledged but not completed.
+	"""
+	SEEN
+	"""
+	Completed.
+	"""
+	DONE
 }
 
 """

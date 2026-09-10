@@ -279,7 +279,8 @@ pub struct ExternalSession {
 }
 
 /// The agent behind a session, as much of it as rendering a message needs.
-#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SessionBot {
     /// The bot's id. A message it sent has `"bot|{id}"` as its sender.
@@ -296,7 +297,8 @@ pub struct SessionBot {
 /// Clients deserialize this, so both derives are used.
 // Domain-owned because the queue GET endpoint and the realtime snapshot
 // serialize this type byte-identically; that identity is the client contract.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct QueuedActionDto {
     /// The id the action was accepted under.

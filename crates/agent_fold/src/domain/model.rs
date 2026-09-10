@@ -30,6 +30,8 @@ mod part;
 mod permission;
 /// The agent's plan.
 mod plan;
+/// Turn-level facts derived from the fold.
+mod signal;
 /// Delegated agents.
 mod subagent;
 /// Tool calls.
@@ -47,6 +49,7 @@ pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata};
 pub use part::{Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
 pub use plan::{PlanEntry, PlanEntryPriority, PlanEntryStatus};
+pub use signal::TurnSignal;
 pub use subagent::{SubagentResult, ToolStats};
 pub use tool::{AnsiText, FileDiff, ToolDetail, ToolName, ToolStatus};
 pub use user_tool::UserToolOutcome;

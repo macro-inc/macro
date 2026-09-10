@@ -79,7 +79,7 @@ identifier spaces and must not be confused.
 | --- | --- |
 | `agent.turn` | Did a Cursor turn run, and how did it end? `agent.turn.stop_reason` / `agent.turn.outcome`, plus `cursor.agent.id` / `cursor.run.id`. |
 | `cursor.run.poll` | Is a turn still alive? One per poll, at DEBUG. |
-| `agent.session.turn_ended` | The turn reached a stop reason. |
+| `agent.session.turn_ended` | The connection's live fold closed the turn on a logged frame; carries `agent.turn.id`, `agent.turn.stop_reason`, and `agent.action.id` when a local prompt opened it. |
 | `agent.session.disconnect` | The session's actor wrote a `disconnected` event, and `agent.session.close_reason` says why. |
 | `agent.session.mark_disconnected` | The session was marked dead by its opener because the runtime never came up. |
 | `agent.pipe.reap` | A Cursor pipe was closed for idleness, with `agent.pipe.idle_ms`. |

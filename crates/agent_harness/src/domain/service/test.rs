@@ -9,6 +9,7 @@ use agent_client_protocol::schema::v1::{
     AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
     ResumeSessionResponse, SessionCapabilities, SessionId, SessionResumeCapabilities,
 };
+use agent_fold::domain::model::TurnSignal;
 use agent_fold::domain::model::{AuthorKind, MessageId};
 use agent_fold::domain::service::FoldedMessageService;
 use agent_runtime_protocol::domain::{
@@ -16,15 +17,17 @@ use agent_runtime_protocol::domain::{
     schema::v0::{AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage},
 };
 use agent_session::PROTOCOL_VERSION;
+use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_session::domain::model::{
     AgentMcpServers, AgentSessionId, CreateAgentSessionParams, Message, SandboxSize,
 };
 use agent_session::domain::ports::{
     AgentSessionLogRepo as _, AgentSessionNotificationRecipient as _, AgentSessionRepo as _,
-    ControlEvent, NoOpRealtime,
+    ControlEvent, NoOpRealtime, NoopLifecyclePublisher,
 };
 use agent_session::domain::service::AgentSessionServiceImpl;
-use agent_session::testing::InMemoryAgentSessionRepo;
+use agent_session::domain::session::StopReason;
+use agent_session::testing::{InMemoryAgentSessionRepo, RecordingLifecyclePublisher};
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -47,6 +50,8 @@ use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
 use crate::testing::helpers::egress::{EgressProvisionerMock, test_egress};
 use agent_session::domain::error::AgentSessionError;
+use agent_session::domain::model::ReplicaId;
+use agent_session::domain::ports::{NoOpAgentSessionNameGenerator, NoOpTurnObserver};
 use agent_session::domain::ports::{
     OpenExternalAgentSession, OpenManagedSession, SessionOpener as _,
 };
@@ -239,19 +244,40 @@ struct SignallingTurnObserver {
 }
 
 impl agent_session::domain::ports::SessionTurnObserver for SignallingTurnObserver {
-    fn turn_ended(&self, id: AgentSessionId) {
-        agent_session::domain::ports::SessionTurnObserver::turn_ended(&self.harness, id);
-        let _ = self.ended.send(id);
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        let ended = matches!(signal, TurnSignal::TurnEnded { .. });
+        agent_session::domain::ports::SessionTurnObserver::signal(&self.harness, id, signal);
+        if ended {
+            let _ = self.ended.send(id);
+        }
     }
 
-    fn session_stopped(&self, id: AgentSessionId) {
-        agent_session::domain::ports::SessionTurnObserver::session_stopped(&self.harness, id);
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
+        agent_session::domain::ports::SessionTurnObserver::session_stopped(
+            &self.harness,
+            id,
+            reason,
+        );
     }
 }
 
-/// The test's half of [`SignallingTurnObserver`].
+/// The test's half of [`SignallingTurnObserver`], plus the lifecycle facts
+/// the harness and its session service published.
 struct TurnSignals {
     ended: mpsc::UnboundedReceiver<AgentSessionId>,
+    lifecycle: RecordingLifecyclePublisher,
+}
+
+impl TurnSignals {
+    /// Every lifecycle event published so far, in order.
+    fn lifecycle(&self) -> Vec<AgentSessionLifecycleEvent> {
+        self.lifecycle.published()
+    }
+
+    /// Wait until at least `count` lifecycle events have been published.
+    async fn lifecycle_published(&self, count: usize) {
+        self.lifecycle.wait_for_published(count).await;
+    }
 }
 
 impl TurnSignals {
@@ -292,13 +318,19 @@ fn harness_with_signals(
     // Same knot as production wiring: the harness is built from the session
     // service and is also its turn observer, so the observer binds late.
     let turn_observer = Arc::new(agent_session::domain::ports::LateBoundTurnObserver::new());
+    // One recorder for both publishers, as in production: renames come from
+    // the session service, everything else from the harness.
+    let lifecycle = RecordingLifecyclePublisher::new();
     let service = AgentHarnessService::new(
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
-        )
-        .with_turn_observer(turn_observer.clone()),
+            NoOpAgentSessionNameGenerator,
+            turn_observer.clone(),
+            Arc::new(lifecycle.clone()),
+            ReplicaId::mint(),
+        ),
         containers.clone(),
         announcer.clone(),
         TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
@@ -312,6 +344,7 @@ fn harness_with_signals(
             harness: "opencode".to_owned(),
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
         },
+        lifecycle.clone(),
     );
     let (ended, ended_rx) = mpsc::unbounded_channel();
     turn_observer.bind(SignallingTurnObserver {
@@ -320,7 +353,10 @@ fn harness_with_signals(
     });
     (
         (service, repo, containers, announcer, runtimes),
-        TurnSignals { ended: ended_rx },
+        TurnSignals {
+            ended: ended_rx,
+            lifecycle,
+        },
     )
 }
 
@@ -1798,6 +1834,10 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
         ),
         containers.clone(),
         AnnouncerMock::new(),
@@ -1822,6 +1862,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
             },
         )
         .with_managed_bot(inmem_bot),
+        NoopLifecyclePublisher,
     );
 
     let session = service
@@ -2248,6 +2289,10 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
@@ -2262,6 +2307,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
             harness: "opencode".to_owned(),
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
         },
+        NoopLifecyclePublisher,
     );
 
     service
@@ -2291,6 +2337,10 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
@@ -2305,6 +2355,7 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
             harness: "opencode".to_owned(),
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
         },
+        NoopLifecyclePublisher,
     );
     let session = service
         .open_external_session(open_external_request("/srv/agent"))
@@ -2327,4 +2378,295 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
         repo.get(session.id).await.is_ok(),
         "the command did not execute on this replica"
     );
+}
+
+/// The lifecycle facts the harness publishes, end to end through a live
+/// session: the mock agent answers, asks, and dies; the recorder says what
+/// downstream would have heard.
+mod lifecycle_events {
+    use super::*;
+
+    use agent_client_protocol::JsonRpcMessage as _;
+    use agent_client_protocol::schema::v1::{
+        CreateElicitationRequest, ElicitationFormMode, ElicitationSchema, ElicitationSessionScope,
+        RequestId,
+    };
+    use agent_fold::domain::model::TurnId;
+    use agent_runtime_protocol::domain::action::{
+        AgentActionId, ElicitationAnswer, ElicitationRequestId,
+    };
+    use agent_session::domain::events::AgentSessionLifecycleEvent as Lifecycle;
+
+    /// Open a session from a mention and let its first turn settle: `Opened`,
+    /// `TurnStarted`, `TurnEnded`, `Settled`.
+    async fn settled_session() -> (TestBench, TurnSignals, AgentSessionId, ContainerMock) {
+        let (bench, mut turns) =
+            harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+        let id = AgentSessionId::new();
+        let container = live_session(&bench.0, &bench.2, id).await;
+        turns.settled(id).await;
+        turns.lifecycle_published(4).await;
+        (bench, turns, id, container)
+    }
+
+    fn ask(agent: &FakeAgent, request_id: i64, question: &str) {
+        let request = CreateElicitationRequest::new(
+            ElicitationFormMode::new(
+                ElicitationSessionScope::new(SessionId::new("acp-test")),
+                ElicitationSchema::new(),
+            ),
+            question,
+        );
+        let (method, params) = request
+            .to_untyped_message()
+            .expect("an elicitation serializes")
+            .into_parts();
+        agent.sends_raw(
+            RawJsonRpcMessage::request(method, params, RequestId::Number(request_id))
+                .expect("elicitation params are an object"),
+        );
+    }
+
+    #[tokio::test]
+    async fn the_first_turn_publishes_opened_started_ended_and_settled() {
+        let ((_, _, _, announcer, _), turns, id, _container) = settled_session().await;
+
+        let chip = announcer.announced_messages()[0].message_id;
+        let events = turns.lifecycle();
+        assert!(
+            matches!(
+                events.as_slice(),
+                [
+                    Lifecycle::Opened(opened),
+                    Lifecycle::TurnStarted(started),
+                    Lifecycle::TurnEnded(ended),
+                    Lifecycle::Settled(settled),
+                ] if opened.identity.session_id == id
+                    // No origin asserted: the in-memory repo cannot derive the
+                    // thread's channel, which only the message row knows.
+                    && started.turn == TurnId(0)
+                    && started.announcement_message_id == Some(chip)
+                    && ended.turn == TurnId(0)
+                    && ended.stop_reason == "end_turn"
+                    && ended.queued_remaining == 0
+                    && ended.announcement_message_id == Some(chip)
+                    && settled.last_turn.as_ref().is_some_and(|turn| {
+                        turn.turn == TurnId(0)
+                            && turn.stop_reason == "end_turn"
+                            && turn.announcement_message_id == Some(chip)
+                    })
+            ),
+            "one full turn, in order: {events:#?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_queued_prompt_defers_settled_until_it_too_is_answered() {
+        let ((service, _, _, _, _), turns, id, container) = settled_session().await;
+        let agent = container.agent();
+
+        // The first forward dispatches at once; the second waits behind it.
+        service
+            .execute(id, HarnessCommand::Deliver(forward_message("first")))
+            .await
+            .expect("first forward dispatches");
+        let queued = service
+            .execute(id, HarnessCommand::Deliver(forward_message("second")))
+            .await
+            .expect("second forward is accepted");
+        assert_eq!(queued, CommandOutcome::Queued);
+        turns.lifecycle_published(5).await;
+
+        agent.completes_prompt().await;
+        turns.lifecycle_published(7).await;
+        let events = turns.lifecycle();
+        assert!(
+            matches!(
+                &events[4..7],
+                [
+                    Lifecycle::TurnStarted(first),
+                    Lifecycle::TurnEnded(first_ended),
+                    Lifecycle::TurnStarted(second),
+                ] if first.turn == TurnId(1)
+                    && first_ended.turn == TurnId(1)
+                    && first_ended.queued_remaining == 1
+                    && second.turn == TurnId(2)
+            ),
+            "the first turn ends with one queued and the second starts, no settle between: {events:#?}"
+        );
+
+        agent.completes_prompt().await;
+        turns.lifecycle_published(9).await;
+        let events = turns.lifecycle();
+        assert!(
+            matches!(
+                &events[7..9],
+                [Lifecycle::TurnEnded(ended), Lifecycle::Settled(settled)]
+                    if ended.turn == TurnId(2)
+                        && ended.queued_remaining == 0
+                        && settled.last_turn.as_ref().is_some_and(|turn| turn.turn == TurnId(2))
+            ),
+            "the second turn ends and the session settles: {events:#?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_question_publishes_waiting_for_input_then_input_received() {
+        let ((service, _, _, announcer, _), turns, id, container) = settled_session().await;
+        let agent = container.agent();
+        service
+            .execute(id, HarnessCommand::Deliver(forward_message("pick one")))
+            .await
+            .expect("the prompt dispatches");
+        turns.lifecycle_published(5).await;
+        let chip = announcer
+            .announced_messages()
+            .last()
+            .expect("the forward posted a chip")
+            .message_id;
+
+        ask(&agent, 7, "Which approach?");
+        turns.lifecycle_published(6).await;
+        assert!(
+            matches!(
+                turns.lifecycle().last(),
+                Some(Lifecycle::WaitingForInput(waiting))
+                    if waiting.turn == TurnId(1)
+                        && waiting.question == "Which approach?"
+                        && waiting.announcement_message_id == Some(chip)
+            ),
+            "the question is published against its chip: {:#?}",
+            turns.lifecycle()
+        );
+
+        service
+            .execute(
+                id,
+                HarnessCommand::Deliver(DeliverAction::control(
+                    AgentActionId::mint(),
+                    ControlEvent {
+                        action: AgentAction::respond_elicitation(
+                            ElicitationRequestId::Number(7),
+                            ElicitationAnswer::Decline,
+                        ),
+                        actor: Some(staff_sender()),
+                    },
+                )),
+            )
+            .await
+            .expect("the answer is delivered");
+        turns.lifecycle_published(7).await;
+        assert!(
+            matches!(
+                turns.lifecycle().last(),
+                Some(Lifecycle::InputReceived(received)) if received.turn == TurnId(1)
+            ),
+            "answering clears the wait: {:#?}",
+            turns.lifecycle()
+        );
+    }
+
+    /// The excerpt is the fold's last text for the turn - no refold, no
+    /// second read of the log - which is what the chip shows once done.
+    #[tokio::test]
+    async fn settled_carries_the_agents_last_text() {
+        let ((service, _, _, _, _), turns, id, container) = settled_session().await;
+        let agent = container.agent();
+        service
+            .execute(
+                id,
+                HarnessCommand::Deliver(forward_message("say something")),
+            )
+            .await
+            .expect("the prompt dispatches");
+        turns.lifecycle_published(5).await;
+
+        agent.sends_raw(
+            RawJsonRpcMessage::notification(
+                "session/update".to_owned(),
+                serde_json::json!({
+                    "sessionId": "acp-test",
+                    "update": {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": {"type": "text", "text": "Hello there."}
+                    }
+                }),
+            )
+            .expect("notification params are an object"),
+        );
+        agent.completes_prompt().await;
+        turns.lifecycle_published(7).await;
+
+        let events = turns.lifecycle();
+        assert!(
+            matches!(
+                &events[5..7],
+                [Lifecycle::TurnEnded(ended), Lifecycle::Settled(settled)]
+                    if ended.stop_reason == "end_turn"
+                        && settled.last_turn.as_ref().is_some_and(|turn| {
+                            turn.excerpt.as_deref() == Some("Hello there.")
+                                && turn.stop_reason == "end_turn"
+                        })
+            ),
+            "settled quotes the agent's last words: {events:#?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_death_mid_turn_publishes_stopped_with_the_turn_and_no_settled() {
+        let ((service, _, _, _, _), turns, id, container) = settled_session().await;
+        service
+            .execute(id, HarnessCommand::Deliver(forward_message("keep going")))
+            .await
+            .expect("the prompt dispatches");
+        turns.lifecycle_published(5).await;
+
+        container.disconnects();
+        turns.lifecycle_published(6).await;
+
+        let events = turns.lifecycle();
+        assert!(
+            matches!(
+                events.last(),
+                Some(Lifecycle::Stopped(stopped))
+                    if stopped.turn_in_flight.as_ref().is_some_and(|turn| turn.turn == TurnId(1))
+                        && !stopped.reason.is_empty()
+            ),
+            "the stop names the turn it interrupted: {events:#?}"
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event, Lifecycle::Settled(_)))
+                .count(),
+            1,
+            "only the first turn settled; a death is not a settle: {events:#?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_delete_publishes_deleted_and_nothing_after() {
+        let ((service, _, _, _, _), turns, id, _container) = settled_session().await;
+
+        service
+            .execute(id, HarnessCommand::Delete)
+            .await
+            .expect("delete succeeds");
+        turns.lifecycle_published(5).await;
+
+        // Deleting also stops the actor, but by the time that stop is
+        // observed the row is gone and nothing can describe the session, so
+        // `Deleted` is the last word. Give a late `Stopped` every chance to
+        // show up wrongly before asserting it did not.
+        tokio::task::yield_now().await;
+        let events = turns.lifecycle();
+        assert!(
+            matches!(
+                events.last(),
+                Some(Lifecycle::Deleted(deleted)) if deleted.identity.session_id == id
+            ),
+            "deleted is the last fact about the session: {events:#?}"
+        );
+        assert_eq!(events.len(), 5, "nothing follows deleted: {events:#?}");
+    }
 }

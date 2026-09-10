@@ -1,4 +1,4 @@
-import { Macro } from '@macro/sdk';
+import { Macro } from '@macro-inc/sdk';
 import { env } from '../../src/env';
 
 const macro = new Macro({}).requestedAs(env.MACRO_USER_ID);

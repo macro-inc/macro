@@ -57,10 +57,10 @@ pub enum EmailLiteral {
     /// `email_threads.is_signal` flag: true matches signal threads, false
     /// matches noise threads.
     Importance(bool),
-    /// This node value filters by notification done state for emails.
-    NotificationDone(bool),
-    /// This node value filters by notification seen state for emails.
-    NotificationSeen(bool),
+    /// An entity has a non-deleted notification in this exact state.
+    NotificationState(crate::NotificationState),
+    /// The email thread is read (independent of notification state).
+    Read(bool),
     /// Controls whether shared email threads are included in results.
     Shared(SharedEmailFilter),
     /// When true, only include threads that have at least one message with an
@@ -96,6 +96,7 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             link_ids,
             project_ids,
             importance,
+            is_read,
             notification_filters,
             include_labels: _,
             exclude_labels: _,
@@ -151,12 +152,11 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             .expand(EmailLiteral::ProjectId, Expr::or);
 
         let importance_node = importance.map(|imp| Expr::Literal(EmailLiteral::Importance(imp)));
-        let notification_done_node = notification_filters
-            .done
-            .map(|done| Expr::Literal(EmailLiteral::NotificationDone(done)));
-        let notification_seen_node = notification_filters
-            .seen
-            .map(|seen| Expr::Literal(EmailLiteral::NotificationSeen(seen)));
+        let notification_state_node = notification_filters
+            .into_unique_states()
+            .into_iter()
+            .map(|state| Expr::Literal(EmailLiteral::NotificationState(state)))
+            .reduce(Expr::or);
         let shared_node = if shared.is_default() {
             None
         } else {
@@ -175,8 +175,8 @@ impl ExpandFrame<EmailLiteral> for EmailFilters {
             owner_nodes,
             project_id_nodes,
             importance_node,
-            notification_done_node,
-            notification_seen_node,
+            is_read.map(|read| Expr::val(EmailLiteral::Read(read))),
+            notification_state_node,
             shared_node,
             crm_node,
             calendar_only_node,

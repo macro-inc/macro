@@ -19,6 +19,15 @@ const macro = bot.requestedAs(bot.users.byId(actAs));
 // `as const` keeps the literal types so `.on()` infers each event's payload;
 // `satisfies` makes a typo in this list a compile error.
 const ALL_EVENTS = [
+  'agent_session.deleted',
+  'agent_session.input_received',
+  'agent_session.opened',
+  'agent_session.renamed',
+  'agent_session.settled',
+  'agent_session.stopped',
+  'agent_session.turn_ended',
+  'agent_session.turn_started',
+  'agent_session.waiting_for_input',
   'channel.created',
   'channel.deleted',
   'channel.message_attachment_created',

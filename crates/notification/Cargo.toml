@@ -6,18 +6,19 @@ version = "0.1.0"
 
 
 [features]
-ai_tool = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
+ai_tool = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars", "notification_state/schema"]
 axum = [
   "dep:axum",
   "dep:macro_authorization",
   "dep:model-error-response",
   "dep:model_user",
   "models_pagination/axum",
+  "dep:serde_with",
   "schema",
 ]
 docs = ["dep:aquamarine"]
 redis-tests = []
-schema = ["dep:utoipa", "macro_user_id/schema"]
+schema = ["dep:utoipa", "macro_user_id/schema", "notification_state/schema"]
 
 [dependencies]
 ai_toolset = { path = "../ai_toolset", optional = true }
@@ -51,6 +52,7 @@ model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true }
 models_pagination = { path = "../models_pagination" }
+notification_state = { path = "../notification_state", features = ["postgres"] }
 rate_limit = { path = "../rate_limit" }
 redis = { workspace = true, features = [
   "aio",
@@ -63,6 +65,7 @@ rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_with = { workspace = true, optional = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true }
 strum = { workspace = true }

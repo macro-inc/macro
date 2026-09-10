@@ -165,7 +165,10 @@ describe('compileToAst', () => {
     );
 
     expect(ast.fef).toEqual({
-      '&': [{ l: { fes: 'github_pull_request' } }, { l: { nd: false } }],
+      '&': [
+        { l: { fes: 'github_pull_request' } },
+        { '|': [{ l: { ns: 'unseen' } }, { l: { ns: 'seen' } }] },
+      ],
     });
   });
 

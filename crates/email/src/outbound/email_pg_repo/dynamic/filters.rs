@@ -36,8 +36,8 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::ProjectId(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
-            | EmailLiteral::NotificationSeen(_)
-            | EmailLiteral::NotificationDone(_)
+            | EmailLiteral::Read(_)
+            | EmailLiteral::NotificationState(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
             | EmailLiteral::ViewedAt(_)
@@ -59,8 +59,8 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::Shared(_)
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
-            | EmailLiteral::NotificationSeen(_)
-            | EmailLiteral::NotificationDone(_)
+            | EmailLiteral::Read(_)
+            | EmailLiteral::NotificationState(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
             | EmailLiteral::ViewedAt(_)
@@ -238,14 +238,20 @@ fn build_thread_literal_predicate(
         EmailLiteral::UpdatedAt(lit) => date_predicate(sort_ts_field, lit),
         EmailLiteral::ViewedAt(lit) => date_predicate(&format!("{history_alias}.updated_at"), lit),
         EmailLiteral::Property(lit) => build_thread_property_predicate(lit, thread_alias),
-        EmailLiteral::NotificationSeen(true) => {
-            SqlFragment::raw(format!("{thread_alias}.is_read = TRUE"))
-        }
-        EmailLiteral::NotificationSeen(false) => {
-            SqlFragment::raw(format!("{thread_alias}.is_read = FALSE"))
-        }
+        EmailLiteral::Read(true) => SqlFragment::raw(format!("{thread_alias}.is_read = TRUE")),
+        EmailLiteral::Read(false) => SqlFragment::raw(format!("{thread_alias}.is_read = FALSE")),
         // These literals are handled outside the thread/message predicate.
-        EmailLiteral::NotificationDone(_) | EmailLiteral::Shared(_) => SqlFragment::raw("TRUE"),
+        EmailLiteral::NotificationState(state) => {
+            let mut f = SqlFragment::raw(format!(
+                "EXISTS (SELECT 1 FROM notification n JOIN user_notification un ON un.notification_id = n.id WHERE n.event_item_type = 'email_thread' AND n.event_item_id = {thread_alias}.id::text AND un.deleted_at IS NULL AND un.user_id = "
+            ));
+            f.extend(SqlFragment::bind_viewer());
+            f.push_raw(" AND un.state = ");
+            f.extend(SqlFragment::bind_string(state.as_str()));
+            f.push_raw("::notification_state)");
+            f
+        }
+        EmailLiteral::Shared(_) => SqlFragment::raw("TRUE"),
         EmailLiteral::Sender(_)
         | EmailLiteral::Cc(_)
         | EmailLiteral::Bcc(_)
@@ -279,10 +285,7 @@ fn build_candidate_pair_predicate(
 /// correlated predicate. A scalar subquery intentionally preserves SQL NULL
 /// semantics under NOT (notably for threads without a ViewedAt history row).
 fn build_correlated_thread_predicate(literal: &EmailLiteral, sort_ts_field: &str) -> SqlFragment {
-    if matches!(
-        literal,
-        EmailLiteral::NotificationDone(_) | EmailLiteral::Shared(_)
-    ) {
+    if matches!(literal, EmailLiteral::Shared(_)) {
         return SqlFragment::raw("TRUE");
     }
 

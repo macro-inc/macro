@@ -546,51 +546,43 @@ pub(in crate::outbound::pg_soup_repo) fn build_notification_exists_clause(
     )
 }
 
-pub(in crate::outbound::pg_soup_repo) fn build_notification_done_clause(
+pub(in crate::outbound::pg_soup_repo) fn build_notification_state_clause(
     entity_id_sql: &str,
     entity_type: &str,
-    done: bool,
+    state: item_filters::NotificationState,
 ) -> String {
     build_notification_exists_clause(
         entity_id_sql,
         entity_type,
-        if done {
-            "un.done = true"
-        } else {
-            "un.done = false"
-        },
+        NotificationPredicate::state(state).sql(),
     )
 }
 
-pub(in crate::outbound::pg_soup_repo) fn build_notification_seen_clause(
-    entity_id_sql: &str,
-    entity_type: &str,
-    seen: bool,
-) -> String {
-    build_notification_exists_clause(
-        entity_id_sql,
-        entity_type,
-        if seen {
-            "un.seen_at IS NOT NULL"
-        } else {
-            "un.seen_at IS NULL"
-        },
-    )
-}
-
+// A union of exact states for one EXISTS predicate. Do not intersect these on
+// AND: separate literals may be witnessed by different notification rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::outbound::pg_soup_repo) enum NotificationPredicate {
-    Done(bool),
-    Seen(bool),
-}
+pub(in crate::outbound::pg_soup_repo) struct NotificationPredicate(u8);
 
 impl NotificationPredicate {
+    pub(in crate::outbound::pg_soup_repo) fn state(state: item_filters::NotificationState) -> Self {
+        use item_filters::NotificationState::*;
+        Self(match state {
+            Unseen => 1,
+            Seen => 2,
+            Done => 4,
+        })
+    }
+
     pub(in crate::outbound::pg_soup_repo) fn sql(self) -> &'static str {
-        match self {
-            NotificationPredicate::Done(true) => "un.done = true",
-            NotificationPredicate::Done(false) => "un.done = false",
-            NotificationPredicate::Seen(true) => "un.seen_at IS NOT NULL",
-            NotificationPredicate::Seen(false) => "un.seen_at IS NULL",
+        match self.0 {
+            1 => "un.state = 'unseen'",
+            2 => "un.state = 'seen'",
+            3 => "un.state IN ('unseen', 'seen')",
+            4 => "un.state = 'done'",
+            5 => "un.state IN ('unseen', 'done')",
+            6 => "un.state IN ('seen', 'done')",
+            7 => "TRUE",
+            _ => "FALSE",
         }
     }
 }
@@ -698,7 +690,18 @@ fn strip_notification_conjunction<T: Clone>(
                 _ => None,
             }
         }
-        Expr::Or(_, _) | Expr::Not(_) => None,
+        Expr::Or(a, b) => {
+            match (
+                strip_notification_conjunction(a, notification_predicate),
+                strip_notification_conjunction(b, notification_predicate),
+            ) {
+                (Some((a, None)), Some((b, None))) => {
+                    Some((NotificationPredicate(a.0 | b.0), None))
+                }
+                _ => None,
+            }
+        }
+        Expr::Not(_) => None,
     }
 }
 
@@ -816,11 +819,8 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
             )"#
                 .to_string()
         }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("d.id", "document", done)
-        }
-        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("d.id", "document", seen)
+        filter_ast::ExprFrame::Literal(DocumentLiteral::NotificationState(state)) => {
+            build_notification_state_clause("d.id", "document", state)
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::IncludeCbmAtmNc(true)) => {
             build_task_include_cbm_atm_nc_clause()
@@ -918,11 +918,8 @@ fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> Stri
                 sql_string_literal(&email)
             )
         }
-        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("event.id", "calendar_event", done)
-        }
-        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("event.id", "calendar_event", seen)
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationState(state)) => {
+            build_notification_state_clause("event.id", "calendar_event", state)
         }
     });
     if formatting.is_empty() {
@@ -958,11 +955,8 @@ pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
         filter_ast::ExprFrame::Literal(ChatLiteral::Importance(true)) => "TRUE".to_string(),
         // all chats are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ChatLiteral::Importance(false)) => "1=0".to_string(),
-        filter_ast::ExprFrame::Literal(ChatLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("c.id", "chat", done)
-        }
-        filter_ast::ExprFrame::Literal(ChatLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("c.id", "chat", seen)
+        filter_ast::ExprFrame::Literal(ChatLiteral::NotificationState(state)) => {
+            build_notification_state_clause("c.id", "chat", state)
         }
         filter_ast::ExprFrame::Literal(ChatLiteral::CreatedAt(lit)) => {
             date_predicate(r#"c."createdAt""#, &lit)
@@ -1003,11 +997,8 @@ pub(in crate::outbound::pg_soup_repo) fn build_project_filter(
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(true)) => "TRUE".to_string(),
         // all projects are important, so if importance is false, exclude them
         filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => "1=0".to_string(),
-        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("p.id", "project", done)
-        }
-        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("p.id", "project", seen)
+        filter_ast::ExprFrame::Literal(ProjectLiteral::NotificationState(state)) => {
+            build_notification_state_clause("p.id", "project", state)
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::CreatedAt(lit)) => {
             date_predicate(r#"p."createdAt""#, &lit)
@@ -1400,22 +1391,19 @@ fn build_query(
 
     let document_notification = filter_ast.document_filter.as_deref().and_then(|expr| {
         strip_notification_conjunction(expr, |lit| match lit {
-            DocumentLiteral::NotificationDone(done) => Some(NotificationPredicate::Done(*done)),
-            DocumentLiteral::NotificationSeen(seen) => Some(NotificationPredicate::Seen(*seen)),
+            DocumentLiteral::NotificationState(state) => Some(NotificationPredicate::state(*state)),
             _ => None,
         })
     });
     let chat_notification = filter_ast.chat_filter.as_deref().and_then(|expr| {
         strip_notification_conjunction(expr, |lit| match lit {
-            ChatLiteral::NotificationDone(done) => Some(NotificationPredicate::Done(*done)),
-            ChatLiteral::NotificationSeen(seen) => Some(NotificationPredicate::Seen(*seen)),
+            ChatLiteral::NotificationState(state) => Some(NotificationPredicate::state(*state)),
             _ => None,
         })
     });
     let project_notification = filter_ast.project_filter.as_deref().and_then(|expr| {
         strip_notification_conjunction(expr, |lit| match lit {
-            ProjectLiteral::NotificationDone(done) => Some(NotificationPredicate::Done(*done)),
-            ProjectLiteral::NotificationSeen(seen) => Some(NotificationPredicate::Seen(*seen)),
+            ProjectLiteral::NotificationState(state) => Some(NotificationPredicate::state(*state)),
             _ => None,
         })
     });

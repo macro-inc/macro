@@ -523,7 +523,7 @@ async fn test_processor_mark_processed(pool: PgPool) {
         event_ids.push(id);
     }
 
-    // Get unprocessed events (starts a transaction)
+    // Claims the batch and commits; the rows are already marked processed.
     let unprocessed = processor.get_unprocessed_events().await.unwrap();
 
     // Filter to just our test events
@@ -534,7 +534,7 @@ async fn test_processor_mark_processed(pool: PgPool) {
 
     assert_eq!(to_mark.len(), 2);
 
-    // Mark them as processed (commits the transaction)
+    // Releases the aggregation lock; the rows were marked by the claim.
     processor.mark_processed(to_mark).await.unwrap();
 
     // Verify they are marked as processed in the database
@@ -794,7 +794,7 @@ async fn test_processor_set_aggregates_empty_list(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn test_processor_transaction_lifecycle(pool: PgPool) {
+async fn test_processor_claim_aggregate_lifecycle(pool: PgPool) {
     let processor = FrecencyPgProcessor::new(pool.clone());
     let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
 
@@ -819,7 +819,7 @@ async fn test_processor_transaction_lifecycle(pool: PgPool) {
     .await
     .unwrap();
 
-    // Get unprocessed events (starts transaction)
+    // Claims the batch and commits.
     let events = processor.get_unprocessed_events().await.unwrap();
     let test_event = events.into_iter().find(|e| e.id == event_id);
     assert!(test_event.is_some());
@@ -838,10 +838,10 @@ async fn test_processor_transaction_lifecycle(pool: PgPool) {
         },
     };
 
-    // Set the aggregate (uses same transaction)
+    // Written on its own statement, after the claim committed.
     processor.set_aggregates(vec![aggregate]).await.unwrap();
 
-    // Mark as processed (commits the same transaction)
+    // Releases the aggregation lock taken by the claim.
     processor
         .mark_processed(vec![test_event.unwrap()])
         .await
@@ -875,9 +875,53 @@ async fn test_processor_transaction_lifecycle(pool: PgPool) {
     assert!(was_processed);
 }
 
+/// An idle queue must not strand the aggregation lock.
+///
+/// The pass still takes the lock before discovering there is nothing to claim,
+/// so it has to be closed out by mark_processed like any other. Otherwise the
+/// lock would sit held until the next tick cleaned it up -- once per poll, on
+/// every replica, for as long as the queue stays empty.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn it_cannot_be_read_concurrently(pool: PgPool) {
-    let test_user_id = "test_processor_tx_lifecycle";
+async fn an_empty_batch_still_releases_the_aggregation_lock(pool: PgPool) {
+    let first = FrecencyPgProcessor::new(pool.clone());
+    let second = FrecencyPgProcessor::new(pool);
+
+    // No events inserted: the claim finds nothing.
+    let events = first.get_unprocessed_events().await.unwrap();
+    assert!(events.is_empty());
+
+    // The lock was taken regardless, so the second poller is still shut out.
+    let err = second.get_unprocessed_events().await.unwrap_err();
+    assert!(matches!(err, PollerErr::DbLockErr), "got {err:?}");
+
+    // Closing out the empty pass releases it.
+    first.mark_processed(Vec::new()).await.unwrap();
+    let res = second.get_unprocessed_events().await.unwrap();
+    assert!(res.is_empty());
+}
+
+/// The aggregate lookup renders its filter with `push_tuples`, which emits a
+/// bare `IN ()` for an empty batch. Callers should short-circuit before here,
+/// but the method must not turn "nothing to look up" into a syntax error.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn empty_aggregate_lookup_returns_empty_rather_than_failing(pool: PgPool) {
+    let processor = FrecencyPgProcessor::new(pool);
+    let res = processor
+        .get_aggregates_for_users_entities(Vec::new())
+        .await
+        .expect("an empty lookup must not be a syntax error");
+    assert!(res.is_empty());
+}
+
+/// Only one poller may aggregate at a time.
+///
+/// Disjoint event batches can still merge into the same aggregate key, and
+/// set_aggregates blind-overwrites that row, so two concurrent passes would
+/// lose one of their contributions. The second poller must be turned away
+/// while the first holds the lock, and admitted once it releases.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_second_poller_is_locked_out_until_the_first_finishes(pool: PgPool) {
+    let test_user_id = "test_processor_claim_is_exclusive";
     // Insert an unprocessed event
     let event_id = sqlx::query_scalar!(
         r#"
@@ -899,6 +943,7 @@ async fn it_cannot_be_read_concurrently(pool: PgPool) {
     .await
     .unwrap();
 
+    let pool_handle = pool.clone();
     let first = FrecencyPgProcessor::new(pool.clone());
     let second = FrecencyPgProcessor::new(pool);
 
@@ -906,57 +951,29 @@ async fn it_cannot_be_read_concurrently(pool: PgPool) {
     assert_eq!(events.len(), 1);
     assert_eq!(events.first().unwrap().id, event_id);
 
-    // try to read from a second processor
-    // this fails because the first processor still holds the lock
+    // The first poller holds the aggregation lock across its whole pass, so
+    // the second must not be allowed to read-modify-write concurrently.
     let err = second.get_unprocessed_events().await.unwrap_err();
-    assert!(matches!(err, PollerErr::DbLockErr));
+    assert!(
+        matches!(err, PollerErr::DbLockErr),
+        "second poller should be locked out, got {err:?}"
+    );
 
-    // finish the tx
-    first.mark_processed(Vec::new()).await.unwrap();
-
-    // now second can read because the transaction has finished
-    let res = second.get_unprocessed_events().await.unwrap();
-    assert_eq!(res.len(), 1);
-    assert_eq!(res.first().unwrap().id, event_id);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn test_stale_transaction_is_cleaned_up(pool: PgPool) {
-    let test_user_id = "test_stale_tx_cleanup";
-
-    sqlx::query!(
-        r#"
-        INSERT INTO frecency_events (
-            user_id, entity_type, event_type, timestamp,
-            connection_id, entity_id, was_processed
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, false)
-        "#,
-        test_user_id,
-        "document",
-        "open",
-        Utc::now(),
-        "conn_tx",
-        "doc_tx"
+    // The claim itself already marked the row, independent of the lock.
+    let was_processed = sqlx::query_scalar!(
+        r#"SELECT was_processed AS "was_processed!" FROM frecency_events WHERE id = $1"#,
+        event_id
     )
-    .execute(&pool)
+    .fetch_one(&pool_handle)
     .await
     .unwrap();
+    assert!(was_processed);
 
-    let processor = FrecencyPgProcessor::new(pool);
-
-    // First call succeeds, starts a transaction and stores it in the mutex
-    let events = processor.get_unprocessed_events().await.unwrap();
-    assert_eq!(events.len(), 1);
-
-    // Simulate a processing failure by NOT calling mark_processed.
-    // The next call to get_unprocessed_events should clean up the stale tx
-    // and successfully start a new processing cycle.
-    let events = processor.get_unprocessed_events().await.unwrap();
-    assert_eq!(events.len(), 1);
-
-    // Verify we can still complete the full lifecycle
-    processor.mark_processed(Vec::new()).await.unwrap();
+    // Ending the first pass releases the lock and lets the second in; there
+    // is simply nothing left for it to claim.
+    first.mark_processed(Vec::new()).await.unwrap();
+    let res = second.get_unprocessed_events().await.unwrap();
+    assert!(res.is_empty());
 }
 
 /// Tests that mixing supported (chat_id) and unsupported (role) filters
