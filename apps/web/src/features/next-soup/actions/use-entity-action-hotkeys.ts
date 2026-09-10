@@ -130,7 +130,18 @@ export const useEntityActionHotkeys = (
       return;
     }
 
-    const handleContent = splitHandle.content().type;
+    if (splitHandle.isControllerSplit()) {
+      openEntityInSplitFromUnifiedList(entity, {
+        splitHandle,
+        mergeHistory: true,
+        referredFrom: splitHandle.referredFrom(),
+        notificationSource,
+      });
+      return;
+    }
+
+    const handleContent = splitHandle.content()?.type;
+    if (!handleContent) return;
     if (handleContent === 'component' || handleContent === 'project') return;
     openEntityInSplitFromUnifiedList(entity, {
       splitHandle,
