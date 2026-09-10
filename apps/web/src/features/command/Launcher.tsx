@@ -1005,7 +1005,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   return (
     // The shared shell stopped painting its own pane (cmd+k gets one from the
     // app Dialog wrapper); this raw-Kobalte dialog carries it here.
-    <div class="w-200 max-w-[calc(100vw-16px)] rounded-xl glass-lg bg-menu-glass [--color-dialog:var(--color-menu-glass)]">
+    <div class="w-200 max-w-[calc(100vw-16px)] rounded-xl glass bg-menu-glass [--color-dialog:var(--color-menu-glass)]">
       <CommandMenuShell
         depth={2}
         class="h-auto w-full outline-none"

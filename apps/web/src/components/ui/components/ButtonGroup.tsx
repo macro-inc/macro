@@ -36,43 +36,16 @@ const groupVariantStyles: Record<ButtonVariant, string> = {
   cta: 'border border-transparent ',
 };
 
-/* Mirrors the glass mapping in Button.tsx: the group carries the glass for
-   the whole row, sized like its buttons (compact sizes get `glass-sm`), and a
-   `ghost` group — a bare toolbar cluster with no surface of its own — only
-   picks it up on hover. Kept local rather than imported so the Button <->
-   ButtonGroup dependency stays type-only. */
-const glassSizeStyles: Record<ButtonSize, string> = {
-  xs: 'glass-sm',
-  'icon-xs': 'glass-sm',
-  sm: 'glass-sm',
-  'icon-sm': 'glass-sm',
-  md: 'glass',
-  'icon-md': 'glass',
-  lg: 'glass',
-  'icon-lg': 'glass',
-  xl: 'glass',
-};
-
-// Literal strings only — Tailwind's scanner can't see template-built classes.
-const ghostGlassSizeStyles: Record<ButtonSize, string> = {
-  xs: 'hover:glass-sm',
-  'icon-xs': 'hover:glass-sm',
-  sm: 'hover:glass-sm',
-  'icon-sm': 'hover:glass-sm',
-  md: 'hover:glass',
-  'icon-md': 'hover:glass',
-  lg: 'hover:glass',
-  'icon-lg': 'hover:glass',
-  xl: 'hover:glass',
-};
-
-const glassClass = (variant: ButtonVariant, size: ButtonSize): string => {
-  if (variant === 'ghost') return ghostGlassSizeStyles[size];
-  // Same rule as Button: the rim is the edge, so `outline` drops its hard
-  // border rather than drawing a second line under it.
-  return variant === 'outline'
-    ? `${glassSizeStyles[size]} border-transparent`
-    : glassSizeStyles[size];
+/* Mirrors the glass rule in Button.tsx: the group carries the glass for the
+   whole row, and a `ghost` group — a bare toolbar cluster with no surface of
+   its own — only picks it up on hover. Kept local rather than imported so the
+   Button <-> ButtonGroup dependency stays type-only. Literal class strings
+   only — Tailwind's scanner can't see template-built classes. */
+const glassClass = (variant: ButtonVariant): string => {
+  if (variant === 'ghost') return 'hover:glass';
+  // The rim is the edge, so `outline` drops its hard border rather than
+  // drawing a second line under it.
+  return variant === 'outline' ? 'glass border-transparent' : 'glass';
 };
 
 const dividerVariantStyles: Record<ButtonVariant, string> = {
@@ -145,7 +118,7 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
             'inline-flex overflow-hidden rounded-sm',
             /* the group is the pane of glass — its buttons opt out (see
                Button.tsx) so the row reads as one surface, not N chips */
-            glassClass(variant(), props.size ?? 'md'),
+            glassClass(variant()),
             /* strip per-button rounding + borders so the group owns the frame */
             '**:data-button:rounded-none',
             '**:data-button:border-0',

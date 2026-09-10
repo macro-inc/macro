@@ -139,47 +139,20 @@ function isIconSize(size: ButtonSize): boolean {
   return size.startsWith('icon-');
 }
 
-// The glass treatment (see the `glass` utilities in index.css) — ported from
-// the marketing site's hero CTA ring. Every variant carries it; `ghost` is the
-// one exception, and only because it has no surface of its own to catch the
-// light: a persistent rim and drop shadow would put a chip around every bare
-// toolbar icon in the app. It picks the glass up on hover, where it does have
-// a scrim. The glass scales with the button: compact sizes get the subtler
-// `glass-sm` so dense toolbars don't shimmer.
+// The glass treatment (see the `glass` utility in index.css) — the same
+// material as the app's menus and dialogs. Every variant carries it; `ghost`
+// is the one exception, and only because it has no surface of its own to
+// catch the light: a persistent rim and drop shadow would put a chip around
+// every bare toolbar icon in the app. It picks the glass up on hover, where
+// it does have a scrim.
 // Literal class strings only — Tailwind's scanner can't see classes built
-// from template strings, so the hover-variant map is spelled out in full.
-const glassSizeStyles: Record<ButtonSize, string> = {
-  xs: 'glass-sm',
-  'icon-xs': 'glass-sm',
-  sm: 'glass-sm',
-  'icon-sm': 'glass-sm',
-  md: 'glass',
-  'icon-md': 'glass',
-  lg: 'glass',
-  'icon-lg': 'glass',
-  xl: 'glass',
-};
-
-const ghostGlassSizeStyles: Record<ButtonSize, string> = {
-  xs: 'not-disabled:hover:glass-sm',
-  'icon-xs': 'not-disabled:hover:glass-sm',
-  sm: 'not-disabled:hover:glass-sm',
-  'icon-sm': 'not-disabled:hover:glass-sm',
-  md: 'not-disabled:hover:glass',
-  'icon-md': 'not-disabled:hover:glass',
-  lg: 'not-disabled:hover:glass',
-  'icon-lg': 'not-disabled:hover:glass',
-  xl: 'not-disabled:hover:glass',
-};
-
-const glassClass = (variant: ButtonVariant, size: ButtonSize): string => {
-  if (variant === 'ghost') return ghostGlassSizeStyles[size];
+// from template strings.
+const glassClass = (variant: ButtonVariant): string => {
+  if (variant === 'ghost') return 'not-disabled:hover:glass';
   // The glass rim is the edge. `outline` is the one variant with a hard
   // border of its own, and under the rim it reads as a double line — so the
   // border goes transparent and the tinted fill plus rim carry the shape.
-  return variant === 'outline'
-    ? `${glassSizeStyles[size]} border-transparent`
-    : glassSizeStyles[size];
+  return variant === 'outline' ? 'glass border-transparent' : 'glass';
 };
 
 export const Button = (props: ButtonProps) => {
@@ -218,7 +191,7 @@ export const Button = (props: ButtonProps) => {
       // Inside a ButtonGroup the group owns the frame (it strips per-button
       // borders and rounding), so it carries the glass for the whole row —
       // one pane of glass instead of one per segment.
-      group === undefined && glassClass(variant(), size()),
+      group === undefined && glassClass(variant()),
       local.class
     );
 

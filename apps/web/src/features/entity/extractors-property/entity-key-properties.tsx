@@ -177,7 +177,7 @@ function KeyPropertiesRow(props: {
                     class={cn(
                       /* border, not ring: Tailwind rings are box-shadows and
                          would fight the glass shadow */
-                      'flex items-center gap-1 min-w-0 border border-edge-muted/50 glass-sm',
+                      'flex items-center gap-1 min-w-0 border border-edge-muted/50 glass',
                       'px-1.5 py-1 leading-tight text-left rounded-full',
                       '@max-2xl/u-list:border-0 @max-2xl/u-list:glass-none @max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
                       {

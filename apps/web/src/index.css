@@ -137,11 +137,11 @@
        from and how strong the effect is at full size. The site is dark-only,
        so its hard-coded values are the dark half; in a light theme the lift
        comes from white, not from the (dark) ink color.
-     - GEOMETRY (owned by the utilities) says how big it is. Each size class
-       sets blur/shadow extents and scales the palette strengths through
-       `--glass-scale`. Sizes set their tokens *on the element*, which would
-       out-specify an inherited light-mode value, so they must never name a
-       color or a strength directly — palette lives here, and only here. */
+     - GEOMETRY (owned by the utilities) says how big it is: blur/shadow
+       extents, and `--glass-scale` multiplying every palette strength. The
+       utilities set their tokens *on the element*, which would out-specify an
+       inherited light-mode value, so they must never name a color or a
+       strength directly — palette lives here, and only here. */
   --glass-tint: var(--color-content-1);
   --glass-shade-color: var(--color-surface-0);
   --glass-shadow-alpha: 0.55;
@@ -528,7 +528,9 @@ html[data-theme-light='false'] {
    utility so it composes with variants — `mobile:island` — instead of
    hand-prefixing each part. */
 @utility island {
-  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink ring dark-mode:ring-edge light-mode:ring-panel light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
+  /* The glass rim and cast shadow replace the old ring + light-mode shadow:
+     Tailwind rings are box-shadows and would fight the glass box-shadow. */
+  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink glass;
 }
 
 /* Apple-style glass chrome: backdrop blur, a bright inner top edge, a dark
@@ -537,12 +539,10 @@ html[data-theme-light='false'] {
    length). Shape and background come from the consumer, so this composes with
    any radius — the rim inherits it — and with variants (`hover:glass`).
 
-   Comes in three sizes; `glass` is the medium, tuned for buttons and pills.
-   `glass-lg` is the marketing-site strength, for hero surfaces: menus,
-   popovers, cmd+k, the channel input. `glass-sm` is a whisper for small
-   chrome like property pills. The size utilities restate the full recipe via
-   @apply, so each is a complete class — no pairing required — and they only
-   touch geometry tokens (see the `--glass-*` block in :root for why). */
+   One strength everywhere — the marketing site's hero-ring geometry — so a
+   button, a menu, a dialog and a mobile island all read as the same material.
+   Only geometry tokens are set here (see the `--glass-*` block in :root for
+   why the palette lives there). */
 @utility glass {
   position: relative;
   /* Standard property only — Lightning CSS adds `-webkit-backdrop-filter`
@@ -583,32 +583,6 @@ html[data-theme-light='false'] {
     pointer-events: none;
   }
 
-  /* Medium: buttons and standard controls — a step down from the site's
-     hero ring so rows of buttons don't shimmer. */
-  --glass-scale: 0.72;
-  --glass-blur: 4px;
-  --glass-saturate: 1.15;
-  --glass-shadow-y: 8px;
-  --glass-shadow-blur: 20px;
-  --glass-shadow-spread: -16px;
-}
-
-/* Small: subtle glass for compact chrome (property pills, tiny chips) —
-   mostly rim and top edge, barely-there blur, no real cast shadow. */
-@utility glass-sm {
-  @apply glass;
-  --glass-scale: 0.5;
-  --glass-blur: 3px;
-  --glass-saturate: 1.1;
-  --glass-shadow-y: 3px;
-  --glass-shadow-blur: 8px;
-  --glass-shadow-spread: -6px;
-}
-
-/* Large: the marketing site's hero-ring strength, verbatim — for floating
-   hero surfaces (menus, popovers, cmd+k, the channel input). */
-@utility glass-lg {
-  @apply glass;
   --glass-scale: 1;
   --glass-blur: 6px;
   --glass-saturate: 1.25;
@@ -619,7 +593,7 @@ html[data-theme-light='false'] {
 
 /* Strip the glass under a variant (e.g. a container query collapsing a pill
    to a bare icon, where a rim would chip it). Variant-prefixed utilities sort
-   after plain ones, so `@max-2xl/u-list:glass-none` beats a plain `glass-sm`. */
+   after plain ones, so `@max-2xl/u-list:glass-none` beats a plain `glass`. */
 /* The scrim behind floating dialogs (cmd+k, create, task compose, confirm).
    Three quiet layers instead of one flat dim: a tenth of black so the page
    steps back; a wide top-lit wash that mixes the theme accent in at
@@ -649,13 +623,13 @@ html[data-theme-light='false'] {
   }
 }
 
-/* The channel/compose input: full-strength glass, but the tight menu shadow
+/* The channel/compose input: the same glass, but the tight menu shadow
    swaps for a wide, faint ambient one (a la the ChatGPT composer) so the
    input reads as floating over the conversation rather than popped out of it.
    Light themes keep the same geometry at a much lower scale so the halo
    doesn't dominate pale surfaces. */
 @utility glass-input {
-  @apply glass-lg;
+  @apply glass;
   --glass-shadow-y: 10px;
   --glass-shadow-blur: 40px;
   --glass-shadow-spread: -8px;

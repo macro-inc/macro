@@ -323,7 +323,7 @@ export function ActionMenu(props: {
           on:touchstart={(e) => e.stopPropagation()}
           ref={menuRef}
         >
-          <Surface depth={2} class="py-1.5 glass-lg bg-menu-glass rounded-xl">
+          <Surface depth={2} class="py-1.5 glass bg-menu-glass rounded-xl">
             <div
               class="overflow-y-auto scrollbar-hidden"
               style={{
