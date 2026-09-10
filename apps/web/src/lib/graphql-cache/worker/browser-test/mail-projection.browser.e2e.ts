@@ -20,13 +20,23 @@ test('new Mail filter combinations and pagination work offline without bodies or
     await expect(
       page.getByRole('button', { name: 'Load more cached mail' })
     ).toBeDisabled();
-    await page.getByLabel('View', { exact: true }).selectOption('INBOX');
-    await page.getByLabel('Signal', { exact: true }).selectOption('true');
-    await page.getByLabel('Account', { exact: true }).selectOption('1001');
+    await page
+      .getByRole('combobox', { name: 'View', exact: true })
+      .selectOption('INBOX');
+    await page
+      .getByRole('combobox', { name: 'Signal', exact: true })
+      .selectOption('true');
+    await page
+      .getByRole('combobox', { name: 'Account', exact: true })
+      .selectOption('1001');
     await expect(page.locator('#rows li')).toHaveCount(3);
-    await page.getByLabel('Status', { exact: true }).selectOption('false');
+    await page
+      .getByRole('combobox', { name: 'Status', exact: true })
+      .selectOption('false');
     await expect(page.locator('#rows li')).toHaveCount(0);
-    await page.getByLabel('View', { exact: true }).selectOption('ALL');
+    await page
+      .getByRole('combobox', { name: 'View', exact: true })
+      .selectOption('ALL');
     await expect(page.locator('#rows li')).toHaveCount(4);
     await expect(page.locator('#rows li')).toHaveText([
       / — Done$/,
@@ -34,9 +44,13 @@ test('new Mail filter combinations and pagination work offline without bodies or
       / — Done$/,
       / — Done$/,
     ]);
-    await page.getByLabel('Read', { exact: true }).selectOption('true');
+    await page
+      .getByRole('combobox', { name: 'Read', exact: true })
+      .selectOption('true');
     await expect(page.locator('#rows li')).toHaveCount(0);
-    await page.getByLabel('Read', { exact: true }).selectOption('false');
+    await page
+      .getByRole('combobox', { name: 'Read', exact: true })
+      .selectOption('false');
     await expect(page.locator('#rows li')).toHaveCount(4);
   } finally {
     await context.setOffline(false);
