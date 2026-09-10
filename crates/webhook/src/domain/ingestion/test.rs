@@ -1485,7 +1485,9 @@ fn agent_session_lifecycle_event(
 /// ordering key, and whose grants gate it - not the bot, unlike a trigger.
 #[tokio::test]
 async fn agent_session_lifecycle_events_are_scoped_and_named_by_the_session() {
-    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionSettledMetadata, TurnSummary};
+    use agent_session::domain::events::{
+        AgentSessionLifecycleEvent, SessionSettledMetadata, TurnSummary,
+    };
 
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
     let repository = MockRepository::new(
