@@ -88,6 +88,14 @@ when only slightly above the bottom. Composer and viewport resizing respect the
 same boundary. Returning to the bottom resumes following; loading older messages
 preserves the reading position.
 
+On Safari and iOS, open or navigate near the oldest loaded messages and allow the
+history buffer to fill, then flick into older history. Loading should stop once
+roughly six screens are available above the viewport and resume as you approach
+that buffer. Check that pagination retains the visible message, and that latest
+stays pinned when messages arrive, images load, or the composer resizes. Verify
+message/reply navigation, restoration, and the custom scrollbar after pagination.
+Very long flings or slow responses can still exhaust the available scroll range.
+
 Inline document mentions should show their stored title before entering the viewport
 and while preview requests are pending. With a slow preview response, check that a
 long, unchanged title retains its line wrapping as the preview loads; a renamed
