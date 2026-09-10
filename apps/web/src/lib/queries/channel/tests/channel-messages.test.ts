@@ -365,7 +365,7 @@ describe('channelMessagesQueryOptions', () => {
           updated_at: '2026-09-10T14:00:00Z',
         },
       },
-    ] as ApiChannelWithLatest[]);
+    ] as unknown as ApiChannelWithLatest[]);
     mocks.getChannelMessagesCatchUp.mockResolvedValueOnce(
       ok({
         items: [createMessage('msg-delta', '2026-09-10T13:20:00Z')],
