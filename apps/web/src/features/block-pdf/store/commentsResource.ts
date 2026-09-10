@@ -6,11 +6,8 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
-import {
-  invalidateMessageThreads,
-  messageActions,
-  useMessageThreadsQuery,
-} from '@queries/messages';
+import { useMessageActions, useMessageRootsQuery } from '@queries/messages';
+import { invalidateMessageTimeline } from '@queries/messages/timeline';
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type { AnnotationIncrementalUpdate } from '@service-storage/generated/schemas/annotationIncrementalUpdate';
@@ -20,17 +17,16 @@ import type { DeleteUnthreadedAnchorRequest } from '@service-storage/generated/s
 import type { DeleteUnthreadedAnchorResponse } from '@service-storage/generated/schemas/deleteUnthreadedAnchorResponse';
 import type { EditAnchorRequest } from '@service-storage/generated/schemas/editAnchorRequest';
 import type { EditAnchorResponse } from '@service-storage/generated/schemas/editAnchorResponse';
-import type { EditMessage } from '@service-storage/generated/schemas/editMessage';
 import type { PostMessage } from '@service-storage/messages';
 
 export const documentMessagesQuery = createBlockMemo(() => {
   if (useBlockName() !== 'pdf') return;
   const id = useBlockId();
-  return useMessageThreadsQuery(() => ({ type: 'document', id }));
+  return useMessageRootsQuery(() => ({ type: 'document', id }));
 });
-export const documentMessageThreads = () => {
+export const documentMessageRoots = () => {
   const query = documentMessagesQuery();
-  return query?.isSuccess ? (query.data ?? []) : [];
+  return query?.isSuccess ? query.data : [];
 };
 const isPdfBlock = createBlockMemo(() => useBlockName() === 'pdf');
 export const anchorsResource = createBlockResource(isPdfBlock, async () => {
@@ -43,7 +39,7 @@ export const anchorsResource = createBlockResource(isPdfBlock, async () => {
 
 function actions() {
   const id = useBlockId();
-  return messageActions(() => ({ type: 'document', id }));
+  return useMessageActions(() => ({ type: 'document', id }));
 }
 function useCreateMessage() {
   const messages = actions();
@@ -52,13 +48,6 @@ function useCreateMessage() {
     const message = await messages.post(input);
     void refetch();
     return message;
-  };
-}
-export function useEditCommentResource() {
-  const messages = actions();
-  return async (id: string, input: EditMessage) => {
-    await messages.edit(id, input);
-    return true;
   };
 }
 export function useDeleteCommentResource() {
@@ -170,7 +159,7 @@ function useHandleDeleteUnthreadedAnchor() {
   return async (response: DeleteUnthreadedAnchorResponse) => {
     mutateAnchors((prev) => prev.filter((a) => a.uuid !== response.uuid));
     if (response.threadId != null)
-      void invalidateMessageThreads({ type: 'document', id: documentId });
+      void invalidateMessageTimeline({ type: 'document', id: documentId });
   };
 }
 
@@ -332,7 +321,7 @@ createConnectionBlockWebsocketEffect((event) => {
 
 export function useDeleteThreadResource() {
   const id = useBlockId();
-  const actions = messageActions(() => ({ type: 'document', id }));
+  const actions = useMessageActions(() => ({ type: 'document', id }));
   const [, { refetch }] = anchorsResource;
   return async (rootId: string) => {
     await actions.deleteThread(rootId);

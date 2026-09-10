@@ -23,8 +23,8 @@ use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use bot_id::BotId;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, AdminParticipantRole, EntityAccessReceipt, EntityType,
-        MemberParticipantRole, RequiredPermission,
+        AccessError, AdminParticipantRole, EntityAccessReceipt, EntityType, MemberParticipantRole,
+        RequiredPermission,
     },
     ports::EntityAccessService,
 };
@@ -46,8 +46,8 @@ where
 {
     /// Channel message service used to read timelines, resolve messages, and fetch threads.
     pub service: Arc<Svc>,
-    /// Required message command adapter, separate from channel management.
-    pub messages: Arc<dyn crate::domain::ports::ChannelMessageCommands>,
+    /// Shared message application used by message tools.
+    pub messages: Arc<dyn messages::domain::api::MessageServiceApi>,
     /// Entity access service used to ensure the caller is a channel member.
     pub entity_access_service: Arc<AccessSvc>,
     /// The bot these tools act as, on behalf of the requesting user. Defaults
@@ -77,7 +77,7 @@ where
 {
     /// Create a new channel tool context.
     pub fn new(
-        messages: Arc<dyn crate::domain::ports::ChannelMessageCommands>,
+        messages: Arc<dyn messages::domain::api::MessageServiceApi>,
         service: Svc,
         entity_access_service: AccessSvc,
     ) -> Self {
@@ -100,16 +100,15 @@ where
         &self,
         request_context: &RequestContext,
         channel_id: Uuid,
-    ) -> Result<(), ToolCallError> {
+    ) -> Result<EntityAccessReceipt<messages::domain::service::MessageView>, ToolCallError> {
         self.entity_access_service
-            .check_access(
-                Some(&*request_context.user_id),
+            .generate_entity_access_receipt::<messages::domain::service::MessageView>(
+                &request_context.user_id,
+                None,
                 &channel_id.to_string(),
                 EntityType::Channel,
-                AccessLevel::View,
             )
             .await
-            .map(|_| ())
             .map_err(channel_access_error)
     }
 

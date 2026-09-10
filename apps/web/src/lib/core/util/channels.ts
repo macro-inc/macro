@@ -3,15 +3,14 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { invalidateContacts } from '@core/user/contactService';
-
 import { invalidateListChannels } from '@queries/channel/channels';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
-import { storageServiceClient } from '@service-storage/client';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
+import { entityMessagesClient } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 
 type SendContent = {
@@ -49,22 +48,17 @@ export function useSendMessageToPeople() {
     attachments: NewAttachment[],
     navigate?: NavigationOptions
   ) {
-    const message = await storageServiceClient.postMessage({
-      channel_id: channelId,
-      message: {
-        content,
-        attachments,
-        mentions,
-      },
-    });
-
-    if (message.isErr()) {
-      toast.failure('Failed to send message to people');
-      console.error('failed to post message to channel', message.error);
-      return;
-    }
-
-    const messageResponse = message.value;
+    const messageResponse = await entityMessagesClient
+      .post(
+        { type: 'channel', id: channelId },
+        { content, attachments, mentions }
+      )
+      .catch((error) => {
+        toast.failure('Failed to send message to people');
+        console.error('failed to post message to channel', error);
+        return null;
+      });
+    if (!messageResponse) return;
 
     invalidateListChannels();
     invalidateContacts();

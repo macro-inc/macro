@@ -1,13 +1,21 @@
 import type { PropertyTargetEntityType as PropertyEntityType } from '../../../generated/properties/types.gen';
 import type {
-  Thread as CommentThreadRecord,
   DocumentTeamShareResponse,
   GetDocumentResponses,
   GetUserDocumentsHandlerData,
   GithubPullRequest,
+  MessageCursor,
+  MessageListItem,
+  ThreadState,
 } from '../../../generated/storage/types.gen';
-import { type Mentionable, type MentionPart, wrapXml } from '../../mentions';
-import { MacroApiError, MacroError, paginate, unwrap } from '../../utils';
+import {
+  type Mentionable,
+  type MentionPart,
+  type RichMessage,
+  toBody,
+  wrapXml,
+} from '../../mentions';
+import { MacroApiError, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
@@ -20,7 +28,7 @@ type DocumentDetail = GetDocumentResponses[200]['data']['documentMetadata'];
 /** One of a document's comment threads: the thread record and its comments. */
 export interface CommentThread {
   /** The thread record: id, resolved state, owner, timestamps. */
-  thread: CommentThreadRecord;
+  thread: ThreadState;
   /** The thread's comments, in order. */
   comments: Comment[];
 }
@@ -258,35 +266,47 @@ export class Document
 
   /** The document's comment threads, each with its comments. */
   async comments(): Promise<CommentThread[]> {
-    const { data } = unwrap(
-      await this.client.storage.getDocumentComments({
-        path: { document_id: this.id },
-      }),
-    );
-    return data.map(({ thread, comments }) => ({
-      thread,
-      comments: comments.map((c) => Comment.from(this.client, this, c)),
-    }));
+    const parent = { parent_type: 'document', parent_id: this.id };
+    const roots = paginate<MessageListItem, MessageCursor>(async (cursor) => {
+      const page = unwrap(
+        await this.client.storage.messageTimeline({
+          path: parent,
+          query: { selection: JSON.stringify({ limit: 100, cursor }) },
+        }),
+      );
+      return { items: page.items, nextCursor: page.next_cursor };
+    });
+    const threads: CommentThread[] = [];
+    for await (const item of roots) {
+      const { state, root, replies } = unwrap(
+        await this.client.storage.entityMessageGetThread({
+          path: { ...parent, id: item.id },
+        }),
+      );
+      threads.push({
+        thread: state,
+        comments: [root, ...replies].map((comment) =>
+          Comment.from(this.client, this, comment),
+        ),
+      });
+    }
+    return threads;
   }
 
   /**
    * Add a comment. Starts a new unanchored thread, or replies to an existing
    * one when `threadId` is given. Returns the created comment.
    */
-  async comment(text: string, opts?: { threadId?: number }): Promise<Comment> {
-    const { comments } = await this.mutate((c) =>
-      c.storage.createComment({
-        path: { document_id: this.id },
-        body: { text, threadId: opts?.threadId ?? null },
+  async comment(
+    body: string | RichMessage,
+    opts?: { threadId?: string },
+  ): Promise<Comment> {
+    const created = await this.mutate((c) =>
+      c.storage.entityMessageCreate({
+        path: { parent_type: 'document', parent_id: this.id },
+        body: { ...toBody(body), thread_id: opts?.threadId ?? null },
       }),
     );
-    // The response is the whole thread; the new comment has the highest id.
-    const created = comments.reduce<(typeof comments)[number] | undefined>(
-      (a, b) => (!a || b.commentId > a.commentId ? b : a),
-      undefined,
-    );
-    if (!created)
-      throw new MacroError('create comment returned an empty thread');
     return Comment.from(this.client, this, created);
   }
 

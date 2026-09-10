@@ -1,6 +1,9 @@
+import { ChannelInput } from '@channel/Input';
+import { useBlockAliasedName } from '@core/block';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
-import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
+import { MessageThreadById } from '@core/messages/MessageThread';
+import { buildSimpleEntityUrl } from '@core/util/url';
 import { Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import {
@@ -9,20 +12,12 @@ import {
   onCleanup,
   onMount,
   Show,
-  type Signal,
   useContext,
 } from 'solid-js';
-import type { CommentOperations, Layout, Reply, Root } from './commentType';
-import {
-  DiscussionInput,
-  DiscussionProvider,
-  type DiscussionSource,
-  DiscussionThreadView,
-} from './discussion';
+import type { CommentOperations, Layout, Root } from './commentType';
 import {
   messageAttachments,
   messageMentions,
-  messageToDiscussionComment,
 } from './discussion/messageAdapter';
 import { MeasureContainer } from './MeasureContainer';
 
@@ -38,23 +33,13 @@ export const threadMeasureContainerId = (
   threadId: string
 ) => `comment-measure-container-${documentId}-${threadId}`;
 
-export const ThreadContext = createContext<{
-  mentionsSignal: Signal<UserMentionRecord[]>;
-}>({
-  mentionsSignal: [() => [], () => {}],
-});
-
 export type CommentsContextType = {
-  discussionSource?: DiscussionSource;
   setActiveThread: (threadId: string | null) => void;
   setThreadHeight: (threadId: string, height: number) => void;
   canComment: Accessor<boolean>;
   isDocumentOwner: Accessor<boolean>;
   commentOperations: CommentOperations;
-  getCommentById: (id: string) => Root | Reply | undefined;
   documentId: string;
-  ownedComment: (id: string) => boolean;
-  inComment: boolean;
   highlightedCommentId: Accessor<string | null>;
   /**
    * When set (the touch drawer), messages report their inline-edit state so
@@ -70,13 +55,8 @@ export const CommentsContext = createContext<CommentsContextType>({
   isDocumentOwner: () => false,
   commentOperations: {
     createComment: () => Promise.resolve(null),
-    deleteComment: () => Promise.resolve(false),
-    updateComment: () => Promise.resolve(false),
   },
-  getCommentById: (_id) => undefined,
   documentId: '',
-  ownedComment: () => false,
-  inComment: false,
   highlightedCommentId: () => null,
 });
 
@@ -95,31 +75,16 @@ export function ThreadBody(props: {
    * composer at the drawer bottom instead.
    */
   hideReplyInput?: boolean;
-  /**
-   * Render each message's actions as an always-visible ellipsis dropdown
-   * instead of hover-revealed buttons (the touch drawer has no hover).
-   */
-  actionsDropdown?: boolean;
 }) {
   const context = useContext(CommentsContext);
-  const viewThread = () => ({
-    id: props.comment.threadId,
-    ownerId: props.comment.owner,
-    resolved: props.comment.resolved ?? false,
-    comments: [
-      props.comment,
-      ...props.comment.children.map((id) => context.getCommentById(id)),
-    ].flatMap((comment) =>
-      comment?.message ? [messageToDiscussionComment(comment.message)] : []
-    ),
-  });
+  const blockName = useBlockAliasedName();
   return (
     <StaticMarkdownContext theme={props.theme ?? baseCommentTheme}>
       <Show
         when={!props.comment.isNew}
         fallback={
-          <DiscussionInput
-            parent={context.discussionSource?.messageParent?.()}
+          <ChannelInput
+            parent={{ type: 'document', id: context.documentId }}
             input={{ mode: 'reply', placeholder: 'Leave a comment...' }}
             onClose={() => context.setActiveThread(null)}
             onSend={async (snapshot) => {
@@ -133,17 +98,21 @@ export function ThreadBody(props: {
           />
         }
       >
-        <Show when={context.discussionSource}>
-          {(source) => (
-            <DiscussionProvider source={source()}>
-              <DiscussionThreadView
-                thread={viewThread()}
-                hideReplyInput={props.hideReplyInput}
-                onEditingChange={context.setMessageEditing}
-              />
-            </DiscussionProvider>
-          )}
-        </Show>
+        <MessageThreadById
+          parent={{ type: 'document', id: context.documentId }}
+          rootId={props.comment.threadId}
+          canWrite={context.canComment()}
+          canManage={context.isDocumentOwner()}
+          hideReplyInput={props.hideReplyInput}
+          onEditingChange={context.setMessageEditing}
+          targetId={context.highlightedCommentId()}
+          buildLink={(message) =>
+            buildSimpleEntityUrl(
+              { type: blockName, id: context.documentId },
+              { comment_id: message.id }
+            )
+          }
+        />
       </Show>
     </StaticMarkdownContext>
   );

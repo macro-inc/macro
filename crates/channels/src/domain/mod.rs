@@ -32,10 +32,6 @@ pub mod side_effects;
 #[cfg(feature = "ports")]
 pub mod teammate_dms;
 
-/// Channel compatibility commands over the shared message application.
-#[cfg(feature = "ports")]
-pub mod message_commands;
-
 /// Channel audience policy for authored group mentions.
 #[cfg(feature = "ports")]
 pub mod group_mentions;

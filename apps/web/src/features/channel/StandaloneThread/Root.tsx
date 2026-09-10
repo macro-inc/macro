@@ -1,8 +1,10 @@
 import { DebugSuspense } from '@channel/DebugSuspense';
-import { useChannelMessagesByIdsQuery } from '@queries/channel/channel-messages';
-import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
-import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
+import { useThreadRepliesQuery } from '@queries/messages/thread-replies';
+import { useMessageTimelineByIdsQuery } from '@queries/messages/timeline';
+import type {
+  Message as EntityMessage,
+  MessageListItem,
+} from '@service-storage/messages';
 import { createSignal, type ParentProps } from 'solid-js';
 import { createFocusRequest } from '../Thread/focus-request';
 import { DEFAULT_VISIBLE_REPLY_COUNT } from '../Thread/utils/thread-reply-indicator-helpers';
@@ -11,7 +13,7 @@ import { StandaloneThreadContext } from './context';
 type RootProps = ParentProps<{
   channelId: string;
   messageId: string;
-  data?: ApiChannelMessage;
+  data?: MessageListItem;
 }>;
 
 export function Root(props: RootProps) {
@@ -27,8 +29,8 @@ function RootInner(props: RootProps) {
   const [isReplying, setIsReplying] = createSignal(false);
   const replyInputFocusRequest = createFocusRequest();
 
-  const parentQuery = useChannelMessagesByIdsQuery(
-    () => props.channelId,
+  const parentQuery = useMessageTimelineByIdsQuery(
+    () => ({ type: 'channel', id: (() => props.channelId)() }),
     () => (props.data ? [] : [props.messageId])
   );
 
@@ -36,17 +38,17 @@ function RootInner(props: RootProps) {
   const hasThread = () => (parent()?.thread.reply_count ?? 0) > 0;
 
   const repliesQuery = useThreadRepliesQuery(
-    () => props.channelId,
+    () => ({ type: 'channel', id: (() => props.channelId)() }),
     () => props.messageId,
     () => hasThread() || isReplying()
   );
 
-  const replies = (): ApiThreadReply[] =>
+  const replies = (): EntityMessage[] =>
     repliesQuery.data ?? parent()?.thread.preview ?? [];
 
   const hasReplies = () => replies().length > 0;
 
-  const displayReplies = (): ApiThreadReply[] => {
+  const displayReplies = (): EntityMessage[] => {
     const all = replies();
     if (isExpanded()) return all;
     return all.slice(0, DEFAULT_VISIBLE_REPLY_COUNT);

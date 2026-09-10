@@ -1,11 +1,12 @@
 use std::future::Future;
 
-use channels::domain::{
-    models::{PostMessageNotificationPolicy, PostMessageRequest, Sender, SimpleMention},
-    ports::ChannelMessageCommands,
-};
+use channels::domain::models::Sender;
 use macro_user_id::user_id::MacroUserIdStr;
 use mention_utils::serialize::user_mention;
+use messages::domain::{
+    api::MessageCommands,
+    models::{MessageAttribution, PostMessage, PostMessageNotificationPolicy, SimpleMention},
+};
 use rootcause::{Report, prelude::ResultExt};
 use uuid::Uuid;
 
@@ -23,21 +24,24 @@ pub trait SupportChannelMessageGateway: Send + Sync {
         &self,
         actor: Sender,
         channel_id: Uuid,
-        request: PostMessageRequest,
+        request: PostMessage,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Outbound bridge that verifies the support sender's current channel membership.
-pub struct AuthorizedSupportChannelMessages<'a, S, A>(pub &'a S, pub &'a A);
+pub struct AuthorizedSupportChannelMessages<A>(
+    pub std::sync::Arc<dyn MessageCommands>,
+    pub std::sync::Arc<A>,
+);
 
-impl<S: ChannelMessageCommands, A: entity_access::domain::ports::EntityAccessService>
-    SupportChannelMessageGateway for AuthorizedSupportChannelMessages<'_, S, A>
+impl<A: entity_access::domain::ports::EntityAccessService> SupportChannelMessageGateway
+    for AuthorizedSupportChannelMessages<A>
 {
     async fn post_message(
         &self,
         actor: Sender,
         channel_id: Uuid,
-        request: PostMessageRequest,
+        request: PostMessage,
     ) -> Result<(), Report> {
         let user = actor
             .as_user()
@@ -53,7 +57,7 @@ impl<S: ChannelMessageCommands, A: entity_access::domain::ports::EntityAccessSer
             .await
             .context("support sender must still be a channel member")?;
         self.0
-            .post_message(access, request)
+            .post(access, request)
             .await
             .context("failed to post Macro support welcome message")?;
         Ok(())
@@ -99,14 +103,15 @@ If you have any feedback or find any bugs let us know here.",
         .post_message(
             Sender::new_from_user(julia),
             channel_id,
-            PostMessageRequest {
+            PostMessage {
                 content: welcome,
                 mentions,
                 thread_id: None,
                 attachments: Vec::new(),
                 nonce: None,
                 notification_policy: PostMessageNotificationPolicy::MentionsOnly,
-                triggered_by: None,
+                attribution: MessageAttribution::Unprompted,
+                anchor: None,
             },
         )
         .await?;

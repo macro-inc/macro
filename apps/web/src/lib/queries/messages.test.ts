@@ -2,10 +2,12 @@ import {
   useEntitySubscription,
   useReopenTrackedEntitiesOnReconnect,
 } from '@service-connection/client';
+import type { MessageChange } from '@service-storage/generated/schemas/messageChange';
 import type { MessageParent } from '@service-storage/messages';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useMessageThreadQuery } from './messages';
+import { useChannelReferenceThreadsQuery } from './messages';
+import { useMessageThreadQuery } from './messages/thread-replies';
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
@@ -88,18 +90,6 @@ it('subscribes and heartbeats a linked document drawer without a document block'
   expect(sent('open')).toHaveLength(1);
   vi.advanceTimersByTime(20_000);
   expect(sent('ping')).toHaveLength(1);
-  for (const type of ['posted', 'edited', 'updated']) {
-    for (const listener of mocks.updates) {
-      listener({
-        type: 'message_update',
-        data: { parent, root_id: 'root', change: { type } },
-      });
-    }
-  }
-  expect(mocks.invalidate).toHaveBeenCalledTimes(3);
-  expect(mocks.invalidate).toHaveBeenLastCalledWith({
-    queryKey: ['entity-messages', 'document', parent.id, 'thread', 'root'],
-  });
   close();
   expect(sent('close')).toHaveLength(1);
   vi.advanceTimersByTime(20_000);
@@ -131,6 +121,70 @@ it.each(['drawer', 'block'] as const)(
   }
 );
 
+it('shares heartbeat and reconnect work across many threads in one parent', () => {
+  mount(useReopenTrackedEntitiesOnReconnect);
+  const closeBlock = mountBlock();
+  const closeThreads = Array.from({ length: 50 }, (_, index) =>
+    mount(() =>
+      useMessageThreadQuery(
+        () => parent,
+        () => `root-${index}`
+      )
+    )
+  );
+  expect(sent('open')).toHaveLength(1);
+  expect(mocks.invalidate).toHaveBeenCalledTimes(3);
+  mocks.invalidate.mockClear();
+  vi.advanceTimersByTime(20_000);
+  expect(sent('ping')).toHaveLength(1);
+  for (const reconnect of mocks.reconnects) reconnect();
+  expect(sent('open')).toHaveLength(2);
+  expect(mocks.invalidate).toHaveBeenCalledTimes(3);
+
+  closeThreads[0]();
+  mocks.invalidate.mockClear();
+  for (const reconnect of mocks.reconnects) reconnect();
+  expect(mocks.invalidate).toHaveBeenCalledTimes(3);
+  for (const close of closeThreads.slice(1)) close();
+  mocks.invalidate.mockClear();
+  for (const reconnect of mocks.reconnects) reconnect();
+  expect(mocks.invalidate).not.toHaveBeenCalled();
+  expect(sent('close')).toHaveLength(0);
+  vi.advanceTimersByTime(20_000);
+  expect(sent('ping')).toHaveLength(2);
+  closeBlock();
+  expect(sent('close')).toHaveLength(1);
+  vi.advanceTimersByTime(20_000);
+  expect(sent('ping')).toHaveLength(2);
+});
+
+it('refreshes cached messages after all views close and the parent reopens', () => {
+  const open = () =>
+    mount(() =>
+      useMessageThreadQuery(
+        () => parent,
+        () => 'root'
+      )
+    );
+  const close = open();
+  expect(mocks.invalidate).toHaveBeenCalledTimes(3);
+  close();
+  mocks.invalidate.mockClear();
+  open();
+  expect(sent('open')).toHaveLength(2);
+  expect(mocks.invalidate).toHaveBeenCalledTimes(3);
+});
+
+it('suspends the shared heartbeat in a background tab', () => {
+  mountBlock();
+  mocks.focused.mockReturnValue(false);
+  vi.advanceTimersByTime(40_000);
+  expect(sent('ping')).toHaveLength(0);
+  mocks.focused.mockReturnValue(true);
+  vi.advanceTimersByTime(20_000);
+  expect(sent('ping')).toHaveLength(1);
+});
+
 it('moves the drawer subscription with its source and reopens all remaining owners on reconnect', () => {
   mountBlock();
   const [source, setSource] = createSignal(parent);
@@ -150,11 +204,35 @@ it('moves the drawer subscription with its source and reopens all remaining owne
   expect(sent('open', 'next-document')).toHaveLength(2);
   expect(mocks.invalidate).toHaveBeenLastCalledWith({
     queryKey: [
-      'entity-messages',
-      'document',
-      'next-document',
-      'thread',
-      'root',
+      'messages',
+      'threadReplies',
+      { type: 'document', id: 'next-document' },
     ],
   });
+});
+
+it('refreshes reference discovery only for channel membership or message changes', () => {
+  mount(() =>
+    useChannelReferenceThreadsQuery(
+      () => parent,
+      () => true
+    )
+  );
+  const emit = (type: MessageChange['type'], parentType = 'channel') => {
+    for (const listener of mocks.updates)
+      listener({
+        type: 'message_update',
+        data: { parent: { type: parentType, id: 'source' }, change: { type } },
+      });
+  };
+  emit('typing');
+  emit('reaction_changed');
+  emit('posted', 'document');
+  expect(mocks.invalidate).not.toHaveBeenCalled();
+  emit('posted');
+  emit('edited');
+  emit('message_deleted');
+  for (const listener of mocks.updates)
+    listener({ type: 'channel_participant_removed' });
+  expect(mocks.invalidate).toHaveBeenCalledTimes(4);
 });

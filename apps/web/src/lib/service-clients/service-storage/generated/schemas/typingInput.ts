@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TypingInputNonce } from './typingInputNonce';
+import type { TypingInputThreadId } from './typingInputThreadId';
 
 /**
  * Transient typing update.
@@ -14,4 +15,6 @@ export interface TypingInput {
   active: boolean;
   /** Client mutation nonce. */
   nonce?: TypingInputNonce;
+  /** Root being replied to, absent for the parent composer. */
+  thread_id?: TypingInputThreadId;
 }

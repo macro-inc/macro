@@ -190,6 +190,7 @@ async fn edit_pdf_free_comment_anchor(
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
+        messages::domain::ports::NoMessageEventPublisher,
     )
     .edit(
         &user.to_owned().try_into().unwrap(),

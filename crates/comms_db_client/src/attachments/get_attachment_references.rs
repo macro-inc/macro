@@ -72,7 +72,7 @@ pub async fn get_attachment_references(
                 ChannelReference,
                 r#"
                 SELECT 
-                    a.channel_id                     AS "channel_id!: uuid::Uuid",
+                    m.parent_entity_id::uuid                     AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     a.message_id                     AS "message_id!: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",
@@ -80,9 +80,9 @@ pub async fn get_attachment_references(
                     m.content                        AS "message_content!",         -- String
                     m.created_at                     AS "message_created_at!: chrono::DateTime<chrono::Utc>",
                     a.created_at                     AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
-                FROM comms_channel_attachments a
-                JOIN comms_channel_messages m ON a.message_id = m.id
-                JOIN comms_channels c ON a.channel_id = c.id
+                FROM comms_attachments a
+                JOIN comms_messages m ON a.message_id = m.id
+                JOIN comms_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
                 WHERE a.entity_type = $1
                   AND a.entity_id  = $2
@@ -105,7 +105,7 @@ pub async fn get_attachment_references(
                 ChannelReference,
                 r#"
                 SELECT 
-                    m.channel_id                     AS "channel_id!: uuid::Uuid",
+                    m.parent_entity_id::uuid                     AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     m.id                             AS "message_id!: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",
@@ -114,8 +114,8 @@ pub async fn get_attachment_references(
                     m.created_at                     AS "message_created_at!: chrono::DateTime<chrono::Utc>",
                     em.created_at                    AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
                 FROM comms_entity_mentions em
-                JOIN comms_channel_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')
-                JOIN comms_channels c ON m.channel_id = c.id
+                JOIN comms_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')
+                JOIN comms_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
                 WHERE em.entity_type = $1
                   AND em.entity_id  = $2

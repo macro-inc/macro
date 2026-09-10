@@ -157,7 +157,8 @@ pub struct ThreadState {
     pub user_id: String,
     /// Whether this discussion has been resolved.
     pub resolved: bool,
-    /// No anchor means a discussion on the entire parent.
+    /// No anchor means a discussion on the entire parent. Deleted Markdown
+    /// threads retain their mark identity so closed documents can reconcile it.
     pub anchor: Option<ThreadAnchor>,
     /// Creation time of the discussion.
     pub created_at: DateTime<Utc>,
@@ -165,6 +166,20 @@ pub struct ThreadState {
     pub updated_at: DateTime<Utc>,
     /// Explicit deletion of the entire thread, distinct from root deletion.
     pub deleted_at: Option<DateTime<Utc>>,
+}
+
+/// Partial changes to the lifecycle and placement of a document discussion.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub struct ThreadPatch {
+    /// Resolve or reopen the discussion; absent preserves its state.
+    pub resolved: Option<bool>,
+    /// Move a Markdown discussion to the document when its marked text is removed.
+    #[serde(default)]
+    pub detach_anchor: bool,
+    /// Client nonce for the shared thread update event.
+    pub nonce: Option<String>,
 }
 
 /// Public bot profile attached to bot-authored messages.
@@ -381,4 +396,46 @@ pub struct PostMessage {
     pub attachments: Vec<NewAttachment>,
     /// Client nonce for optimistic reconciliation.
     pub nonce: Option<String>,
+}
+
+/// Root message with its small thread preview, independent of its parent type.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct MessageListItem {
+    /// The same canonical message returned by item reads and writes.
+    #[serde(flatten)]
+    pub message: Message,
+    /// Thread metadata, independent of the first message's lifecycle.
+    pub state: ThreadState,
+    /// Bounded reply preview; full replies load on expansion.
+    pub thread: MessageThreadPreview,
+}
+
+/// Thread counts and its oldest three live replies.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct MessageThreadPreview {
+    /// Total live reply count.
+    pub reply_count: i64,
+    /// Creation time of the latest live reply.
+    pub latest_reply_at: Option<DateTime<Utc>>,
+    /// Bounded preview using the canonical message shape.
+    pub preview: Vec<Message>,
+}
+
+impl models_pagination::Identify for MessageListItem {
+    type Id = Uuid;
+    fn id(&self) -> Uuid {
+        self.message.id
+    }
+}
+impl models_pagination::SortOn<models_pagination::CreatedAt> for MessageListItem {
+    fn sort_on(
+        sort_type: models_pagination::CreatedAt,
+    ) -> impl FnMut(&Self) -> models_pagination::CursorVal<models_pagination::CreatedAt> {
+        move |item| models_pagination::CursorVal {
+            sort_type,
+            last_val: item.message.created_at,
+        }
+    }
 }

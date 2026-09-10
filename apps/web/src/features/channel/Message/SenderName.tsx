@@ -1,6 +1,6 @@
 import type { MessageData } from '@core/messages/types';
 import { getDisplayName, tryMacroId } from '@core/user';
-import { getBotDisplayName } from '@queries/channel/message-sender';
+import { getBotDisplayName } from '@queries/messages/message-sender';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { useMessage } from './context';
@@ -27,5 +27,7 @@ export function SenderName(props: { message: MessageData }) {
   const displayName = () => getDisplayName(macroId());
   const agentName = () =>
     getBotDisplayName(props.message.sender_id, props.message.sender);
-  return <>{agentName() ?? displayName()}</>;
+  return (
+    <>{props.message.imported_author?.name ?? agentName() ?? displayName()}</>
+  );
 }

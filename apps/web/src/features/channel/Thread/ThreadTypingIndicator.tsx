@@ -1,16 +1,17 @@
 import { idToDisplayName } from '@core/user';
-import { getTypingUsersForChannel } from '@queries/channel/typing';
+import { getTypingUsers } from '@queries/messages/typing';
+import type { MessageParent } from '@service-storage/messages';
 import { createMemo, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 
 type ThreadTypingIndicatorProps = {
-  channelId: string;
+  parent: MessageParent;
   threadId: string | null;
 };
 
 export function ThreadTypingIndicator(props: ThreadTypingIndicatorProps) {
   const typingUsers = createMemo(() => {
-    const users = getTypingUsersForChannel(props.channelId, props.threadId);
+    const users = getTypingUsers(props.parent, props.threadId);
     return Array.from(users);
   });
 

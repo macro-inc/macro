@@ -61,14 +61,14 @@ export const usePdfCommentEffects = () => {
   );
   let navigated: string | null = null;
   createEffect(() => {
-    const requested = target();
+    const requested = target.messageId();
     if (!requested) {
       navigated = null;
       return;
     }
     if (requested === navigated) return;
     const comment = commentsStore.get.find(
-      (comment) => comment.id === requested
+      (comment) => comment.id === requested || comment.id === target.rootId()
     );
     if (!comment) return;
     activeCommentThreadSignal.set(comment.threadId);

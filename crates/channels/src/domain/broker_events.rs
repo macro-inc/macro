@@ -15,7 +15,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::models::{ChannelType, MutatedAttachment, SimpleMention};
+use crate::domain::models::{ChannelType, SimpleMention};
 
 /// Attachment payload carried by channel wire events.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,8 +31,8 @@ pub struct ChannelEventAttachment {
     pub created_at: DateTime<Utc>,
 }
 
-impl From<&MutatedAttachment> for ChannelEventAttachment {
-    fn from(attachment: &MutatedAttachment) -> Self {
+impl From<&messages::domain::models::MessageAttachment> for ChannelEventAttachment {
+    fn from(attachment: &messages::domain::models::MessageAttachment) -> Self {
         Self {
             attachment_id: attachment.id,
             entity_type: attachment.entity_type.clone(),

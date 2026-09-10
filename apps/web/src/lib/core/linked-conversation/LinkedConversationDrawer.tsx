@@ -6,6 +6,7 @@ import { openDocument } from '@core/component/LexicalMarkdown/component/core/Blo
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import type { MessageParent } from '@service-storage/messages';
+import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { LinkedConversation } from './LinkedConversation';
@@ -39,7 +40,7 @@ export function LinkedConversationDrawer(props: LinkedConversationDrawerProps) {
   const document = useDocumentMetadataQuery(() =>
     props.parent.type === 'document' ? props.parent.id : ''
   );
-  const openInParent = (clickedMessageId?: string) => {
+  const openInParent = createCallback((clickedMessageId?: string) => {
     const target = clickedMessageId ?? props.messageId;
     const isReply = target !== props.messageId;
     if (props.parent.type === 'channel') {
@@ -60,7 +61,7 @@ export function LinkedConversationDrawer(props: LinkedConversationDrawerProps) {
       return;
     }
     drawer.close();
-  };
+  });
 
   return (
     <SplitDrawer
@@ -104,7 +105,13 @@ function DrawerConversation(props: {
   return (
     <Show
       when={source.root()}
-      fallback={<p class="px-2 text-sm text-ink-muted">Loading thread…</p>}
+      fallback={
+        <p class="px-2 text-sm text-ink-muted">
+          {source.unavailable?.()
+            ? 'This thread is unavailable.'
+            : 'Loading thread…'}
+        </p>
+      }
     >
       <LinkedConversation
         source={source}

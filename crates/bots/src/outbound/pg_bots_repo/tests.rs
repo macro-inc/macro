@@ -981,10 +981,132 @@ async fn create_channel_scoped_bot_creates_bot_participant_and_token(
     let authenticated = service
         .authenticate_channel_token(channel_id, &created.bot_token)
         .await?;
-    assert_eq!(authenticated.bot_id, created.bot.id);
-    assert_eq!(authenticated.kind, BotKind::Owned);
+    assert_eq!(
+        authenticated.get_authenticated_bot_auth()?.bot_id(),
+        created.bot.id
+    );
+    assert_eq!(authenticated.entity().entity_id, channel_id.to_string());
     assert!(token_last_used_at(&pool, created.token.id).await?.is_some());
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn autonomous_webhook_keeps_its_membership_after_owner_leaves(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use entity_access::domain::{models::BotReceiptScope, ports::EntityAccessService};
+    use messages::domain::{
+        models::PostMessage,
+        ports::{MessageReferenceAccess, NoMessageEventPublisher},
+        service::{MessageService, MessageWrite},
+    };
+
+    let service = service(&pool);
+    let channel_id = Uuid::new_v4();
+    insert_channel_member(&pool, channel_id, USER_OWNER).await?;
+    let created = service
+        .create_channel_scoped_bot(
+            user_id(USER_OWNER),
+            channel_id,
+            create_channel_scoped_req("autonomous-webhook"),
+        )
+        .await?;
+    sqlx::query!("UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1 AND user_id = $2", channel_id, USER_OWNER)
+        .execute(&pool).await?;
+    let access_service = entity_access::domain::service::EntityAccessServiceImpl::new(
+        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+    );
+    assert!(
+        access_service
+            .generate_entity_access_receipt::<MessageWrite>(
+                &user_id(USER_OWNER).0,
+                None,
+                &channel_id.to_string(),
+                EntityType::Channel,
+            )
+            .await
+            .is_err()
+    );
+
+    let receipt = service
+        .authenticate_channel_token(channel_id, &created.bot_token)
+        .await?;
+    assert!(receipt.acting_user_id().is_none());
+    assert_eq!(
+        receipt.get_authenticated_bot_auth()?.scope(),
+        &BotReceiptScope::Channel { channel_id }
+    );
+    let references =
+        messages::outbound::entity_access_audience::EntityAccessMessageReferences(access_service);
+    assert!(
+        references
+            .can_view(receipt.auth(), EntityType::Channel, &channel_id.to_string())
+            .await?
+    );
+    assert!(
+        !references
+            .can_view(
+                receipt.auth(),
+                EntityType::Channel,
+                &Uuid::new_v4().to_string()
+            )
+            .await?
+    );
+    assert!(
+        !references
+            .can_view(
+                receipt.auth(),
+                EntityType::Document,
+                "owner-private-document"
+            )
+            .await?
+    );
+    let posted = MessageService::new(
+        messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+        NoMessageEventPublisher,
+    )
+    .post(
+        receipt,
+        PostMessage {
+            content: "The installed integration remains active".into(),
+            thread_id: None,
+            anchor: None,
+            mentions: vec![],
+            attachments: vec![],
+            nonce: None,
+            notification_policy: Default::default(),
+            attribution: messages::domain::models::MessageAttribution::Unprompted,
+        },
+    )
+    .await?;
+    assert_eq!(
+        posted.sender_id.as_ref(),
+        created.bot.id.into_storage_id().as_ref()
+    );
+    assert_eq!(posted.parent.entity_id(), channel_id.to_string());
+    assert!(
+        service
+            .channel_message_access(created.bot.id, channel_id)
+            .await
+            .is_ok()
+    );
+
+    service
+        .remove_bot_from_channel(user_id(USER_OWNER), channel_id, created.bot.id)
+        .await?;
+    assert!(
+        service
+            .authenticate_channel_token(channel_id, &created.bot_token)
+            .await
+            .is_err()
+    );
+    assert!(
+        service
+            .channel_message_access(created.bot.id, channel_id)
+            .await
+            .is_err()
+    );
     Ok(())
 }
 
@@ -1184,8 +1306,8 @@ async fn authenticate_channel_token_accepts_migrated_uuid_token(
         .authenticate_channel_token(channel_id, &raw_token)
         .await?;
 
-    assert_eq!(authenticated.bot_id, bot.id);
-    assert_eq!(authenticated.kind, BotKind::Owned);
+    assert_eq!(authenticated.get_authenticated_bot_auth()?.bot_id(), bot.id);
+    assert_eq!(authenticated.entity().entity_id, channel_id.to_string());
     assert!(token_last_used_at(&pool, token_id).await?.is_some());
 
     Ok(())

@@ -44,7 +44,6 @@ use channels::{
     },
     inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
     outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
@@ -953,7 +952,6 @@ async fn run() -> anyhow::Result<()> {
 
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(conn_gateway_client.clone()),
         NotificationChannelSender::new(notification_ingress_service.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
@@ -967,6 +965,17 @@ async fn run() -> anyhow::Result<()> {
     let message_realtime = messages::outbound::connection_gateway::ConnectionGatewayMessages(
         conn_gateway_client.clone(),
     );
+    let discussion_delivery = messages::domain::delivery::DiscussionDelivery::new(
+        messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()),
+        messages::outbound::entity_access_audience::EntityAccessMessageAudience(
+            (*entity_access_service).clone(),
+        ),
+        message_realtime.clone(),
+        messages::outbound::notification_sender::MessageNotificationSender(
+            notification_ingress_service.clone(),
+        ),
+    )
+    .with_sharing(messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()));
     let message_delivery = messages::domain::delivery::ParentMessagePublisher::new(
         channels::domain::message_delivery::ChannelMessageDelivery::new(
             PgChannelsRepo::new(db.clone()),
@@ -974,21 +983,12 @@ async fn run() -> anyhow::Result<()> {
             PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
             message_realtime.clone(),
         ),
-        messages::domain::delivery::DiscussionDelivery::new(
-            messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()),
-            messages::outbound::entity_access_audience::EntityAccessMessageAudience(
-                (*entity_access_service).clone(),
-            ),
-            message_realtime,
-            messages::outbound::notification_sender::MessageNotificationSender(
-                notification_ingress_service.clone(),
-            ),
-        )
-        .with_sharing(messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone())),
+        discussion_delivery.clone(),
     );
     let annotation_service = Arc::new(messages::domain::annotations::AnnotationService::new(
         macro_db_client::annotations::repository::PgAnnotationRepository(db.clone()),
         (*entity_access_service).clone(),
+        discussion_delivery,
     ));
     let messages_state = messages::inbound::axum_router::MessagesRouterState {
         service: Arc::new(
@@ -1021,11 +1021,7 @@ async fn run() -> anyhow::Result<()> {
     };
 
     let channels_service = Arc::new(channels_service);
-    let channel_messages = Arc::new(
-        channels::domain::message_commands::ChannelMessageAdapter::new(
-            messages_state.service.clone(),
-        ),
-    );
+    let channel_messages = messages_state.service.clone();
 
     let teammate_dms_brokers = config.kafka_brokers.as_ref().to_string();
     consumer_tracker.spawn({
@@ -1471,7 +1467,6 @@ async fn run() -> anyhow::Result<()> {
         messages_state,
         annotation_service,
         channels_state: ChannelsRouterState::from_arc(
-            channel_messages,
             channels_service,
             (*entity_access_service).clone(),
             authorization_state.clone(),

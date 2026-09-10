@@ -9,6 +9,7 @@ mock = []
 schema = ["dep:utoipa", "item_filters/schema"]
 
 [dependencies]
+messages = { path = "../messages" }
 anyhow = { workspace = true }
 call = { path = "../call", default-features = false }
 channels = { path = "../channels", default-features = false, features = ["list"] }

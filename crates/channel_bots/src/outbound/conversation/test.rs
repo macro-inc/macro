@@ -18,7 +18,6 @@ fn posted(parent: MessageParent, bot: bool) -> MessageEvent {
     }
     MessageEvent {
         parent,
-        root_id: message.id,
         actor: message.sender_id.as_ref().to_owned(),
         nonce: None,
         change: MessageChange::Posted {

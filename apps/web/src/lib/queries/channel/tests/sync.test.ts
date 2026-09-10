@@ -1,251 +1,327 @@
-/**
- * @vitest-environment jsdom
- */
+vi.mock('@queries/messages/subscription', () => ({
+  useMessageSubscription: () => {},
+}));
 
+/** @vitest-environment jsdom */
 import type {
-  ApiChannelMessage,
-  ApiThreadReply,
-} from '@service-storage/client';
-import type { ApiMessageAttachment as ApiAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
+  Message,
+  MessageListItem,
+  MessageParent,
+  MessageThread,
+} from '@service-storage/messages';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let testQueryClient: QueryClient;
-
 vi.mock('../../client', () => ({
   get queryClient() {
     return testQueryClient;
   },
 }));
 
-vi.mock('@service-storage/client', () => ({
-  storageServiceClient: {},
-}));
-
-import type { ChannelMessagesData } from '../channel-messages';
-import { getChannelMessagesQueryKey } from '../channel-messages';
+import { MessageNonceKeys, messageKeys } from '../../messages/keys';
 import {
-  normalizeChannelMessageSender,
-  normalizeThreadReplySender,
-} from '../message-sender';
+  applyMessage,
+  applyThreadState,
+  handleMessageEvent,
+} from '../../messages/sync';
+import { getThreadRepliesQueryKey } from '../../messages/thread-replies';
 import {
-  handleCommsAttachment,
-  handleCommsMessage,
-  handleCommsReaction,
-} from '../sync';
-import { getThreadRepliesQueryKey } from '../thread-replies';
+  getMessageTimelineQueryKey,
+  type MessageTimelineData,
+} from '../../messages/timeline';
+import { clearTypingIndicators, getTypingUsers } from '../../messages/typing';
+import { registerNonce } from '../../nonce';
 
-function createPaginatedMessage(
+const time = '2026-09-09T00:00:00Z';
+const message = (
+  parent: MessageParent,
   id: string,
-  createdAt: string,
-  overrides: Partial<ApiChannelMessage> = {}
-): ApiChannelMessage {
-  return normalizeChannelMessageSender({
-    id,
-    channel_id: 'channel-1',
-    sender_id: 'user-1',
-    content: `Message ${id}`,
-    created_at: createdAt,
-    updated_at: createdAt,
-    deleted_at: undefined,
-    edited_at: undefined,
-    attachments: [],
-    reactions: [],
-    thread: {
-      preview: [],
-      reply_count: 0,
-      latest_reply_at: null,
-    },
-    ...overrides,
-  });
-}
-
-function createThreadReply(
-  id: string,
-  createdAt: string,
-  overrides: Partial<ApiThreadReply> = {}
-): ApiThreadReply {
-  return normalizeThreadReplySender({
-    id,
-    sender_id: 'user-1',
-    content: `Reply ${id}`,
-    created_at: createdAt,
-    updated_at: createdAt,
-    edited_at: undefined,
-    attachments: [],
-    reactions: [],
-    ...overrides,
-  });
-}
-
-function createAttachment(id: string, messageId: string): ApiAttachment {
-  return {
-    id,
-    channel_id: 'channel-1',
-    message_id: messageId,
-    created_at: '2024-01-03T02:00:00.000Z',
-    updated_at: '2024-01-03T02:00:00.000Z',
-    entity_id: `entity-${id}`,
-    entity_type: 'Document',
-    s3_key: `${id}.txt`,
-    file_name: `${id}.txt`,
-    file_size: 100,
-    mime_type: 'text/plain',
-  } as ApiAttachment;
-}
-
-function createChannelMessagesData(
-  pages: Array<Array<ApiChannelMessage>>
-): ChannelMessagesData {
-  return {
-    pages: pages.map((items, index) => ({
-      items,
-      next_cursor: index === pages.length - 1 ? null : `next-${index}`,
-      previous_cursor: index === 0 ? null : `prev-${index}`,
-    })),
-    pageParams: pages.map(() => null),
-  };
-}
-
-describe('channel sync', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    testQueryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
-  });
-
-  afterEach(() => {
-    testQueryClient.clear();
-  });
-
-  it('replaces top-level attachments in the rendered cache', () => {
-    testQueryClient.setQueryData(
-      getChannelMessagesQueryKey('channel-1'),
-      createChannelMessagesData([
-        [createPaginatedMessage('msg-1', '2024-01-03T00:00:00.000Z')],
-      ])
-    );
-
-    handleCommsAttachment({
-      channel_id: 'channel-1',
-      message_id: 'msg-1',
-      nonce: 'external-attachment',
-      attachments: [createAttachment('att-1', 'msg-1')],
-    });
-
-    const cached = testQueryClient.getQueryData<ChannelMessagesData>(
-      getChannelMessagesQueryKey('channel-1')
-    );
-    expect(cached?.pages[0].items[0].attachments).toEqual([
-      expect.objectContaining({ id: 'att-1', message_id: 'msg-1' }),
-    ]);
-  });
-
-  it('soft-deletes a top-level message with replies on external delete', () => {
-    testQueryClient.setQueryData(
-      getChannelMessagesQueryKey('channel-1'),
-      createChannelMessagesData([
-        [
-          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
-            thread: {
-              preview: [
-                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
-              ],
-              reply_count: 1,
-              latest_reply_at: '2024-01-03T01:00:00.000Z',
-            },
-          }),
-        ],
-      ])
-    );
-
-    handleCommsMessage({
-      channel_id: 'channel-1',
-      id: 'parent-1',
-      thread_id: null,
-      deleted_at: '2024-01-03T03:00:00.000Z',
-      nonce: 'external-delete',
-    } as Parameters<typeof handleCommsMessage>[0]);
-
-    const cached = testQueryClient.getQueryData<ChannelMessagesData>(
-      getChannelMessagesQueryKey('channel-1')
-    );
-    const message = cached?.pages[0].items[0];
-    expect(message?.id).toBe('parent-1');
-    expect(message?.deleted_at).toBe('2024-01-03T03:00:00.000Z');
-    expect(message?.thread.preview).toHaveLength(1);
-  });
-
-  it('removes a top-level message without replies on external delete', () => {
-    testQueryClient.setQueryData(
-      getChannelMessagesQueryKey('channel-1'),
-      createChannelMessagesData([
-        [
-          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z'),
-          createPaginatedMessage('parent-2', '2024-01-03T01:00:00.000Z'),
-        ],
-      ])
-    );
-
-    handleCommsMessage({
-      channel_id: 'channel-1',
-      id: 'parent-1',
-      thread_id: null,
-      deleted_at: '2024-01-03T03:00:00.000Z',
-      nonce: 'external-delete',
-    } as Parameters<typeof handleCommsMessage>[0]);
-
-    const cached = testQueryClient.getQueryData<ChannelMessagesData>(
-      getChannelMessagesQueryKey('channel-1')
-    );
-    expect(cached?.pages[0].items.map((item) => item.id)).toEqual(['parent-2']);
-  });
-
-  it('updates thread reply reactions without the legacy channel cache', () => {
-    testQueryClient.setQueryData(
-      getChannelMessagesQueryKey('channel-1'),
-      createChannelMessagesData([
-        [
-          createPaginatedMessage('parent-1', '2024-01-03T00:00:00.000Z', {
-            thread: {
-              preview: [
-                createThreadReply('reply-1', '2024-01-03T01:00:00.000Z'),
-              ],
-              reply_count: 1,
-              latest_reply_at: '2024-01-03T01:00:00.000Z',
-            },
-          }),
-        ],
-      ])
-    );
-    testQueryClient.setQueryData(
-      getThreadRepliesQueryKey('channel-1', 'parent-1'),
-      [createThreadReply('reply-1', '2024-01-03T01:00:00.000Z')]
-    );
-
-    handleCommsReaction({
-      channel_id: 'channel-1',
-      message_id: 'reply-1',
-      nonce: 'external-reaction',
-      reactions: [{ emoji: '👍', users: ['user-1'] }],
-    });
-
-    const replies = testQueryClient.getQueryData<Array<ApiThreadReply>>(
-      getThreadRepliesQueryKey('channel-1', 'parent-1')
-    );
-    expect(replies?.[0].reactions).toEqual([
-      { emoji: '👍', users: ['user-1'] },
-    ]);
-
-    const cached = testQueryClient.getQueryData<ChannelMessagesData>(
-      getChannelMessagesQueryKey('channel-1')
-    );
-    expect(cached?.pages[0].items[0].thread.preview[0].reactions).toEqual([
-      { emoji: '👍', users: ['user-1'] },
-    ]);
+  thread_id?: string
+): Message => ({
+  id,
+  parent,
+  thread_id,
+  sender_id: 'macro|a@example.com',
+  content: id,
+  created_at: time,
+  updated_at: time,
+  mentions: [],
+  attachments: [],
+  reactions: [],
+});
+const state = {
+  root_id: 'root',
+  user_id: 'macro|a@example.com',
+  created_at: time,
+  updated_at: time,
+  resolved: false,
+};
+const item = (parent: MessageParent): MessageListItem => ({
+  ...message(parent, 'root'),
+  state,
+  thread: { reply_count: 0, latest_reply_at: null, preview: [] },
+});
+beforeEach(() => {
+  testQueryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
   });
 });
+afterEach(() => {
+  testQueryClient.clear();
+  clearTypingIndicators();
+});
+describe.each(['channel', 'document'] as const)(
+  '%s uses the shared live cache',
+  (type) => {
+    const parent: MessageParent = { type, id: 'source' };
+    const other: MessageParent = {
+      type: type === 'channel' ? 'document' : 'channel',
+      id: 'source',
+    };
+    const timelineKey = () => getMessageTimelineQueryKey(parent);
+    const threadKey = () => getThreadRepliesQueryKey(parent, 'root');
+    function seed() {
+      testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
+        pageParams: [null],
+        pages: [
+          { items: [item(parent)], next_cursor: null, previous_cursor: null },
+        ],
+      });
+      testQueryClient.setQueryData<MessageListItem[]>(
+        messageKeys.messagesByIds(parent, ['root']).queryKey,
+        [item(parent)]
+      );
+      testQueryClient.setQueryData<MessageThread>(threadKey(), {
+        state,
+        root: message(parent, 'root'),
+        replies: [],
+      });
+      testQueryClient.setQueryData<MessageThread>(
+        getThreadRepliesQueryKey(other, 'root'),
+        { state, root: message(other, 'root'), replies: [] }
+      );
+    }
+    it('reconciles replies, attachments, mentions, reactions, and edits across timeline and linked drawer', () => {
+      seed();
+      const reply = {
+        ...message(parent, 'reply', 'root'),
+        attachments: [
+          {
+            id: 'attachment',
+            entity_id: 'doc',
+            entity_type: 'document',
+            created_at: time,
+          },
+        ],
+      };
+      applyMessage(reply, 'posted');
+      const edit = {
+        ...reply,
+        content: 'edited',
+        mentions: [{ entity_type: 'document', entity_id: 'doc' }],
+        reactions: [{ emoji: '👍', users: ['macro|a@example.com'] }],
+      };
+      applyMessage(edit, 'edited');
+      const root = testQueryClient.getQueryData<MessageTimelineData>(
+        timelineKey()
+      )!.pages[0].items[0];
+      expect(root.thread.reply_count).toBe(1);
+      expect(root.thread.preview).toEqual([expect.objectContaining(edit)]);
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+      ).toEqual([expect.objectContaining(edit)]);
+      expect(
+        testQueryClient.getQueryData<MessageListItem[]>(
+          messageKeys.messagesByIds(parent, ['root']).queryKey
+        )![0].thread.preview
+      ).toEqual([expect.objectContaining(edit)]);
+      expect(
+        testQueryClient.getQueryData<MessageThread>(
+          getThreadRepliesQueryKey(other, 'root')
+        )!.replies
+      ).toEqual([]);
+    });
+    it('preserves imported reply order when an older reply is edited', () => {
+      seed();
+      const first = {
+        ...message(parent, 'first', 'root'),
+        created_at: '2026-01-03T00:00:00Z',
+      };
+      const second = {
+        ...message(parent, 'second', 'root'),
+        created_at: '2026-01-01T00:00:00Z',
+      };
+      testQueryClient.setQueryData<MessageThread>(threadKey(), {
+        state,
+        root: message(parent, 'root'),
+        replies: [first, second],
+      });
+      applyMessage({ ...first, content: 'edited historical reply' }, 'edited');
+      expect(
+        testQueryClient
+          .getQueryData<MessageThread>(threadKey())!
+          .replies.map((reply) => reply.id)
+      ).toEqual(['first', 'second']);
+    });
+    it('does not count a reaction to an unseen preview reply as a new post', () => {
+      seed();
+      testQueryClient.removeQueries({ queryKey: threadKey() });
+      const root = {
+        ...item(parent),
+        thread: {
+          reply_count: 4,
+          latest_reply_at: time,
+          preview: ['first', 'second', 'third'].map((id) =>
+            message(parent, id, 'root')
+          ),
+        },
+      };
+      testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
+        pageParams: [null],
+        pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+      });
+      testQueryClient.setQueryData<MessageListItem[]>(
+        messageKeys.messagesByIds(parent, ['root']).queryKey,
+        [root]
+      );
+
+      handleMessageEvent({
+        parent,
+        actor: 'macro|b@example.com',
+        change: {
+          type: 'reaction_changed',
+          message: {
+            ...message(parent, 'fourth', 'root'),
+            reactions: [{ emoji: '👍', users: ['macro|b@example.com'] }],
+          },
+        },
+      });
+
+      expect(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].items[0].thread
+      ).toEqual(root.thread);
+      expect(
+        testQueryClient.getQueryData<MessageListItem[]>(
+          messageKeys.messagesByIds(parent, ['root']).queryKey
+        )![0].thread
+      ).toEqual(root.thread);
+      expect(testQueryClient.getQueryData(threadKey())).toBeUndefined();
+    });
+    it('does not insert an unseen edit or let a reaction snapshot overwrite content', () => {
+      seed();
+      applyMessage(message(parent, 'unseen', 'root'), 'edited');
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+      ).toEqual([]);
+
+      const reply = message(parent, 'reply', 'root');
+      applyMessage(reply, 'posted');
+      applyMessage({ ...reply, content: 'new content' }, 'edited');
+      applyMessage(
+        {
+          ...reply,
+          reactions: [{ emoji: '👍', users: ['macro|b@example.com'] }],
+        },
+        'reaction_changed'
+      );
+
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+      ).toEqual([
+        expect.objectContaining({
+          content: 'new content',
+          reactions: [{ emoji: '👍', users: ['macro|b@example.com'] }],
+        }),
+      ]);
+      expect(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].items[0].thread.reply_count
+      ).toBe(1);
+    });
+    it('updates the canonical root when only a linked thread is cached', () => {
+      testQueryClient.setQueryData<MessageThread>(threadKey(), {
+        state,
+        root: message(parent, 'root'),
+        replies: [message(parent, 'reply', 'root')],
+      });
+      applyMessage(
+        { ...message(parent, 'root'), content: 'edited root' },
+        'edited'
+      );
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.root.content
+      ).toBe('edited root');
+      applyMessage(
+        { ...message(parent, 'root'), content: '', deleted_at: time },
+        'message_deleted'
+      );
+      const thread = testQueryClient.getQueryData<MessageThread>(threadKey())!;
+      expect(thread.root.deleted_at).toBe(time);
+      expect(thread.replies).toHaveLength(1);
+      expect(testQueryClient.getQueryData(timelineKey())).toBeUndefined();
+    });
+    it('keeps root tombstones with replies and propagates resolution and whole-thread deletion', () => {
+      seed();
+      applyMessage(message(parent, 'reply', 'root'), 'posted');
+      applyMessage(
+        {
+          ...message(parent, 'root'),
+          content: '',
+          deleted_at: time,
+        },
+        'message_deleted'
+      );
+      expect(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].items[0].deleted_at
+      ).toBe(time);
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+      ).toHaveLength(1);
+      applyThreadState(parent, { ...state, resolved: true });
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.state.resolved
+      ).toBe(true);
+      applyThreadState(parent, { ...state, deleted_at: time });
+      expect(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].items
+      ).toEqual(
+        parent.type === 'document'
+          ? [expect.objectContaining({ state: { ...state, deleted_at: time } })]
+          : []
+      );
+    });
+    it('skips the sender nonce and scopes ephemeral typing to the parent and root', () => {
+      seed();
+      registerNonce(MessageNonceKeys.MESSAGE, 'own-send');
+      handleMessageEvent({
+        parent,
+        actor: 'macro|a@example.com',
+        nonce: 'own-send',
+        change: {
+          type: 'posted',
+          message: message(parent, 'reply', 'root'),
+          mentions: [],
+          notification_policy: 'Default',
+        },
+      });
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+      ).toEqual([]);
+      handleMessageEvent(
+        {
+          parent,
+          actor: 'macro|b@example.com',
+          nonce: null,
+          change: { type: 'typing', active: true, thread_id: null },
+        },
+        'macro|a@example.com'
+      );
+      expect([...getTypingUsers(parent)]).toEqual(['macro|b@example.com']);
+      expect([...getTypingUsers(other)]).toEqual([]);
+    });
+  }
+);

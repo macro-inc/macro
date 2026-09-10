@@ -1,4 +1,4 @@
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { MessageListItem } from '@service-storage/messages';
 import { type Accessor, createEffect, on } from 'solid-js';
 
 function isNearTrueBottom(
@@ -9,8 +9,8 @@ function isNearTrueBottom(
 }
 
 function didInsertMessageOnBottom(
-  currentMessages: Array<ApiChannelMessage>,
-  previousMessages: Array<ApiChannelMessage> | undefined
+  currentMessages: Array<MessageListItem>,
+  previousMessages: Array<MessageListItem> | undefined
 ): boolean {
   if (!previousMessages) return false;
   const lastCurrentMessage = currentMessages.at(-1);
@@ -22,7 +22,7 @@ function didInsertMessageOnBottom(
 export type StickyScrollerProps = {
   isNearBottom: Accessor<boolean>;
   hasMoreBelow: Accessor<boolean>;
-  messages: Accessor<Array<ApiChannelMessage>>;
+  messages: Accessor<Array<MessageListItem>>;
   scrollToBottom: () => void;
 };
 

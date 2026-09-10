@@ -345,67 +345,6 @@ impl ChannelMessage {
             mentions: message.mentions,
         }
     }
-
-    /// Converts a channels-domain channel message into a Soup channel message.
-    pub fn new_from_channel_message(message: channels::domain::models::ChannelMessage) -> Self {
-        Self {
-            message_id: message.id,
-            thread_id: None,
-            sender_id: message.sender_id,
-            content: message.content,
-            created_at: message.created_at,
-            updated_at: message.updated_at,
-            deleted_at: message.deleted_at,
-            mentions: Vec::new(),
-        }
-    }
-
-    /// Converts a channels-domain thread reply into a Soup channel message.
-    pub fn new_from_thread_reply(
-        parent_id: Uuid,
-        reply: channels::domain::models::ThreadReply,
-    ) -> Self {
-        Self {
-            message_id: reply.id,
-            thread_id: Some(parent_id),
-            sender_id: reply.sender_id,
-            content: reply.content,
-            created_at: reply.created_at,
-            updated_at: reply.updated_at,
-            deleted_at: None,
-            mentions: Vec::new(),
-        }
-    }
-
-    /// Converts a raw channels-domain top-level message row into a Soup channel message.
-    pub fn new_from_top_level_message_row(
-        row: channels::domain::models::TopLevelMessageRow,
-    ) -> Self {
-        Self {
-            message_id: row.id,
-            thread_id: None,
-            sender_id: row.sender_id,
-            content: row.content,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: row.deleted_at,
-            mentions: Vec::new(),
-        }
-    }
-
-    /// Converts a raw channels-domain thread reply row into a Soup channel message.
-    pub fn new_from_thread_reply_row(row: channels::domain::models::ThreadReplyRow) -> Self {
-        Self {
-            message_id: row.id,
-            thread_id: Some(row.thread_id),
-            sender_id: row.sender_id,
-            content: row.content,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: None,
-            mentions: Vec::new(),
-        }
-    }
 }
 
 impl LatestMessage {
@@ -538,12 +477,15 @@ impl From<channels::domain::models::MessageAttachment> for SoupMessageAttachment
     }
 }
 
-impl From<channels::domain::models::ThreadReply> for SoupThreadReply {
-    fn from(reply: channels::domain::models::ThreadReply) -> Self {
+impl From<messages::domain::models::Message> for SoupThreadReply {
+    fn from(reply: messages::domain::models::Message) -> Self {
         Self {
             id: reply.id,
-            sender: SoupMessageSender::from_message_sender(&reply.sender_id, reply.bot_profile),
-            sender_id: reply.sender_id,
+            sender: SoupMessageSender::from_message_sender(
+                reply.sender_id.as_ref(),
+                reply.bot_profile,
+            ),
+            sender_id: reply.sender_id.into(),
             content: reply.content,
             created_at: reply.created_at,
             updated_at: reply.updated_at,
@@ -554,8 +496,8 @@ impl From<channels::domain::models::ThreadReply> for SoupThreadReply {
     }
 }
 
-impl From<channels::domain::models::ThreadInfo> for SoupThreadInfo {
-    fn from(thread: channels::domain::models::ThreadInfo) -> Self {
+impl From<messages::domain::models::MessageThreadPreview> for SoupThreadInfo {
+    fn from(thread: messages::domain::models::MessageThreadPreview) -> Self {
         Self {
             reply_count: thread.reply_count,
             latest_reply_at: thread.latest_reply_at,
@@ -566,18 +508,25 @@ impl From<channels::domain::models::ThreadInfo> for SoupThreadInfo {
 
 impl SoupChannelThread {
     /// Converts a channels-domain channel message into a Soup thread root.
-    pub fn new_from_channel_message(message: channels::domain::models::ChannelMessage) -> Self {
+    pub fn new_from_channel_message(item: messages::domain::models::MessageListItem) -> Self {
+        let message = item.message;
         Self {
             id: message.id,
-            channel_id: message.channel_id,
-            sender: SoupMessageSender::from_message_sender(&message.sender_id, message.bot_profile),
-            sender_id: message.sender_id,
+            channel_id: match message.parent {
+                messages::domain::models::MessageParent::Channel(id) => id,
+                _ => unreachable!("channel list selects channel parents"),
+            },
+            sender: SoupMessageSender::from_message_sender(
+                message.sender_id.as_ref(),
+                message.bot_profile,
+            ),
+            sender_id: message.sender_id.into(),
             content: message.content,
             created_at: message.created_at,
             updated_at: message.updated_at,
             edited_at: message.edited_at,
             deleted_at: message.deleted_at,
-            thread: SoupThreadInfo::from(message.thread),
+            thread: SoupThreadInfo::from(item.thread),
             reactions: message.reactions.into_iter().map(Into::into).collect(),
             attachments: message.attachments.into_iter().map(Into::into).collect(),
         }

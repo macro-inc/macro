@@ -51,21 +51,21 @@ async fn channel_read_projections_keep_channel_scoped_index_plans(pool: PgPool) 
     let channel = Uuid::parse_str("01990000-0000-7000-8000-000000000005").unwrap();
     let queries = [
         // Timeline includes tombstone roots with surviving replies, in either direction.
-        "SELECT m.id FROM comms_channel_messages m WHERE m.channel_id = $1 AND m.thread_id IS NULL
-         AND (m.deleted_at IS NULL OR EXISTS (SELECT 1 FROM comms_channel_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL))
+        "SELECT m.id FROM comms_messages m WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = $1::uuid::text AND m.thread_id IS NULL
+         AND (m.deleted_at IS NULL OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL))
          ORDER BY m.created_at DESC, m.id DESC LIMIT 50",
-        "SELECT m.id FROM comms_channel_messages m WHERE m.channel_id = $1 AND m.thread_id IS NULL
-         AND (m.deleted_at IS NULL OR EXISTS (SELECT 1 FROM comms_channel_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL))
+        "SELECT m.id FROM comms_messages m WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = $1::uuid::text AND m.thread_id IS NULL
+         AND (m.deleted_at IS NULL OR EXISTS (SELECT 1 FROM comms_messages r WHERE r.thread_id = m.id AND r.deleted_at IS NULL))
          ORDER BY m.created_at ASC, m.id ASC LIMIT 50",
         // Batched latest reads use a parameterized lateral scan for each channel.
         "SELECT latest.id FROM unnest(ARRAY[$1::uuid]) i(channel_id) LEFT JOIN LATERAL (
-         SELECT m.id FROM comms_channel_messages m WHERE m.channel_id = i.channel_id AND m.deleted_at IS NULL
+         SELECT m.id FROM comms_messages m WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = i.channel_id::text AND m.deleted_at IS NULL
          ORDER BY m.created_at DESC LIMIT 1) latest ON true",
         "SELECT latest.id FROM unnest(ARRAY[$1::uuid]) i(channel_id) LEFT JOIN LATERAL (
-         SELECT m.id FROM comms_channel_messages m WHERE m.channel_id = i.channel_id AND m.deleted_at IS NULL AND m.thread_id IS NULL
+         SELECT m.id FROM comms_messages m WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = i.channel_id::text AND m.deleted_at IS NULL AND m.thread_id IS NULL
          ORDER BY m.created_at DESC LIMIT 1) latest ON true",
         // Unfiltered reads still need a channel index, including deleted replies.
-        "SELECT m.id FROM comms_channel_messages m WHERE m.channel_id = $1 ORDER BY m.created_at DESC LIMIT 50",
+        "SELECT m.id FROM comms_messages m WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = $1::uuid::text ORDER BY m.created_at DESC LIMIT 50",
     ];
     for query in queries {
         let plan: Value = sqlx::query_scalar(&format!("EXPLAIN (ANALYZE, FORMAT JSON) {query}"))
@@ -79,7 +79,7 @@ async fn channel_read_projections_keep_channel_scoped_index_plans(pool: PgPool) 
             nodes.iter().any(|node| {
                 node["Index Name"]
                     .as_str()
-                    .is_some_and(|name| name.starts_with("comms_messages_channel_"))
+                    .is_some_and(|name| name.starts_with("comms_messages_parent_"))
                     && node["Index Cond"]
                         .as_str()
                         .is_some_and(|condition| condition.contains("parent_entity_id"))
@@ -204,14 +204,14 @@ async fn populated_old_schema_survives_both_migrations(pool: PgPool) {
     .unwrap();
     assert!(legacy_gone);
     let channel_count: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM comms_channel_messages WHERE channel_id = $1")
+        sqlx::query_scalar("SELECT count(*) FROM comms_messages WHERE parent_entity_type = 'channel' AND parent_entity_id = $1::uuid::text")
             .bind(generate_uuid_v7())
             .fetch_one(&mut connection)
             .await
             .unwrap();
     assert_eq!(channel_count, 0); // Non-UUID legacy document IDs cannot break channel views.
     let channel_messages: Vec<(String, Option<Uuid>)> =
-        sqlx::query_as("SELECT content, thread_id FROM comms_channel_messages ORDER BY id")
+        sqlx::query_as("SELECT content, thread_id FROM comms_messages WHERE parent_entity_type = 'channel' ORDER BY id")
             .fetch_all(&mut connection)
             .await
             .unwrap();

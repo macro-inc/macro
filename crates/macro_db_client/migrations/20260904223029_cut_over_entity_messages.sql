@@ -193,38 +193,16 @@ ALTER TABLE comms_messages ADD CONSTRAINT comms_messages_thread_parent_fkey
 CREATE INDEX comms_messages_parent_timeline
     ON comms_messages(parent_entity_type, parent_entity_id, created_at, id)
     WHERE thread_id IS NULL;
+-- Full history reads include replies and tombstones.
+CREATE INDEX comms_messages_parent_history
+    ON comms_messages(parent_entity_type, parent_entity_id, created_at DESC, id DESC);
 CREATE INDEX comms_messages_parent_activity
     ON comms_messages(parent_entity_type, parent_entity_id, created_at DESC)
     WHERE deleted_at IS NULL;
--- Existing channel readers filter the UUID projection below. Its guarded cast
--- must match these expressions exactly: the text parent indexes cannot serve
--- channel_id predicates, and document IDs need not be UUIDs. Preserve both
--- tombstone-inclusive timelines and live-message latest/activity lookups.
-CREATE INDEX comms_messages_channel_timeline
-    ON comms_messages((CASE WHEN parent_entity_type = 'channel' THEN parent_entity_id::uuid END), created_at DESC, id DESC)
-    WHERE parent_entity_type = 'channel';
-CREATE INDEX comms_messages_channel_toplevel_cursor
-    ON comms_messages((CASE WHEN parent_entity_type = 'channel' THEN parent_entity_id::uuid END), created_at DESC, id DESC)
-    WHERE parent_entity_type = 'channel' AND thread_id IS NULL;
-CREATE INDEX comms_messages_channel_activity
-    ON comms_messages((CASE WHEN parent_entity_type = 'channel' THEN parent_entity_id::uuid END), created_at DESC)
-    WHERE parent_entity_type = 'channel' AND deleted_at IS NULL;
 CREATE INDEX comms_messages_thread_order
     ON comms_messages(thread_id, import_order, created_at, id) WHERE thread_id IS NOT NULL;
 CREATE INDEX comms_attachments_entity_created
     ON comms_attachments(entity_type, entity_id, created_at DESC) INCLUDE (message_id);
-
--- Channel read projections derive scope from the single message store. They
--- contain no duplicate messages and cannot accept channel_id writes.
-CREATE VIEW comms_channel_messages AS
-SELECT id, CASE WHEN parent_entity_type = 'channel' THEN parent_entity_id::uuid END AS channel_id, thread_id, sender_id, content,
-    created_at, updated_at, edited_at, deleted_at, triggered_by_user_id
-FROM comms_messages WHERE parent_entity_type = 'channel';
-CREATE VIEW comms_channel_attachments AS
-SELECT a.id, a.message_id, a.entity_type, a.entity_id, a.created_at, a.width, a.height,
-    CASE WHEN m.parent_entity_type = 'channel' THEN m.parent_entity_id::uuid END AS channel_id
-FROM comms_attachments a JOIN comms_messages m ON m.id = a.message_id
-WHERE m.parent_entity_type = 'channel';
 
 CREATE FUNCTION validate_message_parent() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE parent_found boolean; root_thread uuid; root_deleted timestamptz;

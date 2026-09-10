@@ -6,6 +6,7 @@ export type ThreadPayload = {
   anchorId: string; // uuid
   page: number;
   comments: IComment[];
+  replyCount: number;
   isResolved: boolean;
 };
 

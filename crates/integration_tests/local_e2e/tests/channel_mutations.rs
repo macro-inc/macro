@@ -29,6 +29,7 @@ struct ChannelApiClient {
     label: String,
     mutation_base_url: String,
     read_base_url: String,
+    messages_base_url: String,
 }
 
 impl ChannelApiClient {
@@ -50,6 +51,7 @@ impl ChannelApiClient {
             label: "channels".to_string(),
             mutation_base_url: trim_trailing_slash(&mutation_base_url),
             read_base_url: trim_trailing_slash(&read_base_url),
+            messages_base_url: format!("{}/messages", services.document_storage_url()),
         }
     }
 
@@ -79,21 +81,24 @@ impl ChannelApiClient {
 
     fn channel_message_url(&self, channel_id: &str, message_id: &str) -> String {
         format!(
-            "{}/{channel_id}/message/{message_id}",
-            self.mutation_base_url
+            "{}/channel/{channel_id}/items/{message_id}",
+            self.messages_base_url
         )
     }
 
     fn post_channel_message_url(&self, channel_id: &str) -> String {
-        format!("{}/{channel_id}/message", self.mutation_base_url)
+        format!("{}/channel/{channel_id}", self.messages_base_url)
     }
 
-    fn post_channel_reaction_url(&self, channel_id: &str) -> String {
-        format!("{}/{channel_id}/reaction", self.mutation_base_url)
+    fn post_channel_reaction_url(&self, channel_id: &str, message_id: &str) -> String {
+        format!(
+            "{}/reactions",
+            self.channel_message_url(channel_id, message_id)
+        )
     }
 
     fn post_channel_typing_url(&self, channel_id: &str) -> String {
-        format!("{}/{channel_id}/typing", self.mutation_base_url)
+        format!("{}/channel/{channel_id}/typing", self.messages_base_url)
     }
 
     fn channel_participants_url(&self, channel_id: &str) -> String {
@@ -744,9 +749,11 @@ async fn assert_document_attachment_share_permission_side_effect_contract(
 
     for event in listeners
         .wait_for_all(
-            "comms_message",
+            "message_update",
             |data| {
-                data.get("id").and_then(Value::as_str) == Some(root.id.as_str())
+                data.pointer("/change/type").and_then(Value::as_str) == Some("posted")
+                    && data.pointer("/change/message/id").and_then(Value::as_str)
+                        == Some(root.id.as_str())
                     && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
             },
             "root realtime message",
@@ -754,24 +761,28 @@ async fn assert_document_attachment_share_permission_side_effect_contract(
         .await?
     {
         ensure!(
-            event.data.get("content").and_then(Value::as_str) == Some(content.as_str()),
+            event
+                .data
+                .pointer("/change/message/content")
+                .and_then(Value::as_str)
+                == Some(content.as_str()),
             "{} {} root content mismatch: {}",
             ctx.api.label(),
             event.label,
             event.data
         );
+        ensure!(
+            event
+                .data
+                .pointer("/change/message/attachments/0/entity_id")
+                .and_then(Value::as_str)
+                == Some(document.document_id.as_str()),
+            "{} {} root attachment missing from message event: {}",
+            ctx.api.label(),
+            event.label,
+            event.data
+        );
     }
-
-    listeners
-        .wait_for_all(
-            "comms_attachment",
-            |data| {
-                data.get("message_id").and_then(Value::as_str) == Some(root.id.as_str())
-                    && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
-            },
-            "root attachment realtime event",
-        )
-        .await?;
 
     let bob_invite = wait_for_notification(
         &ctx.http,
@@ -880,9 +891,11 @@ async fn assert_follow_up_message_side_effect_contract(
 
     listeners
         .wait_for_all(
-            "comms_message",
+            "message_update",
             |data| {
-                data.get("id").and_then(Value::as_str) == Some(follow_up.id.as_str())
+                data.pointer("/change/type").and_then(Value::as_str) == Some("posted")
+                    && data.pointer("/change/message/id").and_then(Value::as_str)
+                        == Some(follow_up.id.as_str())
                     && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
             },
             "follow-up realtime message",
@@ -944,9 +957,11 @@ async fn assert_typing_side_effect_contract(ctx: &ChannelContractContext) -> any
 
     for event in listeners
         .wait_for_all(
-            "comms_typing",
+            "message_update",
             |data| {
-                data.get("user_id").and_then(Value::as_str) == Some(ctx.users.bob.user_id.as_str())
+                data.pointer("/change/type").and_then(Value::as_str) == Some("typing")
+                    && data.get("actor").and_then(Value::as_str)
+                        == Some(ctx.users.bob.user_id.as_str())
                     && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
             },
             "typing realtime event",
@@ -954,7 +969,11 @@ async fn assert_typing_side_effect_contract(ctx: &ChannelContractContext) -> any
         .await?
     {
         ensure!(
-            event.data.get("action").and_then(Value::as_str) == Some("start"),
+            event
+                .data
+                .pointer("/change/active")
+                .and_then(Value::as_bool)
+                == Some(true),
             "{} {} typing action mismatch: {}",
             ctx.api.label(),
             event.label,
@@ -1011,9 +1030,11 @@ async fn assert_reaction_side_effect_contract(ctx: &ChannelContractContext) -> a
 
     for event in listeners
         .wait_for_all(
-            "comms_reaction",
+            "message_update",
             |data| {
-                data.get("message_id").and_then(Value::as_str) == Some(root.id.as_str())
+                data.pointer("/change/type").and_then(Value::as_str) == Some("reaction_changed")
+                    && data.pointer("/change/message/id").and_then(Value::as_str)
+                        == Some(root.id.as_str())
                     && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
             },
             "reaction realtime event",
@@ -1093,9 +1114,11 @@ async fn assert_thread_reply_side_effect_contract(
 
     for event in listeners
         .wait_for_all(
-            "comms_message",
+            "message_update",
             |data| {
-                data.get("id").and_then(Value::as_str) == Some(reply.id.as_str())
+                data.pointer("/change/type").and_then(Value::as_str) == Some("posted")
+                    && data.pointer("/change/message/id").and_then(Value::as_str)
+                        == Some(reply.id.as_str())
                     && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
             },
             "reply realtime message",
@@ -1103,7 +1126,11 @@ async fn assert_thread_reply_side_effect_contract(
         .await?
     {
         ensure!(
-            event.data.get("thread_id").and_then(Value::as_str) == Some(root.id.as_str()),
+            event
+                .data
+                .pointer("/change/message/thread_id")
+                .and_then(Value::as_str)
+                == Some(root.id.as_str()),
             "{} {} reply thread mismatch: {}",
             ctx.api.label(),
             event.label,
@@ -1169,8 +1196,6 @@ async fn assert_message_edit_side_effect_contract(
         &json!({
             "content": content,
             "mentions": [],
-            "attachment_ids_to_delete": [],
-            "attachments_to_add": [],
             "nonce": nonce,
         }),
     )
@@ -1180,9 +1205,11 @@ async fn assert_message_edit_side_effect_contract(
 
     for event in listeners
         .wait_for_all(
-            "comms_message",
+            "message_update",
             |data| {
-                data.get("id").and_then(Value::as_str) == Some(root.id.as_str())
+                data.pointer("/change/type").and_then(Value::as_str) == Some("edited")
+                    && data.pointer("/change/message/id").and_then(Value::as_str)
+                        == Some(root.id.as_str())
                     && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
             },
             "edit realtime message",
@@ -1190,7 +1217,11 @@ async fn assert_message_edit_side_effect_contract(
         .await?
     {
         ensure!(
-            event.data.get("content").and_then(Value::as_str) == Some(content.as_str()),
+            event
+                .data
+                .pointer("/change/message/content")
+                .and_then(Value::as_str)
+                == Some(content.as_str()),
             "{} {} edit content mismatch: {}",
             ctx.api.label(),
             event.label,
@@ -1247,9 +1278,11 @@ async fn assert_message_delete_side_effect_contract(
 
     for event in listeners
         .wait_for_all(
-            "comms_message",
+            "message_update",
             |data| {
-                data.get("id").and_then(Value::as_str) == Some(root.id.as_str())
+                data.pointer("/change/type").and_then(Value::as_str) == Some("message_deleted")
+                    && data.pointer("/change/message/id").and_then(Value::as_str)
+                        == Some(root.id.as_str())
                     && data.get("nonce").and_then(Value::as_str) == Some(nonce.as_str())
             },
             "delete realtime message",
@@ -1259,7 +1292,7 @@ async fn assert_message_delete_side_effect_contract(
         ensure!(
             !event
                 .data
-                .get("deleted_at")
+                .pointer("/change/message/deleted_at")
                 .unwrap_or(&Value::Null)
                 .is_null(),
             "{} {} delete payload missing deleted_at: {}",
@@ -1499,12 +1532,11 @@ async fn post_reaction_via(
     nonce: &str,
 ) -> anyhow::Result<()> {
     require_success(
-        http.post(api.post_channel_reaction_url(channel_id))
+        http.post(api.post_channel_reaction_url(channel_id, message_id))
             .bearer_auth(token)
             .json(&json!({
                 "emoji": emoji,
-                "message_id": message_id,
-                "action": action,
+                "add": action == "Add",
                 "nonce": nonce,
             }))
             .send()
@@ -1530,7 +1562,7 @@ async fn post_typing_via(
         http.post(api.post_channel_typing_url(channel_id))
             .bearer_auth(token)
             .json(&json!({
-                "action": action,
+                "active": action == "start",
                 "thread_id": thread_id,
                 "nonce": nonce,
             }))
@@ -1746,7 +1778,6 @@ async fn assert_db_message(
     thread_id: Option<&str>,
 ) -> anyhow::Result<()> {
     let message_id = Uuid::parse_str(message_id).context("failed to parse message id")?;
-    let channel_id = Uuid::parse_str(channel_id).context("failed to parse channel id")?;
     let thread_id = thread_id
         .map(Uuid::parse_str)
         .transpose()
@@ -1757,7 +1788,8 @@ async fn assert_db_message(
             SELECT 1
             FROM comms_messages
             WHERE id = $1
-              AND channel_id = $2
+              AND parent_entity_type = 'channel'
+              AND parent_entity_id = $2
               AND sender_id = $3
               AND content = $4
               AND thread_id IS NOT DISTINCT FROM $5
@@ -2029,7 +2061,7 @@ fn participant_ids(channel: &Value) -> anyhow::Result<impl Iterator<Item = &str>
 
 fn reaction_payload_contains_user(payload: &Value, emoji: &str, user_id: &str) -> bool {
     payload
-        .get("reactions")
+        .pointer("/change/message/reactions")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()

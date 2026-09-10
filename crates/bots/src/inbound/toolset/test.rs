@@ -226,11 +226,11 @@ impl BotService for ToolTestBotService {
         unimplemented!()
     }
 
-    async fn ensure_bot_in_channel(
+    async fn channel_message_access(
         &self,
         _bot_id: BotId,
         _channel_id: Uuid,
-    ) -> Result<(), BotError> {
+    ) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
         unimplemented!()
     }
 
@@ -242,7 +242,7 @@ impl BotService for ToolTestBotService {
         &self,
         _channel_id: Uuid,
         _token: &str,
-    ) -> Result<AuthenticatedBot, BotError> {
+    ) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
         unimplemented!()
     }
 }

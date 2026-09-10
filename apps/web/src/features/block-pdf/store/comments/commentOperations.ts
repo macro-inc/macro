@@ -6,7 +6,6 @@ import { useBlockId } from '@core/block';
 import { type DeleteCommentInfo, isRoot } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import { blockElementSignal } from '@core/signal/blockElement';
-import type { EditMessage } from '@service-storage/generated/schemas/editMessage';
 import type { Message, PostMessage } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import {
@@ -15,7 +14,6 @@ import {
   useCreateHighlightCommentResource,
   useCreateThreadReplyResource,
   useDeleteCommentResource,
-  useEditCommentResource,
 } from '../commentsResource';
 import { highlightsUuidMap } from '../highlight';
 import { newThreadPlaceable, useDeleteNewFreeComment } from './freeComments';
@@ -97,17 +95,6 @@ export function useCreateComment() {
     }
 
     return await createThreadReply(info);
-  });
-}
-
-export function useUpdateComment() {
-  const analytics = useAnalytics();
-
-  const editComment = useEditCommentResource();
-
-  return createCallback((commentId: string, info: EditMessage) => {
-    analytics.track('comment_update', { blockType: 'pdf' });
-    return editComment(commentId, info);
   });
 }
 

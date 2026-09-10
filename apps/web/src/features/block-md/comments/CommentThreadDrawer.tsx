@@ -5,12 +5,12 @@ import {
   threadStore,
 } from '@block-md/comments/commentStore';
 import { mdStore } from '@block-md/signal/markdownBlockData';
+import { ChannelInput } from '@channel/Input';
 import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@components/app/mobile/MobileDrawer';
 import type { CommentOperations, Root } from '@core/comments/commentType';
-import { DiscussionInput } from '@core/comments/discussion';
 import {
   messageAttachments,
   messageMentions,
@@ -21,6 +21,7 @@ import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
+import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { Button } from '@ui';
 import { $setSelection } from 'lexical';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
@@ -50,8 +51,7 @@ function getCommentComposerInput(): HTMLElement | null {
 /**
  * The drawer's always-visible reply composer, pinned below the scrolling
  * thread. Extracted so its state (text, mentions) resets when the pager
- * switches threads (the host keys it by thread). Provides its own
- * ThreadContext so @-mentions typed here are captured.
+ * switches threads (the host keys it by thread).
  */
 function PinnedReplyComposer(props: {
   root: Root;
@@ -59,24 +59,33 @@ function PinnedReplyComposer(props: {
 }) {
   let clear: (() => void) | undefined;
   const context = useContext(CommentsContext);
+  const typing = usePostTypingUpdateMutation();
   return (
     <StaticMarkdownContext theme={drawerCommentTheme}>
       <div
         class="shrink-0 px-3"
         classList={{ 'pb-(--safe-bottom)': !virtualKeyboardVisible() }}
       >
-        <DiscussionInput
-          parent={context.discussionSource?.messageParent?.()}
+        <ChannelInput
+          parent={{ type: 'document', id: context.documentId }}
           input={{ mode: 'reply', placeholder: 'Reply...' }}
           autofocus={false}
           onReady={(handle) => {
             clear = handle.clear;
           }}
           onStartTyping={() =>
-            context.discussionSource?.typing?.(props.root.threadId, true)
+            typing.mutate({
+              parent: { type: 'document', id: context.documentId },
+              threadId: props.root.threadId,
+              action: 'start',
+            })
           }
           onStopTyping={() =>
-            context.discussionSource?.typing?.(props.root.threadId, false)
+            typing.mutate({
+              parent: { type: 'document', id: context.documentId },
+              threadId: props.root.threadId,
+              action: 'stop',
+            })
           }
           onSend={async (snapshot) => {
             await props.createComment({
@@ -272,7 +281,6 @@ export function CommentThreadDrawer() {
                       isActive
                       theme={drawerCommentTheme}
                       hideReplyInput
-                      actionsDropdown
                     />
                   </div>
                 )}

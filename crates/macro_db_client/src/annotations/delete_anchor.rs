@@ -1,5 +1,5 @@
 use anyhow::{Result, ensure};
-use messages::domain::annotations::AnnotationMutation;
+use messages::domain::annotations::{AnnotationMutation, DeletedAnnotation};
 use model::annotations::{
     AnchorId, PdfAnchorId,
     delete::{
@@ -16,7 +16,7 @@ pub async fn delete_document_anchor(
     db: &Pool<Postgres>,
     access: AnnotationMutation,
     req: DeleteUnthreadedAnchorRequest,
-) -> Result<DeleteUnthreadedAnchorResponse> {
+) -> Result<DeletedAnnotation> {
     let thread_id: Option<Uuid>;
     let document_id: String;
     let mut transaction = db.begin().await?;
@@ -30,22 +30,29 @@ pub async fn delete_document_anchor(
         }
     }
 
-    if let Some(thread_id) = thread_id {
+    let thread = if let Some(thread_id) = thread_id {
         let parent = messages::domain::models::MessageParent::parse("document", &document_id)?;
-        messages::outbound::pg_message_repo::PgMessageRepository::delete_thread_in(
-            &mut transaction,
-            &parent,
-            thread_id,
+        Some(
+            messages::outbound::pg_message_repo::PgMessageRepository::delete_thread_in(
+                &mut transaction,
+                &parent,
+                thread_id,
+            )
+            .await?,
         )
-        .await?;
-    }
+    } else {
+        None
+    };
 
     transaction.commit().await?;
 
-    Ok(DeleteUnthreadedAnchorResponse {
-        document_id,
-        anchor_info,
-        thread_id,
+    Ok(DeletedAnnotation {
+        response: DeleteUnthreadedAnchorResponse {
+            document_id,
+            anchor_info,
+            thread_id,
+        },
+        thread,
     })
 }
 

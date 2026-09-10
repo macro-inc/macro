@@ -59,13 +59,30 @@ impl MessageRepository for Repo {
                 .then(|| self.state.clone()),
         )
     }
-    async fn list(
+    async fn timeline(
         &self,
-        _: &MessageParent,
-        _: Option<MessageCursor>,
-        _: u16,
-    ) -> Result<ThreadPage, MessageError> {
-        unimplemented!()
+        parent: &MessageParent,
+        query: MessageTimelineQuery,
+    ) -> Result<MessagePage, MessageError> {
+        let included = self.message.parent == *parent
+            && (query.ids.is_empty() || query.ids.contains(&self.message.id));
+        Ok(MessagePage {
+            items: if included {
+                vec![MessageListItem {
+                    message: self.message.clone(),
+                    state: self.state.clone(),
+                    thread: MessageThreadPreview {
+                        reply_count: 0,
+                        latest_reply_at: None,
+                        preview: vec![],
+                    },
+                }]
+            } else {
+                vec![]
+            },
+            next_cursor: None,
+            previous_cursor: None,
+        })
     }
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
         let mut message = self.message.clone();
@@ -107,13 +124,20 @@ impl MessageRepository for Repo {
     ) -> Result<Message, MessageError> {
         unimplemented!()
     }
-    async fn resolve(
+    async fn patch_thread(
         &self,
         _: &MessageParent,
         _: Uuid,
-        _: bool,
+        patch: ThreadPatch,
     ) -> Result<ThreadState, MessageError> {
-        unimplemented!()
+        let mut state = self.state.clone();
+        if let Some(resolved) = patch.resolved {
+            state.resolved = resolved;
+        }
+        if patch.detach_anchor {
+            state.anchor = None;
+        }
+        Ok(state)
     }
     async fn delete_thread(&self, _: &MessageParent, _: Uuid) -> Result<ThreadState, MessageError> {
         panic!("single-message deletion must never delete the thread")
@@ -193,6 +217,89 @@ fn access(user: &str, document: &str, level: AccessLevel) -> EntityAccessReceipt
 }
 
 #[tokio::test]
+async fn document_editor_can_detach_another_authors_mark_without_deleting_the_thread() {
+    let repo = fixture();
+    let events = Events::default();
+    let service = MessageService::new(repo.clone(), events.clone());
+    let state = service
+        .patch_thread(
+            access("macro|editor@example.com", "doc", AccessLevel::Edit),
+            repo.state.root_id,
+            ThreadPatch {
+                detach_anchor: true,
+                nonce: Some("removed-mark".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(state.anchor.is_none());
+    assert!(state.deleted_at.is_none());
+    assert_eq!(state.user_id, repo.state.user_id);
+    assert!(repo.deletes.lock().unwrap().is_empty());
+    let events = events.0.lock().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].nonce.as_deref(), Some("removed-mark"));
+    assert!(
+        matches!(&events[0].change, MessageChange::ThreadUpdated { state } if state.anchor.is_none() && state.deleted_at.is_none())
+    );
+}
+
+#[tokio::test]
+async fn commenters_can_resolve_but_cannot_detach_document_text() {
+    let repo = fixture();
+    let events = Events::default();
+    let service = MessageService::new(repo.clone(), events.clone());
+    let result = service
+        .patch_thread(
+            access("macro|author@example.com", "doc", AccessLevel::Comment),
+            repo.state.root_id,
+            ThreadPatch {
+                detach_anchor: true,
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(MessageError::Forbidden)));
+    assert!(events.0.lock().unwrap().is_empty());
+    let state = service
+        .patch_thread(
+            access("macro|author@example.com", "doc", AccessLevel::Comment),
+            repo.state.root_id,
+            ThreadPatch {
+                resolved: Some(true),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(state.resolved);
+    assert_eq!(state.anchor, repo.state.anchor);
+}
+
+#[tokio::test]
+async fn thread_patch_cannot_detach_pdf_annotations() {
+    let mut repo = fixture();
+    repo.state.anchor = Some(ThreadAnchor::PdfHighlight {
+        anchor_id: Uuid::from_u128(3),
+    });
+    let events = Events::default();
+    let service = MessageService::new(repo.clone(), events.clone());
+    let result = service
+        .patch_thread(
+            access("macro|editor@example.com", "doc", AccessLevel::Edit),
+            repo.state.root_id,
+            ThreadPatch {
+                detach_anchor: true,
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(MessageError::Invalid(_))));
+    assert!(events.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn root_deletion_tombstones_only_the_message_and_emits_shared_update() {
     let repo = fixture();
     let events = Events::default();
@@ -211,7 +318,9 @@ async fn root_deletion_tombstones_only_the_message_and_emits_shared_update() {
     assert!(repo.state.anchor.is_some());
     let events = events.0.lock().unwrap();
     assert_eq!(events.len(), 1);
-    assert_eq!(events[0].root_id, repo.message.id);
+    assert!(
+        matches!(&events[0].change, MessageChange::MessageDeleted { message } if message.root_id() == repo.message.id)
+    );
     assert_eq!(events[0].nonce.as_deref(), Some("nonce"));
     assert!(matches!(
         events[0].change,
@@ -341,16 +450,14 @@ async fn inaccessible_references_are_rejected_before_persistence() {
             .await,
         Err(MessageError::Forbidden)
     ));
-    let edit = EditMessage {
-        notification_policy: Default::default(),
-        content: "replacement".into(),
-        mentions: vec![],
-        attachments: Some(vec![attachment]),
-        nonce: None,
+    let edit = MessagePatch {
+        content: Some("replacement".into()),
+        attachments: AttachmentChange::Replace(vec![attachment]),
+        ..Default::default()
     };
     assert!(matches!(
         service
-            .edit(
+            .patch(
                 access("macro|author@example.com", "doc", AccessLevel::Comment),
                 Uuid::from_u128(1),
                 edit
@@ -443,10 +550,8 @@ async fn source_mentions_never_grant_channel_access_and_revocation_removes_the_t
         .unwrap();
     assert_eq!(page.threads.len(), 1);
     assert_eq!(page.threads[0].channel_name.as_deref(), Some("visible"));
-    assert_eq!(
-        page.threads[0].thread.root.parent,
-        MessageParent::Channel(channel)
-    );
+    assert_eq!(page.threads[0].parent, MessageParent::Channel(channel));
+    assert_eq!(page.threads[0].root_id, Uuid::from_u128(1));
     assert!(!page.threads[0].can_reply);
     assert!(page.next_cursor.is_none());
     grants.0.lock().unwrap().clear();
@@ -458,6 +563,48 @@ async fn source_mentions_never_grant_channel_access_and_revocation_removes_the_t
             .threads
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn reference_discovery_pages_authorized_identities_without_reading_message_content() {
+    let mut repo = fixture();
+    let visible = Uuid::from_u128(20);
+    let private = Uuid::from_u128(21);
+    // The message reader fixture contains only an unrelated document root.
+    // Discovery must use the source facts, leaving hydration to the common reader.
+    repo.references = (1..=205)
+        .map(|id| ReferencedThreadCandidate {
+            channel_id: if id % 100 == 0 { visible } else { private },
+            root_id: Uuid::from_u128(id),
+            channel_name: Some(if id % 100 == 0 { "visible" } else { "private" }.into()),
+            created_at: repo.message.created_at,
+        })
+        .collect();
+    let grants = SourceAccess(Arc::new(Mutex::new(
+        [visible.to_string()].into_iter().collect(),
+    )));
+    let service = MessageService::new(repo, Events::default()).with_references(grants);
+    let receipt = || {
+        access("macro|author@example.com", "doc", AccessLevel::Comment)
+            .try_into_requirement()
+            .unwrap()
+    };
+    let first = service
+        .referenced_threads(receipt(), None, 1)
+        .await
+        .unwrap();
+    assert_eq!(first.threads.len(), 1);
+    assert_eq!(first.threads[0].root_id, Uuid::from_u128(100));
+    assert_eq!(first.threads[0].parent, MessageParent::Channel(visible));
+    assert_eq!(first.next_cursor.as_ref().unwrap().id, Uuid::from_u128(100));
+
+    let second = service
+        .referenced_threads(receipt(), first.next_cursor, 1)
+        .await
+        .unwrap();
+    assert_eq!(second.threads.len(), 1);
+    assert_eq!(second.threads[0].root_id, Uuid::from_u128(200));
+    assert!(second.next_cursor.is_none());
 }
 
 fn post_input() -> PostMessage {
@@ -531,15 +678,13 @@ async fn editor_reference_tags_are_authorized_for_posts_and_edits() {
             }];
             let posted = service.post(channel_access(), input.clone()).await;
             let edited = service
-                .edit(
+                .patch(
                     channel_access(),
                     repo.message.id,
-                    EditMessage {
-                        content: input.content,
-                        mentions: input.mentions.clone(),
-                        attachments: None,
-                        notification_policy: Default::default(),
-                        nonce: None,
+                    MessagePatch {
+                        content: Some(input.content),
+                        mentions: Some(input.mentions.clone()),
+                        ..Default::default()
                     },
                 )
                 .await;
@@ -604,15 +749,13 @@ async fn a_group_remains_one_authored_reference_and_resolves_current_recipients_
     let posted = service.post(channel_access(), input.clone()).await.unwrap();
     assert_eq!(posted.mentions, input.mentions);
     service
-        .edit(
+        .patch(
             channel_access(),
             repo.message.id,
-            EditMessage {
-                content: input.content.clone(),
-                mentions: input.mentions.clone(),
-                attachments: None,
-                notification_policy: Default::default(),
-                nonce: None,
+            MessagePatch {
+                content: Some(input.content.clone()),
+                mentions: Some(input.mentions.clone()),
+                ..Default::default()
             },
         )
         .await
@@ -854,15 +997,13 @@ async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_a
             .is_none()
     );
     service
-        .edit(
+        .patch(
             receipt(),
             posted.id,
-            EditMessage {
+            MessagePatch {
                 notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
-                content: "final @mention".into(),
-                mentions: vec![],
-                attachments: None,
-                nonce: None,
+                content: Some("final @mention".into()),
+                ..Default::default()
             },
         )
         .await

@@ -23,6 +23,17 @@ export default defineConfig(
     input: `./specs/${service}.json`,
     output: {
       path: `./generated/${service}`,
+      postProcess: ['storage', 'agent-harness', 'notification'].includes(
+        service,
+      )
+        ? [
+            {
+              command: 'bun',
+              args: ['./scripts/format-generated.ts', '{{path}}'],
+              name: 'Normalize generated whitespace',
+            },
+          ]
+        : [],
     },
     plugins: [
       '@hey-api/client-fetch',

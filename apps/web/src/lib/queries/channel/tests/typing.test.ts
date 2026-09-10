@@ -8,15 +8,15 @@ vi.mock('@service-storage/client', () => ({
 
 import {
   clearTypingIndicators,
-  getTypingUsersForChannel,
+  getTypingUsers,
   handleCommsTyping,
   TYPING_INDICATOR_TIMEOUT_MS,
-} from '../typing';
+} from '../../messages/typing';
 
 const currentUserId = 'user-current';
 
 function typingUsers(channelId = 'channel-1') {
-  return [...getTypingUsersForChannel(channelId)];
+  return [...getTypingUsers({ type: 'channel', id: channelId })];
 }
 
 beforeEach(() => {
@@ -32,7 +32,11 @@ afterEach(() => {
 describe('channel typing indicators', () => {
   it('expires indicators unless refreshed by a new start event', () => {
     handleCommsTyping(
-      { action: 'start', channel_id: 'channel-1', user_id: 'user-typing' },
+      {
+        action: 'start',
+        parent: { type: 'channel', id: 'channel-1' },
+        user_id: 'user-typing',
+      },
       currentUserId
     );
 
@@ -40,7 +44,11 @@ describe('channel typing indicators', () => {
 
     vi.advanceTimersByTime(TYPING_INDICATOR_TIMEOUT_MS - 1);
     handleCommsTyping(
-      { action: 'start', channel_id: 'channel-1', user_id: 'user-typing' },
+      {
+        action: 'start',
+        parent: { type: 'channel', id: 'channel-1' },
+        user_id: 'user-typing',
+      },
       currentUserId
     );
 

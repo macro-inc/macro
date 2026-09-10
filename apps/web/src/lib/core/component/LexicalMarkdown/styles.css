@@ -582,6 +582,12 @@ mark {
   border-bottom: unset;
 }
 
+.md-mark.comment[data-comment-inactive] {
+  background: unset;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
 .md-no-comments {
   .md-mark.comment {
     background: unset !important;

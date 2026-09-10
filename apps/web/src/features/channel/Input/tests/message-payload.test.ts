@@ -9,6 +9,30 @@ const snap = (mentions: ItemMention[]) => ({
 });
 
 describe('authored group references', () => {
+  it('preserves display-only mention chips in the body without blocking a send', () => {
+    const snapshot = {
+      ...snap([
+        { itemType: 'date', itemId: '2026-09-09' },
+        { itemType: 'contact', itemId: 'contact-1' },
+        {
+          itemType: 'foreign',
+          itemId: 'https://github.com/example/repo/pull/1',
+        },
+        { itemType: 'skill', itemId: 'builtin:review' },
+        { itemType: 'document', itemId: 'doc-1' },
+        { itemType: 'user', itemId: 'macro|a@example.com' },
+      ]),
+      value:
+        'Review the PR with this contact on <m-date-mention>{"date":"2026-09-09"}</m-date-mention>.',
+    };
+    const result = buildPostMessageRequest({ snapshot });
+    expect(result.content).toBe(snapshot.value);
+    expect(result.mentions).toEqual([
+      { entity_type: 'document', entity_id: 'doc-1' },
+      { entity_type: 'user', entity_id: 'macro|a@example.com' },
+    ]);
+  });
+
   it('retains @here and explicit users without depending on a cached participant roster', () => {
     const result = buildPostMessageRequest({
       snapshot: snap([

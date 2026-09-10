@@ -1,15 +1,15 @@
 import type { DateValue } from '@core/util/date';
-import type { ChannelMessagesData } from '@queries/channel/channel-messages';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { MessageTimelineData } from '@queries/messages/timeline';
+import type { MessageListItem } from '@service-storage/messages';
 
-/** Minimal shape needed by isNewMessage — satisfied by both ApiChannelMessage and ApiThreadReply. */
+/** Minimal shape needed by isNewMessage — satisfied by both MessageListItem and EntityMessage. */
 export type NewMessageCheckable = { created_at: string; sender_id: string };
 
 export function flattenMessages(
-  data: ChannelMessagesData | undefined
-): ApiChannelMessage[] {
+  data: MessageTimelineData | undefined
+): MessageListItem[] {
   if (!data?.pages?.length) return [];
-  const all: ApiChannelMessage[] = [];
+  const all: MessageListItem[] = [];
   for (let i = data.pages.length - 1; i >= 0; i--) {
     const items = data.pages[i].items;
     for (let j = items.length - 1; j >= 0; j--) {

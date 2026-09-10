@@ -14,6 +14,7 @@ export type ThreadPayload = {
   rootId: string;
   anchorId: string; // uuid
   comments: IComment[];
+  replyCount: number;
   isResolved: boolean;
 };
 

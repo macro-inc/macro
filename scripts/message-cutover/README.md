@@ -51,7 +51,8 @@ ID, including deleted roots. Empty threads receive structural tombstones.
 imports comments and thread state, converts PDF anchor foreign keys, rewrites
 saved PDF export comment IDs and notification IDs, verifies counts and content,
 and drops Comment, Thread, ThreadAnchor, and the channel_id storage columns.
-The two `comms_channel_*` views are filtered reads of the sole message store.
+All readers use indexed parent predicates on the sole message store; no channel
+compatibility views are created.
 The immutable ID mapping tables only resolve previously copied links.
 
 Both commands take the same advisory lock. They report success without rewriting

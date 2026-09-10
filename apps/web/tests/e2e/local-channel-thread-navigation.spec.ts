@@ -138,8 +138,9 @@ function countChannelMessageRequests(
   page.on('request', (request) => {
     const url = new URL(request.url());
     if (
-      url.pathname.endsWith(`/channels/${channelId}/messages`) &&
-      url.searchParams.get('load_around_message_id') === loadAroundMessageId
+      url.pathname.endsWith(`/messages/channel/${channelId}`) &&
+      (JSON.parse(url.searchParams.get('selection') ?? '{}').around ?? null) ===
+        loadAroundMessageId
     ) {
       count += 1;
     }
@@ -315,7 +316,7 @@ test('the latest target wins while an earlier reply request is still loading', a
   const channel = localE2ESeed.smoke.generalChannel;
   const staleThread = localE2ESeed.smoke.generalAlternateDeepThread;
   const finalThread = localE2ESeed.smoke.generalDeepThread;
-  const staleRepliesPath = `/channels/${channel.channel_id}/messages/${staleThread.parentMessageId}/replies`;
+  const staleRepliesPath = `/messages/channel/${channel.channel_id}/threads/${staleThread.parentMessageId}`;
   let releaseStaleReplies = () => {};
   const holdStaleReplies = new Promise<void>((resolve) => {
     releaseStaleReplies = resolve;

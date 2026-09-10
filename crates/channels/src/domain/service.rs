@@ -3,34 +3,27 @@ use crate::domain::{
     events::ChannelEvent,
     models::{
         Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
-        BotSenderProfile, ChannelAttachmentType, ChannelContextMessage, ChannelJoinCodeResponse,
-        ChannelMessage, ChannelMessageFilters, ChannelMetadata, ChannelParticipant, ChannelPreview,
-        ChannelPreviewData, ChannelType, CreateEntityMentionOptions, EntityMention,
+        ChannelAttachmentType, ChannelJoinCodeResponse, ChannelMetadata, ChannelParticipant,
+        ChannelPreview, ChannelPreviewData, ChannelType, CreateEntityMentionOptions, EntityMention,
         GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-        GetOrCreatePrivateRequest, MessagePageDirection, ParticipantRole, PatchChannelRequest,
-        PostTypingRequest, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
-        Sender, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow, WithChannelId,
+        GetOrCreatePrivateRequest, ParticipantRole, PatchChannelRequest, ReferencedShareItem,
+        RemoveParticipantsRequest, Sender, WithChannelId,
     },
     ports::{
-        ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr,
-        ChannelMessagesQueryResult, ChannelMutationErr, ChannelReferenceSharePermissions,
-        ChannelRepo, ChannelService,
+        ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr, ChannelMutationErr,
+        ChannelReferenceSharePermissions, ChannelRepo, ChannelService,
     },
 };
-use bot_id::BotIdStr;
 use bot_id::cowlike::CowLike;
 use channel_sender::ChannelSender;
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, PaginateOn, Query};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
-
-/// Default number of preview replies per thread.
-const THREAD_PREVIEW_COUNT: u16 = 3;
 
 /// Service implementation backed by a [`ChannelRepo`].
 #[derive(Clone)]
@@ -89,154 +82,6 @@ where
     R: ChannelRepo,
     anyhow::Error: From<R::Err>,
 {
-    /// Hydrate top-level message rows with thread data, reactions, and attachments.
-    async fn hydrate_messages(
-        &self,
-        rows: Vec<TopLevelMessageRow>,
-    ) -> Result<Vec<ChannelMessage>, ChannelMessagesErr> {
-        let parent_ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
-
-        let thread_data = self
-            .repo
-            .get_thread_data(&parent_ids, THREAD_PREVIEW_COUNT)
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        let mut all_ids: Vec<Uuid> = parent_ids.clone();
-        let mut sender_ids: Vec<&str> = rows.iter().map(|r| r.sender_id.as_str()).collect();
-        for td in thread_data.values() {
-            for reply in &td.preview_replies {
-                all_ids.push(reply.id);
-                sender_ids.push(reply.sender_id.as_str());
-            }
-        }
-
-        let (reactions, attachments, bot_profiles) = tokio::join!(
-            self.repo.get_reactions_batch(&all_ids),
-            self.repo.get_attachments_batch(&all_ids),
-            self.get_bot_profiles_for_senders(sender_ids),
-        );
-
-        let reactions = reactions.map_err(anyhow::Error::from)?;
-        let attachments = attachments.map_err(anyhow::Error::from)?;
-        let bot_profiles = bot_profiles?;
-
-        let messages: Vec<ChannelMessage> = rows
-            .into_iter()
-            .map(|row| {
-                let td = thread_data.get(&row.id);
-                let preview_replies = td
-                    .map(|td| {
-                        td.preview_replies
-                            .iter()
-                            .map(|r| ThreadReply {
-                                id: r.id,
-                                bot_profile: bot_profile_for(&bot_profiles, &r.sender_id),
-                                sender_id: r.sender_id.clone(),
-                                triggered_by: r.triggered_by.clone(),
-                                content: r.content.clone(),
-                                created_at: r.created_at,
-                                updated_at: r.updated_at,
-                                edited_at: r.edited_at,
-                                reactions: reactions.get(&r.id).cloned().unwrap_or_default(),
-                                attachments: attachments.get(&r.id).cloned().unwrap_or_default(),
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-
-                ChannelMessage {
-                    id: row.id,
-                    channel_id: row.channel_id,
-                    bot_profile: bot_profile_for(&bot_profiles, &row.sender_id),
-                    sender_id: row.sender_id,
-                    triggered_by: row.triggered_by,
-                    content: row.content,
-                    created_at: row.created_at,
-                    updated_at: row.updated_at,
-                    edited_at: row.edited_at,
-                    deleted_at: row.deleted_at,
-                    thread: ThreadInfo {
-                        reply_count: td.map_or(0, |td| td.reply_count),
-                        latest_reply_at: td.and_then(|td| td.latest_reply_at),
-                        preview: preview_replies,
-                    },
-                    reactions: reactions.get(&row.id).cloned().unwrap_or_default(),
-                    attachments: attachments.get(&row.id).cloned().unwrap_or_default(),
-                }
-            })
-            .collect();
-
-        Ok(messages)
-    }
-
-    /// Hydrate thread reply rows with reactions, attachments, and bot profiles.
-    async fn hydrate_thread_replies(
-        &self,
-        reply_rows: Vec<ThreadReplyRow>,
-    ) -> Result<Vec<ThreadReply>, ChannelMessagesErr> {
-        if reply_rows.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let reply_ids: Vec<Uuid> = reply_rows.iter().map(|row| row.id).collect();
-        let (reactions, attachments, bot_profiles) = tokio::join!(
-            self.repo.get_reactions_batch(&reply_ids),
-            self.repo.get_attachments_batch(&reply_ids),
-            self.get_bot_profiles_for_senders(reply_rows.iter().map(|row| row.sender_id.as_str())),
-        );
-
-        let reactions = reactions.map_err(anyhow::Error::from)?;
-        let attachments = attachments.map_err(anyhow::Error::from)?;
-        let bot_profiles = bot_profiles?;
-
-        Ok(reply_rows
-            .into_iter()
-            .map(|row| ThreadReply {
-                id: row.id,
-                bot_profile: bot_profile_for(&bot_profiles, &row.sender_id),
-                sender_id: row.sender_id,
-                triggered_by: row.triggered_by,
-                content: row.content,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
-                edited_at: row.edited_at,
-                reactions: reactions.get(&row.id).cloned().unwrap_or_default(),
-                attachments: attachments.get(&row.id).cloned().unwrap_or_default(),
-            })
-            .collect())
-    }
-
-    /// Batch-fetch public bot profiles for any bot senders among `sender_ids`.
-    async fn get_bot_profiles_for_senders(
-        &self,
-        sender_ids: impl IntoIterator<Item = &str>,
-    ) -> Result<HashMap<BotId, BotSenderProfile>, ChannelMessagesErr> {
-        let bot_ids: HashSet<BotId> = sender_ids
-            .into_iter()
-            .filter_map(|id| BotIdStr::parse_from_str(id).ok())
-            .map(|x| x.bot_id())
-            .collect();
-        if bot_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let bot_ids: Vec<BotId> = bot_ids.into_iter().collect();
-        self.repo
-            .get_bot_profiles(&bot_ids)
-            .await
-            .map_err(anyhow::Error::from)
-            .map_err(ChannelMessagesErr::Repo)
-    }
-}
-
-/// Resolve the bot profile for a sender id, if the sender is a known bot.
-fn bot_profile_for(
-    profiles: &HashMap<BotId, BotSenderProfile>,
-    sender_id: &str,
-) -> Option<BotSenderProfile> {
-    let bot_id = BotIdStr::parse_from_str(sender_id).ok()?.bot_id();
-    profiles.get(&bot_id).cloned()
 }
 
 fn require_user_actor(actor: &Sender) -> Result<MacroUserIdStr<'static>, ChannelMutationErr> {
@@ -541,35 +386,6 @@ where
         self.events.dispatch(ChannelEvent::ChannelDeleted {
             channel_id,
             actor: Sender::new_from_user(actor),
-        });
-        Ok(())
-    }
-
-    #[tracing::instrument(err, skip(self, req))]
-    async fn post_typing(
-        &self,
-        actor: Sender,
-        channel_id: Uuid,
-        req: PostTypingRequest,
-    ) -> Result<(), ChannelMutationErr> {
-        let thread_id = req
-            .thread_id
-            .as_deref()
-            .map(Uuid::parse_str)
-            .transpose()
-            .map_err(|err| ChannelMutationErr::BadRequest(err.to_string()))?;
-        let participants = self
-            .repo
-            .get_participants(channel_id)
-            .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-        self.events.dispatch(ChannelEvent::TypingChanged {
-            channel_id,
-            actor,
-            action: req.action,
-            thread_id,
-            recipients: participant_ids(&participants),
-            nonce: req.nonce,
         });
         Ok(())
     }
@@ -908,117 +724,12 @@ where
     }
 }
 
-/// Build a centered window of messages around an anchor.
-///
-/// - `before`: older messages in DESC order (closest to anchor first).
-/// - `anchor`: the anchor message itself.
-/// - `after`: newer messages in ASC order (closest to anchor first).
-/// - `limit`: total number of messages to return (including the anchor).
-///
-/// Returns messages in DESC order (newest first).
-struct CenteredWindow {
-    rows: Vec<TopLevelMessageRow>,
-    has_more_newer: bool,
-}
-
-impl std::ops::Deref for CenteredWindow {
-    type Target = [TopLevelMessageRow];
-
-    fn deref(&self) -> &Self::Target {
-        &self.rows
-    }
-}
-
-fn center_window(
-    before: Vec<TopLevelMessageRow>,
-    anchor: TopLevelMessageRow,
-    after: Vec<TopLevelMessageRow>,
-    limit: usize,
-) -> CenteredWindow {
-    if limit == 0 {
-        return CenteredWindow {
-            rows: vec![],
-            has_more_newer: !after.is_empty(),
-        };
-    }
-    if limit == 1 {
-        return CenteredWindow {
-            rows: vec![anchor],
-            has_more_newer: !after.is_empty(),
-        };
-    }
-
-    let slots = limit - 1;
-    let half = slots / 2;
-
-    let before_take = half.min(before.len());
-    let after_take = (slots - before_take).min(after.len());
-    let before_take = (slots - after_take).min(before.len());
-    let has_more_newer = after.len() > after_take;
-
-    let mut before = before;
-    before.truncate(before_take);
-
-    let mut after = after;
-    after.truncate(after_take);
-    after.reverse();
-
-    let mut result = after;
-    result.reserve(1 + before.len());
-    result.push(anchor);
-    result.append(&mut before);
-
-    CenteredWindow {
-        rows: result,
-        has_more_newer,
-    }
-}
-
 impl<R, E> ChannelService for ChannelServiceImpl<R, E>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
     anyhow::Error: From<R::Err>,
 {
-    #[tracing::instrument(err, skip(self))]
-    async fn get_channel_messages(
-        &self,
-        channel_id: Uuid,
-        query: Query<Uuid, CreatedAt, ()>,
-        direction: MessagePageDirection,
-        limit: u16,
-        filters: &ChannelMessageFilters,
-        notification_user_id: Option<MacroUserIdStr<'static>>,
-    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
-        let limit = limit.clamp(1, 100);
-
-        let rows_result = self
-            .repo
-            .get_top_level_messages(
-                channel_id,
-                &query,
-                direction,
-                limit,
-                filters,
-                notification_user_id,
-            )
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        let messages = self.hydrate_messages(rows_result.rows).await?;
-
-        let page = messages
-            .into_iter()
-            .paginate_on(limit.into(), CreatedAt)
-            .filter_on(())
-            .into_page();
-
-        Ok(ChannelMessagesQueryResult {
-            page,
-            has_more_newer: rows_result.has_more_newer,
-        })
-    }
-
     #[tracing::instrument(err, skip(self))]
     async fn get_channel_attachments(
         &self,
@@ -1153,31 +864,6 @@ where
         Ok(activity)
     }
 
-    #[tracing::instrument(err, skip(self))]
-    async fn get_message_context(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        before: i64,
-        after: i64,
-    ) -> Result<Vec<ChannelContextMessage>, ChannelMessagesErr> {
-        let mut messages = self
-            .repo
-            .get_messages_with_context(channel_id, message_id, before.max(0), after.max(0))
-            .await
-            .map_err(anyhow::Error::from)
-            .map_err(ChannelMessagesErr::Repo)?;
-
-        let bot_profiles = self
-            .get_bot_profiles_for_senders(messages.iter().map(|m| m.sender_id.as_str()))
-            .await?;
-        for message in &mut messages {
-            message.bot_profile = bot_profile_for(&bot_profiles, &message.sender_id);
-        }
-
-        Ok(messages)
-    }
-
     #[tracing::instrument(err, skip(self, user_id))]
     async fn get_attachment_references(
         &self,
@@ -1190,102 +876,6 @@ where
             .await
             .map_err(anyhow::Error::from)
             .map_err(ChannelMessagesErr::Repo)
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_channel_messages_around(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        limit: u16,
-    ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
-        let limit = limit.clamp(1, 100);
-
-        let anchor = self
-            .repo
-            .resolve_top_level_parent(channel_id, message_id)
-            .await
-            .map_err(anyhow::Error::from)?
-            .ok_or(ChannelMessagesErr::MessageNotFound(message_id))?;
-
-        if anchor.deleted_at.is_some() {
-            let thread_data = self
-                .repo
-                .get_thread_data(&[anchor.id], 1)
-                .await
-                .map_err(anyhow::Error::from)?;
-            let has_active_replies = thread_data
-                .get(&anchor.id)
-                .is_some_and(|td| td.reply_count > 0);
-
-            if !has_active_replies {
-                return Err(ChannelMessagesErr::MessageNotFound(message_id));
-            }
-        }
-
-        let (before, after) = self
-            .repo
-            .get_top_level_messages_around(channel_id, anchor.created_at, anchor.id, limit)
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        let window = center_window(before, anchor, after, limit.into());
-        let has_more_newer = window.has_more_newer;
-        let messages = self.hydrate_messages(window.rows).await?;
-
-        let page = messages
-            .into_iter()
-            .paginate_on(limit.into(), CreatedAt)
-            .filter_on(())
-            .into_page();
-
-        Ok(ChannelMessagesQueryResult {
-            page,
-            has_more_newer,
-        })
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_thread_reply_rows(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> Result<Vec<ThreadReplyRow>, ChannelMessagesErr> {
-        let parent = self
-            .repo
-            .resolve_top_level_parent(channel_id, message_id)
-            .await
-            .map_err(anyhow::Error::from)?
-            .ok_or(ChannelMessagesErr::MessageNotFound(message_id))?;
-
-        self.repo
-            .get_thread_replies(parent.id)
-            .await
-            .map_err(anyhow::Error::from)
-            .map_err(ChannelMessagesErr::Repo)
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_thread_replies(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> Result<Vec<ThreadReply>, ChannelMessagesErr> {
-        let reply_rows = self.get_thread_reply_rows(channel_id, message_id).await?;
-        self.hydrate_thread_replies(reply_rows).await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn resolve_message(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> Result<ResolvedChannelMessage, ChannelMessagesErr> {
-        self.repo
-            .resolve_message(channel_id, message_id)
-            .await
-            .map_err(anyhow::Error::from)?
-            .ok_or(ChannelMessagesErr::MessageNotFound(message_id))
     }
 
     async fn create_channel(
@@ -1385,15 +975,6 @@ where
         channel_id: Uuid,
     ) -> Result<(), ChannelMutationErr> {
         ChannelServiceImpl::delete_channel(self, actor, channel_id).await
-    }
-
-    async fn post_typing(
-        &self,
-        actor: Sender,
-        channel_id: Uuid,
-        req: PostTypingRequest,
-    ) -> Result<(), ChannelMutationErr> {
-        ChannelServiceImpl::post_typing(self, actor, channel_id, req).await
     }
 
     async fn add_participants(

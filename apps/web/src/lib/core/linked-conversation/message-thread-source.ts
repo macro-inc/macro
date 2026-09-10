@@ -10,11 +10,16 @@ export function createMessageThreadSource(
   id: Accessor<string>
 ): LinkedConversationSource {
   const query = useMessageThreadQuery(parent, id);
+  const thread = () =>
+    query.isSuccess && !query.data.state.deleted_at ? query.data : undefined;
   return {
-    root: () =>
-      query.isSuccess ? messageToMessageData(query.data.root) : undefined,
-    replies: () =>
-      query.isSuccess ? query.data.replies.map(messageToMessageData) : [],
-    replyCount: () => (query.isSuccess ? query.data.replies.length : undefined),
+    root: () => {
+      const value = thread();
+      return value ? messageToMessageData(value.root) : undefined;
+    },
+    replies: () => thread()?.replies.map(messageToMessageData) ?? [],
+    replyCount: () => thread()?.replies.length,
+    unavailable: () =>
+      query.isError || (query.isSuccess && !!query.data.state.deleted_at),
   };
 }

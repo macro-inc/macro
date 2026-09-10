@@ -1,3 +1,7 @@
+vi.mock('@queries/messages/subscription', () => ({
+  useMessageSubscription: () => {},
+}));
+
 import { queryClient } from '@queries/client';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,9 +11,9 @@ vi.mock('@service-storage/client', () => ({
 }));
 
 import {
-  type ChannelMessagesData,
-  getChannelMessagesQueryKey,
-} from '@queries/channel/channel-messages';
+  getMessageTimelineQueryKey,
+  type MessageTimelineData,
+} from '@queries/messages/timeline';
 import {
   createTargetMessageController,
   restoreDefaultChannelPaginationAfterTargetLoad,
@@ -251,21 +255,26 @@ describe('createTargetMessageController', () => {
       pages: [
         {
           items: [],
-          next_cursor: 'next',
-          previous_cursor: 'prev',
+          next_cursor: { id: 'next', created_at: '2024-01-01T00:00:00Z' },
+          previous_cursor: { id: 'prev', created_at: '2024-01-01T00:00:00Z' },
         },
       ],
-    } as ChannelMessagesData;
+    } as MessageTimelineData;
 
     queryClient.setQueryData(
-      getChannelMessagesQueryKey('channel-1', 'message-9'),
+      getMessageTimelineQueryKey(
+        { type: 'channel', id: 'channel-1' },
+        'message-9'
+      ),
       aroundData
     );
 
     restoreDefaultChannelPaginationAfterTargetLoad('channel-1', 'message-9');
 
     expect(
-      queryClient.getQueryData(getChannelMessagesQueryKey('channel-1', null))
+      queryClient.getQueryData(
+        getMessageTimelineQueryKey({ type: 'channel', id: 'channel-1' }, null)
+      )
     ).toEqual(aroundData);
   });
 });

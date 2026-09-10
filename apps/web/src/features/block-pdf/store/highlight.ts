@@ -11,7 +11,7 @@ import { produce, reconcile } from 'solid-js/store';
 import { Highlight, type IHighlight } from '../model/Highlight';
 import {
   anchorsResource,
-  documentMessageThreads,
+  documentMessageRoots,
   useCreateUnthreadedHighlightResource,
   useDeleteUnthreadedHighlightResource,
 } from './commentsResource';
@@ -36,7 +36,7 @@ createBlockEffect(() => {
   const anchors = anchorsData();
   if (!anchors || anchors.length === 0) return;
 
-  const commentThreads = documentMessageThreads();
+  const commentThreads = documentMessageRoots();
 
   const highlightAnchors = anchors.filter((a) => a.anchorType === 'highlight');
 
@@ -72,11 +72,12 @@ createBlockEffect(() => {
       thread: commentThread
         ? {
             threadId: commentThread.state.root_id,
-            rootId: commentThread.root.id,
+            rootId: commentThread.id,
             anchorId: a.uuid,
             page: a.page,
-            comments: [commentThread.root, ...commentThread.replies],
+            comments: [commentThread, ...commentThread.thread.preview],
             isResolved: commentThread.state.resolved,
+            replyCount: commentThread.thread.reply_count,
           }
         : null,
     };

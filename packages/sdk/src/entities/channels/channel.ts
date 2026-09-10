@@ -3,7 +3,7 @@ import type {
   GetChannelAttachmentsResponses,
   GetChannelParticipantsResponses,
   GetChannelResponses,
-  TypingAction,
+  MessageCursor,
 } from '../../../generated/storage/types.gen';
 import { type RichMessage, toBody } from '../../mentions';
 import { paginate, unwrap } from '../../utils';
@@ -120,18 +120,17 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
 
   /** The messages in this channel, most recent first, auto-paginated. */
   messages(opts?: { pageSize?: number }): AsyncGenerator<Message> {
-    return paginate(async (cursor) => {
+    return paginate<Message, MessageCursor>(async (cursor) => {
       const page = unwrap(
-        await this.client.storage.getChannelMessages({
-          path: { channel_id: this.id },
+        await this.client.storage.messageTimeline({
+          path: { parent_type: 'channel', parent_id: this.id },
           query: {
-            ...(opts?.pageSize ? { limit: opts.pageSize } : {}),
-            ...(cursor ? { cursor } : {}),
+            selection: JSON.stringify({ limit: opts?.pageSize, cursor }),
           },
         }),
       );
       return {
-        items: page.items.map((m) => Message.from(this.client, m)),
+        items: page.items.map((m) => Message.from(this.client, this.id, m)),
         nextCursor: page.next_cursor,
       };
     });
@@ -214,13 +213,16 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
 
   /** Broadcast a typing indicator, optionally scoped to a thread. */
   async typing(
-    action: TypingAction,
+    action: 'start' | 'stop',
     opts?: { thread?: Thread },
   ): Promise<void> {
     unwrap(
-      await this.client.storage.postTyping({
-        path: { channel_id: this.id },
-        body: { action, thread_id: opts?.thread?.rootId ?? null },
+      await this.client.storage.entityMessageTyping({
+        path: { parent_type: 'channel', parent_id: this.id },
+        body: {
+          active: action === 'start',
+          thread_id: opts?.thread?.rootId ?? null,
+        },
       }),
     );
   }

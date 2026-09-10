@@ -20,7 +20,6 @@ impl MessageEventPublisher for Target {
 fn event(change: MessageChange) -> MessageEvent {
     MessageEvent {
         parent: MessageParent::parse("document", "doc").unwrap(),
-        root_id: uuid::Uuid::from_u128(1),
         actor: "macro|author@example.com".into(),
         nonce: None,
         change,
@@ -62,7 +61,10 @@ async fn typing_only_reaches_the_parent_transport() {
         log: log.clone(),
     };
     MessageEffects::new(target(0), target(1), target(2))
-        .publish(event(MessageChange::Typing { active: true }))
+        .publish(event(MessageChange::Typing {
+            thread_id: None,
+            active: true,
+        }))
         .await
         .unwrap();
     assert_eq!(*log.lock().unwrap(), vec![2]);

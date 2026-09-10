@@ -59,18 +59,15 @@ async fn channel_message_posts_to_http_and_delivers_to_websocket() -> anyhow::Re
         .await
         .context("failed to decode post message response")?;
 
-    ensure!(
-        posted.nonce.as_deref() == Some(nonce.as_str()),
-        "post response did not echo nonce; response={posted:?}"
-    );
-
-    let delivered = wait_for_comms_message(&mut websocket_read, &posted.id, &nonce).await?;
+    let delivered = wait_for_posted_message(&mut websocket_read, &posted.id, &nonce).await?;
     ensure!(
         delivered.get("content").and_then(Value::as_str) == Some(content.as_str()),
         "websocket message content mismatch: {delivered}"
     );
     ensure!(
-        delivered.get("channel_id").and_then(Value::as_str) == Some(channel.channel_id.as_str()),
+        delivered.pointer("/parent/type").and_then(Value::as_str) == Some("channel")
+            && delivered.pointer("/parent/id").and_then(Value::as_str)
+                == Some(channel.channel_id.as_str()),
         "websocket message channel mismatch: {delivered}"
     );
     ensure!(
@@ -79,22 +76,20 @@ async fn channel_message_posts_to_http_and_delivers_to_websocket() -> anyhow::Re
     );
 
     let get_response = http
-        .get(format!(
-            "{}?limit=25",
-            services.get_channel_url(&channel.channel_id)
-        ))
+        .get(services.post_channel_message_url(&channel.channel_id))
+        .query(&[("selection", r#"{"limit":25}"#)])
         .bearer_auth(&token)
         .send()
         .await
-        .context("failed to GET channel")?;
-    let get_response = require_success(get_response, "GET channel").await?;
+        .context("failed to GET message timeline")?;
+    let get_response = require_success(get_response, "GET message timeline").await?;
     let channel_response: Value = get_response
         .json()
         .await
-        .context("failed to decode get channel response")?;
+        .context("failed to decode message timeline response")?;
 
     let persisted = channel_response
-        .get("messages")
+        .get("items")
         .and_then(Value::as_array)
         .and_then(|messages| {
             messages.iter().find(|message| {
@@ -103,7 +98,7 @@ async fn channel_message_posts_to_http_and_delivers_to_websocket() -> anyhow::Re
         })
         .with_context(|| {
             format!(
-                "posted message {} was not returned by GET channel",
+                "posted message {} was not returned by GET message timeline",
                 posted.id
             )
         })?;
@@ -124,7 +119,6 @@ async fn channel_message_posts_to_http_and_delivers_to_websocket() -> anyhow::Re
 #[derive(Debug, Deserialize)]
 struct PostMessageResponse {
     id: String,
-    nonce: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -161,7 +155,7 @@ where
     }
 }
 
-async fn wait_for_comms_message<S>(
+async fn wait_for_posted_message<S>(
     websocket_read: &mut S,
     expected_message_id: &str,
     expected_nonce: &str,
@@ -175,7 +169,7 @@ where
         let remaining = deadline.saturating_duration_since(Instant::now());
         ensure!(
             !remaining.is_zero(),
-            "timed out waiting for websocket comms_message {expected_message_id}"
+            "timed out waiting for websocket message_update {expected_message_id}"
         );
 
         let message = next_websocket_message(websocket_read, remaining).await?;
@@ -191,14 +185,19 @@ where
             continue;
         };
 
-        if message_type != "comms_message" {
+        if message_type != "message_update" {
             continue;
         }
 
-        if data.get("id").and_then(Value::as_str) == Some(expected_message_id)
+        if data.pointer("/change/type").and_then(Value::as_str) == Some("posted")
+            && data.pointer("/change/message/id").and_then(Value::as_str)
+                == Some(expected_message_id)
             && data.get("nonce").and_then(Value::as_str) == Some(expected_nonce)
         {
-            return Ok(data);
+            return data
+                .pointer("/change/message")
+                .cloned()
+                .context("posted event missing message");
         }
     }
 }

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            parent_entity_id::uuid AS \"channel_id!\",\n            id AS \"id!\"\n        FROM comms_messages\n        WHERE parent_entity_type = 'channel' AND (\n            $3::bool IS NULL\n            OR ($3 AND deleted_at IS NOT NULL)\n            OR (NOT $3 AND deleted_at IS NULL))\n        ORDER BY created_at ASC\n        LIMIT $1\n        OFFSET $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "39e85ce18ff806aa8822e16956582f1bec8b6320f94f32a04d6374ebde595f94"
+}

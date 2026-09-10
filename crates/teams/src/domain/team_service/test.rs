@@ -10,14 +10,10 @@ use std::{
 use channels::domain::{
     dm::{EnsureDms, EnsureDmsSummary},
     models::{
-        AttachmentEntityReference, ChannelAttachmentType, ChannelMessageFilters,
-        ChannelParticipant, ChannelType, CreateChannelRequest, CreateChannelResponse,
-        MessagePageDirection, Sender, ThreadReply,
+        AttachmentEntityReference, ChannelAttachmentType, ChannelParticipant, ChannelType,
+        CreateChannelRequest, CreateChannelResponse, Sender,
     },
-    ports::{
-        ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
-        ChannelService,
-    },
+    ports::{ChannelAttachmentsPage, ChannelMessagesErr, ChannelMutationErr, ChannelService},
 };
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, EntityType, MemberTeamRole, OwnerTeamRole,
@@ -897,18 +893,6 @@ struct RecordingChannelService {
 }
 
 impl ChannelService for RecordingChannelService {
-    fn get_channel_messages(
-        &self,
-        _channel_id: uuid::Uuid,
-        _query: Query<uuid::Uuid, CreatedAt, ()>,
-        _direction: MessagePageDirection,
-        _limit: u16,
-        _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
-    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for team service tests") }
-    }
-
     fn get_channel_attachments(
         &self,
         _channel_id: uuid::Uuid,
@@ -933,23 +917,6 @@ impl ChannelService for RecordingChannelService {
         _user_id: String,
     ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send
     {
-        async move { unimplemented!("not needed for team service tests") }
-    }
-
-    fn get_channel_messages_around(
-        &self,
-        _channel_id: uuid::Uuid,
-        _message_id: uuid::Uuid,
-        _limit: u16,
-    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for team service tests") }
-    }
-
-    fn get_thread_replies(
-        &self,
-        _channel_id: uuid::Uuid,
-        _message_id: uuid::Uuid,
-    ) -> impl Future<Output = Result<Vec<ThreadReply>, ChannelMessagesErr>> + Send {
         async move { unimplemented!("not needed for team service tests") }
     }
 

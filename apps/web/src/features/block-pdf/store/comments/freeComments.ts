@@ -18,7 +18,7 @@ import {
 } from '@block-pdf/type/placeables';
 import { createBlockMemo } from '@core/block';
 import { useUserId } from '@core/context/user';
-import { anchorsResource, documentMessageThreads } from '../commentsResource';
+import { anchorsResource, documentMessageRoots } from '../commentsResource';
 
 export { isThreadPlaceable };
 
@@ -70,6 +70,7 @@ const getFreeCommentThread = (
     text: rootComment.content,
     message: rootComment,
     children: replies.map((r) => r.id),
+    replyCount: thread.replyCount,
     resolved: thread.isResolved,
   };
 
@@ -81,7 +82,7 @@ const serverCommentPlaceables = createBlockMemo<IThreadPlaceable[]>(() => {
   const anchors = anchorsData();
   if (!anchors || anchors.length === 0) return [];
 
-  const commentThreads = documentMessageThreads();
+  const commentThreads = documentMessageRoots();
   if (!commentThreads || commentThreads.length === 0) return [];
 
   const freeCommentAnchors = anchors.filter(
@@ -112,10 +113,11 @@ const serverCommentPlaceables = createBlockMemo<IThreadPlaceable[]>(() => {
       },
       payload: {
         threadId: commentThread.state.root_id,
-        rootId: commentThread.root.id,
+        rootId: commentThread.id,
         anchorId: a.uuid,
         page: a.page,
-        comments: [commentThread.root, ...commentThread.replies],
+        comments: [commentThread, ...commentThread.thread.preview],
+        replyCount: commentThread.thread.reply_count,
         isResolved: commentThread.state.resolved,
       },
       allowableEdits: a.allowableEdits as any,
@@ -182,6 +184,7 @@ export const freeComments = createBlockMemo(() => {
         createdAt: new Date(),
         isNew: true,
         children: [],
+        replyCount: 0,
         threadId: 'draft',
         anchorId: commentPlaceable.internalId,
       };

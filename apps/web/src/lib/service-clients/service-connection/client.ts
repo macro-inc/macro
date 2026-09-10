@@ -20,8 +20,12 @@ import { ws } from './websocket';
 interface TrackedEntity {
   entityType: TrackEntityMessage['entity_type'];
   count: number;
+  heartbeat: ReturnType<typeof setInterval>;
+  refreshCallbacks: Map<EntityRefresh, number>;
 }
 const trackedEntities: Map<EntityId, TrackedEntity> = new Map();
+type EntityTarget = Pick<TrackEntityMessage, 'entity_id' | 'entity_type'>;
+type EntityRefresh = (entity: EntityTarget) => void;
 
 export const connectionGatewayClient = {
   async trackEntity(args: TrackEntityMessage) {
@@ -34,6 +38,14 @@ export const connectionGatewayClient = {
         trackedEntities.set(args.entity_id, {
           entityType: args.entity_type,
           count: 1,
+          heartbeat: setInterval(() => {
+            if (isTabFocused())
+              void connectionGatewayClient.trackEntity({
+                ...args,
+                action: 'ping',
+              });
+          }, 20_000),
+          refreshCallbacks: new Map(),
         });
       }
     } else if (args.action === 'close') {
@@ -42,6 +54,7 @@ export const connectionGatewayClient = {
         tracked.count -= 1;
         return ok({});
       } else {
+        clearInterval(tracked.heartbeat);
         trackedEntities.delete(args.entity_id);
         clearStream(args.entity_id);
       }
@@ -54,11 +67,10 @@ export const connectionGatewayClient = {
   },
 };
 
-/** Keep an entity subscribed for this view's lifetime, sharing ownership with other views. */
+/** Share tracking and heartbeats; refresh once on subscription and reconnect. */
 export function useEntitySubscription(
-  entity: Accessor<
-    Pick<TrackEntityMessage, 'entity_id' | 'entity_type'> | undefined
-  >
+  entity: Accessor<EntityTarget | undefined>,
+  onRefresh?: EntityRefresh
 ): void {
   const target = createMemo(entity, undefined, {
     equals: (previous, next) =>
@@ -71,11 +83,19 @@ export function useEntitySubscription(
       const track = (action: TrackEntityMessage['action']) =>
         void connectionGatewayClient.trackEntity({ ...value, action });
       track('open');
-      const heartbeat = setInterval(() => {
-        if (isTabFocused()) track('ping');
-      }, 20_000);
+      const callbacks = trackedEntities.get(value.entity_id)!.refreshCallbacks;
+      if (onRefresh) {
+        const count = callbacks.get(onRefresh) ?? 0;
+        callbacks.set(onRefresh, count + 1);
+        // A cached view may have missed updates while nobody tracked its parent.
+        if (count === 0) onRefresh(value);
+      }
       onCleanup(() => {
-        clearInterval(heartbeat);
+        if (onRefresh) {
+          const count = callbacks.get(onRefresh) ?? 0;
+          if (count > 1) callbacks.set(onRefresh, count - 1);
+          else callbacks.delete(onRefresh);
+        }
         track('close');
       });
     })
@@ -89,13 +109,17 @@ export function useEntitySubscription(
  */
 export function useReopenTrackedEntitiesOnReconnect(): void {
   createReconnectEffect(ws, () => {
-    for (const [entity_id, { entityType }] of trackedEntities) {
+    for (const [
+      entity_id,
+      { entityType, refreshCallbacks },
+    ] of trackedEntities) {
+      const entity = { entity_id, entity_type: entityType };
       ws.send({
         type: 'track_entity',
-        entity_id,
-        entity_type: entityType,
+        ...entity,
         action: 'open',
       });
+      for (const onRefresh of refreshCallbacks.keys()) onRefresh(entity);
     }
   });
 }

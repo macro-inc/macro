@@ -207,7 +207,7 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
                 _ => return None,
             };
             Some(build_notification_exists_clause(
-                "m.channel_id",
+                "m.parent_entity_id",
                 "channel",
                 &format!(
                     "n.secondary_event_item_type = 'channel_message' AND n.secondary_event_item_id = m.id::text AND {}",
@@ -220,9 +220,9 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
         id_sql,
         format!(
             r#"EXISTS (
-                SELECT 1 FROM comms_channel_messages m
+                SELECT 1 FROM comms_messages m
                 JOIN comms_channel_participants cp
-                    ON cp.channel_id = m.channel_id
+                    ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text
                     AND cp.user_id = $1
                     AND cp.left_at IS NULL
                 WHERE m.id = {id_sql}::uuid

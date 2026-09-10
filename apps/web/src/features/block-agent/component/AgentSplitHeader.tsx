@@ -3,6 +3,7 @@ import {
   ResponsiveBlockToolbar,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -14,6 +15,7 @@ import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import ChatCircleDots from '@phosphor/chat-circle-dots.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import LinkIcon from '@phosphor/link.svg';
 import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
@@ -21,6 +23,10 @@ import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import {
+  ORIGIN_THREAD_DRAWER_ID,
+  sessionOriginThread,
+} from '../context/origin-thread';
 
 /** 'claude-code' → 'Claude Code'; the fallback when the fold has no title. */
 export function harnessTitle(harness: string | undefined): string {
@@ -47,6 +53,7 @@ export function AgentSplitHeader(props: {
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
   const { sessionId } = useAgentSession();
+  const conversation = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
   const userId = useUserId();
   const title = () => {
     const persistedName = props.session?.name;
@@ -76,6 +83,12 @@ export function AgentSplitHeader(props: {
   };
 
   const tools: BlockTool[] = [
+    {
+      label: 'Open conversation',
+      icon: ChatCircleDots,
+      action: () => conversation.toggle(),
+      condition: () => sessionOriginThread(props.session) !== undefined,
+    },
     {
       label: () => {
         const provider = props.session?.external?.provider;

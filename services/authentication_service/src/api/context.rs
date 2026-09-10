@@ -8,7 +8,6 @@ use channels::{
         side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
     },
     outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
         notification_sender::NotificationChannelSender, pg_channels_repo::PgChannelsRepo,
         pg_side_effect_context::PgChannelSideEffectContext,
@@ -62,7 +61,6 @@ pub(crate) type ChannelServiceType = ChannelServiceImpl<
     SpawnedChannelEventDispatcher<
         ChannelSideEffectService<
             PgChannelSideEffectContext,
-            ConnectionGatewayChannelRealtimePublisher,
             NotificationChannelSender<NotificationIngressType>,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
             AuthenticationEventBroker,
@@ -135,7 +133,7 @@ pub(crate) struct ApiContext {
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
-    pub channel_messages: Arc<channels::domain::message_commands::ChannelMessageAdapter>,
+    pub channel_messages: Arc<dyn messages::domain::api::MessageCommands>,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub entity_access_service: Arc<EntityAccessServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,

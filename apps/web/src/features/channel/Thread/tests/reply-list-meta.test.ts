@@ -1,5 +1,5 @@
-import { senderFromStorageId } from '@queries/channel/message-sender';
-import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
+import { senderFromStorageId } from '@queries/messages/message-sender';
+import type { Message as EntityMessage } from '@service-storage/messages';
 import { describe, expect, it } from 'vitest';
 import { buildThreadReplyListMeta } from '../reply-list-meta';
 
@@ -7,9 +7,11 @@ function createReply(
   id: string,
   createdAt: string,
   senderId = 'user-1'
-): ApiThreadReply {
+): EntityMessage {
   return {
     id,
+    parent: { type: 'channel', id: 'channel-1' },
+    mentions: [],
     content: '',
     created_at: createdAt,
     updated_at: createdAt,

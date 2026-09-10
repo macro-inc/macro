@@ -5,6 +5,8 @@ use sqlx::{PgPool, Postgres, Transaction, types::Json};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+mod timeline;
+
 #[cfg(test)]
 mod test;
 
@@ -144,7 +146,15 @@ impl PgMessageRepository {
                     parent: MessageParent::parse(&r.parent_entity_type, &r.parent_entity_id)
                         .map_err(|e| MessageError::Repository(rootcause::Report::new(e).into()))?,
                     thread_id: r.thread_id,
-                    bot_profile: bots.get(&r.sender_id).cloned(),
+                    bot_profile: bots.get(&r.sender_id).cloned().or_else(|| {
+                        let id = bot_id::BotIdStr::parse_from_str(&r.sender_id)
+                            .ok()?
+                            .bot_id();
+                        bot_id::system_bot(id).map(|bot| BotSenderProfile {
+                            name: bot.name.to_owned(),
+                            avatar_url: None,
+                        })
+                    }),
                     mentions: if deleted {
                         vec![]
                     } else {
@@ -283,18 +293,18 @@ impl PgMessageRepository {
         parent: &MessageParent,
         root_id: Uuid,
     ) -> Result<ThreadState, MessageError> {
-        Self::set_thread_in(tx, parent, root_id, None, true).await
+        Self::set_thread_in(tx, parent, root_id, ThreadPatch::default(), true).await
     }
 
     async fn set_thread(
         &self,
         parent: &MessageParent,
         root_id: Uuid,
-        resolved: Option<bool>,
+        patch: ThreadPatch,
         delete: bool,
     ) -> Result<ThreadState, MessageError> {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
-        let state = Self::set_thread_in(&mut tx, parent, root_id, resolved, delete).await?;
+        let state = Self::set_thread_in(&mut tx, parent, root_id, patch, delete).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(state)
     }
@@ -303,7 +313,7 @@ impl PgMessageRepository {
         tx: &mut Transaction<'_, Postgres>,
         parent: &MessageParent,
         root_id: Uuid,
-        resolved: Option<bool>,
+        patch: ThreadPatch,
         delete: bool,
     ) -> Result<ThreadState, MessageError> {
         let state = sqlx::query_scalar!(
@@ -344,9 +354,9 @@ impl PgMessageRepository {
         let result = sqlx::query_scalar!(
             r#"UPDATE comms_message_threads t SET resolved = COALESCE($2, resolved), updated_at = now(),
                    deleted_at = CASE WHEN $3 THEN now() ELSE deleted_at END,
-                   anchor = CASE WHEN $3 THEN NULL ELSE anchor END
+                   anchor = CASE WHEN $4 OR ($3 AND anchor->>'type' <> 'markdown') THEN NULL ELSE anchor END
                WHERE root_id = $1 RETURNING to_jsonb(t) AS "state!: Json<ThreadState>""#,
-            root_id, resolved, delete,
+            root_id, patch.resolved, delete, patch.detach_anchor,
         ).fetch_one(&mut **tx).await.map_err(database_error)?;
         Ok(result.0)
     }
@@ -474,78 +484,12 @@ impl MessageRepository for PgMessageRepository {
         Ok(messages)
     }
 
-    async fn list(
+    async fn timeline(
         &self,
         parent: &MessageParent,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<ThreadPage, MessageError> {
-        let states = sqlx::query!(
-            r#"SELECT to_jsonb(t) AS "state!: Json<ThreadState>", m.created_at FROM comms_messages m
-               JOIN comms_message_threads t ON t.root_id = m.id
-               WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2 AND t.deleted_at IS NULL
-                   AND ($3::timestamptz IS NULL OR (m.created_at, m.id) > ($3, $4::uuid))
-               ORDER BY m.created_at, m.id LIMIT $5"#,
-            parent.entity_type(),
-            parent.entity_id(),
-            cursor.as_ref().map(|c| c.created_at),
-            cursor.as_ref().map(|c| c.id),
-            i64::from(limit.clamp(1, 100)) + 1,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(database_error)?;
-        let has_more = states.len() > usize::from(limit.clamp(1, 100));
-        let states: Vec<_> = states
-            .into_iter()
-            .take(usize::from(limit.clamp(1, 100)))
-            .collect();
-        let next_cursor = if has_more {
-            states.last().map(|s| MessageCursor {
-                created_at: s.created_at,
-                id: s.state.root_id,
-            })
-        } else {
-            None
-        };
-        let roots: Vec<_> = states.iter().map(|s| s.state.root_id).collect();
-        let rows = sqlx::query_scalar!(
-            r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
-               WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
-                   AND (m.id = ANY($3) OR (m.thread_id = ANY($3) AND m.deleted_at IS NULL))
-               ORDER BY m.import_order NULLS LAST, m.created_at, m.id"#,
-            parent.entity_type(),
-            parent.entity_id(),
-            &roots,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(database_error)?;
-        let mut root_messages = HashMap::new();
-        let mut replies: HashMap<Uuid, Vec<Message>> = HashMap::new();
-        for message in self.hydrate(rows).await? {
-            if let Some(root) = message.thread_id {
-                replies.entry(root).or_default().push(message);
-            } else {
-                root_messages.insert(message.id, message);
-            }
-        }
-        let threads = states
-            .into_iter()
-            .filter_map(|s| {
-                root_messages
-                    .remove(&s.state.root_id)
-                    .map(|root| MessageThread {
-                        replies: replies.remove(&s.state.root_id).unwrap_or_default(),
-                        root,
-                        state: s.state.0,
-                    })
-            })
-            .collect();
-        Ok(ThreadPage {
-            threads,
-            next_cursor,
-        })
+        query: MessageTimelineQuery,
+    ) -> Result<MessagePage, MessageError> {
+        self.read_timeline(parent, query).await
     }
 
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
@@ -681,13 +625,13 @@ impl MessageRepository for PgMessageRepository {
         Ok(message)
     }
 
-    async fn resolve(
+    async fn patch_thread(
         &self,
         parent: &MessageParent,
         root: Uuid,
-        resolved: bool,
+        patch: ThreadPatch,
     ) -> Result<ThreadState, MessageError> {
-        self.set_thread(parent, root, Some(resolved), false).await
+        self.set_thread(parent, root, patch, false).await
     }
 
     async fn delete_thread(
@@ -695,7 +639,8 @@ impl MessageRepository for PgMessageRepository {
         parent: &MessageParent,
         root: Uuid,
     ) -> Result<ThreadState, MessageError> {
-        self.set_thread(parent, root, None, true).await
+        self.set_thread(parent, root, ThreadPatch::default(), true)
+            .await
     }
 
     async fn resolve_legacy(

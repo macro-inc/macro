@@ -31,26 +31,71 @@ pub struct MessageCursor {
     pub id: Uuid,
 }
 
-/// Page of threads on a parent.
+/// Direction through a parent timeline, retaining channel cursor semantics.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum MessageDirection {
+    /// Most recent first, or older than the cursor.
+    #[default]
+    Older,
+    /// Newer than the cursor.
+    Newer,
+}
+
+/// Root selection shared by channel timelines and document discussions.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct MessageTimelineQuery {
+    /// Stable creation-time and UUID cursor.
+    pub cursor: Option<MessageCursor>,
+    /// Which side of the cursor to fetch.
+    #[serde(default)]
+    pub direction: MessageDirection,
+    /// Center on the root containing this message.
+    pub around: Option<Uuid>,
+    /// Restrict roots to this set, for selected source threads.
+    #[serde(default)]
+    pub ids: Vec<Uuid>,
+    /// Select anchored or unanchored roots; absent includes both.
+    pub anchored: Option<bool>,
+    /// Include whole-thread tombstones when reconciling persisted document marks.
+    #[serde(default)]
+    pub include_deleted_threads: bool,
+    /// Include roots or live replies created at or after this time.
+    pub activity_after: Option<DateTime<Utc>>,
+    /// Include roots or live replies created before this time.
+    pub activity_before: Option<DateTime<Utc>>,
+    /// Page size, clamped by the application to 1..=100.
+    pub limit: Option<u16>,
+}
+
+pub use super::models::{MessageListItem, MessageThreadPreview};
+
+/// Bidirectional, bounded timeline page, ordered newest root first.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ThreadPage {
-    /// Root messages and their discussions.
-    pub threads: Vec<MessageThread>,
-    /// Cursor for the next page.
+pub struct MessagePage {
+    /// Root messages with bounded previews.
+    pub items: Vec<MessageListItem>,
+    /// Continue to older roots.
     pub next_cursor: Option<MessageCursor>,
+    /// Continue to newer roots.
+    pub previous_cursor: Option<MessageCursor>,
 }
 
 /// A source channel thread that mentions the requested document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ReferencedThread {
+    /// Source parent used by the common message reader and mutations.
+    pub parent: MessageParent,
+    /// Source root identity; discovery does not copy its message content.
+    pub root_id: Uuid,
     /// Source channel's current display name, returned only after access checks.
     pub channel_name: Option<String>,
     /// Whether this viewer currently has permission to reply in the source channel.
     pub can_reply: bool,
-    /// Canonical source messages: replies must retain this parent.
-    pub thread: MessageThread,
 }
 
 /// Authorized source threads, deduplicated by root.
@@ -89,7 +134,7 @@ pub struct CreateMessage {
     pub input: PostMessage,
 }
 
-/// Message updates accepted by the shared API.
+/// Normalized content and reference update passed to persistence.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct EditMessage {
@@ -109,7 +154,9 @@ pub struct EditMessage {
 }
 
 /// Attachment changes interpreted by the common command boundary.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum AttachmentChange {
     /// Keep current attachments.
     #[default]
@@ -126,41 +173,29 @@ pub enum AttachmentChange {
 }
 
 /// Partial updates share the same authorship, reference, and delivery rules as edits.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessagePatch {
     /// Replacement body; absent preserves current content.
     pub content: Option<String>,
     /// Replacement authored mentions; absent preserves current mentions.
     pub mentions: Option<Vec<SimpleMention>>,
     /// Attachment change, without adapter-side message reads.
+    #[serde(default)]
     pub attachments: AttachmentChange,
     /// Client mutation nonce.
     pub nonce: Option<String>,
     /// Trusted notification behavior.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schema(ignore))]
     pub notification_policy: PatchMessageNotificationPolicy,
 }
-impl From<EditMessage> for MessagePatch {
-    fn from(edit: EditMessage) -> Self {
-        Self {
-            content: Some(edit.content),
-            mentions: Some(edit.mentions),
-            attachments: edit
-                .attachments
-                .map_or(AttachmentChange::Preserve, AttachmentChange::Replace),
-            nonce: edit.nonce,
-            notification_policy: edit.notification_policy,
-        }
-    }
-}
-
 /// A committed message or thread change sent to delivery adapters.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageEvent {
     /// Changed parent, used for subscriptions and cache invalidation.
     pub parent: MessageParent,
-    /// Root message UUID.
-    pub root_id: Uuid,
     /// User or bot who initiated the operation.
     pub actor: String,
     /// Mutation nonce for optimistic reconciliation.
@@ -204,13 +239,15 @@ pub enum MessageChange {
         /// Persisted message.
         message: Message,
     },
-    /// Thread resolution or deletion changed.
+    /// Thread resolution, placement, or deletion changed.
     ThreadUpdated {
         /// Persisted thread state.
         state: ThreadState,
     },
     /// Transient typing indication.
     Typing {
+        /// Root being replied to, or no root for the parent composer.
+        thread_id: Option<Uuid>,
         /// Whether the user is currently typing.
         active: bool,
     },
@@ -256,13 +293,13 @@ pub trait MessageRepository: Send + Sync + 'static {
         message_id: Uuid,
         limit: u16,
     ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
-    /// List roots and ordered replies. Explicitly deleted threads are excluded.
-    fn list(
+    /// Read a bounded root page with reply previews under indexable parent predicates.
+    fn timeline(
         &self,
         parent: &MessageParent,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> impl Future<Output = Result<ThreadPage, MessageError>> + Send;
+        query: MessageTimelineQuery,
+    ) -> impl Future<Output = Result<MessagePage, MessageError>> + Send;
+
     /// Atomically create a message, its initial references, and any new thread state.
     fn create(
         &self,
@@ -290,12 +327,12 @@ pub trait MessageRepository: Send + Sync + 'static {
         emoji: &str,
         add: bool,
     ) -> impl Future<Output = Result<Message, MessageError>> + Send;
-    /// Set thread resolution.
-    fn resolve(
+    /// Apply authorized thread resolution or Markdown anchor detachment.
+    fn patch_thread(
         &self,
         parent: &MessageParent,
         root_id: Uuid,
-        resolved: bool,
+        patch: ThreadPatch,
     ) -> impl Future<Output = Result<ThreadState, MessageError>> + Send;
     /// Delete a discussion and clean up comment-only anchors, preserving standalone highlights.
     fn delete_thread(

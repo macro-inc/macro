@@ -1,12 +1,11 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
-import { createDocumentDiscussionSource } from '@block-md/comments/documentDiscussionSource';
+import { DocumentDiscussion } from '@block-md/component/DocumentDiscussion';
 import {
   FileDetailsSection,
   FilePropertiesSection,
   SidePanel,
 } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
-import { Discussion, DiscussionProvider } from '@core/comments/discussion';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 
@@ -50,10 +49,5 @@ function ActionsSectionContent() {
 }
 
 function PdfDiscussion() {
-  const source = createDocumentDiscussionSource();
-  return (
-    <DiscussionProvider source={source}>
-      <Discussion label="Comments" />
-    </DiscussionProvider>
-  );
+  return <DocumentDiscussion label="Comments" />;
 }

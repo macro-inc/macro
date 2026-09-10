@@ -34,6 +34,7 @@ import {
   Switch,
 } from 'solid-js';
 import { useAgentMentionUsers } from '../use-agent-mention-users';
+import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 import { createCollapsedInputState } from './create-collapsed-input-state';
@@ -58,6 +59,7 @@ import { hasSendableInputContent } from './utils/sendable-content';
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
+  parent?: import('@service-storage/messages').MessageParent;
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
@@ -226,12 +228,17 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
+  const parentBots =
+    !props.bots && props.parent
+      ? useMessageBotMentionUsers(() => props.parent!)
+      : () => [];
   const mentionUsers = useAgentMentionUsers(() => [
     ...(props.participants?.() ?? []),
-    ...(props.bots?.() ?? []),
+    ...(props.bots?.() ?? parentBots()),
   ]);
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
+    groupMentions: !props.parent || props.parent.type === 'channel',
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     enableMentions: true,
     users: mentionUsers,

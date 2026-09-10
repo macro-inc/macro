@@ -1,16 +1,19 @@
 use super::*;
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::Message;
 use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
 };
+use uuid::Uuid;
 
 #[derive(Clone, Default)]
 struct Log {
     events: Arc<Mutex<Vec<ChannelEvent>>>,
     live: Arc<Mutex<usize>>,
     shares: Arc<Mutex<usize>>,
+    fail_live: bool,
 }
 impl ChannelEventDispatcher for Log {
     fn dispatch(&self, event: ChannelEvent) {
@@ -23,6 +26,9 @@ impl MessageRealtime for Log {
     }
     async fn send(&self, _: &MessageEvent, _: HashSet<String>) -> Result<(), rootcause::Report> {
         *self.live.lock().unwrap() += 1;
+        if self.fail_live {
+            return Err(rootcause::report!("realtime unavailable"));
+        }
         Ok(())
     }
 }
@@ -79,7 +85,6 @@ fn message() -> Message {
 fn event(change: MessageChange) -> MessageEvent {
     MessageEvent {
         parent: message().parent,
-        root_id: message().id,
         actor: message().sender_id.as_ref().to_owned(),
         nonce: None,
         change,
@@ -110,7 +115,10 @@ async fn sharing_failure_does_not_suppress_committed_post_delivery() {
     assert_eq!(*log.shares.lock().unwrap(), 1);
     assert!(matches!(
         log.events.lock().unwrap().as_slice(),
-        [ChannelEvent::MessagePosted { .. }]
+        [ChannelEvent::MessageCommitted {
+            event,
+            ..
+        }] if matches!(event.change, MessageChange::Posted { .. })
     ));
 }
 
@@ -139,25 +147,21 @@ async fn edits_share_new_mentions_and_emit_attachment_removals() {
     );
     assert_eq!(*log.shares.lock().unwrap(), 1);
     let events = log.events.lock().unwrap();
-    assert!(matches!(
-        &events[0],
-        ChannelEvent::MessageChanged {
-            posted_notification: None,
-            ..
-        }
-    ));
-    let ChannelEvent::AttachmentsChanged {
-        added,
-        removed,
-        attachments,
-        ..
-    } = &events[1]
-    else {
-        panic!("missing attachment event")
+    assert_eq!(events.len(), 1);
+    let ChannelEvent::MessageCommitted { event, .. } = &events[0] else {
+        panic!("missing committed message")
     };
-    assert!(added.is_empty() && attachments.is_empty());
-    assert_eq!(removed.len(), 1);
-    assert_eq!(removed[0].id, Uuid::from_u128(4));
+    let MessageChange::Edited {
+        message,
+        previous_attachments,
+        ..
+    } = &event.change
+    else {
+        panic!("missing canonical edit")
+    };
+    assert!(message.attachments.is_empty());
+    assert_eq!(previous_attachments.len(), 1);
+    assert_eq!(previous_attachments[0].id, Uuid::from_u128(4));
 }
 
 #[tokio::test]
@@ -186,13 +190,7 @@ async fn reaction_add_and_remove_record_the_human_actor_activity() {
         delivery.publish(event).await.unwrap();
     }
     assert_eq!(*log.live.lock().unwrap(), 2);
-    let events = log.events.lock().unwrap();
-    assert!(
-        matches!(&events[0], ChannelEvent::ReactionChanged { reactions, .. } if reactions.len() == 1)
-    );
-    assert!(
-        matches!(&events[1], ChannelEvent::ReactionChanged { reactions, .. } if reactions.is_empty())
-    );
+    assert!(log.events.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -212,10 +210,7 @@ async fn reaction_activity_failure_does_not_suppress_delivery() {
             .is_err()
     );
     assert_eq!(*log.live.lock().unwrap(), 1);
-    assert!(matches!(
-        log.events.lock().unwrap().as_slice(),
-        [ChannelEvent::ReactionChanged { .. }]
-    ));
+    assert!(log.events.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -236,4 +231,31 @@ async fn bot_reactions_and_deletions_do_not_record_human_activity() {
         .await
         .unwrap();
     assert_eq!(*log.live.lock().unwrap(), 2);
+}
+
+#[tokio::test]
+async fn realtime_failure_does_not_suppress_channel_notification_and_search_events() {
+    let log = Log {
+        fail_live: true,
+        ..Default::default()
+    };
+    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    assert!(
+        delivery
+            .publish(event(MessageChange::Posted {
+                message: message(),
+                mentions: vec![],
+                notification_policy: Default::default()
+            }))
+            .await
+            .is_err()
+    );
+    assert_eq!(*log.live.lock().unwrap(), 1);
+    assert!(matches!(
+        &log.events.lock().unwrap()[0],
+        ChannelEvent::MessageCommitted {
+            event,
+            ..
+        } if matches!(event.change, MessageChange::Posted { .. })
+    ));
 }

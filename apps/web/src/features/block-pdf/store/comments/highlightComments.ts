@@ -93,6 +93,7 @@ const getHighlightThread = (
     text: rootComment.content,
     message: rootComment,
     children: replies.map((r) => r.id),
+    replyCount: thread.replyCount,
     resolved: thread.isResolved,
   };
 
@@ -139,6 +140,7 @@ export const highlightComments = createBlockMemo(() => {
           createdAt: new Date(),
           isNew: true,
           children: [],
+          replyCount: 0,
           threadId: 'draft',
           anchorId: highlight.uuid,
         };

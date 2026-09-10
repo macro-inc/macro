@@ -11,13 +11,12 @@ use crate::domain::{
     events::ChannelEvent,
     mention_events::{EntityRef, MentionMacroEvent, MentionMetadata},
     models::{
-        BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
-        MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, SimpleMention,
-        TypingAction,
+        BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType,
+        PostMessageNotificationPolicy, SimpleMention,
     },
     ports::{
         ChannelContactsDispatcher, ChannelEventDispatcher, ChannelEventHandler,
-        ChannelNotificationSender, ChannelRealtimePublisher, ChannelSideEffectContext,
+        ChannelNotificationSender, ChannelSideEffectContext,
     },
 };
 use bot_id::BotIdStr;
@@ -28,6 +27,10 @@ use tracing::Instrument as _;
 use uuid::Uuid;
 
 use messages::domain::mentions::{BOT_MENTION_ENTITY_TYPE, bot_mention_ids};
+use messages::domain::{
+    models::{Message, MessageParent, PatchMessageNotificationPolicy},
+    ports::{MessageChange, MessageEvent},
+};
 
 /// Collect mentioned bots that are active participants in the channel.
 ///
@@ -71,63 +74,6 @@ fn mention_bot_id(entity_id: &str) -> Option<BotId> {
 fn is_bot_user_mention(mention: &SimpleMention) -> bool {
     mention.entity_type == "user"
         && mention_bot_id(&mention.entity_id) == Some(bot_id::MACRO_AI_BOT_ID)
-}
-
-/// Realtime update requested by the channel domain.
-#[derive(Debug, Clone)]
-pub enum ChannelRealtimeEffect {
-    /// A message was created or changed.
-    Message {
-        /// Recipients that should receive the update.
-        recipients: Vec<MacroUserIdStr<'static>>,
-        /// Persisted message payload.
-        message: Box<MutatedMessage>,
-        /// Public bot profile when the sender is a bot.
-        bot_profile: Option<BotSenderProfile>,
-        /// Client mutation nonce echoed to listeners.
-        nonce: Option<String>,
-    },
-    /// Message attachments changed.
-    Attachments {
-        /// Recipients that should receive the update.
-        recipients: Vec<MacroUserIdStr<'static>>,
-        /// Channel containing the message.
-        channel_id: Uuid,
-        /// Message whose attachments changed.
-        message_id: Uuid,
-        /// Current attachment set.
-        attachments: Vec<MutatedAttachment>,
-        /// Client mutation nonce echoed to listeners.
-        nonce: Option<String>,
-    },
-    /// Message reactions changed.
-    Reaction {
-        /// Recipients that should receive the update.
-        recipients: Vec<MacroUserIdStr<'static>>,
-        /// Channel containing the message.
-        channel_id: Uuid,
-        /// Message whose reactions changed.
-        message_id: Uuid,
-        /// Current grouped reaction state.
-        reactions: Vec<CountedReaction>,
-        /// Client mutation nonce echoed to listeners.
-        nonce: Option<String>,
-    },
-    /// Typing state changed.
-    Typing {
-        /// Recipients that should receive the update.
-        recipients: Vec<MacroUserIdStr<'static>>,
-        /// Channel containing the typing update.
-        channel_id: Uuid,
-        /// User whose typing state changed.
-        user_id: String,
-        /// Typing action.
-        action: TypingAction,
-        /// Optional thread id for thread-scoped typing.
-        thread_id: Option<Uuid>,
-        /// Client mutation nonce echoed to listeners.
-        nonce: Option<String>,
-    },
 }
 
 /// The sender of a channel message for notification purposes.
@@ -285,24 +231,11 @@ pub enum ChannelNotificationEffect {
 
 /// Domain service that derives and dispatches side effects for channel events.
 #[derive(Clone)]
-pub struct ChannelSideEffectService<C, R, N, K, B = NoopMacroEventBroker> {
+pub struct ChannelSideEffectService<C, N, K, B = NoopMacroEventBroker> {
     context: C,
-    realtime: R,
     notifications: N,
     contacts: K,
     macro_event_broker: B,
-}
-
-struct MessagePostedSideEffects {
-    channel_id: Uuid,
-    metadata: ChannelMetadata,
-    participants: Vec<ChannelParticipant>,
-    message: MutatedMessage,
-    mentions: Vec<SimpleMention>,
-    has_attachments: bool,
-    attachments: Vec<MutatedAttachment>,
-    nonce: Option<String>,
-    notification_policy: PostMessageNotificationPolicy,
 }
 
 struct InviteNotificationRequest {
@@ -315,15 +248,14 @@ struct InviteNotificationRequest {
     metadata: ChannelMetadata,
 }
 
-impl<C, R, N, K> ChannelSideEffectService<C, R, N, K> {
+impl<C, N, K> ChannelSideEffectService<C, N, K> {
     /// Create a channel side-effect service that drops broker events.
     ///
     /// Use [`Self::with_macro_event_broker`] to publish channel events to the
     /// macro event broker.
-    pub fn new(context: C, realtime: R, notifications: N, contacts: K) -> Self {
+    pub fn new(context: C, notifications: N, contacts: K) -> Self {
         Self {
             context,
-            realtime,
             notifications,
             contacts,
             macro_event_broker: NoopMacroEventBroker,
@@ -331,15 +263,14 @@ impl<C, R, N, K> ChannelSideEffectService<C, R, N, K> {
     }
 }
 
-impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
+impl<C, N, K, B> ChannelSideEffectService<C, N, K, B> {
     /// Configure a macro event broker to publish channel events to.
     pub fn with_macro_event_broker<B2: MacroEventBroker>(
         self,
         macro_event_broker: B2,
-    ) -> ChannelSideEffectService<C, R, N, K, B2> {
+    ) -> ChannelSideEffectService<C, N, K, B2> {
         ChannelSideEffectService {
             context: self.context,
-            realtime: self.realtime,
             notifications: self.notifications,
             contacts: self.contacts,
             macro_event_broker,
@@ -375,10 +306,9 @@ where
     }
 }
 
-impl<C, R, N, K, B> ChannelEventHandler for ChannelSideEffectService<C, R, N, K, B>
+impl<C, N, K, B> ChannelEventHandler for ChannelSideEffectService<C, N, K, B>
 where
     C: ChannelSideEffectContext + Clone,
-    R: ChannelRealtimePublisher + Clone,
     N: ChannelNotificationSender + Clone,
     K: ChannelContactsDispatcher + Clone,
     B: MacroEventBroker + Clone,
@@ -395,127 +325,46 @@ where
             ChannelEvent::EntityMentionCreated { .. } => {}
             ChannelEvent::EntityMentionDeleted { .. } => {}
             ChannelEvent::ChannelDeleted { .. } => {}
-            ChannelEvent::MessagePosted {
-                channel_id,
+            ChannelEvent::MessageCommitted {
+                event,
                 metadata,
                 participants,
-                message,
-                mentions,
-                has_attachments,
-                attachments,
-                nonce,
-                notification_policy,
             } => {
-                self.handle_message_posted(MessagePostedSideEffects {
-                    channel_id,
-                    metadata,
-                    participants,
-                    message,
-                    mentions,
-                    has_attachments,
-                    attachments,
-                    nonce,
-                    notification_policy,
-                })
-                .await;
-            }
-            ChannelEvent::AttachmentsChanged {
-                channel_id,
-                message_id,
-                attachments,
-                recipients,
-                nonce,
-                ..
-            } => {
-                self.publish_realtime(ChannelRealtimeEffect::Attachments {
-                    recipients,
-                    channel_id,
-                    message_id,
-                    attachments,
-                    nonce,
-                })
-                .await;
-            }
-            ChannelEvent::MessageChanged {
-                channel_id,
-                message,
-                recipients,
-                nonce,
-                posted_notification,
-                ..
-            } => {
-                let bot_profile = self.bot_profile_for_message(&message).await;
-                self.publish_realtime(ChannelRealtimeEffect::Message {
-                    recipients,
-                    message: Box::new(message.clone()),
-                    bot_profile: bot_profile.clone(),
-                    nonce,
-                })
-                .await;
-
-                if let Some(notification) = posted_notification {
-                    self.send_message_posted_notifications(PostedMessageNotificationInputs {
-                        channel_id,
-                        metadata: notification.metadata,
-                        participants: notification.participants,
-                        message,
-                        mentions: notification.mentions,
-                        has_attachments: notification.has_attachments,
-                        bot_profile,
-                        notification_policy: PostMessageNotificationPolicy::Default,
-                    })
-                    .await;
+                let MessageParent::Channel(channel_id) = event.parent else {
+                    return;
+                };
+                if let Some(metadata) = metadata {
+                    let posted = match event.change {
+                        MessageChange::Posted {
+                            message,
+                            mentions,
+                            notification_policy,
+                        } => Some((message, mentions, notification_policy)),
+                        MessageChange::Edited {
+                            message,
+                            mentions,
+                            notification_policy:
+                                PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                            ..
+                        } => Some((message, mentions, PostMessageNotificationPolicy::Default)),
+                        _ => None,
+                    };
+                    if let Some((message, mentions, notification_policy)) = posted
+                        && notification_policy != PostMessageNotificationPolicy::Silent
+                    {
+                        self.send_message_posted_notifications(PostedMessageNotificationInputs {
+                            channel_id,
+                            metadata,
+                            participants,
+                            has_attachments: !message.attachments.is_empty(),
+                            bot_profile: message.bot_profile.clone(),
+                            message,
+                            mentions,
+                            notification_policy,
+                        })
+                        .await;
+                    }
                 }
-            }
-            ChannelEvent::MessageDeleted {
-                message,
-                recipients,
-                nonce,
-                ..
-            } => {
-                let bot_profile = self.bot_profile_for_message(&message).await;
-                self.publish_realtime(ChannelRealtimeEffect::Message {
-                    recipients,
-                    message: Box::new(message),
-                    bot_profile,
-                    nonce,
-                })
-                .await;
-            }
-            ChannelEvent::ReactionChanged {
-                channel_id,
-                message_id,
-                reactions,
-                recipients,
-                nonce,
-                ..
-            } => {
-                self.publish_realtime(ChannelRealtimeEffect::Reaction {
-                    recipients,
-                    channel_id,
-                    message_id,
-                    reactions,
-                    nonce,
-                })
-                .await;
-            }
-            ChannelEvent::TypingChanged {
-                channel_id,
-                actor,
-                action,
-                thread_id,
-                recipients,
-                nonce,
-            } => {
-                self.publish_realtime(ChannelRealtimeEffect::Typing {
-                    recipients,
-                    channel_id,
-                    user_id: actor.as_ref().to_string(),
-                    action,
-                    thread_id,
-                    nonce,
-                })
-                .await;
             }
             ChannelEvent::ParticipantsAdded {
                 channel_id,
@@ -568,80 +417,12 @@ where
     }
 }
 
-impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B>
+impl<C, N, K, B> ChannelSideEffectService<C, N, K, B>
 where
     C: ChannelSideEffectContext + Clone,
-    R: ChannelRealtimePublisher + Clone,
     N: ChannelNotificationSender + Clone,
     K: ChannelContactsDispatcher + Clone,
 {
-    async fn handle_message_posted(&self, event: MessagePostedSideEffects) {
-        let MessagePostedSideEffects {
-            channel_id,
-            metadata,
-            participants,
-            message,
-            mentions,
-            has_attachments,
-            attachments,
-            nonce,
-            notification_policy,
-        } = event;
-        let recipients = participant_ids(&participants);
-        let bot_profile = self.bot_profile_for_message(&message).await;
-        self.publish_realtime(ChannelRealtimeEffect::Message {
-            recipients: recipients.clone(),
-            message: Box::new(message.clone()),
-            bot_profile: bot_profile.clone(),
-            nonce: nonce.clone(),
-        })
-        .await;
-
-        if !attachments.is_empty() {
-            self.publish_realtime(ChannelRealtimeEffect::Attachments {
-                recipients,
-                channel_id,
-                message_id: message.id,
-                attachments,
-                nonce,
-            })
-            .await;
-        }
-
-        if notification_policy != PostMessageNotificationPolicy::Silent {
-            self.send_message_posted_notifications(PostedMessageNotificationInputs {
-                channel_id,
-                metadata,
-                participants,
-                message,
-                mentions,
-                has_attachments,
-                bot_profile,
-                notification_policy,
-            })
-            .await;
-        }
-    }
-
-    /// Resolve the public bot profile when the message sender is a bot.
-    async fn bot_profile_for_message(&self, message: &MutatedMessage) -> Option<BotSenderProfile> {
-        let bot_id = message.sender_id.as_bot()?.bot_id();
-        if bot_id == bot_id::MACRO_AI_BOT_ID {
-            return Some(BotSenderProfile {
-                name: bot_id::MACRO_AI_NAME.to_string(),
-                avatar_url: None,
-            });
-        }
-        self.context.get_bot_sender_profile(bot_id).await
-    }
-
-    async fn publish_realtime(&self, effect: ChannelRealtimeEffect) {
-        if let Err(err) = self.realtime.publish(effect).await {
-            let err: anyhow::Error = err.into();
-            tracing::error!(error=?err, "unable to dispatch channel realtime event");
-        }
-    }
-
     async fn send_notification(&self, effect: ChannelNotificationEffect) {
         if let Err(err) = self.notifications.send(effect).await {
             let err: anyhow::Error = err.into();
@@ -736,7 +517,7 @@ where
         channel_id: Uuid,
         metadata: ChannelMetadata,
         participants: &[ChannelParticipant],
-        message: &MutatedMessage,
+        message: &Message,
         resolved_sender: ResolvedNotificationSender,
         mentions: Vec<SimpleMention>,
     ) -> anyhow::Result<PostedMessageNotificationContext> {
@@ -842,7 +623,7 @@ where
     async fn send_user_mention_notifications(
         &self,
         channel_id: Uuid,
-        message: &MutatedMessage,
+        message: &Message,
         has_attachments: bool,
         context: &PostedMessageNotificationContext,
     ) {
@@ -873,7 +654,7 @@ where
     async fn send_document_mention_notifications(
         &self,
         channel_id: Uuid,
-        message: &MutatedMessage,
+        message: &Message,
         has_attachments: bool,
         context: &PostedMessageNotificationContext,
     ) {
@@ -904,7 +685,7 @@ where
         &self,
         thread_id: Uuid,
         channel_id: Uuid,
-        message: &MutatedMessage,
+        message: &Message,
         has_attachments: bool,
         context: &PostedMessageNotificationContext,
     ) {
@@ -939,7 +720,7 @@ where
     async fn send_first_message_invites(
         &self,
         channel_id: Uuid,
-        message: &MutatedMessage,
+        message: &Message,
         context: PostedMessageNotificationContext,
     ) {
         let Some(invited_by_user_id) = context.sender.as_user().cloned() else {
@@ -976,7 +757,7 @@ where
     async fn send_channel_message_notification(
         &self,
         channel_id: Uuid,
-        message: &MutatedMessage,
+        message: &Message,
         has_attachments: bool,
         context: &PostedMessageNotificationContext,
     ) {
@@ -1063,7 +844,7 @@ struct PostedMessageNotificationInputs {
     channel_id: Uuid,
     metadata: ChannelMetadata,
     participants: Vec<ChannelParticipant>,
-    message: MutatedMessage,
+    message: Message,
     mentions: Vec<SimpleMention>,
     has_attachments: bool,
     bot_profile: Option<BotSenderProfile>,
@@ -1094,15 +875,6 @@ struct PostedMessageNotificationContext {
 /// skipped before parsing to avoid spurious parse warnings.
 fn is_bot_principal(id: &str) -> bool {
     BotIdStr::parse_from_str(id).is_ok()
-}
-
-fn participant_ids(participants: &[ChannelParticipant]) -> Vec<MacroUserIdStr<'static>> {
-    participants
-        .iter()
-        .filter(|p| !is_bot_principal(&p.user_id))
-        .filter_map(|p| MacroUserIdStr::parse_from_str(&p.user_id).ok())
-        .map(|id| id.into_owned())
-        .collect()
 }
 
 fn recipients_excluding<'a>(
@@ -1153,49 +925,24 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
 /// `macro.channels` topic.
 ///
 /// Ephemeral events (typing) and reaction changes publish nothing.
-fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
-    match event {
-        ChannelEvent::ChannelCreated {
-            channel_id,
-            actor,
-            on_behalf_of,
-            channel_type,
-            channel_name,
-            participant_user_ids,
-        } => vec![ChannelMacroEvent::created(ChannelCreatedMetadata {
-            channel_id: *channel_id,
-            actor: actor.clone(),
-            on_behalf_of: on_behalf_of.clone(),
-            channel_type: *channel_type,
-            channel_name: channel_name.clone(),
-            participant_user_ids: participant_user_ids.clone(),
-        })],
-        ChannelEvent::ChannelUpdated {
-            channel_id,
-            actor,
-            previous_name,
-            channel_name,
-        } => vec![ChannelMacroEvent::updated(ChannelUpdatedMetadata {
-            channel_id: *channel_id,
-            actor: actor.clone(),
-            previous_name: previous_name.clone(),
-            channel_name: channel_name.clone(),
-        })],
-        ChannelEvent::ChannelDeleted { channel_id, actor } => {
-            vec![ChannelMacroEvent::deleted(ChannelDeletedMetadata {
-                channel_id: *channel_id,
-                actor: actor.clone(),
-            })]
-        }
-        ChannelEvent::MessagePosted {
-            channel_id,
-            metadata,
-            participants,
-            message,
-            mentions,
-            attachments,
-            ..
+fn message_broker_events(
+    event: &MessageEvent,
+    metadata: &Option<ChannelMetadata>,
+    participants: &[ChannelParticipant],
+) -> Vec<ChannelMacroEvent> {
+    let MessageParent::Channel(channel_id) = &event.parent else {
+        return Vec::new();
+    };
+    let Ok(actor) = crate::domain::models::Sender::try_from(event.actor.clone()) else {
+        return Vec::new();
+    };
+    match &event.change {
+        MessageChange::Posted {
+            message, mentions, ..
         } => {
+            let Some(metadata) = metadata else {
+                return Vec::new();
+            };
             let mut events = vec![ChannelMacroEvent::message_posted(
                 ChannelMessagePostedMetadata {
                     channel_id: *channel_id,
@@ -1206,20 +953,22 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                     channel_type: metadata.channel_type,
                     content: message.content.clone(),
                     mentions: mentions.clone(),
-                    attachments: attachments
+                    attachments: message
+                        .attachments
                         .iter()
                         .map(ChannelEventAttachment::from)
                         .collect(),
                     created_at: message.created_at,
                 },
             )];
-            if !attachments.is_empty() {
+            if !message.attachments.is_empty() {
                 events.push(ChannelMacroEvent::message_attachment_created(
                     ChannelMessageAttachmentCreatedMetadata {
                         channel_id: *channel_id,
                         message_id: message.id,
                         actor: message.sender_id.clone(),
-                        attachments: attachments
+                        attachments: message
+                            .attachments
                             .iter()
                             .map(ChannelEventAttachment::from)
                             .collect(),
@@ -1261,52 +1010,40 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
             }
             events
         }
-        ChannelEvent::MessageChanged {
-            channel_id,
-            actor,
+        MessageChange::Edited {
             message,
-            ..
-        } => vec![ChannelMacroEvent::message_patched(
-            ChannelMessagePatchedMetadata {
-                channel_id: *channel_id,
-                message_id: message.id,
-                thread_id: message.thread_id,
-                actor: actor.clone(),
-                content: message.content.clone(),
-                edited_at: message.edited_at,
-                updated_at: message.updated_at,
-            },
-        )],
-        ChannelEvent::MessageDeleted {
-            channel_id,
-            actor,
-            message,
-            ..
-        } => vec![ChannelMacroEvent::message_deleted(
-            ChannelMessageDeletedMetadata {
-                channel_id: *channel_id,
-                message_id: message.id,
-                thread_id: message.thread_id,
-                actor: actor.clone(),
-                deleted_at: message.deleted_at,
-            },
-        )],
-        ChannelEvent::AttachmentsChanged {
-            channel_id,
-            actor,
-            message_id,
-            added,
-            removed,
+            previous_attachments,
             ..
         } => {
-            let mut events = Vec::new();
+            let mut events = vec![ChannelMacroEvent::message_patched(
+                ChannelMessagePatchedMetadata {
+                    channel_id: *channel_id,
+                    message_id: message.id,
+                    thread_id: message.thread_id,
+                    actor: actor.clone(),
+                    content: message.content.clone(),
+                    edited_at: message.edited_at,
+                    updated_at: message.updated_at,
+                },
+            )];
+            let added: Vec<_> = message
+                .attachments
+                .iter()
+                .filter(|a| !previous_attachments.iter().any(|p| p.id == a.id))
+                .map(ChannelEventAttachment::from)
+                .collect();
+            let removed: Vec<_> = previous_attachments
+                .iter()
+                .filter(|a| !message.attachments.iter().any(|p| p.id == a.id))
+                .map(ChannelEventAttachment::from)
+                .collect();
             if !added.is_empty() {
                 events.push(ChannelMacroEvent::message_attachment_created(
                     ChannelMessageAttachmentCreatedMetadata {
                         channel_id: *channel_id,
-                        message_id: *message_id,
+                        message_id: message.id,
                         actor: actor.clone(),
-                        attachments: added.iter().map(ChannelEventAttachment::from).collect(),
+                        attachments: added,
                     },
                 ));
             }
@@ -1314,14 +1051,66 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                 events.push(ChannelMacroEvent::message_attachment_removed(
                     ChannelMessageAttachmentRemovedMetadata {
                         channel_id: *channel_id,
-                        message_id: *message_id,
-                        actor: actor.clone(),
-                        attachments: removed.iter().map(ChannelEventAttachment::from).collect(),
+                        message_id: message.id,
+                        actor,
+                        attachments: removed,
                     },
                 ));
             }
             events
         }
+        MessageChange::MessageDeleted { message } => vec![ChannelMacroEvent::message_deleted(
+            ChannelMessageDeletedMetadata {
+                channel_id: *channel_id,
+                message_id: message.id,
+                thread_id: message.thread_id,
+                actor,
+                deleted_at: message.deleted_at,
+            },
+        )],
+        _ => Vec::new(),
+    }
+}
+
+fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
+    match event {
+        ChannelEvent::ChannelCreated {
+            channel_id,
+            actor,
+            on_behalf_of,
+            channel_type,
+            channel_name,
+            participant_user_ids,
+        } => vec![ChannelMacroEvent::created(ChannelCreatedMetadata {
+            channel_id: *channel_id,
+            actor: actor.clone(),
+            on_behalf_of: on_behalf_of.clone(),
+            channel_type: *channel_type,
+            channel_name: channel_name.clone(),
+            participant_user_ids: participant_user_ids.clone(),
+        })],
+        ChannelEvent::ChannelUpdated {
+            channel_id,
+            actor,
+            previous_name,
+            channel_name,
+        } => vec![ChannelMacroEvent::updated(ChannelUpdatedMetadata {
+            channel_id: *channel_id,
+            actor: actor.clone(),
+            previous_name: previous_name.clone(),
+            channel_name: channel_name.clone(),
+        })],
+        ChannelEvent::ChannelDeleted { channel_id, actor } => {
+            vec![ChannelMacroEvent::deleted(ChannelDeletedMetadata {
+                channel_id: *channel_id,
+                actor: actor.clone(),
+            })]
+        }
+        ChannelEvent::MessageCommitted {
+            event,
+            metadata,
+            participants,
+        } => message_broker_events(event, metadata, participants),
         ChannelEvent::ParticipantsAdded {
             channel_id,
             channel_type,
@@ -1367,7 +1156,6 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                 removed_user_ids: removed_user_ids.clone(),
             },
         )],
-        ChannelEvent::ReactionChanged { .. } | ChannelEvent::TypingChanged { .. } => Vec::new(),
         ChannelEvent::EntityMentionCreated { .. } | ChannelEvent::EntityMentionDeleted { .. } => {
             Vec::new()
         }
@@ -1382,23 +1170,29 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
 /// and on-delete (`mention.created`/`mention.deleted`).
 fn mention_broker_events_for_event(event: &ChannelEvent) -> Vec<MentionMacroEvent> {
     match event {
-        ChannelEvent::MessagePosted {
-            message, mentions, ..
-        } => mentions
-            .iter()
-            .map(|mention| {
-                MentionMacroEvent::message_sent(MentionMetadata {
-                    source: EntityRef {
-                        id: message.id.to_string(),
-                        kind: "message".to_string(),
-                    },
-                    mentioned: EntityRef {
-                        id: mention.entity_id.clone(),
-                        kind: mention.entity_type.clone(),
-                    },
+        ChannelEvent::MessageCommitted { event, .. } => {
+            let MessageChange::Posted {
+                message, mentions, ..
+            } = &event.change
+            else {
+                return Vec::new();
+            };
+            mentions
+                .iter()
+                .map(|mention| {
+                    MentionMacroEvent::message_sent(MentionMetadata {
+                        source: EntityRef {
+                            id: message.id.to_string(),
+                            kind: "message".to_string(),
+                        },
+                        mentioned: EntityRef {
+                            id: mention.entity_id.clone(),
+                            kind: mention.entity_type.clone(),
+                        },
+                    })
                 })
-            })
-            .collect(),
+                .collect()
+        }
         ChannelEvent::EntityMentionCreated { mention } => {
             vec![MentionMacroEvent::created(mention.into())]
         }

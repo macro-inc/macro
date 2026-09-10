@@ -1,5 +1,4 @@
 import type { DateValue } from '@core/util/date';
-import type { EditMessage } from '@service-storage/generated/schemas/editMessage';
 import type { Message, PostMessage } from '@service-storage/messages';
 
 export type IComment = Message;
@@ -24,7 +23,11 @@ type ThreadedComment = CommentBase & {
   isNew: boolean;
 };
 
-export type Root = ThreadedComment & { children: string[] };
+export type Root = ThreadedComment & {
+  children: string[];
+  /** Total live replies; children contains only the currently loaded preview. */
+  replyCount: number;
+};
 export type Reply = ThreadedComment;
 export type DeleteCommentInfo = {
   commentId: string;
@@ -35,8 +38,6 @@ export type CommentOperations = {
   createComment: (
     input: PostMessage & { thread_id: string }
   ) => Promise<Message | null>;
-  deleteComment: (info: DeleteCommentInfo) => Promise<boolean> | undefined;
-  updateComment: (commentId: string, input: EditMessage) => Promise<boolean>;
 };
 
 export function isRoot(comment: Root | Reply): comment is Root {

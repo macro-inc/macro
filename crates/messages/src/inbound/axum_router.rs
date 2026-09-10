@@ -53,7 +53,7 @@ where
     Router::new()
         .route(
             "/{parent_type}/{parent_id}",
-            get(list::<A, Auth>).post(create::<A, Auth>),
+            get(timeline::<A, Auth>).post(create::<A, Auth>),
         )
         .route(
             "/{parent_type}/{parent_id}/items/{id}",
@@ -68,13 +68,10 @@ where
         .route(
             "/{parent_type}/{parent_id}/threads/{id}",
             get(get_thread::<A, Auth>)
-                .patch(resolve::<A, Auth>)
+                .patch(patch_thread::<A, Auth>)
                 .delete(delete_thread::<A, Auth>),
         )
-        .route(
-            "/{parent_type}/{parent_id}/threads/{id}/typing",
-            post(typing::<A, Auth>),
-        )
+        .route("/{parent_type}/{parent_id}/typing", post(typing::<A, Auth>))
         .route(
             "/{parent_type}/{parent_id}/legacy/{legacy_id}",
             get(legacy::<A, Auth>),
@@ -84,6 +81,36 @@ where
             get(referenced_threads::<A, Auth>),
         )
         .with_state(state)
+}
+
+/// Query selection encoded as JSON to retain structured cursor and root ID types.
+#[derive(Debug, Default, Deserialize, utoipa::IntoParams)]
+pub struct TimelineQuery {
+    /// Serialized MessageTimelineQuery; absent selects the latest roots.
+    pub selection: Option<String>,
+}
+
+#[utoipa::path(operation_id = "message_timeline", get, path = "/messages/{parent_type}/{parent_id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), TimelineQuery), responses((status = 200, body = MessagePage)))]
+/// Read a bounded timeline with lazy thread previews.
+pub async fn timeline<A: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    Path(path): Path<ParentPath>,
+    Query(query): Query<TimelineQuery>,
+) -> Result<Json<MessagePage>, MessageHttpError> {
+    let query = query
+        .selection
+        .as_deref()
+        .map(serde_json::from_str::<MessageTimelineQuery>)
+        .transpose()
+        .map_err(|_| MessageError::Invalid("invalid timeline query"))?
+        .unwrap_or_default();
+    Ok(Json(
+        state
+            .service
+            .timeline(receipt(state.access.as_ref(), &user, &path).await?, query)
+            .await?,
+    ))
 }
 
 /// Parent path shared by every operation.
@@ -167,35 +194,6 @@ pub struct PageQuery {
     pub cursor_id: Option<Uuid>,
 }
 
-#[utoipa::path(operation_id = "entity_message_list", get, path = "/messages/{parent_type}/{parent_id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), PageQuery), responses((status = 200, body = ThreadPage)))]
-/// List a parent's discussions.
-pub async fn list<A, Auth>(
-    State(state): State<MessagesRouterState<A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
-    Path(path): Path<ParentPath>,
-    Query(query): Query<PageQuery>,
-) -> Result<Json<ThreadPage>, MessageHttpError>
-where
-    A: EntityAccessService,
-    Auth: MacroAuthorizationService,
-{
-    let cursor = match (query.created_at, query.cursor_id) {
-        (Some(created_at), Some(id)) => Some(MessageCursor { created_at, id }),
-        (None, None) => None,
-        _ => return Err(MessageError::Invalid("both cursor fields are required").into()),
-    };
-    Ok(Json(
-        state
-            .service
-            .list(
-                receipt(state.access.as_ref(), &user, &path).await?,
-                cursor,
-                query.limit.unwrap_or(50),
-            )
-            .await?,
-    ))
-}
-
 #[utoipa::path(operation_id = "entity_message_create", post, path = "/messages/{parent_type}/{parent_id}", params(("parent_type" = String, Path), ("parent_id" = String, Path)), request_body = PostMessage, responses((status = 200, body = Message)))]
 /// Create a root message or reply.
 pub async fn create<A, Auth>(
@@ -238,13 +236,13 @@ where
     ))
 }
 
-#[utoipa::path(operation_id = "entity_message_edit", patch, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = EditMessage, responses((status = 200, body = Message)))]
+#[utoipa::path(operation_id = "entity_message_edit", patch, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = MessagePatch, responses((status = 200, body = Message)))]
 /// Edit an owned message.
 pub async fn edit<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
-    Json(input): Json<EditMessage>,
+    Json(input): Json<MessagePatch>,
 ) -> Result<Json<Message>, MessageHttpError>
 where
     A: EntityAccessService,
@@ -253,7 +251,7 @@ where
     Ok(Json(
         state
             .service
-            .edit(
+            .patch(
                 receipt(state.access.as_ref(), &user, &path).await?,
                 path_id(&path)?,
                 input,
@@ -355,13 +353,15 @@ where
 /// Transient typing update.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct TypingInput {
+    /// Root being replied to, absent for the parent composer.
+    pub thread_id: Option<Uuid>,
     /// Whether the caller is typing.
     pub active: bool,
     /// Client mutation nonce.
     pub nonce: Option<String>,
 }
 
-#[utoipa::path(operation_id = "entity_message_typing", post, path = "/messages/{parent_type}/{parent_id}/threads/{id}/typing", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = TypingInput, responses((status = 204)))]
+#[utoipa::path(operation_id = "entity_message_typing", post, path = "/messages/{parent_type}/{parent_id}/typing", params(("parent_type" = String, Path), ("parent_id" = String, Path)), request_body = TypingInput, responses((status = 204)))]
 /// Broadcast typing within an authorized discussion.
 pub async fn typing<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
@@ -377,7 +377,7 @@ where
         .service
         .typing(
             receipt(state.access.as_ref(), &user, &path).await?,
-            path_id(&path)?,
+            input.thread_id,
             input.active,
             input.nonce,
         )
@@ -385,22 +385,13 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Discussion resolution mutation.
-#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
-pub struct ResolveInput {
-    /// Target resolved state.
-    pub resolved: bool,
-    /// Client nonce.
-    pub nonce: Option<String>,
-}
-
-#[utoipa::path(operation_id = "entity_message_resolve", patch, path = "/messages/{parent_type}/{parent_id}/threads/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = ResolveInput, responses((status = 200, body = ThreadState)))]
-/// Resolve or reopen a discussion.
-pub async fn resolve<A, Auth>(
+#[utoipa::path(operation_id = "entity_message_patch_thread", patch, path = "/messages/{parent_type}/{parent_id}/threads/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = ThreadPatch, responses((status = 200, body = ThreadState)))]
+/// Update a discussion's lifecycle and placement.
+pub async fn patch_thread<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
-    Json(input): Json<ResolveInput>,
+    Json(input): Json<ThreadPatch>,
 ) -> Result<Json<ThreadState>, MessageHttpError>
 where
     A: EntityAccessService,
@@ -409,11 +400,10 @@ where
     Ok(Json(
         state
             .service
-            .resolve(
+            .patch_thread(
                 receipt(state.access.as_ref(), &user, &path).await?,
                 path_id(&path)?,
-                input.resolved,
-                input.nonce,
+                input,
             )
             .await?,
     ))

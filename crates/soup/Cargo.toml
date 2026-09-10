@@ -96,6 +96,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+messages = { path = "../messages" }
 ai_toolset = { path = "../ai_toolset" }
 cool_asserts = "2"
 filter_ast = { path = "../filter_ast" }

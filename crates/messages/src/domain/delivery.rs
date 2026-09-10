@@ -191,7 +191,10 @@ impl<
             _ => None,
         };
         if let Some((message, mentions, policy)) = notification {
-            let mut context = self.context.context(&event.parent, event.root_id).await?;
+            let mut context = self
+                .context
+                .context(&event.parent, message.root_id())
+                .await?;
             context.sender_profile_picture = self
                 .context
                 .sender_profile_picture(&event.actor)

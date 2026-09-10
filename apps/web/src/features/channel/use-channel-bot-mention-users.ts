@@ -46,32 +46,31 @@ export function availableBotMentionUsers(
  * `bot|<uuid>` principal form so mentions are re-tagged as bot mentions at
  * send time (see `authoredMentions`).
  */
-export function useChannelBotMentionUsers(
-  channelId: Accessor<string>
+export function useMessageBotMentionUsers(
+  parent: Accessor<import('@service-storage/messages').MessageParent>
 ): Accessor<IUser[]> {
-  const channelBots = useChannelBotsQuery(channelId);
+  const channelBots = useChannelBotsQuery(() =>
+    parent().type === 'channel' ? parent().id : ''
+  );
   const agents = useAgentsQuery();
   const cursorStatus = useCursorApiKeyStatusQuery();
-
   return createMemo(() =>
     availableBotMentionUsers(
       channelBots.isSuccess ? channelBots.data : [],
       agents.isSuccess ? agents.data : [],
-      cursorStatus.isSuccess ? cursorStatus.data.registered : false
+      cursorStatus.isSuccess ? cursorStatus.data.registered : false,
+      parent().type
     )
   );
 }
-
-/** Documents expose the user's and team's agents independently of channel installation. */
+export function useChannelBotMentionUsers(
+  channelId: Accessor<string>
+): Accessor<IUser[]> {
+  return useMessageBotMentionUsers(() => ({
+    type: 'channel',
+    id: channelId(),
+  }));
+}
 export function useDocumentBotMentionUsers(): Accessor<IUser[]> {
-  const agents = useAgentsQuery();
-  const cursorStatus = useCursorApiKeyStatusQuery();
-  return createMemo(() =>
-    availableBotMentionUsers(
-      [],
-      agents.isSuccess ? agents.data : [],
-      cursorStatus.isSuccess ? cursorStatus.data.registered : false,
-      'document'
-    )
-  );
+  return useMessageBotMentionUsers(() => ({ type: 'document', id: '' }));
 }

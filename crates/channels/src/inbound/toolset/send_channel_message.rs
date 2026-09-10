@@ -5,10 +5,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::models::{PostMessageNotificationPolicy, PostMessageRequest};
 use crate::domain::ports::ChannelService;
 use crate::inbound::toolset::ChannelToolContext;
 use entity_access::domain::ports::EntityAccessService;
+use messages::domain::models::{MessageAttribution, PostMessage, PostMessageNotificationPolicy};
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[schemars(
@@ -65,33 +65,33 @@ where
             )
             .await
             .map_err(super::channel_access_error)?;
-        let triggered_by = Some(request_context.user_id.as_ref().to_string());
 
-        let req = PostMessageRequest {
+        let req = PostMessage {
             content: self.content.clone(),
             mentions: vec![],
             attachments: vec![],
             nonce: None,
             notification_policy: PostMessageNotificationPolicy::Default,
             thread_id: self.thread_id,
-            triggered_by,
+            attribution: MessageAttribution::ActingUser,
+            anchor: None,
         };
 
         service_context
             .messages
-            .post_message(access, req)
+            .post(access, req)
             .await
             .map_err(tool_err("failed to send message"))
             .map(|response| SendChannelMessageResponse {
                 channel_id: self.channel_id,
-                message_id: response.id,
+                message_id: response.id.to_string(),
             })
     }
 }
 
 fn tool_err(
     description: &'static str,
-) -> impl FnOnce(crate::domain::ports::ChannelMutationErr) -> ToolCallError {
+) -> impl FnOnce(messages::domain::ports::MessageError) -> ToolCallError {
     move |err| ToolCallError {
         description: description.to_string(),
         internal_error: anyhow::Error::new(err),

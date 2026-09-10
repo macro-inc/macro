@@ -9,7 +9,6 @@ use channels::{
         side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
     },
     outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
         notification_sender::NotificationChannelSender,
         pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
@@ -384,7 +383,6 @@ async fn main() -> anyhow::Result<()> {
     // indexing.
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway_client.clone()),
         NotificationChannelSender::new(notification_ingress_service.clone()),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
@@ -422,8 +420,7 @@ async fn main() -> anyhow::Result<()> {
         PgChannelsRepo::new(db.clone()),
         channel_event_dispatcher,
     );
-    let channel_messages =
-        Arc::new(channels::domain::message_commands::ChannelMessageAdapter::new(shared_messages));
+    let channel_messages = shared_messages;
 
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl,

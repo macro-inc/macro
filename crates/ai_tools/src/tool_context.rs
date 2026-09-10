@@ -17,7 +17,6 @@ use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEve
 use channels::domain::{list_service::ChannelListServiceImpl, service::ChannelServiceImpl};
 use channels::inbound::toolset::ChannelToolContext;
 use channels::outbound::{
-    connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
     contacts_dispatcher::ContactsChannelDispatcher, notification_sender::NotificationChannelSender,
     pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
 };
@@ -250,7 +249,6 @@ pub fn build_channel_tool_context_with_side_effects(
     });
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(clients.connection_gateway.clone()),
         NotificationChannelSender::new(notification_ingress),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
@@ -282,7 +280,7 @@ pub fn build_channel_tool_context_with_dispatcher(
     messages: Arc<dyn messages::domain::api::MessageServiceApi>,
 ) -> ToolChannelToolContext {
     ChannelToolContext::new(
-        Arc::new(channels::domain::message_commands::ChannelMessageAdapter::new(messages)),
+        messages,
         ChannelServiceImpl::with_dependencies(PgChannelsRepo::new(pool.clone()), dispatcher),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),

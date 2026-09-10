@@ -1,6 +1,5 @@
 import {
   activeCommentThreadSignal,
-  commentsStore,
   commentWidthSignal,
   highlightedCommentIdSignal,
   highlightedCommentThreadsSignal,
@@ -13,12 +12,9 @@ import {
   type CommentsContextType,
   Thread,
 } from '@core/comments/Thread';
-import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
-import { buildSimpleEntityUrl } from '@core/util/url';
 import { autoUpdate, computePosition } from '@floating-ui/dom';
-import { createMessageDiscussionSource } from '@queries/messages-discussion';
 import {
   createEffect,
   createMemo,
@@ -33,70 +29,26 @@ import {
   threadHeightStore,
   threadsPositionStore,
 } from './commentLayout';
-import {
-  useCreateComment,
-  useDeleteComment,
-  useUpdateComment,
-} from './commentOperations';
+import { useCreateComment } from './commentOperations';
 
 const useCommentsContext = (): CommentsContextType => {
-  const comments = commentsStore.get;
   const setActiveThread = activeCommentThreadSignal.set;
   const setThreadHeight = threadHeightStore.set;
-  const ownedCommentIds = createMemo(() => {
-    const userId = useUserId()();
-    if (!userId) {
-      console.error('User ID not found, cannot get owned comment placeables');
-      return [];
-    }
-    const owned = Object.values(commentsStore.get)
-      .filter((c) => !!c)
-      .filter((c) => c.owner === userId)
-      .map((c) => c.id);
-    return owned;
-  });
-  const ownedCommentSelector = createSelector(
-    ownedCommentIds,
-    (id: string, owned) => (owned ?? []).includes(id)
-  );
-
   const createComment = useCreateComment();
-  const updateComment = useUpdateComment();
-  const deleteComment = useDeleteComment();
 
   const documentId = useBlockId();
   const isDocumentOwner = useIsDocumentOwner();
   const canComment = useCanComment();
 
-  const getCommentById = (id: string) => comments[id];
-
-  const discussionSource = createMessageDiscussionSource({
-    parent: () => ({ type: 'document', id: documentId }),
-    canEdit: canComment,
-    currentUserId: useUserId(),
-    canManageThreads: isDocumentOwner,
-    targetCommentId: () => highlightedCommentIdSignal(),
-    buildCommentLink: (comment) =>
-      buildSimpleEntityUrl(
-        { type: 'md', id: documentId },
-        { comment_id: comment.id }
-      ),
-  });
   const commentsContext: CommentsContextType = {
-    discussionSource,
     setActiveThread,
     setThreadHeight,
     canComment,
     isDocumentOwner,
-    getCommentById,
     documentId,
-    ownedComment: ownedCommentSelector,
     commentOperations: {
       createComment,
-      deleteComment,
-      updateComment,
     },
-    inComment: true,
     highlightedCommentId: highlightedCommentIdSignal.get,
   };
   return commentsContext;

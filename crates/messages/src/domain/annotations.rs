@@ -1,5 +1,9 @@
 //! Authorization for editing geometry and explicitly deleting PDF annotations.
-use super::{models::MessageParent, ports::MessageError, service::MessageWrite};
+use super::{
+    models::{MessageParent, ThreadState},
+    ports::{MessageChange, MessageError, MessageEvent, MessageEventPublisher},
+    service::MessageWrite,
+};
 use entity_access::domain::{
     models::{EntityAccessAuth, EntityAccessReceipt, EntityType, OwnerAccessLevel},
     ports::EntityAccessService,
@@ -30,6 +34,14 @@ pub struct AnnotationTarget {
 pub struct AnnotationMutation {
     target: AnnotationTarget,
 }
+
+/// Committed annotation deletion and the shared discussion state changed with it.
+pub struct DeletedAnnotation {
+    /// Geometry response returned to the annotation editor.
+    pub response: DeleteUnthreadedAnchorResponse,
+    /// Discussion tombstone, when the annotation had a conversation.
+    pub thread: Option<ThreadState>,
+}
 impl AnnotationMutation {
     /// Authorized annotation identity and ownership facts.
     pub fn target(&self) -> &AnnotationTarget {
@@ -56,18 +68,25 @@ pub trait AnnotationRepository: Send + Sync {
         &self,
         access: AnnotationMutation,
         input: DeleteUnthreadedAnchorRequest,
-    ) -> impl Future<Output = Result<DeleteUnthreadedAnchorResponse, MessageError>> + Send;
+    ) -> impl Future<Output = Result<DeletedAnnotation, MessageError>> + Send;
 }
 
 /// Existing PDF operations composed with current document access.
-pub struct AnnotationService<R, A> {
+pub struct AnnotationService<R, A, P> {
     repo: R,
     access: A,
+    events: P,
 }
-impl<R: AnnotationRepository, A: EntityAccessService> AnnotationService<R, A> {
+impl<R: AnnotationRepository, A: EntityAccessService, P: MessageEventPublisher>
+    AnnotationService<R, A, P>
+{
     /// Compose persistence and access ports.
-    pub fn new(repo: R, access: A) -> Self {
-        Self { repo, access }
+    pub fn new(repo: R, access: A, events: P) -> Self {
+        Self {
+            repo,
+            access,
+            events,
+        }
     }
 
     async fn capability(
@@ -155,7 +174,22 @@ impl<R: AnnotationRepository, A: EntityAccessService> AnnotationService<R, A> {
             model::annotations::delete::DeleteUnthreadedPdfAnchorRequest::Highlight(id),
         ) = input;
         let access = self.capability(user, org, id, true).await?;
-        self.repo.delete(access, input).await
+        let parent = MessageParent::parse("document", &access.target().document_id)
+            .map_err(|_| MessageError::NotFound)?;
+        let deleted = self.repo.delete(access, input).await?;
+        if let Some(state) = deleted.thread {
+            let event = MessageEvent {
+                parent,
+                actor: user.as_ref().to_owned(),
+                nonce: None,
+                change: MessageChange::ThreadUpdated { state },
+            };
+            // The deletion has committed; delivery failure must not ask callers to repeat it.
+            let _ = self.events.publish(event).await.inspect_err(|error| {
+                tracing::error!(error=?error, "failed to deliver committed annotation discussion deletion");
+            });
+        }
+        Ok(deleted.response)
     }
 }
 

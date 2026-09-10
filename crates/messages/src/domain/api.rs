@@ -21,12 +21,12 @@ pub trait MessageReader: Send + Sync + 'static {
         root: Uuid,
     ) -> Result<MessageThread, MessageError>;
     /// Read a page of discussions on an authorized parent.
-    async fn list(
+    async fn timeline(
         &self,
         access: EntityAccessReceipt<MessageView>,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<ThreadPage, MessageError>;
+        query: MessageTimelineQuery,
+    ) -> Result<MessagePage, MessageError>;
+
     /// Read live history preceding a prompt, scoped by its parent.
     async fn preceding(
         &self,
@@ -60,13 +60,6 @@ pub trait MessageCommands: Send + Sync + 'static {
         access: EntityAccessReceipt<MessageWrite>,
         input: PostMessage,
     ) -> Result<Message, MessageError>;
-    /// Edit a message under the common authorship policy.
-    async fn edit(
-        &self,
-        access: EntityAccessReceipt<MessageWrite>,
-        id: Uuid,
-        input: EditMessage,
-    ) -> Result<Message, MessageError>;
     /// Apply partial body, mention, and attachment changes under the common policy.
     async fn patch(
         &self,
@@ -94,17 +87,16 @@ pub trait MessageCommands: Send + Sync + 'static {
     async fn typing(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
-        root: Uuid,
+        root: Option<Uuid>,
         active: bool,
         nonce: Option<String>,
     ) -> Result<(), MessageError>;
-    /// Resolve or reopen a document discussion.
-    async fn resolve(
+    /// Update document discussion state or detach removed Markdown text.
+    async fn patch_thread(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
         root_id: Uuid,
-        resolved: bool,
-        nonce: Option<String>,
+        patch: ThreadPatch,
     ) -> Result<ThreadState, MessageError>;
     /// Delete a discussion under the common moderation policy.
     async fn delete_thread(
@@ -136,14 +128,14 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageSe
     ) -> Result<MessageThread, MessageError> {
         MessageService::get_thread(self, access, root).await
     }
-    async fn list(
+    async fn timeline(
         &self,
         access: EntityAccessReceipt<MessageView>,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<ThreadPage, MessageError> {
-        MessageService::list(self, access, cursor, limit).await
+        query: MessageTimelineQuery,
+    ) -> Result<MessagePage, MessageError> {
+        MessageService::timeline(self, access, query).await
     }
+
     async fn preceding(
         &self,
         access: EntityAccessReceipt<MessageView>,
@@ -179,14 +171,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
     ) -> Result<Message, MessageError> {
         MessageService::post(self, access, input).await
     }
-    async fn edit(
-        &self,
-        access: EntityAccessReceipt<MessageWrite>,
-        id: Uuid,
-        input: EditMessage,
-    ) -> Result<Message, MessageError> {
-        MessageService::edit(self, access, id, input).await
-    }
     async fn patch(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -216,20 +200,19 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
     async fn typing(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
-        root: Uuid,
+        root: Option<Uuid>,
         active: bool,
         nonce: Option<String>,
     ) -> Result<(), MessageError> {
         MessageService::typing(self, access, root, active, nonce).await
     }
-    async fn resolve(
+    async fn patch_thread(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
         root_id: Uuid,
-        resolved: bool,
-        nonce: Option<String>,
+        patch: ThreadPatch,
     ) -> Result<ThreadState, MessageError> {
-        MessageService::resolve(self, access, root_id, resolved, nonce).await
+        MessageService::patch_thread(self, access, root_id, patch).await
     }
     async fn delete_thread(
         &self,
@@ -260,12 +243,12 @@ mockall::mock! {
         root: Uuid,
     ) -> Result<MessageThread, MessageError>;
     /// Read a page of discussions on an authorized parent.
-    async fn list(
+    async fn timeline(
         &self,
         access: EntityAccessReceipt<MessageView>,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<ThreadPage, MessageError>;
+        query: MessageTimelineQuery,
+    ) -> Result<MessagePage, MessageError>;
+
     /// Read live history preceding a prompt, scoped by its parent.
     async fn preceding(
         &self,
@@ -286,16 +269,9 @@ mockall::mock! {
         access: EntityAccessReceipt<MessageWrite>,
         input: PostMessage,
     ) -> Result<Message, MessageError>;
-    /// Edit a message under the common authorship policy.
-    async fn edit(
-        &self,
-        access: EntityAccessReceipt<MessageWrite>,
-        id: Uuid,
-        input: EditMessage,
-    ) -> Result<Message, MessageError>;
-    /// Tombstone a message under the common authorship and moderation policy.
     /// Apply partial body, mention, and attachment changes under the common policy.
     async fn patch(&self, access: EntityAccessReceipt<MessageWrite>, id: Uuid, input: MessagePatch) -> Result<Message, MessageError>;
+    /// Tombstone a message under the common authorship and moderation policy.
     async fn delete(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -315,11 +291,11 @@ mockall::mock! {
     async fn typing(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
-        root: Uuid,
+        root: Option<Uuid>,
         active: bool,
         nonce: Option<String>,
-    ) -> Result<(), MessageError>;    /// Resolve or reopen a document discussion.
-    async fn resolve(&self, access: EntityAccessReceipt<MessageWrite>, root_id: Uuid, resolved: bool, nonce: Option<String>) -> Result<ThreadState, MessageError>;
+    ) -> Result<(), MessageError>;    /// Update document discussion state or detach removed Markdown text.
+    async fn patch_thread(&self, access: EntityAccessReceipt<MessageWrite>, root_id: Uuid, patch: ThreadPatch) -> Result<ThreadState, MessageError>;
     /// Delete a discussion under the common moderation policy.
     async fn delete_thread(&self, access: EntityAccessReceipt<MessageWrite>, root_id: Uuid, nonce: Option<String>) -> Result<ThreadState, MessageError>;
     }

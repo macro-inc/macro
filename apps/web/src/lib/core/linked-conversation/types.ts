@@ -19,6 +19,8 @@ export type LinkedConversationMessage = MessageData;
 export interface LinkedConversationSource {
   /** Root message of the conversation, once loaded. */
   root: Accessor<LinkedConversationMessage | undefined>;
+  /** The source is deleted or cannot be read, rather than still loading. */
+  unavailable?: Accessor<boolean>;
   /** Replies to the root, oldest-first. May be a preview subset — see {@link replyCount}. */
   replies: Accessor<LinkedConversationMessage[]>;
   /**

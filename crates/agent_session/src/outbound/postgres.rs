@@ -256,7 +256,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         // message - directly, rather than from a channel - is its owner's alone.
         let origin_channel_id = match originating_message_id {
             Some(message_id) => sqlx::query_scalar!(
-                r#"SELECT channel_id AS "channel_id!" FROM comms_channel_messages WHERE id = $1"#,
+                r#"SELECT parent_entity_id::uuid AS "channel_id!" FROM comms_messages WHERE parent_entity_type = 'channel' AND id = $1"#,
                 message_id,
             )
             .fetch_optional(&mut *transaction)

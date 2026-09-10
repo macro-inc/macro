@@ -2,8 +2,8 @@ import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { STATIC_IMAGE, STATIC_VIDEO } from '@core/store/cacheChannelInput';
 import { messageReference } from '@macro-inc/lexical-core/utils/message-references';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
-import type { PostMessageRequest } from '@service-storage/generated/schemas/postMessageRequest';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
+import type { PostMessage } from '@service-storage/messages';
 import type { InputAttachmentData, InputSnapshot } from './types';
 
 export function attachmentEntityType(
@@ -30,7 +30,9 @@ export function authoredMentions(mentions: ItemMention[]): SimpleMention[] {
         ? (mention.groupAlias ?? mention.itemId)
         : mention.itemId
     );
-    if (!reference) throw new Error('Unsupported message reference');
+    // Dates, contacts, and PR chips remain in the body; they do not name a
+    // permission-bearing message reference, just as in Markdown extraction.
+    if (!reference) continue;
     const key = `${reference.entityType}:${reference.entityId}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -53,7 +55,7 @@ export type OptimisticPostMessageAttachment = {
 };
 
 export type PostMessageSendPayload = {
-  message: PostMessageRequest;
+  message: PostMessage & { mentions: SimpleMention[] };
   optimisticAttachments: OptimisticPostMessageAttachment[];
 };
 
@@ -88,6 +90,6 @@ export function buildPostMessageSendPayload(
 
 export function buildPostMessageRequest(
   options: BuildPostMessageRequestOptions
-): PostMessageRequest {
+): PostMessageSendPayload['message'] {
   return buildPostMessageSendPayload(options).message;
 }

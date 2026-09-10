@@ -1,10 +1,9 @@
 use super::{events::ChannelEvent, models::*, ports::*};
 use messages::domain::{
     delivery::MessageRealtime,
-    models::{Message, MessageParent},
+    models::MessageParent,
     ports::{MessageChange, MessageEvent, MessageEventPublisher},
 };
-use uuid::Uuid;
 
 #[cfg(test)]
 mod test;
@@ -31,45 +30,6 @@ impl<R, E, P, G> ChannelMessageDelivery<R, E, P, G> {
     }
 }
 
-fn persisted(channel_id: Uuid, m: &Message) -> MutatedMessage {
-    MutatedMessage {
-        id: m.id,
-        channel_id,
-        thread_id: m.thread_id,
-        sender_id: m.sender_id.clone(),
-        triggered_by: m.triggered_by.clone(),
-        content: m.content.clone(),
-        created_at: m.created_at,
-        updated_at: m.updated_at,
-        edited_at: m.edited_at,
-        deleted_at: m.deleted_at,
-    }
-}
-
-fn attachments(channel_id: Uuid, m: &Message) -> Vec<MutatedAttachment> {
-    attachment_rows(channel_id, m.id, &m.attachments)
-}
-
-fn attachment_rows(
-    channel_id: Uuid,
-    message_id: Uuid,
-    values: &[messages::domain::models::MessageAttachment],
-) -> Vec<MutatedAttachment> {
-    values
-        .iter()
-        .map(|a| MutatedAttachment {
-            id: a.id,
-            channel_id,
-            message_id,
-            entity_type: a.entity_type.clone(),
-            entity_id: a.entity_id.clone(),
-            width: a.width,
-            height: a.height,
-            created_at: a.created_at,
-        })
-        .collect()
-}
-
 fn repo_error(error: impl Into<anyhow::Error>) -> rootcause::Report {
     rootcause::report!("channel message delivery failed: {}", error.into())
 }
@@ -93,10 +53,6 @@ impl<
             .get_participants(channel_id)
             .await
             .map_err(repo_error)?;
-        let recipients: Vec<_> = participants
-            .iter()
-            .filter_map(|p| p.user_id.clone().try_into().ok())
-            .collect();
         let live_users = participants.iter().map(|p| p.user_id.clone()).collect();
         let mut side_effect_error = None;
         // Sharing and activity failures must not suppress events for a committed message.
@@ -138,13 +94,26 @@ impl<
                 side_effect_error = Some(repo_error(error));
             }
         }
-        match &event.change {
-            MessageChange::Posted {
-                message,
-                mentions,
-                notification_policy,
-            } => {
-                let metadata = if let Some(user) = actor.as_user() {
+        if matches!(&event.change, MessageChange::ReactionChanged { .. })
+            && actor.as_user().is_some()
+            && let Err(error) = self.repo.upsert_activity(actor.clone(), channel_id).await
+        {
+            side_effect_error = Some(repo_error(error));
+        }
+        if let Err(error) = self.realtime.send(&event, live_users).await {
+            side_effect_error = Some(error);
+        }
+        if matches!(
+            &event.change,
+            MessageChange::Posted { .. }
+                | MessageChange::Edited { .. }
+                | MessageChange::MessageDeleted { .. }
+        ) {
+            let metadata = if matches!(
+                &event.change,
+                MessageChange::Posted { .. } | MessageChange::Edited { .. }
+            ) {
+                Some(if let Some(user) = actor.as_user() {
                     self.repo
                         .get_channel_metadata(channel_id, user.clone())
                         .await
@@ -159,116 +128,16 @@ impl<
                         channel_type: info.channel_type,
                         channel_name: info.name.unwrap_or_default(),
                     }
-                };
-                self.events.dispatch(ChannelEvent::MessagePosted {
-                    channel_id,
-                    metadata,
-                    participants,
-                    message: persisted(channel_id, message),
-                    mentions: mentions.clone(),
-                    has_attachments: !message.attachments.is_empty(),
-                    attachments: attachments(channel_id, message),
-                    nonce: event.nonce.clone(),
-                    notification_policy: *notification_policy,
-                });
-            }
-            MessageChange::Edited {
-                message,
-                previous_attachments,
-                mentions,
-                notification_policy,
-            } => {
-                let posted_notification = if *notification_policy
-                    == PatchMessageNotificationPolicy::NotifyAsPostedMessage
-                {
-                    let info = self
-                        .repo
-                        .get_channel_info(channel_id)
-                        .await
-                        .map_err(repo_error)?;
-                    Some(crate::domain::events::MessageChangedNotificationContext {
-                        metadata: ChannelMetadata {
-                            channel_type: info.channel_type,
-                            channel_name: info.name.unwrap_or_default(),
-                        },
-                        participants: participants.clone(),
-                        mentions: mentions.clone(),
-                        has_attachments: !message.attachments.is_empty(),
-                    })
-                } else {
-                    None
-                };
-                self.events.dispatch(ChannelEvent::MessageChanged {
-                    channel_id,
-                    actor: actor.clone(),
-                    message: persisted(channel_id, message),
-                    recipients: recipients.clone(),
-                    nonce: event.nonce.clone(),
-                    posted_notification,
-                });
-                let current = attachments(channel_id, message);
-                let previous = attachment_rows(channel_id, message.id, previous_attachments);
-                let added = current
-                    .iter()
-                    .filter(|a| !previous.iter().any(|p| p.id == a.id))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                let removed = previous
-                    .into_iter()
-                    .filter(|p| !current.iter().any(|a| a.id == p.id))
-                    .collect::<Vec<_>>();
-                if !added.is_empty() || !removed.is_empty() {
-                    self.events.dispatch(ChannelEvent::AttachmentsChanged {
-                        channel_id,
-                        actor: actor.clone(),
-                        message_id: message.id,
-                        attachments: current,
-                        added,
-                        removed,
-                        recipients,
-                        nonce: event.nonce.clone(),
-                    });
-                }
-            }
-            MessageChange::MessageDeleted { message } => {
-                self.events.dispatch(ChannelEvent::MessageDeleted {
-                    channel_id,
-                    actor: actor.clone(),
-                    message: persisted(channel_id, message),
-                    recipients: recipients.clone(),
-                    nonce: event.nonce.clone(),
-                });
-            }
-            MessageChange::ReactionChanged { message } => {
-                if actor.as_user().is_some()
-                    && let Err(error) = self.repo.upsert_activity(actor.clone(), channel_id).await
-                {
-                    side_effect_error = Some(repo_error(error));
-                }
-                self.events.dispatch(ChannelEvent::ReactionChanged {
-                    channel_id,
-                    actor: actor.clone(),
-                    message_id: message.id,
-                    reactions: message.reactions.clone(),
-                    recipients: recipients.clone(),
-                    nonce: event.nonce.clone(),
-                });
-            }
-            MessageChange::Typing { active } => self.events.dispatch(ChannelEvent::TypingChanged {
-                channel_id,
-                actor,
-                action: if *active {
-                    TypingAction::Start
-                } else {
-                    TypingAction::Stop
-                },
-                thread_id: Some(event.root_id),
-                recipients,
-                nonce: event.nonce.clone(),
-            }),
-            MessageChange::ThreadUpdated { .. } => {}
+                })
+            } else {
+                None
+            };
+            self.events.dispatch(ChannelEvent::MessageCommitted {
+                event: Box::new(event),
+                metadata,
+                participants,
+            });
         }
-        self.realtime.send(&event, live_users).await?;
         if let Some(error) = side_effect_error {
             return Err(error);
         }

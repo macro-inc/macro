@@ -16,13 +16,16 @@ import GitBranch from '@phosphor/git-branch.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { storageServiceClient } from '@service-storage/client';
-import type { MessageThread } from '@service-storage/messages';
+import {
+  entityMessagesClient,
+  type MessageParent,
+  type MessageThread,
+} from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
 import { Button, ButtonGroup, Dropdown } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { discussionThreads } from '../comments/discussionResource';
 import { mdStore } from '../signal/markdownBlockData';
 
 const LAST_USED_KEY = 'dispatch-agent-last-used';
@@ -168,12 +171,27 @@ export function useDispatchAgentAction() {
   const lastUsed = () =>
     ALL_ACTIONS.find((a) => a.key === lastUsedKey()) ?? COPY_ACTION;
 
-  const buildPrompt = createCallback(() => {
+  const buildPrompt = createCallback(async () => {
     const docName = name();
     const content = store.editor
       ? editorStateAsMarkdown(store.editor, 'external')
       : '';
-    const threads = discussionThreads() ?? [];
+    // Copy/export needs full discussions, not the timeline's bounded reply previews.
+    const parent: MessageParent = { type: 'document', id: blockId };
+    const threads: MessageThread[] = [];
+    let cursor;
+    do {
+      const page = await entityMessagesClient.list(parent, {
+        anchored: false,
+        limit: 100,
+        cursor,
+      });
+      for (const root of page.items) {
+        threads.push(await entityMessagesClient.thread(parent, root.id));
+      }
+      cursor = page.next_cursor;
+    } while (cursor);
+    threads.reverse();
     return generateTaskPrompt(blockId, docName, content, threads);
   });
 

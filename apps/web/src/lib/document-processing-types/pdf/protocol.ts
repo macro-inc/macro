@@ -27,6 +27,7 @@ export type PdfThreadPayload = {
   anchorId: string;
   page: number;
   comments: IComment[];
+  replyCount: number;
   isResolved: boolean;
 };
 

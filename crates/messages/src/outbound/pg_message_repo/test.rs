@@ -46,6 +46,53 @@ fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn shared_reads_preserve_system_and_deleted_bot_profiles(pool: PgPool) {
+    setup(&pool).await;
+    let deleted_bot = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO bots (id, kind, owner_user_id, name, handle, avatar_url, deleted_at) \
+         VALUES ($1, 'owned', $2, 'Historical Agent', 'historical-agent', 'https://example.com/agent.png', now())",
+    )
+    .bind(deleted_bot)
+    .bind(USER)
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgMessageRepository::new(pool);
+    for (bot_id, name, avatar_url) in [
+        (
+            bot_id::MACRO_AI_BOT_ID,
+            bot_id::system_bot(bot_id::MACRO_AI_BOT_ID).unwrap().name,
+            None,
+        ),
+        (
+            bot_id::BotId::new_from_uuid(deleted_bot),
+            "Historical Agent",
+            Some("https://example.com/agent.png"),
+        ),
+    ] {
+        let mut input = command("message-doc-a", None, "Agent answer");
+        input.actor = channel_sender::ChannelSender::new_from_bot(bot_id);
+        input.triggered_by = Some(USER.to_owned());
+        let message = repo.create(input).await.unwrap();
+        let read = repo
+            .get(&message.parent, message.id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            read.bot_profile,
+            Some(BotSenderProfile {
+                name: name.to_owned(),
+                avatar_url: avatar_url.map(str::to_owned),
+            })
+        );
+        let listed = repo.hydrate_roots(&[message.id]).await.unwrap();
+        assert_eq!(listed[0].message.bot_profile, read.bot_profile);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn thread_identity_tombstones_and_parent_isolation(pool: PgPool) {
     setup(&pool).await;
     let repo = PgMessageRepository::new(pool.clone());
@@ -71,10 +118,20 @@ async fn thread_identity_tombstones_and_parent_isolation(pool: PgPool) {
     );
     let deleted = repo.delete(&parent, root.id).await.unwrap();
     assert!(deleted.deleted_at.is_some());
-    let page = repo.list(&parent, None, 10).await.unwrap();
-    assert_eq!(page.threads.len(), 1);
-    assert!(page.threads[0].root.content.is_empty());
-    assert_eq!(page.threads[0].replies[0].content, "reply");
+    let page = repo
+        .timeline(
+            &parent,
+            MessageTimelineQuery {
+                cursor: None,
+                limit: Some(10),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.items.len(), 1);
+    assert!(page.items[0].message.content.is_empty());
+    assert_eq!(page.items[0].thread.preview[0].content, "reply");
     repo.create(command(
         "message-doc-a",
         Some(root.id),
@@ -84,11 +141,18 @@ async fn thread_identity_tombstones_and_parent_isolation(pool: PgPool) {
     .unwrap();
     repo.delete_thread(&parent, root.id).await.unwrap();
     assert!(
-        repo.list(&parent, None, 10)
-            .await
-            .unwrap()
-            .threads
-            .is_empty()
+        repo.timeline(
+            &parent,
+            MessageTimelineQuery {
+                cursor: None,
+                limit: Some(10),
+                ..Default::default()
+            }
+        )
+        .await
+        .unwrap()
+        .items
+        .is_empty()
     );
     assert!(
         repo.create(command(
@@ -98,6 +162,81 @@ async fn thread_identity_tombstones_and_parent_isolation(pool: PgPool) {
         ))
         .await
         .is_err()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleted_markdown_threads_keep_paged_cleanup_identity(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let mark_id = Uuid::from_u128(102);
+    let mut create = command("message-doc-a", None, "removed discussion");
+    create.input.anchor = Some(NewThreadAnchor::Markdown { mark_id });
+    let deleted = repo.create(create).await.unwrap();
+    let state = repo
+        .delete_thread(&deleted.parent, deleted.id)
+        .await
+        .unwrap();
+    assert!(state.deleted_at.is_some());
+    assert!(matches!(state.anchor, Some(ThreadAnchor::Markdown { mark_id: id }) if id == mark_id));
+    let live = repo
+        .create(command("message-doc-a", None, "live discussion"))
+        .await
+        .unwrap();
+
+    // A new reader must recover deletion without a live event or old root cache.
+    let repo = PgMessageRepository::new(pool);
+    let normal = repo
+        .timeline(&deleted.parent, MessageTimelineQuery::default())
+        .await
+        .unwrap();
+    assert_eq!(normal.items.len(), 1);
+    assert_eq!(normal.items[0].message.id, live.id);
+    let first = repo
+        .timeline(
+            &deleted.parent,
+            MessageTimelineQuery {
+                include_deleted_threads: true,
+                limit: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.items[0].message.id, live.id);
+    let older = repo
+        .timeline(
+            &deleted.parent,
+            MessageTimelineQuery {
+                include_deleted_threads: true,
+                cursor: first.next_cursor,
+                limit: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(older.items.len(), 1);
+    assert_eq!(older.items[0].message.id, deleted.id);
+    assert!(older.items[0].message.content.is_empty());
+    assert!(older.items[0].state.deleted_at.is_some());
+    assert!(
+        matches!(older.items[0].state.anchor, Some(ThreadAnchor::Markdown { mark_id: id }) if id == mark_id)
+    );
+    assert!(older.next_cursor.is_none());
+    let other_parent = MessageParent::parse("document", "message-doc-b").unwrap();
+    assert!(
+        repo.timeline(
+            &other_parent,
+            MessageTimelineQuery {
+                include_deleted_threads: true,
+                ..Default::default()
+            }
+        )
+        .await
+        .unwrap()
+        .items
+        .is_empty()
     );
 }
 
@@ -127,10 +266,17 @@ async fn reactions_attachments_and_resolution_use_shared_message_data(pool: PgPo
     assert_eq!(reacted.reactions.len(), 1);
     assert_eq!(reacted.reactions[0].users, vec![USER]);
     assert!(
-        repo.resolve(&root.parent, root.id, true)
-            .await
-            .unwrap()
-            .resolved
+        repo.patch_thread(
+            &root.parent,
+            root.id,
+            ThreadPatch {
+                resolved: Some(true),
+                ..Default::default()
+            }
+        )
+        .await
+        .unwrap()
+        .resolved
     );
     let edit = EditMessage {
         notification_policy: Default::default(),
@@ -149,6 +295,65 @@ async fn reactions_attachments_and_resolution_use_shared_message_data(pool: PgPo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn detaching_a_mark_retains_the_complete_thread_and_makes_it_unanchored(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool.clone());
+    let mut create = command("message-doc-a", None, "anchored root");
+    create.input.anchor = Some(NewThreadAnchor::Markdown {
+        mark_id: Uuid::from_u128(101),
+    });
+    let root = repo.create(create).await.unwrap();
+    let reply = repo
+        .create(command("message-doc-a", Some(root.id), "retained reply"))
+        .await
+        .unwrap();
+    let state = repo
+        .patch_thread(
+            &root.parent,
+            root.id,
+            ThreadPatch {
+                detach_anchor: true,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(state.anchor.is_none());
+    assert!(state.deleted_at.is_none());
+    let reloaded = PgMessageRepository::new(pool);
+    let page = reloaded
+        .timeline(
+            &root.parent,
+            MessageTimelineQuery {
+                anchored: Some(false),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].message.id, root.id);
+    assert_eq!(page.items[0].message.content, "anchored root");
+    assert_eq!(page.items[0].thread.reply_count, 1);
+    assert_eq!(page.items[0].thread.preview[0].id, reply.id);
+    assert!(
+        reloaded
+            .patch_thread(
+                &root.parent,
+                root.id,
+                ThreadPatch {
+                    detach_anchor: true,
+                    ..Default::default()
+                }
+            )
+            .await
+            .unwrap()
+            .anchor
+            .is_none()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn parent_deletion_cascades_and_cursor_does_not_repeat_roots(pool: PgPool) {
     setup(&pool).await;
     let repo = PgMessageRepository::new(pool.clone());
@@ -159,11 +364,31 @@ async fn parent_deletion_cascades_and_cursor_does_not_repeat_roots(pool: PgPool)
     repo.create(command("message-doc-a", None, "second"))
         .await
         .unwrap();
-    let first = repo.list(&root.parent, None, 1).await.unwrap();
-    let second = repo.list(&root.parent, first.next_cursor, 1).await.unwrap();
-    assert_eq!(first.threads.len(), 1);
-    assert_eq!(second.threads.len(), 1);
-    assert_ne!(first.threads[0].root.id, second.threads[0].root.id);
+    let first = repo
+        .timeline(
+            &root.parent,
+            MessageTimelineQuery {
+                cursor: None,
+                limit: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let second = repo
+        .timeline(
+            &root.parent,
+            MessageTimelineQuery {
+                cursor: first.next_cursor,
+                limit: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.items.len(), 1);
+    assert_eq!(second.items.len(), 1);
+    assert_ne!(first.items[0].message.id, second.items[0].message.id);
     assert!(second.next_cursor.is_none());
     sqlx::query!(r#"DELETE FROM "Document" WHERE id = 'message-doc-a'"#)
         .execute(&pool)
@@ -220,11 +445,18 @@ async fn highlight_attachment_is_scoped_and_explicit_thread_deletion_preserves_h
     create.input.anchor = Some(NewThreadAnchor::PdfHighlight { anchor_id });
     assert!(repo.create(create.clone()).await.is_err());
     assert!(
-        repo.list(&create.parent, None, 10)
-            .await
-            .unwrap()
-            .threads
-            .is_empty()
+        repo.timeline(
+            &create.parent,
+            MessageTimelineQuery {
+                cursor: None,
+                limit: Some(10),
+                ..Default::default()
+            }
+        )
+        .await
+        .unwrap()
+        .items
+        .is_empty()
     );
     create.parent = MessageParent::parse("document", "message-doc-a").unwrap();
     let root = repo.create(create).await.unwrap();
@@ -470,4 +702,266 @@ async fn replacement_attachments_preserve_retained_ids_and_remove_only_missing_i
         .await
         .unwrap();
     assert!(removed.attachments.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn both_parents_use_bounded_previews_and_bidirectional_windows(pool: PgPool) {
+    setup(&pool).await;
+    let channel = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels(id, channel_type, owner_id) VALUES ($1, 'private', $2)",
+        channel,
+        USER
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgMessageRepository::new(pool.clone());
+    for parent in [
+        MessageParent::Channel(channel),
+        MessageParent::parse("document", "message-doc-a").unwrap(),
+    ] {
+        let mut roots = Vec::new();
+        for index in 0..7 {
+            let mut input = command("message-doc-a", None, &format!("root {index}"));
+            input.parent = parent.clone();
+            roots.push(repo.create(input).await.unwrap());
+        }
+        let root = roots[3].id;
+        for index in 0..12 {
+            let mut input = command("message-doc-a", Some(root), &format!("reply {index}"));
+            input.parent = parent.clone();
+            repo.create(input).await.unwrap();
+        }
+        let latest = repo
+            .timeline(
+                &parent,
+                MessageTimelineQuery {
+                    limit: Some(3),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            latest
+                .items
+                .iter()
+                .map(|m| m.message.id)
+                .collect::<Vec<_>>(),
+            vec![roots[6].id, roots[5].id, roots[4].id]
+        );
+        assert!(latest.previous_cursor.is_none());
+        let older = repo
+            .timeline(
+                &parent,
+                MessageTimelineQuery {
+                    cursor: latest.next_cursor,
+                    limit: Some(3),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(older.items[0].message.id, root);
+        assert_eq!(older.items[0].thread.reply_count, 12);
+        assert_eq!(older.items[0].thread.preview.len(), 3);
+        assert_eq!(older.items[0].thread.preview[0].content, "reply 0");
+        let newer = repo
+            .timeline(
+                &parent,
+                MessageTimelineQuery {
+                    cursor: older.previous_cursor,
+                    direction: MessageDirection::Newer,
+                    limit: Some(3),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            newer.items.iter().map(|m| m.message.id).collect::<Vec<_>>(),
+            latest
+                .items
+                .iter()
+                .map(|m| m.message.id)
+                .collect::<Vec<_>>()
+        );
+        let reply = older.items[0].thread.preview[0].id;
+        let around = repo
+            .timeline(
+                &parent,
+                MessageTimelineQuery {
+                    around: Some(reply),
+                    limit: Some(3),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            around
+                .items
+                .iter()
+                .map(|m| m.message.id)
+                .collect::<Vec<_>>(),
+            vec![roots[4].id, root, roots[2].id]
+        );
+        assert!(around.next_cursor.is_some() && around.previous_cursor.is_some());
+        assert!(around.items.iter().all(|m| m.message.parent == parent));
+        assert!(matches!(
+            repo.timeline(
+                &MessageParent::parse("document", "message-doc-b").unwrap(),
+                MessageTimelineQuery {
+                    around: Some(reply),
+                    ..Default::default()
+                },
+            )
+            .await,
+            Err(MessageError::NotFound)
+        ));
+        // Activity windows include a root when a reply, rather than the root, falls in the window.
+        let active = repo
+            .timeline(
+                &parent,
+                MessageTimelineQuery {
+                    activity_after: Some(older.items[0].thread.preview[0].created_at),
+                    ids: vec![root, roots[0].id],
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            active
+                .items
+                .iter()
+                .map(|item| item.message.id)
+                .collect::<Vec<_>>(),
+            vec![root]
+        );
+        let future = repo
+            .timeline(
+                &parent,
+                MessageTimelineQuery {
+                    activity_after: Some(chrono::Utc::now() + chrono::Duration::seconds(1)),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert!(future.items.is_empty());
+        // Around an edge, backfill from the other side instead of returning a short page.
+        for (anchor, expected) in [
+            (roots[0].id, vec![roots[2].id, roots[1].id, roots[0].id]),
+            (roots[6].id, vec![roots[6].id, roots[5].id, roots[4].id]),
+        ] {
+            let edge = repo
+                .timeline(
+                    &parent,
+                    MessageTimelineQuery {
+                        around: Some(anchor),
+                        limit: Some(3),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                edge.items
+                    .iter()
+                    .map(|item| item.message.id)
+                    .collect::<Vec<_>>(),
+                expected
+            );
+        }
+        repo.delete(&parent, roots[0].id).await.unwrap();
+        let empty_root = repo
+            .timeline(
+                &parent,
+                MessageTimelineQuery {
+                    ids: vec![roots[0].id],
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            empty_root.items.is_empty(),
+            matches!(parent, MessageParent::Channel(_))
+        );
+        let centered_empty_root = repo
+            .timeline(
+                &parent,
+                MessageTimelineQuery {
+                    around: Some(roots[0].id),
+                    limit: Some(1),
+                    ..Default::default()
+                },
+            )
+            .await;
+        if matches!(parent, MessageParent::Channel(_)) {
+            assert!(matches!(centered_empty_root, Err(MessageError::NotFound)));
+        } else {
+            let page = centered_empty_root.unwrap();
+            assert_eq!(page.items[0].message.id, roots[0].id);
+            assert!(page.items[0].message.deleted_at.is_some());
+        }
+        repo.delete(&parent, root).await.unwrap();
+        let page = repo
+            .timeline(
+                &parent,
+                MessageTimelineQuery {
+                    ids: vec![root],
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert!(page.items[0].message.deleted_at.is_some());
+        assert_eq!(page.items[0].thread.reply_count, 12);
+        for target in [root, reply] {
+            let centered_deleted_root = repo
+                .timeline(
+                    &parent,
+                    MessageTimelineQuery {
+                        around: Some(target),
+                        limit: Some(1),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(centered_deleted_root.items[0].message.id, root);
+            assert!(centered_deleted_root.items[0].message.deleted_at.is_some());
+            assert_eq!(centered_deleted_root.items[0].thread.reply_count, 12);
+        }
+        repo.delete_thread(&parent, root).await.unwrap();
+        for target in [root, reply] {
+            assert!(matches!(
+                repo.timeline(
+                    &parent,
+                    MessageTimelineQuery {
+                        around: Some(target),
+                        ..Default::default()
+                    },
+                )
+                .await,
+                Err(MessageError::NotFound)
+            ));
+        }
+        assert!(
+            repo.timeline(
+                &parent,
+                MessageTimelineQuery {
+                    ids: vec![root],
+                    ..Default::default()
+                }
+            )
+            .await
+            .unwrap()
+            .items
+            .is_empty()
+        );
+    }
 }

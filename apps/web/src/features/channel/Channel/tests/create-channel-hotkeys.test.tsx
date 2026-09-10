@@ -3,7 +3,7 @@ import {
   useHotKeyRoot,
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { MessageListItem } from '@service-storage/messages';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, onMount, Show } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
@@ -60,7 +60,7 @@ function ChannelEditHarness(props: {
     },
     navigation: () => undefined,
     messageById: () =>
-      new Map([[originalMessage.id, originalMessage as ApiChannelMessage]]),
+      new Map([[originalMessage.id, originalMessage as MessageListItem]]),
     getMessageActions: () => ({
       onEdit: () => {
         setIsEditing(true);

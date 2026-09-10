@@ -24,7 +24,10 @@ function channelParticipantsQueryOptions(channelId: string) {
 }
 
 export function useChannelParticipantsQuery(channelId: Accessor<string>) {
-  return useQuery(() => channelParticipantsQueryOptions(channelId()));
+  return useQuery(() => ({
+    ...channelParticipantsQueryOptions(channelId()),
+    enabled: !!channelId(),
+  }));
 }
 
 export function invalidateChannelParticipants(channelId: string) {

@@ -28,23 +28,38 @@ Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote)
 4. Completion signal: the `Stop` button disappears. Poll for that with `evaluate_script`;
    do not rely on `wait_for` text.
 
-## Comments (Discussion)
+## Comments
 
-Below the editor, expand `Discussion`. Its `Leave a comment...` composer supports
-`Attach files`, formatting, mentions, and `Send comment` (Enter also submits).
+Below the editor, expand `Discussion` to see comments without a text anchor.
+Its `Leave a comment...` composer supports
+`Attach files`, formatting, mentions, and `Send message` (Enter also submits).
 Attachment-only comments are allowed after uploads finish. Confirm completion by
 the new message appearing above the composer; a failed send retains the draft.
 Live updates preserve unsent replies and edits while updating the surrounding thread.
+The timeline initially loads a bounded page with up to three preview replies per
+thread. Expand a thread to load its replies; `Load earlier comments` pages backward.
 
-Select text and choose the comment action to create an anchored discussion. Existing
+Select text and choose the comment action to create an anchored comment. These threads
+appear beside their text in the margin (or in the active thread drawer on phones),
+and never in the bottom Discussion, including after live updates or reloads. Existing
 highlights locate threads by their stable mark IDs. Replies, attachments, reactions,
-and editing use the same message controls as channels. On phones, the active Markdown
-thread opens in a drawer with a pinned reply composer.
+and editing use the same message controls as channels. Removing the last marked text
+moves its retained conversation to Discussion, where it remains after reload. Removing
+only part of a marked range keeps the conversation anchored to the remaining text.
+On phones, the active Markdown thread opens in a drawer with a pinned reply composer;
+long-press any message for edit, delete, copy-link, and reaction actions.
 
 `Resolve` / `Reopen` changes the discussion state. Deleting the root message leaves a
 tombstone and retains its replies. `Delete discussion` explicitly removes the whole
 thread and requests confirmation. `Copy link` targets the specific comment. Previously
 copied numeric links still resolve under current document permissions.
+Deleting an anchored Markdown discussion removes its mark while preserving the document
+text and any overlapping comments. If deletion happens while the document is closed,
+its next editable view removes the retained mark when the document loads.
+Read-only viewers see plain text without a dead comment highlight; this presentation
+change leaves the stored document and overlapping live comments intact.
+Closing or paging away from a comment being edited
+restores the pinned reply composer when the drawer is reopened.
 
 PDFs expose a `Comments` section in the side panel as well as anchored margin threads.
 Deleting a comment placeable removes its discussion; deleting a discussion attached
@@ -55,11 +70,14 @@ to a regular highlight leaves the independent highlight in place.
 The comment composer supports the same agent mentions as channels. `@Macro` answers
 in the discussion; available `@macro-new`, `@coder`, `@cursor`, and owned/team agents
 open a linked session. Follow-up mentions in that thread can continue the session.
-The session's conversation drawer opens the document discussion and receives live
+In the agent session, click `Open conversation` in the header (or the title menu
+on mobile). The conversation drawer opens the document discussion and receives live
 replies, edits, and reactions while the source document is closed. Closing the drawer
 keeps any open document view subscribed. Access follows the
 current document permissions, so revoking a collaborator prevents further prompts
 and inherited session access.
+`Copy as prompt` loads complete discussion histories when invoked, including replies
+beyond the timeline preview.
 
 For isolated drawer checks, `/app/component/linked-conversation` accepts a parent
 type (`Document` or `Channel`), parent ID, and root message ID. Click `Load conversation`
@@ -69,8 +87,9 @@ can verify that closing either view preserves updates in the other.
 Enable `Include channel mentions` to add accessible channel threads that reference
 the document. Each has a `From …` link to its source. Replying there sends to that
 channel; resolving/deleting whole document discussions is unavailable on these
-source threads. Their reply composer supports channel `@here`; document discussions
-do not offer group mentions. The bottom composer still creates a document discussion. The option
+source threads. Their inline reply/edit controls remain available even when the channel screen
+uses its floating composer. Their reply composer supports channel `@here`; document
+discussions do not offer group mentions. The bottom composer still creates a document discussion. The option
 starts off and never grants access to a private channel.
 
 ## Side panel

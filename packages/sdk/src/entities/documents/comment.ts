@@ -1,43 +1,36 @@
-import type { Comment as CommentRecord } from '../../../generated/storage/types.gen';
-import { MacroNotFoundError, unwrap } from '../../utils';
+import type { Message as MessageRecord } from '../../../generated/storage/types.gen';
+import { type RichMessage, toBody } from '../../mentions';
+import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import { User } from '../users/user';
 import type { Document } from './document';
 
 /**
- * A comment on a document. Compound-keyed by `(documentId, commentId)`:
- * comment ids are numeric and only unique per document, so the numeric id is
- * kept as {@link commentId} and its string form backs the base class `id`.
+ * A document message, addressed by its document and message UUID. Its record
+ * and mutations are the same ones used for channel messages.
  */
-export class Comment extends MacroEntity<CommentRecord> {
+export class Comment extends MacroEntity<MessageRecord> {
   private constructor(
     client: MacroClient,
     /** The document this comment belongs to. */
     readonly documentId: string,
-    /** The comment's numeric id, as the API uses it. */
-    readonly commentId: number,
-    seed?: CommentRecord,
+    /** The comment's message UUID. */
+    readonly commentId: string,
+    seed?: MessageRecord,
   ) {
-    super(client, String(commentId), seed);
+    super(client, commentId, seed);
   }
 
-  /**
-   * There is no single-comment GET, so a fetch loads the document's comment
-   * threads and finds this comment in them.
-   */
-  protected async fetch(): Promise<CommentRecord> {
-    const { data } = unwrap(
-      await this.client.storage.getDocumentComments({
-        path: { document_id: this.documentId },
+  protected async fetch(): Promise<MessageRecord> {
+    return unwrap(
+      await this.client.storage.entityMessageGetMessage({
+        path: {
+          parent_type: 'document',
+          parent_id: this.documentId,
+          id: this.id,
+        },
       }),
-    );
-    for (const thread of data) {
-      const found = thread.comments.find((c) => c.commentId === this.commentId);
-      if (found) return found;
-    }
-    throw new MacroNotFoundError(
-      `comment ${this.commentId} not found on document ${this.documentId}`,
     );
   }
 
@@ -45,38 +38,40 @@ export class Comment extends MacroEntity<CommentRecord> {
   static from(
     client: MacroClient,
     document: Document,
-    record: CommentRecord,
+    record: MessageRecord,
   ): Comment {
-    return new Comment(client, document.id, record.commentId, record);
+    return new Comment(client, document.id, record.id, record);
   }
 
   /** The comment's text. */
-  readonly text = this.field('text');
+  readonly text = this.field('content');
 
   /** The id of the thread this comment belongs to. */
-  readonly threadId = this.field('threadId');
+  async threadId(): Promise<string> {
+    return (await this.detail.get()).thread_id ?? this.id;
+  }
 
   /** When the comment was created. */
-  readonly createdAt = this.field('createdAt');
+  readonly createdAt = this.field('created_at');
 
   /** When the comment was last updated. */
-  readonly updatedAt = this.field('updatedAt');
+  readonly updatedAt = this.field('updated_at');
 
   /** The user who wrote this comment. */
   async author(): Promise<User> {
-    return User.byId(this.client, (await this.detail.get()).owner);
+    return User.byId(this.client, (await this.detail.get()).sender_id);
   }
 
-  /**
-   * Replace the comment's text. The endpoint requires the thread id in the
-   * body, which is resolved from the comment's own record.
-   */
-  async edit(text: string): Promise<this> {
-    const { threadId } = await this.detail.get();
+  /** Replace the comment's text, with optional rich mentions. */
+  async edit(body: string | RichMessage): Promise<this> {
     await this.mutate((c) =>
-      c.storage.editComment({
-        path: { comment_id: this.commentId },
-        body: { text, threadId },
+      c.storage.entityMessageEdit({
+        path: {
+          parent_type: 'document',
+          parent_id: this.documentId,
+          id: this.id,
+        },
+        body: toBody(body),
       }),
     );
     return this;
@@ -85,9 +80,12 @@ export class Comment extends MacroEntity<CommentRecord> {
   /** Delete this comment. */
   async delete(): Promise<void> {
     await this.mutate((c) =>
-      c.storage.deleteComment({
-        path: { comment_id: this.commentId },
-        body: {},
+      c.storage.entityMessageDeleteMessage({
+        path: {
+          parent_type: 'document',
+          parent_id: this.documentId,
+          id: this.id,
+        },
       }),
     );
   }

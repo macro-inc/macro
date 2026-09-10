@@ -19,6 +19,7 @@ import {
   $getSelection,
   $isRangeSelection,
   $isTextNode,
+  $nodesOfType,
   COMMAND_PRIORITY_EDITOR,
   createCommand,
   type LexicalEditor,
@@ -37,7 +38,11 @@ interface CommentOperations {
     isDraft: boolean,
     isLocal: boolean
   ) => void;
-  remove: (markId: string, markNodeKey: string) => void;
+  remove: (
+    markId: string,
+    markNodeKey: string,
+    lastRangeRemoved: boolean
+  ) => void;
   setActiveIds: (markIds: string[]) => void;
   init: () => void;
 }
@@ -90,10 +95,6 @@ export const DELETE_COMMENT_COMMAND = createCommand<[string, boolean]>(
 export const MARK_SELECTED_COMMENT_COMMAND = createCommand<string[]>(
   'MARK_SELECTED_COMMENT_COMMAND'
 );
-
-export const REMOVE_ORPHANED_COMMENT_MARKS_COMMAND = createCommand<
-  ReadonlySet<string>
->('REMOVE_ORPHANED_COMMENT_MARKS_COMMAND');
 
 export const COMMIT_COMMENT_MARK_COMMAND = createCommand<{
   markId: string;
@@ -202,70 +203,6 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
       ops.init();
     }),
 
-    editor.registerMutationListener(
-      CommentNode,
-      (mutations) => {
-        editor.getEditorState().read(() => {
-          for (const [key, mutation] of mutations) {
-            const node: null | CommentNode = $getNodeByKey(key);
-            let ids: NodeKey[] = [];
-
-            if (mutation === 'destroyed') {
-              ids = markNodeKeysToIDs.get(key) || [];
-            } else if ($isMarkNode(node)) {
-              ids = node.getIDs();
-            }
-
-            for (let i = 0; i < ids.length; i++) {
-              const id = ids[i];
-              let markNodeKeys = markNodeMap.get(id);
-              markNodeKeysToIDs.set(key, ids);
-
-              if (mutation === 'destroyed') {
-                ops.remove(id, key);
-
-                if (markNodeKeys !== undefined) {
-                  markNodeKeys.delete(key);
-                  if (markNodeKeys.size === 0) {
-                    markNodeMap.delete(id);
-                  }
-                }
-              } else {
-                const markElement = editor.getElementByKey(key);
-                if (!markElement || !node) {
-                  console.error('unable to find html element for mark node');
-                } else {
-                  const isDraft = node.getIsDraft();
-                  const hasServerThread = !isDraft;
-                  const nodePeerId = $getPeerId(node);
-                  const isLocal = Boolean(
-                    nodePeerId && nodePeerId === peerId()
-                  );
-                  ops.add(
-                    id,
-                    node,
-                    markElement,
-                    hasServerThread,
-                    isDraft,
-                    isLocal
-                  );
-                }
-
-                if (markNodeKeys === undefined) {
-                  markNodeKeys = new Set();
-                  markNodeMap.set(id, markNodeKeys);
-                }
-                if (!markNodeKeys.has(key)) {
-                  markNodeKeys.add(key);
-                }
-              }
-            }
-          }
-        });
-      },
-      { skipInitialization: false }
-    ),
-
     editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
         const selection = $getSelection();
@@ -343,7 +280,8 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
           if (!node) continue;
 
           if (forceDelete) {
-            $unwrapMarkNode(node);
+            if (node.getIDs().length > 1) node.deleteID(markId);
+            else $unwrapMarkNode(node);
             continue;
           }
 
@@ -395,20 +333,63 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
       COMMAND_PRIORITY_EDITOR
     ),
     editor.registerCommand(
-      REMOVE_ORPHANED_COMMENT_MARKS_COMMAND,
-      (validMarkIds) => {
-        $removeOrphanedCommentMarks(validMarkIds);
-        return true;
-      },
-      COMMAND_PRIORITY_EDITOR
-    ),
-    editor.registerCommand(
       CLEANUP_COMMENTS_COMMAND,
       (payload) => {
         $disposeExternalDraftComments(payload);
         return true;
       },
       COMMAND_PRIORITY_EDITOR
+    ),
+
+    // Publish mounted marks after their commands and lookup entries are ready.
+    editor.registerMutationListener(
+      CommentNode,
+      (mutations) => {
+        editor.getEditorState().read(() => {
+          // Node replacements and merges can destroy one mark node while another
+          // keeps the same ID. Only the complete new tree proves a range is gone.
+          const remainingIds = new Set(
+            $nodesOfType(CommentNode).flatMap((node) => node.getIDs())
+          );
+          for (const [key, mutation] of mutations) {
+            const node: null | CommentNode = $getNodeByKey(key);
+            const ids = $isMarkNode(node) ? node.getIDs() : [];
+            for (const id of markNodeKeysToIDs.get(key) ?? []) {
+              if (ids.includes(id)) continue;
+              ops.remove(id, key, !remainingIds.has(id));
+              const keys = markNodeMap.get(id);
+              keys?.delete(key);
+              if (keys?.size === 0) markNodeMap.delete(id);
+            }
+            if (mutation === 'destroyed') {
+              markNodeKeysToIDs.delete(key);
+              continue;
+            }
+            markNodeKeysToIDs.set(key, ids);
+            for (const id of ids) {
+              setMarkNodeMapEntry(id, key);
+              const markElement = editor.getElementByKey(key);
+              if (!markElement || !node) {
+                console.error('unable to find html element for mark node');
+              } else {
+                const isDraft = node.getIsDraft();
+                const hasServerThread = !isDraft;
+                const nodePeerId = $getPeerId(node);
+                const isLocal = Boolean(nodePeerId && nodePeerId === peerId());
+                ops.add(
+                  id,
+                  node,
+                  markElement,
+                  hasServerThread,
+                  isDraft,
+                  isLocal
+                );
+              }
+            }
+          }
+        });
+      },
+      { skipInitialization: false }
     )
   );
 }
@@ -440,24 +421,6 @@ function $disposeExternalDraftComments(validPeerIds: string[]) {
       if (!validPeerIds.includes(nodePeerId)) {
         $unwrapMarkNode(node);
       }
-    }
-  });
-}
-
-function $removeOrphanedCommentMarks(validMarkIds: ReadonlySet<string>) {
-  $traverseNodes($getRoot(), (node) => {
-    if (!$isCommentNode(node) || node.getIsDraft()) return;
-
-    const invalidIds = node.getIDs().filter((id) => !validMarkIds.has(id));
-    if (invalidIds.length === 0) return;
-
-    if (invalidIds.length === node.getIDs().length) {
-      $unwrapMarkNode(node);
-      return;
-    }
-
-    for (const id of invalidIds) {
-      node.deleteID(id);
     }
   });
 }

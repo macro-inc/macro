@@ -16,7 +16,7 @@ pub async fn get_messages(
         r#"
         SELECT
             id AS "id!",
-            channel_id AS "channel_id!",
+            parent_entity_id::uuid AS "channel_id!",
             sender_id AS "sender_id!",
             content AS "content!",
             created_at AS "created_at!",
@@ -26,8 +26,8 @@ pub async fn get_messages(
             deleted_at as "deleted_at: chrono::DateTime<chrono::Utc>"
         FROM (
             SELECT *
-            FROM comms_channel_messages
-            WHERE channel_id = $1
+            FROM comms_messages
+            WHERE parent_entity_type = 'channel' AND parent_entity_id = $1::uuid::text
             AND ($2::timestamptz IS NULL OR created_at >= $2)
             ORDER BY created_at DESC
             LIMIT $3
@@ -72,13 +72,13 @@ pub async fn get_channel_messages(
     let messages = sqlx::query!(
         r#"
         SELECT
-            channel_id AS "channel_id!",
+            parent_entity_id::uuid AS "channel_id!",
             id AS "id!"
-        FROM comms_channel_messages
-        WHERE
+        FROM comms_messages
+        WHERE parent_entity_type = 'channel' AND (
             $3::bool IS NULL
             OR ($3 AND deleted_at IS NOT NULL)
-            OR (NOT $3 AND deleted_at IS NULL)
+            OR (NOT $3 AND deleted_at IS NULL))
         ORDER BY created_at ASC
         LIMIT $1
         OFFSET $2

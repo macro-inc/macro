@@ -4,7 +4,6 @@
 mod tests;
 
 use crate::domain::{
-    models::{BotId, BotSenderProfile},
     ports::ChannelSideEffectContext,
     side_effects::{ChannelDocumentMention, ThreadNotificationContext},
 };
@@ -137,36 +136,6 @@ impl ChannelSideEffectContext for PgChannelSideEffectContext {
     ) -> Option<String> {
         get_sender_profile_picture_url(&self.pool, &sender_id).await
     }
-
-    async fn get_bot_sender_profile(&self, bot_id: BotId) -> Option<BotSenderProfile> {
-        get_bot_sender_profile(&self.pool, bot_id).await
-    }
-}
-
-async fn get_bot_sender_profile(db: &PgPool, bot_id: BotId) -> Option<BotSenderProfile> {
-    // First-party bots have no row; their profile comes from the registry.
-    if let Some(system) = bot_id::system_bot(bot_id) {
-        return Some(BotSenderProfile {
-            name: system.name.to_owned(),
-            avatar_url: None,
-        });
-    }
-    sqlx::query!(
-        r#"
-        SELECT name, avatar_url
-        FROM bots
-        WHERE id = $1
-        "#,
-        bot_id.as_uuid(),
-    )
-    .fetch_optional(db)
-    .await
-    .ok()
-    .flatten()
-    .map(|row| BotSenderProfile {
-        name: row.name,
-        avatar_url: row.avatar_url,
-    })
 }
 
 async fn get_sender_profile_picture_url(
@@ -196,8 +165,8 @@ async fn get_message_owner(pool: &PgPool, message_id: Uuid) -> anyhow::Result<St
         SenderIdRow,
         r#"
         SELECT sender_id AS "sender_id!"
-        FROM comms_channel_messages
-        WHERE id = $1
+        FROM comms_messages
+        WHERE parent_entity_type = 'channel' AND id = $1
         ORDER BY created_at ASC
         "#,
         message_id,
@@ -212,8 +181,8 @@ async fn get_channel_message_count(pool: &PgPool, channel_id: Uuid) -> anyhow::R
     let count = sqlx::query_scalar!(
         r#"
         SELECT COUNT(id) AS "count!"
-        FROM comms_channel_messages
-        WHERE channel_id = $1
+        FROM comms_messages
+        WHERE parent_entity_type = 'channel' AND parent_entity_id = $1::uuid::text
         "#,
         channel_id,
     )
@@ -231,19 +200,18 @@ async fn get_channel_participants_for_thread_id(
         r#"
         SELECT DISTINCT id AS "user_id!" FROM (
             SELECT m.sender_id AS id
-            FROM comms_channel_messages m
+            FROM comms_messages m
             JOIN comms_channel_participants cp
-              ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
+              ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = m.sender_id
             WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
             UNION
-            SELECT em.entity_id AS id
+            SELECT cp.user_id AS id
             FROM comms_entity_mentions em
-            JOIN comms_channel_messages m ON m.id::text = em.source_entity_id
+            JOIN comms_messages m ON m.id::text = em.source_entity_id
             JOIN comms_channel_participants cp
-              ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
+              ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND ((em.entity_type = 'user' AND cp.user_id = em.entity_id) OR (em.entity_type = 'group' AND em.entity_id = 'here' AND cp.user_id LIKE 'macro|%'))
             WHERE (m.id = $1 OR m.thread_id = $1)
               AND em.source_entity_type = 'message'
-              AND em.entity_type = 'user'
               AND cp.left_at IS NULL
         ) AS combined
         "#,

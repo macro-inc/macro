@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-    
+
     constructor(args?: {
         client?: Client;
     }) {
@@ -30,9 +30,9 @@ class HeyApiClient {
 
 class HeyApiRegistry<T> {
     private readonly defaultKey = 'default';
-    
+
     private readonly instances: Map<string, T> = new Map();
-    
+
     get(key?: string): T {
         const instance = this.instances.get(key ?? this.defaultKey);
         if (!instance) {
@@ -40,7 +40,7 @@ class HeyApiRegistry<T> {
         }
         return instance;
     }
-    
+
     set(value: T, key?: string): void {
         this.instances.set(key ?? this.defaultKey, value);
     }
@@ -48,7 +48,7 @@ class HeyApiRegistry<T> {
 
 export class Sdk extends HeyApiClient {
     public static readonly __registry: HeyApiRegistry<Sdk> = new HeyApiRegistry<Sdk>();
-    
+
     constructor(args?: {
         client?: Client;
         key?: string;
@@ -56,14 +56,14 @@ export class Sdk extends HeyApiClient {
         super(args);
         Sdk.__registry.set(this, args?.key);
     }
-    
+
     /**
      * Read the caller's default sandbox size for new `@coder` sessions.
      */
     public getAgentSandboxSize<ThrowOnError extends boolean = false>(options?: Options<GetAgentSandboxSizeData, ThrowOnError>): RequestResult<GetAgentSandboxSizeResponses, GetAgentSandboxSizeErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetAgentSandboxSizeResponses, GetAgentSandboxSizeErrors, ThrowOnError>({ url: '/agent-sandbox-size', ...options });
     }
-    
+
     /**
      * Set the caller's default sandbox size for the next `@coder` mention.
      */
@@ -77,7 +77,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Open an agent session served by an external runtime.
      *
@@ -97,21 +97,21 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete an agent session and its live resources.
      */
     public deleteAgentSession<ThrowOnError extends boolean = false>(options: Options<DeleteAgentSessionData, ThrowOnError>): RequestResult<DeleteAgentSessionResponses, DeleteAgentSessionErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteAgentSessionResponses, DeleteAgentSessionErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}', ...options });
     }
-    
+
     /**
      * Get an agent session by id.
      */
     public getAgentSession<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionData, ThrowOnError>): RequestResult<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}', ...options });
     }
-    
+
     /**
      * Perform a control operation on a live agent session.
      *
@@ -128,7 +128,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * The raw protocol log of one agent session.
      *
@@ -142,7 +142,7 @@ export class Sdk extends HeyApiClient {
     public getAgentSessionLog<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionLogData, ThrowOnError>): RequestResult<GetAgentSessionLogResponses, GetAgentSessionLogErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAgentSessionLogResponses, GetAgentSessionLogErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/log', ...options });
     }
-    
+
     /**
      * Rename an agent session.
      */
@@ -156,14 +156,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * The actions waiting to dispatch in this session, oldest first.
      */
     public getAgentSessionQueue<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionQueueData, ThrowOnError>): RequestResult<GetAgentSessionQueueResponses, GetAgentSessionQueueErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAgentSessionQueueResponses, GetAgentSessionQueueErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/queue', ...options });
     }
-    
+
     /**
      * Remove a queued action before it dispatches. There is no un-sending: an
      * action that already went out answers 404.
@@ -171,7 +171,7 @@ export class Sdk extends HeyApiClient {
     public removeQueuedAction<ThrowOnError extends boolean = false>(options: Options<RemoveQueuedActionData, ThrowOnError>): RequestResult<RemoveQueuedActionResponses, RemoveQueuedActionErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<RemoveQueuedActionResponses, RemoveQueuedActionErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/queue/{action_id}', ...options });
     }
-    
+
     /**
      * Replace a queued prompt's text before it dispatches.
      */
@@ -185,7 +185,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Resize this session's sandbox and remember the size as the owner's default.
      */

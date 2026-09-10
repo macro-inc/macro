@@ -82,6 +82,10 @@ impl<A: EntityAccessService> crate::domain::ports::MessageReferenceAccess
                 }
                 EntityAccessAuth::Bot(bot) => {
                     let scope = match bot.scope() {
+                        BotReceiptScope::Channel { channel_id } => {
+                            return Ok(entity_type == EntityType::Channel
+                                && entity_id == channel_id.to_string());
+                        }
                         BotReceiptScope::User { acting_user } => BotAccessScope::User {
                             user_id: acting_user.clone(),
                             user_org_id: None,
@@ -135,6 +139,10 @@ impl<A: EntityAccessService> crate::domain::ports::MessageReferenceAccess
                 }
                 EntityAccessAuth::Bot(bot) => {
                     let scope = match bot.scope() {
+                        BotReceiptScope::Channel { channel_id } => {
+                            return Ok(entity_type == EntityType::Channel
+                                && entity_id == channel_id.to_string());
+                        }
                         BotReceiptScope::User { acting_user } => BotAccessScope::User {
                             user_id: acting_user.clone(),
                             user_org_id: None,

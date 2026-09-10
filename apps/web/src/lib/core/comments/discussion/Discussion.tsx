@@ -24,21 +24,16 @@ import {
 } from 'solid-js';
 import { useDiscussion } from './context';
 import { DiscussionInput } from './DiscussionInput';
-import {
-  discussionCommentToMessageData,
-  discussionInputAttachments,
-} from './messageAdapter';
+import { discussionCommentToMessageData } from './messageAdapter';
 import type {
   DiscussionComment,
   DiscussionThread as ViewThread,
 } from './types';
 
 /**
- * Renders a collapsible discussion (threads + composer) from the current
- * [`DiscussionSource`]. Backend-agnostic: drive it via a `DiscussionProvider`
- * supplying a document/task or CRM source.
+ * Renders external CRM/PR discussion records through shared message primitives.
  */
-export function Discussion(props: { label?: string } = {}) {
+export function Discussion() {
   const source = useDiscussion();
   const [isExpanded, setIsExpanded] = createSignal(true);
   const [mountedCommentsVersion, setMountedCommentsVersion] = createSignal(0);
@@ -120,8 +115,8 @@ export function Discussion(props: { label?: string } = {}) {
 
   const handleCreateThread = async (snapshot: InputSnapshot) => {
     const text = snapshot.value.trim();
-    if (!text && !snapshot.attachments.length) return;
-    await source.createThread(text, snapshot.mentions, snapshot.attachments);
+    if (!text) return;
+    await source.createThread(text, snapshot.mentions);
     newThreadInputHandle?.clear();
   };
 
@@ -139,41 +134,14 @@ export function Discussion(props: { label?: string } = {}) {
           ) : (
             <CaretRight class="size-3" />
           )}
-          <span class="text-xs">{props.label ?? 'Discussion'}</span>
+          <span class="text-xs">Discussion</span>
         </button>
         <div class="flex-1 border-t border-edge-muted" />
       </div>
 
-      <Show when={source.channelReferences}>
-        {(references) => (
-          <label class="mt-2 flex items-center gap-2 text-xs text-ink-muted">
-            <input
-              type="checkbox"
-              checked={references().enabled()}
-              onChange={(event) =>
-                references().setEnabled(event.currentTarget.checked)
-              }
-            />
-            Include channel mentions
-          </label>
-        )}
-      </Show>
       <Show when={isExpanded()}>
         <StaticMarkdownContext>
           <div class="py-2 text-xs">
-            <Show when={source.isLoading?.()}>
-              <p class="text-ink-muted">Loading comments...</p>
-            </Show>
-            <Show when={source.error?.()}>
-              {(error) => (
-                <p role="alert">
-                  {error()}{' '}
-                  <button type="button" onClick={source.retry}>
-                    Retry
-                  </button>
-                </p>
-              )}
-            </Show>
             <div>
               <Key each={source.threads()} by="id">
                 {(thread) => {
@@ -195,8 +163,6 @@ export function Discussion(props: { label?: string } = {}) {
             <Show when={source.canEdit()}>
               <div class="mt-4">
                 <DiscussionInput
-                  parent={source.messageParent?.()}
-                  attachmentMode={source.attachmentMode ?? 'inline-images'}
                   input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
                   onSend={handleCreateThread}
                   onReady={(handle) => {
@@ -215,27 +181,15 @@ export function Discussion(props: { label?: string } = {}) {
 
 export function DiscussionThreadView(props: {
   thread: ViewThread;
-  hideReplyInput?: boolean;
-  onEditingChange?: (commentId: string, editing: boolean) => void;
   listMeta?: ChannelMessageListMeta;
   onCommentMount?: (commentId: string, element: HTMLElement) => void;
   onCommentCleanup?: (commentId: string, element: HTMLElement) => void;
 }) {
   const source = useDiscussion();
-  const canEdit = () => source.canReply?.(props.thread) ?? source.canEdit();
+  const canEdit = source.canEdit;
 
   const [isReplying, setIsReplying] = createSignal(false);
-  const [editingId, setEditingIdSignal] = createSignal<string | null>(null);
-  const setEditingId = (id: string | null) => {
-    const previous = editingId();
-    if (previous) props.onEditingChange?.(previous, false);
-    setEditingIdSignal(id);
-    if (id) props.onEditingChange?.(id, true);
-  };
-  onCleanup(() => {
-    const id = editingId();
-    if (id) props.onEditingChange?.(id, false);
-  });
+  const [editingId, setEditingId] = createSignal<string | null>(null);
   let replyInputHandle: { clear: () => void } | undefined;
   let replyInputContainerRef: HTMLDivElement | undefined;
 
@@ -283,12 +237,6 @@ export function DiscussionThreadView(props: {
               setIsReplying(true);
             }
           : undefined,
-      onReact:
-        canEdit() && !comment.deletedAt && source.react
-          ? async ({ emoji }) => {
-              if (emoji) await source.react?.(comment, emoji);
-            }
-          : undefined,
       onEdit:
         own && canEdit() && !comment.deletedAt
           ? () => {
@@ -307,13 +255,8 @@ export function DiscussionThreadView(props: {
 
   const handleReply = async (snapshot: InputSnapshot) => {
     const text = snapshot.value.trim();
-    if (!text && !snapshot.attachments.length) return;
-    await source.createReply(
-      threadId(),
-      text,
-      snapshot.mentions,
-      snapshot.attachments
-    );
+    if (!text) return;
+    await source.createReply(threadId(), text, snapshot.mentions);
     replyInputHandle?.clear();
     setIsReplying(false);
   };
@@ -323,13 +266,8 @@ export function DiscussionThreadView(props: {
     snapshot: InputSnapshot
   ) => {
     const text = snapshot.value.trim();
-    if (!text && !snapshot.attachments.length) return;
-    await source.editComment(
-      comment,
-      text,
-      snapshot.mentions,
-      snapshot.attachments
-    );
+    if (!text) return;
+    await source.editComment(comment, text);
     setEditingId(null);
   };
 
@@ -340,71 +278,6 @@ export function DiscussionThreadView(props: {
           discussionCommentToMessageData(rootComment());
         return (
           <div class="flex flex-col w-full gap-0">
-            <Show when={props.thread.sourceLabel}>
-              <a
-                class="mb-1 text-xs text-ink-muted underline"
-                href={props.thread.sourceHref}
-              >
-                From {props.thread.sourceLabel}
-              </a>
-            </Show>
-            <Show
-              when={
-                props.thread.parent?.type !== 'channel' &&
-                (source.resolveThread || source.deleteThread)
-              }
-            >
-              <div class="flex items-center justify-end gap-3 text-xs text-ink-muted">
-                <Show when={props.thread.resolved}>
-                  <span>Resolved</span>
-                </Show>
-                <Show when={canEdit() && source.resolveThread}>
-                  <button
-                    type="button"
-                    class="hover:text-ink"
-                    onClick={async () => {
-                      try {
-                        await source.resolveThread?.(
-                          threadId(),
-                          !props.thread.resolved
-                        );
-                      } catch {
-                        toast.failure('Could not update discussion');
-                      }
-                    }}
-                  >
-                    {props.thread.resolved ? 'Reopen' : 'Resolve'}
-                  </button>
-                </Show>
-                <Show
-                  when={
-                    canEdit() &&
-                    source.deleteThread &&
-                    source.canDeleteThread?.(props.thread)
-                  }
-                >
-                  <button
-                    type="button"
-                    class="hover:text-ink"
-                    onClick={async () => {
-                      if (
-                        !window.confirm(
-                          'Delete this discussion and all its replies?'
-                        )
-                      )
-                        return;
-                      try {
-                        await source.deleteThread?.(threadId());
-                      } catch {
-                        toast.failure('Could not delete discussion');
-                      }
-                    }}
-                  >
-                    Delete discussion
-                  </button>
-                </Show>
-              </div>
-            </Show>
             <Thread.Row
               message={rootMessageData()}
               listMeta={props.listMeta}
@@ -460,9 +333,7 @@ export function DiscussionThreadView(props: {
                       }}
                     </Key>
 
-                    <Show
-                      when={isReplying() && canEdit() && !props.hideReplyInput}
-                    >
+                    <Show when={isReplying() && canEdit()}>
                       <div class="ph-no-capture">
                         <Show when={!hasReplies()}>
                           <Thread.ReplyAuthor
@@ -479,19 +350,7 @@ export function DiscussionThreadView(props: {
                             <ThreadReplyInputConnector rail="thread" />
                           </Show>
                           <DiscussionInput
-                            parent={
-                              props.thread.parent ?? source.messageParent?.()
-                            }
-                            attachmentMode={
-                              source.attachmentMode ?? 'inline-images'
-                            }
                             input={{ mode: 'reply', placeholder: 'Reply...' }}
-                            onStartTyping={() =>
-                              source.typing?.(threadId(), true)
-                            }
-                            onStopTyping={() =>
-                              source.typing?.(threadId(), false)
-                            }
                             onSend={handleReply}
                             onClose={() => {
                               setIsReplying(false);
@@ -504,9 +363,7 @@ export function DiscussionThreadView(props: {
                       </div>
                     </Show>
 
-                    <Show
-                      when={!isReplying() && canEdit() && !props.hideReplyInput}
-                    >
+                    <Show when={!isReplying() && canEdit()}>
                       <Thread.ActionsFooter>
                         <Thread.ReplyButton
                           getFocusTarget={() =>
@@ -526,15 +383,6 @@ export function DiscussionThreadView(props: {
                 </div>
               </Show>
             </Thread.Row>
-            <Show when={source.typingUsers?.(threadId()).length}>
-              <p class="pl-8 text-xs text-ink-muted" role="status">
-                {source
-                  .typingUsers?.(threadId())
-                  .map((id) => getDisplayName(tryMacroId(id)))
-                  .join(', ')}{' '}
-                typing...
-              </p>
-            </Show>
           </div>
         );
       }}
@@ -553,7 +401,6 @@ function DiscussionMessageView(props: {
   onMount?: (commentId: string, element: HTMLElement) => void;
   onCleanup?: (commentId: string, element: HTMLElement) => void;
 }) {
-  const source = useDiscussion();
   const isEditing = () => props.editingId === props.comment.id;
   const messageData = () => discussionCommentToMessageData(props.comment);
 
@@ -586,13 +433,7 @@ function DiscussionMessageView(props: {
               placement="header"
               class="flex items-baseline gap-1 min-w-0"
             >
-              <Show
-                when={props.comment.importedAuthor}
-                fallback={<Message.SenderName />}
-              >
-                <span class="font-medium">{props.comment.importedAuthor}</span>
-                <span class="text-ink-muted">(imported)</span>
-              </Show>
+              <Message.SenderName />
               <Message.Timestamp class="shrink-0" format="dateAndTime" />
               <Show when={!props.comment.deletedAt}>
                 <Message.EditedIndicator class="shrink-0" />
@@ -612,13 +453,10 @@ function DiscussionMessageView(props: {
               }
             >
               <DiscussionInput
-                parent={props.comment.parent ?? source.messageParent?.()}
-                attachmentMode={source.attachmentMode ?? 'inline-images'}
                 input={{
                   mode: 'reply',
                   placeholder: 'Edit comment...',
                   value: props.comment.text,
-                  attachments: discussionInputAttachments(props.comment),
                 }}
                 onSend={props.onEditSave}
                 onClose={() => {
@@ -626,8 +464,6 @@ function DiscussionMessageView(props: {
                 }}
               />
             </Show>
-            <Message.Attachments />
-            <Message.Reactions />
           </Message.Slot>
           <Show when={!isEditing()}>
             <Message.ActionMenu />

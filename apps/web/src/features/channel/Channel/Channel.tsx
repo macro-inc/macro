@@ -51,25 +51,25 @@ import {
   invalidateChannelsActivity,
   useUpdateChannelsActivityMutation,
 } from '@queries/channel/activity';
-import {
-  type ChannelMessagesData,
-  createMessageIndex,
-  getChannelMessagesQueryKey,
-  isMissingChannelMessageError,
-  useChannelMessagesQuery,
-} from '@queries/channel/channel-messages';
+import { queryClient } from '@queries/client';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
   useSendMessageMutation,
-} from '@queries/channel/message';
+} from '@queries/messages/mutations';
 import {
   useAddReactionMutation,
   useRemoveReactionMutation,
-} from '@queries/channel/reaction';
-import { threadRepliesQueryOptions } from '@queries/channel/thread-replies';
-import { usePostTypingUpdateMutation } from '@queries/channel/typing';
-import { queryClient } from '@queries/client';
+} from '@queries/messages/reactions';
+import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
+import {
+  createMessageIndex,
+  getMessageTimelineQueryKey,
+  isMissingMessageError,
+  type MessageTimelineData,
+  useMessageTimelineQuery,
+} from '@queries/messages/timeline';
+import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { useBeforeLeave } from '@solidjs/router';
 import {
@@ -137,13 +137,13 @@ export type ChannelProps = {
   targetMessageId?: string | undefined;
   targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
-  initialMessagesStateSnapshot?: ChannelMessagesStateSnapshot;
+  initialMessagesStateSnapshot?: MessageTimelineStateSnapshot;
   onHandleReady?: (handle: ChannelHandle) => void;
   /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
 };
 
-export type ChannelMessagesStateSnapshot = {
+export type MessageTimelineStateSnapshot = {
   scroll?: ThreadListScrollSnapshot;
   threads?: ThreadManagerSnapshot;
   /** The unified input's reply binding, persisted by ids only. */
@@ -153,7 +153,7 @@ export type ChannelMessagesStateSnapshot = {
 export type ChannelHandle = {
   goToMessage: TargetMessageController['goToMessage'];
   goToLatest: () => void;
-  getMessagesStateSnapshot: () => ChannelMessagesStateSnapshot | undefined;
+  getMessagesStateSnapshot: () => MessageTimelineStateSnapshot | undefined;
 };
 
 export function Channel(props: ChannelProps) {
@@ -208,13 +208,13 @@ export function Channel(props: ChannelProps) {
   const [channelInputHandle, setChannelInputHandle] =
     createSignal<InputHandle>();
 
-  const messagesQuery = useChannelMessagesQuery(
-    () => props.channelId,
+  const messagesQuery = useMessageTimelineQuery(
+    () => ({ type: 'channel', id: (() => props.channelId)() }),
     targetMessageController.loadAroundMessageId
   );
   const isTargetMessageMissing = () =>
     targetMessageController.loadAroundMessageId() !== undefined &&
-    isMissingChannelMessageError(messagesQuery.error);
+    isMissingMessageError(messagesQuery.error);
   const messagesLoadResult = {
     data: () => messagesQuery.data,
     // Pagination and background-refresh errors should not replace content that
@@ -232,8 +232,7 @@ export function Channel(props: ChannelProps) {
     on(
       [targetMessageController.loadAroundMessageId, () => messagesQuery.error],
       ([loadAroundMessageId, error]) => {
-        if (!loadAroundMessageId || !isMissingChannelMessageError(error))
-          return;
+        if (!loadAroundMessageId || !isMissingMessageError(error)) return;
 
         toast.alert('Message no longer available', {
           subtext: 'Showing the latest messages instead.',
@@ -245,7 +244,7 @@ export function Channel(props: ChannelProps) {
   );
 
   const messageIndex = createMessageIndex(
-    () => messagesQuery.data as ChannelMessagesData | undefined
+    () => messagesQuery.data as MessageTimelineData | undefined
   );
 
   const messages = createMemo(() => [...messageIndex.items]);
@@ -308,7 +307,10 @@ export function Channel(props: ChannelProps) {
     // Reply data and the load-around message window can load in parallel. The
     // mounted query reuses this request and remains the owner of render state.
     void queryClient.prefetchQuery(
-      threadRepliesQueryOptions(props.channelId, threadId)
+      threadRepliesQueryOptions(
+        { type: 'channel', id: props.channelId },
+        threadId
+      )
     );
   };
 
@@ -318,7 +320,7 @@ export function Channel(props: ChannelProps) {
 
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
-    channelId: () => props.channelId,
+    parent: () => ({ type: 'channel', id: (() => props.channelId)() }),
 
     patchMessage: patchMessageMutation.mutate,
     onEditEnded: (message) => {
@@ -455,7 +457,7 @@ export function Channel(props: ChannelProps) {
   );
 
   const getMessageActions = createChannelMessageActions({
-    channelId: () => props.channelId,
+    parent: () => ({ type: 'channel', id: (() => props.channelId)() }),
     userId,
     deleteMessage: deleteConfirmation.requestDelete,
     addReaction: addReactionMutation.mutate,
@@ -546,7 +548,10 @@ export function Channel(props: ChannelProps) {
   const handleScrollToBottom = () => {
     if (messagesQuery.hasPreviousPage) {
       targetMessageController.reset();
-      const defaultKey = getChannelMessagesQueryKey(props.channelId, null);
+      const defaultKey = getMessageTimelineQueryKey(
+        { type: 'channel', id: props.channelId },
+        null
+      );
       queryClient.resetQueries({ queryKey: defaultKey });
     } else {
       threadListNavigation()?.scrollToBottom('end');
@@ -630,7 +635,7 @@ export function Channel(props: ChannelProps) {
 
     sendMessageMutation.mutate(
       {
-        channelID: props.channelId,
+        parent: { type: 'channel', id: props.channelId },
         senderId,
         optimisticId: crypto.randomUUID(),
         ...payload,
@@ -654,7 +659,7 @@ export function Channel(props: ChannelProps) {
     if (!senderId) return;
     sendMessageMutation.mutate(
       {
-        channelID: props.channelId,
+        parent: { type: 'channel', id: props.channelId },
         senderId,
         optimisticId: crypto.randomUUID(),
         message: {
@@ -781,7 +786,10 @@ export function Channel(props: ChannelProps) {
                                 {(m) => (
                                   <ChannelThread
                                     data={m}
-                                    channelId={() => props.channelId}
+                                    parent={() => ({
+                                      type: 'channel',
+                                      id: (() => props.channelId)(),
+                                    })}
                                     isNewestThread={isNewestThread()}
                                     getMessageActions={getMessageActions}
                                     isFindBarOpen={findBar.isOpen}
@@ -817,6 +825,11 @@ export function Channel(props: ChannelProps) {
                                       },
                                       onClearTarget: releaseSelectionAndTarget,
                                     }}
+                                    inputMode={
+                                      isUnifiedInputMode()
+                                        ? 'unified'
+                                        : 'inline'
+                                    }
                                     unifiedReplyTarget={unifiedInput.replyTarget()}
                                     isExpanded={state.isExpanded}
                                     setIsExpanded={state.setIsExpanded}
@@ -963,13 +976,19 @@ export function Channel(props: ChannelProps) {
                             })}
                             onStartTyping={() =>
                               typingMutation.mutate({
-                                channelId: props.channelId,
+                                parent: {
+                                  type: 'channel',
+                                  id: props.channelId,
+                                },
                                 action: 'start',
                               })
                             }
                             onStopTyping={() =>
                               typingMutation.mutate({
-                                channelId: props.channelId,
+                                parent: {
+                                  type: 'channel',
+                                  id: props.channelId,
+                                },
                                 action: 'stop',
                               })
                             }

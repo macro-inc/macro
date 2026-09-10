@@ -1,7 +1,3 @@
-import {
-  discussionCommentToMessageData,
-  messageToDiscussionComment,
-} from '@core/comments/discussion/messageAdapter';
 import type { Message } from '@service-storage/messages';
 import { expect, it } from 'vitest';
 import { messageToMessageData } from './message-data';
@@ -25,19 +21,21 @@ const message: Message = {
 };
 it('does not treat reaction activity as a content edit in either message surface', () => {
   expect(messageToMessageData(message).edited_at).toBeNull();
-  expect(
-    discussionCommentToMessageData(messageToDiscussionComment(message))
-      .edited_at
-  ).toBeNull();
 });
 it('preserves the actual edit time, thread, and bot attribution', () => {
   const edited = { ...message, edited_at: '2026-09-07T00:01:00Z' };
   expect(messageToMessageData(edited)).toMatchObject({
     edited_at: edited.edited_at,
     thread_id: 'root',
+    parent: edited.parent,
     sender: { name: 'Researcher', triggered_by: message.triggered_by },
   });
-  expect(
-    discussionCommentToMessageData(messageToDiscussionComment(edited)).edited_at
-  ).toBe(edited.edited_at);
+});
+
+it('keeps historical imported attribution in linked conversation rendering', () => {
+  const imported = { ...message, imported_author: { name: 'Original author' } };
+  expect(messageToMessageData(imported)).toMatchObject({
+    parent: imported.parent,
+    imported_author: imported.imported_author,
+  });
 });

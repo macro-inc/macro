@@ -1,7 +1,6 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { useBlockId } from '@core/block';
-import type { DeleteCommentInfo } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import {
   COMMIT_COMMENT_MARK_COMMAND,
@@ -10,22 +9,18 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockElementSignal } from '@core/signal/blockElement';
-import type { EditMessage } from '@service-storage/generated/schemas/editMessage';
 import type { Message, PostMessage } from '@service-storage/messages';
 import { until } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { onCleanup } from 'solid-js';
 import {
   activeCommentThreadSignal,
-  commentsStore,
   markStore,
   threadStore,
 } from './commentStore';
 import {
   useCreateHighlightCommentResource,
   useCreateThreadReplyResource,
-  useDeleteCommentResource,
-  useEditCommentResource,
 } from './commentsResource';
 
 export function useCreateComment() {
@@ -79,47 +74,8 @@ export function useCreateComment() {
   });
 }
 
-export function useUpdateComment() {
-  const analytics = useAnalytics();
-
-  const editComment = useEditCommentResource();
-
-  return createCallback((commentId: string, info: EditMessage) => {
-    analytics.track('comment_update', { blockType: 'md' });
-
-    return editComment(commentId, info);
-  });
-}
-
 export function useCreatePendingComment() {
   return createCallback(async (_info: {}) => {});
-}
-
-export function useDeleteComment() {
-  const analytics = useAnalytics();
-
-  const deleteComment = useDeleteCommentResource();
-  const deleteNewComments = useDeleteNewComments();
-  const editor = mdStore.get.editor;
-  const comments = commentsStore.get;
-
-  return createCallback(async (info: DeleteCommentInfo) => {
-    analytics.track('comment_delete', { blockType: 'md' });
-    editor?.dispatchCommand(DISCARD_DRAFT_COMMENT_COMMAND, undefined);
-    const commentId = info.commentId;
-
-    if (commentId === 'draft') {
-      deleteNewComments();
-      return true;
-    }
-
-    const comment = comments[commentId];
-    // this can happen when deleting the thread ->
-    // comment mark deleted -> comment server delete re-attempted
-    if (!comment) return true;
-
-    return await deleteComment(commentId);
-  });
 }
 
 export function useDeleteNewComments() {

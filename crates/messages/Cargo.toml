@@ -17,6 +17,7 @@ delivery = ["outbound", "dep:connection_gateway_client", "dep:model-entity", "de
 inbound = ["ports", "schema", "dep:axum", "dep:macro_authorization", "entity_access/inbound"]
 
 [dependencies]
+models_pagination = { path = "../models_pagination" }
 bot_id = { path = "../bot_id" }
 mockall = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }

@@ -1,6 +1,6 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { MessageListItem } from '@service-storage/messages';
 import type { Accessor } from 'solid-js';
 import type { MessageActions, MessageData } from '../Message';
 import { getMessageReplyPreviewTexts } from '../Message/browser-selection';
@@ -11,7 +11,7 @@ import type { ThreadListNavigation } from './ThreadList';
 type CreateChannelHotkeysOptions = {
   selection: MessageSelection;
   navigation: Accessor<ThreadListNavigation | undefined>;
-  messageById: Accessor<Map<string, ApiChannelMessage>>;
+  messageById: Accessor<Map<string, MessageListItem>>;
   getMessageActions: (message: MessageData) => MessageActions | undefined;
   userId: Accessor<string | undefined>;
   isInputEmpty: Accessor<boolean>;

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT sender_id AS \"sender_id!\"\n        FROM comms_messages\n        WHERE parent_entity_type = 'channel' AND id = $1\n        ORDER BY created_at ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sender_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "71a6b553cf392e821bf056f2ee1cbd85027b9e80fe7d1ccc924349e48b966586"
+}

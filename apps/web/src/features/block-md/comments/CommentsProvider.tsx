@@ -7,19 +7,28 @@ import {
 import { autoRegister } from '@core/component/LexicalMarkdown/plugins';
 import {
   commentPlugin,
+  DELETE_COMMENT_COMMAND,
   MARK_SELECTED_COMMENT_COMMAND,
-  REMOVE_ORPHANED_COMMENT_MARKS_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { useUserId } from '@core/context/user';
+import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { CommentNode } from '@macro-inc/lexical-core';
 import { useMessageLink } from '@queries/messages';
-import { COMMAND_PRIORITY_LOW, SELECTION_CHANGE_COMMAND } from 'lexical';
+import { usePatchThreadMutation } from '@queries/messages/mutations';
+import { onThreadStateUpdated } from '@queries/messages/sync';
+import type { MessageThread } from '@service-storage/messages';
+import {
+  $getNodeByKey,
+  COMMAND_PRIORITY_LOW,
+  SELECTION_CHANGE_COMMAND,
+} from 'lexical';
 import {
   type Accessor,
   createEffect,
   createMemo,
   createSignal,
+  onCleanup,
   untrack,
   useContext,
   type VoidComponent,
@@ -77,6 +86,7 @@ function getHighlightThread(
     text: rootComment.content,
     message: rootComment,
     children: replies.map((r) => r.id),
+    replyCount: thread.replyCount,
     resolved: thread.isResolved,
   };
 
@@ -88,7 +98,7 @@ export const CommentsProvider: VoidComponent<{
   loroManager: LoroManager;
 }> = (props) => {
   const documentId = useBlockId();
-  const targetCommentId = useMessageLink(
+  const target = useMessageLink(
     () => ({ type: 'document', id: documentId }),
     () => props.activeComment?.()
   );
@@ -113,6 +123,71 @@ export const CommentsProvider: VoidComponent<{
   const [, setCommentsInitialized] = commentMarksInitializedSignal;
   const [highlightedId, setHighlightedId] = highlightedCommentIdSignal;
   const setActiveMarkIds = activeMarkIdsSignal.set;
+  const canEdit = useCanEdit();
+  const canComment = useCanComment();
+  const userId = useUserId();
+  const patchThread = usePatchThreadMutation();
+  // Pending commands, not a comment projection: metadata for an old root may
+  // still be loading when its text is removed.
+  const removedMarks = new Set<string>();
+
+  const updateMarkPresentation = (
+    node: CommentNode,
+    element: HTMLElement,
+    removedMarkId?: string
+  ) => {
+    const threads = commentThreadsData();
+    const inactive = node.getIDs().every((id) => {
+      const owners = threads.filter(
+        (thread) =>
+          thread.state.anchor?.type === 'markdown' &&
+          thread.state.anchor.mark_id === id
+      );
+      // An overlapping live or unloaded comment keeps its highlight.
+      if (owners.some((thread) => !thread.state.deleted_at)) return false;
+      return (
+        id === removedMarkId || owners.some((thread) => thread.state.deleted_at)
+      );
+    });
+    element.toggleAttribute('data-comment-inactive', inactive);
+  };
+
+  const removeThreadPlacement = (state: MessageThread['state']) => {
+    if (!state.deleted_at && state.anchor !== null) return;
+    const markIds =
+      state.deleted_at && state.anchor?.type === 'markdown'
+        ? [state.anchor.mark_id]
+        : Object.values(marks)
+            .filter((mark) => mark?.thread?.threadId === state.root_id)
+            .map((mark) => mark!.id);
+    for (const markId of markIds) {
+      const mark = marks[markId];
+      if (mark?.thread && mark.thread.threadId !== state.root_id) continue;
+      removedMarks.delete(markId);
+      setMarks(markId, undefined);
+      // Viewers can hide a deleted highlight without writing the document.
+      editor.getEditorState().read(() => {
+        for (const [key, element] of Object.entries(
+          mountedMarks[markId] ?? {}
+        )) {
+          const node = $getNodeByKey<CommentNode>(key);
+          if (node && element) updateMarkPresentation(node, element, markId);
+        }
+      });
+      // Deleting one's own comment also includes removing its persisted mark.
+      if (
+        state.deleted_at &&
+        (canEdit() || (canComment() && state.user_id === userId()))
+      )
+        editor.dispatchCommand(DELETE_COMMENT_COMMAND, [markId, true]);
+    }
+  };
+  onCleanup(
+    onThreadStateUpdated((parent, state) => {
+      if (parent.type === 'document' && parent.id === documentId)
+        removeThreadPlacement(state);
+    })
+  );
 
   /** Communicates comment ready to block. */
   const initComments = () => setCommentsInitialized(true);
@@ -126,6 +201,7 @@ export const CommentsProvider: VoidComponent<{
     isLocal: boolean
   ) => {
     const markNodeKey = markNode.getKey();
+    updateMarkPresentation(markNode, markElement);
     if (!mountedMarks[markId]) setMountedMarks(markId, {});
     setMountedMarks(markId, markNodeKey, markElement);
     const existing = marks[markId];
@@ -152,19 +228,46 @@ export const CommentsProvider: VoidComponent<{
 
   const deleteNewComments = useDeleteNewComments();
 
-  const removeCommentMark = (markId: string, markNodeKey: string) => {
+  const detachRemovedThreads = () => {
+    if (!canEdit()) return;
+    for (const thread of commentThreadsData()) {
+      const anchor = thread.state.anchor;
+      if (anchor?.type !== 'markdown' || !removedMarks.has(anchor.mark_id))
+        continue;
+      removedMarks.delete(anchor.mark_id);
+      // Undo can restore the range before a paged thread has loaded.
+      if (Object.values(mountedMarks[anchor.mark_id] ?? {}).some(Boolean))
+        continue;
+      patchThread.mutate({
+        parent: { type: 'document', id: documentId },
+        rootId: thread.id,
+        patch: { detach_anchor: true },
+      });
+    }
+  };
+
+  const removeCommentMark = (
+    markId: string,
+    markNodeKey: string,
+    lastRangeRemoved: boolean
+  ) => {
     if (mountedMarks[markId]) {
       setMountedMarks(markId, markNodeKey, undefined);
+      if (!Object.values(mountedMarks[markId] ?? {}).some(Boolean)) {
+        setMountedMarks(markId, undefined);
+      }
     }
     const existing = marks[markId];
+    if (lastRangeRemoved && existing?.existsOnServer && canEdit()) {
+      removedMarks.add(markId);
+      detachRemovedThreads();
+    }
 
     if (!existing) return;
-    if (Object.keys(existing.markNodes).length <= 1) {
-      // Removing marked text leaves its conversation in the document discussion list.
-      setMarks(markId, undefined);
-      return;
-    }
     setMarks(markId, 'markNodes', markNodeKey, undefined);
+    if (!Object.values(marks[markId]?.markNodes ?? {}).some(Boolean)) {
+      setMarks(markId, undefined);
+    }
   };
 
   // Remove the temporary draft comment when the active thread is cleared
@@ -222,7 +325,6 @@ export const CommentsProvider: VoidComponent<{
   });
 
   // Compute visible comment threads from marks
-  const userId = useUserId();
   const highlightComments = createMemo(() => {
     const currentUserId = userId();
     const out: (Root | Reply)[] = [];
@@ -243,6 +345,7 @@ export const CommentsProvider: VoidComponent<{
           createdAt: new Date(),
           isNew: true,
           children: [],
+          replyCount: 0,
           threadId: 'draft',
           anchorId: mark.id,
         };
@@ -283,16 +386,18 @@ export const CommentsProvider: VoidComponent<{
     if (!commentMarksInitializedSignal()) return;
     if (!messageQuery?.isSuccess) return;
 
-    const commentThreads = commentThreadsData() ?? [];
-    const validAnchorIds = new Set<string>();
+    detachRemovedThreads();
 
+    const commentThreads = commentThreadsData() ?? [];
     const mappedAnchors = commentThreads.map((commentThread) => {
       const anchor = commentThread.state.anchor;
-      if (anchor?.type !== 'markdown') return undefined;
+      if (commentThread.state.deleted_at) return undefined;
+      if (anchor?.type !== 'markdown') {
+        untrack(() => removeThreadPlacement(commentThread.state));
+        return undefined;
+      }
       const anchorId = anchor.mark_id;
-      validAnchorIds.add(anchorId);
-
-      const sortedComments = [commentThread.root, ...commentThread.replies];
+      const sortedComments = [commentThread, ...commentThread.thread.preview];
       const rootComment = sortedComments[0];
       const markNodes = mountedMarks[anchorId];
       if (!markNodes) return undefined;
@@ -308,6 +413,7 @@ export const CommentsProvider: VoidComponent<{
           rootId: rootComment.id,
           anchorId: anchorId,
           comments: sortedComments,
+          replyCount: commentThread.thread.reply_count,
           isResolved: commentThread.state.resolved,
         },
       };
@@ -319,21 +425,30 @@ export const CommentsProvider: VoidComponent<{
       if (!anchor) continue;
       for (const element of Object.values(anchor.markNodes)) {
         element?.classList.remove('draft');
+        element?.removeAttribute('data-comment-inactive');
       }
       setMarks(anchor.id, anchor);
     }
 
-    editor.dispatchCommand(
-      REMOVE_ORPHANED_COMMENT_MARKS_COMMAND,
-      validAnchorIds
-    );
+    // Bind live owners first: a newer discussion may reuse a deleted mark ID.
+    for (const thread of commentThreads) {
+      const anchor = thread.state.anchor;
+      // Retained identities recover deletes missed while the document was
+      // closed, regardless of whether metadata or Loro marks arrive first.
+      if (
+        thread.state.deleted_at &&
+        anchor?.type === 'markdown' &&
+        mountedMarks[anchor.mark_id]
+      )
+        untrack(() => removeThreadPlacement(thread.state));
+    }
   });
 
   const [targetRequest, setTargetRequest] = createSignal(0);
   let pendingTargetCommentId: string | undefined;
 
   createEffect(() => {
-    pendingTargetCommentId = targetCommentId() ?? undefined;
+    pendingTargetCommentId = target.messageId() ?? undefined;
     setTargetRequest((request) => request + 1);
   });
 
@@ -349,10 +464,8 @@ export const CommentsProvider: VoidComponent<{
     const commentId = rawId;
 
     const commentThreads = commentThreadsData() ?? [];
-    const targetThread = commentThreads.find((thread) =>
-      [thread.root, ...thread.replies].some(
-        (comment) => comment.id === commentId
-      )
+    const targetThread = commentThreads.find(
+      (thread) => thread.id === target.rootId()
     );
     if (targetThread && !targetThread.state.anchor) {
       activeCommentThreadSignal.set(null);
@@ -361,7 +474,8 @@ export const CommentsProvider: VoidComponent<{
       return;
     }
 
-    const comment = commentsStore.get[commentId];
+    const comment =
+      commentsStore.get[commentId] ?? commentsStore.get[target.rootId() ?? ''];
     if (!comment) return;
     highlightedCommentIdSignal.set(commentId);
     const mark = marks[comment.anchorId];

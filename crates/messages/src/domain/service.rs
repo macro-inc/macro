@@ -1,9 +1,9 @@
 use super::{mentions::MessageReferenceKind, models::*, ports::*};
 use channel_sender::ChannelSender;
 use entity_access::domain::models::{
-    AdminParticipantRole, CommentAccessLevel, EntityAccessAuth, EntityAccessReceipt,
-    EntityPermission, EntityType, MemberParticipantRole, OwnerAccessLevel, RequiredPermission,
-    ViewAccessLevel, ViewOnly,
+    AdminParticipantRole, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
+    EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole, OwnerAccessLevel,
+    RequiredPermission, ViewAccessLevel, ViewOnly,
 };
 use uuid::Uuid;
 
@@ -115,27 +115,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                         next_cursor: visible_cursor,
                     });
                 }
-                let state = match self.active_thread(&parent, candidate.root_id).await {
-                    Ok(state) => state,
-                    Err(MessageError::NotFound) => continue,
-                    Err(error) => return Err(error),
-                };
-                let root = self
-                    .active_message(&parent, candidate.root_id, true)
-                    .await?;
-                let replies = self.repo.replies(&parent, candidate.root_id).await?;
                 let can_reply = self
                     .references
                     .can_write(access.auth(), EntityType::Channel, &id)
                     .await?;
                 threads.push(ReferencedThread {
+                    parent,
+                    root_id: candidate.root_id,
                     channel_name: candidate.channel_name,
                     can_reply,
-                    thread: MessageThread {
-                        state,
-                        root,
-                        replies,
-                    },
                 });
                 visible_cursor = cursor.clone();
             }
@@ -148,17 +136,37 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         }
     }
 
-    /// Read a parent timeline after verifying its continued existence.
+    /// Read the same bounded message timeline for either parent.
     #[tracing::instrument(err, skip(self, access))]
-    pub async fn list(
+    pub async fn timeline(
         &self,
         access: EntityAccessReceipt<MessageView>,
-        cursor: Option<MessageCursor>,
-        limit: u16,
-    ) -> Result<ThreadPage, MessageError> {
+        mut query: MessageTimelineQuery,
+    ) -> Result<MessagePage, MessageError> {
+        if query
+            .activity_after
+            .zip(query.activity_before)
+            .is_some_and(|(from, to)| from >= to)
+        {
+            return Err(MessageError::Invalid("activity start must precede end"));
+        }
+        if query.around.is_some()
+            && (!query.ids.is_empty()
+                || query.anchored.is_some()
+                || query.activity_after.is_some()
+                || query.activity_before.is_some())
+        {
+            return Err(MessageError::Invalid(
+                "centered windows cannot have filters",
+            ));
+        }
         let parent = parent_from_receipt(&access)?;
         self.ensure_parent(&parent).await?;
-        self.repo.list(&parent, cursor, limit.clamp(1, 100)).await
+        query.limit = Some(query.limit.unwrap_or(50).clamp(1, 100));
+        if query.ids.len() > 100 || (query.around.is_some() && query.cursor.is_some()) {
+            return Err(MessageError::Invalid("invalid timeline selection"));
+        }
+        self.repo.timeline(&parent, query).await
     }
 
     /// Read a message and its canonical root for navigation.
@@ -211,20 +219,24 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     pub async fn typing(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
-        root_id: Uuid,
+        root_id: Option<Uuid>,
         active: bool,
         nonce: Option<String>,
     ) -> Result<(), MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
-        self.active_thread(&parent, root_id).await?;
+        if let Some(root_id) = root_id {
+            self.active_thread(&parent, root_id).await?;
+        }
         self.publish(MessageEvent {
             parent,
-            root_id,
             actor: actor.as_ref().to_owned(),
             nonce,
-            change: MessageChange::Typing { active },
+            change: MessageChange::Typing {
+                thread_id: root_id,
+                active,
+            },
         })
         .await;
         Ok(())
@@ -269,7 +281,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             .await?;
         self.publish(MessageEvent {
             parent,
-            root_id: message.root_id(),
             actor: actor.as_ref().to_owned(),
             nonce,
             change: MessageChange::Posted {
@@ -280,17 +291,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         })
         .await;
         Ok(message)
-    }
-
-    /// Edit a message owned by the caller. Imported display names confer no rights.
-    #[tracing::instrument(err, skip(self, access, input))]
-    pub async fn edit(
-        &self,
-        access: EntityAccessReceipt<MessageWrite>,
-        id: Uuid,
-        input: EditMessage,
-    ) -> Result<Message, MessageError> {
-        self.patch(access, id, input.into()).await
     }
 
     /// Apply partial updates without requiring callers to reconstruct a message.
@@ -368,7 +368,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let message = self.repo.edit(&parent, id, input).await?;
         self.publish(MessageEvent {
             parent,
-            root_id: message.root_id(),
             actor: actor.as_ref().to_owned(),
             nonce,
             change: MessageChange::Edited {
@@ -445,28 +444,40 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         Ok(message)
     }
 
-    /// Resolve or reopen a discussion; all commenters may do so.
+    /// Update a discussion; detaching document text requires edit access.
     #[tracing::instrument(err, skip(self, access))]
-    pub async fn resolve(
+    pub async fn patch_thread(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
         root_id: Uuid,
-        resolved: bool,
-        nonce: Option<String>,
+        patch: ThreadPatch,
     ) -> Result<ThreadState, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         if !parent.is_discussion() {
             return Err(MessageError::Invalid(
-                "only entity discussions can be resolved",
+                "only entity discussions support thread updates",
             ));
         }
         self.ensure_parent(&parent).await?;
-        self.active_thread(&parent, root_id).await?;
-        let state = self.repo.resolve(&parent, root_id, resolved).await?;
+        let thread = self.active_thread(&parent, root_id).await?;
+        if patch.resolved.is_none() && !patch.detach_anchor {
+            return Err(MessageError::Invalid("thread update must change a field"));
+        }
+        if patch.detach_anchor {
+            if !access.entity_permission().satisfies::<EditAccessLevel>() {
+                return Err(MessageError::Forbidden);
+            }
+            if !matches!(thread.anchor, None | Some(ThreadAnchor::Markdown { .. })) {
+                return Err(MessageError::Invalid(
+                    "only Markdown text anchors can be detached",
+                ));
+            }
+        }
+        let nonce = patch.nonce.clone();
+        let state = self.repo.patch_thread(&parent, root_id, patch).await?;
         self.publish(MessageEvent {
             parent,
-            root_id,
             actor: actor.as_ref().to_owned(),
             nonce,
             change: MessageChange::ThreadUpdated {
@@ -500,7 +511,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let state = self.repo.delete_thread(&parent, root_id).await?;
         self.publish(MessageEvent {
             parent,
-            root_id,
             actor: actor.as_ref().to_owned(),
             nonce,
             change: MessageChange::ThreadUpdated {
@@ -697,7 +707,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ) {
         self.publish(MessageEvent {
             parent: message.parent.clone(),
-            root_id: message.root_id(),
             actor: actor.as_ref().to_owned(),
             nonce,
             change,

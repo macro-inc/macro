@@ -27,7 +27,7 @@ export function UnifiedEditInput(props: {
             onDismiss={() => props.messageEditor.cancel(message.id)}
           />
           <MessageEditorContent
-            channelId={props.channelId}
+            parent={{ type: 'channel', id: props.channelId }}
             message={message}
             messageEditor={props.messageEditor}
             participants={participants.users}

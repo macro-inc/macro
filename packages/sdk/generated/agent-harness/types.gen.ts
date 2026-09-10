@@ -176,14 +176,10 @@ export type AgentSessionResponse = {
      */
     status: SessionStatusDto;
     /**
-     * The channel `thread_id` lives in, when the session was spawned from a
-     * thread.
-     */
-    threadChannelId?: string | null;
-    /**
      * The root message of the thread the session was created from, if any.
      */
     threadId?: string | null;
+    threadParent?: null | MessageParent;
     /**
      * The directory the session's harness runs in on its runtime.
      */
@@ -309,10 +305,6 @@ export type CreateAgentSessionResponse = {
  */
 export type CreateSessionThread = {
     /**
-     * Channel the mentioning message was posted in.
-     */
-    channelId: string;
-    /**
      * The mention's text, quoted in the session's announcement.
      */
     content?: string;
@@ -321,11 +313,20 @@ export type CreateSessionThread = {
      */
     messageId: string;
     /**
+     * Channel the mentioning message was posted in.
+     */
+    parent: MessageParent;
+    /**
      * Thread the session belongs to; defaults to the message itself, which
      * is how a top-level mention roots its own thread.
      */
     threadId?: string | null;
 };
+
+/**
+ * A validated document identifier. Historical document ids need not be UUIDs.
+ */
+export type DocumentId = string;
 
 /**
  * Request body for editing a queued prompt.
@@ -383,6 +384,23 @@ export type LogFrameDto = {
      * Which way the frame travelled.
      */
     direction: LogDirectionDto;
+};
+
+/**
+ * The entity whose permissions and lifecycle govern a message.
+ */
+export type MessageParent = {
+    /**
+     * A channel, including direct messages.
+     */
+    id: string;
+    type: 'channel';
+} | {
+    /**
+     * A document, including tasks and PDFs.
+     */
+    id: DocumentId;
+    type: 'document';
 };
 
 /**

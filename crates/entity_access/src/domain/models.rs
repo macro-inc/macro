@@ -75,6 +75,11 @@ impl BotAccessScope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "scope", rename_all = "snake_case")]
 pub enum BotReceiptScope {
+    /// An autonomous webhook authorized only by its active channel membership.
+    Channel {
+        /// The sole channel authorized by this receipt.
+        channel_id: Uuid,
+    },
     /// Access was resolved as a verified acting user.
     User {
         /// The verified acting user's identifier.
@@ -92,7 +97,7 @@ impl BotReceiptScope {
     pub fn acting_user_id(&self) -> Option<&MacroUserIdStr<'static>> {
         match self {
             Self::User { acting_user } => Some(acting_user),
-            Self::Team { .. } => None,
+            Self::Team { .. } | Self::Channel { .. } => None,
         }
     }
 
@@ -100,7 +105,7 @@ impl BotReceiptScope {
     pub fn team_id(&self) -> Option<Uuid> {
         match self {
             Self::Team { team_id } => Some(*team_id),
-            Self::User { .. } => None,
+            Self::User { .. } | Self::Channel { .. } => None,
         }
     }
 }

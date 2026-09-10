@@ -8,18 +8,14 @@ use crate::domain::ports::{ChannelListRepo, ChannelListUserRepo};
 use crate::domain::{
     models::{
         Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
-        AttachmentGenericReference, BotId, BotSenderProfile, ChannelAttachment,
-        ChannelAttachmentType, ChannelContextMessage, ChannelInfo, ChannelListItem, ChannelMessage,
-        ChannelMessageFilters, ChannelMessageKind, ChannelMetadata, ChannelParticipant,
-        ChannelPreviewRow, ChannelType, ChannelWithParticipants, CountedReaction,
-        CreateChannelRequest, CreateEntityMentionOptions, CreatedChannel, EntityMention,
-        GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
-        MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
-        ParticipantRole, PatchChannelRequest, RecentChannelMessage, ReferencedShareItemType,
-        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
-        TopLevelMessageRow, UserName, fallback_user_name,
+        AttachmentGenericReference, BotId, ChannelAttachment, ChannelAttachmentType, ChannelInfo,
+        ChannelListItem, ChannelMetadata, ChannelParticipant, ChannelPreviewRow, ChannelType,
+        ChannelWithParticipants, CreateChannelRequest, CreateEntityMentionOptions, CreatedChannel,
+        EntityMention, GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageListItem,
+        NameLookup, ParticipantRole, PatchChannelRequest, RecentChannelMessage,
+        ReferencedShareItemType, UserName, fallback_user_name,
     },
-    ports::{ChannelRepo, TopLevelMessagesQueryResult},
+    ports::ChannelRepo,
 };
 use anyhow::Context;
 use channel_sender::ChannelSender;
@@ -40,7 +36,6 @@ use sqlx::{Executor, PgPool, Postgres};
 use sqlx::{QueryBuilder, Row, postgres::PgRow};
 use std::collections::{HashMap, HashSet};
 
-use indexmap::IndexMap;
 use uuid::Uuid;
 
 /// Postgres-backed repository for channels.
@@ -54,96 +49,6 @@ impl PgChannelsRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
-}
-
-#[cfg(feature = "list")]
-fn bot_profile_for_sender(
-    profiles: &HashMap<BotId, BotSenderProfile>,
-    sender_id: &str,
-) -> Option<BotSenderProfile> {
-    use bot_id::BotIdStr;
-
-    let bot_id = BotIdStr::parse_from_str(sender_id).ok()?.bot_id();
-    profiles.get(&bot_id).cloned()
-}
-
-/// Intermediate row for the top-level messages query.
-#[derive(Debug, sqlx::FromRow)]
-struct TopLevelRow {
-    id: Uuid,
-    channel_id: Uuid,
-    sender_id: String,
-    triggered_by_user_id: Option<String>,
-    content: String,
-    created_at: chrono::DateTime<chrono::Utc>,
-    updated_at: chrono::DateTime<chrono::Utc>,
-    edited_at: Option<chrono::DateTime<chrono::Utc>>,
-    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// Intermediate row for resolving a message id.
-#[derive(Debug, sqlx::FromRow)]
-struct ResolvedMessageRow {
-    id: Uuid,
-    channel_id: Uuid,
-    thread_id: Option<Uuid>,
-    created_at: chrono::DateTime<chrono::Utc>,
-}
-
-/// Intermediate row for the merged thread data query (stats + preview replies).
-#[derive(Debug, sqlx::FromRow)]
-struct ThreadDataRow {
-    id: Uuid,
-    thread_id: Uuid,
-    sender_id: String,
-    triggered_by_user_id: Option<String>,
-    content: String,
-    created_at: chrono::DateTime<chrono::Utc>,
-    updated_at: chrono::DateTime<chrono::Utc>,
-    edited_at: Option<chrono::DateTime<chrono::Utc>>,
-    reply_count: i64,
-    latest_reply_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// Intermediate row for full thread replies query.
-#[derive(Debug, sqlx::FromRow)]
-struct ThreadReplyOnlyRow {
-    id: Uuid,
-    thread_id: Uuid,
-    sender_id: String,
-    triggered_by_user_id: Option<String>,
-    content: String,
-    created_at: chrono::DateTime<chrono::Utc>,
-    updated_at: chrono::DateTime<chrono::Utc>,
-    edited_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// Intermediate row for grouped reactions.
-#[derive(Debug, sqlx::FromRow)]
-struct ReactionRow {
-    message_id: Uuid,
-    emoji: String,
-    user_id: String,
-}
-
-/// Intermediate row for reactions including the creation timestamp.
-#[derive(Debug, sqlx::FromRow)]
-struct ReactionWithCreatedAtRow {
-    emoji: String,
-    user_id: String,
-    created_at: chrono::DateTime<chrono::Utc>,
-}
-
-/// Intermediate row for attachments.
-#[derive(Debug, sqlx::FromRow)]
-struct AttachmentRow {
-    id: Uuid,
-    message_id: Uuid,
-    entity_type: String,
-    entity_id: String,
-    width: Option<i32>,
-    height: Option<i32>,
-    created_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// Intermediate row for channel-level attachments.
@@ -160,40 +65,6 @@ struct ChannelAttachmentRow {
     created_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// Intermediate row for message context queries.
-#[derive(Debug, sqlx::FromRow)]
-struct ContextMessageRow {
-    id: Uuid,
-    channel_id: Uuid,
-    thread_id: Option<Uuid>,
-    sender_id: String,
-    triggered_by_user_id: Option<String>,
-    content: String,
-    created_at: chrono::DateTime<chrono::Utc>,
-    updated_at: chrono::DateTime<chrono::Utc>,
-    edited_at: Option<chrono::DateTime<chrono::Utc>>,
-    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-impl From<ContextMessageRow> for ChannelContextMessage {
-    fn from(row: ContextMessageRow) -> Self {
-        Self {
-            id: row.id,
-            channel_id: row.channel_id,
-            thread_id: row.thread_id,
-            sender_id: row.sender_id,
-            triggered_by: row.triggered_by_user_id,
-            // Bot profiles are joined in the service layer.
-            bot_profile: None,
-            content: row.content,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            edited_at: row.edited_at,
-            deleted_at: row.deleted_at,
-        }
-    }
-}
-
 /// Intermediate row for channel participants.
 #[derive(Debug, sqlx::FromRow)]
 struct ParticipantRow {
@@ -202,34 +73,6 @@ struct ParticipantRow {
     role: ParticipantRole,
     joined_at: chrono::DateTime<chrono::Utc>,
     left_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// Intermediate row for mutation-returned messages.
-#[derive(Debug, sqlx::FromRow)]
-struct MutatedMessageRow {
-    id: Uuid,
-    channel_id: Uuid,
-    thread_id: Option<Uuid>,
-    sender_id: String,
-    triggered_by_user_id: Option<String>,
-    content: String,
-    created_at: chrono::DateTime<chrono::Utc>,
-    updated_at: chrono::DateTime<chrono::Utc>,
-    edited_at: Option<chrono::DateTime<chrono::Utc>>,
-    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-/// Intermediate row for mutation-returned attachments.
-#[derive(Debug, sqlx::FromRow)]
-struct MutatedAttachmentRow {
-    id: Uuid,
-    channel_id: Uuid,
-    message_id: Uuid,
-    entity_type: String,
-    entity_id: String,
-    width: Option<i32>,
-    height: Option<i32>,
-    created_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// Intermediate row for channel info.
@@ -267,16 +110,6 @@ struct UserIdRow {
 }
 
 #[derive(Debug, sqlx::FromRow)]
-struct MacroUserIdRow {
-    user_id: String,
-}
-
-#[derive(Debug, sqlx::FromRow)]
-struct SenderIdRow {
-    sender_id: String,
-}
-
-#[derive(Debug, sqlx::FromRow)]
 struct ChannelIdRow {
     id: Uuid,
 }
@@ -284,61 +117,6 @@ struct ChannelIdRow {
 #[derive(Debug, sqlx::FromRow)]
 struct ExistsRow {
     exists: bool,
-}
-
-fn mutated_message_from_row(row: MutatedMessageRow) -> anyhow::Result<MutatedMessage> {
-    let sender_id = ChannelSender::parse_from_str(&row.sender_id)
-        .map(CowLike::into_owned)
-        .with_context(|| format!("invalid message sender_id {}", row.sender_id))?;
-    Ok(MutatedMessage {
-        id: row.id,
-        channel_id: row.channel_id,
-        thread_id: row.thread_id,
-        sender_id,
-        triggered_by: row.triggered_by_user_id,
-        content: row.content,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        edited_at: row.edited_at,
-        deleted_at: row.deleted_at,
-    })
-}
-
-impl From<MutatedAttachmentRow> for MutatedAttachment {
-    fn from(row: MutatedAttachmentRow) -> Self {
-        Self {
-            id: row.id,
-            channel_id: row.channel_id,
-            message_id: row.message_id,
-            entity_type: row.entity_type,
-            entity_id: row.entity_id,
-            width: row.width,
-            height: row.height,
-            created_at: row.created_at,
-        }
-    }
-}
-
-fn group_counted_reactions(
-    reactions: impl IntoIterator<Item = (String, String, DateTime<Utc>)>,
-) -> Vec<CountedReaction> {
-    let mut grouped: HashMap<String, (Vec<String>, DateTime<Utc>)> = HashMap::new();
-    for (emoji, user_id, created_at) in reactions {
-        grouped
-            .entry(emoji)
-            .and_modify(|(users, earliest_at)| {
-                users.push(user_id.clone());
-                *earliest_at = std::cmp::min(*earliest_at, created_at);
-            })
-            .or_insert_with(|| (vec![user_id], created_at));
-    }
-
-    let mut counted: Vec<_> = grouped
-        .into_iter()
-        .map(|(emoji, (users, created_at))| (CountedReaction { emoji, users }, created_at))
-        .collect();
-    counted.sort_by_key(|(_, created_at)| *created_at);
-    counted.into_iter().map(|(reaction, _)| reaction).collect()
 }
 
 async fn create_activity<'e, E>(executor: E, channel_id: Uuid, user_id: &str) -> anyhow::Result<()>
@@ -357,159 +135,6 @@ where
     .execute(executor)
     .await?;
     Ok(())
-}
-
-async fn insert_message_mentions<'e, E>(
-    executor: E,
-    message_id: Uuid,
-    mentions: &[SimpleMention],
-) -> anyhow::Result<Vec<String>>
-where
-    E: Executor<'e, Database = Postgres>,
-{
-    if mentions.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let entity_types: Vec<_> = mentions
-        .iter()
-        .map(|mention| mention.entity_type.clone())
-        .collect();
-    let entity_ids: Vec<_> = mentions
-        .iter()
-        .map(|mention| mention.entity_id.clone())
-        .collect();
-
-    let message_id_text = message_id.to_string();
-    let mentioned_users = sqlx::query_as!(
-        UserIdRow,
-        r#"
-        WITH message_channel AS (
-            SELECT channel_id FROM comms_channel_messages WHERE id = $1
-        ),
-        mentions_to_insert AS (
-            SELECT t.entity_type, t.entity_id
-            FROM UNNEST($2::text[], $3::text[]) AS t(entity_type, entity_id)
-        ),
-        inserted_mentions AS (
-            INSERT INTO comms_entity_mentions (
-                id,
-                source_entity_type,
-                source_entity_id,
-                entity_type,
-                entity_id,
-                user_id
-            )
-            SELECT gen_random_uuid(), 'message', $4::text, m.entity_type, m.entity_id, NULL
-            FROM mentions_to_insert m
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM comms_entity_mentions em
-                WHERE em.source_entity_type = 'message'
-                  AND em.source_entity_id = $4::text
-                  AND em.entity_type = m.entity_type
-                  AND em.entity_id = m.entity_id
-            )
-        )
-        SELECT DISTINCT cp.user_id
-        FROM mentions_to_insert m
-        CROSS JOIN message_channel mc
-        JOIN comms_channel_participants cp ON m.entity_id = cp.user_id
-        WHERE m.entity_type = 'user'
-          AND cp.channel_id = mc.channel_id
-          AND cp.left_at IS NULL
-        "#,
-        message_id,
-        &entity_types,
-        &entity_ids,
-        message_id_text,
-    )
-    .fetch_all(executor)
-    .await?;
-
-    Ok(mentioned_users.into_iter().map(|row| row.user_id).collect())
-}
-
-async fn delete_entity_mentions_by_source<'e, E>(
-    executor: E,
-    source_entity_ids: &[String],
-) -> anyhow::Result<u64>
-where
-    E: Executor<'e, Database = Postgres>,
-{
-    let result = sqlx::query!(
-        r#"
-        DELETE FROM comms_entity_mentions
-        WHERE source_entity_id = ANY($1)
-        "#,
-        source_entity_ids,
-    )
-    .execute(executor)
-    .await?;
-    Ok(result.rows_affected())
-}
-
-async fn get_message_owner(
-    pool: &PgPool,
-    channel_id: Uuid,
-    message_id: Uuid,
-) -> anyhow::Result<Option<ChannelSender<'static>>> {
-    let row = sqlx::query_as!(
-        SenderIdRow,
-        r#"
-        SELECT sender_id AS "sender_id!"
-        FROM comms_channel_messages
-        WHERE id = $1 AND channel_id = $2 AND deleted_at IS NULL
-        ORDER BY created_at ASC
-        "#,
-        message_id,
-        channel_id,
-    )
-    .fetch_optional(pool)
-    .await
-    .context("unable to get message owner")?;
-    row.map(|row| {
-        ChannelSender::parse_from_str(&row.sender_id)
-            .map(CowLike::into_owned)
-            .with_context(|| format!("invalid message sender_id {}", row.sender_id))
-    })
-    .transpose()
-}
-
-async fn get_channel_participants_for_thread_id(
-    pool: &PgPool,
-    thread_id: Uuid,
-) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
-    let rows = sqlx::query_as!(
-        MacroUserIdRow,
-        r#"
-        SELECT DISTINCT id AS "user_id!" FROM (
-            SELECT m.sender_id AS id
-            FROM comms_channel_messages m
-            JOIN comms_channel_participants cp
-              ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
-            WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
-            UNION
-            SELECT cp.user_id AS id
-            FROM comms_entity_mentions em
-            JOIN comms_channel_messages m ON m.id::text = em.source_entity_id
-            JOIN comms_channel_participants cp
-              ON cp.channel_id = m.channel_id
-             AND ((em.entity_type = 'user' AND cp.user_id = em.entity_id)
-               OR (em.entity_type = 'group' AND em.entity_id = 'here' AND cp.user_id LIKE 'macro|%'))
-            WHERE (m.id = $1 OR m.thread_id = $1)
-              AND em.source_entity_type = 'message'
-              AND cp.left_at IS NULL
-        ) AS combined
-        "#,
-        thread_id,
-    )
-    .fetch_all(pool)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .filter_map(|row| MacroUserIdStr::try_from(row.user_id).ok())
-        .collect())
 }
 
 fn static_channel_name(
@@ -1076,7 +701,7 @@ fn push_channel_thread_participant_filter_expr(
         r#"(EXISTS (
             SELECT 1
             FROM comms_channel_participants pcp
-            WHERE pcp.channel_id = m.channel_id
+            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = pcp.channel_id::text
               AND pcp.user_id = "#,
     );
     builder.push_bind(participant.clone());
@@ -1085,7 +710,7 @@ fn push_channel_thread_participant_filter_expr(
               AND pcp.left_at IS NULL
         ) AND EXISTS (
             SELECT 1
-            FROM comms_channel_messages tm
+            FROM comms_messages tm
             WHERE (tm.id = m.id OR tm.thread_id = m.id)
               AND tm.deleted_at IS NULL
               AND (
@@ -1162,21 +787,12 @@ fn build_channel_thread_rows_query(
     builder.push(
         r#" AND cp.left_at IS NULL
         )
-        SELECT
-            m.id AS id,
-            m.channel_id AS channel_id,
-            m.sender_id AS sender_id,
-            m.triggered_by_user_id AS triggered_by_user_id,
-            m.content AS content,
-            m.created_at AS created_at,
-            m.updated_at AS updated_at,
-            m.edited_at::timestamptz AS edited_at,
-            m.deleted_at::timestamptz AS deleted_at
-        FROM comms_channel_messages m
-        INNER JOIN user_channels c ON c.id = m.channel_id
+        SELECT m.id
+        FROM comms_messages m
+        INNER JOIN user_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
         LEFT JOIN LATERAL (
             SELECT MAX(reply.updated_at) AS latest_reply_updated_at
-            FROM comms_channel_messages reply
+            FROM comms_messages reply
             WHERE reply.thread_id = m.id
               AND reply.deleted_at IS NULL
         ) thread_stats ON TRUE
@@ -1348,8 +964,8 @@ impl ChannelListRepo for PgChannelsRepo {
                     ),
                     '{}'::text[]
                 ) AS mentions
-            FROM comms_channel_messages m
-            WHERE m.channel_id = i.channel_id
+            FROM comms_messages m
+            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = i.channel_id::text
               AND m.deleted_at IS NULL
             ORDER BY m.created_at DESC
             LIMIT 1
@@ -1372,8 +988,8 @@ impl ChannelListRepo for PgChannelsRepo {
                     ),
                     '{}'::text[]
                 ) AS mentions
-            FROM comms_channel_messages m
-            WHERE m.channel_id = i.channel_id
+            FROM comms_messages m
+            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = i.channel_id::text
               AND m.deleted_at IS NULL
               AND m.thread_id IS NULL
             ORDER BY m.created_at DESC
@@ -1492,118 +1108,17 @@ impl ChannelListRepo for PgChannelsRepo {
     async fn get_thread_messages(
         &self,
         params: GetThreadReplyRowsParams,
-    ) -> Result<Vec<ChannelMessage>, rootcause::Report> {
-        use bot_id::BotIdStr;
-
-        let parents: Vec<TopLevelMessageRow> = build_channel_thread_rows_query(&params)
+    ) -> Result<Vec<MessageListItem>, rootcause::Report> {
+        let ids: Vec<Uuid> = build_channel_thread_rows_query(&params)
             .build()
-            .try_map(|row: PgRow| {
-                Ok(TopLevelMessageRow {
-                    id: row.try_get("id")?,
-                    channel_id: row.try_get("channel_id")?,
-                    sender_id: row.try_get("sender_id")?,
-                    triggered_by: row.try_get::<Option<String>, _>("triggered_by_user_id")?,
-                    content: row.try_get("content")?,
-                    created_at: row.try_get("created_at")?,
-                    updated_at: row.try_get("updated_at")?,
-                    edited_at: row.try_get("edited_at")?,
-                    deleted_at: row.try_get("deleted_at")?,
-                })
-            })
+            .try_map(|row: PgRow| row.try_get("id"))
             .fetch_all(&self.pool)
             .await?;
-
-        let parent_ids: Vec<Uuid> = parents.iter().map(|parent| parent.id).collect();
-        if parent_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let thread_data = self
-            .get_thread_data(&parent_ids, 3)
-            .await
-            .map_err(|error| rootcause::report!(error))?;
-
-        let mut all_ids = parent_ids.clone();
-        let mut sender_ids: Vec<&str> = parents
-            .iter()
-            .map(|parent| parent.sender_id.as_str())
-            .collect();
-        for data in thread_data.values() {
-            for reply in &data.preview_replies {
-                all_ids.push(reply.id);
-                sender_ids.push(reply.sender_id.as_str());
-            }
-        }
-
-        let bot_ids: Vec<BotId> = sender_ids
-            .into_iter()
-            .filter_map(|sender_id| BotIdStr::parse_from_str(sender_id).ok())
-            .map(|x| x.bot_id())
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
-
-        let (reactions, attachments, bot_profiles) = tokio::join!(
-            self.get_reactions_batch(&all_ids),
-            self.get_attachments_batch(&all_ids),
-            self.get_bot_profiles(&bot_ids),
-        );
-
-        let reactions = reactions.map_err(|error| rootcause::report!(error))?;
-        let attachments = attachments.map_err(|error| rootcause::report!(error))?;
-        let bot_profiles = bot_profiles.map_err(|error| rootcause::report!(error))?;
-
-        Ok(parents
-            .into_iter()
-            .map(|parent| {
-                let data = thread_data.get(&parent.id);
-                let preview = data
-                    .map(|data| {
-                        data.preview_replies
-                            .iter()
-                            .map(|reply| ThreadReply {
-                                id: reply.id,
-                                sender_id: reply.sender_id.clone(),
-                                triggered_by: reply.triggered_by.clone(),
-                                bot_profile: bot_profile_for_sender(
-                                    &bot_profiles,
-                                    &reply.sender_id,
-                                ),
-                                content: reply.content.clone(),
-                                created_at: reply.created_at,
-                                updated_at: reply.updated_at,
-                                edited_at: reply.edited_at,
-                                reactions: reactions.get(&reply.id).cloned().unwrap_or_default(),
-                                attachments: attachments
-                                    .get(&reply.id)
-                                    .cloned()
-                                    .unwrap_or_default(),
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-
-                ChannelMessage {
-                    id: parent.id,
-                    channel_id: parent.channel_id,
-                    sender_id: parent.sender_id.clone(),
-                    triggered_by: parent.triggered_by.clone(),
-                    bot_profile: bot_profile_for_sender(&bot_profiles, &parent.sender_id),
-                    content: parent.content,
-                    created_at: parent.created_at,
-                    updated_at: parent.updated_at,
-                    edited_at: parent.edited_at,
-                    deleted_at: parent.deleted_at,
-                    thread: ThreadInfo {
-                        reply_count: data.map_or(0, |data| data.reply_count),
-                        latest_reply_at: data.and_then(|data| data.latest_reply_at),
-                        preview,
-                    },
-                    reactions: reactions.get(&parent.id).cloned().unwrap_or_default(),
-                    attachments: attachments.get(&parent.id).cloned().unwrap_or_default(),
-                }
-            })
-            .collect())
+        Ok(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(self.pool.clone())
+                .hydrate_roots(&ids)
+                .await?,
+        )
     }
 }
 
@@ -1681,8 +1196,8 @@ impl ChannelAttachmentRepo for PgChannelsRepo {
                 ),
                 '{}'::text[]
             ) AS "mentions!"
-        FROM comms_channel_messages m
-        WHERE m.channel_id = $1
+        FROM comms_messages m
+        WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = $1::uuid::text
           AND m.deleted_at IS NULL
         ORDER BY m.created_at DESC
         LIMIT $2
@@ -1709,454 +1224,6 @@ impl ChannelRepo for PgChannelsRepo {
     type Err = anyhow::Error;
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_top_level_messages(
-        &self,
-        channel_id: Uuid,
-        query: &Query<Uuid, CreatedAt, ()>,
-        direction: MessagePageDirection,
-        limit: u16,
-        filters: &ChannelMessageFilters,
-        notification_user_id: Option<MacroUserIdStr<'static>>,
-    ) -> Result<TopLevelMessagesQueryResult, Self::Err> {
-        let (cursor_created_at, cursor_id) = match query.vals() {
-            (Some(id), Some(val)) => (Some(*val), Some(*id)),
-            _ => (None, None),
-        };
-        let limit_i64 = i64::from(limit);
-        let limit_usize = usize::from(limit);
-
-        let message_ids_filter: Option<&[Uuid]> = if filters.message_ids.is_empty() {
-            None
-        } else {
-            Some(&filters.message_ids)
-        };
-        let created_after = filters.created_after;
-        let created_before = filters.created_before;
-        let activity_after = filters.activity_after;
-        let activity_before = filters.activity_before;
-        let notification_filter_active = !filters.notification_filters.is_empty();
-        let notification_user_id = match (notification_filter_active, notification_user_id.as_ref())
-        {
-            (true, Some(user_id)) => user_id.as_ref(),
-            (true, None) => {
-                anyhow::bail!("notification_user_id is required when notification_filters are set")
-            }
-            (false, _) => "",
-        };
-        let notification_done = filters.notification_filters.done;
-        let notification_seen = filters.notification_filters.seen;
-
-        let (rows, has_more_newer) = match direction {
-            MessagePageDirection::Older => {
-                let rows = sqlx::query_as!(
-                    TopLevelRow,
-                    r#"
-                    SELECT
-                        m.id AS "id!",
-                        m.channel_id AS "channel_id!",
-                        m.sender_id AS "sender_id!",
-                        m.triggered_by_user_id,
-                        m.content AS "content!",
-                        m.created_at AS "created_at!",
-                        m.updated_at AS "updated_at!",
-                        m.edited_at::timestamptz AS "edited_at?",
-                        m.deleted_at::timestamptz AS "deleted_at?"
-                    FROM comms_channel_messages m
-                    WHERE m.channel_id = $1
-                      AND m.thread_id IS NULL
-                      AND (m.deleted_at IS NULL OR EXISTS (
-                          SELECT 1 FROM comms_channel_messages r
-                          WHERE r.thread_id = m.id AND r.deleted_at IS NULL
-                      ))
-                      AND ($2::timestamptz IS NULL OR (m.created_at, m.id) < ($2, $3))
-                      AND ($5::uuid[] IS NULL OR m.id = ANY($5))
-                      AND ($6::timestamptz IS NULL OR m.created_at >= $6)
-                      AND ($7::timestamptz IS NULL OR m.created_at < $7)
-                      AND (
-                          ($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
-                          OR (
-                              ($8::timestamptz IS NULL OR m.created_at >= $8)
-                              AND ($9::timestamptz IS NULL OR m.created_at < $9)
-                          )
-                          OR EXISTS (
-                              SELECT 1 FROM comms_channel_messages r
-                              WHERE r.thread_id = m.id
-                                AND r.deleted_at IS NULL
-                                AND ($8::timestamptz IS NULL OR r.created_at >= $8)
-                                AND ($9::timestamptz IS NULL OR r.created_at < $9)
-                          )
-                      )
-                      AND ($10::bool = FALSE OR (
-                          ($11::bool IS NULL OR EXISTS (
-                              SELECT 1
-                              FROM notification n
-                              JOIN user_notification un ON un.notification_id = n.id
-                              JOIN comms_channel_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                              WHERE un.user_id = $13::text
-                                AND un.deleted_at IS NULL
-                                AND un.done = $11
-                                AND n.event_item_type = 'channel'
-                                AND n.event_item_id = $1::uuid::text
-                                AND n.metadata->>'messageId' IS NOT NULL
-                                AND msg.channel_id = $1
-                                AND msg.deleted_at IS NULL
-                                AND COALESCE(msg.thread_id, msg.id) = m.id
-                          ))
-                          AND ($12::bool IS NULL OR EXISTS (
-                              SELECT 1
-                              FROM notification n
-                              JOIN user_notification un ON un.notification_id = n.id
-                              JOIN comms_channel_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                              WHERE un.user_id = $13::text
-                                AND un.deleted_at IS NULL
-                                AND (un.seen_at IS NOT NULL) = $12
-                                AND n.event_item_type = 'channel'
-                                AND n.event_item_id = $1::uuid::text
-                                AND n.metadata->>'messageId' IS NOT NULL
-                                AND msg.channel_id = $1
-                                AND msg.deleted_at IS NULL
-                                AND COALESCE(msg.thread_id, msg.id) = m.id
-                          ))
-                      ))
-                    ORDER BY m.created_at DESC, m.id DESC
-                    LIMIT $4
-                    "#,
-                    channel_id,
-                    cursor_created_at,
-                    cursor_id,
-                    limit_i64,
-                    message_ids_filter as Option<&[Uuid]>,
-                    created_after,
-                    created_before,
-                    activity_after,
-                    activity_before,
-                    notification_filter_active,
-                    notification_done,
-                    notification_seen,
-                    notification_user_id,
-                )
-                .fetch_all(&self.pool)
-                .await?;
-
-                (rows, cursor_created_at.is_some())
-            }
-            MessagePageDirection::Newer => {
-                let mut rows = sqlx::query_as!(
-                    TopLevelRow,
-                    r#"
-                    SELECT
-                        m.id AS "id!",
-                        m.channel_id AS "channel_id!",
-                        m.sender_id AS "sender_id!",
-                        m.triggered_by_user_id,
-                        m.content AS "content!",
-                        m.created_at AS "created_at!",
-                        m.updated_at AS "updated_at!",
-                        m.edited_at::timestamptz AS "edited_at?",
-                        m.deleted_at::timestamptz AS "deleted_at?"
-                    FROM comms_channel_messages m
-                    WHERE m.channel_id = $1
-                      AND m.thread_id IS NULL
-                      AND (m.deleted_at IS NULL OR EXISTS (
-                          SELECT 1 FROM comms_channel_messages r
-                          WHERE r.thread_id = m.id AND r.deleted_at IS NULL
-                      ))
-                      AND ($2::timestamptz IS NOT NULL AND (m.created_at, m.id) > ($2, $3))
-                      AND ($5::uuid[] IS NULL OR m.id = ANY($5))
-                      AND ($6::timestamptz IS NULL OR m.created_at >= $6)
-                      AND ($7::timestamptz IS NULL OR m.created_at < $7)
-                      AND (
-                          ($8::timestamptz IS NULL AND $9::timestamptz IS NULL)
-                          OR (
-                              ($8::timestamptz IS NULL OR m.created_at >= $8)
-                              AND ($9::timestamptz IS NULL OR m.created_at < $9)
-                          )
-                          OR EXISTS (
-                              SELECT 1 FROM comms_channel_messages r
-                              WHERE r.thread_id = m.id
-                                AND r.deleted_at IS NULL
-                                AND ($8::timestamptz IS NULL OR r.created_at >= $8)
-                                AND ($9::timestamptz IS NULL OR r.created_at < $9)
-                          )
-                      )
-                      AND ($10::bool = FALSE OR (
-                          ($11::bool IS NULL OR EXISTS (
-                              SELECT 1
-                              FROM notification n
-                              JOIN user_notification un ON un.notification_id = n.id
-                              JOIN comms_channel_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                              WHERE un.user_id = $13::text
-                                AND un.deleted_at IS NULL
-                                AND un.done = $11
-                                AND n.event_item_type = 'channel'
-                                AND n.event_item_id = $1::uuid::text
-                                AND n.metadata->>'messageId' IS NOT NULL
-                                AND msg.channel_id = $1
-                                AND msg.deleted_at IS NULL
-                                AND COALESCE(msg.thread_id, msg.id) = m.id
-                          ))
-                          AND ($12::bool IS NULL OR EXISTS (
-                              SELECT 1
-                              FROM notification n
-                              JOIN user_notification un ON un.notification_id = n.id
-                              JOIN comms_channel_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
-                              WHERE un.user_id = $13::text
-                                AND un.deleted_at IS NULL
-                                AND (un.seen_at IS NOT NULL) = $12
-                                AND n.event_item_type = 'channel'
-                                AND n.event_item_id = $1::uuid::text
-                                AND n.metadata->>'messageId' IS NOT NULL
-                                AND msg.channel_id = $1
-                                AND msg.deleted_at IS NULL
-                                AND COALESCE(msg.thread_id, msg.id) = m.id
-                          ))
-                      ))
-                    ORDER BY m.created_at ASC, m.id ASC
-                    LIMIT $4
-                    "#,
-                    channel_id,
-                    cursor_created_at,
-                    cursor_id,
-                    limit_i64 + 1,
-                    message_ids_filter as Option<&[Uuid]>,
-                    created_after,
-                    created_before,
-                    activity_after,
-                    activity_before,
-                    notification_filter_active,
-                    notification_done,
-                    notification_seen,
-                    notification_user_id,
-                )
-                .fetch_all(&self.pool)
-                .await?;
-
-                let has_more_newer = rows.len() > limit_usize;
-                if has_more_newer {
-                    rows.truncate(limit_usize);
-                }
-
-                rows.reverse();
-                (rows, has_more_newer)
-            }
-        };
-
-        let rows = rows
-            .into_iter()
-            .map(|r| TopLevelMessageRow {
-                id: r.id,
-                channel_id: r.channel_id,
-                sender_id: r.sender_id,
-                triggered_by: r.triggered_by_user_id,
-                content: r.content,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                edited_at: r.edited_at,
-                deleted_at: r.deleted_at,
-            })
-            .collect();
-
-        Ok(TopLevelMessagesQueryResult {
-            rows,
-            has_more_newer,
-        })
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_thread_data(
-        &self,
-        parent_ids: &[Uuid],
-        preview_count: u16,
-    ) -> Result<HashMap<Uuid, ThreadData>, Self::Err> {
-        if parent_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let rows = sqlx::query_as!(
-            ThreadDataRow,
-            r#"
-            SELECT
-                id AS "id!", thread_id AS "thread_id!", sender_id AS "sender_id!",
-                triggered_by_user_id,
-                content AS "content!", created_at AS "created_at!", updated_at AS "updated_at!",
-                edited_at::timestamptz AS "edited_at?",
-                reply_count AS "reply_count!", latest_reply_at AS "latest_reply_at?"
-            FROM (
-                SELECT
-                    r.id,
-                    r.thread_id,
-                    r.sender_id,
-                    r.triggered_by_user_id,
-                    r.content,
-                    r.created_at,
-                    r.updated_at,
-                    r.edited_at,
-                    COUNT(*) OVER (PARTITION BY r.thread_id) AS reply_count,
-                    MAX(r.created_at) OVER (PARTITION BY r.thread_id)::timestamptz AS latest_reply_at,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY r.thread_id
-                        ORDER BY r.created_at ASC, r.id ASC
-                    ) AS rn
-                FROM comms_channel_messages r
-                WHERE r.thread_id = ANY($1) AND r.deleted_at IS NULL
-            ) sub
-            WHERE rn <= $2
-            ORDER BY thread_id, created_at ASC, id ASC
-            "#,
-            parent_ids,
-            i64::from(preview_count) as i64,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut map: HashMap<Uuid, ThreadData> = HashMap::new();
-        for r in rows {
-            let entry = map.entry(r.thread_id).or_insert_with(|| ThreadData {
-                reply_count: r.reply_count,
-                latest_reply_at: r.latest_reply_at,
-                preview_replies: Vec::new(),
-            });
-            entry.preview_replies.push(ThreadReplyRow {
-                id: r.id,
-                thread_id: r.thread_id,
-                sender_id: r.sender_id,
-                triggered_by: r.triggered_by_user_id,
-                content: r.content,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                edited_at: r.edited_at,
-            });
-        }
-
-        Ok(map)
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_thread_replies(&self, parent_id: Uuid) -> Result<Vec<ThreadReplyRow>, Self::Err> {
-        let rows = sqlx::query_as!(
-            ThreadReplyOnlyRow,
-            r#"
-            SELECT
-                id AS "id!",
-                thread_id AS "thread_id!",
-                sender_id AS "sender_id!",
-                triggered_by_user_id,
-                content AS "content!",
-                created_at AS "created_at!",
-                updated_at AS "updated_at!",
-                edited_at::timestamptz AS "edited_at?"
-            FROM comms_channel_messages
-            WHERE thread_id = $1
-              AND deleted_at IS NULL
-            ORDER BY created_at ASC, id ASC
-            "#,
-            parent_id,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        Ok(rows
-            .into_iter()
-            .map(|r| ThreadReplyRow {
-                id: r.id,
-                thread_id: r.thread_id,
-                sender_id: r.sender_id,
-                triggered_by: r.triggered_by_user_id,
-                content: r.content,
-                created_at: r.created_at,
-                updated_at: r.updated_at,
-                edited_at: r.edited_at,
-            })
-            .collect())
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_reactions_batch(
-        &self,
-        message_ids: &[Uuid],
-    ) -> Result<HashMap<Uuid, Vec<CountedReaction>>, Self::Err> {
-        if message_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let rows = sqlx::query_as!(
-            ReactionRow,
-            r#"
-            SELECT message_id, emoji, user_id
-            FROM comms_reactions
-            WHERE message_id = ANY($1)
-            ORDER BY created_at ASC
-            "#,
-            message_ids,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        // Group by message_id, then fold by emoji within each message. Rows arrive
-        // ordered by created_at ASC, so an IndexMap preserves first-reacted order per
-        // emoji instead of the random order a HashMap would iterate in.
-        let mut map: HashMap<Uuid, IndexMap<String, Vec<String>>> = HashMap::new();
-        for r in rows {
-            map.entry(r.message_id)
-                .or_default()
-                .entry(r.emoji)
-                .or_default()
-                .push(r.user_id);
-        }
-
-        Ok(map
-            .into_iter()
-            .map(|(msg_id, emoji_map)| {
-                let reactions = emoji_map
-                    .into_iter()
-                    .map(|(emoji, users)| CountedReaction { emoji, users })
-                    .collect();
-                (msg_id, reactions)
-            })
-            .collect())
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_attachments_batch(
-        &self,
-        message_ids: &[Uuid],
-    ) -> Result<HashMap<Uuid, Vec<MessageAttachment>>, Self::Err> {
-        if message_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let rows = sqlx::query_as!(
-            AttachmentRow,
-            r#"
-            SELECT id AS "id!", message_id AS "message_id!", entity_type AS "entity_type!", entity_id AS "entity_id!",
-                   width AS "width?", height AS "height?", created_at AS "created_at!"
-            FROM comms_channel_attachments
-            WHERE message_id = ANY($1)
-            ORDER BY created_at ASC
-            "#,
-            message_ids,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut map: HashMap<Uuid, Vec<MessageAttachment>> = HashMap::new();
-        for r in rows {
-            map.entry(r.message_id)
-                .or_default()
-                .push(MessageAttachment {
-                    id: r.id,
-                    entity_type: r.entity_type,
-                    entity_id: r.entity_id,
-                    width: r.width,
-                    height: r.height,
-                    created_at: r.created_at,
-                });
-        }
-
-        Ok(map)
-    }
-
-    #[tracing::instrument(err, skip(self))]
     async fn get_channel_attachments(
         &self,
         channel_id: Uuid,
@@ -2174,12 +1241,12 @@ impl ChannelRepo for PgChannelsRepo {
         let rows = sqlx::query_as!(
             ChannelAttachmentRow,
             r#"
-            SELECT a.id AS "id!", a.channel_id AS "channel_id!", a.message_id AS "message_id!", m.sender_id AS "sender_id!",
+            SELECT a.id AS "id!", m.parent_entity_id::uuid AS "channel_id!", a.message_id AS "message_id!", m.sender_id AS "sender_id!",
                 a.entity_type AS "entity_type!", a.entity_id AS "entity_id!",
                 a.width AS "width?", a.height AS "height?", a.created_at AS "created_at!"
-            FROM comms_channel_attachments a
-            JOIN comms_channel_messages m ON m.id = a.message_id
-            WHERE a.channel_id = $1
+            FROM comms_attachments a
+            JOIN comms_messages m ON m.id = a.message_id
+            WHERE m.parent_entity_type = 'channel' AND m.parent_entity_id = $1::uuid::text
               AND m.deleted_at IS NULL
               AND ($2::timestamptz IS NULL OR (a.created_at, a.id) < ($2, $3))
               AND ($5::bool IS NULL
@@ -2251,112 +1318,6 @@ impl ChannelRepo for PgChannelsRepo {
             .collect())
     }
 
-    #[tracing::instrument(err, skip(self))]
-    async fn get_messages_with_context(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        before: i64,
-        after: i64,
-    ) -> Result<Vec<ChannelContextMessage>, Self::Err> {
-        let before = before.max(0);
-        let after = after.max(0);
-
-        let target = sqlx::query_as!(
-            ContextMessageRow,
-            r#"
-            SELECT
-                id AS "id!",
-                channel_id AS "channel_id!",
-                thread_id,
-                sender_id AS "sender_id!",
-                triggered_by_user_id,
-                content AS "content!",
-                created_at AS "created_at!",
-                updated_at AS "updated_at!",
-                edited_at::timestamptz AS "edited_at?",
-                deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_channel_messages
-            WHERE id = $1 AND channel_id = $2
-            "#,
-            message_id,
-            channel_id,
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        let Some(target) = target else {
-            return Ok(Vec::new());
-        };
-
-        let mut before_messages = sqlx::query_as!(
-            ContextMessageRow,
-            r#"
-            SELECT
-                id AS "id!",
-                channel_id AS "channel_id!",
-                thread_id,
-                sender_id AS "sender_id!",
-                triggered_by_user_id,
-                content AS "content!",
-                created_at AS "created_at!",
-                updated_at AS "updated_at!",
-                edited_at::timestamptz AS "edited_at?",
-                deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_channel_messages
-            WHERE channel_id = $1
-              AND (created_at, id) < ($2, $3)
-            ORDER BY created_at DESC, id DESC
-            LIMIT $4
-            "#,
-            channel_id,
-            target.created_at,
-            target.id,
-            before,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        before_messages.reverse();
-
-        let after_messages = sqlx::query_as!(
-            ContextMessageRow,
-            r#"
-            SELECT
-                id AS "id!",
-                channel_id AS "channel_id!",
-                thread_id,
-                sender_id AS "sender_id!",
-                triggered_by_user_id,
-                content AS "content!",
-                created_at AS "created_at!",
-                updated_at AS "updated_at!",
-                edited_at::timestamptz AS "edited_at?",
-                deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_channel_messages
-            WHERE channel_id = $1
-              AND (created_at, id) > ($2, $3)
-            ORDER BY created_at ASC, id ASC
-            LIMIT $4
-            "#,
-            channel_id,
-            target.created_at,
-            target.id,
-            after,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut messages = Vec::with_capacity(before_messages.len() + 1 + after_messages.len());
-        messages.extend(before_messages);
-        messages.push(target);
-        messages.extend(after_messages);
-
-        Ok(messages
-            .into_iter()
-            .map(ChannelContextMessage::from)
-            .collect())
-    }
-
     #[tracing::instrument(err, skip(self, user_id))]
     async fn get_attachment_references(
         &self,
@@ -2370,7 +1331,7 @@ impl ChannelRepo for PgChannelsRepo {
                 AttachmentChannelReference,
                 r#"
                 SELECT
-                    a.channel_id                     AS "channel_id!: uuid::Uuid",
+                    m.parent_entity_id::uuid                     AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     a.message_id                     AS "message_id!: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",
@@ -2378,9 +1339,9 @@ impl ChannelRepo for PgChannelsRepo {
                     m.content                        AS "message_content!",         -- String
                     m.created_at                     AS "message_created_at!: chrono::DateTime<chrono::Utc>",
                     a.created_at                     AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
-                FROM comms_channel_attachments a
-                JOIN comms_channel_messages m ON a.message_id = m.id
-                JOIN comms_channels c ON a.channel_id = c.id
+                FROM comms_attachments a
+                JOIN comms_messages m ON a.message_id = m.id
+                JOIN comms_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
                 WHERE a.entity_type = ANY($1)
                   AND a.entity_id  = $2
@@ -2403,7 +1364,7 @@ impl ChannelRepo for PgChannelsRepo {
                 AttachmentChannelReference,
                 r#"
                 SELECT
-                    m.channel_id                     AS "channel_id!: uuid::Uuid",
+                    m.parent_entity_id::uuid                     AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     m.id                             AS "message_id!: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",
@@ -2412,8 +1373,8 @@ impl ChannelRepo for PgChannelsRepo {
                     m.created_at                     AS "message_created_at!: chrono::DateTime<chrono::Utc>",
                     em.created_at                    AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
                 FROM comms_entity_mentions em
-                JOIN comms_channel_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')
-                JOIN comms_channels c ON m.channel_id = c.id
+                JOIN comms_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')
+                JOIN comms_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
                 WHERE em.entity_type = ANY($1)
                   AND em.entity_id  = $2
@@ -2501,181 +1462,6 @@ impl ChannelRepo for PgChannelsRepo {
         });
 
         Ok(references)
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn resolve_top_level_parent(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> Result<Option<TopLevelMessageRow>, Self::Err> {
-        let row = sqlx::query_as!(
-            TopLevelRow,
-            r#"
-            SELECT
-                m.id AS "id!",
-                m.channel_id AS "channel_id!",
-                m.sender_id AS "sender_id!",
-                m.triggered_by_user_id,
-                m.content AS "content!",
-                m.created_at AS "created_at!",
-                m.updated_at AS "updated_at!",
-                m.edited_at::timestamptz AS "edited_at?",
-                m.deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_channel_messages m
-            WHERE m.id = COALESCE(
-                (SELECT thread_id FROM comms_channel_messages WHERE id = $1 AND channel_id = $2),
-                $1
-            )
-            AND m.channel_id = $2
-            AND m.thread_id IS NULL
-            "#,
-            message_id,
-            channel_id,
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row.map(|r| TopLevelMessageRow {
-            id: r.id,
-            channel_id: r.channel_id,
-            sender_id: r.sender_id,
-            triggered_by: r.triggered_by_user_id,
-            content: r.content,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-            edited_at: r.edited_at,
-            deleted_at: r.deleted_at,
-        }))
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn resolve_message(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> Result<Option<ResolvedChannelMessage>, Self::Err> {
-        let row = sqlx::query_as!(
-            ResolvedMessageRow,
-            r#"
-            SELECT id AS "id!", channel_id AS "channel_id!", thread_id, created_at AS "created_at!"
-            FROM comms_channel_messages
-            WHERE id = $1
-              AND channel_id = $2
-            "#,
-            message_id,
-            channel_id,
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row.map(|r| {
-            let kind = if r.thread_id.is_some() {
-                ChannelMessageKind::ThreadReply
-            } else {
-                ChannelMessageKind::TopLevelMessage
-            };
-            ResolvedChannelMessage {
-                message_id: r.id,
-                channel_id: r.channel_id,
-                kind,
-                thread_id: r.thread_id.unwrap_or(r.id),
-                created_at: r.created_at,
-            }
-        }))
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_top_level_messages_around(
-        &self,
-        channel_id: Uuid,
-        anchor_created_at: DateTime<Utc>,
-        anchor_id: Uuid,
-        limit: u16,
-    ) -> Result<(Vec<TopLevelMessageRow>, Vec<TopLevelMessageRow>), Self::Err> {
-        let limit_i64 = i64::from(limit);
-
-        let before_fut = sqlx::query_as!(
-            TopLevelRow,
-            r#"
-            SELECT
-                m.id AS "id!",
-                m.channel_id AS "channel_id!",
-                m.sender_id AS "sender_id!",
-                m.triggered_by_user_id,
-                m.content AS "content!",
-                m.created_at AS "created_at!",
-                m.updated_at AS "updated_at!",
-                m.edited_at::timestamptz AS "edited_at?",
-                m.deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_channel_messages m
-            WHERE m.channel_id = $1
-              AND m.thread_id IS NULL
-              AND (m.deleted_at IS NULL OR EXISTS (
-                  SELECT 1 FROM comms_channel_messages r
-                  WHERE r.thread_id = m.id AND r.deleted_at IS NULL
-              ))
-              AND (m.created_at, m.id) < ($2, $3)
-            ORDER BY m.created_at DESC, m.id DESC
-            LIMIT $4
-            "#,
-            channel_id,
-            anchor_created_at,
-            anchor_id,
-            limit_i64,
-        )
-        .fetch_all(&self.pool);
-
-        let after_fut = sqlx::query_as!(
-            TopLevelRow,
-            r#"
-            SELECT
-                m.id AS "id!",
-                m.channel_id AS "channel_id!",
-                m.sender_id AS "sender_id!",
-                m.triggered_by_user_id,
-                m.content AS "content!",
-                m.created_at AS "created_at!",
-                m.updated_at AS "updated_at!",
-                m.edited_at::timestamptz AS "edited_at?",
-                m.deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_channel_messages m
-            WHERE m.channel_id = $1
-              AND m.thread_id IS NULL
-              AND (m.deleted_at IS NULL OR EXISTS (
-                  SELECT 1 FROM comms_channel_messages r
-                  WHERE r.thread_id = m.id AND r.deleted_at IS NULL
-              ))
-              AND (m.created_at, m.id) > ($2, $3)
-            ORDER BY m.created_at ASC, m.id ASC
-            LIMIT $4
-            "#,
-            channel_id,
-            anchor_created_at,
-            anchor_id,
-            limit_i64,
-        )
-        .fetch_all(&self.pool);
-
-        let (before_rows, after_rows): (Vec<TopLevelRow>, Vec<TopLevelRow>) =
-            tokio::try_join!(before_fut, after_fut)?;
-
-        let to_row = |r: TopLevelRow| TopLevelMessageRow {
-            id: r.id,
-            channel_id: r.channel_id,
-            sender_id: r.sender_id,
-            triggered_by: r.triggered_by_user_id,
-            content: r.content,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-            edited_at: r.edited_at,
-            deleted_at: r.deleted_at,
-        };
-
-        let before: Vec<TopLevelMessageRow> = before_rows.into_iter().map(to_row).collect();
-        let after: Vec<TopLevelMessageRow> = after_rows.into_iter().map(to_row).collect();
-
-        Ok((before, after))
     }
 
     async fn get_channel_info(&self, channel_id: Uuid) -> Result<ChannelInfo, Self::Err> {
@@ -3275,45 +2061,6 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(())
     }
 
-    async fn create_message(
-        &self,
-        channel_id: Uuid,
-        sender_id: ChannelSender<'_>,
-        triggered_by_user_id: Option<String>,
-        content: String,
-        thread_id: Option<Uuid>,
-    ) -> Result<MutatedMessage, Self::Err> {
-        let message_id = macro_uuid::generate_uuid_v7();
-        let row = sqlx::query_as!(
-            MutatedMessageRow,
-            r#"
-            INSERT INTO comms_messages (id, parent_entity_id, sender_id, triggered_by_user_id, content, thread_id, parent_entity_type)
-            VALUES ($1, $2::uuid::text, $3, $4, $5, $6, 'channel')
-            RETURNING
-                id,
-                parent_entity_id::uuid AS "channel_id!",
-                sender_id,
-                triggered_by_user_id,
-                content,
-                created_at,
-                updated_at,
-                thread_id,
-                edited_at::timestamptz AS "edited_at?",
-                deleted_at::timestamptz AS "deleted_at?"
-            "#,
-            message_id,
-            channel_id,
-            sender_id.as_ref(),
-            triggered_by_user_id,
-            content,
-            thread_id,
-        )
-        .fetch_one(&self.pool)
-        .await
-        .context("unable to create message")?;
-        mutated_message_from_row(row)
-    }
-
     async fn touch_channel_updated_at(&self, channel_id: Uuid) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
@@ -3327,131 +2074,6 @@ impl ChannelRepo for PgChannelsRepo {
         .execute(&self.pool)
         .await
         .context("unable to update the channel updated_at timestamp")?;
-        Ok(())
-    }
-
-    async fn create_message_mentions(
-        &self,
-        message_id: Uuid,
-        mentions: Vec<SimpleMention>,
-    ) -> Result<(), Self::Err> {
-        insert_message_mentions(&self.pool, message_id, &mentions)
-            .await
-            .map(|_| ())
-    }
-
-    async fn sync_message_mentions(
-        &self,
-        message_id: Uuid,
-        mentions: Vec<SimpleMention>,
-    ) -> Result<(), Self::Err> {
-        let mut transaction = self.pool.begin().await?;
-        let source_entity_ids = [message_id.to_string()];
-        delete_entity_mentions_by_source(&mut *transaction, &source_entity_ids).await?;
-        insert_message_mentions(&mut *transaction, message_id, &mentions).await?;
-        transaction.commit().await?;
-        Ok(())
-    }
-
-    async fn add_attachments(
-        &self,
-        message_id: Uuid,
-        channel_id: Uuid,
-        attachments: Vec<NewChannelAttachment>,
-    ) -> Result<Vec<MutatedAttachment>, Self::Err> {
-        if attachments.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let mut inserted = Vec::with_capacity(attachments.len());
-        for attachment in attachments {
-            let entity_type = ReferencedShareItemType::from_raw(&attachment.entity_type)
-                .map(ReferencedShareItemType::as_str)
-                .unwrap_or(attachment.entity_type.as_str());
-            let row = sqlx::query_as!(
-                MutatedAttachmentRow,
-                r#"
-                INSERT INTO comms_attachments (
-                    id,
-                    message_id,
-                    entity_type,
-                    entity_id,
-                    width,
-                    height
-                )
-                SELECT $1, $2, $4, $5, $6, $7 FROM comms_channel_messages WHERE id = $2 AND channel_id = $3
-                RETURNING id AS "id!", message_id AS "message_id!", $3::uuid AS "channel_id!", entity_type AS "entity_type!", entity_id AS "entity_id!", width, height, created_at AS "created_at!"
-                "#,
-                macro_uuid::generate_uuid_v7(),
-                message_id,
-                channel_id,
-                entity_type,
-                attachment.entity_id,
-                attachment.width,
-                attachment.height,
-            )
-            .fetch_one(&self.pool)
-            .await?;
-            inserted.push(row.into());
-        }
-        Ok(inserted)
-    }
-
-    async fn get_message_attachments(
-        &self,
-        message_id: Uuid,
-    ) -> Result<Vec<MutatedAttachment>, Self::Err> {
-        Ok(sqlx::query_as!(
-            MutatedAttachmentRow,
-            r#"
-                SELECT id AS "id!", message_id AS "message_id!", channel_id AS "channel_id!", entity_type AS "entity_type!", entity_id AS "entity_id!", width, height, created_at AS "created_at!"
-                FROM comms_channel_attachments
-                WHERE message_id = $1
-                "#,
-            message_id,
-        )
-        .fetch_all(&self.pool)
-        .await?
-        .into_iter()
-        .map(Into::into)
-        .collect::<Vec<_>>())
-    }
-
-    async fn delete_attachments(&self, attachment_ids: Vec<Uuid>) -> Result<(), Self::Err> {
-        if attachment_ids.is_empty() {
-            return Ok(());
-        }
-        sqlx::query!(
-            r#"
-            DELETE FROM comms_attachments
-            WHERE id = ANY($1) AND message_id IN (SELECT id FROM comms_channel_messages)
-            "#,
-            &attachment_ids,
-        )
-        .execute(&self.pool)
-        .await
-        .context("failed to delete attachments by IDs")?;
-        Ok(())
-    }
-
-    async fn delete_entity_mentions_for_entities(
-        &self,
-        entity_ids: Vec<String>,
-        source_entity_id: String,
-    ) -> Result<(), Self::Err> {
-        if entity_ids.is_empty() {
-            return Ok(());
-        }
-        sqlx::query!(
-            r#"
-            DELETE FROM comms_entity_mentions
-            WHERE entity_id = ANY($1) AND source_entity_id = $2
-            "#,
-            &entity_ids,
-            source_entity_id,
-        )
-        .execute(&self.pool)
-        .await?;
         Ok(())
     }
 
@@ -3515,118 +2137,6 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(mention)
     }
 
-    async fn patch_message_attachments(
-        &self,
-        message_id: Uuid,
-        attachments: Vec<MutatedAttachment>,
-    ) -> Result<MutatedMessage, Self::Err> {
-        let has_attachments = !attachments.is_empty();
-        let row = sqlx::query_as!(
-            MutatedMessageRow,
-            r#"
-            UPDATE comms_channel_messages
-            SET
-                updated_at = NOW(),
-                edited_at = NOW(),
-                deleted_at = CASE
-                    WHEN $2 = false AND (content IS NULL OR content ~ '^[\s]*$') THEN NOW()
-                    ELSE deleted_at
-                END
-            WHERE id = $1
-            RETURNING
-                id AS "id!",
-                channel_id AS "channel_id!",
-                sender_id AS "sender_id!",
-                triggered_by_user_id,
-                content AS "content!",
-                created_at AS "created_at!",
-                updated_at AS "updated_at!",
-                thread_id,
-                edited_at::timestamptz AS "edited_at?",
-                deleted_at::timestamptz AS "deleted_at?"
-            "#,
-            message_id,
-            has_attachments,
-        )
-        .fetch_one(&self.pool)
-        .await
-        .context("unable to update message")?;
-        mutated_message_from_row(row)
-    }
-
-    async fn patch_message(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        content: String,
-    ) -> Result<MutatedMessage, Self::Err> {
-        let row = sqlx::query_as!(
-            MutatedMessageRow,
-            r#"
-            UPDATE comms_channel_messages
-            SET content = $1, updated_at = NOW(), edited_at = NOW()
-            WHERE id = $2 AND channel_id = $3
-            RETURNING
-                id AS "id!",
-                channel_id AS "channel_id!",
-                sender_id AS "sender_id!",
-                triggered_by_user_id,
-                content AS "content!",
-                created_at AS "created_at!",
-                updated_at AS "updated_at!",
-                thread_id,
-                edited_at::timestamptz AS "edited_at?",
-                deleted_at::timestamptz AS "deleted_at?"
-            "#,
-            content,
-            message_id,
-            channel_id,
-        )
-        .fetch_one(&self.pool)
-        .await
-        .context("unable to update message")?;
-        mutated_message_from_row(row)
-    }
-    async fn delete_message(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> Result<MutatedMessage, Self::Err> {
-        let row = sqlx::query_as!(
-            MutatedMessageRow,
-            r#"
-            UPDATE comms_channel_messages
-            SET content = '', updated_at = NOW(), deleted_at = NOW()
-            WHERE id = $1 AND channel_id = $2
-            RETURNING
-                id AS "id!",
-                channel_id AS "channel_id!",
-                sender_id AS "sender_id!",
-                triggered_by_user_id,
-                content AS "content!",
-                created_at AS "created_at!",
-                updated_at AS "updated_at!",
-                thread_id,
-                edited_at::timestamptz AS "edited_at?",
-                deleted_at::timestamptz AS "deleted_at?"
-            "#,
-            message_id,
-            channel_id,
-        )
-        .fetch_one(&self.pool)
-        .await
-        .context("unable to delete message")?;
-        mutated_message_from_row(row)
-    }
-
-    async fn get_message_owner(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> Result<Option<ChannelSender<'static>>, Self::Err> {
-        get_message_owner(&self.pool, channel_id, message_id).await
-    }
-
     async fn get_participants(
         &self,
         channel_id: Uuid,
@@ -3659,13 +2169,6 @@ impl ChannelRepo for PgChannelsRepo {
                 left_at: row.left_at,
             })
             .collect())
-    }
-
-    async fn get_thread_participants(
-        &self,
-        thread_id: Uuid,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
-        get_channel_participants_for_thread_id(&self.pool, thread_id).await
     }
 
     async fn upsert_activity(
@@ -3801,162 +2304,5 @@ impl ChannelRepo for PgChannelsRepo {
             }
         };
         Ok(activity)
-    }
-
-    async fn add_reaction(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        emoji: String,
-        user_id: ChannelSender<'_>,
-    ) -> Result<(), Self::Err> {
-        let row = sqlx::query_as!(
-            ExistsRow,
-            r#"
-            WITH message AS (
-                SELECT id
-                FROM comms_channel_messages
-                WHERE id = $2 AND channel_id = $1
-            ),
-            inserted AS (
-                INSERT INTO comms_reactions (message_id, emoji, user_id)
-                SELECT id, $3, $4
-                FROM message
-                ON CONFLICT DO NOTHING
-            )
-            SELECT EXISTS (SELECT 1 FROM message) AS "exists!"
-            "#,
-            channel_id,
-            message_id,
-            emoji,
-            user_id.as_ref(),
-        )
-        .fetch_one(&self.pool)
-        .await
-        .context("failed to add reaction")?;
-        if !row.exists {
-            anyhow::bail!("message not found in channel");
-        }
-        Ok(())
-    }
-
-    async fn remove_reaction(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        emoji: String,
-        user_id: ChannelSender<'_>,
-    ) -> Result<(), Self::Err> {
-        let row = sqlx::query_as!(
-            ExistsRow,
-            r#"
-            WITH message AS (
-                SELECT id
-                FROM comms_channel_messages
-                WHERE id = $2 AND channel_id = $1
-            ),
-            deleted AS (
-                DELETE FROM comms_reactions r
-                USING message m
-                WHERE r.message_id = m.id
-                  AND r.emoji = $3
-                  AND r.user_id = $4
-            )
-            SELECT EXISTS (SELECT 1 FROM message) AS "exists!"
-            "#,
-            channel_id,
-            message_id,
-            emoji,
-            user_id.as_ref(),
-        )
-        .fetch_one(&self.pool)
-        .await
-        .context("failed to remove reaction")?;
-        if !row.exists {
-            anyhow::bail!("message not found in channel");
-        }
-        Ok(())
-    }
-
-    async fn get_message_reactions(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> Result<Vec<CountedReaction>, Self::Err> {
-        let reactions = sqlx::query_as!(
-            ReactionWithCreatedAtRow,
-            r#"
-            SELECT r.emoji, r.user_id, r.created_at
-            FROM comms_reactions r
-            JOIN comms_channel_messages m ON m.id = r.message_id
-            WHERE r.message_id = $1 AND m.channel_id = $2
-            "#,
-            message_id,
-            channel_id,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("unable to fetch reactions")?
-        .into_iter()
-        .map(|row| (row.emoji, row.user_id, row.created_at))
-        .collect::<Vec<_>>();
-        Ok(group_counted_reactions(reactions))
-    }
-
-    async fn get_bot_profiles(
-        &self,
-        bot_ids: &[BotId],
-    ) -> Result<HashMap<BotId, BotSenderProfile>, Self::Err> {
-        if bot_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        // First-party bots have no row; their profiles come from the registry.
-        let mut profiles: HashMap<BotId, BotSenderProfile> = bot_ids
-            .iter()
-            .filter_map(|id| {
-                bot_id::system_bot(*id).map(|bot| {
-                    (
-                        *id,
-                        BotSenderProfile {
-                            name: bot.name.to_owned(),
-                            avatar_url: None,
-                        },
-                    )
-                })
-            })
-            .collect();
-        let ids: Vec<Uuid> = bot_ids
-            .iter()
-            .filter(|id| !bot_id::is_system_bot(**id))
-            .map(|id| id.as_uuid())
-            .collect();
-        if ids.is_empty() {
-            return Ok(profiles);
-        }
-        // Soft-deleted bots are included on purpose so historical messages
-        // keep their sender identity.
-        let rows = sqlx::query!(
-            r#"
-            SELECT id, name, avatar_url
-            FROM bots
-            WHERE id = ANY($1)
-            "#,
-            &ids,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .context("unable to fetch bot profiles")?;
-
-        profiles.extend(rows.into_iter().map(|row| {
-            (
-                BotId::new_from_uuid(row.id),
-                BotSenderProfile {
-                    name: row.name,
-                    avatar_url: row.avatar_url,
-                },
-            )
-        }));
-        Ok(profiles)
     }
 }

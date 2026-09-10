@@ -61,7 +61,10 @@ describe('MarkMessageNotifications', () => {
 
   it('marks every document mention from the mounted channel message as read', async () => {
     render(() => (
-      <MarkMessageNotifications messageId="message-1" channelId="channel-1">
+      <MarkMessageNotifications
+        messageId="message-1"
+        parent={{ type: 'channel', id: 'channel-1' }}
+      >
         <span>Message</span>
       </MarkMessageNotifications>
     ));
@@ -84,7 +87,10 @@ describe('MarkMessageNotifications', () => {
 
     try {
       render(() => (
-        <MarkMessageNotifications messageId="message-1" channelId="channel-1">
+        <MarkMessageNotifications
+          messageId="message-1"
+          parent={{ type: 'channel', id: 'channel-1' }}
+        >
           <span>Message</span>
         </MarkMessageNotifications>
       ));

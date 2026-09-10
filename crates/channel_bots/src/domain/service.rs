@@ -10,7 +10,7 @@ use messages::domain::{
     models::{
         MessageParent, PatchMessageNotificationPolicy, PostMessage, PostMessageNotificationPolicy,
     },
-    ports::{EditMessage, MessageError},
+    ports::{MessageError, MessagePatch},
     service::MessageView,
 };
 use uuid::Uuid;
@@ -311,15 +311,13 @@ where
             .map_err(|e| anyhow::anyhow!(e.to_string()))?;
         match self
             .messages
-            .edit(
+            .patch(
                 access,
                 thinking.id,
-                EditMessage {
-                    content: reply,
-                    mentions: Vec::new(),
-                    attachments: None,
-                    nonce: None,
+                MessagePatch {
+                    content: Some(reply),
                     notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                    ..Default::default()
                 },
             )
             .await

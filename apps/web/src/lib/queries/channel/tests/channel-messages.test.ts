@@ -1,4 +1,7 @@
-import { err as resultErr } from 'neverthrow';
+vi.mock('@queries/messages/subscription', () => ({
+  useMessageSubscription: () => {},
+}));
+
 /**
  * @vitest-environment jsdom
  */
@@ -8,7 +11,7 @@ import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  getChannelMessages: vi.fn(),
+  getMessageTimeline: vi.fn(),
 }));
 
 let testQueryClient: QueryClient;
@@ -19,36 +22,34 @@ vi.mock('../../client', () => ({
   },
 }));
 
-vi.mock('@service-storage/client', () => ({
-  storageServiceClient: {
-    getChannelMessages: mocks.getChannelMessages,
-  },
+vi.mock('@service-storage/messages', () => ({
+  entityMessagesClient: { list: mocks.getMessageTimeline },
 }));
 
 import {
-  channelMessagesQueryOptions,
-  isMissingChannelMessageError,
-} from '../channel-messages';
+  isMissingMessageError,
+  messageTimelineQueryOptions,
+} from '../../messages/timeline';
 
 beforeEach(() => {
   testQueryClient = new QueryClient();
-  mocks.getChannelMessages.mockReset();
+  mocks.getMessageTimeline.mockReset();
 });
 
 afterEach(() => {
   testQueryClient.clear();
 });
 
-describe('channelMessagesQueryOptions', () => {
+describe('messageTimelineQueryOptions', () => {
   it.each(['NOT_FOUND', 'GONE'] as const)(
     'throws missing load-around messages without retrying them for %s',
     async (code) => {
-      mocks.getChannelMessages.mockResolvedValueOnce(
-        resultErr([{ code, message: 'Message unavailable' }])
+      mocks.getMessageTimeline.mockRejectedValueOnce(
+        new ThrownResultError([{ code, message: 'Message unavailable' }])
       );
 
-      const options = channelMessagesQueryOptions(
-        'channel-1',
+      const options = messageTimelineQueryOptions(
+        { type: 'channel', id: 'channel-1' },
         'message-missing'
       );
 
@@ -64,23 +65,40 @@ describe('channelMessagesQueryOptions', () => {
       }
 
       expect(error).toBeInstanceOf(ThrownResultError);
-      expect(isMissingChannelMessageError(error)).toBe(true);
+      expect(isMissingMessageError(error)).toBe(true);
       expect(options.retry(0, error)).toBe(false);
-      expect(mocks.getChannelMessages).toHaveBeenCalledTimes(1);
-      expect(mocks.getChannelMessages).toHaveBeenCalledWith({
-        channel_id: 'channel-1',
-        limit: 50,
-        next_cursor: null,
-        previous_cursor: null,
-        load_around_message_id: 'message-missing',
-      });
+      expect(mocks.getMessageTimeline).toHaveBeenCalledTimes(1);
+      expect(mocks.getMessageTimeline).toHaveBeenCalledWith(
+        { type: 'channel', id: 'channel-1' },
+        {
+          limit: 50,
+          cursor: undefined,
+          direction: 'older',
+          around: 'message-missing',
+          include_deleted_threads: false,
+        }
+      );
     }
   );
 
   it('preserves the default single retry for other errors', () => {
-    const options = channelMessagesQueryOptions('channel-1', null);
+    const options = messageTimelineQueryOptions(
+      { type: 'channel', id: 'channel-1' },
+      null
+    );
 
     expect(options.retry(0, new Error('network'))).toBe(true);
     expect(options.retry(1, new Error('network'))).toBe(false);
+  });
+
+  it('shares document roots with the annotation projection, including deletion state', async () => {
+    const parent = { type: 'document' as const, id: 'document' };
+    const annotations = messageTimelineQueryOptions(parent, null);
+    mocks.getMessageTimeline.mockResolvedValue({ items: [] });
+    await annotations.queryFn({ pageParam: null });
+    expect(mocks.getMessageTimeline).toHaveBeenLastCalledWith(
+      parent,
+      expect.objectContaining({ include_deleted_threads: true })
+    );
   });
 });

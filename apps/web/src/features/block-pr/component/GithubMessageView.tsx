@@ -4,7 +4,6 @@ import { ThreadReplyRail } from '@channel/Thread/ThreadReplyRail';
 import type { MessageData } from '@core/messages/types';
 import MacroLogo from '@icon/macro-logo.svg';
 import type { GithubPullRequestComment } from '@service-storage/generated/schemas';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import { Key } from '@solid-primitives/keyed';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
@@ -100,12 +99,17 @@ function toMessageData(comment: GithubPullRequestComment): MessageData {
 function toThreadRowMessage(
   comment: GithubPullRequestComment,
   replies: GithubPullRequestComment[]
-): ApiChannelMessage {
+): MessageData & {
+  thread: {
+    reply_count: number;
+    latest_reply_at?: string | null;
+    preview: MessageData[];
+  };
+} {
   const message = toMessageData(comment);
   const login = comment.authorLogin ?? 'github';
   return {
     ...message,
-    channel_id: '',
     content: message.content ?? '',
     sender: {
       type: 'bot',

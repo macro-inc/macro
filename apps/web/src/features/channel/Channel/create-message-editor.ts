@@ -2,7 +2,8 @@ import type { InputSnapshot } from '@channel/Input';
 import { toast } from '@core/component/Toast/Toast';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
-import { type Accessor, createSignal } from 'solid-js';
+import type { MessageParent } from '@service-storage/messages';
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import { authoredMentions } from '../Input/message-payload';
 import type { MessageData } from '../Message';
 import type { MessageEditState } from '../Thread/types';
@@ -13,7 +14,7 @@ import {
 } from './message-editing';
 
 type PatchMessageInput = {
-  channelID: string;
+  parent: MessageParent;
   messageID: string;
   content: string;
   mentions: SimpleMention[];
@@ -22,7 +23,7 @@ type PatchMessageInput = {
 };
 
 type CreateMessageEditorOptions = {
-  channelId: () => string;
+  parent: () => MessageParent;
   patchMessage: (input: PatchMessageInput) => void;
   /**
    * Called when an edit session ends — saved, cancelled, or abandoned by
@@ -48,6 +49,11 @@ export function createMessageEditor(
     setEditState(undefined);
     options.onEditEnded?.(message);
   };
+
+  onCleanup(() => {
+    const current = editState();
+    if (current) endEdit(current.message);
+  });
 
   const start: MessageEditor['start'] = (message: MessageData) => {
     const previous = editState();
@@ -100,7 +106,7 @@ export function createMessageEditor(
     }
 
     options.patchMessage({
-      channelID: options.channelId(),
+      parent: message.parent ?? options.parent(),
       messageID: message.id,
       content: nextContent,
       mentions: authoredMentions(snapshot.mentions),

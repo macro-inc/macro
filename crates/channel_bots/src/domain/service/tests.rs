@@ -53,15 +53,19 @@ async fn document_invocation_reads_its_thread_and_delivers_a_bot_reply_with_comm
     let mut api = MockMessageServiceApi::new();
     configure_reads(&mut api, &trigger, thread(root, vec![trigger.clone()]));
     expect_placeholder(&mut api);
-    api.expect_edit().once().returning(|access, id, input| {
+    api.expect_patch().once().returning(|access, id, input| {
         assert_eq!(access.entity().entity_id, parent().entity_id());
         assert_eq!(id, Uuid::from_u128(3));
-        assert_eq!(input.content, "the answer");
+        assert_eq!(input.content.as_deref(), Some("the answer"));
         assert_eq!(
             input.notification_policy,
             PatchMessageNotificationPolicy::NotifyAsPostedMessage
         );
-        Ok(message(3, Some(Uuid::from_u128(1)), &input.content))
+        Ok(message(
+            3,
+            Some(Uuid::from_u128(1)),
+            input.content.as_deref().unwrap(),
+        ))
     });
     let responder = Arc::new(Responder {
         prompts: Mutex::new(vec![]),
@@ -134,7 +138,7 @@ async fn deleted_placeholder_does_not_recreate_a_response() {
     let mut api = MockMessageServiceApi::new();
     configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
     expect_placeholder(&mut api);
-    api.expect_edit()
+    api.expect_patch()
         .once()
         .returning(|_, _, _| Err(MessageError::NotFound));
     let responder = Arc::new(Responder {

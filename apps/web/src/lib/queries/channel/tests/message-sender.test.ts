@@ -7,8 +7,9 @@ import {
   type ChannelMessageWithMaybeSender,
   getBotDisplayName,
   normalizeChannelMessageSender,
+  normalizeThreadReplySender,
   senderFromStorageId,
-} from '../message-sender';
+} from '../../messages/message-sender';
 
 function legacyMessage(
   senderId: string,
@@ -16,7 +17,15 @@ function legacyMessage(
 ): ChannelMessageWithMaybeSender {
   return {
     id: 'message-1',
-    channel_id: 'channel-1',
+    parent: { type: 'channel', id: 'channel-1' },
+    mentions: [],
+    state: {
+      root_id: 'message-1',
+      user_id: senderId,
+      created_at: '2026-05-28T10:00:00Z',
+      updated_at: '2026-05-28T10:00:00Z',
+      resolved: false,
+    },
     sender_id: senderId,
     content: 'hello',
     created_at: '2026-05-28T10:00:00.000Z',
@@ -27,6 +36,8 @@ function legacyMessage(
       preview: [
         {
           id: 'reply-1',
+          parent: { type: 'channel', id: 'channel-1' },
+          mentions: [],
           sender_id: replySenderId,
           content: 'reply',
           created_at: '2026-05-28T10:01:00.000Z',
@@ -51,7 +62,9 @@ describe('message sender normalization', () => {
       type: 'user',
       id: 'macro|alice@example.com',
     });
-    expect(message.thread.preview[0].sender).toEqual({
+    expect(
+      normalizeThreadReplySender(message.thread.preview[0]).sender
+    ).toEqual({
       type: 'user',
       id: 'macro|reply@example.com',
     });

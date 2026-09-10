@@ -93,7 +93,7 @@ function formatReadChannelWindow(args: {
     .exhaustive();
 }
 
-export const readChannelMessagesHandler = createToolRenderer({
+export const readMessageTimelineHandler = createToolRenderer({
   name: 'ReadChannelMessages',
   render: (ctx) => {
     const channelName = useChannelName(ctx.tool.data.channelId, 'Channel');

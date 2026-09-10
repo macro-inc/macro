@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(preview) AS \"message!: Json<StoredMessage>\"\n            FROM unnest($1::uuid[]) root(id) CROSS JOIN LATERAL (\n                SELECT r.* FROM comms_messages r WHERE r.thread_id = root.id AND r.deleted_at IS NULL\n                ORDER BY r.import_order NULLS LAST, r.created_at, r.id LIMIT 3\n            ) preview",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message!: Json<StoredMessage>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "743c933a0166ab770898f8af61e648d28c7182cc148e5dfa44bfb6980340dae3"
+}

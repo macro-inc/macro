@@ -1129,10 +1129,27 @@ impl DocumentRepo for PgDocumentRepo {
         let mut cursor = None;
         loop {
             let page = repo
-                .list(&parent, cursor, 100)
+                .timeline(
+                    &parent,
+                    messages::domain::ports::MessageTimelineQuery {
+                        cursor,
+                        limit: Some(100),
+                        ..Default::default()
+                    },
+                )
                 .await
                 .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
-            threads.extend(page.threads);
+            for item in page.items {
+                let replies = repo
+                    .replies(&parent, item.message.id)
+                    .await
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+                threads.push(messages::domain::models::MessageThread {
+                    state: item.state,
+                    root: item.message,
+                    replies,
+                });
+            }
             cursor = page.next_cursor;
             if cursor.is_none() {
                 break;

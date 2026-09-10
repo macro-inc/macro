@@ -171,7 +171,9 @@ fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors
                 on_behalf_of: Some(acting_user.clone()),
                 actor_user_id: None,
             },
-            BotReceiptScope::Team { .. } => PublishedDocumentActors::default(),
+            BotReceiptScope::Team { .. } | BotReceiptScope::Channel { .. } => {
+                PublishedDocumentActors::default()
+            }
         },
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
             PublishedDocumentActors::default()

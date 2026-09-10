@@ -472,7 +472,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to favorite Macro support channel");
             }
 
-            let _ = post_support_channel_welcome(&AuthorizedSupportChannelMessages(channel_messages.as_ref(), entity_access_service.as_ref()), &channel.id, owner_id)
+            let _ = post_support_channel_welcome(&AuthorizedSupportChannelMessages(channel_messages, entity_access_service), &channel.id, owner_id)
                 .await
                 .inspect_err(|e| {
                 tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to post Macro support welcome message");

@@ -45,7 +45,7 @@ import {
   type PropertySaveHandler,
 } from '@property/context/PropertiesContext';
 import type { PropertyApiValues, Property as PropertyT } from '@property/types';
-import { senderFromStorageId } from '@queries/channel/message-sender';
+import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { ItemEntity } from '@queries/preview';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-storage/generated/schemas';

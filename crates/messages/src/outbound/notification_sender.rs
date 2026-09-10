@@ -69,7 +69,7 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
                     sub_type,
                     mention_id: n.message.id.to_string(),
                     comment_id: n.message.id,
-                    thread_id: n.event.root_id,
+                    thread_id: n.message.root_id(),
                     text: n.message.content.clone(),
                     sender_profile_picture_url: n
                         .message
@@ -87,7 +87,7 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
                     file_type: n.context.file_type.clone(),
                     sub_type,
                     comment_id: n.message.id,
-                    thread_id: n.event.root_id,
+                    thread_id: n.message.root_id(),
                     text: n.message.content.clone(),
                     sender_profile_picture_url: n
                         .message
@@ -105,7 +105,7 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
                     file_type: n.context.file_type.clone(),
                     sub_type,
                     comment_id: n.message.id,
-                    thread_id: n.event.root_id,
+                    thread_id: n.message.root_id(),
                     text: n.message.content.clone(),
                     sender_profile_picture_url: n
                         .message

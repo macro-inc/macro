@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT id AS \"user_id!\" FROM (\n            SELECT m.sender_id AS id\n            FROM comms_messages m\n            JOIN comms_channel_participants cp\n              ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND cp.user_id = m.sender_id\n            WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL\n            UNION\n            SELECT cp.user_id AS id\n            FROM comms_entity_mentions em\n            JOIN comms_messages m ON m.id::text = em.source_entity_id\n            JOIN comms_channel_participants cp\n              ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text AND ((em.entity_type = 'user' AND cp.user_id = em.entity_id) OR (em.entity_type = 'group' AND em.entity_id = 'here' AND cp.user_id LIKE 'macro|%'))\n            WHERE (m.id = $1 OR m.thread_id = $1)\n              AND em.source_entity_type = 'message'\n              AND cp.left_at IS NULL\n        ) AS combined\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "efeec01e1669e210c46af925858248398ebdc4da3af008fbd31ff5378cc6e6fd"
+}

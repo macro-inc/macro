@@ -63,19 +63,7 @@ export function MinimizedThread(props: {
     });
   });
 
-  // TODO (seamus) : in the current version of minimized threads the ids are
-  // not being shown.
-  // const _userIds = createMemo(() => {
-  //   const ids = new Set<string>();
-  //   ids.add(props.comment.author);
-  //   for (const replyId of props.comment.children) {
-  //     const reply = getCommentById(replyId) as Reply | undefined;
-  //     if (reply && reply.author) ids.add(reply.author);
-  //   }
-  //   return Array.from(ids);
-  // });
-
-  const commentCount = () => 1 + props.comment.children.length;
+  const commentCount = () => 1 + props.comment.replyCount;
   const clickHandler = () => {
     if (expandable()) {
       setExpanded(true);

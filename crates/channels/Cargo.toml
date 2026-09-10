@@ -52,6 +52,7 @@ list = [
   "ports",
 ]
 outbound = [
+  "messages/outbound",
   "dep:connection_gateway_client",
   "dep:contacts",
   "dep:entity_access",

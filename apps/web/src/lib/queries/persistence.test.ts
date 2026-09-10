@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
 import { authKeys } from './auth/keys';
 import { channelKeys } from './channel/keys';
+import { messageKeys } from './messages/keys';
 import { type PersistScope, setupQueryPersistence } from './persistence';
 import type {
   PerQueryPersistence,
@@ -61,7 +62,9 @@ describe('setupQueryPersistence', () => {
       true
     );
     expect(
-      shouldPersistChannelQuery(channelKeys.messages('a', null).queryKey)
+      shouldPersistChannelQuery(
+        messageKeys.messages({ type: 'channel', id: 'a' }, null).queryKey
+      )
     ).toBe(false);
     expect(shouldPersistChannelQuery(['channel', 'future-family', 'a'])).toBe(
       false

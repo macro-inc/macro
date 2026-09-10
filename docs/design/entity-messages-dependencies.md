@@ -1,5 +1,9 @@
 # Message dependencies after the cleanup
 
+Historical snapshot of the 2026-09-07 cleanup. The
+[2026-09-09 consolidation](entity-messages-simplification.md) supersedes these graphs:
+the parallel client/read paths and adapters described below have been removed.
+
 Implemented on the message-unification branch, 2026-09-07. This document describes
 application dependencies and capabilities, separate from the database cutover in
 [entity-messages.md](entity-messages.md).

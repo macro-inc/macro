@@ -53,6 +53,11 @@ used in chat and channels; they serialize as `<m-document-mention>` tags in the 
 the agent sees. Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread).
 
+For a session dispatched from a channel or document comment, `Open conversation`
+in the header (or the title menu on mobile) opens its originating thread. The
+drawer receives live replies, edits, and reactions while the source is closed;
+`Open thread` navigates back to the source.
+
 - Sending is never blocked by a running turn. A prompt sent mid-turn is queued
   **server-side** and dispatches automatically when the current turn ends, one per turn.
   The queue holds at most 50 entries; past that a send is refused with an error rather

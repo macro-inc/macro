@@ -13,15 +13,10 @@ import {
 } from '@queries/agent-session/realtime-protocol';
 import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
 import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
-import {
-  handleCommsAttachment,
-  handleCommsMessage,
-  handleCommsReaction,
-} from '@queries/channel/sync';
-import { handleCommsTyping } from '@queries/channel/typing';
 import { invalidateContacts } from '@queries/contacts/contacts';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
+import { handleMessageEvent } from '@queries/messages/sync';
 import {
   applyNotificationStatusUpdate,
   notificationStatusUpdatePayloadSchema,
@@ -62,8 +57,12 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       .with({ type: 'contacts_invalidation' }, () => {
         invalidateContacts();
       })
-      .with({ type: 'comms_message' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsMessage);
+      .with({ type: 'message_update' }, () => {
+        withParsedWebsocketPayload<Parameters<typeof handleMessageEvent>[0]>(
+          data.type,
+          data.data,
+          (event) => handleMessageEvent(event, props.userId())
+        );
       })
       // One frame appended to a live agent session's log. Routed to the
       // channel's fold rather than to any cache: the frame is not a message,
@@ -90,23 +89,6 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           data.type,
           data.data,
           handleAgentSessionQueue
-        );
-      })
-      .with({ type: 'comms_reaction' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsReaction);
-      })
-      .with({ type: 'comms_attachment' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsAttachment);
-      })
-      .with({ type: 'comms_typing' }, () => {
-        const userId = props.userId();
-        if (!userId) return;
-        withParsedWebsocketPayload<Parameters<typeof handleCommsTyping>[0]>(
-          data.type,
-          data.data,
-          (payload) => {
-            handleCommsTyping(payload, userId);
-          }
         );
       })
       .with({ type: 'notification_status_updated' }, () => {

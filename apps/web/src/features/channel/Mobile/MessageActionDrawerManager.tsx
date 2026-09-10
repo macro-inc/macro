@@ -5,6 +5,7 @@ import { ActionDrawer } from './ActionDrawer';
 import {
   MessageActionDrawerContextProvider,
   type MessageActionDrawerState,
+  useMessageActionDrawer,
 } from './message-action-drawer-context';
 
 /**
@@ -15,7 +16,7 @@ import {
 export function MaybeMessageActionDrawerManager(props: {
   children: JSX.Element;
 }) {
-  if (!isTouchDevice()) return props.children;
+  if (!isTouchDevice() || useMessageActionDrawer()) return props.children;
 
   const [isOpen, setIsOpen] = createSignal(false);
   const [message, setMessage] = createSignal<MessageData | undefined>();

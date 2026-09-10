@@ -1,9 +1,9 @@
 use messages::domain::{
-    annotations::{AnnotationMutation, AnnotationRepository, AnnotationTarget},
+    annotations::{AnnotationMutation, AnnotationRepository, AnnotationTarget, DeletedAnnotation},
     ports::MessageError,
 };
 use model::annotations::{
-    delete::{DeleteUnthreadedAnchorRequest, DeleteUnthreadedAnchorResponse},
+    delete::DeleteUnthreadedAnchorRequest,
     edit::{EditAnchorRequest, EditAnchorResponse},
 };
 use sqlx::PgPool;
@@ -43,7 +43,7 @@ impl AnnotationRepository for PgAnnotationRepository {
         &self,
         access: AnnotationMutation,
         input: DeleteUnthreadedAnchorRequest,
-    ) -> Result<DeleteUnthreadedAnchorResponse, MessageError> {
+    ) -> Result<DeletedAnnotation, MessageError> {
         super::delete_anchor::delete_document_anchor(&self.0, access, input)
             .await
             .map_err(|e| MessageError::Repository(rootcause::report!("{e}")))

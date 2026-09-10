@@ -67,7 +67,6 @@ use bot_id::BotId;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use bots_directory::PgBotDirectory;
 use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher};
-use channels::outbound::connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher;
 use channels::outbound::contacts_dispatcher::ContactsChannelDispatcher;
 use channels::outbound::notification_sender::NotificationChannelSender;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
@@ -385,7 +384,6 @@ async fn run() -> anyhow::Result<()> {
     );
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway.clone()),
         NotificationChannelSender::new(notifications.clone()),
         ContactsChannelDispatcher::new(contacts_ingress),
     )

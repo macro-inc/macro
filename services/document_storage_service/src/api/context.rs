@@ -29,7 +29,6 @@ use channels::{
     },
     inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
     outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
         notification_sender::NotificationChannelSender, pg_channels_repo::PgChannelsRepo,
         pg_side_effect_context::PgChannelSideEffectContext,
@@ -341,7 +340,6 @@ pub(crate) type DssChannelListState =
 /// Type alias for the channels service wired into DSS.
 pub(crate) type DssChannelEffects = ChannelSideEffectService<
     PgChannelSideEffectContext,
-    ConnectionGatewayChannelRealtimePublisher,
     NotificationChannelSender<NotificationIngressType>,
     ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
     DssEventBroker,
@@ -351,6 +349,15 @@ pub(crate) type DssChannelEffects = ChannelSideEffectService<
 pub(crate) type DssAnnotationService = messages::domain::annotations::AnnotationService<
     macro_db_client::annotations::repository::PgAnnotationRepository,
     EntityAccessService,
+    messages::domain::delivery::DiscussionDelivery<
+        messages::outbound::pg_discussion_context::PgDiscussionContext,
+        messages::outbound::entity_access_audience::EntityAccessMessageAudience<
+            EntityAccessService,
+        >,
+        messages::outbound::connection_gateway::ConnectionGatewayMessages,
+        messages::outbound::notification_sender::MessageNotificationSender<NotificationIngressType>,
+        messages::outbound::pg_discussion_context::PgDiscussionContext,
+    >,
 >;
 
 /// Shared messages use the same parent access and authentication services as DSS.
@@ -381,12 +388,8 @@ pub(crate) type DssHarnessesState =
     harnesses::inbound::axum_router::HarnessesRouterState<DssHarnessService, AuthorizationService>;
 
 /// Type alias for the channel bot webhook router state.
-pub(crate) type DssChannelBotWebhookState = ChannelBotWebhookRouterState<
-    DssBotService,
-    Arc<channels::domain::message_commands::ChannelMessageAdapter>,
-    EntityAccessService,
-    AuthorizationService,
->;
+pub(crate) type DssChannelBotWebhookState =
+    ChannelBotWebhookRouterState<DssBotService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the call connection service.
 pub(crate) type CallConnectionService =

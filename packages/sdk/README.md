@@ -186,6 +186,22 @@ app.post('/webhook', (c) => macro.events.webhook()(c.req.raw));
 
 This section is just if you are contributing to the SDK.
 
+Channel messages and document comments use the shared `/messages/{parent_type}/{parent_id}` API.
+`channel.send()`, `message.reply()/edit()/delete()/react()`, and `document.comment()`
+use the same message record. `document.comment()` and `comment.edit()` also accept
+rich bodies composed with `msg`.
+
+Comment IDs and thread IDs are now UUID strings. `comment.threadId()` returns
+the root message UUID, including for a root comment itself. `document.comments()`
+returns all root pages and complete replies; its `thread` record is the generated
+`ThreadState` (`root_id`, `resolved`, `anchor`, and timestamps). Existing numeric
+comment URLs remain a web navigation concern; SDK operations use message UUIDs.
+
+After API changes, run `just update-generated` to rebuild the service specs and
+SDK. If the web app's OpenAPI files are already current, `bun run sync-specs &&
+bun run generate` regenerates the SDK without rebuilding Rust. Validate with
+`bun run check`, `bun test tests`, and `bun run coverage`.
+
 ## Coverage checking
 
 We have a coverage checker. It reads every generated function and ensures that

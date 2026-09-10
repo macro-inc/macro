@@ -312,12 +312,14 @@ pub trait BotService: Send + Sync + 'static {
         token_id: Uuid,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
 
-    /// Ensure that a bot is an active participant in a channel.
-    fn ensure_bot_in_channel(
+    /// Authorize an authenticated bot's messages using its active channel membership.
+    fn channel_message_access(
         &self,
         bot_id: BotId,
         channel_id: Uuid,
-    ) -> impl Future<Output = Result<(), BotError>> + Send;
+    ) -> impl Future<
+        Output = Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError>,
+    > + Send;
 
     /// Authenticate a raw bearer token.
     fn authenticate_token(
@@ -325,12 +327,14 @@ pub trait BotService: Send + Sync + 'static {
         token: &str,
     ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
 
-    /// Authenticate a raw bot token scoped to a channel.
+    /// Authenticate a channel token and issue its membership-bound message capability.
     fn authenticate_channel_token(
         &self,
         channel_id: Uuid,
         token: &str,
-    ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
+    ) -> impl Future<
+        Output = Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError>,
+    > + Send;
 }
 
 /// Bot service error.

@@ -1,8 +1,11 @@
 import type { ApiCountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
+import type { MessageParent } from '@service-storage/messages';
 
 export type MessageData = {
+  parent?: MessageParent;
+  imported_author?: { name: string } | null;
   id: string;
   content: string;
   sender_id: string;

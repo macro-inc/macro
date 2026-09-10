@@ -5,7 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-import type { MessageThread } from './messageThread';
+import type { MessageParent } from './messageParent';
 import type { ReferencedThreadChannelName } from './referencedThreadChannelName';
 
 /**
@@ -16,6 +16,8 @@ export interface ReferencedThread {
   can_reply: boolean;
   /** Source channel's current display name, returned only after access checks. */
   channel_name?: ReferencedThreadChannelName;
-  /** Canonical source messages: replies must retain this parent. */
-  thread: MessageThread;
+  /** Source parent used by the common message reader and mutations. */
+  parent: MessageParent;
+  /** Source root identity; discovery does not copy its message content. */
+  root_id: string;
 }

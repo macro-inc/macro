@@ -32,6 +32,7 @@ async fn standalone_highlight_remains_unthreaded_until_a_message_attaches_it(poo
             actor: "macro|user@user.com".to_owned().try_into().unwrap(),
             triggered_by: None,
             input: PostMessage {
+                notification_policy: Default::default(),
                 attribution: Default::default(),
                 content: "Comment on selection".into(),
                 thread_id: None,

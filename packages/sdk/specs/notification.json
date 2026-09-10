@@ -1298,8 +1298,8 @@
         "required": ["documentName", "owner", "commentId", "threadId", "text"],
         "properties": {
           "commentId": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "uuid",
             "description": "the comment id"
           },
           "documentName": {
@@ -1313,6 +1313,10 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public bot name when the author is an agent rather than a Macro user."
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
@@ -1333,8 +1337,8 @@
             "description": "the text of the comment"
           },
           "threadId": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "uuid",
             "description": "the thread id"
           }
         }
@@ -1930,8 +1934,8 @@
         ],
         "properties": {
           "commentId": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "uuid",
             "description": "the comment id"
           },
           "documentName": {
@@ -1949,6 +1953,10 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public bot name when the author is an agent rather than a Macro user."
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
@@ -1969,8 +1977,8 @@
             "description": "the text of the comment"
           },
           "threadId": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "uuid",
             "description": "the thread id"
           }
         }
@@ -2513,8 +2521,8 @@
         "required": ["documentName", "owner", "commentId", "threadId", "text"],
         "properties": {
           "commentId": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "uuid",
             "description": "the comment id"
           },
           "documentName": {
@@ -2528,6 +2536,10 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public bot name when the author is an agent rather than a Macro user."
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
@@ -2548,8 +2560,8 @@
             "description": "the text of the comment"
           },
           "threadId": {
-            "type": "integer",
-            "format": "int64",
+            "type": "string",
+            "format": "uuid",
             "description": "the thread id"
           }
         }

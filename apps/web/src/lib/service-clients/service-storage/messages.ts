@@ -1,15 +1,33 @@
+import { throwOnErr } from '@core/util/result';
 import { dssFetch } from './client';
-import type { EditMessage } from './generated/schemas/editMessage';
-import type { Message } from './generated/schemas/message';
+import type { Message as StoredMessage } from './generated/schemas/message';
 import type { MessageCursor } from './generated/schemas/messageCursor';
 import type { MessageParent } from './generated/schemas/messageParent';
 import type { MessageThread } from './generated/schemas/messageThread';
 import type { PostMessage } from './generated/schemas/postMessage';
 import type { ReferencedThreadPage } from './generated/schemas/referencedThreadPage';
-import type { ThreadPage } from './generated/schemas/threadPage';
+import type { ThreadPatch } from './generated/schemas/threadPatch';
 import type { ThreadState } from './generated/schemas/threadState';
 
-export type { Message, MessageParent, MessageThread, PostMessage };
+export type { MessageParent, MessageThread, PostMessage, ThreadPatch };
+export type Message = StoredMessage & {
+  sender?: import('./generated/schemas/apiMessageSender').ApiMessageSender;
+};
+export type { MessagePatch } from './generated/schemas/messagePatch';
+export type { MessageCursor };
+
+import type { MessagePatch } from './generated/schemas/messagePatch';
+export type MessageListItem =
+  import('./generated/schemas/messageListItem').MessageListItem & {
+    sender?: import('./generated/schemas/apiMessageSender').ApiMessageSender;
+  };
+export type MessageTimelinePage = Omit<
+  import('./generated/schemas/messagePage').MessagePage,
+  'items'
+> & { items: MessageListItem[] };
+export type { MessageTimelineQuery } from './generated/schemas/messageTimelineQuery';
+
+import type { MessageTimelineQuery } from './generated/schemas/messageTimelineQuery';
 
 function path(parent: MessageParent) {
   return `/messages/${parent.type}/${encodeURIComponent(parent.id)}`;
@@ -20,23 +38,19 @@ async function request<T extends object>(
   method = 'GET',
   body?: unknown
 ): Promise<T> {
-  const result = await dssFetch<T>(url, {
-    method,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (result.isErr())
-    throw new Error('Message request failed', { cause: result.error });
-  return result.value;
+  return throwOnErr(() =>
+    dssFetch<T>(url, {
+      method,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+  );
 }
 
 export const entityMessagesClient = {
-  list(parent: MessageParent, cursor?: MessageCursor | null) {
-    const query = new URLSearchParams({ limit: '100' });
-    if (cursor) {
-      query.set('created_at', cursor.created_at);
-      query.set('cursor_id', cursor.id);
-    }
-    return request<ThreadPage>(`${path(parent)}?${query}`);
+  list(parent: MessageParent, selection: MessageTimelineQuery = {}) {
+    return request<MessageTimelinePage>(
+      `${path(parent)}?${new URLSearchParams({ selection: JSON.stringify(selection) })}`
+    );
   },
   references(parent: MessageParent, cursor?: MessageCursor | null) {
     const query = new URLSearchParams({ limit: '100' });
@@ -60,31 +74,37 @@ export const entityMessagesClient = {
       nonce: input.nonce ?? crypto.randomUUID(),
     });
   },
-  edit(parent: MessageParent, id: string, input: EditMessage) {
+  patch(parent: MessageParent, id: string, input: MessagePatch) {
     return request<Message>(
       `${path(parent)}/items/${encodeURIComponent(id)}`,
       'PATCH',
       { ...input, nonce: input.nonce ?? crypto.randomUUID() }
     );
   },
-  delete(parent: MessageParent, id: string) {
+  delete(parent: MessageParent, id: string, nonce?: string) {
     return request<Message>(
-      `${path(parent)}/items/${encodeURIComponent(id)}`,
+      `${path(parent)}/items/${encodeURIComponent(id)}${nonce ? `?nonce=${encodeURIComponent(nonce)}` : ''}`,
       'DELETE'
     );
   },
-  react(parent: MessageParent, id: string, emoji: string, add: boolean) {
+  react(
+    parent: MessageParent,
+    id: string,
+    emoji: string,
+    add: boolean,
+    nonce?: string
+  ) {
     return request<Message>(
       `${path(parent)}/items/${encodeURIComponent(id)}/reactions`,
       'POST',
-      { emoji, add }
+      { emoji, add, nonce }
     );
   },
-  resolve(parent: MessageParent, rootId: string, resolved: boolean) {
+  patchThread(parent: MessageParent, rootId: string, patch: ThreadPatch) {
     return request<ThreadState>(
       `${path(parent)}/threads/${encodeURIComponent(rootId)}`,
       'PATCH',
-      { resolved }
+      patch
     );
   },
   deleteThread(parent: MessageParent, rootId: string) {
@@ -93,14 +113,11 @@ export const entityMessagesClient = {
       'DELETE'
     );
   },
-  async typing(parent: MessageParent, rootId: string, active: boolean) {
-    const result = await dssFetch(
-      `${path(parent)}/threads/${encodeURIComponent(rootId)}/typing`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ active }),
-      }
-    );
+  async typing(parent: MessageParent, rootId: string | null, active: boolean) {
+    const result = await dssFetch(`${path(parent)}/typing`, {
+      method: 'POST',
+      body: JSON.stringify({ thread_id: rootId, active }),
+    });
     if (result.isErr())
       throw new Error('Typing update failed', { cause: result.error });
   },

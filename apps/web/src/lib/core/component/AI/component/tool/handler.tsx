@@ -63,8 +63,8 @@ import { readActivityHandler } from './ReadActivity';
 import { readCallRecordHandler } from './ReadCallRecord';
 import {
   readChannelMessageContextHandler,
-  readChannelMessagesHandler,
   readChannelThreadHandler,
+  readMessageTimelineHandler,
 } from './ReadChannel';
 import { readChatHandler } from './ReadChat';
 import { readContentHandler } from './ReadContent';
@@ -148,7 +148,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadActivity: readActivityHandler,
   ReadCallRecord: readCallRecordHandler,
   ReadChannelMessageContext: readChannelMessageContextHandler,
-  ReadChannelMessages: readChannelMessagesHandler,
+  ReadChannelMessages: readMessageTimelineHandler,
   ReadChannelThread: readChannelThreadHandler,
   ReadChat: readChatHandler,
   ReadThread: readThreadHandler,

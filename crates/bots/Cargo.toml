@@ -66,6 +66,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+messages = { path = "../messages", features = ["test-utils"] }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "outbound",
   "ports",

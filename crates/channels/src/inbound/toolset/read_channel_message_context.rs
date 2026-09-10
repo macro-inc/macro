@@ -1,11 +1,11 @@
 //! Tool for reading context around a specific channel message.
+use messages::domain::ports::MessageTimelineQuery;
 
 use super::ChannelToolContext;
 use super::types::{
     ToolChannelMessage, ToolOmission, ToolOmissionKind, ToolResolvedMessage, ToolThreadReply,
     clamp_max_chars, content_truncation_omissions,
 };
-use crate::domain::models::ChannelMessageKind;
 use crate::domain::ports::ChannelService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
@@ -127,7 +127,7 @@ where
         service_context: ServiceContext<ChannelToolContext<Svc, AccessSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        service_context
+        let access = service_context
             .require_channel_member(&request_context, self.channel_id)
             .await?;
 
@@ -139,28 +139,41 @@ where
             .saturating_add(1);
 
         let resolved = service_context
-            .service
-            .resolve_message(self.channel_id, self.message_id)
+            .messages
+            .get(access.clone(), self.message_id)
             .await
             .map_err(tool_err("failed to resolve channel message"))?;
-        let anchor = ToolResolvedMessage::from(resolved.clone());
+        let anchor = ToolResolvedMessage::from_message(&resolved, self.channel_id);
 
         let mut channel_page = service_context
-            .service
-            .get_channel_messages_around(self.channel_id, resolved.thread_id, channel_limit)
+            .messages
+            .timeline(
+                access.clone(),
+                MessageTimelineQuery {
+                    around: Some(resolved.root_id()),
+                    limit: Some(channel_limit),
+                    ..Default::default()
+                },
+            )
             .await
-            .map_err(tool_err("failed to read channel context around message"))?
-            .page;
+            .map_err(tool_err("failed to read channel context around message"))?;
         channel_page.items.reverse();
         let channel_messages: Vec<ToolChannelMessage> = channel_page
             .items
             .into_iter()
-            .map(|message| ToolChannelMessage::from_message(message, true, max_chars_per_message))
+            .map(|message| {
+                ToolChannelMessage::from_message(
+                    message,
+                    self.channel_id,
+                    true,
+                    max_chars_per_message,
+                )
+            })
             .collect();
 
         let parent_index = channel_messages
             .iter()
-            .position(|message| message.id == resolved.thread_id)
+            .position(|message| message.id == resolved.root_id())
             .ok_or_else(|| ToolCallError {
                 description: "message parent was not returned in channel context".to_string(),
                 internal_error: anyhow::anyhow!("channel context missing parent"),
@@ -174,23 +187,24 @@ where
             after,
         };
 
-        let thread_context = match resolved.kind {
-            ChannelMessageKind::TopLevelMessage => None,
-            ChannelMessageKind::ThreadReply => Some(
-                read_reply_context(
-                    &*service_context.service,
-                    ReplyContextArgs {
-                        channel_id: self.channel_id,
-                        reply_id: self.message_id,
-                        thread_id: resolved.thread_id,
-                        parent: anchor_or_parent,
-                        before: self.thread_before,
-                        after: self.thread_after,
-                        max_chars_per_message,
-                    },
-                )
-                .await?,
-            ),
+        let thread_context = match resolved.thread_id {
+            None => None,
+            Some(_) => Some(read_reply_context(
+                service_context
+                    .messages
+                    .get_thread(access, resolved.root_id())
+                    .await
+                    .map_err(tool_err("failed to read thread"))?
+                    .replies,
+                ReplyContextArgs {
+                    reply_id: self.message_id,
+                    thread_id: resolved.root_id(),
+                    parent: anchor_or_parent,
+                    before: self.thread_before,
+                    after: self.thread_after,
+                    max_chars_per_message,
+                },
+            )?),
         };
 
         let channel_context_messages = flatten_channel_context(&channel_context);
@@ -231,7 +245,6 @@ where
 }
 
 struct ReplyContextArgs {
-    channel_id: Uuid,
     reply_id: Uuid,
     thread_id: Uuid,
     parent: ToolChannelMessage,
@@ -240,19 +253,12 @@ struct ReplyContextArgs {
     max_chars_per_message: usize,
 }
 
-async fn read_reply_context<Svc>(
-    service: &Svc,
+fn read_reply_context(
+    replies: Vec<messages::domain::models::Message>,
     args: ReplyContextArgs,
-) -> Result<ToolThreadReplyContextWindow, ToolCallError>
-where
-    Svc: ChannelService,
-{
+) -> Result<ToolThreadReplyContextWindow, ToolCallError> {
     let before = usize::from(args.before.unwrap_or(10).min(50));
     let after = usize::from(args.after.unwrap_or(10).min(50));
-    let replies = service
-        .get_thread_replies(args.channel_id, args.reply_id)
-        .await
-        .map_err(tool_err("failed to read thread replies around message"))?;
     let total = replies.len();
     let anchor_index = replies
         .iter()
@@ -306,7 +312,7 @@ fn flatten_thread_context(context: &ToolThreadReplyContextWindow) -> Vec<ToolThr
 
 fn tool_err(
     description: &'static str,
-) -> impl FnOnce(crate::domain::ports::ChannelMessagesErr) -> ToolCallError {
+) -> impl FnOnce(messages::domain::ports::MessageError) -> ToolCallError {
     move |err| ToolCallError {
         description: description.to_string(),
         internal_error: anyhow::Error::new(err),

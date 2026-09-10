@@ -771,14 +771,18 @@ where
         }
     }
 
-    async fn ensure_bot_in_channel(&self, bot_id: BotId, channel_id: Uuid) -> Result<(), BotError> {
+    async fn channel_message_access(
+        &self,
+        bot_id: BotId,
+        channel_id: Uuid,
+    ) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
         if self
             .repo
             .bot_active_in_channel(channel_id, bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
         {
-            Ok(())
+            channel_message_receipt(bot_id, channel_id)
         } else {
             Err(BotError::Unauthorized)
         }
@@ -797,12 +801,36 @@ where
         &self,
         channel_id: Uuid,
         token: &str,
-    ) -> Result<AuthenticatedBot, BotError> {
+    ) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
         let candidate = self
             .repo
             .channel_token_candidate(channel_id, token)
             .await
             .map_err(|err| BotError::Repo(err.into()))?;
-        Ok(self.authenticate_candidate(candidate).await?.bot)
+        channel_message_receipt(
+            self.authenticate_candidate(candidate).await?.bot.bot_id,
+            channel_id,
+        )
     }
+}
+
+fn channel_message_receipt(
+    bot_id: BotId,
+    channel_id: Uuid,
+) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
+    use entity_access::domain::models::{
+        BotReceiptScope, Entity, EntityPermission, ParticipantRole,
+    };
+    EntityAccessReceipt::try_new_bot(
+        bot_id.into_storage_id(),
+        BotReceiptScope::Channel { channel_id },
+        Entity {
+            entity_type: EntityType::Channel,
+            entity_id: channel_id.to_string(),
+        },
+        EntityPermission::ChannelRole {
+            role: ParticipantRole::Member,
+        },
+    )
+    .map_err(|_| BotError::Unauthorized)
 }

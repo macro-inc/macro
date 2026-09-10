@@ -4,9 +4,9 @@ This release replaces the separate document Comment/Thread store with shared
 messages. It also moves agent invocation, session origins, history, and answer
 delivery onto the same parent-aware model. Email comments are outside this change.
 
-The [dependency walkthrough](entity-messages-dependencies.md) includes before/after
-DAGs and explains the application interfaces, agent capabilities, delivery targets,
-and shared composer introduced by the subsequent cleanup.
+The [implemented simplification](entity-messages-simplification.md) shows the current
+dependency DAG and the shared API, reader, client, cache, and thread UI. The earlier
+[dependency cleanup](entity-messages-dependencies.md) is historical context.
 
 ## Identity and storage
 
@@ -21,25 +21,25 @@ Deleting a root tombstones that message and preserves the discussion. Explicitly
 deleting the discussion removes its replies and comment-only anchors. Independent
 PDF highlights survive.
 
-## One mutation service
+## One message API and implementation
 
-`crates/messages` owns post, edit, delete, reaction, thread, and typing use cases.
-Its domain service receives typed parent access capabilities. SQL and transaction
-mechanics live in its outbound repository. Delivery is composed through ports.
+`crates/messages` owns timeline, individual-message, thread, post, edit, delete,
+reaction, thread-state, and typing use cases. Its domain service receives typed
+parent access capabilities. SQL and transaction mechanics live in its outbound
+repository. Delivery is composed through ports.
 
-The HTTP interface is `/messages/{parent_type}/{parent_id}` with item, thread,
-reaction, typing, reference, and old-link resolution subroutes. Existing channel
-write URLs adapt their inputs into this same service, including attachment deltas,
-notification policy, bot scope, and client nonce. They no longer run a second write
-pipeline. Channel membership, channel lists/search, and specialized read projections
-remain channel APIs; the two `comms_channel_*` views filter the shared store.
-The channel UUID projections have matching partial expression indexes for
-tombstone-inclusive timelines, top-level cursors, and live-message activity/latest
-reads. Generic text-parent indexes alone cannot serve those projected predicates.
+Both surfaces use `/messages/{parent_type}/{parent_id}` with item, thread, reaction,
+typing, reference, and old-link resolution subroutes. The old channel message routes
+and request/response adapters are removed. Channel APIs retain channel metadata,
+membership, lists, and specialized selection such as inbox ranking. Those readers
+use indexed parent predicates directly; the channel compatibility views are gone.
 
-Document discussions use the channel message renderer and composer. Agent session
-conversation drawers and ReplyTarget references accept either parent. Existing
-channel-only reference serialization is understood on read.
+Timelines have cursor pagination and three reply previews per root; full replies
+load on opening the thread. The frontend generalizes the existing channel mutations,
+optimistic reconciliation, and realtime cache updates to a parent. Native document
+messages render through the shared message/thread components, without converting to
+`DiscussionComment`. Linked drawers and ReplyTarget references accept either parent;
+existing channel-only reference serialization is understood on read.
 
 Reference authorization accepts the editor's email `thread` tag (alongside `email`
 and `email_thread`), calls, and calendar events through their existing access rules.
@@ -91,8 +91,9 @@ one view cannot close another view's subscription.
 
 `GET /messages/document/{id}/references` discovers channel threads whose current
 structured mentions reference this document, deduplicates by root, and authorizes
-source-channel viewing before loading messages. A mention grants no access. The
-response includes the source name and current reply capability.
+source-channel viewing before exposing their identities. A mention grants no access.
+The response includes only the source parent/root, name, and current reply capability;
+the common message reader and cache own the source's content.
 
 The document Discussion offers `Include channel mentions`, initially off. Source
 threads retain their channel parent, links, and permissions. Reply/edit/delete/react
@@ -199,3 +200,40 @@ snapshot and application artifacts.
   services. Composition roots wire concrete infrastructure; adapters translate
   requests or deliver effects. The earlier limitation on verifying a real
   model-backed agent answer still applies.
+
+## Consolidation verification on 2026-09-09
+
+The [current architecture and DAG](entity-messages-simplification.md) replace the
+parallel paths described in the earlier verification sections.
+
+- Root Nix `just prepare_db` passed across the workspace and regenerated SQLx
+  metadata. Root `just clippy` passed, including sync-service. The final storage,
+  authentication, and agent-harness binaries built successfully.
+- Affected Rust suites passed, including messages (40), channels (240), inbox/soup
+  (255; two existing ignored tests), agent/session/trigger integrations, bots,
+  document readers, and the affected services. The shared reader covers built-in
+  bot identities and soft-deleted bot profiles. Delivery tests verify that reaction
+  activity and notification/search effects survive independent live-delivery failures.
+- All six Rust cutover tests passed after removal of the compatibility views. They
+  seed the pre-migration schema, migrate existing comments, verify preserved anchors,
+  roots/replies/empty threads and old links, and exercise new writes. Indexed query
+  plans remain covered with 30,000 unrelated messages present.
+- Full frontend `bun run check` passed. The 173 selected frontend tests passed,
+  covering optimistic mutations, timeline/selected-root/reply reconciliation,
+  imported ordering and attribution, composition, and source subscriptions. Thirteen
+  cache persistence tests also passed.
+- Chrome on custom instance `messages` verified document post/edit/react/reply using
+  the shared API; reactions preserve the actual edit timestamp. The combined view
+  retained an in-progress draft and focus while its source was edited and reference
+  discovery refreshed. Its `@here` reply appeared in the original channel, with the
+  original channel parent and root ID.
+- With the document closed, the linked drawer opened and heartbeated the source
+  subscription. A separate collaborator's post, edit, and reaction arrived live.
+  The document composer displayed the shared agent mention menu.
+
+The 41-second recording is `/tmp/macro-message-consolidation-demo/unified-discussions.mp4`;
+its adjacent `index.html`, JSON evidence, and `run-notes.md` describe the checks.
+Pauses between checks are shortened. This video does not film the migration.
+A real model-backed agent answer remains unverified locally: the environment lacks
+provider credentials and the required harness configuration. Automated invocation,
+access, history, session-context, and reply-delivery coverage passed.

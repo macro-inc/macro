@@ -1,9 +1,7 @@
 use crate::domain::models::{NotifiedEntity, TouchedEntity};
 use crate::domain::ports::MockSoupRepo;
 use channels::domain::{
-    models::{
-        ChannelMessage, GetChannelsRequest, GetThreadReplyRowsRequest, ThreadInfo, ThreadReply,
-    },
+    models::{GetChannelsRequest, GetThreadReplyRowsRequest, MessageListItem},
     ports::ChannelListService,
 };
 use chrono::Days;
@@ -85,7 +83,7 @@ impl ChannelListService for NoopCommsService {
     async fn get_thread_messages(
         &self,
         _req: GetThreadReplyRowsRequest,
-    ) -> Result<Vec<ChannelMessage>, Report> {
+    ) -> Result<Vec<MessageListItem>, Report> {
         Ok(Vec::new())
     }
 
@@ -99,14 +97,14 @@ impl ChannelListService for NoopCommsService {
 
 #[derive(Clone)]
 struct RecordingCommsService {
-    rows: Vec<ChannelMessage>,
+    rows: Vec<MessageListItem>,
     channel_calls: Arc<Mutex<u32>>,
     channel_filters: Arc<Mutex<Vec<String>>>,
     thread_filters: Arc<Mutex<Vec<String>>>,
 }
 
 impl RecordingCommsService {
-    fn new(rows: Vec<ChannelMessage>) -> Self {
+    fn new(rows: Vec<MessageListItem>) -> Self {
         Self {
             rows,
             channel_calls: Arc::new(Mutex::new(0)),
@@ -152,7 +150,7 @@ impl ChannelListService for RecordingCommsService {
     async fn get_thread_messages(
         &self,
         req: GetThreadReplyRowsRequest,
-    ) -> Result<Vec<ChannelMessage>, Report> {
+    ) -> Result<Vec<MessageListItem>, Report> {
         self.thread_filters
             .lock()
             .unwrap()
@@ -567,36 +565,51 @@ fn channel_thread_message(
     thread_id: Uuid,
     reply_id: Uuid,
     updated_at: DateTime<Utc>,
-) -> ChannelMessage {
-    ChannelMessage {
+) -> MessageListItem {
+    use messages::domain::models::{Message, MessageParent, MessageThreadPreview, ThreadState};
+    let created_at = DateTime::default();
+    let message = Message {
         id: thread_id,
-        channel_id,
-        sender_id: "macro|test@example.com".to_string(),
+        parent: MessageParent::Channel(channel_id),
+        thread_id: None,
+        sender_id: "macro|test@example.com".to_owned().try_into().unwrap(),
         bot_profile: None,
-        content: "thread parent".to_string(),
-        created_at: DateTime::default(),
+        imported_author: None,
+        mentions: vec![],
+        content: "thread parent".into(),
+        created_at,
         updated_at,
         edited_at: None,
         deleted_at: None,
         triggered_by: None,
-        thread: ThreadInfo {
-            reply_count: 1,
-            latest_reply_at: Some(DateTime::default() + Days::new(1)),
-            preview: vec![ThreadReply {
-                id: reply_id,
-                sender_id: "macro|other@example.com".to_string(),
-                bot_profile: None,
-                content: "thread reply".to_string(),
-                created_at: DateTime::default() + Days::new(1),
-                updated_at: DateTime::default() + Days::new(1),
-                edited_at: None,
-                triggered_by: None,
-                reactions: Vec::new(),
-                attachments: Vec::new(),
-            }],
+        reactions: vec![],
+        attachments: vec![],
+    };
+    let reply = Message {
+        id: reply_id,
+        thread_id: Some(thread_id),
+        sender_id: "macro|other@example.com".to_owned().try_into().unwrap(),
+        content: "thread reply".into(),
+        created_at: created_at + Days::new(1),
+        updated_at: created_at + Days::new(1),
+        ..message.clone()
+    };
+    MessageListItem {
+        state: ThreadState {
+            root_id: thread_id,
+            user_id: message.sender_id.as_ref().into(),
+            created_at,
+            updated_at,
+            resolved: false,
+            deleted_at: None,
+            anchor: None,
         },
-        reactions: Vec::new(),
-        attachments: Vec::new(),
+        message,
+        thread: MessageThreadPreview {
+            reply_count: 1,
+            latest_reply_at: Some(reply.created_at),
+            preview: vec![reply],
+        },
     }
 }
 

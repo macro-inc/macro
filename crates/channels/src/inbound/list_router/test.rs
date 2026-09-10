@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::models::{
-    ChannelMessage, ChannelWithParticipants, GetThreadReplyRowsRequest, LatestMessage, UserName,
+    ChannelWithParticipants, GetThreadReplyRowsRequest, LatestMessage, MessageListItem, UserName,
 };
 
 const VALID_BEARER_TOKEN: &str = "valid-token";
@@ -88,7 +88,7 @@ impl ChannelListService for FakeChannelListService {
     async fn get_thread_messages(
         &self,
         _request: GetThreadReplyRowsRequest,
-    ) -> Result<Vec<ChannelMessage>, Report> {
+    ) -> Result<Vec<MessageListItem>, Report> {
         Ok(Vec::new())
     }
 

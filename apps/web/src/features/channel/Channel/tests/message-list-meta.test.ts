@@ -1,6 +1,6 @@
-import { senderFromStorageId } from '@queries/channel/message-sender';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
+import type { MessageListItem } from '@service-storage/messages';
 import { describe, expect, it } from 'vitest';
 import { buildChannelMessageListMeta } from '../message-list-meta';
 
@@ -9,10 +9,18 @@ function createMessage(
   createdAt: string,
   senderId = 'user-1',
   sender: ApiMessageSender = senderFromStorageId(senderId)
-): ApiChannelMessage {
+): MessageListItem {
   return {
     id,
-    channel_id: 'channel-1',
+    mentions: [],
+    state: {
+      root_id: id,
+      user_id: 'user-1',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+      resolved: false,
+    },
+    parent: { type: 'channel', id: 'channel-1' },
     content: '',
     created_at: createdAt,
     updated_at: createdAt,

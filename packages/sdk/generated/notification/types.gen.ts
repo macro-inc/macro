@@ -231,7 +231,7 @@ export type CommentedOnDocumentMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: string;
     /**
      * The name of the document.
      */
@@ -244,6 +244,10 @@ export type CommentedOnDocumentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -253,7 +257,7 @@ export type CommentedOnDocumentMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: string;
 };
 
 /**
@@ -686,7 +690,7 @@ export type MentionedInDocumentCommentMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: string;
     /**
      * The name of the document.
      */
@@ -703,6 +707,10 @@ export type MentionedInDocumentCommentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -712,7 +720,7 @@ export type MentionedInDocumentCommentMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: string;
 };
 
 export type NewEmailMetadata = {
@@ -1001,7 +1009,7 @@ export type RepliedToDocumentCommentThreadMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: string;
     /**
      * The name of the document.
      */
@@ -1014,6 +1022,10 @@ export type RepliedToDocumentCommentThreadMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -1023,7 +1035,7 @@ export type RepliedToDocumentCommentThreadMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: string;
 };
 
 /**

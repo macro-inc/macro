@@ -9,7 +9,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
-use channels::domain::models::{PostMessageResponse, Sender};
+use channels::domain::models::Sender;
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
@@ -286,7 +286,11 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
-    async fn ensure_bot_in_channel(&self, bot_id: BotId, channel_id: Uuid) -> Result<(), BotError> {
+    async fn channel_message_access(
+        &self,
+        bot_id: BotId,
+        channel_id: Uuid,
+    ) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
         self.membership_calls.fetch_add(1, Ordering::SeqCst);
         *self
             .last_membership
@@ -297,7 +301,9 @@ impl BotService for TestBotService {
             TestMembershipMode::Ok {
                 expected_channel_id,
                 expected_bot_id,
-            } if channel_id == expected_channel_id && bot_id == expected_bot_id => Ok(()),
+            } if channel_id == expected_channel_id && bot_id == expected_bot_id => {
+                channel_receipt(bot_id, channel_id)
+            }
             TestMembershipMode::Ok { .. } | TestMembershipMode::Unauthorized => {
                 Err(BotError::Unauthorized)
             }
@@ -312,7 +318,7 @@ impl BotService for TestBotService {
         &self,
         channel_id: Uuid,
         token: &str,
-    ) -> Result<AuthenticatedBot, BotError> {
+    ) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
         self.auth_calls.fetch_add(1, Ordering::SeqCst);
         *self.last_auth.lock().expect("auth call mutex poisoned") = Some(AuthCall {
             channel_id,
@@ -325,14 +331,29 @@ impl BotService for TestBotService {
                 expected_token,
                 bot_id,
             } if channel_id == *expected_channel_id && token == expected_token => {
-                Ok(AuthenticatedBot {
-                    bot_id: *bot_id,
-                    kind: BotKind::Owned,
-                })
+                channel_receipt(*bot_id, channel_id)
             }
             _ => Err(BotError::Unauthorized),
         }
     }
+}
+
+fn channel_receipt(
+    bot_id: BotId,
+    channel_id: Uuid,
+) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
+    EntityAccessReceipt::try_new_bot(
+        bot_id.into_storage_id(),
+        entity_access::domain::models::BotReceiptScope::Channel { channel_id },
+        entity_access::domain::models::Entity {
+            entity_id: channel_id.to_string(),
+            entity_type: EntityType::Channel,
+        },
+        EntityPermission::ChannelRole {
+            role: EntityParticipantRole::Member,
+        },
+    )
+    .map_err(|_| BotError::Unauthorized)
 }
 
 #[derive(Clone, Copy)]
@@ -456,56 +477,54 @@ impl EntityAccessService for TestAccessService {
 struct PostedMessage {
     actor: Sender,
     channel_id: Uuid,
-    req: PostMessageRequest,
-}
-
-#[derive(Clone, Copy)]
-enum TestPostMode {
-    Ok,
+    req: PostMessage,
 }
 
 #[derive(Clone)]
 struct TestChannelPoster {
-    mode: TestPostMode,
     calls: Arc<Mutex<Vec<PostedMessage>>>,
 }
 
 impl TestChannelPoster {
     fn new() -> Self {
         Self {
-            mode: TestPostMode::Ok,
             calls: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
 
-impl ChannelMessagePoster for TestChannelPoster {
-    fn post_message(
-        &self,
-        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
-        req: PostMessageRequest,
-    ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
-        let actor = Sender::new_from_bot(access.get_authenticated_bot_auth().unwrap().bot_id());
-        let channel_id = access.entity().entity_id.parse().unwrap();
-        let calls = self.calls.clone();
-        let mode = self.mode;
-        async move {
-            calls
-                .lock()
-                .expect("posted message mutex poisoned")
-                .push(PostedMessage {
-                    actor,
-                    channel_id,
-                    req,
-                });
-
-            match mode {
-                TestPostMode::Ok => Ok(PostMessageResponse {
-                    id: Uuid::new_v4().to_string(),
-                    nonce: None,
-                }),
-            }
-        }
+impl TestChannelPoster {
+    fn messages(self) -> Arc<dyn messages::domain::api::MessageCommands> {
+        let mut mock = messages::domain::api::MockMessageCommands::new();
+        mock.expect_post().returning(move |access, req| {
+            let actor = Sender::new_from_bot(access.get_authenticated_bot_auth().unwrap().bot_id());
+            let channel_id = access.entity().entity_id.parse().unwrap();
+            let now = chrono::Utc::now();
+            let message = messages::domain::models::Message {
+                id: Uuid::new_v4(),
+                parent: messages::domain::models::MessageParent::Channel(channel_id),
+                thread_id: req.thread_id,
+                sender_id: actor.clone(),
+                triggered_by: None,
+                bot_profile: None,
+                content: req.content.clone(),
+                mentions: req.mentions.clone(),
+                reactions: vec![],
+                attachments: vec![],
+                imported_author: None,
+                created_at: now,
+                updated_at: now,
+                edited_at: None,
+                deleted_at: None,
+            };
+            self.calls.lock().unwrap().push(PostedMessage {
+                actor,
+                channel_id,
+                req,
+            });
+            Ok(message)
+        });
+        Arc::new(mock)
     }
 }
 
@@ -643,7 +662,7 @@ fn router(
 ) -> Router {
     channel_scoped_bot_router(ChannelBotWebhookRouterState::new(
         service,
-        poster,
+        poster.messages(),
         TestAccessService::new(role),
         authorization_state(TestBotAuthorizer::rejecting(
             MacroAuthorizationError::InvalidCredentials,
@@ -663,7 +682,7 @@ fn webhook_router_with_authorizer(
 ) -> Router {
     channel_bot_webhook_router(ChannelBotWebhookRouterState::new(
         service,
-        poster,
+        poster.messages(),
         TestAccessService::new(EntityParticipantRole::Member),
         authorization_state(bot_authorizer),
     ))
@@ -824,7 +843,10 @@ async fn channel_webhook_router_preferred_token_posts_as_bot() {
     assert_eq!(call.actor, Sender::new_from_bot(bot_id));
     assert_eq!(call.channel_id, channel_id);
     assert_eq!(call.req.content, "hello preferred");
-    assert!(call.req.triggered_by.is_none());
+    assert!(matches!(
+        call.req.attribution,
+        messages::domain::models::MessageAttribution::Unprompted
+    ));
 }
 
 #[tokio::test]
@@ -887,7 +909,10 @@ async fn channel_webhook_router_verified_acting_user_is_not_used_for_attribution
     let calls = poster.calls.lock().expect("posted message mutex poisoned");
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].actor, Sender::new_from_bot(bot_id));
-    assert!(calls[0].req.triggered_by.is_none());
+    assert!(matches!(
+        calls[0].req.attribution,
+        messages::domain::models::MessageAttribution::Unprompted
+    ));
 }
 
 #[tokio::test]
@@ -1156,7 +1181,10 @@ async fn channel_webhook_router_legacy_valid_json_posts_as_bot() {
     assert!(call.req.attachments.is_empty());
     assert!(call.req.thread_id.is_none());
     assert!(call.req.nonce.is_none());
-    assert!(call.req.triggered_by.is_none());
+    assert!(matches!(
+        call.req.attribution,
+        messages::domain::models::MessageAttribution::Unprompted
+    ));
 }
 
 #[tokio::test]

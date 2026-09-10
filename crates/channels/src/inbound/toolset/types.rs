@@ -1,9 +1,9 @@
 //! Shared channel AI tool input/output types.
-
-use crate::domain::models::{
-    ChannelMessage, ChannelMessageKind, CountedReaction, MessageAttachment, ResolvedChannelMessage,
-    ThreadReply,
+use messages::domain::{
+    models::{CountedReaction, Message, MessageAttachment},
+    ports::MessageListItem,
 };
+
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -35,15 +35,6 @@ pub enum ToolMessageKind {
     TopLevelMessage,
     /// A reply inside a top-level message's thread.
     ThreadReply,
-}
-
-impl From<ChannelMessageKind> for ToolMessageKind {
-    fn from(kind: ChannelMessageKind) -> Self {
-        match kind {
-            ChannelMessageKind::TopLevelMessage => Self::TopLevelMessage,
-            ChannelMessageKind::ThreadReply => Self::ThreadReply,
-        }
-    }
 }
 
 /// A reaction summary on a message.
@@ -118,7 +109,7 @@ pub struct ToolThreadReply {
 
 impl ToolThreadReply {
     pub(crate) fn from_reply(
-        reply: ThreadReply,
+        reply: Message,
         thread_id: Uuid,
         max_chars_per_message: usize,
     ) -> Self {
@@ -130,7 +121,7 @@ impl ToolThreadReply {
         Self {
             id: reply.id,
             thread_id,
-            sender_id: reply.sender_id,
+            sender_id: reply.sender_id.into(),
             content,
             content_truncated,
             created_at: reply.created_at,
@@ -198,16 +189,18 @@ pub struct ToolChannelMessage {
 
 impl ToolChannelMessage {
     pub(crate) fn from_message(
-        message: ChannelMessage,
+        item: MessageListItem,
+        channel_id: Uuid,
         include_thread_preview: bool,
         max_chars_per_message: usize,
     ) -> Self {
+        let message = item.message;
         let thread_id = message.id;
         let TruncatedContent {
             content,
             content_truncated,
         } = truncate_content(message.content, max_chars_per_message);
-        let preview_replies = message.thread.preview;
+        let preview_replies = item.thread.preview;
         let preview_len = if include_thread_preview {
             preview_replies.len() as i64
         } else {
@@ -222,8 +215,8 @@ impl ToolChannelMessage {
 
         Self {
             id: message.id,
-            channel_id: message.channel_id,
-            sender_id: message.sender_id,
+            channel_id,
+            sender_id: message.sender_id.into(),
             content,
             content_truncated,
             created_at: message.created_at,
@@ -232,10 +225,10 @@ impl ToolChannelMessage {
             deleted_at: message.deleted_at,
             thread: ToolThreadSummary {
                 thread_id,
-                reply_count: message.thread.reply_count,
-                latest_reply_at: message.thread.latest_reply_at,
+                reply_count: item.thread.reply_count,
+                latest_reply_at: item.thread.latest_reply_at,
                 preview,
-                omitted_reply_count: (message.thread.reply_count - preview_len).max(0),
+                omitted_reply_count: (item.thread.reply_count - preview_len).max(0),
             },
             reactions: message
                 .reactions
@@ -267,13 +260,17 @@ pub struct ToolResolvedMessage {
     pub created_at: DateTime<Utc>,
 }
 
-impl From<ResolvedChannelMessage> for ToolResolvedMessage {
-    fn from(message: ResolvedChannelMessage) -> Self {
+impl ToolResolvedMessage {
+    pub(crate) fn from_message(message: &Message, channel_id: Uuid) -> Self {
         Self {
-            message_id: message.message_id,
-            channel_id: message.channel_id,
-            kind: ToolMessageKind::from(message.kind),
-            thread_id: message.thread_id,
+            message_id: message.id,
+            channel_id,
+            kind: if message.thread_id.is_some() {
+                ToolMessageKind::ThreadReply
+            } else {
+                ToolMessageKind::TopLevelMessage
+            },
+            thread_id: message.root_id(),
             created_at: message.created_at,
         }
     }
@@ -391,69 +388,4 @@ pub(crate) fn content_truncation_omissions(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domain::models::ThreadInfo;
-
-    fn dt(seconds: i64) -> DateTime<Utc> {
-        DateTime::from_timestamp(seconds, 0).unwrap()
-    }
-
-    fn reply(seconds: i64) -> ThreadReply {
-        ThreadReply {
-            id: Uuid::new_v4(),
-            sender_id: "macro|reply@example.com".to_string(),
-            triggered_by: None,
-            bot_profile: None,
-            content: "reply".to_string(),
-            created_at: dt(seconds),
-            updated_at: dt(seconds),
-            edited_at: None,
-            reactions: Vec::new(),
-            attachments: Vec::new(),
-        }
-    }
-
-    fn message_with_thread(reply_count: i64, preview: Vec<ThreadReply>) -> ChannelMessage {
-        let id = Uuid::new_v4();
-        ChannelMessage {
-            id,
-            channel_id: Uuid::new_v4(),
-            sender_id: "macro|sender@example.com".to_string(),
-            triggered_by: None,
-            bot_profile: None,
-            content: "parent".to_string(),
-            created_at: dt(1),
-            updated_at: dt(1),
-            edited_at: None,
-            deleted_at: None,
-            thread: ThreadInfo {
-                reply_count,
-                latest_reply_at: None,
-                preview,
-            },
-            reactions: Vec::new(),
-            attachments: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn omitted_reply_count_includes_hidden_previews_when_preview_is_disabled() {
-        let message = message_with_thread(5, vec![reply(2), reply(3), reply(4)]);
-
-        let tool_message = ToolChannelMessage::from_message(message, false, 4_000);
-
-        assert!(tool_message.thread.preview.is_none());
-        assert_eq!(tool_message.thread.omitted_reply_count, 5);
-    }
-
-    #[test]
-    fn omitted_reply_count_excludes_included_previews_when_preview_is_enabled() {
-        let message = message_with_thread(5, vec![reply(2), reply(3), reply(4)]);
-
-        let tool_message = ToolChannelMessage::from_message(message, true, 4_000);
-
-        assert_eq!(tool_message.thread.preview.as_ref().unwrap().len(), 3);
-        assert_eq!(tool_message.thread.omitted_reply_count, 2);
-    }
-}
+mod test;

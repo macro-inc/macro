@@ -6,7 +6,7 @@ import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import type { ReplyTargetDecoratorProps } from '@macro-inc/lexical-core';
 import { useBotsQuery } from '@queries/bots/bots';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
-import { getBotDisplayName } from '@queries/channel/message-sender';
+import { getBotDisplayName } from '@queries/messages/message-sender';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
 import { openDocument } from '../core/BlockLink';

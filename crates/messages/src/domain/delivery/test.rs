@@ -89,7 +89,6 @@ fn event() -> MessageEvent {
     };
     MessageEvent {
         parent,
-        root_id: message.root_id(),
         actor,
         nonce: None,
         change: MessageChange::Posted {

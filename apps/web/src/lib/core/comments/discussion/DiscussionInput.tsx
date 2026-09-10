@@ -8,16 +8,10 @@ import type {
   InputHandle,
 } from '@channel/Input/types';
 import { isReplyInput } from '@channel/Input/types';
-import { uploadInputAttachments } from '@channel/Input/upload-attachments';
 import {
   applyInlineFormat,
   applyNodeFormat,
 } from '@channel/Input/utils/formatting';
-import { useAgentMentionUsers } from '@channel/use-agent-mention-users';
-import {
-  useChannelBotMentionUsers,
-  useDocumentBotMentionUsers,
-} from '@channel/use-channel-bot-mention-users';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import { toast } from '@core/component/Toast/Toast';
@@ -25,9 +19,7 @@ import { createConfiguredMessageEditor } from '@core/messages/configured-message
 import { createMessageComposer } from '@core/messages/create-message-composer';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
-import { chatRuleset, uploadFile } from '@core/util/upload';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import type { MessageParent } from '@service-storage/messages';
 import { isIOS } from '@solid-primitives/platform';
 import { Surface } from '@ui';
 import {
@@ -41,8 +33,6 @@ import {
 
 export type DiscussionInputProps = InputCallbacks & {
   input: InputData;
-  parent?: MessageParent;
-  attachmentMode?: 'files' | 'inline-images';
   markdownNamespace?: string;
   participants?: Accessor<IUser[]>;
   onReady?: (handle: InputHandle) => void;
@@ -51,7 +41,7 @@ export type DiscussionInputProps = InputCallbacks & {
   autofocus?: boolean;
 };
 
-function AttachFilesAction(props: { inlineImages: boolean }) {
+function AttachImagesAction() {
   const commands = useInputCommands();
   let fileInputRef: HTMLInputElement | undefined;
 
@@ -73,11 +63,11 @@ function AttachFilesAction(props: { inlineImages: boolean }) {
         type="file"
         class="hidden"
         multiple
-        accept={props.inlineImages ? 'image/*' : undefined}
+        accept="image/*"
         onChange={onAttachImages}
       />
       <InputActionButton
-        label={props.inlineImages ? 'Attach images' : 'Attach files'}
+        label="Attach images"
         onClick={() => fileInputRef?.click()}
       >
         <PaperclipIcon class="size-5" />
@@ -86,15 +76,11 @@ function AttachFilesAction(props: { inlineImages: boolean }) {
   );
 }
 
-function DefaultActions(props: {
-  input: InputData;
-  isSending: boolean;
-  inlineImages: boolean;
-}) {
+function DefaultActions(props: { input: InputData; isSending: boolean }) {
   return (
     <Input.Actions>
       <Input.Actions.Left>
-        <AttachFilesAction inlineImages={props.inlineImages} />
+        <AttachImagesAction />
         <Input.ToggleFormatAction />
         <Show when={isReplyInput(props.input)}>
           <Input.CloseReplyAction />
@@ -110,54 +96,27 @@ function DefaultActions(props: {
 export function DiscussionInput(props: DiscussionInputProps) {
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   const [isFocused, setIsFocused] = createSignal(false);
-  const {
-    inputState,
-    mentionsTracker,
-    attachmentTracker: attachments,
-    onChange,
-  } = createMessageComposer({
+  const { inputState, mentionsTracker, onChange } = createMessageComposer({
     input: props.input,
     callbacks: props,
     clearEditor: () => clearEditor(),
     onSendError: () =>
       toast.failure('Could not send comment. Your draft is still here.'),
     attachFiles: async (files) => {
-      if (props.attachmentMode === 'inline-images') {
-        for (const file of files)
-          await addMediaFromFile(markdownEditor.lexical, file, 'image');
-        return;
-      }
-      await uploadInputAttachments({
-        files,
-        tracker: attachments,
-        uploadFile: (file) =>
-          uploadFile(file, chatRuleset, { hideProgressIndicator: true }),
-      });
+      for (const file of files)
+        await addMediaFromFile(markdownEditor.lexical, file, 'image');
     },
   });
   const inputView = inputState.view;
   const commands = inputState.commands;
 
-  const documentAgents = props.parent ? useDocumentBotMentionUsers() : () => [];
-  const channelAgents = props.parent
-    ? useChannelBotMentionUsers(() =>
-        props.parent?.type === 'channel' ? props.parent.id : ''
-      )
-    : () => [];
-  const agents = () =>
-    props.parent?.type === 'channel' ? channelAgents() : documentAgents();
-  const mentionUsers = useAgentMentionUsers(
-    () => [...(props.participants?.() ?? []), ...agents()],
-    () => !!props.parent
-  );
   const markdownEditor = createConfiguredMessageEditor({
-    groupMentions: props.parent?.type === 'channel',
     inlineMedia: true,
     disableMentionTracking: true,
     type: 'markdown',
     namespace: props.markdownNamespace ?? 'discussion-input-markdown',
     enableMentions: true,
-    users: mentionUsers,
+    users: props.participants,
     scrollContainer,
     onMentionCreate: mentionsTracker.onMentionCreate,
     onMentionRemove: mentionsTracker.onMentionRemove,
@@ -196,7 +155,6 @@ export function DiscussionInput(props: DiscussionInputProps) {
       markdownEditor.controls.setMarkdown(snapshot.value);
       mentionsTracker.setMentions(snapshot.mentions);
       inputState.setValue(snapshot.value);
-      attachments.setAttachments(snapshot.attachments);
       markdownEditor.controls.focus();
     },
   });
@@ -246,7 +204,6 @@ export function DiscussionInput(props: DiscussionInputProps) {
               />
             </Input.Editor>
           </Input.EditorShell>
-          <Input.Attachments />
           <Input.Footer>
             <Switch>
               <Match when={props.children}>{props.children}</Match>
@@ -254,7 +211,6 @@ export function DiscussionInput(props: DiscussionInputProps) {
                 <DefaultActions
                   input={inputView()}
                   isSending={!!inputView().hasPendingAttachments}
-                  inlineImages={props.attachmentMode === 'inline-images'}
                 />
               </Match>
             </Switch>

@@ -1,5 +1,4 @@
 import { selectingCommentThreadSignal } from '@block-pdf/signal/click';
-import { useOwnedCommentSelector } from '@block-pdf/signal/permissions';
 import {
   GUTTER_MARGIN,
   MIN_RIGHT_COLUMN_WIDTH,
@@ -9,14 +8,9 @@ import {
   threadHeightStore,
   threadsOnPagePositionStore,
 } from '@block-pdf/store/comments/commentLayout';
-import {
-  useCreateComment,
-  useDeleteComment,
-  useUpdateComment,
-} from '@block-pdf/store/comments/commentOperations';
+import { useCreateComment } from '@block-pdf/store/comments/commentOperations';
 import {
   activeCommentThreadSignal,
-  useGetCommentById,
   useIsActiveThreadSelector,
 } from '@block-pdf/store/comments/commentStore';
 import { useBlockId, useIsNestedBlock } from '@core/block';
@@ -26,10 +20,7 @@ import {
   type CommentsContextType,
   Thread,
 } from '@core/comments/Thread';
-import { useUserId } from '@core/context/user';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
-import { buildSimpleEntityUrl } from '@core/util/url';
-import { createMessageDiscussionSource } from '@queries/messages-discussion';
 import { createMemo, createSelector, For } from 'solid-js';
 
 export function RightMarginLayout(props: { pageNumber: number }) {
@@ -66,10 +57,6 @@ const useCommentsContext = (): CommentsContextType => {
   const setThreadHeight = threadHeightStore.set;
 
   const createComment = useCreateComment();
-  const updateComment = useUpdateComment();
-  const deleteComment = useDeleteComment();
-
-  const ownedCommentSelector = useOwnedCommentSelector();
 
   const documentId = useBlockId();
   const isDocumentOwner = useIsDocumentOwner();
@@ -79,35 +66,15 @@ const useCommentsContext = (): CommentsContextType => {
     return hasPermissions();
   };
 
-  const getCommentById = useGetCommentById();
-
-  const discussionSource = createMessageDiscussionSource({
-    parent: () => ({ type: 'document', id: documentId }),
-    canEdit: canComment,
-    currentUserId: useUserId(),
-    canManageThreads: isDocumentOwner,
-    targetCommentId: () => null,
-    buildCommentLink: (comment) =>
-      buildSimpleEntityUrl(
-        { type: 'pdf', id: documentId },
-        { comment_id: comment.id }
-      ),
-  });
   const commentsContext: CommentsContextType = {
-    discussionSource,
     setActiveThread,
     setThreadHeight,
     canComment,
     isDocumentOwner,
-    getCommentById,
     documentId,
-    ownedComment: ownedCommentSelector,
     commentOperations: {
       createComment,
-      deleteComment,
-      updateComment,
     },
-    inComment: true,
     highlightedCommentId: () => null,
   };
 
