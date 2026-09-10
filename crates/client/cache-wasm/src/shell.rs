@@ -448,8 +448,8 @@ impl CacheState {
             .expect("callable cache state contains an engine"))
     }
 
-    /// Keep stored notification associations out of writes that will reset the
-    /// cache. The engine still owns the identity reset and operation invalidation.
+    /// Keep stored projection inputs out of writes that will reset the cache.
+    /// The engine still owns the identity reset and operation invalidation.
     async fn can_reuse_stored_identity(&mut self, identity: Option<&str>) -> Result<bool, JsValue> {
         let Some(observed) = identity else {
             return Ok(true);
@@ -1141,7 +1141,9 @@ impl CacheEngine {
             let mut projections =
                 authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
-            if state.can_reuse_stored_identity(identity.as_deref()).await? {
+            let reuse_stored_identity =
+                state.can_reuse_stored_identity(identity.as_deref()).await?;
+            if reuse_stored_identity {
                 projections.extend(
                     notification_projection_updates(
                         state.engine_mut()?.storage(),
@@ -1155,12 +1157,13 @@ impl CacheEngine {
                 );
             }
             projections.extend(
-                soup_filter_cache_adapter::mail::projection_updates(
+                soup_filter_cache_adapter::mail::projection_updates_for_write(
                     state.engine_mut()?.storage(),
                     &query,
                     operation_name.as_deref(),
                     &vars,
                     &data,
+                    reuse_stored_identity,
                 )
                 .await
                 .map_err(err_js)?,
@@ -1211,7 +1214,9 @@ impl CacheEngine {
             let mut projections =
                 authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
-            if state.can_reuse_stored_identity(identity.as_deref()).await? {
+            let reuse_stored_identity =
+                state.can_reuse_stored_identity(identity.as_deref()).await?;
+            if reuse_stored_identity {
                 projections.extend(
                     notification_projection_updates(
                         state.engine_mut()?.storage(),
@@ -1225,12 +1230,13 @@ impl CacheEngine {
                 );
             }
             projections.extend(
-                soup_filter_cache_adapter::mail::projection_updates(
+                soup_filter_cache_adapter::mail::projection_updates_for_write(
                     state.engine_mut()?.storage(),
                     &query,
                     operation_name.as_deref(),
                     &variables,
                     &data,
+                    reuse_stored_identity,
                 )
                 .await
                 .map_err(err_js)?,

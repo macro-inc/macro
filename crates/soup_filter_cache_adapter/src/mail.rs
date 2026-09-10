@@ -145,6 +145,21 @@ pub async fn projection_updates<S: Storage>(
     variables: &Map<String, Value>,
     data: &Value,
 ) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
+    projection_updates_for_write(storage, query, operation, variables, data, true).await
+}
+
+/// Prepare Mail facts without consulting the old user's records when the write
+/// will reset cache identity. Complete incoming snapshots remain projectable;
+/// partial incoming rows remain incomplete instead of borrowing old metadata.
+/// The cache engine, not this adapter, performs the actual identity reset.
+pub async fn projection_updates_for_write<S: Storage>(
+    storage: &S,
+    query: &str,
+    operation: Option<&str>,
+    variables: &Map<String, Value>,
+    data: &Value,
+    reuse_stored_identity: bool,
+) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
     let parsed = Document::parse(query).map_err(error)?;
     let op = parsed.operation(operation).map_err(error)?;
     let updates = normalize(op, variables, data)
@@ -164,7 +179,11 @@ pub async fn projection_updates<S: Storage>(
         .iter()
         .map(|(key, _)| key.clone())
         .collect::<Vec<_>>();
-    let bases = storage.get_batch(&keys).await.map_err(error)?;
+    let bases = if reuse_stored_identity {
+        storage.get_batch(&keys).await.map_err(error)?
+    } else {
+        vec![None; keys.len()]
+    };
     let supported_view = canonical_preview(&op.selection_set, variables)?;
     Ok(updates
         .into_iter()

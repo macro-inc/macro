@@ -251,6 +251,83 @@ fn turso_offline_mail() {
 }
 
 #[test]
+fn identity_switch_does_not_read_old_mail_bases_but_keeps_incoming_snapshots() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        write(&mut engine, QUERY, &seed()).await;
+        let vars = Map::new();
+        let mut partial = json!({"user":{"id":"new-viewer","soup":{"items":[{"__typename":"GraphqlSoupEmailThread","id":id(1),"isRead":true}]}}});
+        let reads = engine.storage().record_get_count();
+        let projections =
+            projection_updates_for_write(engine.storage(), PARTIAL, None, &vars, &partial, false)
+                .await
+                .unwrap();
+        assert_eq!(
+            engine.storage().record_get_count(),
+            reads,
+            "identity-changing preparation must not read old records"
+        );
+        assert!(
+            matches!(
+                projections.as_slice(),
+                [ProjectionMutation::MarkIncomplete { .. }]
+            ),
+            "partial rows must not borrow the previous viewer's complete metadata"
+        );
+
+        // Same-identity incremental writes still resolve against the existing base.
+        partial["user"]["id"] = json!(VIEWER);
+        let projections =
+            projection_updates_for_write(engine.storage(), PARTIAL, None, &vars, &partial, true)
+                .await
+                .unwrap();
+        assert!(matches!(
+            projections.as_slice(),
+            [ProjectionMutation::Patch { .. }]
+        ));
+
+        let mut incoming = seed();
+        incoming["user"]["id"] = json!("new-viewer");
+        incoming["user"]["soup"]["items"]
+            .as_array_mut()
+            .unwrap()
+            .truncate(1);
+        incoming["user"]["soup"]["items"][0]["isRead"] = json!(true);
+        let reads = engine.storage().record_get_count();
+        let projections =
+            projection_updates_for_write(engine.storage(), QUERY, None, &vars, &incoming, false)
+                .await
+                .unwrap();
+        assert_eq!(engine.storage().record_get_count(), reads);
+        assert!(
+            matches!(projections.as_slice(), [ProjectionMutation::Replace(_)]),
+            "the first new-viewer snapshot must establish Mail coverage immediately"
+        );
+        let result = engine
+            .write_query_with_registration_and_projections(
+                None,
+                None,
+                NetworkWrite {
+                    query: QUERY,
+                    operation_name: None,
+                    variables: &vars,
+                    data: &incoming,
+                    identity: Some("new-viewer"),
+                },
+                projections,
+            )
+            .await
+            .unwrap();
+        assert!(result.reset, "the engine still owns the identity reset");
+        let PageResult::MailPage { keys, .. } = read(&mut engine, filters(), "ALL", None).await
+        else {
+            panic!("new-viewer snapshot is queryable")
+        };
+        assert_eq!(keys, vec![format!("{TYPE}:{}", id(1))]);
+    });
+}
+
+#[test]
 fn missing_proof_is_not_a_false_fact() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
