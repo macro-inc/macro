@@ -38,12 +38,13 @@ export function createScrollCompensation(options: ScrollCompensationOptions) {
     if (touchTargets.size > 0) return;
     timer = setTimeout(() => {
       const element = options.getElement();
-      // Do not interrupt iOS rubber-banding. The next in-bounds scroll retries.
+      // Do not interrupt iOS rubber-banding. Retry even without another scroll event.
       if (
         element &&
         (element.scrollTop < 0 ||
           element.scrollTop > element.scrollHeight - element.clientHeight)
       ) {
+        scheduleFinish();
         return;
       }
       finish();

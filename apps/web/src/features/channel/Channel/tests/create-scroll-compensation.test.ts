@@ -196,6 +196,29 @@ describe('gesture scroll compensation', () => {
     expect(f.writeOffset).toHaveBeenCalledExactlyOnceWith(200);
   });
 
+  it.each([
+    { overscroll: -40, settled: 0, target: 1200, expected: 200 },
+    { overscroll: 4540, settled: 4500, target: 800, expected: 4300 },
+  ])(
+    'retries rubber-banding at $overscroll without another scroll event',
+    ({ overscroll, settled, target, expected }) => {
+      const f = setup();
+      f.wheel();
+      f.compensation.defer(target);
+      f.element.scrollTop = overscroll;
+      vi.advanceTimersByTime(600);
+      expect(f.writeOffset).not.toHaveBeenCalled();
+      expect(f.shift()).toBe(target - 1000);
+
+      f.element.scrollTop = settled;
+      vi.advanceTimersByTime(150);
+      expect(f.writeOffset).toHaveBeenCalledExactlyOnceWith(expected);
+      expect(f.shift()).toBe(0);
+      expect(f.compensation.defer(expected + 100)).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
   it('tracks fingers on different rows until the final finger lifts', () => {
     const f = setup();
     const first = document.createElement('div');
