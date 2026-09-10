@@ -101,6 +101,15 @@ A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
 keyed by message ID; offscreen rows are normally absent from the DOM.
 
+Reopening a channel already loaded this session requests
+`GET /dss/channels/<id>/messages/catch-up?after=<newest cached created_at>&limit=50`
+and merges the result into the cached first page. A first open, a message link,
+a channel cached away from its latest page, and a delta longer than one page use
+`GET /dss/channels/<id>/messages`. The `channel_messages_load` event records
+`path` (`catch_up` or `full`) and `reason`
+(`watermark`, `list_ahead`, `no_cache`, `cache_not_at_latest`, `load_around`,
+`delta_overflow`, or `catch_up_error`).
+
 ## Chat navigation rail
 
 On desktop, the Chat rail has `Browse` and `Recents` tabs. Browse contains
