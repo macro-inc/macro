@@ -2,7 +2,6 @@ use crate::{
     domain::models::SoupDocumentServerFacts,
     outbound::pg_soup_repo::{
         expanded::{
-            by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
             by_ids::{expanded_soup_by_ids, expanded_soup_by_ids_with_projection},
             dynamic::{
                 ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup,
@@ -31,6 +30,47 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
+
+/// The unfiltered soup pages used to be served by two hand-written queries in
+/// `expanded::by_cursor`. They are now answered by the dynamic builder with an
+/// empty filter, which folds to the same predicates. These helpers keep the
+/// old call shape so the suite below goes on asserting the same behaviour
+/// against the replacement.
+async fn expanded_generic_cursor_soup(
+    db: &PgPool,
+    user_id: MacroUserIdStr<'_>,
+    limit: u16,
+    cursor: Query<Uuid, SimpleSortMethod, ()>,
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    expanded_dynamic_cursor_soup(
+        db,
+        ExpandedDynamicCursorArgs {
+            user_id,
+            limit,
+            cursor: cursor.map_filter(|_| EntityFilterAst::default()),
+            exclude_frecency: false,
+        },
+    )
+    .await
+}
+
+async fn no_frecency_expanded_generic_soup(
+    db: &PgPool,
+    user_id: MacroUserIdStr<'_>,
+    limit: u16,
+    cursor: Query<Uuid, SimpleSortMethod, Frecency>,
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    expanded_dynamic_cursor_soup(
+        db,
+        ExpandedDynamicCursorArgs {
+            user_id,
+            limit,
+            cursor: cursor.map_filter(|_| EntityFilterAst::default()),
+            exclude_frecency: true,
+        },
+    )
+    .await
+}
 
 macro_rules! unwrap_enum {
     // Base case: single variant
