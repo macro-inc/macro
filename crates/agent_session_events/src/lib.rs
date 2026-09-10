@@ -71,7 +71,8 @@ pub struct TurnSummary {
     pub announcement_message_id: Option<Uuid>,
     /// The ACP stop reason, or `"error"` when the runtime refused the prompt.
     pub stop_reason: String,
-    /// The tail of the agent's last text in the turn, capped by the emitter.
+    /// The agent's last text in the turn, whole; what the magic chip shows
+    /// once the turn ends. `None` when the turn produced no prose.
     pub excerpt: Option<String>,
 }
 

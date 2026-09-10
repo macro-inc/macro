@@ -6,6 +6,7 @@
  */
 
 /**
- * The tail of the agent's last text in the turn, capped by the emitter.
+ * The agent's last text in the turn, whole; what the magic chip shows
+once the turn ends. `None` when the turn produced no prose.
  */
 export type TurnSummaryExcerpt = string | null;

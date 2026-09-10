@@ -18,7 +18,8 @@ export interface TurnSummary {
   actor?: TurnSummaryActor;
   /** The magic-chip message posted for this turn, when one was. */
   announcement_message_id?: TurnSummaryAnnouncementMessageId;
-  /** The tail of the agent's last text in the turn, capped by the emitter. */
+  /** The agent's last text in the turn, whole; what the magic chip shows
+once the turn ends. `None` when the turn produced no prose. */
   excerpt?: TurnSummaryExcerpt;
   /** The ACP stop reason, or `"error"` when the runtime refused the prompt. */
   stop_reason: string;

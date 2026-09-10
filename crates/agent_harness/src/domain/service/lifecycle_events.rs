@@ -7,9 +7,6 @@ use agent_session_events::{AgentSessionLifecycleEvent, SessionIdentity, SessionO
 
 use super::*;
 
-/// The most of the agent's last text a `settled` event carries.
-const SETTLED_EXCERPT_MAX_CHARS: usize = 280;
-
 impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
     AgentHarnessInner<
         Sessions,
@@ -80,7 +77,11 @@ where
         }
     }
 
-    /// The tail of the agent's last text in the session, for `settled`.
+    /// The agent's last text in the session, whole, for `settled`.
+    ///
+    /// Not truncated: a consumer that needs a shorter form (a push
+    /// notification, a preview) cuts it to its own limit, and one that wants
+    /// the passage as the chip shows it gets exactly that.
     ///
     /// `None` when the agent wrote no prose, and when the log cannot be read:
     /// the excerpt is a courtesy, and `settled` must still go out without it.
@@ -104,26 +105,6 @@ where
                 _ => None,
             })
             .filter(|text| !text.is_empty())?;
-        Some(truncate_chars(last_agent_text, SETTLED_EXCERPT_MAX_CHARS))
-    }
-}
-
-/// The first `max_chars` scalar values of `text`, on a character boundary.
-fn truncate_chars(text: &str, max_chars: usize) -> String {
-    match text.char_indices().nth(max_chars) {
-        Some((end, _)) => text[..end].to_owned(),
-        None => text.to_owned(),
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::truncate_chars;
-
-    #[test]
-    fn truncation_counts_characters_not_bytes() {
-        assert_eq!(truncate_chars("héllo", 3), "hél");
-        assert_eq!(truncate_chars("short", 10), "short");
-        assert_eq!(truncate_chars("", 3), "");
+        Some(last_agent_text.to_owned())
     }
 }

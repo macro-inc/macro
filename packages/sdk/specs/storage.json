@@ -27009,7 +27009,7 @@
           },
           "excerpt": {
             "type": ["string", "null"],
-            "description": "The tail of the agent's last text in the turn, capped by the emitter."
+            "description": "The agent's last text in the turn, whole; what the magic chip shows\nonce the turn ends. `None` when the turn produced no prose."
           },
           "stop_reason": {
             "type": "string",

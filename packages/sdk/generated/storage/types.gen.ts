@@ -9057,7 +9057,8 @@ export type TurnSummary = {
      */
     announcement_message_id?: string | null;
     /**
-     * The tail of the agent's last text in the turn, capped by the emitter.
+     * The agent's last text in the turn, whole; what the magic chip shows
+     * once the turn ends. `None` when the turn produced no prose.
      */
     excerpt?: string | null;
     /**
