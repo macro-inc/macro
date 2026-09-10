@@ -197,17 +197,16 @@ export function TasksSidebar() {
     );
 
   return (
-    <ViewSidebar.Root aria-label="Tasks navigation" class="gap-4 bg-panel pt-2">
-      <div class="flex items-center">
-        <SplitPanel.ControlGroup>
+    <ViewSidebar.Root aria-label="Tasks navigation" class="gap-4 bg-panel">
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
           <SplitPanel.CloseButton />
+          <ViewSidebar.Title>Tasks</ViewSidebar.Title>
+        </div>
+        <SplitPanel.ControlGroup>
           <SplitPanel.BackButton />
           <SplitPanel.ForwardButton />
         </SplitPanel.ControlGroup>
-      </div>
-
-      <ViewSidebar.Header class="h-8">
-        <ViewSidebar.Title>Tasks</ViewSidebar.Title>
       </ViewSidebar.Header>
 
       <ViewSidebar.Content class="flex flex-col gap-6">

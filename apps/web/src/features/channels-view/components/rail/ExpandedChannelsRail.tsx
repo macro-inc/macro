@@ -140,7 +140,7 @@ function ExpandedHeader() {
       </div>
       <div class="flex h-8 items-center gap-2">
         <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
-        <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+        <h1 class="m-0 min-w-0 flex-1 truncate text-base font-semibold tracking-[-0.03em] text-ink">
           Chat
         </h1>
       </div>

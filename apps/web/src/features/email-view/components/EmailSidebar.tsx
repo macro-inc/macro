@@ -70,15 +70,16 @@ export function EmailSidebar() {
   });
 
   return (
-    <ViewSidebar.Root aria-label="Email navigation" class="gap-4 pt-2">
-      <SplitPanel.ControlGroup>
-        <SplitPanel.CloseButton />
-        <SplitPanel.BackButton />
-        <SplitPanel.ForwardButton />
-      </SplitPanel.ControlGroup>
-
+    <ViewSidebar.Root aria-label="Email navigation" class="gap-4">
       <ViewSidebar.Header>
-        <ViewSidebar.Title>Email</ViewSidebar.Title>
+        <div class="flex min-w-0 items-center gap-1">
+          <SplitPanel.CloseButton />
+          <ViewSidebar.Title>Email</ViewSidebar.Title>
+        </div>
+        <SplitPanel.ControlGroup>
+          <SplitPanel.BackButton />
+          <SplitPanel.ForwardButton />
+        </SplitPanel.ControlGroup>
       </ViewSidebar.Header>
 
       <ViewSidebar.Content class="flex flex-col gap-6">
