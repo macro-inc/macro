@@ -200,7 +200,11 @@ impl PredicateExpr {
                     stack.push((right, depth + 1));
                 }
                 Self::Not(expr) => stack.push((expr, depth + 1)),
-                Self::All | Self::None | Self::Exact { .. } | Self::I64Range { .. } | Self::ExactExists { .. } => {}
+                Self::All
+                | Self::None
+                | Self::Exact { .. }
+                | Self::I64Range { .. }
+                | Self::ExactExists { .. } => {}
             }
         }
 
@@ -279,7 +283,10 @@ impl IndexDocument {
                 .exact_facts
                 .iter()
                 .any(|fact| &fact.attribute == attribute && &fact.value == value),
-            PredicateExpr::ExactExists { attribute } => self.exact_facts.iter().any(|fact| &fact.attribute == attribute),
+            PredicateExpr::ExactExists { attribute } => self
+                .exact_facts
+                .iter()
+                .any(|fact| &fact.attribute == attribute),
             PredicateExpr::I64Range {
                 attribute,
                 lower,
@@ -682,7 +689,7 @@ impl OptimisticProjectionMutation {
                     } else {
                         Ok(())
                     }
-                },
+                }
                 Self::Patch { .. } => unreachable!(),
             };
         };
@@ -877,7 +884,9 @@ fn expression_depends_on(expr: &PredicateExpr, attribute: &Token) -> bool {
             attribute: candidate,
             ..
         }
-        | PredicateExpr::ExactExists { attribute: candidate } => candidate == attribute,
+        | PredicateExpr::ExactExists {
+            attribute: candidate,
+        } => candidate == attribute,
         PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
             expression_depends_on(left, attribute) || expression_depends_on(right, attribute)
         }
@@ -888,7 +897,9 @@ fn expression_depends_on(expr: &PredicateExpr, attribute: &Token) -> bool {
 
 fn collect_expression_attributes(expr: &PredicateExpr, attributes: &mut BTreeSet<Token>) {
     match expr {
-        PredicateExpr::Exact { attribute, .. } | PredicateExpr::I64Range { attribute, .. } | PredicateExpr::ExactExists { attribute } => {
+        PredicateExpr::Exact { attribute, .. }
+        | PredicateExpr::I64Range { attribute, .. }
+        | PredicateExpr::ExactExists { attribute } => {
             attributes.insert(attribute.clone());
         }
         PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
@@ -932,7 +943,10 @@ fn simplify(expr: PredicateExpr) -> Result<PredicateExpr, ValidationError> {
                 upper,
             }
         }
-        expr @ (PredicateExpr::All | PredicateExpr::None | PredicateExpr::Exact { .. } | PredicateExpr::ExactExists { .. }) => expr,
+        expr @ (PredicateExpr::All
+        | PredicateExpr::None
+        | PredicateExpr::Exact { .. }
+        | PredicateExpr::ExactExists { .. }) => expr,
     })
 }
 

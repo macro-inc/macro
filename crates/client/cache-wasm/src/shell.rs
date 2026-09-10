@@ -25,8 +25,8 @@ use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
 use soup_filter_cache_adapter::{
     SoupFilterCompileOutcome, authoritative_projection_mutations, compile_filter_request,
-    dirty_projection_mutations, optimistic_projection_mutations,
-    notification_projection_updates, notification_deletion_updates, optimistic_notification_updates,
+    dirty_projection_mutations, notification_deletion_updates, notification_projection_updates,
+    optimistic_notification_updates, optimistic_projection_mutations,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -1112,7 +1112,17 @@ impl CacheEngine {
             let mut projections =
                 authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
-            projections.extend(notification_projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &vars, &data).await.map_err(err_js)?);
+            projections.extend(
+                notification_projection_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(err_js)?,
+            );
             let result = state
                 .engine_mut()?
                 .write_query_with_registration_and_projections(
@@ -1159,7 +1169,17 @@ impl CacheEngine {
             let mut projections =
                 authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
-            projections.extend(notification_projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &variables, &data).await.map_err(err_js)?);
+            projections.extend(
+                notification_projection_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &data,
+                )
+                .await
+                .map_err(err_js)?,
+            );
             let result = state
                 .engine_mut()?
                 .hydrate_query_with_projections(
@@ -1220,7 +1240,17 @@ impl CacheEngine {
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
             let mut projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
-            projection_mutations.extend(optimistic_notification_updates(notification_projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &vars, &data).await.map_err(err_js)?));
+            projection_mutations.extend(optimistic_notification_updates(
+                notification_projection_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(err_js)?,
+            ));
             let claim = MutationClaimRequest {
                 owner: lease_owner,
                 now_ms: parse_timestamp(now_ms, "claim timestamp")?,
@@ -1417,7 +1447,17 @@ impl CacheEngine {
             let mut projections =
                 authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
                     .map_err(err_js)?;
-            projections.extend(notification_projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &vars, &data).await.map_err(err_js)?);
+            projections.extend(
+                notification_projection_updates(
+                    state.engine_mut()?.storage(),
+                    &query,
+                    operation_name.as_deref(),
+                    &vars,
+                    &data,
+                )
+                .await
+                .map_err(err_js)?,
+            );
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write_with_projections_outcome(
@@ -1498,7 +1538,11 @@ impl CacheEngine {
             let mut state = state.lock().await;
             state.ensure_callable()?;
             let mut projections = dirty_projection_mutations(&keys);
-            projections.extend(notification_deletion_updates(state.engine_mut()?.storage(), &keys, true).await.map_err(err_js)?);
+            projections.extend(
+                notification_deletion_updates(state.engine_mut()?.storage(), &keys, true)
+                    .await
+                    .map_err(err_js)?,
+            );
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let result = state
@@ -1522,8 +1566,15 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
-            let mut projections = notification_deletion_updates(state.engine_mut()?.storage(), &keys, false).await.map_err(err_js)?;
-            projections.extend(keys.iter().filter_map(|key| RecordKey::new(key.clone()).ok()).map(cache_core::predicate::ProjectionMutation::Delete));
+            let mut projections =
+                notification_deletion_updates(state.engine_mut()?.storage(), &keys, false)
+                    .await
+                    .map_err(err_js)?;
+            projections.extend(
+                keys.iter()
+                    .filter_map(|key| RecordKey::new(key.clone()).ok())
+                    .map(cache_core::predicate::ProjectionMutation::Delete),
+            );
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
             let result = state

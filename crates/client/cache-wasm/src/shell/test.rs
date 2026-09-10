@@ -70,6 +70,7 @@ const SOUP_WITH_PROJECTION_QUERY: &str = r#"query SoupWithProjection($input: Sou
                 __typename
                 id
                 cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
                 displayName
                 ... on GraphqlSoupDocument {
                     ownerId
@@ -93,6 +94,7 @@ const SOUP_BACKFILL_WITH_PROJECTION_QUERY: &str = r#"query SoupBackfill($input: 
                 __typename
                 id
                 cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
                 displayName
                 ... on GraphqlSoupDocument {
                     ownerId
@@ -115,6 +117,7 @@ const SOUP_UPDATES_WITH_PROJECTION_SUBSCRIPTION: &str = r#"subscription SoupUpda
                 __typename
                 id
                 cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
                 displayName
                 ... on GraphqlSoupDocument {
                     ownerId
@@ -359,6 +362,7 @@ fn projected_document_item_with_facts(
     serde_json::json!({
         "__typename": "GraphqlSoupDocument",
         "id": document_id,
+        "notifications": [],
         "cacheProjection": v3_document_supplement(
             document_id,
             is_email_attachment,

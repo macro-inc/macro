@@ -169,11 +169,19 @@ fn validate_exact_facts(
             if value.len() != 16 {
                 return Err(ProfileValidationError::InvalidValue("task-status-option"));
             }
-        } else if version == ProfileVersion::V4 && (attribute == &vocabulary::notification_unseen() || attribute == &vocabulary::notification_seen()) {
+        } else if version == ProfileVersion::V4
+            && (attribute == &vocabulary::notification_unseen()
+                || attribute == &vocabulary::notification_seen())
+        {
             if value.len() != 16 {
                 return Err(ProfileValidationError::InvalidValue("notification-id"));
             }
-            if facts.iter().any(|other| other.value == fact.value && other.attribute != *attribute && (other.attribute == vocabulary::notification_seen() || other.attribute == vocabulary::notification_unseen())) {
+            if facts.iter().any(|other| {
+                other.value == fact.value
+                    && other.attribute != *attribute
+                    && (other.attribute == vocabulary::notification_seen()
+                        || other.attribute == vocabulary::notification_unseen())
+            }) {
                 return Err(ProfileValidationError::InvalidValue("notification-state"));
             }
         } else {

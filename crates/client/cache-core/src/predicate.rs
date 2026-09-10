@@ -10,9 +10,10 @@ use crate::{
 use maybe_send::MaybeSend;
 pub use predicate_index::ProjectionIncompleteKind;
 use predicate_index::{
-    EffectiveOptimisticProjection, ExactAttributePatch, ExactFact, IndexDocument, IntegerAttributePatch,
-    IntegerFact, OptimisticProjectionMutation, OptimisticProjectionState, OptimisticUncertainty,
-    PendingOptimisticProjection, Profile, RecordKey, Token, ValidatedIndexQuery, ValidationError,
+    EffectiveOptimisticProjection, ExactAttributePatch, ExactFact, IndexDocument,
+    IntegerAttributePatch, IntegerFact, OptimisticProjectionMutation, OptimisticProjectionState,
+    OptimisticUncertainty, PendingOptimisticProjection, Profile, RecordKey, Token,
+    ValidatedIndexQuery, ValidationError,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
@@ -370,17 +371,27 @@ fn apply_projection_mutation(
                     .chain(sorts.iter().map(|fact| fact.attribute.clone())),
             );
         }
-        OptimisticProjectionMutation::PatchExact { record_key, profile, partition, remove, insert } => {
+        OptimisticProjectionMutation::PatchExact {
+            record_key,
+            profile,
+            partition,
+            remove,
+            insert,
+        } => {
             let Some(OptimisticProjectionState::Complete(document)) = state else {
                 *state = Some(OptimisticProjectionState::Incomplete {
-                    record_key: record_key.clone(), profile: profile.clone(), partition: partition.clone(),
+                    record_key: record_key.clone(),
+                    profile: profile.clone(),
+                    partition: partition.clone(),
                     kind: ProjectionIncompleteKind::Missing,
                 });
                 return Ok(());
             };
             if document.profile != *profile || document.partition != *partition {
                 *state = Some(OptimisticProjectionState::Incomplete {
-                    record_key: record_key.clone(), profile: profile.clone(), partition: partition.clone(),
+                    record_key: record_key.clone(),
+                    profile: profile.clone(),
+                    partition: partition.clone(),
                     kind: ProjectionIncompleteKind::Missing,
                 });
                 return Ok(());
@@ -388,7 +399,9 @@ fn apply_projection_mutation(
             // A member edit cannot establish completeness for an uncertain set.
             if patch_exact_members(document, remove, insert).is_err() {
                 *state = Some(OptimisticProjectionState::Incomplete {
-                    record_key: record_key.clone(), profile: profile.clone(), partition: partition.clone(),
+                    record_key: record_key.clone(),
+                    profile: profile.clone(),
+                    partition: partition.clone(),
                     kind: ProjectionIncompleteKind::Dirty,
                 });
             }
@@ -549,7 +562,11 @@ pub fn apply_authoritative_projection_patch(
     }
 }
 
-fn patch_exact_members(document: &mut IndexDocument, remove: &[ExactFact], insert: &[ExactFact]) -> Result<(), ValidationError> {
+fn patch_exact_members(
+    document: &mut IndexDocument,
+    remove: &[ExactFact],
+    insert: &[ExactFact],
+) -> Result<(), ValidationError> {
     document.exact_facts.retain(|fact| !remove.contains(fact));
     document.exact_facts.extend_from_slice(insert);
     document.canonicalize();
@@ -558,13 +575,31 @@ fn patch_exact_members(document: &mut IndexDocument, remove: &[ExactFact], inser
 
 /// Apply individual set-member edits without claiming a missing base is complete.
 pub fn apply_authoritative_exact_members(
-    current: Option<&ProjectionState>, record_key: &RecordKey, profile: &Profile, partition: &Token,
-    remove: &[ExactFact], insert: &[ExactFact],
+    current: Option<&ProjectionState>,
+    record_key: &RecordKey,
+    profile: &Profile,
+    partition: &Token,
+    remove: &[ExactFact],
+    insert: &[ExactFact],
 ) -> ProjectionState {
-    let mut state = apply_authoritative_projection_patch(current, record_key, profile, partition, &[], &[], &[]);
+    let mut state = apply_authoritative_projection_patch(
+        current,
+        record_key,
+        profile,
+        partition,
+        &[],
+        &[],
+        &[],
+    );
     if let ProjectionState::Complete(document) = &mut state
-        && patch_exact_members(document, remove, insert).is_err() {
-        state = ProjectionState::Incomplete { record_key: record_key.clone(), profile: profile.clone(), partition: partition.clone(), kind: ProjectionIncompleteKind::Dirty };
+        && patch_exact_members(document, remove, insert).is_err()
+    {
+        state = ProjectionState::Incomplete {
+            record_key: record_key.clone(),
+            profile: profile.clone(),
+            partition: partition.clone(),
+            kind: ProjectionIncompleteKind::Dirty,
+        };
     }
     state
 }
@@ -675,7 +710,20 @@ pub fn apply_authoritative_projection_mutations(
                 kind: *kind,
             }),
             ProjectionMutation::Delete(_) => None,
-            ProjectionMutation::PatchExact { record_key, profile, partition, remove, insert } => Some(apply_authoritative_exact_members(states.get(record_key), record_key, profile, partition, remove, insert)),
+            ProjectionMutation::PatchExact {
+                record_key,
+                profile,
+                partition,
+                remove,
+                insert,
+            } => Some(apply_authoritative_exact_members(
+                states.get(record_key),
+                record_key,
+                profile,
+                partition,
+                remove,
+                insert,
+            )),
         };
         if let Some(state) = state {
             states.insert(key, state);

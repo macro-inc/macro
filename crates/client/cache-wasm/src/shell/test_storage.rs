@@ -233,8 +233,14 @@ impl PredicateIndexStorage for BrowserStorage {
             .await
     }
 
-    async fn delete_batch_with_projection_changes(&mut self, keys: &[EntityKey<'static>], projections: Vec<ProjectionMutation>) -> Result<(), Self::Error> {
-        self.inner.delete_batch_with_projection_changes(keys, projections).await
+    async fn delete_batch_with_projection_changes(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .delete_batch_with_projection_changes(keys, projections)
+            .await
     }
 
     async fn query_predicate_index(

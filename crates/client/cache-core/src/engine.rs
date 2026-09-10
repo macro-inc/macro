@@ -26,8 +26,8 @@ use crate::predicate::reconciliation::{
 use crate::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionMutation, ProjectionMutationLayer, ProjectionState,
-    StagedOptimisticProjection, StagedOptimisticProjectionOwner,
-    apply_authoritative_projection_mutations, apply_authoritative_projection_patch, apply_authoritative_exact_members,
+    StagedOptimisticProjection, StagedOptimisticProjectionOwner, apply_authoritative_exact_members,
+    apply_authoritative_projection_mutations, apply_authoritative_projection_patch,
     compose_effective_optimistic_projection,
 };
 use crate::query_inspection::{
@@ -1758,8 +1758,21 @@ impl<S: Storage> Engine<S> {
                 ProjectionMutation::Delete(record_key) => {
                     authoritative.insert(record_key.clone(), None);
                 }
-                ProjectionMutation::PatchExact { record_key, profile, partition, remove, insert } => {
-                    let state = apply_authoritative_exact_members(authoritative.get(record_key).and_then(Option::as_ref), record_key, profile, partition, remove, insert);
+                ProjectionMutation::PatchExact {
+                    record_key,
+                    profile,
+                    partition,
+                    remove,
+                    insert,
+                } => {
+                    let state = apply_authoritative_exact_members(
+                        authoritative.get(record_key).and_then(Option::as_ref),
+                        record_key,
+                        profile,
+                        partition,
+                        remove,
+                        insert,
+                    );
                     authoritative.insert(record_key.clone(), Some(state));
                 }
             }
@@ -2405,11 +2418,23 @@ impl<S: PredicateIndexStorage> Engine<S> {
         keys: &[EntityKey<'static>],
         projection_keys: &[PredicateRecordKey],
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
-        self.delete_keys_with_projection_changes(keys, projection_keys.iter().cloned().map(ProjectionMutation::Delete).collect()).await
+        self.delete_keys_with_projection_changes(
+            keys,
+            projection_keys
+                .iter()
+                .cloned()
+                .map(ProjectionMutation::Delete)
+                .collect(),
+        )
+        .await
     }
 
     /// Atomically delete records and update projections that depend on them.
-    pub async fn delete_keys_with_projection_changes(&mut self, keys: &[EntityKey<'static>], projections: Vec<ProjectionMutation>) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
+    pub async fn delete_keys_with_projection_changes(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         let affected = self.deps.ops_for_keys(keys.iter());
         self.storage

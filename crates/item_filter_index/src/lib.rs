@@ -71,10 +71,14 @@ pub mod vocabulary {
     }
 
     /// IDs of unseen notifications for the viewer and primary entity.
-    pub fn notification_unseen() -> Token { token("notification-unseen") }
+    pub fn notification_unseen() -> Token {
+        token("notification-unseen")
+    }
 
     /// IDs of seen, still-active notifications for the viewer and primary entity.
-    pub fn notification_seen() -> Token { token("notification-seen") }
+    pub fn notification_seen() -> Token {
+        token("notification-seen")
+    }
 
     /// Document partition.
     pub fn document_partition() -> Token {
@@ -320,10 +324,18 @@ fn check_soup_flat(
     {
         return Eligibility::Unsupported(UnsupportedReason::Literal("document"));
     }
-    if !supported_expr(ast.project_filter.as_deref(), |lit| supported_project_literal(lit) || (supports_notifications && matches!(lit, ProjectLiteral::NotificationState(state) if active_notification_state(state)))) {
+    if !supported_expr(ast.project_filter.as_deref(), |lit| {
+        supported_project_literal(lit)
+            || (supports_notifications
+                && matches!(lit, ProjectLiteral::NotificationState(state) if active_notification_state(state)))
+    }) {
         return Eligibility::Unsupported(UnsupportedReason::Literal("project"));
     }
-    if !supported_expr(ast.chat_filter.as_deref(), |lit| supported_chat_literal(lit) || (supports_notifications && matches!(lit, ChatLiteral::NotificationState(state) if active_notification_state(state)))) {
+    if !supported_expr(ast.chat_filter.as_deref(), |lit| {
+        supported_chat_literal(lit)
+            || (supports_notifications
+                && matches!(lit, ChatLiteral::NotificationState(state) if active_notification_state(state)))
+    }) {
         return Eligibility::Unsupported(UnsupportedReason::Literal("chat"));
     }
 
@@ -380,25 +392,44 @@ pub fn compile_soup_flat_v3(
 
 /// Compile exact UNSEEN/SEEN notification predicates in addition to v3 literals.
 /// DONE is intentionally unsupported: the active edge contains no done history.
-pub fn compile_soup_flat_v4(ast: &EntityFilterAst, request: SoupFlatRequest) -> Result<LocalCompileOutcome, CompileError> {
-    compile_soup_flat(ast, request, vocabulary::profile_v4(),
-        |lit| supported_document_literal_v3(lit) || matches!(lit, DocumentLiteral::NotificationState(state) if active_notification_state(state)),
+pub fn compile_soup_flat_v4(
+    ast: &EntityFilterAst,
+    request: SoupFlatRequest,
+) -> Result<LocalCompileOutcome, CompileError> {
+    compile_soup_flat(
+        ast,
+        request,
+        vocabulary::profile_v4(),
+        |lit| {
+            supported_document_literal_v3(lit)
+                || matches!(lit, DocumentLiteral::NotificationState(state) if active_notification_state(state))
+        },
         |lit| match lit {
             DocumentLiteral::NotificationState(state) => Ok(notification_state_expr(state)),
             _ => compile_document_literal_v3(lit),
-        }, Some(compile_status_property_literal), true)
+        },
+        Some(compile_status_property_literal),
+        true,
+    )
 }
 
 fn active_notification_state(state: &item_filters::NotificationState) -> bool {
-    matches!(state, item_filters::NotificationState::Unseen | item_filters::NotificationState::Seen)
+    matches!(
+        state,
+        item_filters::NotificationState::Unseen | item_filters::NotificationState::Seen
+    )
 }
 
 fn notification_state_expr(state: &item_filters::NotificationState) -> PredicateExpr {
-    PredicateExpr::ExactExists { attribute: match state {
-        item_filters::NotificationState::Unseen => vocabulary::notification_unseen(),
-        item_filters::NotificationState::Seen => vocabulary::notification_seen(),
-        item_filters::NotificationState::Done => unreachable!("eligibility excludes done history"),
-    } }
+    PredicateExpr::ExactExists {
+        attribute: match state {
+            item_filters::NotificationState::Unseen => vocabulary::notification_unseen(),
+            item_filters::NotificationState::Seen => vocabulary::notification_seen(),
+            item_filters::NotificationState::Done => {
+                unreachable!("eligibility excludes done history")
+            }
+        },
+    }
 }
 
 type PropertyLiteralCompiler = fn(&PropertiesLiteral) -> Result<PredicateExpr, CompileError>;
@@ -451,14 +482,18 @@ fn compile_soup_flat(
             PartitionPredicate {
                 partition: vocabulary::project_partition(),
                 predicate: compile_expr(ast.project_filter.as_deref(), |lit| match lit {
-                    ProjectLiteral::NotificationState(state) if supports_notifications => Ok(notification_state_expr(state)),
+                    ProjectLiteral::NotificationState(state) if supports_notifications => {
+                        Ok(notification_state_expr(state))
+                    }
                     _ => compile_project_literal(lit),
                 })?,
             },
             PartitionPredicate {
                 partition: vocabulary::chat_partition(),
                 predicate: compile_expr(ast.chat_filter.as_deref(), |lit| match lit {
-                    ChatLiteral::NotificationState(state) if supports_notifications => Ok(notification_state_expr(state)),
+                    ChatLiteral::NotificationState(state) if supports_notifications => {
+                        Ok(notification_state_expr(state))
+                    }
                     _ => compile_chat_literal(lit),
                 })?,
             },

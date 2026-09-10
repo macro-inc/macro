@@ -24,7 +24,9 @@ use soup_filter_projection::{
 use std::collections::HashSet;
 
 mod notifications;
-pub use notifications::{notification_projection_updates, notification_deletion_updates, optimistic_notification_updates};
+pub use notifications::{
+    notification_deletion_updates, notification_projection_updates, optimistic_notification_updates,
+};
 
 /// Failure to materialize or compile a Soup filter request.
 #[derive(Debug, thiserror::Error)]
@@ -375,6 +377,18 @@ fn insert_authoritative_mutation(
         return;
     }
 
+    if let (
+        Some(ProjectionMutation::Patch { exact: prior_exact, integers: prior_integers, sorts: prior_sorts, .. }),
+        ProjectionMutation::Patch { exact, integers, sorts, .. },
+    ) = (mutations.get_mut(&key), &mutation) {
+        prior_exact.retain(|prior| !exact.iter().any(|next| next.attribute == prior.attribute));
+        prior_exact.extend(exact.iter().cloned());
+        prior_integers.retain(|prior| !integers.iter().any(|next| next.attribute == prior.attribute));
+        prior_integers.extend(integers.iter().cloned());
+        prior_sorts.retain(|prior| !sorts.iter().any(|next| next.attribute == prior.attribute));
+        prior_sorts.extend(sorts.iter().cloned());
+        return;
+    }
     let existing_is_replace = matches!(mutations.get(&key), Some(ProjectionMutation::Replace(_)));
     if matches!(mutation, ProjectionMutation::Replace(_)) || !existing_is_replace {
         mutations.insert(key, mutation);
@@ -652,7 +666,8 @@ fn optimistic_projection_for_object(
         )
     {
         if let Ok(document) = compose_soup_flat_v3(input, None, None)
-            && let Ok(document) = notifications::compose_active_notifications(document, object) {
+            && let Ok(document) = notifications::compose_active_notifications(document, object)
+        {
             return Some(OptimisticProjectionMutation::Replace(document));
         }
     }

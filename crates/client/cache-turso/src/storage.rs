@@ -1479,10 +1479,22 @@ impl PredicateIndexStorage for TursoStorage {
         keys: &[EntityKey<'static>],
         projection_keys: &[PredicateRecordKey],
     ) -> Result<(), Self::Error> {
-        self.delete_batch_with_projection_changes(keys, projection_keys.iter().cloned().map(ProjectionMutation::Delete).collect()).await
+        self.delete_batch_with_projection_changes(
+            keys,
+            projection_keys
+                .iter()
+                .cloned()
+                .map(ProjectionMutation::Delete)
+                .collect(),
+        )
+        .await
     }
 
-    async fn delete_batch_with_projection_changes(&mut self, keys: &[EntityKey<'static>], projections: Vec<ProjectionMutation>) -> Result<(), Self::Error> {
+    async fn delete_batch_with_projection_changes(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let result = (|| {
             let keys = keys
@@ -1811,16 +1823,41 @@ fn write_projection_mutations(
     if !keys.is_empty() {
         // Network snapshots and realtime writes must rebase pending member edits
         // in the same transaction, not leave a shadow based on older authority.
-        let sources = driver::query(connection, QUEUE_SELECT, Vec::new())?.into_iter().map(|row| {
-            let row = parse_queue_row(&row)?;
-            let source = cache_core::queue::decode_optimistic_source(&row.optimistic.ok_or_else(invariant)?.optimistic_data_json).map_err(|_| invariant())?;
-            Ok((row.id, source))
-        }).collect::<Result<Vec<_>, TursoStorageError>>()?;
-        let layers = sources.iter().map(|(owner, source)| cache_core::predicate::ProjectionMutationLayer { owner: *owner, mutations: &source.projection_mutations }).collect::<Vec<_>>();
+        let sources = driver::query(connection, QUEUE_SELECT, Vec::new())?
+            .into_iter()
+            .map(|row| {
+                let row = parse_queue_row(&row)?;
+                let source = cache_core::queue::decode_optimistic_source(
+                    &row.optimistic.ok_or_else(invariant)?.optimistic_data_json,
+                )
+                .map_err(|_| invariant())?;
+                Ok((row.id, source))
+            })
+            .collect::<Result<Vec<_>, TursoStorageError>>()?;
+        let layers = sources
+            .iter()
+            .map(
+                |(owner, source)| cache_core::predicate::ProjectionMutationLayer {
+                    owner: *owner,
+                    mutations: &source.projection_mutations,
+                },
+            )
+            .collect::<Vec<_>>();
         for key in keys {
             delete_optimistic_projection(connection, &key)?;
-            if let Some(shadow) = cache_core::predicate::compose_effective_optimistic_projection(&key, states.get(&key), &layers).map_err(|_| invariant())? {
-                insert_optimistic_projection(connection, mutation_id_to_sql(shadow.owner)?, shadow.state, shadow.uncertainty)?;
+            if let Some(shadow) = cache_core::predicate::compose_effective_optimistic_projection(
+                &key,
+                states.get(&key),
+                &layers,
+            )
+            .map_err(|_| invariant())?
+            {
+                insert_optimistic_projection(
+                    connection,
+                    mutation_id_to_sql(shadow.owner)?,
+                    shadow.state,
+                    shadow.uncertainty,
+                )?;
             }
         }
     }

@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use soup_filter_projection::{
     SoupCacheProjectionSupplement, decode_cache_projection_supplement,
-    encode_cache_projection_supplement, validate_soup_flat_v3,
+    encode_cache_projection_supplement, validate_soup_flat_v4,
 };
 use std::collections::BTreeMap;
 
@@ -30,7 +30,7 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
     else {
         panic!("partial optimistic Soup entity should compile to a patch");
     };
-    assert_eq!(profile, &vocabulary::profile_v3());
+    assert_eq!(profile, &vocabulary::profile_v4());
     assert!(
         exact
             .iter()
@@ -63,7 +63,7 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
     else {
         panic!("a document create without server facts must patch, not claim completeness");
     };
-    assert_eq!(profile, &vocabulary::profile_v3());
+    assert_eq!(profile, &vocabulary::profile_v4());
     assert!(
         exact
             .iter()
@@ -79,6 +79,7 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
         &serde_json::json!({
             "create": {
                 "__typename": "GraphqlSoupProject",
+                "notifications": [],
                 "id": "00000000-0000-0000-0000-000000000003",
                 "ownerId": "user-1",
                 "parentId": null,
@@ -90,7 +91,7 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
     let [OptimisticProjectionMutation::Replace(complete)] = complete.as_slice() else {
         panic!("a project optimistic create has every required v3 fact");
     };
-    assert_eq!(complete.profile, vocabulary::profile_v3());
+    assert_eq!(complete.profile, vocabulary::profile_v4());
 
     let deletion = optimistic_projection_mutations(
         &serde_json::json!({
@@ -202,7 +203,7 @@ fn authoritative_direct_fields_without_projection_schema_field_become_v3_patch()
     assert!(matches!(
         mutations.as_slice(),
         [ProjectionMutation::Patch { profile, .. }]
-            if profile == &vocabulary::profile_v3()
+            if profile == &vocabulary::profile_v4()
     ));
 }
 
@@ -264,8 +265,9 @@ fn partial_queries_preserve_v3_authority_and_mark_missing_v3() {
     else {
         panic!("a projection-less partial query must produce a bounded v3 patch");
     };
-    assert_eq!(profile, &vocabulary::profile_v3());
-    assert!(exact.is_empty());
+    assert_eq!(profile, &vocabulary::profile_v4());
+    assert_eq!(exact.len(), 2);
+    assert!(exact.iter().all(|patch| patch.values.is_empty()));
     assert!(integers.is_empty());
     assert!(sorts.is_empty());
 
@@ -287,7 +289,7 @@ fn partial_queries_preserve_v3_authority_and_mark_missing_v3() {
             profile,
             kind: ProjectionIncompleteKind::Missing,
             ..
-        }) if profile == &vocabulary::profile_v3()
+        }) if profile == &vocabulary::profile_v4()
     ));
 }
 
@@ -382,6 +384,7 @@ const SUPPLEMENT_SUBSCRIPTION: &str = r#"subscription Supplement {
                 __typename
                 id
                 cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
                 ... on GraphqlSoupDocument {
                     ownerId
                     projectId
@@ -402,6 +405,7 @@ const SUPPLEMENT_BACKFILL: &str = r#"query SoupBackfill {
                 __typename
                 id
                 cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
                 ... on GraphqlSoupDocument {
                     ownerId
                     projectId
@@ -443,6 +447,7 @@ fn selected_document(
         "__typename": "GraphqlSoupDocument",
         "id": id,
         "cacheProjection": cache_projection,
+        "notifications": [],
         "ownerId": "macro|owner@example.com",
         "projectId": null,
         "fileType": "md",
@@ -478,7 +483,7 @@ fn selected_document_supplement_composes_direct_and_server_owned_facts() {
     let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
         panic!("a valid selected supplement and direct fields must replace authority");
     };
-    assert_eq!(document.profile, vocabulary::profile_v3());
+    assert_eq!(document.profile, vocabulary::profile_v4());
     assert_eq!(document.partition, vocabulary::document_partition());
     assert!(document.exact_facts.iter().any(|fact| {
         fact.attribute == vocabulary::owner()
@@ -590,6 +595,7 @@ fn selected_project_and_chat_null_supplements_are_valid_direct_only_v3_hydration
             __typename
             id
             cacheProjection @cacheOnly
+                notifications { id entityId entityType state }
             ... on GraphqlSoupProject { ownerId parentId createdAt updatedAt }
             ... on GraphqlSoupChat { ownerId projectId createdAt updatedAt }
         } } }
@@ -603,6 +609,7 @@ fn selected_project_and_chat_null_supplements_are_valid_direct_only_v3_hydration
                     "__typename": "GraphqlSoupProject",
                     "id": "00000000-0000-0000-0000-000000000010",
                     "cacheProjection": null,
+                    "notifications": [],
                     "ownerId": "macro|owner@example.com",
                     "parentId": null,
                     "createdAt": "2025-01-01T00:00:00Z",
@@ -612,6 +619,7 @@ fn selected_project_and_chat_null_supplements_are_valid_direct_only_v3_hydration
                     "__typename": "GraphqlSoupChat",
                     "id": "00000000-0000-0000-0000-000000000011",
                     "cacheProjection": null,
+                    "notifications": [],
                     "ownerId": "macro|owner@example.com",
                     "projectId": null,
                     "createdAt": "2025-01-01T00:00:00Z",
@@ -626,7 +634,7 @@ fn selected_project_and_chat_null_supplements_are_valid_direct_only_v3_hydration
         let ProjectionMutation::Replace(document) = mutation else {
             panic!("direct-only entity must produce a complete replacement");
         };
-        validate_soup_flat_v3(document).unwrap();
+        validate_soup_flat_v4(document).unwrap();
         assert_ne!(document.partition, vocabulary::document_partition());
     }
 }
@@ -672,7 +680,7 @@ fn missing_malformed_or_mismatched_document_supplements_remain_incomplete() {
             matches!(
                 mutations.as_slice(),
                 [ProjectionMutation::MarkIncomplete { profile, kind, .. }]
-                    if profile == &vocabulary::profile_v3() && *kind == expected_kind
+                    if profile == &vocabulary::profile_v4() && *kind == expected_kind
             ),
             "{name}: {mutations:?}"
         );
@@ -790,7 +798,7 @@ fn partial_mutation_payloads_patch_v3_without_fabricating_server_facts() {
     else {
         panic!("partial authoritative entity must produce one v3 patch");
     };
-    assert_eq!(profile, &vocabulary::profile_v3());
+    assert_eq!(profile, &vocabulary::profile_v4());
     assert!(
         exact
             .iter()
@@ -935,7 +943,7 @@ fn production_documents_presets_compile_for_created_and_updated_sorts() {
                 let SoupFilterCompileOutcome::Supported(query) = outcome else {
                     panic!("{name} must be soup-flat-v3 eligible");
                 };
-                assert_eq!(query.as_query().profile, vocabulary::profile_v3(), "{name}");
+                assert_eq!(query.as_query().profile, vocabulary::profile_v4(), "{name}");
                 assert_eq!(query.as_query().sort_attribute, sort_attribute, "{name}");
                 assert_eq!(query.as_query().sort_direction, direction, "{name}");
                 assert_eq!(query.as_query().tie_break_direction, direction, "{name}");
@@ -998,7 +1006,7 @@ fn production_my_tasks_importance_and_status_filter_compiles_locally() {
     else {
         panic!("production My Tasks filter must use the local v3 profile");
     };
-    assert_eq!(query.as_query().profile, vocabulary::profile_v3());
+    assert_eq!(query.as_query().profile, vocabulary::profile_v4());
     let document = &query.as_query().partitions[0].predicate;
     assert!(format!("{document:?}").contains("importance"));
     assert!(format!("{document:?}").contains("task-status-option"));
@@ -1039,7 +1047,7 @@ fn differential_document(
     }
     IndexDocument {
         record_key: RecordKey::new(format!("GraphqlSoupDocument:{id}")).unwrap(),
-        profile: vocabulary::profile_v3(),
+        profile: vocabulary::profile_v4(),
         partition: vocabulary::document_partition(),
         exact_facts,
         integer_facts: vec![
@@ -1237,7 +1245,7 @@ fn production_documents_presets_support_importance_in_v3() {
     .unwrap() else {
         panic!("importance must compile in soup-flat-v3");
     };
-    assert_eq!(query.as_query().profile, vocabulary::profile_v3());
+    assert_eq!(query.as_query().profile, vocabulary::profile_v4());
 }
 
 #[derive(Debug, Deserialize)]
