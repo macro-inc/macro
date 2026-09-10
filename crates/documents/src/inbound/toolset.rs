@@ -14,6 +14,7 @@ use crate::{
     domain::ports::DocumentService,
     domain::ports::create::DocumentCreationService,
     domain::ports::editing::EditingWorkerService,
+    domain::ports::mentions::NoOpDocumentMentionTracker,
     inbound::toolset::{
         create_document::CreateDocument, edit_document::EditDocument, read_content::ReadContent,
         read_metadata::ReadMetadata, rename_document::RenameDocument,
@@ -33,8 +34,12 @@ use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 
 /// Default backend-owned document creation use case for document tools.
-pub type DefaultDocumentToolCreator<DSvc> =
-    DocumentCreator<Arc<DSvc>, LexicalSyncMarkdownInitializer, ReqwestDocumentBytesUploader>;
+pub type DefaultDocumentToolCreator<DSvc> = DocumentCreator<
+    Arc<DSvc>,
+    LexicalSyncMarkdownInitializer,
+    ReqwestDocumentBytesUploader,
+    NoOpDocumentMentionTracker,
+>;
 
 /// Service context for document AI tools
 pub struct DocumentToolContext<
@@ -117,6 +122,7 @@ impl<
                 sync_service_client.as_ref().clone(),
             ),
             ReqwestDocumentBytesUploader::default(),
+            NoOpDocumentMentionTracker,
         );
 
         Self {

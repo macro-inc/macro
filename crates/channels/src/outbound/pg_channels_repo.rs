@@ -2387,7 +2387,7 @@ impl ChannelRepo for PgChannelsRepo {
         let generic_references_fut = async {
             sqlx::query!(
                 r#"
-                SELECT
+                SELECT DISTINCT ON (em.source_entity_type, em.source_entity_id)
                     em.source_entity_type,
                     em.source_entity_id,
                     em.entity_type,
@@ -2398,7 +2398,7 @@ impl ChannelRepo for PgChannelsRepo {
                 WHERE em.entity_type = ANY($1)
                   AND em.entity_id  = $2
                   AND em.source_entity_type != 'message'
-                ORDER BY em.created_at DESC
+                ORDER BY em.source_entity_type, em.source_entity_id, em.created_at DESC
                 "#,
                 &entity_types,
                 entity_id,

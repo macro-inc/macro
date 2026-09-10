@@ -154,6 +154,7 @@ pub type DefaultDocumentCreator<T> = crate::domain::create::DocumentCreator<
     Arc<T>,
     crate::outbound::markdown_init::LexicalSyncMarkdownInitializer,
     crate::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
+    crate::outbound::mention_tracker::LexicalCommsMentionTracker,
 >;
 
 /// Router state containing document router dependencies.
