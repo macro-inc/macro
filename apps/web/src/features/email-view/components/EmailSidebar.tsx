@@ -70,10 +70,7 @@ export function EmailSidebar() {
   });
 
   return (
-    <ViewSidebar.Root
-      aria-label="Email navigation"
-      class="gap-4 border-r-0 pt-2"
-    >
+    <ViewSidebar.Root aria-label="Email navigation" class="gap-4 pt-2">
       <SplitPanel.ControlGroup>
         <SplitPanel.CloseButton />
         <SplitPanel.BackButton />

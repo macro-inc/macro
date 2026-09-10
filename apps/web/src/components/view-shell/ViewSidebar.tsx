@@ -8,7 +8,7 @@ function Root(props: JSX.HTMLAttributes<HTMLElement>) {
     <aside
       {...rest}
       class={cn(
-        'flex size-full min-h-0 min-w-0 flex-col border-r border-edge px-4 pb-5 pt-4',
+        'flex size-full min-h-0 min-w-0 flex-col px-4 pb-5 pt-4',
         local.class
       )}
       data-view-sidebar=""

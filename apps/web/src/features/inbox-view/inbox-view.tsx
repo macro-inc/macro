@@ -89,7 +89,7 @@ function InboxViewRoot() {
                     main={{ min: 224, preferredWidth: 640 }}
                     resizable
                   >
-                    <ViewShell.Aside class="flex flex-col border-r border-edge bg-panel">
+                    <ViewShell.Aside class="flex flex-col bg-panel">
                       <NotificationsListPane
                         onPreviewEntityChange={setPreviewEntity}
                       />

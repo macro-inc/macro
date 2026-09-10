@@ -4,6 +4,7 @@ import {
   createSizeBreakpoints,
 } from '@app/util/create-size-breakpoints';
 import { Resize } from '@core/component/Resize';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {
@@ -58,7 +59,12 @@ export type ViewShellLayout = {
 
 type ViewShellInternal = ViewShellLayout & { id: string };
 
-const RESIZE_GUTTER = 8;
+/**
+ * Space between aside, main, and detail. On desktop it is exactly the 1px
+ * divider the resize gutter paints, so the regions meet edge-to-edge; touch
+ * layouts keep their wider spacing.
+ */
+const RESIZE_GUTTER = isTouchDevice() ? 8 : 1;
 
 const ViewShellContext = createContext<ViewShellInternal>();
 
@@ -361,7 +367,9 @@ function Header(props: JSX.HTMLAttributes<HTMLElement>) {
     <header
       {...rest}
       class={cn(
-        'shrink-0 px-4 pb-3 pt-2 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)]',
+        // A 1px divider closes the toolbar off from the content below it,
+        // matching the pane dividers; touch layouts stay borderless.
+        'shrink-0 border-b-[1px] border-edge px-4 pb-3 pt-2 touch:border-b-0 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)]',
         local.class
       )}
       data-view-shell-header=""

@@ -153,23 +153,9 @@ export function SplitPanel(props: SplitPanelProps) {
     setContentOffsetTop(offset);
   });
 
-  function multipleSplits() {
-    const splits = globalSplitManager()?.splits?.();
-    return Boolean(splits && splits.length > 1);
-  }
-
   // On mobile the header stays visible for list views too: it hosts the
   // floating filter-pill strip (see MobileSoupViewTabs).
   const shouldHideSplitHeader = createMemo(() => isSoloSettings());
-
-  const splitFocusStyling = () =>
-    !isTouchDevice() &&
-    props.active &&
-    multipleSplits() &&
-    !props.handle.isSpotLight();
-
-  const splitUnfocusedStyling = () =>
-    !isTouchDevice() && !props.active && multipleSplits();
 
   const gutterSize = () =>
     globalSplitManager()?.resizeContext()?.gutterSize() ?? 0;
@@ -185,38 +171,6 @@ export function SplitPanel(props: SplitPanelProps) {
       !props.handle.isSpotLight() &&
       props.handle.isViewerSplit()
     );
-  });
-
-  /**
-   * This split is a preview controller with its viewer tucked flush against
-   * its right edge: paint above the viewer so the controller's card and
-   * shadow read as being in front.
-   */
-  const hasTuckedViewer = createMemo(() => {
-    return (
-      !isTouchDevice() &&
-      !props.handle.isSpotLight() &&
-      props.handle.isControllerSplit()
-    );
-  });
-
-  /**
-   * When either member of a tucked Preview Pair is active, the active member
-   * stays solid and its partner is dashed. Both retain the standard edge color.
-   */
-  const previewPairFocusStyling = createMemo(() => {
-    const manager = globalSplitManager();
-    if (!manager || isTouchDevice() || props.handle.isSpotLight()) return false;
-
-    const peerId = props.handle.isControllerSplit()
-      ? manager.viewerOf(props.split.id)
-      : props.handle.isViewerSplit()
-        ? manager.controllerOf(props.split.id)
-        : undefined;
-    if (!peerId || manager.getSplit(peerId)?.isSpotLight()) return false;
-
-    const activeId = manager.activeSplitId();
-    return activeId === props.split.id || activeId === peerId;
   });
 
   const usesComposableLayout = () =>
@@ -335,27 +289,16 @@ export function SplitPanel(props: SplitPanelProps) {
             data-modal={props.handle.isSpotLight()}
             tabindex={-1}
           >
+            {/* Flat pane: no radius, shadow, or inset border. Panes share the
+                page surface and are separated only by the zone's 1px gutter
+                divider, so nothing here may paint its own edge. */}
             <Panel
               class={cn(
-                'rounded-xl touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
-                splitUnfocusedStyling() && 'split-panel-inactive',
-                {
-                  'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
-                  'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
-                  'border-solid!': previewPairFocusStyling() && props.active,
-                  'border-dashed!': previewPairFocusStyling() && !props.active,
-                  // Drawer look: both members square their seam corners. The
-                  // seam border always belongs to the Controller — the
-                  // Viewer's seam edge stays borderless so the line never
-                  // doubles, and keeping it on one fixed member regardless
-                  // of focus means switching focus can't shift layout by the
-                  // border width (the ! beats Surface's inline border
-                  // shorthand).
-                  'rounded-l-none border-l-0!': tuckedBehindController(),
-                  'rounded-r-none': hasTuckedViewer(),
-                }
+                'rounded-none touch:after:hidden bg-panel',
+                !isTouchDevice() && 'split-panel-flat'
               )}
-              depth={isTouchDevice() ? 0 : 1}
+              hideBorder
+              depth={0}
             >
               <Show when={!usesComposableLayout()}>
                 <Panel.Header

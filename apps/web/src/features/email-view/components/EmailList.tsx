@@ -410,9 +410,11 @@ export function EmailList(props: EmailListProps) {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
+      {/* The list sits flat on the pane surface on every platform; desktop
+          keeps a small inset so rows clear the toolbar divider. */}
       <Surface
-        depth={isTouchDevice() ? 0 : 2}
-        hideBorder={isTouchDevice()}
+        depth={0}
+        hideBorder
         ref={(element: HTMLDivElement) => {
           setGrid(element);
           props.ref?.(element);
@@ -423,8 +425,8 @@ export function EmailList(props: EmailListProps) {
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
         class={cn(
-          'soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none',
-          isTouchDevice() ? 'rounded-none bg-transparent' : 'rounded-2xl p-2'
+          'soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden rounded-none bg-transparent outline-none',
+          !isTouchDevice() && 'p-2'
         )}
       >
         <PullToRefresh

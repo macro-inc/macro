@@ -427,9 +427,11 @@ export function TaskList(props: TaskListProps) {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
+      {/* The list sits flat on the pane surface on every platform; desktop
+          keeps a small inset so rows clear the toolbar divider. */}
       <Surface
-        depth={isTouchDevice() ? 0 : 2}
-        hideBorder={isTouchDevice()}
+        depth={0}
+        hideBorder
         ref={(element: HTMLDivElement) => {
           setGrid(element);
           props.ref?.(element);
@@ -440,11 +442,8 @@ export function TaskList(props: TaskListProps) {
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
         class={cn(
-          '@container/u-list flex min-h-0 min-w-0 flex-col outline-none',
-          {
-            'rounded-2xl p-2': !isTouchDevice(),
-            'rounded-none bg-transparent p-0': isTouchDevice(),
-          }
+          '@container/u-list flex min-h-0 min-w-0 flex-col rounded-none bg-transparent outline-none',
+          isTouchDevice() ? 'p-0' : 'p-2'
         )}
       >
         <ListLayoutProvider ref={grid}>

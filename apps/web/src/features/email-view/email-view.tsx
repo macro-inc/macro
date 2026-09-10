@@ -31,13 +31,12 @@ export type EmailViewProps = {
 function EmailListFallback() {
   return (
     <Surface
-      depth={isTouchDevice() ? 0 : 2}
-      hideBorder={isTouchDevice()}
+      depth={0}
+      hideBorder
       class={cn(
-        'grid size-full min-h-0 min-w-0 place-items-center text-ink-muted',
-        isTouchDevice()
-          ? 'rounded-none bg-transparent pt-(--mobile-content-inset-top) pb-(--mobile-content-inset-bottom)'
-          : 'rounded-2xl'
+        'grid size-full min-h-0 min-w-0 place-items-center rounded-none bg-transparent text-ink-muted',
+        isTouchDevice() &&
+          'pt-(--mobile-content-inset-top) pb-(--mobile-content-inset-bottom)'
       )}
     >
       <SpinnerIcon aria-label="Loading email" class="size-5 animate-spin" />

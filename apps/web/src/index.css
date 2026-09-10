@@ -181,14 +181,11 @@ body.tauri-ios {
   --layer-inset: var(--color-surface-3);
 }
 
-/* Scope the panel semantic itself so nested bg-panel consumers share the same
-   inactive split chrome instead of only tinting the outer panel element. */
-.split-panel-inactive {
-  --color-panel: color-mix(
-    in oklch,
-    var(--theme-panel, var(--color-surface-1)) 80%,
-    var(--color-page)
-  );
+/* Desktop panes are flat: scope the panel semantic itself so every nested
+   bg-panel consumer (view chrome, sidebars, sticky headers) shares the page
+   surface and panes meet edge-to-edge instead of reading as lifted cards. */
+.split-panel-flat {
+  --color-panel: var(--color-page);
 }
 
 @theme {
