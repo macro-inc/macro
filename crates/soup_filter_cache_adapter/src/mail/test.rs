@@ -7,7 +7,7 @@ use cache_core::{
 use serde_json::json;
 
 const VIEWER: &str = "macro|mail@example.com";
-const QUERY: &str = r#"query MailSeed { user { id emailLinks { id } soup(input: {initial:{limit:100,emailView:ALL}}) { items { __typename id ... on GraphqlSoupEmailThread { linkId inboxVisible isRead isSignal hasNonTrashedMessages latestInboundMessageTs latestNonSpamMessageTs updatedAt } } } } }"#;
+const QUERY: &str = r#"query MailSeed { user { id emailLinks { id } soup(input: {initial:{limit:100,emailView:ALL}}) { items { __typename id ... on GraphqlSoupEmailThread { linkId ownerId inboxVisible isRead isSignal hasNonTrashedMessages latestInboundMessageTs latestNonSpamMessageTs latestOutboundMessageTs hasCalendarAttachment hasThreadShare mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id } updatedAt } } } } }"#;
 const PARTIAL: &str = r#"query Partial { user { id soup(input:{initial:{limit:1}}) { items { __typename id ... on GraphqlSoupEmailThread { isRead inboxVisible } } } } }"#;
 fn id(n: u128) -> String {
     uuid::Uuid::from_u128(n).to_string()
@@ -17,7 +17,35 @@ fn filters() -> Value {
     json!({"documentFilter":{"literal":{"id":nil}},"projectFilter":{"literal":{"projectIdSelf":nil}},"chatFilter":{"literal":{"chatId":nil}},"calendarEventFilter":{"literal":{"id":nil}},"channelFilter":{"literal":{"channelId":nil}},"channelThreadFilter":{"literal":{"threadId":nil}},"callFilter":{"literal":{"callId":nil}},"crmCompanyFilter":{"literal":{"id":nil}},"foreignEntityFilter":{"literal":{"id":nil}}})
 }
 fn row(n: u128) -> Value {
-    json!({"__typename":"GraphqlSoupEmailThread","id":id(n),"linkId":id(if n<=50 {1000}else if n<=70 {1001}else {9999}),"inboxVisible":n.is_multiple_of(2),"isRead":false,"isSignal":n.is_multiple_of(3),"hasNonTrashedMessages":n!=7,"latestInboundMessageTs":if n==2 {Value::Null}else {json!("2025-01-02T00:00:00.000002Z")},"latestNonSpamMessageTs":"2025-01-03T00:00:00.000003Z","updatedAt":"2025-01-04T00:00:00.000004Z"})
+    let mut row = json!({"__typename":"GraphqlSoupEmailThread","id":id(n),"linkId":id(if n<=50 {1000}else if n<=70 {1001}else {9999}),"inboxVisible":n.is_multiple_of(2),"isRead":false,"isSignal":n.is_multiple_of(3),"hasNonTrashedMessages":n!=7,"latestInboundMessageTs":if n==2 {Value::Null}else {json!("2025-01-02T00:00:00.000002Z")},"latestNonSpamMessageTs":"2025-01-03T00:00:00.000003Z","updatedAt":"2025-01-04T00:00:00.000004Z"});
+    row["ownerId"] = json!(if n <= 50 {
+        VIEWER
+    } else {
+        "macro|other@example.com"
+    });
+    row["latestOutboundMessageTs"] = if n.is_multiple_of(4) && n != 4 {
+        json!("2025-01-01T00:00:00Z")
+    } else {
+        Value::Null
+    };
+    row["hasCalendarAttachment"] = json!(n.is_multiple_of(5));
+    row["hasThreadShare"] = json!(n == 1 || n == 60 || (71..=74).contains(&n));
+    row["mailAllPreview"] = if n != 7 {
+        json!({"id":id(n+10000)})
+    } else {
+        Value::Null
+    };
+    row["mailDraftPreview"] = if n.is_multiple_of(3) && n != 7 {
+        json!({"id":id(n+20000)})
+    } else {
+        Value::Null
+    };
+    row["mailSentPreview"] = if n.is_multiple_of(4) && n != 7 {
+        json!({"id":id(n+30000)})
+    } else {
+        Value::Null
+    };
+    row
 }
 fn seed() -> Value {
     json!({"user":{"id":VIEWER,"emailLinks":[{"id":id(1000)},{"id":id(1001)}],"soup":{"items":(1..=75).map(row).collect::<Vec<_>>()}}})
@@ -64,6 +92,38 @@ async fn read<S: PredicateIndexStorage>(
     .await
     .unwrap()
 }
+async fn all_keys<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    f: Value,
+    view: &str,
+) -> Vec<String> {
+    let mut keys = Vec::new();
+    let mut cursor = None;
+    loop {
+        let PageResult::MailPage {
+            keys: page_keys,
+            next_cursor,
+            sort_timestamps,
+            ..
+        } = read(engine, f.clone(), view, cursor).await
+        else {
+            panic!("supported tab")
+        };
+        if view == "SENT" {
+            assert!(
+                sort_timestamps
+                    .iter()
+                    .all(|ts| ts.starts_with("2025-01-01"))
+            );
+        }
+        keys.extend(page_keys);
+        cursor = next_cursor;
+        if cursor.is_none() {
+            return keys;
+        }
+    }
+}
+
 async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
     let mut engine = Engine::new(storage);
     assert!(matches!(
@@ -98,6 +158,54 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
     assert!(
         all.windows(2).all(|w| w[0] > w[1]),
         "microsecond ties use stable normalized keys"
+    );
+    assert_eq!(
+        all_keys(&mut engine, filters(), "DRAFTS").await.len(),
+        23,
+        "older drafts are independent of ALL preview"
+    );
+    assert_eq!(
+        all_keys(&mut engine, filters(), "SENT").await.len(),
+        16,
+        "sent messages also require an outbound timestamp"
+    );
+    let mut calendar = filters();
+    calendar["emailFilter"] = json!({"tree":{"literal":{"calendarOnly":true}}});
+    assert_eq!(all_keys(&mut engine, calendar, "ALL").await.len(), 14);
+    let mut shared = filters();
+    shared["emailFilter"] = json!({"tree":{"literal":{"shared":"ONLY"}}});
+    let shared_keys = all_keys(&mut engine, shared.clone(), "ALL").await;
+    assert_eq!(shared_keys.len(), 5);
+    assert!(
+        !shared_keys.contains(&format!("{TYPE}:{}", id(1))),
+        "own grant is excluded by Mail's owner policy"
+    );
+    assert!(
+        !shared_keys.contains(&format!("{TYPE}:{}", id(61))),
+        "delegation alone is not a share"
+    );
+    assert!(
+        !shared_keys.contains(&format!("{TYPE}:{}", id(75))),
+        "different owner alone is not a share"
+    );
+    let mut revoked = seed();
+    revoked["user"]["soup"]["items"] = json!([row(72)]);
+    revoked["user"]["soup"]["items"][0]["hasThreadShare"] = json!(false);
+    write(&mut engine, QUERY, &revoked).await;
+    assert_eq!(
+        all_keys(&mut engine, shared, "ALL").await.len(),
+        4,
+        "refreshed grant removal removes shared membership"
+    );
+    let mut draft_removed = seed();
+    draft_removed["user"]["soup"]["items"] = json!([row(3)]);
+    draft_removed["user"]["soup"]["items"][0]["mailDraftPreview"] = Value::Null;
+    write(&mut engine, QUERY, &draft_removed).await;
+    assert_eq!(all_keys(&mut engine, filters(), "DRAFTS").await.len(), 22);
+    assert_eq!(
+        all_keys(&mut engine, filters(), "ALL").await.len(),
+        69,
+        "removing a draft must not drop its thread from ALL"
     );
     let mut archived = filters();
     archived["emailFilter"] = json!({"tree":{"literal":{"inboxVisible":false}}});
@@ -145,7 +253,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
         .unwrap(),
         PageResult::StaleCursor { .. }
     ));
-    for view in ["DRAFTS", "SENT"] {
+    for view in ["STARRED", "IMPORTANT"] {
         assert!(matches!(
             read(&mut engine, filters(), view, None).await,
             PageResult::Unsupported
@@ -153,7 +261,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
     }
     for literal in [
         json!({"sender":{"partial":"a"}}),
-        json!({"shared":"ONLY"}),
+        json!({"recipient":{"partial":"a"}}),
         json!({"notificationState":"DONE"}),
     ] {
         let mut f = filters();

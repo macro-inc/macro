@@ -596,6 +596,7 @@ export function createGraphqlSoupAstItemsQuery(
         !isCachedMailView(initial.emailView)
       )
         return;
+      const mailView = initial.emailView;
       setFetchingMailPage(true);
       try {
         const result = await host.entityFilter({
@@ -638,7 +639,7 @@ export function createGraphqlSoupAstItemsQuery(
         ).flatMap((record) => {
           const ts = timestamps.get(soupItemKey(record));
           if (!ts) return [record];
-          const projected = materializeMailView(record as MailItemFieldsFragment, initial.emailView, ts);
+          const projected = materializeMailView(record as MailItemFieldsFragment, mailView, ts);
           return projected ? [projected] : [];
         });
         const items = records.flatMap((record) => {

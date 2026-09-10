@@ -1,4 +1,6 @@
 import { createWorkerCacheHost } from '../../host/worker-host';
+import { materializeMailView, type CachedMailView } from '../../../queries/soup/graphql/mail-view';
+import type { MailItemFieldsFragment } from '../../../service-clients/service-storage/graphql/generated/graphql';
 
 const host = createWorkerCacheHost({
   scope: `offline-mail-${crypto.randomUUID()}`,
@@ -12,8 +14,11 @@ const select = (id: string) =>
 const id = (n: number) =>
   `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 const nil = id(0);
-const query = `query MailSeed { user { id emailLinks { id } soup(input:{initial:{limit:100,emailView:ALL}}) { items { __typename id ... on GraphqlSoupEmailThread { name linkId isRead inboxVisible isSignal hasNonTrashedMessages latestInboundMessageTs latestNonSpamMessageTs updatedAt } } } } }`;
-const fragment = `fragment MailRow on GraphqlSoupEmailThread { id name isRead inboxVisible }`;
+const previewFields = 'id subject snippet isDraft senderEmail senderName senderPhotoUrl';
+const previews = `mailAllPreview { ${previewFields} } mailDraftPreview { ${previewFields} } mailSentPreview { ${previewFields} }`;
+const query = `query MailSeed { user { id emailLinks { id } soup(input:{initial:{limit:100,emailView:ALL}}) { items { __typename id ... on GraphqlSoupEmailThread { name linkId ownerId isRead inboxVisible isSignal hasNonTrashedMessages latestInboundMessageTs latestNonSpamMessageTs latestOutboundMessageTs hasCalendarAttachment hasThreadShare ${previews} updatedAt } } } } }`;
+const fragment = `fragment MailRow on GraphqlSoupEmailThread { __typename id emailName:name isRead inboxVisible ${previews} }`;
+const preview = (n:number,subject:string,isDraft:boolean) => ({id:id(n),subject,snippet:subject,isDraft,senderEmail:null,senderName:null,senderPhotoUrl:null});
 let nextCursor: string | undefined;
 let requestId = 0;
 async function refresh(append = false) {
@@ -24,6 +29,7 @@ async function refresh(append = false) {
     ['signal', 'importance'],
     ['read', 'read'],
     ['archive', 'inboxVisible'],
+    ['calendar', 'calendarOnly'],
   ]) {
     const value = select(control).value;
     if (value !== 'all')
@@ -31,6 +37,7 @@ async function refresh(append = false) {
   }
   if (select('account').value !== 'all')
     literals.push({ literal: { owner: id(Number(select('account').value)) } });
+  if (select('sharing').value !== 'EXCLUDE') literals.push({literal:{shared:select('sharing').value}});
   const tree = literals.reduce<Record<string, unknown> | undefined>(
     (left, right) => (left ? { and: { left, right } } : right),
     undefined
@@ -54,7 +61,7 @@ async function refresh(append = false) {
       sortDirection: 'DESC',
       limit: 10,
       mail: {
-        view: select('view').value as 'ALL' | 'INBOX',
+        view: select('view').value as CachedMailView,
         ...(append && nextCursor ? { cursor: nextCursor } : {}),
       },
     });
@@ -68,10 +75,11 @@ async function refresh(append = false) {
     if (current !== requestId) return;
     if (page.revision !== selected.revision) throw new Error('stale page');
     if (!append) rows.replaceChildren();
-    for (const { record } of selected.records) {
-      const email = record as { name: string; inboxVisible: boolean };
+    for (const { recordKey, record } of selected.records) {
+      const email = materializeMailView(record as MailItemFieldsFragment,select('view').value as CachedMailView,page.sortTimestamps[page.keys.indexOf(recordKey)]);
+      if (!email || email.__typename !== 'GraphqlSoupEmailThread') throw new Error('missing canonical preview');
       const li = document.createElement('li');
-      li.textContent = `${email.name} — ${email.inboxVisible ? 'Not Done' : 'Done'}`;
+      li.textContent = `${email.emailName} — ${email.inboxVisible ? 'Not Done' : 'Done'}`;
       rows.append(li);
     }
     nextCursor = page.nextCursor ?? undefined;
@@ -104,7 +112,14 @@ await host.writeQuery({
           return {
             __typename: 'GraphqlSoupEmailThread',
             id: id(n),
-            name: `Email ${n}`,
+            name: `Wrong last-query preview ${n}`,
+            ownerId: n<=50 ? 'offline-mail-viewer' : 'macro|other@example.com',
+            hasThreadShare: n===1 || n===60 || (n>=71 && n<=74),
+            hasCalendarAttachment: n%5===0,
+            latestOutboundMessageTs: n%4===0 && n!==4 ? '2025-01-01T00:00:00Z' : null,
+            mailAllPreview: n===7 ? null : preview(n+10000,`Email ${n}`,false),
+            mailDraftPreview: n%3===0 && n!==7 ? preview(n+20000,`Draft ${n}`,true) : null,
+            mailSentPreview: n%4===0 && n!==7 ? preview(n+30000,`Sent ${n}`,false) : null,
             linkId: id(n <= 50 ? 1000 : n <= 70 ? 1001 : 9999),
             isRead: n % 4 === 0,
             inboxVisible: n % 2 === 0,

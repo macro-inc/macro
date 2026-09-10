@@ -185,6 +185,9 @@ describe('createGraphqlSoupAstItemsQuery', () => {
             id: key.split(':')[1],
             name: key,
             sortTs: 'wrong-view-timestamp',
+            mailAllPreview: { id: `${key}-preview`, subject: key, snippet: 'canonical', isDraft: false, senderEmail: null, senderName: null, senderPhotoUrl: null },
+            mailDraftPreview: null,
+            mailSentPreview: null,
           },
         })),
       })
