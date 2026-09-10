@@ -5,7 +5,7 @@ mod test;
 
 use std::pin::Pin;
 
-use agent_session_events::{AgentSessionLifecycleEvent, AgentSessionLifecycleMacroEvent};
+use crate::domain::events::{AgentSessionLifecycleEvent, AgentSessionLifecycleMacroEvent};
 use macro_event_broker::MacroEventBroker;
 
 use crate::domain::ports::AgentSessionLifecyclePublisher;

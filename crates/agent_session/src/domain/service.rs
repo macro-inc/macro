@@ -58,12 +58,11 @@ use super::model::{
 use super::ports::{
     AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
     AgentSessionNameGenerator, AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
-    Appended, NoOpAgentSessionNameGenerator, NoOpTurnObserver, NoopLifecyclePublisher,
-    SessionOwnership, SessionTurnObserver,
+    Appended, NoOpAgentSessionNameGenerator, SessionOwnership, SessionTurnObserver,
 };
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 use super::session::{CloseReason, Input};
-use agent_session_events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
+use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
 const COMMAND_BUFFER: usize = 1028;
@@ -275,69 +274,43 @@ pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGen
     lifecycle: Arc<Mutex<()>>,
 }
 
-impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
-    /// Build a service from its persistence port, fold, and realtime
-    /// publisher.
+impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
+    /// Build a service from every port it drives.
     ///
-    /// Only a live session streams, so a caller with no viewers to serve -
-    /// tests, and offline tooling - passes
-    /// [`NoOpRealtime`](super::ports::NoOpRealtime).
-    pub fn new(repo: R, folds: Folds, realtime: Rt) -> Self {
+    /// Nothing is defaulted: a caller with no viewers passes
+    /// [`NoOpRealtime`](super::ports::NoOpRealtime), one with no queue above
+    /// it passes [`NoOpTurnObserver`], one with nothing downstream passes
+    /// [`NoopLifecyclePublisher`], and one that is the only service instance
+    /// in its process mints its own [`ReplicaId`] - each choice visible at the
+    /// call site rather than hidden in a builder's default.
+    ///
+    /// `replica` is this service's identity in the session-management lease.
+    /// A restarted process is a new replica whose claims are recovered by
+    /// heartbeat staleness, never inherited. A process with more than one
+    /// attach-capable instance hands every instance the same id: commands
+    /// forward to an address, and every instance in a process shares one.
+    pub fn new(
+        repo: R,
+        folds: Folds,
+        realtime: Rt,
+        name_generator: Namer,
+        turn_observer: Arc<dyn SessionTurnObserver>,
+        lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
+        replica: ReplicaId,
+    ) -> Self {
         Self {
             repo,
             folds,
             realtime,
-            name_generator: NoOpAgentSessionNameGenerator,
-            turn_observer: Arc::new(NoOpTurnObserver),
-            lifecycle_publisher: Arc::new(NoopLifecyclePublisher),
+            name_generator,
+            turn_observer,
+            lifecycle_publisher,
             active: Arc::new(DashMap::new()),
-            replica: ReplicaId::mint(),
+            replica,
             tasks: TaskTracker::new(),
             cancellation: CancellationToken::new(),
             lifecycle: Arc::new(Mutex::new(())),
         }
-    }
-}
-
-impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
-    /// Replace the no-op name generator with a production adapter.
-    #[must_use]
-    pub fn with_name_generator<NextNamer>(
-        self,
-        name_generator: NextNamer,
-    ) -> AgentSessionServiceImpl<R, Folds, Rt, NextNamer> {
-        AgentSessionServiceImpl {
-            repo: self.repo,
-            folds: self.folds,
-            realtime: self.realtime,
-            name_generator,
-            turn_observer: self.turn_observer,
-            lifecycle_publisher: self.lifecycle_publisher,
-            active: self.active,
-            replica: self.replica,
-            tasks: self.tasks,
-            cancellation: self.cancellation,
-            lifecycle: self.lifecycle,
-        }
-    }
-
-    /// Replace the no-op turn observer with whoever gates prompts on turns -
-    /// in production, the harness's queue.
-    #[must_use]
-    pub fn with_turn_observer(mut self, turn_observer: Arc<dyn SessionTurnObserver>) -> Self {
-        self.turn_observer = turn_observer;
-        self
-    }
-
-    /// Replace the no-op lifecycle publisher with whoever carries session
-    /// facts downstream - in production, the Kafka broker.
-    #[must_use]
-    pub fn with_lifecycle_publisher(
-        mut self,
-        lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
-    ) -> Self {
-        self.lifecycle_publisher = lifecycle_publisher;
-        self
     }
 
     /// This service's identity in the session-management lease, for the
@@ -345,19 +318,6 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
     #[must_use]
     pub fn replica_id(&self) -> ReplicaId {
         self.replica
-    }
-
-    /// Adopt a caller-minted replica identity, replacing the constructor's.
-    ///
-    /// For processes with more than one attach-capable service instance: the
-    /// lease's replica is the *process* (commands forward to an address, and
-    /// every instance in a process shares one), so the composition root mints
-    /// a single id and stamps it on each instance. The instances' session
-    /// sets are disjoint by construction, so they never contend for a lease.
-    #[must_use]
-    pub fn with_replica(mut self, replica: ReplicaId) -> Self {
-        self.replica = replica;
-        self
     }
 
     /// Stop active actors and wait for their tasks to release their transports.

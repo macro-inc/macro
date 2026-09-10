@@ -194,7 +194,7 @@ impl WebhookEventIngestionService for FlakyIngestionService {
 
     async fn ingest_agent_session_lifecycle_event(
         &self,
-        _event: Event<agent_session_events::AgentSessionLifecycleEvent>,
+        _event: Event<agent_session::domain::events::AgentSessionLifecycleEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         self.ingest()
     }

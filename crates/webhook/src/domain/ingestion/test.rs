@@ -1459,10 +1459,10 @@ async fn agent_trigger_events_are_scoped_by_the_channel_but_named_by_the_bot() {
 
 fn agent_session_lifecycle_event(
     event: fn(
-        agent_session_events::SessionIdentity,
-    ) -> agent_session_events::AgentSessionLifecycleEvent,
-) -> Event<agent_session_events::AgentSessionLifecycleEvent> {
-    use agent_session_events::{SessionIdentity, ThreadOrigin};
+        agent_session::domain::events::SessionIdentity,
+    ) -> agent_session::domain::events::AgentSessionLifecycleEvent,
+) -> Event<agent_session::domain::events::AgentSessionLifecycleEvent> {
+    use agent_session::domain::events::{SessionIdentity, ThreadOrigin};
     use macro_user_id::cowlike::CowLike as _;
 
     Event::new(event(SessionIdentity {
@@ -1485,7 +1485,7 @@ fn agent_session_lifecycle_event(
 /// ordering key, and whose grants gate it - not the bot, unlike a trigger.
 #[tokio::test]
 async fn agent_session_lifecycle_events_are_scoped_and_named_by_the_session() {
-    use agent_session_events::{AgentSessionLifecycleEvent, SessionSettledMetadata, TurnSummary};
+    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionSettledMetadata, TurnSummary};
 
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
     let repository = MockRepository::new(
@@ -1542,7 +1542,7 @@ async fn agent_session_lifecycle_events_are_scoped_and_named_by_the_session() {
 
 #[tokio::test]
 async fn every_agent_session_lifecycle_variant_is_named_by_its_wire_tag() {
-    use agent_session_events::{
+    use agent_session::domain::events::{
         AgentSessionLifecycleEvent, SessionDeletedMetadata, WaitingForInputMetadata,
     };
 
@@ -1587,7 +1587,7 @@ async fn every_agent_session_lifecycle_variant_is_named_by_its_wire_tag() {
 /// from the event: the owner, plus the channel it was opened from.
 #[tokio::test]
 async fn a_deleted_session_is_delivered_to_its_owner_and_origin_channel() {
-    use agent_session_events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
 
     let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
     let repository = MockRepository::new(
@@ -1624,7 +1624,7 @@ async fn a_deleted_session_is_delivered_to_its_owner_and_origin_channel() {
 
 #[tokio::test]
 async fn a_deleted_session_without_an_origin_is_its_owners_alone() {
-    use agent_session_events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
 
     let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
     let repository = MockRepository::new(

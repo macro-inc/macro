@@ -17,6 +17,7 @@ use agent_runtime_protocol::domain::{
     schema::v0::{AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage},
 };
 use agent_session::PROTOCOL_VERSION;
+use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_session::domain::model::{
     AgentMcpServers, AgentSessionId, CreateAgentSessionParams, Message, SandboxSize,
 };
@@ -27,7 +28,6 @@ use agent_session::domain::ports::{
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::domain::session::StopReason;
 use agent_session::testing::{InMemoryAgentSessionRepo, RecordingLifecyclePublisher};
-use agent_session_events::AgentSessionLifecycleEvent;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -50,6 +50,8 @@ use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
 use crate::testing::helpers::egress::{EgressProvisionerMock, test_egress};
 use agent_session::domain::error::AgentSessionError;
+use agent_session::domain::model::ReplicaId;
+use agent_session::domain::ports::{NoOpAgentSessionNameGenerator, NoOpTurnObserver};
 use agent_session::domain::ports::{
     OpenExternalAgentSession, OpenManagedSession, SessionOpener as _,
 };
@@ -324,9 +326,11 @@ fn harness_with_signals(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
-        )
-        .with_turn_observer(turn_observer.clone())
-        .with_lifecycle_publisher(Arc::new(lifecycle.clone())),
+            NoOpAgentSessionNameGenerator,
+            turn_observer.clone(),
+            Arc::new(lifecycle.clone()),
+            ReplicaId::mint(),
+        ),
         containers.clone(),
         announcer.clone(),
         TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
@@ -1830,6 +1834,10 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
         ),
         containers.clone(),
         AnnouncerMock::new(),
@@ -2281,6 +2289,10 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
@@ -2325,6 +2337,10 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
@@ -2379,7 +2395,7 @@ mod lifecycle_events {
     use agent_runtime_protocol::domain::action::{
         AgentActionId, ElicitationAnswer, ElicitationRequestId,
     };
-    use agent_session_events::AgentSessionLifecycleEvent as Lifecycle;
+    use agent_session::domain::events::AgentSessionLifecycleEvent as Lifecycle;
 
     /// Open a session from a mention and let its first turn settle: `Opened`,
     /// `TurnStarted`, `TurnEnded`, `Settled`.

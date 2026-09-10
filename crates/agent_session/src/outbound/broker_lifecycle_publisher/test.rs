@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_session_events::{AgentSessionLifecycleEvent, SessionDeletedMetadata, SessionIdentity};
+use crate::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata, SessionIdentity};
 use bots::domain::models::BotId;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::cowlike::CowLike as _;

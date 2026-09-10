@@ -4,6 +4,7 @@ use crate::domain::model::{
     DEFAULT_AGENT_SESSION_NAME, Message, ReplicaAddress, SessionBot, SessionManager,
 };
 use crate::domain::ports::NoOpRealtime;
+use crate::domain::ports::{NoOpTurnObserver, NoopLifecyclePublisher};
 use crate::domain::session::HandshakeStatus;
 use crate::testing::{
     InMemoryAgentSessionRepo, RecordingLifecyclePublisher, RecordingRealtime, test_agent_session,
@@ -44,6 +45,10 @@ fn fixture() -> Fixture {
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
         ),
         repo,
         session,
@@ -212,6 +217,10 @@ async fn manual_rename_trims_persists_and_publishes() {
         repo.clone(),
         FoldedMessageService::new(repo.clone()),
         realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     service
@@ -243,6 +252,10 @@ async fn manual_rename_rejects_blank_and_overlong_names() {
         repo.clone(),
         FoldedMessageService::new(repo),
         RenameRealtime::default(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     assert!(matches!(
@@ -272,6 +285,10 @@ async fn manual_rename_rejects_access_for_another_entity_type() {
         repo.clone(),
         FoldedMessageService::new(repo),
         RenameRealtime::default(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
     let wrong_access = EntityAccessReceipt::<OwnerAccessLevel>::dangerously_assert_internal_user(
         &session.as_uuid().to_string(),
@@ -706,6 +723,10 @@ async fn a_second_replica_cannot_attach_a_session_with_a_live_manager() {
         fx.repo.clone(),
         FoldedMessageService::new(fx.repo.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
     let result = second_replica
         .attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
@@ -999,6 +1020,10 @@ async fn marking_disconnected_persists_and_publishes_the_event() {
         repo.clone(),
         FoldedMessageService::new(repo.clone()),
         realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     service
@@ -1036,8 +1061,15 @@ async fn marking_disconnected_is_bounded_when_persistence_hangs() {
         hang_disconnect: true,
         fail_restore_log: None,
     };
-    let service =
-        AgentSessionServiceImpl::new(hanging, FoldedMessageService::new(repo), NoOpRealtime);
+    let service = AgentSessionServiceImpl::new(
+        hanging,
+        FoldedMessageService::new(repo),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
     let disconnect = tokio::spawn(async move { service.mark_disconnected(session).await });
     tokio::task::yield_now().await;
     tokio::time::advance(SESSION_PERSIST_TIMEOUT).await;
@@ -1209,6 +1241,10 @@ async fn session_log_returns_the_sessions_frames_in_order() {
         store.clone(),
         FoldedMessageService::new(store.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     let log = service

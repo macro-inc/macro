@@ -241,7 +241,6 @@ dependencies = [
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
- "agent_session_events",
  "agent_trigger",
  "anyhow",
  "axum",
@@ -427,7 +426,6 @@ dependencies = [
  "agent-client-protocol",
  "agent_fold",
  "agent_runtime_protocol",
- "agent_session_events",
  "ai_usage",
  "anyhow",
  "axum",
@@ -443,7 +441,7 @@ dependencies = [
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
- "macro_service_urls",
+ "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -461,24 +459,6 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
- "utoipa",
- "workspace-hack",
-]
-
-[[package]]
-name = "agent_session_events"
-version = "0.1.0"
-dependencies = [
- "agent_fold",
- "agent_runtime_protocol",
- "bot_id",
- "macro_event_broker",
- "macro_event_topics",
- "macro_user_id",
- "macro_uuid",
- "serde",
- "serde_json",
- "strum 0.27.2",
  "utoipa",
  "workspace-hack",
 ]
@@ -18079,7 +18059,6 @@ dependencies = [
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
- "agent_session_events",
  "agent_trigger",
  "anyhow",
  "axum",

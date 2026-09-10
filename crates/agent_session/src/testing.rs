@@ -5,6 +5,7 @@
 //! [`AgentSessionLogRepo`] contract without a database.
 
 use crate::domain::error::{AgentSessionError, Result};
+use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, ClaimOutcome,
     CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence,
@@ -17,7 +18,6 @@ use crate::domain::ports::{
 };
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
-use agent_session_events::AgentSessionLifecycleEvent;
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;

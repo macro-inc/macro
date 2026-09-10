@@ -19,9 +19,9 @@ use std::collections::VecDeque;
 
 use agent_fold::domain::model::TurnId;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_session::domain::events::{InFlightTurnSummary, TurnSummary};
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::ports::QueuedControl;
-use agent_session_events::{InFlightTurnSummary, TurnSummary};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use macro_user_id::user_id::MacroUserIdStr;

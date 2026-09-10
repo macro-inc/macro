@@ -9,7 +9,7 @@ use crate::domain::{
     events::WebhookTopicEvent,
     stream::{StreamAudience, StreamCandidateEvent},
 };
-use agent_session_events::AgentSessionLifecycleEvent;
+use agent_session::domain::events::AgentSessionLifecycleEvent;
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;

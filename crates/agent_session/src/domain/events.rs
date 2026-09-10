@@ -1,4 +1,3 @@
-#![deny(missing_docs)]
 //! Agent session lifecycle facts, published to
 //! [`MacroAgentSessionLifecycleTopic`] and keyed by session id.
 //!
@@ -7,22 +6,22 @@
 //! downstream to react to: webhooks, notifications, observability. Commands
 //! that *drive* a session travel on `macro.agent_sessions` instead.
 //!
-//! Deliberately a leaf crate: consumers decode these without the session
-//! service's axum, sqlx, or entity-access dependencies.
+//! Consumers that only decode these events depend on this crate with
+//! `default-features = false`: the domain compiles without the inbound and
+//! outbound adapters' axum, sqlx, and client dependencies.
 
 #[cfg(test)]
 mod test;
 
-use agent_fold::domain::model::TurnId;
 use agent_runtime_protocol::domain::action::AgentActionId;
-use bot_id::BotId;
+use bots::domain::models::BotId;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroAgentSessionLifecycleTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
-pub use agent_fold::domain::log::AgentSessionId;
+use super::model::{AgentSessionId, TurnId};
 
 /// The channel thread a session was opened from, when it was.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

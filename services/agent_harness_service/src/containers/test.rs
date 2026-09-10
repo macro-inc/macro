@@ -2,10 +2,15 @@ use super::*;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::outbound::daytona::AnthropicApiKey;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
+use agent_session::domain::model::ReplicaId;
 use agent_session::domain::ports::NoOpRealtime;
+use agent_session::domain::ports::{
+    NoOpAgentSessionNameGenerator, NoOpTurnObserver, NoopLifecyclePublisher,
+};
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::testing::{InMemoryAgentSessionRepo, test_agent_session};
 use bot_id::BotId;
+use std::sync::Arc;
 
 /// A sandbox provider the tests never reach: every case here is decided by
 /// `route` before the provider is asked for anything.
@@ -32,8 +37,15 @@ fn sessions_with_harness(
     session.bot_id = bot;
     session.harness = harness.to_owned();
     repo.insert_session(session);
-    let service =
-        AgentSessionServiceImpl::new(repo.clone(), FoldedMessageService::new(repo), NoOpRealtime);
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
     (id, service)
 }
 

@@ -119,6 +119,7 @@ use sqlx::postgres::PgPoolOptions;
 use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::Instrument as _;
 
+use agent_session::domain::ports::{NoOpAgentSessionNameGenerator, NoOpTurnObserver};
 use runtime_commands::consume_runtime_commands;
 
 /// Consumer group owning this harness's agent-session offsets.
@@ -240,13 +241,11 @@ async fn run() -> anyhow::Result<()> {
             connection_gateway.clone(),
             session_repo.clone(),
         ),
-    )
-    .with_replica(replica)
-    .with_turn_observer(turn_observer.clone())
-    .with_lifecycle_publisher(lifecycle_publisher.clone())
-    .with_name_generator(HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(
-        pool.clone(),
-    )));
+        HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(pool.clone())),
+        turn_observer.clone(),
+        lifecycle_publisher.clone(),
+        replica,
+    );
 
     // Containers: the sandbox provider (local Docker when a developer has
     // opted in, Daytona otherwise) plus Cursor cloud agents for the `@cursor`
@@ -393,10 +392,11 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
         NoOpRealtime,
-    )
-    .with_replica(replica)
-    .with_turn_observer(turn_observer.clone())
-    .with_lifecycle_publisher(lifecycle_publisher.clone());
+        NoOpAgentSessionNameGenerator,
+        turn_observer.clone(),
+        lifecycle_publisher.clone(),
+        replica,
+    );
     let sandbox_and_inmem = RoutedContainers::new(sandbox, inmem, inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
@@ -630,8 +630,11 @@ async fn run() -> anyhow::Result<()> {
             session_repo.clone(),
             FoldedMessageService::new(session_repo.clone()),
             ConnectionGatewayAgentSessionRealtime::new(connection_gateway, session_repo.clone()),
-        )
-        .with_lifecycle_publisher(lifecycle_publisher),
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            lifecycle_publisher,
+            ReplicaId::mint(),
+        ),
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );

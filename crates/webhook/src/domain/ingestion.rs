@@ -15,7 +15,7 @@ use crate::domain::{
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
-use agent_session_events::{AgentSessionLifecycleEvent, AgentSessionLifecycleEventName};
+use agent_session::domain::events::{AgentSessionLifecycleEvent, AgentSessionLifecycleEventName};
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use chrono::Utc;

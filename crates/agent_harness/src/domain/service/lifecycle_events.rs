@@ -1,7 +1,9 @@
 //! Publishing a session's lifecycle facts: who the session is.
 
+use agent_session::domain::events::{
+    AgentSessionLifecycleEvent, SessionIdentity, SessionOpenedMetadata,
+};
 use agent_session::domain::lifecycle::session_identity;
-use agent_session_events::{AgentSessionLifecycleEvent, SessionIdentity, SessionOpenedMetadata};
 
 use super::*;
 

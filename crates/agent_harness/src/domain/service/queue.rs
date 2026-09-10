@@ -2,7 +2,7 @@
 //! command at a time, and routing to the replica that holds the session.
 
 use agent_fold::domain::model::{StopReason, TurnSignal};
-use agent_session_events::{
+use agent_session::domain::events::{
     AgentSessionLifecycleEvent, InputReceivedMetadata, SessionDeletedMetadata,
     SessionSettledMetadata, SessionStoppedMetadata, TurnEndedMetadata, TurnStartedMetadata,
     WaitingForInputMetadata,

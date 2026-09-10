@@ -1,6 +1,6 @@
 //! Building lifecycle-event identity from the session's own rows.
 
-use agent_session_events::{SessionIdentity, ThreadOrigin};
+use crate::domain::events::{SessionIdentity, ThreadOrigin};
 
 use super::model::{AgentSession, SessionBot};
 

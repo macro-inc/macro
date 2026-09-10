@@ -200,5 +200,5 @@ pub enum WebhookEvent {
     Channel(channels::domain::broker_events::ChannelTopicEvent),
     /// Agent session lifecycle events from the `macro.agent_session_lifecycle`
     /// topic.
-    AgentSession(agent_session_events::AgentSessionLifecycleEvent),
+    AgentSession(agent_session::domain::events::AgentSessionLifecycleEvent),
 }

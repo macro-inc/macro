@@ -1,4 +1,5 @@
 use super::*;
+use bots::domain::models::BotId;
 
 use macro_user_id::cowlike::CowLike;
 use serde_json::json;

@@ -7,7 +7,6 @@ members = [
   "crates/agent_harness",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session",
-  "crates/agent_session_events",
   "crates/agent_trigger",
   "crates/ai_projections",
   "crates/ai_usage",
