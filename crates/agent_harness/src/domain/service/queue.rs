@@ -462,6 +462,11 @@ where
         command: DeliverAction,
     ) -> Result<CommandOutcome> {
         let action_id = command.id;
+        let prompt = match &command.action {
+            AgentAction::Prompt(prompt) => Some(prompt.prompt.clone()),
+            _ => None,
+        };
+        let actor = command.actor.clone();
         queue_result(
             self.queues.enqueue(
                 session_id,
@@ -476,6 +481,12 @@ where
             ),
             session_id,
         )?;
+        // Mentions are a fact about the prompt, not the turn: published as
+        // soon as the prompt is accepted, whether it dispatches now or waits.
+        if let Some(prompt) = prompt {
+            self.publish_mentions(session_id, action_id, actor, &prompt)
+                .await;
+        }
 
         let dispatched = if self.busy.is_pending(session_id) {
             Ok(())

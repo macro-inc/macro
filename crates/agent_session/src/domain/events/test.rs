@@ -22,6 +22,7 @@ fn identity() -> SessionIdentity {
             thread_id: Uuid::from_u128(2),
             originating_message_id: Uuid::from_u128(3),
         }),
+        audience: vec![owner()],
     }
 }
 
@@ -74,6 +75,16 @@ fn one_of_each() -> Vec<AgentSessionLifecycleEvent> {
             identity: identity(),
             turn: TurnId(1),
             action_id: action_id(),
+        }),
+        AgentSessionLifecycleEvent::Mentioned(SessionMentionedMetadata {
+            identity: identity(),
+            action_id: action_id(),
+            mentioned_by: Some(owner()),
+            mentioned: vec![
+                MacroUserIdStr::parse_from_str("macro|reviewer@macro.com")
+                    .expect("valid user id")
+                    .into_owned(),
+            ],
         }),
         AgentSessionLifecycleEvent::Stopped(SessionStoppedMetadata {
             identity: identity(),
@@ -128,6 +139,26 @@ fn every_variant_round_trips() {
             serde_json::from_value(value).expect("deserialize event");
         assert_eq!(parsed, event);
     }
+}
+
+#[test]
+fn identity_without_audience_still_decodes() {
+    // Events published before the audience existed have no such field; a
+    // consumer reading a retained record must not choke on them.
+    let mut value = serde_json::to_value(AgentSessionLifecycleEvent::Renamed(
+        SessionRenamedMetadata {
+            identity: identity(),
+        },
+    ))
+    .expect("serialize event");
+    value["metadata"]["identity"]
+        .as_object_mut()
+        .expect("identity object")
+        .remove("audience");
+
+    let parsed: AgentSessionLifecycleEvent =
+        serde_json::from_value(value).expect("deserialize event");
+    assert!(parsed.identity().audience.is_empty());
 }
 
 #[test]

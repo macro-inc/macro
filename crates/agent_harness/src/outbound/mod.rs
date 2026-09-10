@@ -12,6 +12,7 @@ pub mod forward;
 pub mod local;
 pub(crate) mod managed_containers;
 pub mod namespace;
+pub mod prompt_mentions;
 pub(crate) mod provision;
 pub mod routing;
 pub mod runtime_registry;

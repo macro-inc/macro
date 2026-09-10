@@ -497,6 +497,16 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
         &self,
         agent_session_id: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
+
+    /// Every user the log has attributed a frame to: whoever prompted,
+    /// answered, or otherwise drove the session. Distinct, unordered; the
+    /// owner appears only if they acted. Spans the whole log, resumes
+    /// included - someone who prompted before a resume still cares how it
+    /// ends.
+    fn participants(
+        &self,
+        agent_session_id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send;
 }
 
 /// One frame appended: its durable identity, and what the fold made of it.

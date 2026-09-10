@@ -569,6 +569,13 @@ impl AgentSessionLogRepo for BlockingPromptLogs {
     ) -> Result<Vec<StoredAgentSessionLog>> {
         AgentSessionLogRepo::list_by_session(&self.repo, agent_session_id).await
     }
+
+    async fn participants(
+        &self,
+        agent_session_id: AgentSessionId,
+    ) -> Result<Vec<MacroUserIdStr<'static>>> {
+        AgentSessionLogRepo::participants(&self.repo, agent_session_id).await
+    }
 }
 
 impl Transport<ToRuntimeMessage, ToServerMessage> for PendingTransport {

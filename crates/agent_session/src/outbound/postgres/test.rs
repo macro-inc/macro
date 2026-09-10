@@ -1696,3 +1696,41 @@ async fn history_boundary_range_uses_order_index_and_uuid_tie_break(pool: PgPool
         10000
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn participants_are_the_distinct_users_the_log_attributes(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session_id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+    let alice = user_id("macro|alice@example.com");
+    let bob = user_id("macro|bob@example.com");
+
+    // Two prompts from alice, one from bob, and a frame from nobody.
+    for user in [
+        Some(alice.clone()),
+        Some(bob.clone()),
+        Some(alice.clone()),
+        None,
+    ] {
+        let _ = AgentSessionLogRepo::create(
+            &repo,
+            AgentSessionLog {
+                agent_session_id: session_id,
+                user_id: user,
+                content: Message::ToRuntime(ToRuntimeMessage::Acp(acp_notification())),
+            },
+        )
+        .await
+        .expect("create log entry");
+    }
+
+    let mut participants = repo
+        .participants(session_id)
+        .await
+        .expect("list participants");
+    participants.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+
+    assert_eq!(participants, vec![alice, bob]);
+}

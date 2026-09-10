@@ -51,7 +51,7 @@ use crate::domain::model::{
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
-    AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
+    AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager, PromptMentions,
     RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
@@ -95,6 +95,8 @@ struct AgentHarnessInner<
     busy: PendingCommands,
     /// Where lifecycle facts go. Erased so it is not an eighth type parameter.
     lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
+    /// Who a prompt names; erased for the same reason.
+    mentions: Arc<dyn PromptMentions>,
 }
 
 /// Turns trigger commands into running, announced agent sessions.
@@ -180,6 +182,7 @@ where
         defaults: impl Into<HarnessDefaults>,
         lifecycle_publisher: impl AgentSessionLifecyclePublisher,
         pending: PendingCommands,
+        mentions: impl PromptMentions,
     ) -> Self {
         Self {
             inner: Arc::new(AgentHarnessInner {
@@ -195,6 +198,7 @@ where
                 queues: SessionQueues::new(),
                 busy: pending,
                 lifecycle_publisher: Arc::new(lifecycle_publisher),
+                mentions: Arc::new(mentions),
             }),
             workers: Arc::new(DashMap::new()),
         }

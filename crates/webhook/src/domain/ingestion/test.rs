@@ -1478,6 +1478,7 @@ fn agent_session_lifecycle_event(
             thread_id: uuid::Uuid::from_u128(2),
             originating_message_id: uuid::Uuid::from_u128(3),
         }),
+        audience: Vec::new(),
     }))
 }
 

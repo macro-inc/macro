@@ -1,9 +1,11 @@
 //! Publishing a session's lifecycle facts: who the session is.
 
+use agent_runtime_protocol::domain::action::AgentActionId;
 use agent_session::domain::events::{
-    AgentSessionLifecycleEvent, SessionIdentity, SessionOpenedMetadata,
+    AgentSessionLifecycleEvent, SessionIdentity, SessionMentionedMetadata, SessionOpenedMetadata,
 };
 use agent_session::domain::lifecycle::session_identity;
+use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 
@@ -34,8 +36,11 @@ where
 
     /// The identity block for a session whose row is already in hand.
     pub(super) async fn identity_of(&self, session: &AgentSession) -> Result<SessionIdentity> {
-        let bot = self.sessions.session_bot(session.bot_id).await?;
-        Ok(session_identity(session, &bot))
+        let (bot, participants) = tokio::try_join!(
+            self.sessions.session_bot(session.bot_id),
+            self.sessions.session_participants(session.id),
+        )?;
+        Ok(session_identity(session, &bot, participants))
     }
 
     /// Publish one fact about `session_id`, built once its identity is known.
@@ -55,6 +60,52 @@ where
                 "skipping agent session lifecycle event: identity unavailable"
             ),
         }
+    }
+
+    /// Publish `agent_session.mentioned` for the users a prompt names, if any.
+    ///
+    /// The author is never in the list: mentioning yourself is not news. Like
+    /// every lifecycle publish, a failure to resolve the mentions is logged
+    /// and the prompt goes on regardless - the mention is a courtesy to
+    /// whoever was named, not part of delivering the prompt.
+    pub(super) async fn publish_mentions(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+        prompt_markdown: &str,
+    ) {
+        let mentioned = match self
+            .mentions
+            .mentioned_users(session_id, prompt_markdown)
+            .await
+        {
+            Ok(mentioned) => mentioned,
+            Err(error) => {
+                tracing::warn!(
+                    error = ?error,
+                    %session_id,
+                    "skipping agent_session.mentioned: mentions unavailable"
+                );
+                return;
+            }
+        };
+        let mentioned: Vec<_> = mentioned
+            .into_iter()
+            .filter(|user| actor.as_ref() != Some(user))
+            .collect();
+        if mentioned.is_empty() {
+            return;
+        }
+        self.publish_lifecycle(session_id, |identity| {
+            AgentSessionLifecycleEvent::Mentioned(SessionMentionedMetadata {
+                identity,
+                action_id,
+                mentioned_by: actor,
+                mentioned,
+            })
+        })
+        .await;
     }
 
     /// Publish `agent_session.opened` for a row just created.
