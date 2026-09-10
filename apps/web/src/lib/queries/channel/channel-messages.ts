@@ -31,6 +31,7 @@ import {
   captureThreadPreviewReplySnapshot,
   insertReplyIntoThreadPreview,
   removeReplyFromThreadPreview,
+  replaceReplyCreatedAtInThreadPreview,
   replaceReplyIdInThreadPreview,
   replaceReplyReactionsInThreadPreview,
   restoreReplyToThreadPreview,
@@ -260,7 +261,13 @@ export function channelMessagesQueryOptions(
           });
           return page;
         }
-        const merged = mergeCatchUpPage(delta, watermark.firstPage);
+        const liveFirstPage = queryClient.getQueryData<ChannelMessagesData>(
+          getChannelMessagesQueryKey(channelId, null)
+        )?.pages[0];
+        const merged = mergeCatchUpPage(
+          delta,
+          liveFirstPage ?? watermark.firstPage
+        );
         trackChannelMessagesLoad({
           channelId,
           path: 'catch_up',
@@ -488,6 +495,21 @@ export function replaceTopLevelMessageIdInChannelMessages(
   );
 }
 
+export function replaceTopLevelMessageCreatedAtInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  messageIds: readonly string[],
+  createdAt: string
+): ChannelMessagesData | undefined {
+  if (!data || messageIds.length === 0) return data;
+  const ids = new Set(messageIds);
+
+  return mapChannelMessagesItems(data, (message) =>
+    ids.has(message.id) && message.created_at !== createdAt
+      ? { ...message, created_at: createdAt }
+      : message
+  );
+}
+
 export function replaceTopLevelMessageReactionsInChannelMessages(
   data: ChannelMessagesData | undefined,
   messageId: string,
@@ -626,6 +648,25 @@ export function removeThreadReplyFromChannelMessages(
   return mapChannelMessagesItems(data, (message) => {
     if (message.id !== threadId) return message;
     const thread = removeReplyFromThreadPreview(message.thread, replyId);
+    return thread === message.thread ? message : { ...message, thread };
+  });
+}
+
+export function replaceThreadReplyCreatedAtInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  threadId: string,
+  replyIds: readonly string[],
+  createdAt: string
+): ChannelMessagesData | undefined {
+  if (!data) return data;
+
+  return mapChannelMessagesItems(data, (message) => {
+    if (message.id !== threadId) return message;
+    const thread = replaceReplyCreatedAtInThreadPreview(
+      message.thread,
+      replyIds,
+      createdAt
+    );
     return thread === message.thread ? message : { ...message, thread };
   });
 }

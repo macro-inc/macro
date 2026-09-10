@@ -386,6 +386,43 @@ describe('channelMessagesQueryOptions', () => {
     });
   });
 
+  it('catch-up merge uses the live first page, not the pre-request snapshot', async () => {
+    const cached = createMessage('msg-1', '2026-09-10T13:19:00.123456Z');
+    seedLatestCache([cached]);
+    let releaseCatchUp!: () => void;
+    const holdCatchUp = new Promise<void>((resolve) => {
+      releaseCatchUp = resolve;
+    });
+    mocks.getChannelMessagesCatchUp.mockImplementationOnce(async () => {
+      await holdCatchUp;
+      return ok({
+        items: [createMessage('msg-delta', '2026-09-10T13:20:00.000000Z')],
+        next_cursor: null,
+        previous_cursor: null,
+      });
+    });
+
+    const pending = channelMessagesQueryOptions('channel-1', null).queryFn({
+      pageParam: null,
+    });
+    await Promise.resolve();
+    seedLatestCache([
+      createMessage('msg-live', '2026-09-10T13:18:00.000000Z', {
+        content: 'from websocket',
+      }),
+      cached,
+    ]);
+    releaseCatchUp();
+
+    const result = await pending;
+    expect(result.items.map((item) => item.id)).toEqual([
+      'msg-delta',
+      'msg-live',
+      'msg-1',
+    ]);
+    expect(result.items[1]?.content).toBe('from websocket');
+  });
+
   it('later pages keep using the full endpoint without an event', async () => {
     mocks.getChannelMessages.mockResolvedValueOnce(ok(fullPage()));
 
