@@ -1815,10 +1815,11 @@ fn write_projection_mutations(
         .filter_map(|(key, state)| state.map(|state| (key, state)))
         .collect::<HashMap<_, _>>();
 
-    for mutation in &mutations {
-        let key = mutation.record_key().clone();
-        apply_authoritative_projection_mutations(&mut states, std::slice::from_ref(mutation));
-        write_projection_state(connection, &key, states.get(&key))?;
+    apply_authoritative_projection_mutations(&mut states, &mutations);
+    // A snapshot can include many child contributions to the same parent.
+    // Preserve mutation order in memory, but persist each final state only once.
+    for key in &keys {
+        write_projection_state(connection, key, states.get(key))?;
     }
     if !keys.is_empty() {
         // Network snapshots and realtime writes must rebase pending member edits

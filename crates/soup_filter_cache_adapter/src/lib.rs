@@ -680,12 +680,10 @@ fn optimistic_projection_for_object(
             object,
             Some(created_at_ms),
         )
+        && let Ok(document) = compose_soup_flat_v3(input, None, None)
+        && let Ok(document) = notifications::compose_active_notifications(document, object)
     {
-        if let Ok(document) = compose_soup_flat_v3(input, None, None)
-            && let Ok(document) = notifications::compose_active_notifications(document, object)
-        {
-            return Some(OptimisticProjectionMutation::Replace(document));
-        }
+        return Some(OptimisticProjectionMutation::Replace(document));
     }
 
     let project_field = if kind == SoupFlatEntityKind::Project {

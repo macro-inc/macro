@@ -225,9 +225,10 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
         .await
         .unwrap();
     let key = format!("GraphqlNotification:{C}");
-    let projections = notification_deletion_updates(engine.storage(), &[key.clone()], false)
-        .await
-        .unwrap();
+    let projections =
+        notification_deletion_updates(engine.storage(), std::slice::from_ref(&key), false)
+            .await
+            .unwrap();
     engine
         .delete_keys_with_projection_changes(&[EntityKey(key.into())], projections)
         .await

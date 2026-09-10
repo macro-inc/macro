@@ -38,13 +38,12 @@ pub(super) fn selected_snapshot(
                             };
                             let mut canonical = serde_json::Map::new();
                             for field in &child_fields {
-                                if let Some(value) = object.get(&field.response_key) {
-                                    if canonical
+                                if let Some(value) = object.get(&field.response_key)
+                                    && canonical
                                         .insert(field.name.clone(), value.clone())
                                         .is_some_and(|old| old != *value)
-                                    {
-                                        return serde_json::Value::Null;
-                                    }
+                                {
+                                    return serde_json::Value::Null;
                                 }
                             }
                             serde_json::Value::Object(canonical)
