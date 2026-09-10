@@ -1,5 +1,5 @@
 import { isIOS } from '@solid-primitives/platform';
-import type { LexicalEditor } from 'lexical';
+import { type LexicalEditor, SKIP_SCROLL_INTO_VIEW_TAG } from 'lexical';
 
 export function clearComposer(editor: LexicalEditor, clear: () => void) {
   const root = editor.getRootElement();
@@ -15,5 +15,6 @@ export function clearComposer(editor: LexicalEditor, clear: () => void) {
   root.blur();
   editor.update(clear, { discrete: true });
   root.focus({ preventScroll: true });
-  editor.focus();
+  // Lexical also scrolls the restored caret, separately from DOM focus.
+  editor.update(() => editor.focus(), { tag: SKIP_SCROLL_INTO_VIEW_TAG });
 }

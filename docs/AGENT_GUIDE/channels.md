@@ -166,6 +166,7 @@ useful as a guaranteed-existing channel in tests.
 For mobile send regressions, keep the software keyboard open and send several
 short and multiline messages consecutively. The keyboard should remain open,
 the cleared composer should retain focus, and a pinned chat should remain at the
-bottom through composer resizing and server acknowledgement. Repeat with dictation
+bottom through composer resizing and server acknowledgement. Check that restoring
+the caret after send does not pan the page while the keyboard resizes. Repeat with dictation
 and check that sent text does not return. Scroll into history before an incoming
 message or acknowledgement and verify that it does not pull you to latest.

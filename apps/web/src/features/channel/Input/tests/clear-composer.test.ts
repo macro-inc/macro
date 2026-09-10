@@ -1,3 +1,4 @@
+import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import {
   $addUpdateTag,
   $createParagraphNode,
@@ -5,8 +6,11 @@ import {
   $getRoot,
   $getSelection,
   $setSelection,
+  CLEAR_HISTORY_COMMAND,
   createEditor,
+  HISTORY_PUSH_TAG,
   SKIP_DOM_SELECTION_TAG,
+  UNDO_COMMAND,
 } from 'lexical';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { clearComposer } from '../utils/clear-composer';
@@ -29,6 +33,8 @@ function setup() {
     },
   });
   editor.setRootElement(root);
+  const history = createEmptyHistoryState();
+  const unregisterHistory = registerHistory(editor, history, 400);
   editor.update(
     () => {
       $addUpdateTag(SKIP_DOM_SELECTION_TAG);
@@ -39,17 +45,78 @@ function setup() {
     { discrete: true }
   );
   // This is the selection-clearing update used by the Markdown controls.
-  const clear = vi.fn(() =>
+  const clear = vi.fn(() => {
     editor.update(() => {
       $addUpdateTag(SKIP_DOM_SELECTION_TAG);
       $getRoot().clear().append($createParagraphNode());
       $setSelection(null);
-    })
-  );
-  return { root, editor, clear, dispose: () => editor.setRootElement(null) };
+    });
+    editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
+  });
+  return {
+    root,
+    editor,
+    clear,
+    history,
+    dispose: () => {
+      unregisterHistory();
+      editor.setRootElement(null);
+    },
+  };
 }
 
 describe('iOS composer clearing', () => {
+  it('restores the caret without scrolling the viewport', async () => {
+    const f = setup();
+    try {
+      f.root.focus();
+      // The composer lies below the viewport while the keyboard is resizing.
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, window.innerHeight + 100, 300, 20)
+      );
+      const scrollBy = vi
+        .spyOn(window, 'scrollBy')
+        .mockImplementation(() => {});
+      clearComposer(f.editor, f.clear);
+      await Promise.resolve();
+      expect(document.activeElement).toBe(f.root);
+      f.editor
+        .getEditorState()
+        .read(() => expect($getSelection()).not.toBeNull());
+      expect(scrollBy).not.toHaveBeenCalled();
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('cannot undo a send back to the sent message', async () => {
+    const f = setup();
+    try {
+      f.editor.update(
+        () => {
+          $getRoot()
+            .clear()
+            .append(
+              $createParagraphNode().append($createTextNode('Edited sent text'))
+            );
+          $getRoot().selectEnd();
+        },
+        { discrete: true, tag: [HISTORY_PUSH_TAG, SKIP_DOM_SELECTION_TAG] }
+      );
+      expect(f.history.undoStack.length).toBeGreaterThan(0);
+      f.root.focus();
+      clearComposer(f.editor, f.clear);
+      await Promise.resolve();
+      expect(f.history.undoStack).toEqual([]);
+      expect(f.history.redoStack).toEqual([]);
+      f.editor.dispatchCommand(UNDO_COMMAND, undefined);
+      await Promise.resolve();
+      expect(f.root.textContent).toBe('');
+    } finally {
+      f.dispose();
+    }
+  });
+
   it('ends the editing session and clears before restoring focus in the same task', async () => {
     const f = setup();
     try {
