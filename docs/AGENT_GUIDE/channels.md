@@ -88,6 +88,11 @@ when only slightly above the bottom. Composer and viewport resizing respect the
 same boundary. Returning to the bottom resumes following; loading older messages
 preserves the reading position.
 
+Inline document mentions should show their stored title before entering the viewport
+and while preview requests are pending. With a slow preview response, check that a
+long, unchanged title retains its line wrapping as the preview loads; a renamed
+document should update to its fetched title afterward.
+
 Message and reply links reveal the target inside its thread. Keyboard message
 navigation scrolls only when the selected message is outside the usable viewport.
 Returning through split navigation restores the saved message position and expanded
