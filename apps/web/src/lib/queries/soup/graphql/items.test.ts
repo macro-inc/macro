@@ -148,6 +148,106 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
+  it('paginates never-visited Mail filters offline without a server cursor or stale preview timestamps', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => REVISION_0,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    const keys = [
+      'GraphqlSoupEmailThread:one',
+      'GraphqlSoupEmailThread:two',
+      'GraphqlSoupEmailThread:three',
+    ];
+    const ts = '2025-01-01T00:00:00.000001Z';
+    entityFilterMock.mockImplementation(async (args) => {
+      const index = args.filters.emailFilter ? 2 : args.mail.cursor ? 1 : 0;
+      return {
+        kind: 'mail-page',
+        revision: REVISION_0,
+        keys: [keys[index]],
+        sortTimestamps: [ts],
+        nextCursor: index === 0 ? 'local-next' : null,
+        optimistic: false,
+      };
+    });
+    readRecordsByKeysMock.mockImplementation(
+      async (_host, _selection, requested) => ({
+        revision: REVISION_0,
+        records: requested.map((key: string) => ({
+          recordKey: key,
+          record: {
+            __typename: 'GraphqlSoupEmailThread',
+            id: key.split(':')[1],
+            name: key,
+            sortTs: 'wrong-view-timestamp',
+          },
+        })),
+      })
+    );
+    let dispose!: () => void;
+    let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+    let change!: () => void;
+    createRoot((d) => {
+      dispose = d;
+      const [input, setInput] = createSignal({
+        initial: {
+          emailView: 'ALL',
+          sortMethod: 'UPDATED_AT',
+          limit: 1,
+          filters: {},
+        },
+      });
+      change = () =>
+        setInput({
+          initial: {
+            emailView: 'INBOX',
+            sortMethod: 'UPDATED_AT',
+            limit: 1,
+            filters: { emailFilter: { tree: { literal: { read: true } } } },
+          },
+        });
+      makeGraphqlSoupInputMock.mockImplementation(() => input());
+      query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }) as never,
+        () => ({ enabled: true })
+      );
+    });
+    try {
+      await vi.waitFor(() => expect(query.data()?.entities).toHaveLength(1));
+      expect(query.data()?.cachedMail).toBe(true);
+      expect(query.isLoading()).toBe(false);
+      expect(query.hasNextPage()).toBe(true);
+      await query.fetchNextPage();
+      expect(query.data()?.entities).toHaveLength(2);
+      expect(query.hasNextPage()).toBe(false);
+      expect(fake.executions).toHaveLength(1);
+      expect(
+        (query.data()?.entities[0] as unknown as { sortTs: string } | undefined)?.sortTs
+      ).toBe(ts);
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'server-cursor' }),
+        { source: 'normalized-cache-hit', revision: REVISION_0 }
+      );
+      expect(query.data()?.entities).toHaveLength(2);
+      change();
+      await vi.waitFor(() =>
+        expect(query.data()?.entities[0]?.id).toBe('three')
+      );
+      expect(query.data()?.entities).toHaveLength(1);
+      expect(entityFilterMock.mock.calls.at(-1)?.[0].mail).toEqual({
+        view: 'INBOX',
+      });
+    } finally {
+      dispose();
+      online.mockRestore();
+    }
+  });
+
   it('does not run the local filter for the implicit VIEWED_AT sort', () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

@@ -104,7 +104,8 @@ const FIELD_CONFIG: Record<
     target: 'ef',
     field: 'InboxVisible',
     formatValue: (value) => {
-      if (typeof value !== 'boolean') throw new Error('Invalid mail done filter');
+      if (typeof value !== 'boolean')
+        throw new Error('Invalid mail done filter');
       return !value;
     },
   },

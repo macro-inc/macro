@@ -6,7 +6,10 @@ import {
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
-import { SoupBackfillDocument, SoupMailBackfillDocument } from '@service-storage/graphql/generated/graphql';
+import {
+  SoupBackfillDocument,
+  SoupMailBackfillDocument,
+} from '@service-storage/graphql/generated/graphql';
 import {
   type FetchGraphqlSoupOptions,
   type GraphqlSoupHydrationPage,
@@ -111,7 +114,8 @@ export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
  * ALL covers the first Mail slice across every readable owned/delegated inbox. */
 export const EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'email-filter-metadata',
-  fetchPage: (input, options) => hydrateGraphqlSoup(SoupMailBackfillDocument, { input }, options),
+  fetchPage: (input, options) =>
+    hydrateGraphqlSoup(SoupMailBackfillDocument, { input }, options),
   catchUpAfterInitialPass: true,
   input: { ...EMAIL_SOUP_BACKFILL_LANE.input, limit: PAGE_LIMIT },
 };

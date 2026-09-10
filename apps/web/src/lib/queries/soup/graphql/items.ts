@@ -88,7 +88,9 @@ export function createGraphqlSoupAstItemsQuery(
   options: Accessor<GraphqlSoupAstItemsQueryOptions>
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
-  const [offline, setOffline] = createSignal(typeof navigator !== 'undefined' && !navigator.onLine);
+  const [offline, setOffline] = createSignal(
+    typeof navigator !== 'undefined' && !navigator.onLine
+  );
   const updateConnectivity = () => setOffline(!navigator.onLine);
   if (typeof window !== 'undefined') {
     window.addEventListener('online', updateConnectivity);
@@ -124,7 +126,11 @@ export function createGraphqlSoupAstItemsQuery(
     baselineKeys: ReadonlySet<string>;
     displayedKeys: ReadonlySet<string>;
     data: SoupAstItemsData;
-    mail?: { nextCursor: string | null; revision: CacheRevision; records: GraphqlSoupItem[] };
+    mail?: {
+      nextCursor: string | null;
+      revision: CacheRevision;
+      records: GraphqlSoupItem[];
+    };
   };
   const [currentCacheRevision, setCurrentCacheRevision] = createSignal<
     CacheRevision | undefined
@@ -224,11 +230,19 @@ export function createGraphqlSoupAstItemsQuery(
       setLocalProjection(undefined);
     }
     const existing = untrack(localProjection);
-    if (existing?.mail && existing.input === input && existing.generation === cacheGeneration && existing.mail.revision === revision) return;
+    if (
+      existing?.mail &&
+      existing.input === input &&
+      existing.generation === cacheGeneration &&
+      existing.mail.revision === revision
+    )
+      return;
     if (
       revision === undefined ||
       (networkAuthorityInput === input &&
-        networkAuthorityRevision() === revision && !offline() && !query.error?.networkError) ||
+        networkAuthorityRevision() === revision &&
+        !offline() &&
+        !query.error?.networkError) ||
       !queryOptions.enabled ||
       !graphqlSoupProjectionSupported() ||
       !input ||
@@ -273,7 +287,10 @@ export function createGraphqlSoupAstItemsQuery(
       let outcome: 'success' | 'incomplete' | 'error' = 'incomplete';
       try {
         for (let attempt = 0; attempt < 3; attempt += 1) {
-          const mailView = initial.emailView === 'ALL' || initial.emailView === 'INBOX' ? initial.emailView : undefined;
+          const mailView =
+            initial.emailView === 'ALL' || initial.emailView === 'INBOX'
+              ? initial.emailView
+              : undefined;
           let result = await host.entityFilter({
             filters,
             sortMethod,
@@ -281,10 +298,20 @@ export function createGraphqlSoupAstItemsQuery(
             limit,
             ...(mailView ? { mail: { view: mailView } } : { baseline }),
           });
-          if (mailView && result.kind === 'unsupported') {
-            result = await host.entityFilter({ filters, sortMethod, sortDirection, limit, baseline });
+          if (
+            mailView &&
+            (result.kind === 'unsupported' || result.kind === 'incomplete')
+          ) {
+            result = await host.entityFilter({
+              filters,
+              sortMethod,
+              sortDirection,
+              limit,
+              baseline,
+            });
           }
-          if (result.kind !== 'reconciled' && result.kind !== 'mail-page') return;
+          if (result.kind !== 'reconciled' && result.kind !== 'mail-page')
+            return;
           if (requestId !== localRequest) {
             discarded = true;
             return;
@@ -321,14 +348,21 @@ export function createGraphqlSoupAstItemsQuery(
             setCurrentCacheRevision(latestRevision);
             continue;
           }
-          const timestamps = result.kind === 'mail-page' ? new Map(result.keys.map((key, i) => [key, result.sortTimestamps[i]])) : undefined;
+          const timestamps =
+            result.kind === 'mail-page'
+              ? new Map(
+                  result.keys.map((key, i) => [key, result.sortTimestamps[i]])
+                )
+              : undefined;
           const reconciledRecords = materializeReconciledSoup(
             result.keys,
             chunks.flatMap((chunk) => chunk.records),
             result.kind === 'mail-page' ? [] : records
           ).map((record) => {
             const ts = timestamps?.get(soupItemKey(record));
-            return ts && record.__typename === 'GraphqlSoupEmailThread' ? { ...record, sortTs: ts, createdAt: ts } : record;
+            return ts && record.__typename === 'GraphqlSoupEmailThread'
+              ? { ...record, sortTs: ts, createdAt: ts }
+              : record;
           });
           const items = reconciledRecords.flatMap((record) => {
             const item = mapGraphqlSoupItem(record);
@@ -337,9 +371,19 @@ export function createGraphqlSoupAstItemsQuery(
           setLocalProjection({
             input,
             generation: requestGeneration,
-            baselineKeys: new Set(result.kind === 'mail-page' ? [] : records.map(soupItemKey)),
+            baselineKeys: new Set(
+              result.kind === 'mail-page' ? [] : records.map(soupItemKey)
+            ),
             displayedKeys: new Set(reconciledRecords.map(soupItemKey)),
-            ...(result.kind === 'mail-page' ? { mail: { nextCursor: result.nextCursor, revision: result.revision, records: reconciledRecords } } : {}),
+            ...(result.kind === 'mail-page'
+              ? {
+                  mail: {
+                    nextCursor: result.nextCursor,
+                    revision: result.revision,
+                    records: reconciledRecords,
+                  },
+                }
+              : {}),
             data: {
               cachedMail: result.kind === 'mail-page',
               entities: mapSoupPageToEntityList(
@@ -356,7 +400,10 @@ export function createGraphqlSoupAstItemsQuery(
           outcome = 'success';
           recordAuthority('local');
           finishStaleFallback('local');
-          span.setAttr('evaluation.retained_count', result.kind === 'reconciled' ? result.retainedKeys.length : 0);
+          span.setAttr(
+            'evaluation.retained_count',
+            result.kind === 'reconciled' ? result.retainedKeys.length : 0
+          );
           return;
         }
       } catch {
@@ -464,7 +511,8 @@ export function createGraphqlSoupAstItemsQuery(
     return local;
   };
   const networkIsAuthoritative = (): boolean =>
-    !offline() && !query.error?.networkError &&
+    !offline() &&
+    !query.error?.networkError &&
     networkAuthorityInput === firstPageInput() &&
     networkAuthorityRevision() !== undefined &&
     networkAuthorityRevision() === currentCacheRevision();
@@ -523,7 +571,10 @@ export function createGraphqlSoupAstItemsQuery(
     // placeholders. In particular, local recomputation must not animate the
     // mobile tab-loading bar or make the view report that it has no data.
     isPlaceholderData: () => false,
-    hasNextPage: () => displayLocalProjection()?.mail ? displayLocalProjection()?.mail?.nextCursor != null : query.hasNextPage,
+    hasNextPage: () =>
+      displayLocalProjection()?.mail
+        ? displayLocalProjection()?.mail?.nextCursor != null
+        : query.hasNextPage,
     fetchNextPage: async () => {
       const local = displayLocalProjection();
       if (!local?.mail || networkIsAuthoritative()) {
@@ -531,13 +582,22 @@ export function createGraphqlSoupAstItemsQuery(
         return;
       }
       if (!local.mail.nextCursor || fetchingMailPage()) return;
-      const initial = 'initial' in local.input ? local.input.initial : undefined;
+      const initial =
+        'initial' in local.input ? local.input.initial : undefined;
       const host = getGraphqlSoupCacheHost();
-      if (!initial || !host || (initial.emailView !== 'ALL' && initial.emailView !== 'INBOX')) return;
+      if (
+        !initial ||
+        !host ||
+        (initial.emailView !== 'ALL' && initial.emailView !== 'INBOX')
+      )
+        return;
       setFetchingMailPage(true);
       try {
         const result = await host.entityFilter({
-          filters: initial.filters ?? {}, sortMethod: initial.sortMethod ?? 'UPDATED_AT', sortDirection: initial.sortDirection ?? 'DESC', limit: initial.limit ?? 20,
+          filters: initial.filters ?? {},
+          sortMethod: initial.sortMethod ?? 'UPDATED_AT',
+          sortDirection: initial.sortDirection ?? 'DESC',
+          limit: initial.limit ?? 20,
           mail: { view: initial.emailView, cursor: local.mail.nextCursor },
         });
         if (displayLocalProjection() !== local) return;
@@ -547,25 +607,63 @@ export function createGraphqlSoupAstItemsQuery(
           return;
         }
         if (result.kind !== 'mail-page') return;
-        const selected = await readRecordsByKeys(host, soupItemSelection, result.keys);
+        const selected = await readRecordsByKeys(
+          host,
+          soupItemSelection,
+          result.keys
+        );
         const currentRevision = await host.currentRevision();
-        if (displayLocalProjection() !== local || result.revision !== local.mail.revision || selected.revision !== result.revision || currentRevision !== result.revision) {
+        if (
+          displayLocalProjection() !== local ||
+          result.revision !== local.mail.revision ||
+          selected.revision !== result.revision ||
+          currentRevision !== result.revision
+        ) {
           setLocalEvaluationTrigger((value) => value + 1);
           return;
         }
         const keys = [...local.displayedKeys, ...result.keys];
-        const timestamps = new Map(result.keys.map((key, i) => [key, result.sortTimestamps[i]]));
-        const records = materializeReconciledSoup(keys, selected.records, local.mail.records).map((record) => {
+        const timestamps = new Map(
+          result.keys.map((key, i) => [key, result.sortTimestamps[i]])
+        );
+        const records = materializeReconciledSoup(
+          keys,
+          selected.records,
+          local.mail.records
+        ).map((record) => {
           const ts = timestamps.get(soupItemKey(record));
-          return ts && record.__typename === 'GraphqlSoupEmailThread' ? { ...record, sortTs: ts, createdAt: ts } : record;
+          return ts && record.__typename === 'GraphqlSoupEmailThread'
+            ? { ...record, sortTs: ts, createdAt: ts }
+            : record;
         });
-        const items = records.flatMap((record) => { const item = mapGraphqlSoupItem(record); return item ? [item] : []; });
-        setLocalProjection({ ...local,
+        const items = records.flatMap((record) => {
+          const item = mapGraphqlSoupItem(record);
+          return item ? [item] : [];
+        });
+        setLocalProjection({
+          ...local,
           displayedKeys: new Set(keys),
-          mail: { nextCursor: result.nextCursor, revision: result.revision, records },
-          data: { cachedMail: true, entities: mapSoupPageToEntityList({ items, next_cursor: undefined }, { instructionsIdQuery, showSupportedForeignEntities: options().showSupportedForeignEntities }), groups: undefined },
+          mail: {
+            nextCursor: result.nextCursor,
+            revision: result.revision,
+            records,
+          },
+          data: {
+            cachedMail: true,
+            entities: mapSoupPageToEntityList(
+              { items, next_cursor: undefined },
+              {
+                instructionsIdQuery,
+                showSupportedForeignEntities:
+                  options().showSupportedForeignEntities,
+              }
+            ),
+            groups: undefined,
+          },
         });
-      } finally { setFetchingMailPage(false); }
+      } finally {
+        setFetchingMailPage(false);
+      }
     },
     resetToInitialPage: () => {
       query.resetToInitialPage();

@@ -1515,7 +1515,8 @@ export const SoupViewContextProvider: FlowComponent<
     initialize,
     source: {
       data: entities,
-      cachedMail: () => !search.isSearching() && itemsQueryData()?.cachedMail === true,
+      cachedMail: () =>
+        !search.isSearching() && itemsQueryData()?.cachedMail === true,
       error: () =>
         search.isSearching() ? searchSourceError() : itemsSource.error(),
       hasData: () =>

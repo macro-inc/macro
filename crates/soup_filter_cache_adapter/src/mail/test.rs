@@ -17,7 +17,7 @@ fn filters() -> Value {
     json!({"documentFilter":{"literal":{"id":nil}},"projectFilter":{"literal":{"projectIdSelf":nil}},"chatFilter":{"literal":{"chatId":nil}},"calendarEventFilter":{"literal":{"id":nil}},"channelFilter":{"literal":{"channelId":nil}},"channelThreadFilter":{"literal":{"threadId":nil}},"callFilter":{"literal":{"callId":nil}},"crmCompanyFilter":{"literal":{"id":nil}},"foreignEntityFilter":{"literal":{"id":nil}}})
 }
 fn row(n: u128) -> Value {
-    json!({"__typename":"GraphqlSoupEmailThread","id":id(n),"linkId":id(if n<=50 {1000}else if n<=70 {1001}else {9999}),"inboxVisible":n%2==0,"isRead":false,"isSignal":n%3==0,"hasNonTrashedMessages":n!=7,"latestInboundMessageTs":if n==2 {Value::Null}else {json!("2025-01-02T00:00:00.000002Z")},"latestNonSpamMessageTs":"2025-01-03T00:00:00.000003Z","updatedAt":"2025-01-04T00:00:00.000004Z"})
+    json!({"__typename":"GraphqlSoupEmailThread","id":id(n),"linkId":id(if n<=50 {1000}else if n<=70 {1001}else {9999}),"inboxVisible":n.is_multiple_of(2),"isRead":false,"isSignal":n.is_multiple_of(3),"hasNonTrashedMessages":n!=7,"latestInboundMessageTs":if n==2 {Value::Null}else {json!("2025-01-02T00:00:00.000002Z")},"latestNonSpamMessageTs":"2025-01-03T00:00:00.000003Z","updatedAt":"2025-01-04T00:00:00.000004Z"})
 }
 fn seed() -> Value {
     json!({"user":{"id":VIEWER,"emailLinks":[{"id":id(1000)},{"id":id(1001)}],"soup":{"items":(1..=75).map(row).collect::<Vec<_>>()}}})
@@ -122,7 +122,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
         let n = uuid::Uuid::parse_str(key.split_once(':').unwrap().1)
             .unwrap()
             .as_u128();
-        n % 2 == 0 && n != 2
+        n.is_multiple_of(2) && n != 2
     }));
     assert!(matches!(
         read(&mut engine, filters(), "ALL", Some(cursor.clone())).await,

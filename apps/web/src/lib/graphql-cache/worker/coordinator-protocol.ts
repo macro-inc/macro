@@ -574,7 +574,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
             request.limit < 500 &&
             request.baseline === undefined &&
             (request.mail.cursor === undefined ||
-              (typeof request.mail.cursor === 'string' && request.mail.cursor.length <= 4096)))) &&
+              (typeof request.mail.cursor === 'string' &&
+                request.mail.cursor.length <= 4096)))) &&
         (request.baseline === undefined ||
           (Array.isArray(request.baseline) &&
             request.baseline.length <= MAX_RECONCILIATION_BASELINE &&

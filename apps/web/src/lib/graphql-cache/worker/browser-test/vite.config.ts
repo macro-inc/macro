@@ -50,6 +50,7 @@ export default defineConfig(({ command }) => ({
           'graphql-soup-rollout.html',
           'cache-recovery.html',
           'notification-projection.html',
+          'mail-projection.html',
         ].map((name) => [name.replace('.html', ''), resolve(directory, name)])
       ),
     },

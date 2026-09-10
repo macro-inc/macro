@@ -37,7 +37,11 @@ describe('defineQueryFilters', () => {
 describe('compileToAst', () => {
   it('compiles mail done as archive visibility, independent of notification state', () => {
     for (const done of [true, false]) {
-      const ast = compileToAst(queryStateFrom(defineQueryFilters({ emailView: 'all', include: { emailDone: done } })));
+      const ast = compileToAst(
+        queryStateFrom(
+          defineQueryFilters({ emailView: 'all', include: { emailDone: done } })
+        )
+      );
       expect(ast.ef).toEqual({ l: { InboxVisible: !done } });
     }
   });
