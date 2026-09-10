@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE user_notification\n        SET state = CASE\n            WHEN $3 THEN 'done'::notification_state\n            WHEN state = 'done' THEN 'seen'::notification_state\n            ELSE state\n        END\n        WHERE user_id = $1\n        AND notification_id = ANY($2)\n        AND deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fdd01da054bf3f09225eb4231a68a345e2fa469c60a79199e5a569c1f1489da2"
+}

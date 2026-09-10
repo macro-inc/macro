@@ -35,8 +35,8 @@ use crate::outbound::pg_soup_repo::candidate_gates::{
     includes_projects, project_gate, uuid_guarded,
 };
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    build_notification_done_clause, build_notification_seen_clause, build_properties_filter,
-    calendar_event_filter_is_impossible, properties_filter_can_apply_to,
+    build_notification_state_clause, build_properties_filter, calendar_event_filter_is_impossible,
+    properties_filter_can_apply_to,
 };
 use crate::outbound::pg_soup_repo::type_err;
 
@@ -60,11 +60,8 @@ fn build_calendar_event_filter(tree: Option<&Expr<CalendarEventLiteral>>) -> Str
         filter_ast::ExprFrame::Literal(CalendarEventLiteral::Id(id)) => {
             format!("event.id = '{id}'")
         }
-        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationDone(done)) => {
-            build_notification_done_clause("event.id", "calendar_event", done)
-        }
-        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationSeen(seen)) => {
-            build_notification_seen_clause("event.id", "calendar_event", seen)
+        filter_ast::ExprFrame::Literal(CalendarEventLiteral::NotificationState(state)) => {
+            build_notification_state_clause("event.id", "calendar_event", state)
         }
         filter_ast::ExprFrame::Literal(_) => "FALSE".to_string(),
     });
@@ -106,19 +103,15 @@ fn calendar_event_gate(filter: Option<&EntityFilterAst>) -> String {
 /// tree folds in its own crate, which hydration applies in full; the
 /// notification-state conjuncts it implies are pre-applied here.
 fn foreign_entity_gate(filter: Option<&EntityFilterAst>) -> String {
-    let implied =
-        implied_conjuncts_sql(
-            filter.and_then(|f| f.foreign_entity_filter.as_deref()),
-            |literal| match literal {
-                ForeignEntityLiteral::NotificationDone(done) => Some(
-                    build_notification_done_clause("fe.id", "foreign_entity", *done),
-                ),
-                ForeignEntityLiteral::NotificationSeen(seen) => Some(
-                    build_notification_seen_clause("fe.id", "foreign_entity", *seen),
-                ),
-                _ => None,
-            },
-        );
+    let implied = implied_conjuncts_sql(
+        filter.and_then(|f| f.foreign_entity_filter.as_deref()),
+        |literal| match literal {
+            ForeignEntityLiteral::NotificationState(state) => Some(
+                build_notification_state_clause("fe.id", "foreign_entity", *state),
+            ),
+            _ => None,
+        },
+    );
     uuid_guarded(
         ID_SQL,
         format!(

@@ -3003,7 +3003,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -7273,6 +7273,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "notification",
+ "notification_state",
  "rootcause",
  "serde_json",
  "tokio",
@@ -7368,6 +7369,7 @@ dependencies = [
  "item_filters",
  "macro_user_id",
  "model_file_type",
+ "notification_state",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -8778,6 +8780,7 @@ dependencies = [
  "model_file_type",
  "nom 8.0.0",
  "non_empty",
+ "notification_state",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -11168,6 +11171,7 @@ dependencies = [
  "model-error-response",
  "model_user",
  "models_pagination",
+ "notification_state",
  "rate_limit",
  "rdkafka",
  "redis",
@@ -11176,6 +11180,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "serde_with",
  "sha2 0.10.9",
  "sqlx",
  "strum 0.27.2",
@@ -11305,6 +11310,18 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "workspace-hack",
+]
+
+[[package]]
+name = "notification_state"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "utoipa",
 ]
 
 [[package]]

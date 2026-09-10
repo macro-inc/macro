@@ -45,12 +45,14 @@ import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { useTagSets } from '@property/tags/tag-sets-context';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button, cn, Surface } from '@ui';
+import { debounce } from '@solid-primitives/scheduled';
+import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   Match,
+  onCleanup,
   type Setter,
   Show,
   Suspense,
@@ -145,6 +147,12 @@ export function TaskList(props: TaskListProps) {
     });
   }
 
+  const previewAfterNavigation = debounce(
+    (entity: EntityData) => openEntity(entity, { mergeHistory: true }),
+    150
+  );
+  onCleanup(() => previewAfterNavigation.clear());
+
   function onActivate({
     item,
     metadata,
@@ -177,6 +185,8 @@ export function TaskList(props: TaskListProps) {
       .find((row) => row.kind === 'entity' && row.id === item.id);
 
     if (sourceRow?.kind !== 'entity') return;
+
+    previewAfterNavigation.clear();
 
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
@@ -317,11 +327,11 @@ export function TaskList(props: TaskListProps) {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
+        previewAfterNavigation.clear();
+
         const row = event.result?.item;
         if (row?.kind === 'entity' && panel.handle.isControllerSplit()) {
-          openEntity(row.entity, {
-            mergeHistory: true,
-          });
+          previewAfterNavigation(row.entity);
         }
 
         if (event.kind !== 'move' || event.direction !== 1) return;
@@ -379,6 +389,7 @@ export function TaskList(props: TaskListProps) {
     if (nextTab === activeTab) return;
 
     activeTab = nextTab;
+    previewAfterNavigation.clear();
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
     panel.handle.resetPreview();
@@ -427,9 +438,7 @@ export function TaskList(props: TaskListProps) {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      <Surface
-        depth={isTouchDevice() ? 0 : 2}
-        hideBorder={isTouchDevice()}
+      <div
         ref={(element: HTMLDivElement) => {
           setGrid(element);
           props.ref?.(element);
@@ -439,13 +448,7 @@ export function TaskList(props: TaskListProps) {
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class={cn(
-          '@container/u-list flex min-h-0 min-w-0 flex-col outline-none',
-          {
-            'rounded-2xl p-2': !isTouchDevice(),
-            'rounded-none bg-transparent p-0': isTouchDevice(),
-          }
-        )}
+        class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
       >
         <ListLayoutProvider ref={grid}>
           <ResponsiveTaskListHeader />
@@ -722,7 +725,7 @@ export function TaskList(props: TaskListProps) {
             />
           </Show>
         </ListLayoutProvider>
-      </Surface>
+      </div>
     </MaybeSoupEntityActionDrawerManager>
   );
 }

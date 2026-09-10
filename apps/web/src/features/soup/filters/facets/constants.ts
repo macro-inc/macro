@@ -19,6 +19,7 @@ type FilterFieldCompileKind = 'value' | 'unit' | 'dateRange';
 
 export type FilterFieldMeta = {
   backend: string;
+  notification?: 'done' | 'seen';
   compile?: FilterFieldCompileKind;
   formatValue?: (value: unknown) => unknown;
   domain?: unknown[];
@@ -38,8 +39,16 @@ export const FILTER_TARGETS = {
     fileAssoc: { backend: 'fa' },
     subType: { backend: 'dst' },
     documentOwnerId: { backend: 'o' },
-    documentSeen: { backend: 'ns', domain: [true, false] },
-    documentDone: { backend: 'nd', domain: [true, false] },
+    documentSeen: {
+      backend: 'ns',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    documentDone: {
+      backend: 'ns',
+      notification: 'done',
+      domain: [true, false],
+    },
     documentImportance: { backend: 'imp', domain: [true, false] },
     isEmailAttachment: { backend: 'iea', domain: [true, false] },
     documentCreatedAt: { backend: 'ca', compile: 'dateRange' },
@@ -49,8 +58,16 @@ export const FILTER_TARGETS = {
   // calf — calendar events
   calf: {
     calendarEventId: { backend: 'id' },
-    calendarEventSeen: { backend: 'ns', domain: [true, false] },
-    calendarEventDone: { backend: 'nd', domain: [true, false] },
+    calendarEventSeen: {
+      backend: 'ns',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    calendarEventDone: {
+      backend: 'ns',
+      notification: 'done',
+      domain: [true, false],
+    },
   },
 
   // ef — email
@@ -62,8 +79,12 @@ export const FILTER_TARGETS = {
       backend: 'Sender',
       formatValue: (value) => ({ Partial: value }),
     },
-    emailSeen: { backend: 'NotificationSeen', domain: [true, false] },
-    emailDone: { backend: 'NotificationDone', domain: [true, false] },
+    emailSeen: { backend: 'Read', domain: [true, false] },
+    emailDone: {
+      backend: 'NotificationState',
+      notification: 'done',
+      domain: [true, false],
+    },
     emailImportance: { backend: 'Importance', domain: [true, false] },
     emailShared: { backend: 'Shared' },
     emailCalendarOnly: { backend: 'CalendarOnly', domain: [true, false] },
@@ -75,8 +96,16 @@ export const FILTER_TARGETS = {
     channelId: { backend: 'ChannelId' },
     channelType: { backend: 'ChannelType' },
     channelSenderId: { backend: 'Sender' },
-    channelSeen: { backend: 'NotificationSeen', domain: [true, false] },
-    channelDone: { backend: 'NotificationDone', domain: [true, false] },
+    channelSeen: {
+      backend: 'NotificationState',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    channelDone: {
+      backend: 'NotificationState',
+      notification: 'done',
+      domain: [true, false],
+    },
     channelImportance: { backend: 'Importance', domain: [true, false] },
     channelIsParticipant: { backend: 'IsParticipant', domain: [true, false] },
   },
@@ -87,8 +116,16 @@ export const FILTER_TARGETS = {
     channelThreadId: { backend: 'ThreadId' },
     channelThreadRootSenderId: { backend: 'RootSender' },
     channelThreadParticipantId: { backend: 'Participant' },
-    channelThreadSeen: { backend: 'NotificationSeen', domain: [true, false] },
-    channelThreadDone: { backend: 'NotificationDone', domain: [true, false] },
+    channelThreadSeen: {
+      backend: 'NotificationState',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    channelThreadDone: {
+      backend: 'NotificationState',
+      notification: 'done',
+      domain: [true, false],
+    },
   },
 
   // cf — chats / agents
@@ -96,8 +133,8 @@ export const FILTER_TARGETS = {
     chatId: { backend: 'cid' },
     chatOwnerId: { backend: 'o' },
     chatProjectId: { backend: 'pid' },
-    chatSeen: { backend: 'ns', domain: [true, false] },
-    chatDone: { backend: 'nd', domain: [true, false] },
+    chatSeen: { backend: 'ns', notification: 'seen', domain: [true, false] },
+    chatDone: { backend: 'ns', notification: 'done', domain: [true, false] },
     chatCreatedAt: { backend: 'ca', compile: 'dateRange' },
     chatUpdatedAt: { backend: 'ua', compile: 'dateRange' },
   },
@@ -106,8 +143,8 @@ export const FILTER_TARGETS = {
   pf: {
     folderId: { backend: 'pid' },
     folderOwnerId: { backend: 'o' },
-    folderSeen: { backend: 'ns', domain: [true, false] },
-    folderDone: { backend: 'nd', domain: [true, false] },
+    folderSeen: { backend: 'ns', notification: 'seen', domain: [true, false] },
+    folderDone: { backend: 'ns', notification: 'done', domain: [true, false] },
     folderCreatedAt: { backend: 'ca', compile: 'dateRange' },
     folderUpdatedAt: { backend: 'ua', compile: 'dateRange' },
     projectId: { backend: 'pid' },
@@ -126,8 +163,16 @@ export const FILTER_TARGETS = {
   fef: {
     foreignEntityRecordId: { backend: 'id' },
     foreignEntitySource: { backend: 'fes' },
-    foreignEntitySeen: { backend: 'ns', domain: [true, false] },
-    foreignEntityDone: { backend: 'nd', domain: [true, false] },
+    foreignEntitySeen: {
+      backend: 'ns',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    foreignEntityDone: {
+      backend: 'ns',
+      notification: 'done',
+      domain: [true, false],
+    },
     foreignEntityIncludesMe: { backend: 'me', compile: 'unit' },
   },
 

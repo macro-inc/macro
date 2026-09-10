@@ -1184,17 +1184,17 @@ async fn it_parses_notification_and_task_filters() {
         .body(axum::body::Body::from(
             serde_json::to_vec(&serde_json::json!({
                 "document_filters": {
-                    "notification_filters": { "done": false, "seen": false },
+                    "notification_filters": { "states": ["unseen"] },
                     "task_filters": { "include_cbm_atm_nc": true }
                 },
                 "chat_filters": {
-                    "notification_filters": { "done": false, "seen": false }
+                    "notification_filters": { "states": ["unseen"] }
                 },
                 "project_filters": {
-                    "notification_filters": { "done": false, "seen": false }
+                    "notification_filters": { "states": ["unseen"] }
                 },
                 "channel_filters": {
-                    "notification_filters": { "done": false, "seen": false }
+                    "notification_filters": { "states": ["unseen"] }
                 }
             }))
             .unwrap(),
@@ -1210,34 +1210,24 @@ async fn it_parses_notification_and_task_filters() {
 
     let filter: EntityFilters = serde_json::from_value(arg.filter).unwrap();
     assert_eq!(
-        filter.document_filters.notification_filters.done,
-        Some(false)
-    );
-    assert_eq!(
-        filter.document_filters.notification_filters.seen,
-        Some(false)
+        filter.document_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
     assert_eq!(
         filter.document_filters.task_filters.include_cbm_atm_nc,
         Some(true)
     );
-    assert_eq!(filter.chat_filters.notification_filters.done, Some(false));
-    assert_eq!(filter.chat_filters.notification_filters.seen, Some(false));
     assert_eq!(
-        filter.project_filters.notification_filters.done,
-        Some(false)
+        filter.chat_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
     assert_eq!(
-        filter.project_filters.notification_filters.seen,
-        Some(false)
+        filter.project_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
     assert_eq!(
-        filter.channel_filters.notification_filters.done,
-        Some(false)
-    );
-    assert_eq!(
-        filter.channel_filters.notification_filters.seen,
-        Some(false)
+        filter.channel_filters.notification_filters.states,
+        vec![item_filters::NotificationState::Unseen]
     );
 }
 

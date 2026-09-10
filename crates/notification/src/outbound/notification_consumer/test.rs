@@ -69,7 +69,7 @@ fn row() -> UserNotificationRow<serde_json::Value> {
         notification_event_type: "test".to_string(),
         entity: EntityType::Document.with_entity_string("document-id".to_string()),
         sent: true,
-        done: false,
+        state: crate::domain::models::NotificationState::Unseen,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),

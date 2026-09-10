@@ -63,7 +63,7 @@ query ChannelNotifications($input: SoupInput!) {
           notifications {
             __typename
             id
-            seen
+            state
             viewedAt
           }
         }
@@ -90,7 +90,7 @@ mutation UpdateNotifications($input: UpdateNotificationsInput!) {
   updateNotifications(input: $input) {
     __typename
     id
-    seen
+    state
     viewedAt
   }
 }
@@ -427,7 +427,7 @@ fn incomplete_registered_write_is_conservatively_affected() {
                     "updateNotifications": [{
                         "__typename": "GraphqlNotification",
                         "id": "unrelated-notification",
-                        "seen": true,
+                        "state": "SEEN",
                         "viewedAt": null
                     }]
                 }),
@@ -464,7 +464,7 @@ fn incomplete_registered_write_is_conservatively_affected() {
                     "updateNotifications": [{
                         "__typename": "GraphqlNotification",
                         "id": "another-unrelated-notification",
-                        "seen": true,
+                        "state": "SEEN",
                         "viewedAt": null
                     }]
                 }),
@@ -491,7 +491,7 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
                         "notifications": [{
                             "__typename": "GraphqlNotification",
                             "id": "notification-1",
-                            "seen": false,
+                            "state": "UNSEEN",
                             "viewedAt": null
                         }]
                     }],
@@ -548,8 +548,8 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
             panic!("expected cached channel after activity mutation");
         };
         assert_eq!(
-            data["user"]["soup"]["items"][0]["notifications"][0]["seen"],
-            json!(false)
+            data["user"]["soup"]["items"][0]["notifications"][0]["state"],
+            json!("UNSEEN")
         );
 
         let Json::Object(notification_variables) = json!({
@@ -570,7 +570,7 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
                     "updateNotifications": [{
                         "__typename": "GraphqlNotification",
                         "id": "notification-1",
-                        "seen": true,
+                        "state": "SEEN",
                         "viewedAt": "2025-01-01T00:00:02Z"
                     }]
                 }),
@@ -592,7 +592,7 @@ fn channel_activity_and_notification_status_update_separate_normalized_records()
             panic!("expected cached channel after notification mutation");
         };
         let notification = &data["user"]["soup"]["items"][0]["notifications"][0];
-        assert_eq!(notification["seen"], json!(true));
+        assert_eq!(notification["state"], json!("SEEN"));
         assert_eq!(notification["viewedAt"], json!("2025-01-01T00:00:02Z"));
     });
 }

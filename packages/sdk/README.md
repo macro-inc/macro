@@ -11,7 +11,7 @@ Macro's SDK: a Typescript library for harnessing the power of Macro
 To get started, make a Macro client
 
 ```ts
-import { Macro } from '@macro/sdk';
+import { Macro } from '@macro-inc/sdk';
 
 const macro = new Macro({ }); // uses MACRO_API_KEY env var
 ```
@@ -31,7 +31,7 @@ Every request the SDK sends carries exactly one Macro credential. There are thre
 The default for scripts and integrations. Put the key in `MACRO_API_KEY` and construct with no options.
 
 ```ts
-import { Macro } from '@macro/sdk';
+import { Macro } from '@macro-inc/sdk';
 
 const macro = new Macro({});
 const me = await macro.users.me();
@@ -148,7 +148,7 @@ Use the `msg` tagged template to build rich message bodies for channel messages
 or documents.
 
 ```ts
-import { msg, here } from '@macro/sdk';
+import { msg, here } from '@macro-inc/sdk';
 
 const channel = macro.channels.byId('chan_1');
 const user = macro.users.byId('user_1');
@@ -227,6 +227,12 @@ app.post('/webhook', (c) => macro.events.webhook()(c.req.raw));
 # Developing
 
 This section is just if you are contributing to the SDK.
+
+## Releases
+
+See [Releasing the SDK](RELEASING.md) for patch version bumps, npm setup,
+and tag-triggered publishing. Agents can use the
+[`release-sdk`](../../.agents/skills/release-sdk/SKILL.md) skill.
 
 ## Coverage checking
 

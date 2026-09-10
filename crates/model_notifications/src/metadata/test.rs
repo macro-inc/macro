@@ -936,7 +936,7 @@ fn notification_status_patch_decodes_notif_event_metadata() {
         notification_event_type: "task_assigned".to_string(),
         entity: EntityType::Document.with_entity_string("document-id".to_string()),
         sent: true,
-        done: false,
+        state: notification::domain::models::NotificationState::Unseen,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),

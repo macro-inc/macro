@@ -18,24 +18,28 @@ use uuid::Uuid;
 
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     NotificationPredicate, access_semi_join, build_chat_filter, build_document_filter,
-    build_notification_done_clause, build_notification_exists_clause,
-    build_notification_seen_clause, build_project_filter, build_properties_filter,
-    chat_filter_is_impossible, document_filter_is_impossible,
+    build_notification_exists_clause, build_notification_state_clause, build_project_filter,
+    build_properties_filter, chat_filter_is_impossible, document_filter_is_impossible,
     document_filter_needs_task_property_joins, project_filter_is_impossible,
     properties_filter_can_apply_to,
 };
 
-/// Literals reachable through `And` alone: conditions the whole tree implies,
-/// so applying them as a pre-filter can never drop a row the tree's full fold
-/// would admit. `Or` and `Not` subtrees contribute nothing.
-fn and_conjuncts<'a, T>(expr: &'a Expr<T>, out: &mut Vec<&'a T>) {
+// OR/NOT can be pushed down only when every literal in their subtree is
+// supported. Dropping an unsupported branch inside either can exclude valid rows.
+fn exact_subtree_sql<T>(expr: &Expr<T>, fold: &impl Fn(&T) -> Option<String>) -> Option<String> {
     match expr {
-        Expr::And(a, b) => {
-            and_conjuncts(a, out);
-            and_conjuncts(b, out);
-        }
-        Expr::Literal(literal) => out.push(literal),
-        Expr::Or(..) | Expr::Not(..) => {}
+        Expr::Literal(literal) => fold(literal),
+        Expr::And(a, b) => Some(format!(
+            "({} AND {})",
+            exact_subtree_sql(a, fold)?,
+            exact_subtree_sql(b, fold)?
+        )),
+        Expr::Or(a, b) => Some(format!(
+            "({} OR {})",
+            exact_subtree_sql(a, fold)?,
+            exact_subtree_sql(b, fold)?
+        )),
+        Expr::Not(expr) => Some(format!("NOT ({})", exact_subtree_sql(expr, fold)?)),
     }
 }
 
@@ -48,12 +52,15 @@ pub(super) fn implied_conjuncts_sql<T>(
     let Some(tree) = tree else {
         return String::new();
     };
-    let mut literals = Vec::new();
-    and_conjuncts(tree, &mut literals);
-    literals
-        .into_iter()
-        .filter_map(|literal| fold(literal).map(|sql| format!(" AND {sql}")))
-        .collect()
+    fn implied<T>(tree: &Expr<T>, fold: &impl Fn(&T) -> Option<String>) -> String {
+        match tree {
+            Expr::And(a, b) => format!("{}{}", implied(a, fold), implied(b, fold)),
+            _ => exact_subtree_sql(tree, fold)
+                .map(|sql| format!(" AND ({sql})"))
+                .unwrap_or_default(),
+        }
+    }
+    implied(tree, &fold)
 }
 
 /// The per-type `EXISTS` gate for documents: exists, not deleted, accessible,
@@ -163,8 +170,7 @@ pub(super) fn channel_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
         filter.and_then(|f| f.channel_filter.as_deref()),
         |literal| {
             let predicate = match literal {
-                ChannelLiteral::NotificationDone(done) => NotificationPredicate::Done(*done),
-                ChannelLiteral::NotificationSeen(seen) => NotificationPredicate::Seen(*seen),
+                ChannelLiteral::NotificationState(state) => NotificationPredicate::state(*state),
                 _ => return None,
             };
             Some(build_notification_exists_clause(
@@ -202,8 +208,9 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
         filter.and_then(|f| f.channel_thread_filter.as_deref()),
         |literal| {
             let predicate = match literal {
-                ChannelThreadLiteral::NotificationDone(done) => NotificationPredicate::Done(*done),
-                ChannelThreadLiteral::NotificationSeen(seen) => NotificationPredicate::Seen(*seen),
+                ChannelThreadLiteral::NotificationState(state) => {
+                    NotificationPredicate::state(*state)
+                }
                 _ => return None,
             };
             Some(build_notification_exists_clause(
@@ -249,16 +256,13 @@ pub(super) fn email_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> Stri
         |literal| match literal {
             EmailLiteral::Importance(true) => Some("et.is_signal".to_string()),
             EmailLiteral::Importance(false) => Some("NOT et.is_signal".to_string()),
-            EmailLiteral::NotificationDone(done) => Some(build_notification_done_clause(
+            EmailLiteral::NotificationState(state) => Some(build_notification_state_clause(
                 "et.id",
                 "email_thread",
-                *done,
+                *state,
             )),
-            EmailLiteral::NotificationSeen(seen) => Some(build_notification_seen_clause(
-                "et.id",
-                "email_thread",
-                *seen,
-            )),
+            EmailLiteral::Read(true) => Some("et.is_read".to_string()),
+            EmailLiteral::Read(false) => Some("NOT et.is_read".to_string()),
             _ => None,
         },
     );
