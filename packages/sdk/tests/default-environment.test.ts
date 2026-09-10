@@ -16,8 +16,6 @@ test('uses production services when no environment is configured', () => {
 
   const macro = new Macro({ token: 'test-token' });
 
-  expect(macro._client.hosts.storage).toBe(
-    'https://cloud-storage.macro.com',
-  );
+  expect(macro._client.hosts.storage).toBe('https://gateway.macro.com/dss');
   expect(macro.webAppUrl).toBe('https://macro.com');
 });
