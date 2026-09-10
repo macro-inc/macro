@@ -12,9 +12,11 @@ import { Button, cn } from '@ui';
 import { createSignal, onCleanup } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
+import { SidebarUnreadDot } from './unread-dot';
 
 export type ListNavProps = {
   item: SidebarNextNavItem;
+  unread?: boolean;
   onContextMenuOpenChange?: (open: boolean) => void;
 };
 
@@ -172,6 +174,7 @@ export const ListNav = (props: ListNavProps) => {
         size="icon-md"
         class="cursor-default rounded-xl"
         label={props.item.label}
+        aria-description={props.unread ? 'Unread items' : undefined}
         tooltip={`Go to ${props.item.label}`}
         tooltipPlacement="right"
         hotkey={[TOKENS.sidebar.goToLeader, props.item.hotkeyToken]}
@@ -182,6 +185,7 @@ export const ListNav = (props: ListNavProps) => {
         // tests use keep working.
         data-active={isActive() ? '' : undefined}
         data-sidebar-next-item={props.item.id}
+        data-unread={props.unread ? '' : undefined}
         onMouseDown={onMouseDown}
         onClick={onClick}
       >
@@ -209,6 +213,7 @@ export const ListNav = (props: ListNavProps) => {
           filled={isActive()}
           class={cn('size-5.5', isActive() && 'text-accent')}
         />
+        <SidebarUnreadDot active={props.unread} />
       </Button>
     </SidebarOpenInSplitMenu>
   );
