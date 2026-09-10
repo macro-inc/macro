@@ -95,7 +95,7 @@ where
         let last_agent_text = messages
             .iter()
             .rev()
-            .find(|message| matches!(message.author, Author::Agent { .. }))?
+            .find(|message| matches!(message.author, Author::Agent))?
             .parts
             .iter()
             .rev()

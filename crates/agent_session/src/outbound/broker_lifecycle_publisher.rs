@@ -1,5 +1,8 @@
 //! [`AgentSessionLifecyclePublisher`] over the Macro event broker.
 
+#[cfg(test)]
+mod test;
+
 use std::pin::Pin;
 
 use agent_session_events::{AgentSessionLifecycleEvent, AgentSessionLifecycleMacroEvent};
