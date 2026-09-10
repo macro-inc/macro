@@ -48,7 +48,7 @@ const message: UnifiedNotification = {
   entity_type: 'channel',
   created_at: '2026-09-10T12:00:00Z',
   updated_at: '2026-09-10T12:00:00Z',
-  done: false,
+  state: 'unseen',
   sent: true,
   viewed_at: null,
   notification_event_type: 'channel_message_send',
@@ -129,9 +129,11 @@ describe('sidebar unread presence', () => {
     const { unread, setNotifications } = setup();
     setNotifications([message]);
     expect(unread('channels')).toBe(true);
-    setNotifications([{ ...message, viewed_at: message.created_at }]);
+    setNotifications([
+      { ...message, state: 'seen', viewed_at: message.created_at },
+    ]);
     expect(unread('channels')).toBe(false);
-    setNotifications([{ ...message, done: true }]);
+    setNotifications([{ ...message, state: 'done' }]);
     expect(unread('channels')).toBe(false);
     setNotifications([{ ...message, entity_type: 'document' }]);
     expect(unread('channels')).toBe(false);

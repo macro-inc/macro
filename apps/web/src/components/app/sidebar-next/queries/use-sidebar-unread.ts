@@ -1,6 +1,7 @@
 import { buildEmailQuery } from '@app/features/email-view/queries/email-query';
 import { soupItemMatchesInboxTab } from '@app/features/inbox-view/queries/inbox-item-filter';
 import { useInboxEntitiesQuery } from '@app/features/inbox-view/queries/use-inbox-query';
+import { EMPTY_TAG_FACET_CONTEXT } from '@app/features/soup/filters/facets/tag-facet';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { unreadFilterFn } from '@entity/utils/filter';
 import { notificationIsRead } from '@entity/utils/notification';
@@ -20,6 +21,7 @@ export function useSidebarUnread() {
         tab: 'important',
         inboxIds: undefined,
         facets: { read: ['unread'] },
+        facetContext: EMPTY_TAG_FACET_CONTEXT,
       }),
     () => ({
       meta: { insertFilter: (item) => soupItemMatchesInboxTab(item, 'signal') },

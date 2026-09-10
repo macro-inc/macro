@@ -7,9 +7,10 @@ import {
 } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { TOKENS } from '@core/hotkey/tokens';
+import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import { useLocation } from '@solidjs/router';
 import { Button, cn } from '@ui';
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 import type { SidebarNextNavItem } from './nav-items';
 import { SidebarUnreadDot } from './unread-dot';
@@ -17,6 +18,7 @@ import { SidebarUnreadDot } from './unread-dot';
 export type ListNavProps = {
   item: SidebarNextNavItem;
   unread?: boolean;
+  activeCall?: boolean;
   onContextMenuOpenChange?: (open: boolean) => void;
 };
 
@@ -174,7 +176,11 @@ export const ListNav = (props: ListNavProps) => {
         size="icon-md"
         class="cursor-default rounded-xl"
         label={props.item.label}
-        aria-description={props.unread ? 'Unread items' : undefined}
+        aria-description={
+          [props.unread && 'Unread items', props.activeCall && 'Active call']
+            .filter(Boolean)
+            .join('. ') || undefined
+        }
         tooltip={`Go to ${props.item.label}`}
         tooltipPlacement="right"
         hotkey={[TOKENS.sidebar.goToLeader, props.item.hotkeyToken]}
@@ -186,6 +192,7 @@ export const ListNav = (props: ListNavProps) => {
         data-active={isActive() ? '' : undefined}
         data-sidebar-next-item={props.item.id}
         data-unread={props.unread ? '' : undefined}
+        data-active-call={props.activeCall ? '' : undefined}
         onMouseDown={onMouseDown}
         onClick={onClick}
       >
@@ -213,7 +220,17 @@ export const ListNav = (props: ListNavProps) => {
           filled={isActive()}
           class={cn('size-5.5', isActive() && 'text-accent')}
         />
-        <SidebarUnreadDot active={props.unread} />
+        <Show
+          when={props.activeCall}
+          fallback={<SidebarUnreadDot active={props.unread} />}
+        >
+          <span
+            aria-hidden="true"
+            class="pointer-events-none absolute top-0 right-0 flex size-3.5 items-center justify-center text-accent"
+          >
+            <PhoneCallIcon class="size-full" />
+          </span>
+        </Show>
       </Button>
     </SidebarOpenInSplitMenu>
   );
