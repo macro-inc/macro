@@ -64,9 +64,30 @@ async fn thread_metadata_by_ids_returns_canonical_rows(pool: Pool<Postgres>) -> 
     assert_eq!(metadata[0].thread_id, first_id);
     assert_eq!(metadata[0].link_id, canonical_link_id);
     assert!(metadata[0].latest_inbound_message_ts.is_some());
+    assert!(metadata[0].latest_non_spam_message_ts.is_some());
+    assert!(metadata[0].has_non_trashed_messages);
+    assert!(metadata[1].has_non_trashed_messages);
     assert_eq!(metadata[1].thread_id, second_id);
     assert_eq!(metadata[1].link_id, canonical_link_id);
 
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread"))
+)]
+async fn mail_archive_filters_do_not_require_notifications(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    use filter_ast::Expr;
+    use item_filters::ast::email::EmailLiteral;
+    use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
+    let inbox = uuid::uuid!("11111111-1111-1111-1111-111111111111");
+    let archived = uuid::uuid!("22222222-2222-2222-2222-222222222222");
+    for (visible, expected) in [(true, inbox), (false, archived)] {
+        let filter = Expr::and(Expr::or(Expr::val(EmailLiteral::ThreadId(inbox)), Expr::val(EmailLiteral::ThreadId(archived))), Expr::val(EmailLiteral::InboxVisible(visible)));
+        let rows = super::super::dynamic::dynamic_email_thread_cursor(&pool, &[uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")], 50, &PreviewView::StandardLabel(PreviewViewStandardLabel::All), models_pagination::Query::new(None, models_pagination::SimpleSortMethod::UpdatedAt, std::sync::Arc::new(filter)), "macro|user1@test.com", None).await?;
+        assert_eq!(rows.iter().map(|row| row.id).collect::<Vec<_>>(), vec![expected]);
+    }
     Ok(())
 }
 

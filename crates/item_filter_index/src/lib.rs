@@ -26,6 +26,8 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
+pub mod mail;
+
 /// Stable direct-field profile name retained for existing browser projections.
 pub const SOUP_FLAT_V1: &str = "soup-flat-v1";
 /// Stable server-minted profile containing exact derived document facts.

@@ -342,6 +342,16 @@ where
             .map(|timestamp| timestamp.to_rfc3339()))
     }
 
+    /// Stable ALL-view recency, independent of which preview is currently selected.
+    async fn latest_non_spam_message_ts(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<String>> {
+        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id).await?.latest_non_spam_message_ts.map(|ts| ts.to_rfc3339()))
+    }
+
+    /// Whether the canonical thread has any non-trashed message eligible for Mail.
+    async fn has_non_trashed_messages(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        Ok(load_email_thread_metadata::<ER>(ctx, self.thread_id).await?.has_non_trashed_messages)
+    }
+
     /// A page of messages in this thread, newest first.
     async fn messages(
         &self,

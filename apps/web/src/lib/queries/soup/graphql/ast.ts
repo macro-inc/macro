@@ -320,6 +320,8 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
       return { notificationState: mapNotificationState(value) };
     case 'Read':
       return { read: mapBoolean(value, 'read') };
+    case 'InboxVisible':
+      return { inboxVisible: mapBoolean(value, 'inboxVisible') };
     case 'Shared':
       return { shared: mapEmailShared(value) };
     case 'CalendarOnly':

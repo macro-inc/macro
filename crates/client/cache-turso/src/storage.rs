@@ -2672,6 +2672,16 @@ impl SqlPredicateCompiler {
                 ));
                 name
             }
+            PredicateExpr::After {attribute, value, key, direction, tie_direction} => {
+                let name = self.next_name();
+                let cmp = if *direction == SortDirection::Asc { ">" } else { "<" };
+                let tie = if *tie_direction == SortDirection::Asc { ">" } else { "<" };
+                for _ in 0..2 {
+                    self.parameters.extend([text(profile.token().as_str()), text(partition.as_str()), text(attribute.as_str()), Value::from_i64(*value), Value::from_i64(*value), text(key.as_str())]);
+                }
+                self.ctes.push(format!("{name}(source, document_id) AS (SELECT 0, f.document_id FROM sort_facts f JOIN effective_documents d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_sort_facts f JOIN effective_documents d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
+                name
+            }
             PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
                 let left = self.compile(left, profile, partition);
                 let right = self.compile(right, profile, partition);

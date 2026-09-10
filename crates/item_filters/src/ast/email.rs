@@ -61,6 +61,9 @@ pub enum EmailLiteral {
     NotificationState(crate::NotificationState),
     /// The email thread is read (independent of notification state).
     Read(bool),
+    /// Whether the thread is in the inbox. Mail done means false, independently
+    /// of the lifecycle of any notifications associated with the thread.
+    InboxVisible(bool),
     /// Controls whether shared email threads are included in results.
     Shared(SharedEmailFilter),
     /// When true, only include threads that have at least one message with an

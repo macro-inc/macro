@@ -11,6 +11,10 @@ pub struct EmailThreadMetadata {
     pub link_id: uuid::Uuid,
     /// Timestamp of the latest inbound message, when one exists.
     pub latest_inbound_message_ts: Option<DateTime<Utc>>,
+    /// Canonical ALL-view timestamp before falling back to thread updated_at.
+    pub latest_non_spam_message_ts: Option<DateTime<Utc>>,
+    /// Whether any message survives the Mail view's TRASH exclusion.
+    pub has_non_trashed_messages: bool,
 }
 
 /// A thread record without messages.

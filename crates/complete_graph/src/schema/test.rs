@@ -530,6 +530,8 @@ impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentR
                         link_id: Uuid::from_u128(900 + thread_id.as_u128()),
                         latest_inbound_message_ts: (thread_id.as_u128() % 2 == 1)
                             .then(Default::default),
+                        latest_non_spam_message_ts: None,
+                        has_non_trashed_messages: true,
                     }),
                 )
             })

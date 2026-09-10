@@ -485,6 +485,8 @@ mod tests {
                             thread_id,
                             link_id: Uuid::from_u128(3),
                             latest_inbound_message_ts: None,
+                            latest_non_spam_message_ts: None,
+                            has_non_trashed_messages: true,
                         }),
                     )
                 })

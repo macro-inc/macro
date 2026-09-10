@@ -42,11 +42,21 @@ pub(super) async fn thread_metadata_by_ids(
         EmailThreadMetadata,
         r#"
         SELECT
-            id AS "thread_id!",
-            link_id,
-            latest_inbound_message_ts
-        FROM email_threads
-        WHERE id = ANY($1)
+            t.id AS "thread_id!",
+            t.link_id,
+            t.latest_inbound_message_ts,
+            t.latest_non_spam_message_ts,
+            EXISTS (
+                SELECT 1 FROM email_messages m
+                WHERE m.thread_id = t.id
+                  AND NOT EXISTS (
+                    SELECT 1 FROM email_message_labels ml
+                    JOIN email_labels l ON l.id = ml.label_id
+                    WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'
+                  )
+            ) AS "has_non_trashed_messages!"
+        FROM email_threads t
+        WHERE t.id = ANY($1)
         "#,
         thread_ids,
     )

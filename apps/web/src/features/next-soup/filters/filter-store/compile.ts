@@ -100,7 +100,14 @@ const FIELD_CONFIG: Record<
   threadId: { target: 'ef', field: 'ThreadId' },
   emailLinkId: { target: 'ef', field: 'Owner' },
   emailSeen: { target: 'ef', field: 'Read' },
-  emailDone: { target: 'ef', field: 'NotificationState', notification: 'done' },
+  emailDone: {
+    target: 'ef',
+    field: 'InboxVisible',
+    formatValue: (value) => {
+      if (typeof value !== 'boolean') throw new Error('Invalid mail done filter');
+      return !value;
+    },
+  },
   emailImportance: { target: 'ef', field: 'Importance' },
   emailProjectId: { target: 'ef', field: 'ProjectId' },
   emailSender: {

@@ -179,6 +179,19 @@ pub enum PredicateExpr {
         /// Fact vocabulary token.
         attribute: Token,
     },
+    /// Exclusive keyset boundary over a sort fact and normalized key.
+    After {
+        /// Sort attribute.
+        attribute: Token,
+        /// Last returned sort value.
+        value: i64,
+        /// Last returned normalized key.
+        key: RecordKey,
+        /// Value ordering.
+        direction: SortDirection,
+        /// Tie-break ordering.
+        tie_direction: SortDirection,
+    },
 }
 
 impl PredicateExpr {
@@ -204,7 +217,8 @@ impl PredicateExpr {
                 | Self::None
                 | Self::Exact { .. }
                 | Self::I64Range { .. }
-                | Self::ExactExists { .. } => {}
+                | Self::ExactExists { .. }
+                | Self::After { .. } => {}
             }
         }
 
@@ -296,6 +310,9 @@ impl IndexDocument {
                     && lower.is_none_or(|bound| lower_matches(fact.value, bound))
                     && upper.is_none_or(|bound| upper_matches(fact.value, bound))
             }),
+            PredicateExpr::After {attribute, value, key, direction, tie_direction} => self.sort_facts.iter().find(|fact| &fact.attribute == attribute).is_some_and(|fact| {
+                directional_cmp(fact.value.cmp(value), *direction).then_with(|| directional_cmp(self.record_key.cmp(key), *tie_direction)) == Ordering::Greater
+            }),
             PredicateExpr::And(left, right) => self.matches(left) && self.matches(right),
             PredicateExpr::Or(left, right) => self.matches(left) || self.matches(right),
             PredicateExpr::Not(expr) => !self.matches(expr),
@@ -378,6 +395,15 @@ impl ValidatedIndexQuery {
     pub fn with_limit(&self, limit: u16) -> Result<Self, ValidationError> {
         let mut query = self.0.clone();
         query.limit = limit;
+        Self::new(query)
+    }
+
+    /// Add an exclusive, direction-aware keyset boundary without changing sort semantics.
+    pub fn after(&self, value: i64, key: RecordKey) -> Result<Self, ValidationError> {
+        let mut query = self.0.clone();
+        for partition in &mut query.partitions {
+            partition.predicate = PredicateExpr::And(Box::new(partition.predicate.clone()), Box::new(PredicateExpr::After {attribute:query.sort_attribute.clone(),value,key:key.clone(),direction:query.sort_direction,tie_direction:query.tie_break_direction}));
+        }
         Self::new(query)
     }
 
@@ -886,7 +912,8 @@ fn expression_depends_on(expr: &PredicateExpr, attribute: &Token) -> bool {
         }
         | PredicateExpr::ExactExists {
             attribute: candidate,
-        } => candidate == attribute,
+        }
+        | PredicateExpr::After { attribute: candidate, .. } => candidate == attribute,
         PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
             expression_depends_on(left, attribute) || expression_depends_on(right, attribute)
         }
@@ -899,7 +926,8 @@ fn collect_expression_attributes(expr: &PredicateExpr, attributes: &mut BTreeSet
     match expr {
         PredicateExpr::Exact { attribute, .. }
         | PredicateExpr::I64Range { attribute, .. }
-        | PredicateExpr::ExactExists { attribute } => {
+        | PredicateExpr::ExactExists { attribute }
+        | PredicateExpr::After { attribute, .. } => {
             attributes.insert(attribute.clone());
         }
         PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
@@ -946,7 +974,8 @@ fn simplify(expr: PredicateExpr) -> Result<PredicateExpr, ValidationError> {
         expr @ (PredicateExpr::All
         | PredicateExpr::None
         | PredicateExpr::Exact { .. }
-        | PredicateExpr::ExactExists { .. }) => expr,
+        | PredicateExpr::ExactExists { .. }
+        | PredicateExpr::After { .. }) => expr,
     })
 }
 

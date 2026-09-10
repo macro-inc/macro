@@ -263,6 +263,8 @@ pub(super) fn email_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> Stri
             )),
             EmailLiteral::Read(true) => Some("et.is_read".to_string()),
             EmailLiteral::Read(false) => Some("NOT et.is_read".to_string()),
+            EmailLiteral::InboxVisible(true) => Some("et.inbox_visible".to_string()),
+            EmailLiteral::InboxVisible(false) => Some("NOT et.inbox_visible".to_string()),
             _ => None,
         },
     );
