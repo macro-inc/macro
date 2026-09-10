@@ -5,14 +5,20 @@ language: typescript
 severity: warning
 message: Feature queries/ and primitives/ never import components, views, or UI primitives. They produce data and view-state; views render it.
 note: |-
-  Rule FE-33 in docs/STYLE_GUIDE.md. `queries/` decodes wire types and
-  builds query factories; `primitives/` turns query results into view-state
-  unions and actions with Solid primitives but no JSX. Both are tested
-  under `createRoot` against a mock client, which only stays possible
-  while they import nothing that renders.
+  Rule FE-33 in docs/STYLE_GUIDE.md. `queries/` adapts wire types and
+  builds query factories; `primitives/` consumes feature-owned capabilities
+  to produce state and actions with Solid primitives but no JSX. Test adapters
+  with fake clients and controllers with fake capabilities; neither imports
+  rendering code.
 files:
   - apps/web/src/features/activity/queries/**
   - apps/web/src/features/activity/primitives/**
+  - apps/web/src/features/email-message/queries/**
+  - apps/web/src/features/email-message/primitives/**
+  - apps/web/src/features/email-thread/queries/**
+  - apps/web/src/features/email-thread/primitives/**
+  - apps/web/src/features/email-compose/queries/**
+  - apps/web/src/features/email-compose/primitives/**
 rule:
   kind: string
   regex: ^['"](solid-js/web|@ui|@components/|(\.\./)+(components|views)/)

@@ -62,6 +62,7 @@ members = [
   "crates/memory",
   "crates/mcp_select",
   "crates/mcp_toolset",
+  "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/onboarding",
   "crates/predicate_index",

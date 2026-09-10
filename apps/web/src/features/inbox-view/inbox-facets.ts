@@ -62,7 +62,7 @@ function readOption(
               compositeEntity(toNotificationEntity(entity))
             ]) ?? [];
       const unread = notifications.some(
-        (notification) => !notification.viewed_at
+        (notification) => notification.state === 'unseen'
       );
 
       return unread !== seen;

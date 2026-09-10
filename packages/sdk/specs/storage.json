@@ -3637,6 +3637,115 @@
         }
       }
     },
+    "/channels/{channel_id}/messages/catch-up": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/{channel_id}/messages/catch-up`.",
+        "operationId": "get_channel_messages_catch_up",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Exclusive RFC3339 lower bound. Messages at this instant are omitted.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for older messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "previous_cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for newer messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelMessagesPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/messages/{message_id}/context": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
@@ -15895,6 +16004,11 @@
             "format": "date-time",
             "description": "When set, only return top-level messages created at or after this timestamp."
           },
+          "created_after_exclusive": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When set, only return top-level messages created strictly after this timestamp."
+          },
           "created_before": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -18182,6 +18296,7 @@
           "edit_stages_role",
           "move_closed_deals_role",
           "delete_records_role",
+          "legacy_stage_ids",
           "team_views"
         ],
         "properties": {
@@ -18204,6 +18319,18 @@
           "edit_stages_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
             "description": "Who can change the deal stage set in CRM settings."
+          },
+          "legacy_stage_ids": {
+            "type": "object",
+            "description": "System stage option id to team stage option id for seeded stages.",
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           "move_closed_deals_role": {
             "$ref": "#/components/schemas/CrmPermissionRole",
@@ -19839,6 +19966,10 @@
               "type": "string"
             },
             "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
+          },
+          "is_read": {
+            "type": ["boolean", "null"],
+            "description": "Filter by the email thread's read flag, independently of notification state."
           },
           "link_ids": {
             "type": "array",
@@ -22371,17 +22502,22 @@
       },
       "NotificationFilters": {
         "type": "object",
-        "description": "Notification state filters for channel message queries.",
+        "description": "Notification-level filters that apply to an entity type.",
         "properties": {
-          "done": {
-            "type": ["boolean", "null"],
-            "description": "Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications."
-          },
-          "seen": {
-            "type": ["boolean", "null"],
-            "description": "Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications."
+          "states": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationState"
+            },
+            "description": "Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`."
           }
-        }
+        },
+        "additionalProperties": false
+      },
+      "NotificationState": {
+        "type": "string",
+        "description": "The mutually exclusive lifecycle states of a user's notification.",
+        "enum": ["unseen", "seen", "done"]
       },
       "PairingDetails": {
         "type": "object",

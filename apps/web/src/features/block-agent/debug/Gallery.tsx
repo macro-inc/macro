@@ -5,10 +5,13 @@
  */
 
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
+import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
 import type {
   ElicitationSchema,
   FoldedMessage,
   ModelOption,
+  PendingElicitation,
   ToolStatus,
 } from '@service-agent-fold/generated/types';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
@@ -440,6 +443,59 @@ const FIXTURE_ELICITATION: ElicitationSchema = {
   ],
 };
 
+const GALLERY_CHIP_HEADER = {
+  agent: 'Cursor Agent',
+  model: 'Claude Opus 5 High',
+};
+
+/** The chip through a turn: booting, writing, and done. */
+function MagicChipStateDemo(props: { presentation: MagicChipPresentation }) {
+  return (
+    <MagicChipView
+      agentSessionId="gallery"
+      presentation={props.presentation}
+      header={GALLERY_CHIP_HEADER}
+      onOpen={() => console.log('[gallery] open session')}
+    />
+  );
+}
+
+/** The chip asking, one per request kind; answers land in the console. */
+function MagicChipAskingDemo(props: {
+  request: PendingElicitation['request'];
+}) {
+  const presentation: MagicChipPresentation = {
+    kind: 'asking',
+    markdown: 'Happy to. One quick question before I go on.',
+    asking: {
+      question: {
+        requestId: 0,
+        turn: 0,
+        toolCall: null,
+        message: 'Which colour, and where should it run?',
+        request: props.request,
+      },
+      canAnswer: true,
+      ownerName: 'You',
+    },
+  };
+  return (
+    <MagicChipView
+      agentSessionId="gallery"
+      presentation={presentation}
+      header={GALLERY_CHIP_HEADER}
+      answer={{
+        answering: false,
+        respond: async (answer) => {
+          console.log('[gallery] elicitation answer', answer);
+          return true;
+        },
+      }}
+      onOpen={() => console.log('[gallery] open session')}
+    />
+  );
+}
+
 function ElicitationFormDemo() {
   const [values, setValues] = createStore(initialValues(FIXTURE_ELICITATION));
   const errors = () => validate(FIXTURE_ELICITATION, values);
@@ -466,6 +522,71 @@ export default function AgentUiGallery() {
         <div class="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8">
           <Item label="ElicitationForm (live validation)">
             <ElicitationFormDemo />
+          </Item>
+
+          <Item label="MagicChip (booting, writing, done)">
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'working',
+                activity: {
+                  label: 'Booting agent',
+                  detail: 'Preparing workspace',
+                  busy: true,
+                },
+              }}
+            />
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'answering',
+                markdown:
+                  'The failing test is in `agent_fold`: the batch fold re-derives every message per frame, so the',
+                activity: {
+                  label: 'Running command',
+                  detail: 'cargo test -p agent_fold',
+                  busy: true,
+                },
+              }}
+            />
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'settled',
+                markdown:
+                  '**Fixed.** The incremental machine now handles the replay; `cargo test -p agent_fold` passes.',
+              }}
+            />
+          </Item>
+
+          <Item label="MagicChip asking (form, url, tool draft)">
+            <MagicChipAskingDemo
+              request={{ kind: 'form', schema: FIXTURE_ELICITATION }}
+            />
+            <MagicChipAskingDemo
+              request={{
+                kind: 'url',
+                elicitationId: 'gh-1',
+                url: 'https://github.com/login/device?user_code=ABCD-1234',
+              }}
+            />
+            <MagicChipAskingDemo
+              request={{
+                kind: 'user_tool',
+                tool: 'CreateCalendarEvent',
+                draft: {
+                  title: 'Q3 sync',
+                  time: {
+                    kind: 'timed',
+                    startsAt: '2026-08-20T17:00:00Z',
+                    endsAt: '2026-08-20T17:30:00Z',
+                    timeZone: 'UTC',
+                  },
+                  attendees: [],
+                  recurrenceLines: [],
+                  addGoogleMeet: false,
+                  eventType: 'default',
+                },
+                schema: FIXTURE_ELICITATION,
+              }}
+            />
           </Item>
 
           <Item label="ComposerNotice">

@@ -27,7 +27,7 @@ const CHANNEL_NOTIFICATION_TYPES = [
 ] as const;
 
 export function notificationIsRead(notification: UnifiedNotification): boolean {
-  if (notification.viewed_at || notification.done) return true;
+  if (notification.state !== 'unseen') return true;
 
   if (notification.entity_type === 'channel') {
     const notificationType = notification.notification_metadata?.tag ?? '';
@@ -199,7 +199,7 @@ export function filterValidNotifications(
 export function filterNotDoneNotifications(
   notifications: Notification[]
 ): Notification[] {
-  return notifications.filter((n) => !n.done);
+  return notifications.filter((n) => n.state !== 'done');
 }
 
 export function extractNotificationSenderIds(
@@ -330,7 +330,7 @@ export function extractMessageContent(notification: Notification): string {
 
 /**
  * Checks if a notification or notification stack is unread
- * A notification is unread if it hasn't been viewed (!viewedAt) and isn't done (!done)
+ * A notification is unread when its lifecycle state is unseen.
  * A notification stack is unread if ANY notification in the stack is unread
  */
 export function isNotificationUnread(

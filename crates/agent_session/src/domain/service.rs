@@ -39,6 +39,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use tokio::sync::{Mutex, mpsc, oneshot, watch};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::Instrument as _;
 use tracing::instrument::WithSubscriber as _;
 
 use bots::domain::models::BotId;
@@ -625,6 +626,17 @@ where
         })
     }
 
+    /// The out-of-band disconnect: a session marked dead by its opener rather
+    /// than by its own actor stopping. Spanned separately from
+    /// `agent.session.disconnect` because the two write the same log frame
+    /// for entirely different reasons - this one means the runtime never came
+    /// up at all.
+    #[tracing::instrument(
+        name = "agent.session.mark_disconnected",
+        err,
+        skip(self),
+        fields(agent.session.id = %id),
+    )]
     async fn mark_disconnected(&self, id: AgentSessionId) -> Result<()> {
         let mut logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
         tokio::time::timeout(
@@ -785,39 +797,75 @@ fn spawn_initial_agent_session_rename<R, Rt, Namer>(
     Rt: AgentSessionRealtime + Send + Sync + 'static,
     Namer: AgentSessionNameGenerator + Send + Sync + 'static,
 {
-    tokio::spawn(async move {
-        let result: std::result::Result<(), rootcause::Report> = async {
-            let session = repo
-                .get(id)
-                .await
-                .map_err(|error| rootcause::report!(error))?;
-            let Some(name) = name_generator
-                .generate_name(&session, &initial_prompt)
-                .await?
-            else {
-                return Ok(());
-            };
-            let renamed = repo
-                .set_name_if_default(id, &name)
-                .await
-                .map_err(|error| rootcause::report!(error))?;
-            if !renamed {
-                return Ok(());
+    // Detached, so without a span of its own this work has no session id and
+    // no link to the session that spawned it - which is why a rename that
+    // fails for every session in a deployment still looks like nothing at
+    // all. The outcome is recorded rather than logged because the failure is
+    // swallowed here by design: nothing downstream ever notices a session
+    // that kept its default name.
+    let span = tracing::info_span!(
+        "agent.session.rename",
+        agent.session.id = %id,
+        agent.rename.outcome = tracing::field::Empty,
+    );
+    tokio::spawn(
+        async move {
+            let span = tracing::Span::current();
+            let result: std::result::Result<&'static str, rootcause::Report> = async {
+                let session = repo
+                    .get(id)
+                    .await
+                    .map_err(|error| rootcause::report!(error))?;
+                let Some(name) = name_generator
+                    .generate_name(&session, &initial_prompt)
+                    .await?
+                else {
+                    return Ok("skipped_no_name");
+                };
+                let renamed = repo
+                    .set_name_if_default(id, &name)
+                    .await
+                    .map_err(|error| rootcause::report!(error))?;
+                if !renamed {
+                    return Ok("skipped_already_named");
+                }
+                realtime
+                    .publish_renamed(AgentSessionRenamed {
+                        agent_session_id: id,
+                        name,
+                    })
+                    .await?;
+                Ok("renamed")
             }
-            realtime
-                .publish_renamed(AgentSessionRenamed {
-                    agent_session_id: id,
-                    name,
-                })
-                .await?;
-            Ok(())
-        }
-        .await;
+            .await;
 
-        if let Err(error) = result {
-            tracing::warn!(error = ?error, %id, "failed to auto-rename initial agent session");
+            match result {
+                Ok(outcome) => {
+                    span.record("agent.rename.outcome", outcome);
+                }
+                Err(error) => {
+                    span.record("agent.rename.outcome", "failed");
+                    tracing::warn!(error = ?error, %id, "failed to auto-rename initial agent session");
+                }
+            }
         }
-    });
+        .instrument(span),
+    );
+}
+
+/// The telemetry shape of a log frame: its kind, and the status event it
+/// carries when it is one.
+///
+/// Status events are named individually because a session's visible state is
+/// projected from them and there are only a handful. ACP traffic is counted
+/// but never named - the frame's content is user data and never belongs in a
+/// span.
+fn frame_telemetry(content: &Message) -> (&'static str, Option<&str>) {
+    match content {
+        Message::ToServer(ToServerMessage::Event { event }) => ("event", Some(event.as_str())),
+        Message::ToServer(_) => ("acp_to_server", None),
+        Message::ToRuntime(_) => ("acp_to_runtime", None),
+    }
 }
 
 fn validate_agent_session_name(raw: &str) -> Result<&str> {
@@ -1065,17 +1113,32 @@ where
     Rt: AgentSessionRealtime,
 {
     /// Push the frame just appended out to whoever is watching the session.
+    ///
+    /// The frame's kind rides along because this span is the only per-frame
+    /// signal a session emits: a status event here is what moves the
+    /// composer's whole notion of whether the agent is working, and without
+    /// naming it "a frame was published" answers nothing.
     #[tracing::instrument(
         name = "agent.session.realtime.publish",
         err,
         skip(self, agent_session_id, entry),
-        fields(agent.session.id = %agent_session_id)
+        fields(
+            agent.session.id = %agent_session_id,
+            agent.log.frame_kind = tracing::field::Empty,
+            agent.log.event = tracing::field::Empty,
+        )
     )]
     async fn stream(
         &mut self,
         agent_session_id: AgentSessionId,
         entry: StoredAgentSessionLog,
     ) -> std::result::Result<(), rootcause::Report> {
+        let span = tracing::Span::current();
+        let (frame_kind, event) = frame_telemetry(&entry.entry.content);
+        span.record("agent.log.frame_kind", frame_kind);
+        if let Some(event) = event {
+            span.record("agent.log.event", event);
+        }
         self.realtime
             .publish(LogAppended {
                 agent_session_id,

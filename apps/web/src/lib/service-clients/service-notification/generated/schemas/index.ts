@@ -167,6 +167,7 @@ export * from './notificationDocumentSubTypeOneOfThree';
 export * from './notificationDocumentSubTypeOneOfThreeType';
 export * from './notificationDocumentSubTypeOneOfType';
 export * from './notificationServiceApiVersion';
+export * from './notificationState';
 export * from './notificationTypeName';
 export * from './pushNotificationData';
 export * from './pushNotificationDataSenderProfilePictureUrl';

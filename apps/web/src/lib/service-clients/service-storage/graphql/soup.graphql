@@ -315,8 +315,7 @@ fragment SoupNotificationFields on GraphqlNotification {
 	entityType
 	entityId
 	sent
-	done
-	seen
+	state
 	createdAt
 	viewedAt
 	updatedAt

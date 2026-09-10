@@ -27,16 +27,29 @@ that entity's last operation in the batch. Emitted `SoupUpdated` items are non-n
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
 
-## Inbox — `/app/component/inbox`
+## Notifications — `/app/component/inbox`
 
 Unified triage list (emails, channel messages, task assignments, doc mentions, agent
-results). Filter radios: `Signal` (default, AI-filtered "needs attention") / `Noise` / `All`
-/ `Reminders`; plus `Filter` menu and `Preview` toggle (split list + preview pane; the empty
-preview shows "No content selected"). With the `enable-inbox-notified-sort` flag on, `Signal`
-and `Noise` order rows (and their date headers) by when you were last notified about the
-item, so a fresh comment on an old task sits under "Today"; with it off they order by
-recency like `All` and `Reminders`. Keyboard: `j`/`k` move, `space` preview, `enter` open, `e` mark done.
-Rows are buttons named `<channel> <sender>:<snippet> <time>`.
+results). Tabs are `Signal` (default, AI-filtered "needs attention") and `Noise`, with a
+Filter menu. On desktop, selecting a row renders its block in the inline preview beside
+the notification sidebar. With the `enable-inbox-notified-sort` flag on, both tabs order
+rows and date headers by when you were last notified about the item, so a fresh comment
+on an old task sits under "Today"; with it off they order by content recency. Keyboard:
+`j`/`k` move between rows and update the preview; alternate activation opens a new split.
+
+Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
+unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`
+or `⌘Z`) returns it to seen, not unseen. The row returns to the active inbox without
+an unread badge. Applying the active Inbox preset preserves read/unread selections:
+read (`seen` or `done`) narrows to `seen`, not to all active states. Email read/unread
+is separate from notification lifecycle state.
+
+## Tasks — `/app/component/tasks`
+
+Task navigation uses `My Tasks`, `All Tasks`, and `Created by me`. The desktop
+sidebar has a full-width `New task` action, a collapsible list of task favorites,
+and a collapsible list of tags. Selecting a tag filters the current task view;
+selecting it again clears that tag filter. Favorite rows open their tasks.
 
 ## Email — `/app/component/mail`
 
@@ -45,14 +58,58 @@ Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
 
+Threads open at `/app/email/<thread-id>`. Click a message header to expand or
+collapse it; `Show N hidden messages` reveals the collapsed middle of a longer
+conversation. A link with `?email_message_id=<message-id>` reveals that message.
+Collapsed thread cards use a compact text snippet; expanding mounts the message
+body and its attachments.
+Replies appear inline on desktop and in a composer drawer on touch devices.
+`R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
+or the latest message when none is selected. `F` opens a forward and focuses To.
+While an editable field is focused, Escape is handled by that field before the
+close-reply shortcut.
+An edited reply remains a draft when navigating away and returning. Standalone
+compose also flushes pending edits when leaving through app navigation. During
+send or discard, its sender and scheduling controls cannot change the operation.
+Attachments that can be opened are buttons named by their filename; Tab to one
+and press Enter or Space. Removal is a separate button named `Remove <filename>`.
+Removing a forwarded file keeps the received original.
+AI email tool drafts persist body-only edits; changing recipients or the subject
+is not required to save the body.
+The three-dot button beneath a body reveals quoted content and a trimmed
+signature. Plaintext and Macro Markdown use the existing Markdown renderer;
+Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
+open shadow root: Playwright text locators can reach them, but a card's ordinary
+`innerText` or `querySelector` does not traverse that root.
+
+After a successful send, the `Email sent` notice offers `Undo`. Undo restores the
+sent envelope and editable content, including when the reply used another inbox;
+a slow background refresh must not keep the restored editor disabled. A rejected
+send reports failure and restores its original reply editor if it is still mounted.
+A failure from an older, unmounted editor must not overwrite a newer edited reply.
+A presentation or refresh error after successful delivery is not a reason to send
+again.
+
+While a schedule change is pending, immediate send and further schedule changes
+are disabled. Reply recipients cannot be edited or dragged during scheduling,
+sending, or discarding. A failed schedule or unschedule keeps the last confirmed time.
+If scheduling succeeds but marking the thread done fails, the email remains
+scheduled and a notice explains the separate failure. Check the confirmed time
+before retrying; do not treat that notice as a failed schedule.
+
 With the new app views enabled, mobile and tablet Email use a floating, horizontally
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the
 view is the email list, which scrolls beneath the header and supports pull to refresh
 and swiping left to mark emails done in Signal and Noise. The filter button opens a
-bottom drawer for status, done, attachment and calendar filters, plus the inbox
-selector when available. `Clear all`
-resets those filters and the inbox selection. Desktop keeps its sidebar, search field,
-filter menu and preview control.
+bottom drawer for status, done, attachment and calendar filters, plus an `Inbox`
+section when the user can pick one: `All inboxes` or a single address, never several.
+`Clear all` resets those filters and the inbox selection. Desktop keeps its sidebar,
+search field, filter menu and preview control. The sidebar lists the inboxes above the
+tabs as plain rows; clicking one shows only that inbox, and the `+` beside
+`All inboxes` (`Connect another account`) starts the add-inbox flow. Sidebar rows,
+`New`, and the panel's back, forward and close controls act on primary-button
+mousedown, so the selection changes before the click completes; a normal click
+still works.
 
 ## Search
 
@@ -78,7 +135,9 @@ The side panel's `Calendars` section folds each connected account into a collaps
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Subscribed system calendars (Google holidays, birthdays)
-carry a small RSS icon.
+carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
+warning icon whose tooltip shows the provider error; the account keeps syncing its other
+calendars and the badge clears on its own once that calendar syncs again.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
@@ -163,8 +222,12 @@ Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
-Workspace → `Team`, `Tags`, `CRM`, `Connections` (email/tool OAuth), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`;
+Workspace → `Team`, `Tags`, `CRM` (enable/disable; once enabled, a `Deal stages` section
+with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up/down
+buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
+checkboxes, editable by the role set as `edit_stages_role`),
+`Connections` (email/tool OAuth), `MCP server`
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`, `Harness`;
 `Log out`.
 `Agents` lists team and private agents with `Create agent` / `Edit <name>` dialogs grouped
 Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio pair:
@@ -177,6 +240,16 @@ saving; each teammate connects their own account. An agent session that calls a 
 but unconnected app gets a tool result saying so, and the agent's reply renders a
 `Connect <app>` chip that opens Settings → Connections for that app.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
+
+`Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
+The model list is loaded live and independently for In-memory, connected Cursor, and every
+registered macrod harness. A harness can show `Loading models…`, an unsupported message, or
+a retryable error without hiding the other harnesses. Editing preserves a saved model that
+is no longer offered and labels it `saved, unavailable`. A macrod with no responding runtime
+can remain loading until the 10-second discovery timeout; use Retry after reconnecting it.
+
+`Harness` configures Cursor and paired macrod runtimes. Cursor's default-model picker uses
+the same live model discovery and retains its existing save action.
 
 ## Notifications
 

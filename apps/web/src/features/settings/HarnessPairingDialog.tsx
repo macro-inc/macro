@@ -50,9 +50,11 @@ export function HarnessPairingDialog(props: {
   const currentTeamQuery = useCurrentTeamQuery();
   const currentTeamId = () => currentTeamQuery.data?.team.id;
   const canShareWithTeam = () => currentTeamId() !== undefined;
+  const pairingData = () =>
+    pairingQuery.isSuccess ? pairingQuery.data : undefined;
 
   createEffect(() => {
-    const pairing = pairingQuery.data;
+    const pairing = pairingData();
     if (!pairing) return;
     if (!nameEdited()) setName(pairing.requested_name);
     // The daemon's config may ask for a scope; preselect it, but the person
@@ -94,7 +96,7 @@ export function HarnessPairingDialog(props: {
     (share() === 'Private' || canShareWithTeam());
 
   const approve = async () => {
-    const pairing = pairingQuery.data;
+    const pairing = pairingData();
     if (!pairing || !canApprove()) return;
 
     setApproveError(undefined);
@@ -121,13 +123,13 @@ export function HarnessPairingDialog(props: {
       visibleScrim
       class="w-[min(480px,calc(100vw-16px))]"
     >
-      <Panel depth={2} class="rounded-xl text-ink">
+      <Panel depth={2} class="max-h-[88vh] rounded-xl text-ink">
         <Panel.Header class="px-5 py-3">
           <Dialog.Title class="text-sm font-semibold">
             {approved() ? 'Harness connected' : 'Connect a harness'}
           </Dialog.Title>
         </Panel.Header>
-        <Panel.Body class="p-5">
+        <Panel.Body class="overflow-y-auto p-5">
           <Switch>
             <Match when={approved()}>
               <p class="text-sm leading-5 text-ink-muted">
@@ -153,7 +155,7 @@ export function HarnessPairingDialog(props: {
               )}
             </Match>
 
-            <Match when={pairingQuery.data}>
+            <Match when={pairingData()}>
               {(pairing) => (
                 <div class="flex flex-col gap-4">
                   <div class="flex flex-col gap-1.5">
@@ -287,7 +289,7 @@ export function HarnessPairingDialog(props: {
                 Close
               </Button>
             </Match>
-            <Match when={pairingQuery.data}>
+            <Match when={pairingData()}>
               <Button
                 type="button"
                 variant="ghost"

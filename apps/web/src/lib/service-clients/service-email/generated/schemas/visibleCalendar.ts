@@ -7,6 +7,7 @@
 
 import type { EventReminderOverride } from './eventReminderOverride';
 import type { VisibleCalendarColor } from './visibleCalendarColor';
+import type { VisibleCalendarSyncError } from './visibleCalendarSyncError';
 
 /**
  * A calendar visible to a requester, listed for pickers and filters.
@@ -31,4 +32,8 @@ birthdays) the account subscribes to rather than one a person maintains. */
   isWritable: boolean;
   /** Provider display name. */
   name: string;
+  /** A persistent sync failure isolated to this calendar, surfaced so the
+settings row can badge it. `None` while the calendar is syncing
+normally or a failure has not yet crossed the persistence threshold. */
+  syncError?: VisibleCalendarSyncError;
 }

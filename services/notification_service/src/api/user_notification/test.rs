@@ -18,7 +18,7 @@ fn make_row(
         notification_event_type: event_type.to_string(),
         entity: EntityType::Document.with_entity_string("entity-1".to_string()),
         sent: true,
-        done: false,
+        state: notification::domain::models::NotificationState::Unseen,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),
@@ -288,7 +288,10 @@ fn to_typed_row_preserves_row_fields() {
     assert_eq!(typed.notification_id, uuid::Uuid::nil());
     assert_eq!(typed.notification_event_type, "task_assigned");
     assert!(typed.sent);
-    assert!(!typed.done);
+    assert_eq!(
+        typed.state,
+        notification::domain::models::NotificationState::Unseen
+    );
 
     match typed.notification_metadata {
         NotifEvent::TaskAssigned(ref meta) => {
@@ -334,7 +337,7 @@ fn api_user_notification_and_realtime_notif_metadata_serialize_identically() {
         notification_event_type: "channel_mention".to_string(),
         entity: entity.clone(),
         sent: true,
-        done: false,
+        state: notification::domain::models::NotificationState::Unseen,
         created_at,
         viewed_at: None,
         updated_at: created_at,
@@ -353,7 +356,7 @@ fn api_user_notification_and_realtime_notif_metadata_serialize_identically() {
         notification_event_type: "channel_mention".to_string(),
         entity,
         sent: true,
-        done: false,
+        state: notification::domain::models::NotificationState::Unseen,
         created_at,
         viewed_at: None,
         updated_at: created_at,

@@ -5,7 +5,7 @@
 - `bun run lint`: lint with biome 
 - `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
-- Email rendering snapshots (Playwright HTML fixtures, not inbox e2e) live in `src/lib/core/email/tests`. Run `just test-email-rendering`. Add a fixture under `fixtures/` then `just test-email-rendering-update`.
+- Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
 
 ## Verifying a change in a real browser
 
@@ -79,7 +79,15 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 - Keep reusable components small, atomic, and decoupled from queries/complex state. Push data-fetching and mutations up to use-case-specific composed components.
 - Context should be scoped to a component subtree — Message.Content consuming a MessageContext is fine because the ownership boundary is clear.
 - Composed primitives must not depend on use-case-specific context — a RecipientsSelector should never require an EmailComposeContext.
-- New features use the layered layout in docs/STYLE_GUIDE.md FE-33 (`core / queries / primitives / components / views` plus an injected `context/`). `src/features/activity` is the reference.
+- New features and feature restructures use the layered layout in [docs/FRONTEND_FEATURE_ARCHITECTURE.md](../../docs/FRONTEND_FEATURE_ARCHITECTURE.md), summarized by FE-33 (`core / queries / primitives / components / views` plus an injected `context/`). Keep production wiring in an app-facing entry point and give reactive logic narrow feature-owned contracts. `src/features/activity` illustrates the layers but still has documented composition and contract migration gaps.
+
+### Porting shadcn-solid primitives
+- Use the upstream structure and behavior as a starting point, then reshape exports to match the local slot-based, compound-component API.
+- Replace upstream palette, surface, border, and status classes with the existing semantic tokens; inputs normally use `bg-input`, `border-edge-muted`, `text-ink`, and `text-ink-placeholder`.
+- Preserve Kobalte semantics, state attributes, and polymorphic prop types. Keep accessibility relationships inside the primitive instead of recreating them at call sites.
+- Add a co-located `*.docs.tsx` gallery page and focused `*.test.tsx` coverage for every ported component.
+- Keep `Input` a thin native control. Use `InputGroup` for icons, clear actions, inline Buttons, and shared ButtonGroup framing instead of adding composition props to `Input`.
+- In `InputGroup`, keep the input as the single control and place surrounding content in `Addon` slots. Use `align` for visual placement so accessible DOM order stays independent of layout.
 
 ## Styling
 - Use semantic color tokens, not raw Tailwind color classes.

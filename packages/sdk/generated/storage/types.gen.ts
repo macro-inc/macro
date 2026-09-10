@@ -2282,6 +2282,10 @@ export type ChannelMessageFilters = {
      */
     created_after?: string | null;
     /**
+     * When set, only return top-level messages created strictly after this timestamp.
+     */
+    created_after_exclusive?: string | null;
+    /**
      * When set, only return top-level messages created before this timestamp.
      */
     created_before?: string | null;
@@ -3934,6 +3938,12 @@ export type CrmTeamSettingsResponse = {
      */
     edit_stages_role: CrmPermissionRole;
     /**
+     * System stage option id to team stage option id for seeded stages.
+     */
+    legacy_stage_ids: {
+        [key: string]: string;
+    };
+    /**
      * Who can move deals out of a closed stage.
      */
     move_closed_deals_role: CrmPermissionRole;
@@ -4884,6 +4894,10 @@ export type EmailFilters = {
      * Note: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter.
      */
     include_labels?: Array<string>;
+    /**
+     * Filter by the email thread's read flag, independently of notification state.
+     */
+    is_read?: boolean | null;
     /**
      * Restrict to specific inboxes by email_links.id. Empty means "any inbox the
      * caller can access" (soup expands to the full set at the router edge).
@@ -6269,20 +6283,20 @@ export type NewChannelAttachment = {
 };
 
 /**
- * Notification state filters for channel message queries.
+ * Notification-level filters that apply to an entity type.
  */
 export type NotificationFilters = {
     /**
-     * Filter by notification done state. `Some(true)` selects done
-     * notifications; `Some(false)` selects not-done notifications.
+     * Include entities with a non-deleted notification in any of these exact states.
+     * Empty means no notification restriction. Active means `[unseen, seen]`.
      */
-    done?: boolean | null;
-    /**
-     * Filter by notification seen state. `Some(true)` selects seen
-     * notifications; `Some(false)` selects not-seen notifications.
-     */
-    seen?: boolean | null;
+    states?: Array<NotificationState>;
 };
+
+/**
+ * The mutually exclusive lifecycle states of a user's notification.
+ */
+export type NotificationState = 'unseen' | 'seen' | 'done';
 
 /**
  * A pending pairing, as shown to the approving user.
@@ -10730,6 +10744,50 @@ export type PostChannelMessagesResponses = {
 };
 
 export type PostChannelMessagesResponse = PostChannelMessagesResponses[keyof PostChannelMessagesResponses];
+
+export type GetChannelMessagesCatchUpData = {
+    body?: never;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query: {
+        /**
+         * Exclusive RFC3339 lower bound. Messages at this instant are omitted.
+         */
+        after: string;
+        /**
+         * Page size (1-100, default 50)
+         */
+        limit?: number;
+        /**
+         * Base64 encoded cursor value for older messages
+         */
+        cursor?: string;
+        /**
+         * Base64 encoded cursor value for newer messages
+         */
+        previous_cursor?: string;
+    };
+    url: '/channels/{channel_id}/messages/catch-up';
+};
+
+export type GetChannelMessagesCatchUpErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetChannelMessagesCatchUpError = GetChannelMessagesCatchUpErrors[keyof GetChannelMessagesCatchUpErrors];
+
+export type GetChannelMessagesCatchUpResponses = {
+    200: ApiChannelMessagesPage;
+};
+
+export type GetChannelMessagesCatchUpResponse = GetChannelMessagesCatchUpResponses[keyof GetChannelMessagesCatchUpResponses];
 
 export type GetMessageWithContextData = {
     body?: never;

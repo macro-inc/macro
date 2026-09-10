@@ -11,10 +11,11 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
-        CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
-        CalendarBackfillJob, CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget,
-        CalendarEvent, CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
+        ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus,
+        CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD, CalendarAttendee, CalendarBackfillClaim,
+        CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
+        CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
+        CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
         CalendarEventSourceContent, CalendarEventUpsert, CalendarGrantIntent,
         CalendarLinkTokenIdentity, CalendarMentionEvent, CalendarMentionPreview,
         CalendarMentionRequestItem, CalendarOccurrence, CalendarOccurrenceCursor,
@@ -1384,6 +1385,9 @@ impl CalendarRepository for PgCalendarRepository {
             UPDATE calendars
             SET sync_token = $3,
                 synced_at = now(),
+                last_sync_error = NULL,
+                last_sync_error_at = NULL,
+                consecutive_sync_failures = 0,
                 materialized_starts_at = CASE
                     WHEN $4 THEN $5
                     ELSE materialized_starts_at
@@ -1425,6 +1429,38 @@ impl CalendarRepository for PgCalendarRepository {
 
         tx.commit().await.map_err(report)?;
         Ok(retired)
+    }
+
+    #[tracing::instrument(skip(self, message), fields(job_id = %key.job_id), err)]
+    async fn record_google_calendar_sync_error(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_id: Uuid,
+        message: &str,
+    ) -> Result<(), Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
+        sqlx::query!(
+            r#"
+            UPDATE calendars
+            SET last_sync_error = $3,
+                last_sync_error_at = now(),
+                consecutive_sync_failures = consecutive_sync_failures + 1,
+                updated_at = now()
+            WHERE id = $1
+              AND account_id = $2
+              AND NOT is_deleted
+            "#,
+            calendar_id,
+            account_id,
+            message,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        tx.commit().await.map_err(report)
     }
 
     #[tracing::instrument(skip(self, channel), fields(job_id = %key.job_id), err)]
@@ -1922,7 +1958,9 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.is_primary,
                 calendar.access_role,
                 calendar.provider_calendar_id,
-                calendar.default_reminders
+                calendar.default_reminders,
+                calendar.last_sync_error,
+                calendar.consecutive_sync_failures
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
@@ -1961,6 +1999,9 @@ impl CalendarRepository for PgCalendarRepository {
                 is_primary: row.is_primary,
                 is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
                 is_subscription: is_system_calendar(&row.provider_calendar_id),
+                sync_error: row.last_sync_error.filter(|_| {
+                    row.consecutive_sync_failures >= CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD
+                }),
                 default_reminders: serde_json::from_value(row.default_reminders)
                     .inspect_err(|e| {
                         tracing::error!(error = ?e, calendar_id = %row.id, "malformed calendar default_reminders json");
@@ -2238,6 +2279,18 @@ async fn upsert_calendar_tx(
             is_selected = EXCLUDED.is_selected,
             is_deleted = false,
             default_reminders = EXCLUDED.default_reminders,
+            last_sync_error = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error
+            END,
+            last_sync_error_at = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error_at
+            END,
+            consecutive_sync_failures = CASE
+                WHEN calendars.is_deleted THEN 0
+                ELSE calendars.consecutive_sync_failures
+            END,
             updated_at = now()
         RETURNING
             id,

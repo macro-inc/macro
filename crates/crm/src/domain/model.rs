@@ -1,5 +1,7 @@
 //! Domain models for CRM companies and their related records.
 
+use std::collections::BTreeMap;
+
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
@@ -315,6 +317,9 @@ pub struct CrmTeamSettings {
     /// Stage option ids counting as closed deals; `None` = the client
     /// falls back to its label heuristic.
     pub closed_stage_ids: Option<Vec<uuid::Uuid>>,
+    /// System stage option id to team stage option id for seeded stages.
+    /// Entries may outlive their stage; readers check membership in the set.
+    pub legacy_stage_ids: BTreeMap<uuid::Uuid, uuid::Uuid>,
     /// Team saved views — an opaque JSON array owned by the frontend.
     pub team_views: Value,
     /// Team view applied by default when a member opens the CRM view.
@@ -328,6 +333,7 @@ impl Default for CrmTeamSettings {
             move_closed_deals_role: CrmPermissionRole::Admin,
             delete_records_role: CrmPermissionRole::Admin,
             closed_stage_ids: None,
+            legacy_stage_ids: BTreeMap::new(),
             team_views: Value::Array(Vec::new()),
             default_team_view_id: None,
         }
@@ -347,6 +353,8 @@ pub struct CrmTeamSettingsPatch {
     pub delete_records_role: Option<CrmPermissionRole>,
     /// New `closed_stage_ids`; `Some(None)` clears to the heuristic.
     pub closed_stage_ids: Option<Option<Vec<uuid::Uuid>>>,
+    /// Replacement `legacy_stage_ids` map.
+    pub legacy_stage_ids: Option<BTreeMap<uuid::Uuid, uuid::Uuid>>,
     /// Replacement `team_views` array.
     pub team_views: Option<Value>,
     /// New `default_team_view_id`; `Some(None)` clears it.

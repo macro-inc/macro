@@ -1,5 +1,6 @@
 import {
   type EntityActionListState,
+  type EntityActionNavigationHandler,
   type EntityActionViewContext,
   makeBlockSenderAction,
   makeCopyAction,
@@ -72,6 +73,10 @@ type BuildActionGroups = (
      * their click/hotkey equivalents, including Preview Pair routing.
      */
     splitHandle?: SplitHandle;
+    /** Creates a view-owned follow-up for action-driven navigation. */
+    createActionNavigationHandler?: () =>
+      | EntityActionNavigationHandler
+      | undefined;
   }
 ) => SoupEntityActionGroup[];
 
@@ -144,7 +149,13 @@ export function createSoupEntityActions(): {
   const buildActionGroups: BuildActionGroups = (
     soup,
     entities,
-    { viewContext, viewedProjectId, openTagPicker, splitHandle }
+    {
+      viewContext,
+      viewedProjectId,
+      openTagPicker,
+      splitHandle,
+      createActionNavigationHandler,
+    }
   ) => {
     const canExecuteAll = (canExecute: (e: EntityData) => boolean) =>
       entities.length > 0 && entities.every(canExecute);
@@ -180,7 +191,12 @@ export function createSoupEntityActions(): {
           id: 'mark-done',
           label: 'Mark Done',
           hotkeyToken: TOKENS.entity.action.markDone,
-          onClick: handle(markDone.executeWithSoup),
+          onClick: () =>
+            markDone.executeWithSoup(
+              entities,
+              soup,
+              createActionNavigationHandler?.()
+            ),
         });
       }
     }
@@ -358,10 +374,13 @@ export function createSoupEntityActions(): {
         hotkeyToken: TOKENS.entity.action.createReminder,
         // Not `handle`: the mark-done that follows needs this view's answer to
         // whether the list moves on, the same one Mark Done above is gated by.
-        onClick: () =>
-          createReminderAction.executeWithSoup(entities, soup, {
+        onClick: () => {
+          const onNavigate = createActionNavigationHandler?.();
+          return createReminderAction.executeWithSoup(entities, soup, {
             advances: marksDoneOnThisView,
-          }),
+            onNavigate,
+          });
+        },
       });
     }
 

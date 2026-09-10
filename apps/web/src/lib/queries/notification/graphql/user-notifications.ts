@@ -52,7 +52,10 @@ export function selectGraphqlNotifications(
   for (const page of pages) {
     for (const entity of page.user.soup.items) {
       for (const record of entity.notifications) {
-        if (record.done === done && !notificationsById.has(record.id)) {
+        if (
+          (record.state === 'DONE') === done &&
+          !notificationsById.has(record.id)
+        ) {
           notificationsById.set(record.id, mapGraphqlNotification(record));
         }
       }

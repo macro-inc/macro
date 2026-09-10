@@ -1,0 +1,7 @@
+{
+  "name": "personal-letter",
+  "description": "Personal announcement: unstyled links inherit the theme accent while an intentionally colored button is preserved.",
+  "adaptColors": true,
+  "normalizeFonts": true,
+  "html": "<p>Thanks,<br>The team</p><p>Please update for <a href=\"https://example.com/ios\">iOS</a> or <a href=\"https://example.com/android\">Android</a>.</p><p><a href=\"https://example.com/app\" style=\"display:inline-block;background-color:#7e82c9;color:white;padding:10px 16px;border-radius:4px;text-decoration:none\">Open the app</a></p><p>If you no longer want these messages, please <a href=\"https://example.com/unsubscribe\">let us know</a>.</p>"
+}

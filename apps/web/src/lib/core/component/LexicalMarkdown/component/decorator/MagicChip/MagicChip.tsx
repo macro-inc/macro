@@ -13,6 +13,7 @@ export const MagicChip: Component<MagicChipDecoratorProps> = (props) => {
     <MagicChipView
       agentSessionId={props.agentSessionId}
       presentation={model.presentation()}
+      header={model.header()}
       answer={{
         answering: model.elicitation.answering(),
         respond: model.elicitation.respond,

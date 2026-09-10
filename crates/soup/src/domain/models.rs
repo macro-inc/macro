@@ -956,9 +956,7 @@ pub(crate) fn calendar_filter_supported_by_notified(
             filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a && b,
             filter_ast::ExprFrame::Not(a) => a,
             filter_ast::ExprFrame::Literal(
-                CalendarEventLiteral::Id(_)
-                | CalendarEventLiteral::NotificationDone(_)
-                | CalendarEventLiteral::NotificationSeen(_),
+                CalendarEventLiteral::Id(_) | CalendarEventLiteral::NotificationState(_),
             ) => true,
             filter_ast::ExprFrame::Literal(_) => false,
         })

@@ -275,6 +275,17 @@ impl CalendarRepository for FakeRepo {
         unreachable!()
     }
 
+    async fn record_google_calendar_sync_error(
+        &self,
+        _key: CalendarBackfillJobKey,
+        _lease_token: Uuid,
+        _account_id: Uuid,
+        _calendar_id: Uuid,
+        _message: &str,
+    ) -> Result<(), rootcause::Report> {
+        unreachable!()
+    }
+
     async fn record_watch_channel(
         &self,
         _key: CalendarBackfillJobKey,

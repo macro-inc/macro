@@ -6,6 +6,7 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import {
+  type EntityActionNavigationHandler,
   resolveEntityActionViewContext,
   toEntityActionListState,
   useEntityActionHotkeys,
@@ -37,12 +38,14 @@ import {
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   Match,
+  onCleanup,
   type Setter,
   Show,
   Switch,
@@ -67,7 +70,6 @@ import {
   type InboxDataSourceItem,
   useInboxDataSource,
 } from '../queries/use-inbox-query';
-import { useInboxPreview } from '../use-inbox-preview';
 import { InboxDateGroupHeader } from './InboxDateGroupHeader';
 import { InboxEmptyState } from './InboxEmptyState';
 
@@ -81,8 +83,13 @@ type InboxListActivationMetadata = {
   newSplit?: boolean;
 };
 
-/** Compact Inbox-card list used by the Activity-layout Inbox workspace. */
-export function InboxList() {
+type InboxListProps = {
+  previewEntity: EntityData | undefined;
+  onPreviewEntityChange: (entity: EntityData | undefined) => void;
+};
+
+/** Compact notification list used by the Notifications workspace. */
+export function InboxList(props: InboxListProps) {
   const { state } = useInboxView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -120,18 +127,6 @@ export function InboxList() {
     });
   });
 
-  const preview = useInboxPreview({
-    controller: list,
-    handle: panel.handle,
-    onPreview: (entity) => {
-      void openEntity(entity, {
-        newSplit: false,
-        replacePair: false,
-        mergeHistory: true,
-      });
-    },
-  });
-
   const { buildActionGroups } = createSoupEntityActions();
   const entityActionViewContext = () =>
     resolveEntityActionViewContext({
@@ -155,31 +150,46 @@ export function InboxList() {
 
     if (sourceRow?.kind !== 'entity') return;
 
+    previewAfterNavigation.clear();
+
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    preview.cancel();
+    if (!isTouchDevice() && !newSplit) {
+      markEntitySeen(sourceRow.entity);
+      showPreview(sourceRow.entity);
+      return;
+    }
 
     void openEntity(sourceRow.entity, {
       event: metadata?.event,
       newSplit,
-      replacePair: metadata?.event?.altKey === true && !newSplit,
     });
   }
+
+  function markEntitySeen(entity: WithNotification<EntityData>) {
+    markReminderSeenOnOpen(entity, notificationSource);
+    if (!isNonMemberChannelEntity(entity)) {
+      markChannelNotificationsSeenOnOpen(entity, notificationSource);
+    }
+  }
+
+  function showPreview(entity: WithNotification<EntityData>) {
+    props.onPreviewEntityChange(entity);
+  }
+
+  const previewAfterNavigation = debounce(showPreview, 150);
+  onCleanup(() => previewAfterNavigation.clear());
 
   async function openEntity(
     entity: WithNotification<EntityData>,
     options: {
       event?: MouseEvent;
       newSplit: boolean;
-      replacePair: boolean;
       mergeHistory?: boolean;
     }
   ) {
-    markReminderSeenOnOpen(entity, notificationSource);
-    if (!isNonMemberChannelEntity(entity)) {
-      markChannelNotificationsSeenOnOpen(entity, notificationSource);
-    }
+    markEntitySeen(entity);
 
     const finishTouchHighlight = options.event
       ? persistSoupNavigationTouchHighlight(options.event)
@@ -188,7 +198,6 @@ export function InboxList() {
     try {
       await openEntityInSplitFromUnifiedList(entity, {
         openInNewSplit: options.newSplit,
-        replacePreview: options.replacePair,
         splitHandle: panel.handle,
         referredFrom: 'inbox',
         mergeHistory: options.mergeHistory,
@@ -257,6 +266,17 @@ export function InboxList() {
     return row?.kind === 'entity' ? row.entity : undefined;
   };
 
+  const createActionNavigationHandler = ():
+    | EntityActionNavigationHandler
+    | undefined => {
+    if (props.previewEntity === undefined) return;
+
+    return ({ entity }) => {
+      previewAfterNavigation.clear();
+      props.onPreviewEntityChange(entity);
+    };
+  };
+
   let listRoot: HTMLDivElement | undefined;
   const [collapseRow, setCollapseRow] =
     createSignal<(rowId: string) => Promise<void>>();
@@ -296,9 +316,11 @@ export function InboxList() {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
+        previewAfterNavigation.clear();
+
         const row = event.result?.item;
-        if (row?.kind === 'entity') {
-          preview.request(row.entity);
+        if (!isTouchDevice() && row?.kind === 'entity') {
+          previewAfterNavigation(row.entity);
         }
 
         if (event.kind !== 'move' || event.direction !== 1) return;
@@ -327,6 +349,7 @@ export function InboxList() {
     restoreFocus: () => listRoot?.focus(),
     viewContext: entityActionViewContext,
     splitHandle: panel.handle,
+    createActionNavigationHandler,
     condition: panel.isPanelActive,
   });
 
@@ -337,6 +360,7 @@ export function InboxList() {
       viewContext: entityActionViewContext(),
       viewedProjectId: viewedProjectIdFromContent(content),
       splitHandle: panel.handle,
+      createActionNavigationHandler,
     });
   }
 
@@ -386,10 +410,9 @@ export function InboxList() {
     if (nextTab === activeTab) return;
 
     activeTab = nextTab;
-    preview.cancel();
+    previewAfterNavigation.clear();
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
-    panel.handle.resetPreview();
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
 
@@ -399,19 +422,8 @@ export function InboxList() {
 
     if (list.focus.result()) return;
 
-    const restored = list.focus.restore(list.focus.requestedKey(), {
+    list.focus.restore(list.focus.requestedKey(), {
       retainUnavailable: false,
-    });
-    if (restored) return;
-    if (isTouchDevice()) return;
-    if (panel.handle.isControllerSplit()) {
-      panel.handle.resetPreview();
-      return;
-    }
-
-    list.focus.first({
-      isNavigable: (row) => row.kind === 'entity',
-      reason: 'restore',
     });
   });
 
@@ -433,7 +445,7 @@ export function InboxList() {
       <div
         ref={listRoot}
         role="grid"
-        aria-label="Inbox"
+        aria-label="Notifications"
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
@@ -471,7 +483,7 @@ export function InboxList() {
             >
               <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
                 <SpinnerIcon
-                  aria-label="Loading inbox"
+                  aria-label="Loading notifications"
                   class="size-5 animate-spin"
                 />
               </div>
@@ -482,7 +494,7 @@ export function InboxList() {
                 ref={setEmptyViewport}
                 class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))] text-sm text-ink-muted"
               >
-                <span>Inbox couldn’t be loaded.</span>
+                <span>Notifications couldn’t be loaded.</span>
                 <Button
                   variant="outline"
                   size="sm"
