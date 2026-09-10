@@ -1,4 +1,8 @@
-import { SearchBar, useViewControlHotkeys } from '@app/components/view-shell';
+import {
+  SearchBar,
+  useViewControlHotkeys,
+  ViewShell,
+} from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import MenuIcon from '@phosphor/list.svg';
@@ -6,6 +10,7 @@ import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown, pressHandlers } from '@ui';
 import { createSignal } from 'solid-js';
 import { composeEmail } from '../compose-email';
+import { EMAIL_TABS } from '../constants';
 import { useEmailView } from '../email-view-context';
 import { EmailControls } from './EmailControls';
 import { EmailInboxMenu } from './EmailInboxSelector';
@@ -15,6 +20,14 @@ export type EmailHeaderProps = {
   /** Restores list focus when Escape leaves the search field. */
   onSearchEscape?: () => void;
 };
+
+export function EmailTopBar() {
+  const { state } = useEmailView();
+  const title = () =>
+    EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
+
+  return <ViewShell.TopBar>{title()}</ViewShell.TopBar>;
+}
 
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();

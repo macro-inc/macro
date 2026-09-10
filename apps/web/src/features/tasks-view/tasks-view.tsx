@@ -4,7 +4,7 @@ import { SplitPanel } from '@components/app/split-panel';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createSignal, onMount, Suspense } from 'solid-js';
-import { TasksHeader } from './components/TasksHeader';
+import { TasksHeader, TasksTopBar } from './components/TasksHeader';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
 import { TasksViewProvider } from './tasks-view-context';
@@ -42,6 +42,7 @@ function TasksViewRoot() {
               <TasksSidebar />
             </ViewShell.Aside>
             <ViewShell.Main>
+              <TasksTopBar />
               <ViewShell.Header>
                 <TasksHeader onSearchEscape={() => listElement()?.focus()} />
               </ViewShell.Header>

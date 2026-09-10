@@ -15,7 +15,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { EmailFilterDrawer } from './components/EmailFilterDrawer';
-import { EmailHeader } from './components/EmailHeader';
+import { EmailHeader, EmailTopBar } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailSidebar } from './components/EmailSidebar';
 import { EMAIL_TABS } from './constants';
@@ -48,6 +48,7 @@ function EmailDesktopLayout(
         <EmailSidebar />
       </ViewShell.Aside>
       <ViewShell.Main>
+        <EmailTopBar />
         <ViewShell.Header>
           <EmailHeader onSearchEscape={props.onSearchEscape} />
         </ViewShell.Header>
