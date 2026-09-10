@@ -18076,7 +18076,10 @@ dependencies = [
 name = "webhook"
 version = "0.1.0"
 dependencies = [
+ "agent_fold",
+ "agent_runtime_protocol",
  "agent_session",
+ "agent_session_events",
  "agent_trigger",
  "anyhow",
  "axum",

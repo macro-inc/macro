@@ -15,6 +15,7 @@ use crate::domain::{
     models::{NormalizedWebhookEvent, WebhookEventQueueMessage},
     ports::{WebhookEventEnqueuer, WebhookRepo, WebhookWorkspaceResolver},
 };
+use agent_session_events::{AgentSessionLifecycleEvent, AgentSessionLifecycleEventName};
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use chrono::Utc;
@@ -32,6 +33,7 @@ use uuid::Uuid;
 const DOCUMENT_ENTITY_TYPE: &str = "document";
 const CHANNEL_ENTITY_TYPE: &str = "channel";
 const WEBHOOK_ENTITY_TYPE: &str = "webhook";
+const AGENT_SESSION_ENTITY_TYPE: &str = "agent_session";
 
 /// Webhook event ingestion error.
 #[derive(Debug, thiserror::Error)]
@@ -107,6 +109,12 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
     fn ingest_agent_trigger_event(
         &self,
         event: Event<AgentTriggerTopicEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one `macro.agent_session_lifecycle` event envelope.
+    fn ingest_agent_session_lifecycle_event(
+        &self,
+        event: Event<AgentSessionLifecycleEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 }
 
@@ -446,6 +454,28 @@ pub(crate) fn normalized_agent_trigger_event(
     ))
 }
 
+/// Normalize one agent-session lifecycle event.
+///
+/// Unlike a trigger, whose entity is the bot, a lifecycle stream is about one
+/// session: the entity and the ordering key are the session, mirroring the
+/// broker's partition key, and the session's own grants - its owner and the
+/// channel it came from - decide who may see it.
+pub(crate) fn normalized_agent_session_lifecycle_event(
+    event: &Event<AgentSessionLifecycleEvent>,
+) -> Result<NormalizedWebhookEvent, WebhookEventIngestionError> {
+    let event_name: &'static str = AgentSessionLifecycleEventName::from(&event.event).into();
+    let broker_envelope = serde_json::to_value(event)?;
+    let session_id = event.event.session_id().to_string();
+    Ok(normalized_event(
+        event.event_id,
+        event.schema_version,
+        event_name,
+        AGENT_SESSION_ENTITY_TYPE,
+        &session_id,
+        broker_envelope,
+    ))
+}
+
 impl<A, R, Q> WebhookEventIngestionService for WebhookEventIngestionServiceImpl<A, R, Q>
 where
     A: EntityAccessService,
@@ -498,5 +528,15 @@ where
             .await
             .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
         self.match_and_enqueue(event, workspace_ids).await
+    }
+
+    #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
+    async fn ingest_agent_session_lifecycle_event(
+        &self,
+        event: Event<AgentSessionLifecycleEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let event = normalized_agent_session_lifecycle_event(&event)?;
+        self.resolve_entity_access_and_enqueue(event, EntityType::AgentSession)
+            .await
     }
 }

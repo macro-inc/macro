@@ -1,13 +1,15 @@
 //! Stream-candidate adapters over shared webhook event normalization.
 
 use super::{
-    WebhookEventIngestionError, normalized_agent_trigger_event, normalized_channel_event,
-    normalized_document_event, normalized_webhook_event,
+    WebhookEventIngestionError, normalized_agent_session_lifecycle_event,
+    normalized_agent_trigger_event, normalized_channel_event, normalized_document_event,
+    normalized_webhook_event,
 };
 use crate::domain::{
     events::WebhookTopicEvent,
     stream::{StreamAudience, StreamCandidateEvent},
 };
+use agent_session_events::AgentSessionLifecycleEvent;
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use documents::domain::events::DocumentTopicEvent;
@@ -59,6 +61,19 @@ pub(crate) fn agent_trigger_stream_candidate(
         audience: StreamAudience::Entity {
             entity_id: audience.entity_id,
             entity_type: audience.entity_type,
+        },
+        event: normalized,
+    })
+}
+
+pub(crate) fn agent_session_lifecycle_stream_candidate(
+    event: &Event<AgentSessionLifecycleEvent>,
+) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
+    let normalized = normalized_agent_session_lifecycle_event(event)?;
+    Ok(StreamCandidateEvent {
+        audience: StreamAudience::Entity {
+            entity_id: normalized.entity_id.clone(),
+            entity_type: EntityType::AgentSession,
         },
         event: normalized,
     })
