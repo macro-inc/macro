@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_overage_charge\n            SET status = ($2::text)::ai_overage_charge_status, updated_at = NOW()\n            WHERE stripe_invoice_id = $1\n            RETURNING user_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5b3242aec53416bda738e8e8acac3b260891d26a9c50e553b6f1495f4a6d84ff"
+}

@@ -31,6 +31,7 @@ describe('createOnboardingCheckoutSession', () => {
     expect(mocks.createCheckoutSessionV2).toHaveBeenCalledWith({
       successUrl: `${window.location.origin}/app/onboarding?subscriptionSuccess=true&type=premium`,
       cancelUrl: `${window.location.origin}/app/onboarding?subscriptionCancel=true`,
+      plan: 'premium',
     });
   });
 

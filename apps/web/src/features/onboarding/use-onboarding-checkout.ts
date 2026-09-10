@@ -31,6 +31,7 @@ export async function createOnboardingCheckoutSession(
   const checkoutUrl = await stripeServiceClient.createCheckoutSessionV2({
     successUrl: `${onboardingUrl}?subscriptionSuccess=true&type=${tier}`,
     cancelUrl: `${onboardingUrl}?subscriptionCancel=true`,
+    plan: tier,
   });
 
   if (!checkoutUrl) {

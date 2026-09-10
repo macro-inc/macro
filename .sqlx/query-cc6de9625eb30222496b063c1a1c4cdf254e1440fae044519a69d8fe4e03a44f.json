@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ai_billing_account (user_id, overage_enabled, overage_limit_cents)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (user_id) DO UPDATE\n            SET overage_enabled = EXCLUDED.overage_enabled,\n                overage_limit_cents = EXCLUDED.overage_limit_cents,\n                overage_suspended_at = NULL,\n                updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cc6de9625eb30222496b063c1a1c4cdf254e1440fae044519a69d8fe4e03a44f"
+}
