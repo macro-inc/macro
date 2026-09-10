@@ -521,9 +521,10 @@ where
 {
     async fn get_email_thread_metadata(
         &self,
+        viewer: macro_user_id::user_id::MacroUserIdStr<'static>,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
-        self.get_email_thread_metadata_impl(receipts).await
+        self.get_email_thread_metadata_impl(viewer, receipts).await
     }
 }
 

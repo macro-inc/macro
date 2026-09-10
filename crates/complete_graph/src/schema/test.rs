@@ -532,6 +532,7 @@ impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentR
                             .then(Default::default),
                         latest_non_spam_message_ts: None,
                         has_non_trashed_messages: true,
+                        ..Default::default()
                     }),
                 )
             })

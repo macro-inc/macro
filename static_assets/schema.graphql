@@ -2908,6 +2908,41 @@ enum GraphqlLinkShare {
 }
 
 """
+A body-free normalized message snapshot used by canonical Mail preview edges.
+Its ID identifies the same message across ALL, Drafts and Sent references.
+"""
+type GraphqlMailPreviewMessage {
+	"""
+	Global message ID.
+	"""
+	id: ID!
+	"""
+	Message subject.
+	"""
+	subject: String
+	"""
+	Message snippet, never a body.
+	"""
+	snippet: String
+	"""
+	Whether this message is a draft.
+	"""
+	isDraft: Boolean!
+	"""
+	Sender email address.
+	"""
+	senderEmail: String
+	"""
+	Sender display name.
+	"""
+	senderName: String
+	"""
+	Sender photo URL.
+	"""
+	senderPhotoUrl: String
+}
+
+"""
 Metadata for a mention in a document comment.
 """
 type GraphqlMentionedInDocumentCommentMetadata {
@@ -5070,6 +5105,30 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	Whether the canonical thread has any non-trashed message eligible for Mail.
 	"""
 	hasNonTrashedMessages: Boolean!
+	"""
+	Canonical Sent timestamp, independent of the currently selected preview.
+	"""
+	latestOutboundMessageTs: String
+	"""
+	Authoritative calendar attachment classification used by the Calendar tab.
+	"""
+	hasCalendarAttachment: Boolean!
+	"""
+	Whether the viewer has a thread share grant through their user, team or active channel.
+	"""
+	hasThreadShare: Boolean!
+	"""
+	Latest eligible message for ALL, INBOX, Calendar and Shared, without bodies.
+	"""
+	mailAllPreview: GraphqlMailPreviewMessage
+	"""
+	Latest eligible draft, even when a newer non-draft exists in the thread.
+	"""
+	mailDraftPreview: GraphqlMailPreviewMessage
+	"""
+	Latest eligible sent message, without bodies.
+	"""
+	mailSentPreview: GraphqlMailPreviewMessage
 	"""
 	A page of messages in this thread, newest first.
 	"""

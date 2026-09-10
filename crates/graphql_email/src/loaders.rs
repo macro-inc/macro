@@ -284,7 +284,7 @@ where
 
         match self
             .email_service
-            .get_email_thread_metadata(authorized)
+            .get_email_thread_metadata(user_id.clone(), authorized)
             .await
         {
             Ok(mut metadata) => {

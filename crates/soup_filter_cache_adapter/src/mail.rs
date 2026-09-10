@@ -18,6 +18,7 @@ mod test;
 const TYPE: &str = "GraphqlSoupEmailThread";
 const FIELDS: &[&str] = &[
     "linkId",
+    "ownerId",
     "isRead",
     "inboxVisible",
     "isSignal",
@@ -25,6 +26,12 @@ const FIELDS: &[&str] = &[
     "latestInboundMessageTs",
     "latestNonSpamMessageTs",
     "updatedAt",
+    "latestOutboundMessageTs",
+    "hasCalendarAttachment",
+    "hasThreadShare",
+    "mailAllPreview",
+    "mailDraftPreview",
+    "mailSentPreview",
 ];
 fn error(e: impl std::fmt::Display) -> SoupFilterCacheAdapterError {
     SoupFilterCacheAdapterError(e.to_string())
@@ -59,9 +66,22 @@ fn uuid_fact(attribute: &str, value: &str) -> Option<ExactFact> {
         value: ExactValue::new(uuid::Uuid::parse_str(value).ok()?.as_bytes()).ok()?,
     })
 }
+fn preview_ref(record: &Record, field: &str) -> Option<Option<uuid::Uuid>> {
+    match record.fields.get(field)? {
+        CacheValue::Null => Some(None),
+        CacheValue::Ref(key) => Some(Some(uuid::Uuid::parse_str(key.as_ref().strip_prefix("GraphqlMailPreviewMessage:")?).ok()?)),
+        _ => None,
+    }
+}
+
 fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
     let id = key.as_str().strip_prefix(&format!("{TYPE}:"))?;
-    let facts = vec![
+    let owner = string(record, "ownerId")?;
+    if owner.is_empty() { return None; }
+    let mut facts = vec![
+        ExactFact {attribute:vocabulary::token("mail-owner"),value:ExactValue::utf8(owner).ok()?},
+        bool_fact(record, "hasCalendarAttachment", "mail-calendar")?,
+        bool_fact(record, "hasThreadShare", "mail-shared")?,
         uuid_fact("id", id)?,
         uuid_fact("mail-link-id", string(record, "linkId")?)?,
         bool_fact(record, "isRead", "mail-read")?,
@@ -69,6 +89,13 @@ fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
         bool_fact(record, "isSignal", "mail-signal")?,
         bool_fact(record, "hasNonTrashedMessages", "mail-has-message")?,
     ];
+    let all = preview_ref(record,"mailAllPreview")?;
+    let draft = preview_ref(record,"mailDraftPreview")?;
+    let sent = preview_ref(record,"mailSentPreview")?;
+    if record.fields.get("hasNonTrashedMessages") != Some(&CacheValue::Bool(all.is_some())) || (all.is_none() && (draft.is_some() || sent.is_some())) {return None;}
+    for (attribute,id) in [("mail-all-message",all),("mail-draft-message",draft),("mail-sent-message",sent)] {
+        if let Some(id) = id {facts.push(uuid_fact(attribute,&id.to_string())?);}
+    }
     let updated = timestamp(record, "updatedAt")??;
     let all = timestamp(record, "latestNonSpamMessageTs")?.unwrap_or(updated);
     let mut times = vec![IntegerFact {
@@ -81,6 +108,9 @@ fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
             value: inbound,
         });
     }
+    if let Some(outbound) = timestamp(record,"latestOutboundMessageTs")? {
+        times.push(IntegerFact {attribute:vocabulary::token("mail-sent-ts"),value:outbound});
+    }
     Some(IndexDocument {
         record_key: key,
         profile: vocabulary::profile(),
@@ -91,53 +121,9 @@ fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
     })
 }
 
-fn canonical_preview(
-    selections: &[Selection],
-    variables: &Map<String, Value>,
-) -> Result<bool, SoupFilterCacheAdapterError> {
-    fn addresses(value: &Value) -> bool {
-        match value {
-            Value::Object(object) => object.iter().any(|(key, value)| {
-                matches!(key.as_str(), "sender" | "recipient" | "cc" | "bcc") || addresses(value)
-            }),
-            Value::Array(values) => values.iter().any(addresses),
-            _ => false,
-        }
-    }
-    for selection in selections {
-        let children = match selection {
-            Selection::Field(field) => {
-                if field.name == "soup" {
-                    let args =
-                        cache_core::document::resolve_args(field, variables).map_err(error)?;
-                    if let Some(input) = args.get("input").and_then(|input| {
-                        input.get("initial").or_else(|| input.get("continuation"))
-                    }) && (input
-                        .get("emailView")
-                        .and_then(Value::as_str)
-                        .is_some_and(|view| !matches!(view, "ALL" | "INBOX"))
-                        || input
-                            .get("filters")
-                            .and_then(|filters| filters.get("emailFilter"))
-                            .is_some_and(addresses))
-                    {
-                        return Ok(false);
-                    }
-                }
-                &field.selection_set
-            }
-            Selection::Fragment { selection_set, .. } => selection_set,
-        };
-        if !canonical_preview(children, variables)? {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-
 /// Compose full canonical snapshots, or bounded patches preserving completeness.
-/// Unsupported preview views invalidate Mail projection rather than displaying a
-/// SENT/DRAFTS-specific preview as the canonical ALL/INBOX preview offline.
+/// Canonical preview edges are independent of the source query's view/filter.
+/// A missing v2 field cannot borrow completeness from an older projection.
 pub async fn projection_updates<S: Storage>(
     storage: &S,
     query: &str,
@@ -184,7 +170,6 @@ pub async fn projection_updates_for_write<S: Storage>(
     } else {
         vec![None; keys.len()]
     };
-    let supported_view = canonical_preview(&op.selection_set, variables)?;
     Ok(updates
         .into_iter()
         .zip(bases)
@@ -202,9 +187,6 @@ pub async fn projection_updates_for_write<S: Storage>(
                 partition: vocabulary::partition(),
                 kind: ProjectionIncompleteKind::Missing,
             };
-            if !supported_view {
-                return Some(incomplete());
-            }
             let Some(document) = project(key.clone(), &merged) else {
                 return Some(incomplete());
             };
@@ -220,6 +202,13 @@ pub async fn projection_updates_for_write<S: Storage>(
             }
             let affected = |attribute: &str| match attribute {
                 "mail-link-id" => changed.contains("linkId"),
+                "mail-owner" => changed.contains("ownerId"),
+                "mail-calendar" => changed.contains("hasCalendarAttachment"),
+                "mail-shared" => changed.contains("hasThreadShare"),
+                "mail-all-message" => changed.contains("mailAllPreview"),
+                "mail-draft-message" => changed.contains("mailDraftPreview"),
+                "mail-sent-message" => changed.contains("mailSentPreview"),
+                "mail-sent-ts" => changed.contains("latestOutboundMessageTs"),
                 "mail-read" => changed.contains("isRead"),
                 "mail-inbox" => changed.contains("inboxVisible"),
                 "mail-signal" => changed.contains("isSignal"),
@@ -230,16 +219,11 @@ pub async fn projection_updates_for_write<S: Storage>(
                 "mail-inbox-ts" => changed.contains("latestInboundMessageTs"),
                 _ => false,
             };
-            let exact = document
-                .exact_facts
-                .into_iter()
-                .filter(|fact| affected(fact.attribute.as_str()))
-                .map(|fact| ExactAttributePatch {
-                    attribute: fact.attribute,
-                    values: vec![fact.value],
-                })
-                .collect();
-            let integers = ["mail-all-ts", "mail-inbox-ts"]
+            let exact = ["mail-link-id","mail-owner","mail-read","mail-inbox","mail-signal","mail-has-message","mail-calendar","mail-shared","mail-all-message","mail-draft-message","mail-sent-message"].into_iter()
+                .filter(|attr|affected(attr)).map(|attr|ExactAttributePatch {
+                    attribute:vocabulary::token(attr), values:document.exact_facts.iter().filter(|fact|fact.attribute==vocabulary::token(attr)).map(|fact|fact.value.clone()).collect(),
+                }).collect();
+            let integers = ["mail-all-ts", "mail-inbox-ts", "mail-sent-ts"]
                 .into_iter()
                 .filter(|attr| affected(attr))
                 .map(|attr| predicate_index::IntegerAttributePatch {
@@ -351,7 +335,7 @@ pub fn new_generation() -> String {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageRequest {
-    /// ALL or INBOX.
+    /// ALL, INBOX, DRAFTS or SENT.
     pub view: String,
     /// Opaque revision/query-bound local continuation.
     pub cursor: Option<String>,
@@ -478,6 +462,7 @@ pub async fn page<S: PredicateIndexStorage>(
         },
         &request.view,
         &links,
+        &viewer,
     )
     .map_err(error)?;
     let LocalCompileOutcome::Supported(mut query) = outcome else {

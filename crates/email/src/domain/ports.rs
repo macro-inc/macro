@@ -147,6 +147,7 @@ pub trait EmailRepo: Send + Sync + 'static {
     /// Fetch canonical metadata for a batch of thread IDs.
     fn thread_metadata_by_ids(
         &self,
+        viewer: MacroUserIdStr<'_>,
         thread_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<EmailThreadMetadata>, Self::Err>> + Send;
 
@@ -407,7 +408,8 @@ pub trait EmailThreadMetadataService: Send + Sync + 'static {
     /// Fetch canonical metadata for authorized email threads in one batch.
     fn get_email_thread_metadata(
         &self,
-        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        viewer: MacroUserIdStr<'static>,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>, 
     ) -> impl Future<Output = Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr>> + Send;
 }
 
@@ -862,6 +864,7 @@ impl EmailService for NoOpEmailService {
 impl EmailThreadMetadataService for NoOpEmailService {
     async fn get_email_thread_metadata(
         &self,
+        _viewer: MacroUserIdStr<'static>,
         _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
         Err(no_op_email_err())

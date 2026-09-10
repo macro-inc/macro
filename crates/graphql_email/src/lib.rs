@@ -19,7 +19,7 @@ pub use mutation::{
     GraphqlEmailMutation, MarkEmailThreadSeenInput, UpdateEmailThreadLabelInput,
 };
 pub use objects::{
-    GraphqlSoupEmailMessage, email_message_selection_requires_full_payload, load_email_messages,
+    GraphqlMailPreviewMessage, GraphqlSoupEmailMessage, email_message_selection_requires_full_payload, load_email_messages,
     load_email_thread_metadata, load_latest_email_message,
 };
 pub use user_objects::{

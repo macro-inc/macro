@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use super::message::Message;
 
 /// Canonical persisted metadata lazily exposed for an email thread.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct EmailThreadMetadata {
     /// Database ID of the thread.
     pub thread_id: uuid::Uuid,
@@ -15,6 +15,38 @@ pub struct EmailThreadMetadata {
     pub latest_non_spam_message_ts: Option<DateTime<Utc>>,
     /// Whether any message survives the Mail view's TRASH exclusion.
     pub has_non_trashed_messages: bool,
+    /// Canonical timestamp used by Sent, independent of the current preview.
+    pub latest_outbound_message_ts: Option<DateTime<Utc>>,
+    /// Authoritative thread-level calendar-attachment classification.
+    pub has_calendar_attachment: bool,
+    /// A direct thread share grant through the viewer, team, or active channel.
+    /// This is not inferred from the owner or a delegated inbox.
+    pub has_thread_share: bool,
+    /// Latest non-trashed message for ALL/INBOX/Calendar/Shared.
+    pub all_preview: Option<EmailPreview>,
+    /// Latest non-trashed draft, even if a newer non-draft exists.
+    pub draft_preview: Option<EmailPreview>,
+    /// Latest non-trashed sent message.
+    pub sent_preview: Option<EmailPreview>,
+}
+
+/// Body-free, canonical message data used by Mail list previews.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EmailPreview {
+    /// Global message identity; shared by every preview referencing this message.
+    pub id: uuid::Uuid,
+    /// Message subject, which need not equal another message's subject in the thread.
+    pub subject: Option<String>,
+    /// Short text preview, never the full body.
+    pub snippet: Option<String>,
+    /// Whether this message is a draft.
+    pub is_draft: bool,
+    /// Sender address.
+    pub sender_email: Option<String>,
+    /// Sender display name.
+    pub sender_name: Option<String>,
+    /// Sender profile photo URL.
+    pub sender_photo_url: Option<String>,
 }
 
 /// A thread record without messages.

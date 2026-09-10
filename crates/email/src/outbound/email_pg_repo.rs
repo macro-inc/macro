@@ -153,9 +153,10 @@ impl EmailRepo for EmailPgRepo {
 
     async fn thread_metadata_by_ids(
         &self,
+        viewer: MacroUserIdStr<'_>,
         thread_ids: &[Uuid],
     ) -> Result<Vec<EmailThreadMetadata>, Self::Err> {
-        thread::thread_metadata_by_ids(&self.pool, thread_ids).await
+        thread::thread_metadata_by_ids(&self.pool, viewer, thread_ids).await
     }
 
     async fn messages_by_thread_id_paginated(

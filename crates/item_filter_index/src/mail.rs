@@ -1,10 +1,10 @@
-//! Offline Mail first slice: ALL/INBOX, readable accounts, signal, read and archive state.
+//! Offline Mail tab predicates over canonical thread facts and preview membership.
 use super::*;
 use item_filters::SharedEmailFilter;
 
 /// Stable, separately versioned Mail projection; existing Soup profiles remain usable.
 pub fn profile() -> Profile {
-    Profile::new(token("soup-mail-v1"))
+    Profile::new(token("soup-mail-v2"))
 }
 /// Email thread partition.
 pub fn partition() -> Token {
@@ -15,16 +15,18 @@ pub fn token(value: &str) -> Token {
     Token::new(value).expect("static Mail token")
 }
 
-/// Compile only email-only ALL/INBOX requests. Scope comes from the viewer's
-/// complete cached emailLinks edge, never from ownerId (delegation is supported).
+/// Compile email-only Mail tabs. Readable inbox scope comes from emailLinks;
+/// Shared uses actual thread grants plus the Mail UI's different-owner policy.
+/// Owner inequality alone never establishes shared eligibility.
 pub fn compile(
     ast: &EntityFilterAst,
     request: SoupFlatRequest,
     view: &str,
     links: &[Uuid],
+    viewer: &str,
 ) -> Result<LocalCompileOutcome, CompileError> {
     let unsupported = || LocalCompileOutcome::Unsupported(UnsupportedReason::Literal("email"));
-    if !matches!(view, "ALL" | "INBOX")
+    if !matches!(view, "ALL" | "INBOX" | "DRAFTS" | "SENT")
         || ast.properties_filter.is_some()
         || ast.email_filter.crm_scope.is_some()
         || links.len() > 100
@@ -62,11 +64,11 @@ pub fn compile(
     if !supported(ast.email_filter.tree.as_deref(), true) {
         return Ok(unsupported());
     }
-    let sort = token(if view == "INBOX" {
-        "mail-inbox-ts"
-    } else {
-        "mail-all-ts"
-    });
+    let mut sharing = Vec::new();
+    collect_sharing(ast.email_filter.tree.as_deref(), &mut sharing);
+    if sharing.windows(2).any(|pair| pair[0] != pair[1]) { return Ok(unsupported()); }
+    let sharing = sharing.first().copied().unwrap_or(&SharedEmailFilter::Exclude);
+    let sort = token(match view { "INBOX" => "mail-inbox-ts", "SENT" => "mail-sent-ts", _ => "mail-all-ts" });
     let mut predicate = compile_expr(ast.email_filter.tree.as_deref(), |literal| {
         Ok(match literal {
             EmailLiteral::ThreadId(id) => exact_uuid(vocabulary::id(), id),
@@ -75,15 +77,26 @@ pub fn compile(
             EmailLiteral::InboxVisible(value) => boolean("mail-inbox", *value),
             EmailLiteral::Importance(value) => boolean("mail-signal", *value),
             EmailLiteral::UpdatedAt(value) => date_expr(sort.clone(), value),
-            EmailLiteral::Shared(SharedEmailFilter::Exclude) => PredicateExpr::All,
+            EmailLiteral::Shared(_) => PredicateExpr::All,
+            EmailLiteral::CalendarOnly(true) => boolean("mail-calendar", true),
+            EmailLiteral::CalendarOnly(false) => PredicateExpr::All,
             _ => unreachable!("Mail eligibility checked"),
         })
     })?;
-    let scope = links
+    let owned_scope = links
         .iter()
         .map(|id| exact_uuid(token("mail-link-id"), id))
         .reduce(|a, b| PredicateExpr::Or(Box::new(a), Box::new(b)))
         .unwrap_or(PredicateExpr::None);
+    let shared_scope = boolean("mail-shared", true);
+    let scope = if links.is_empty() {
+        // Soup currently skips the entire email leg when no readable inbox exists.
+        PredicateExpr::None
+    } else { match sharing {
+        SharedEmailFilter::Exclude => owned_scope,
+        SharedEmailFilter::Include => PredicateExpr::Or(Box::new(owned_scope),Box::new(shared_scope)),
+        SharedEmailFilter::Only => PredicateExpr::And(Box::new(shared_scope), Box::new(PredicateExpr::Not(Box::new(exact_utf8(token("mail-owner"),viewer)?)))),
+    }};
     for gate in [scope, boolean("mail-has-message", true)] {
         predicate = PredicateExpr::And(Box::new(predicate), Box::new(gate));
     }
@@ -99,6 +112,13 @@ pub fn compile(
                 }),
             )),
         );
+    }
+    if matches!(view, "DRAFTS" | "SENT") {
+        let attribute = token(if view == "DRAFTS" { "mail-draft-message" } else { "mail-sent-message" });
+        predicate = PredicateExpr::And(Box::new(predicate), Box::new(PredicateExpr::ExactExists {attribute}));
+        if view == "SENT" {
+            predicate = PredicateExpr::And(Box::new(predicate), Box::new(PredicateExpr::I64Range {attribute: sort.clone(),lower:None,upper:None}));
+        }
     }
     Ok(LocalCompileOutcome::Supported(ValidatedIndexQuery::new(
         IndexQuery {
@@ -123,6 +143,14 @@ pub fn boolean(attribute: &str, value: bool) -> PredicateExpr {
     }
 }
 
+fn collect_sharing<'a>(expr: Option<&'a Expr<EmailLiteral>>, modes: &mut Vec<&'a SharedEmailFilter>) {
+    match expr {
+        Some(Expr::And(a,b)) => {collect_sharing(Some(a),modes); collect_sharing(Some(b),modes);}
+        Some(Expr::Literal(EmailLiteral::Shared(mode))) => modes.push(mode),
+        _ => {},
+    }
+}
+
 fn supported(expr: Option<&Expr<EmailLiteral>>, allow_shared: bool) -> bool {
     match expr {
         None => true,
@@ -131,7 +159,7 @@ fn supported(expr: Option<&Expr<EmailLiteral>>, allow_shared: bool) -> bool {
         }
         Some(Expr::Or(a, b)) => supported(Some(a), false) && supported(Some(b), false),
         Some(Expr::Not(inner)) => supported(Some(inner), false),
-        Some(Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude))) => allow_shared,
+        Some(Expr::Literal(EmailLiteral::Shared(_))) => allow_shared,
         Some(Expr::Literal(lit)) => matches!(
             lit,
             EmailLiteral::ThreadId(_)
@@ -140,6 +168,7 @@ fn supported(expr: Option<&Expr<EmailLiteral>>, allow_shared: bool) -> bool {
                 | EmailLiteral::InboxVisible(_)
                 | EmailLiteral::Importance(_)
                 | EmailLiteral::UpdatedAt(_)
+                | EmailLiteral::CalendarOnly(_)
         ),
     }
 }

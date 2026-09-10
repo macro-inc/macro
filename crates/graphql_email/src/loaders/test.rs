@@ -51,6 +51,7 @@ impl SoupEmailThreadMetadataEdgeReader for RecordingReader {
                         latest_inbound_message_ts: None,
                         latest_non_spam_message_ts: None,
                         has_non_trashed_messages: true,
+                        ..Default::default()
                     }),
                 )
             })
@@ -194,6 +195,7 @@ struct RecordingContentService {
 impl EmailThreadMetadataService for RecordingContentService {
     async fn get_email_thread_metadata(
         &self,
+        _viewer: MacroUserIdStr<'static>,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
         self.metadata_calls.fetch_add(1, Ordering::SeqCst);
@@ -209,6 +211,7 @@ impl EmailThreadMetadataService for RecordingContentService {
                         latest_inbound_message_ts: None,
                         latest_non_spam_message_ts: None,
                         has_non_trashed_messages: true,
+                        ..Default::default()
                     },
                 )
             })

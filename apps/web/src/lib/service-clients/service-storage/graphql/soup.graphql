@@ -53,6 +53,27 @@ query MailAccounts {
 	}
 }
 
+fragment MailPreviewFields on GraphqlMailPreviewMessage {
+	id
+	subject
+	snippet
+	isDraft
+	senderEmail
+	senderName
+	senderPhotoUrl
+}
+
+# Local-only selection: materialize canonical preview references instead of the
+# query-dependent preview fields last written by a different tab/filter.
+fragment MailItemFields on GraphqlSoupEntity {
+	...SoupItemFields
+	... on GraphqlSoupEmailThread {
+		mailAllPreview { ...MailPreviewFields }
+		mailDraftPreview { ...MailPreviewFields }
+		mailSentPreview { ...MailPreviewFields }
+	}
+}
+
 fragment SoupItemFields on GraphqlSoupEntity {
 	__typename
 	cacheProjection @cacheOnly
@@ -128,6 +149,12 @@ fragment SoupItemFields on GraphqlSoupEntity {
 		latestInboundMessageTs
 		latestNonSpamMessageTs @cacheOnly
 		hasNonTrashedMessages @cacheOnly
+		latestOutboundMessageTs @cacheOnly
+		hasCalendarAttachment @cacheOnly
+		hasThreadShare @cacheOnly
+		mailAllPreview @cacheOnly { ...MailPreviewFields }
+		mailDraftPreview @cacheOnly { ...MailPreviewFields }
+		mailSentPreview @cacheOnly { ...MailPreviewFields }
 		emailName: name
 		snippet
 		senderEmail

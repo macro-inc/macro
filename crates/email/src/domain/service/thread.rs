@@ -304,6 +304,7 @@ where
     /// Fetch canonical metadata for authorized email threads in one repository batch.
     pub(crate) async fn get_email_thread_metadata_impl(
         &self,
+        viewer: macro_user_id::user_id::MacroUserIdStr<'static>,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
         let thread_ids = email_thread_ids_from_receipts(receipts)?;
@@ -314,7 +315,7 @@ where
 
         Ok(self
             .email_repo
-            .thread_metadata_by_ids(&thread_ids)
+            .thread_metadata_by_ids(viewer, &thread_ids)
             .await
             .map_err(anyhow::Error::from)?
             .into_iter()

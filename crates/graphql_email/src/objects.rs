@@ -27,6 +27,34 @@ pub fn email_message_selection_requires_full_payload(ctx: &Context<'_>) -> bool 
         .any(|field| lookahead.field(field).exists())
 }
 
+/// A body-free normalized message snapshot used by canonical Mail preview edges.
+/// Its ID identifies the same message across ALL, Drafts and Sent references.
+#[derive(SimpleObject)]
+pub struct GraphqlMailPreviewMessage {
+    /// Global message ID.
+    id: ID,
+    /// Message subject.
+    subject: Option<String>,
+    /// Message snippet, never a body.
+    snippet: Option<String>,
+    /// Whether this message is a draft.
+    is_draft: bool,
+    /// Sender email address.
+    sender_email: Option<String>,
+    /// Sender display name.
+    sender_name: Option<String>,
+    /// Sender photo URL.
+    sender_photo_url: Option<String>,
+}
+
+impl From<email::domain::models::EmailPreview> for GraphqlMailPreviewMessage {
+    fn from(preview: email::domain::models::EmailPreview) -> Self {
+        Self { id: ID(preview.id.to_string()), subject: preview.subject, snippet: preview.snippet,
+            is_draft: preview.is_draft, sender_email: preview.sender_email,
+            sender_name: preview.sender_name, sender_photo_url: preview.sender_photo_url }
+    }
+}
+
 /// An adaptively hydrated email content projection for Soup queries.
 pub struct GraphqlSoupEmailMessage(EmailContentMessage);
 
@@ -487,6 +515,7 @@ mod tests {
                             latest_inbound_message_ts: None,
                             latest_non_spam_message_ts: None,
                             has_non_trashed_messages: true,
+                            ..Default::default()
                         }),
                     )
                 })
