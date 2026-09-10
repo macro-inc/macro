@@ -31,11 +31,18 @@ struct TestEmailEdges {
     available: bool,
 }
 
+/// Minimal agent-session edge object needed by the Soup edge trait.
+#[derive(Clone, SimpleObject)]
+struct TestAgentSessionEdges {
+    available: bool,
+}
+
 impl SoupEntityEdges for TestSoupEdges {
     type Property = String;
     type Notification = String;
     type ActivityEvent = String;
     type EmailThreadEdges = TestEmailEdges;
+    type AgentSessionEdges = TestAgentSessionEdges;
 
     fn from_entity(_entity: Entity<'static>) -> Self {
         Self { available: true }
@@ -43,6 +50,10 @@ impl SoupEntityEdges for TestSoupEdges {
 
     fn email_thread_edges(_email_thread_id: Uuid) -> Self::EmailThreadEdges {
         TestEmailEdges { available: true }
+    }
+
+    fn agent_session_edges(_bot_id: Uuid) -> Self::AgentSessionEdges {
+        TestAgentSessionEdges { available: true }
     }
 
     async fn resolve_properties(

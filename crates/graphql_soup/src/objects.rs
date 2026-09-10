@@ -90,6 +90,12 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
     /// Construct the email-thread-specific edge object.
     fn email_thread_edges(email_thread_id: Uuid) -> Self::EmailThreadEdges;
 
+    /// Additional fields attached only to agent-session entities.
+    type AgentSessionEdges: ObjectType + Clone + Send + Sync + 'static;
+
+    /// Construct the agent-session-specific edge object.
+    fn agent_session_edges(bot_id: Uuid) -> Self::AgentSessionEdges;
+
     /// Resolve properties assigned to this entity.
     fn resolve_properties(
         &self,
@@ -956,6 +962,12 @@ where
     /// The bot running this session.
     async fn bot_id(&self) -> ID {
         ID(self.0.bot_id.to_string())
+    }
+
+    #[graphql(flatten)]
+    /// Fields hydrated through the bot domain.
+    async fn agent_session_edges(&self) -> E::AgentSessionEdges {
+        E::agent_session_edges(self.0.bot_id)
     }
 
     /// The channel thread the session was opened from, when any.

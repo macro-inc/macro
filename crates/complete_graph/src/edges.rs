@@ -1,6 +1,10 @@
-use std::marker::PhantomData;
+use std::{collections::HashMap, future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 
-use async_graphql::{Context, ID, Object};
+use async_graphql::{Context, ID, Object, SimpleObject, dataloader::DataLoader};
+use bots::domain::{
+    models::{BotId, BotProfile},
+    ports::BotRepo,
+};
 use graphql_activity::{
     ActivityEdgeKey, GraphqlActivityEvent, SoupActivityEdgeReader, load_entity_activity,
     parse_activity_edge_limit,
@@ -61,6 +65,7 @@ where
     type Notification = GraphqlNotification;
     type ActivityEvent = GraphqlActivityEvent;
     type EmailThreadEdges = SoupEmailThreadEdges<ER>;
+    type AgentSessionEdges = SoupAgentSessionEdges;
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
         Self {
@@ -84,6 +89,12 @@ where
         SoupEmailThreadEdges {
             thread_id,
             _reader: PhantomData,
+        }
+    }
+
+    fn agent_session_edges(bot_id: Uuid) -> Self::AgentSessionEdges {
+        SoupAgentSessionEdges {
+            bot_id: BotId::new_from_uuid(bot_id),
         }
     }
 
@@ -126,6 +137,99 @@ where
             },
         )
         .await
+    }
+}
+
+/// Bot fields presented through an agent-session edge.
+#[derive(Clone, SimpleObject)]
+pub struct GraphqlSessionBot {
+    /// Stable global bot identity.
+    id: ID,
+    /// Bot display name.
+    name: String,
+    /// Optional bot avatar URL.
+    avatar_url: Option<String>,
+}
+
+impl From<BotProfile> for GraphqlSessionBot {
+    fn from(profile: BotProfile) -> Self {
+        Self {
+            id: ID(profile.id.to_string()),
+            name: profile.name,
+            avatar_url: profile.avatar_url,
+        }
+    }
+}
+
+/// Owned future returned by the erased bot-profile batch reader.
+type BotProfileBatchFuture = Pin<
+    Box<
+        dyn Future<Output = Result<HashMap<BotId, BotProfile>, Arc<anyhow::Error>>>
+            + Send
+            + 'static,
+    >,
+>;
+
+/// Type-erased batch reader kept in the concrete GraphQL DataLoader.
+type BotProfileBatchReader = dyn Fn(Vec<BotId>) -> BotProfileBatchFuture + Send + Sync + 'static;
+
+/// DataLoader implementation for bot profiles referenced by agent sessions.
+pub struct AgentSessionBotLoader {
+    /// Erased bots-domain repository call.
+    load_batch: Arc<BotProfileBatchReader>,
+}
+
+impl async_graphql::dataloader::Loader<BotId> for AgentSessionBotLoader {
+    type Value = BotProfile;
+    type Error = Arc<anyhow::Error>;
+
+    async fn load(&self, keys: &[BotId]) -> Result<HashMap<BotId, Self::Value>, Self::Error> {
+        (self.load_batch)(keys.to_vec()).await
+    }
+}
+
+/// Concrete request-scoped DataLoader for agent-session bot edges.
+pub type AgentSessionBotDataLoader = DataLoader<AgentSessionBotLoader>;
+
+/// Build a request-scoped DataLoader backed by the bots domain repository.
+pub fn agent_session_bot_loader<R>(repo: R) -> AgentSessionBotDataLoader
+where
+    R: BotRepo + Clone,
+{
+    let load_batch = move |bot_ids: Vec<BotId>| {
+        let repo = repo.clone();
+        Box::pin(async move {
+            repo.get_bot_profiles(&bot_ids)
+                .await
+                .map_err(|error| Arc::new(error.into()))
+        }) as BotProfileBatchFuture
+    };
+    DataLoader::new(
+        AgentSessionBotLoader {
+            load_batch: Arc::new(load_batch),
+        },
+        tokio::spawn,
+    )
+}
+
+/// Agent-session-specific fields composed from the bots domain.
+#[derive(Clone)]
+pub struct SoupAgentSessionEdges {
+    /// Bot referenced by the session.
+    bot_id: BotId,
+}
+
+/// Bot fields attached only to a Soup agent session.
+#[Object]
+impl SoupAgentSessionEdges {
+    /// The bot running this session, when its profile still exists.
+    async fn bot(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<GraphqlSessionBot>> {
+        let loader = ctx.data::<AgentSessionBotDataLoader>()?;
+        let profile = loader
+            .load_one(self.bot_id)
+            .await
+            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        Ok(profile.map(Into::into))
     }
 }
 

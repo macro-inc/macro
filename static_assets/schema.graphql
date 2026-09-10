@@ -3508,6 +3508,24 @@ type GraphqlSelectOptionPropertyValue {
 }
 
 """
+Bot fields presented through an agent-session edge.
+"""
+type GraphqlSessionBot {
+	"""
+	Stable global bot identity.
+	"""
+	id: ID!
+	"""
+	Bot display name.
+	"""
+	name: String!
+	"""
+	Optional bot avatar URL.
+	"""
+	avatarUrl: String
+}
+
+"""
 A typed value accepted when setting an entity property.
 """
 input GraphqlSetPropertyValue @oneOf {
@@ -3685,6 +3703,10 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	The bot running this session.
 	"""
 	botId: ID!
+	"""
+	The bot running this session, when its profile still exists.
+	"""
+	bot: GraphqlSessionBot
 	"""
 	The channel thread the session was opened from, when any.
 	"""

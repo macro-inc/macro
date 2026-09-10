@@ -45,17 +45,17 @@ struct CursorParts {
     property_filter: Option<Expr<PropertiesLiteral>>,
 }
 
-/// Outcome of walking an `AgentSessionLiteral` AST for the opt-in decision.
-#[derive(Default)]
-struct OptIn {
-    include: bool,
-    named: bool,
-}
-
 /// Whether the filter opts the query into agent sessions at all: an explicit
 /// `Include`, or naming specific ids/owners. Fails closed on shapes that only
 /// negate (`Not(Include)` is not an opt-in).
 fn opted_in(expr: &Expr<AgentSessionLiteral>) -> bool {
+    /// Outcome of walking an `AgentSessionLiteral` AST for the opt-in decision.
+    #[derive(Default)]
+    struct OptIn {
+        include: bool,
+        named: bool,
+    }
+
     fn walk(expr: &Expr<AgentSessionLiteral>, out: &mut OptIn) {
         match expr {
             Expr::Literal(AgentSessionLiteral::Include) => out.include = true,

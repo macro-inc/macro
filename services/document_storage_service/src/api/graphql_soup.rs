@@ -12,6 +12,7 @@ use axum::{
     routing::get,
 };
 use axum_extra::extract::Cached;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use complete_graph::GraphqlRequestParts;
 use graphql_soup::soup_item_loader;
 use macro_authorization::{
@@ -166,6 +167,9 @@ fn insert_graphql_context_data(
     data.insert(state.soup_router_state.email_service());
     data.insert(state.entity_access_service.clone());
     data.insert(soup_item_loader);
+    data.insert(complete_graph::agent_session_bot_loader(PgBotsRepo::new(
+        state.readonly_db.0.clone(),
+    )));
     data.insert(complete_graph::entity_properties_loader(
         macro_user_id.clone(),
         property_reader,

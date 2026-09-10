@@ -3762,6 +3762,7 @@ dependencies = [
  "apollo-compiler",
  "async-graphql",
  "axum",
+ "bots",
  "chrono",
  "email",
  "entity_access",

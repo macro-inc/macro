@@ -152,6 +152,17 @@ pub struct Bot {
     pub has_agent: bool,
 }
 
+/// Minimal bot identity used when another domain presents a bot reference.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BotProfile {
+    /// Bot id.
+    pub id: BotId,
+    /// Display name.
+    pub name: String,
+    /// Optional avatar URL.
+    pub avatar_url: Option<String>,
+}
+
 impl Bot {
     /// The [`Bot`] view of a first-party bot.
     ///
