@@ -305,6 +305,7 @@ struct JsEntityFilterRequest {
     sort_direction: String,
     limit: u16,
     baseline: Option<Vec<JsPredicateBaselineEntry>>,
+    mail: Option<soup_filter_cache_adapter::mail::PageRequest>,
 }
 
 #[derive(Deserialize)]
@@ -422,6 +423,7 @@ fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
 
 struct CacheState {
     engine: Option<BrowserEngine>,
+    mail_generation: String,
     scope: String,
     hot_capacity: Option<u32>,
     reset_required: bool,
@@ -606,6 +608,7 @@ async fn open_cache_inner(
         CacheEngine {
             state: Rc::new(Mutex::new(CacheState {
                 engine: Some(build_engine(storage, hot_capacity)),
+                mail_generation: soup_filter_cache_adapter::mail::new_generation(),
                 scope,
                 hot_capacity,
                 reset_required: false,
@@ -1009,6 +1012,11 @@ impl CacheEngine {
             state.ensure_callable()?;
             let request: JsEntityFilterRequest =
                 serde_wasm_bindgen::from_value(request).map_err(err_js)?;
+            if let Some(mail) = request.mail {
+                let generation = state.mail_generation.clone();
+                let result = soup_filter_cache_adapter::mail::page(state.engine_mut()?, &generation, request.filters, &request.sort_method, &request.sort_direction, request.limit, mail).await.map_err(err_js)?;
+                return to_js(&result);
+            }
             let outcome = compile_filter_request(
                 request.filters,
                 &request.sort_method,
@@ -1136,6 +1144,7 @@ impl CacheEngine {
                     .map_err(err_js)?,
                 );
             }
+            projections.extend(soup_filter_cache_adapter::mail::projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &vars, &data).await.map_err(err_js)?);
             let result = state
                 .engine_mut()?
                 .write_query_with_registration_and_projections(
@@ -1195,6 +1204,7 @@ impl CacheEngine {
                     .map_err(err_js)?,
                 );
             }
+            projections.extend(soup_filter_cache_adapter::mail::projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &variables, &data).await.map_err(err_js)?);
             let result = state
                 .engine_mut()?
                 .hydrate_query_with_projections(
@@ -1269,6 +1279,7 @@ impl CacheEngine {
                 )
                 .map_err(err_js)?,
             );
+            projection_mutations.extend(soup_filter_cache_adapter::mail::optimistic_updates(soup_filter_cache_adapter::mail::projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &vars, &data).await.map_err(err_js)?));
             let claim = MutationClaimRequest {
                 owner: lease_owner,
                 now_ms: parse_timestamp(now_ms, "claim timestamp")?,
@@ -1476,6 +1487,7 @@ impl CacheEngine {
                 .await
                 .map_err(err_js)?,
             );
+            projections.extend(soup_filter_cache_adapter::mail::projection_updates(state.engine_mut()?.storage(), &query, operation_name.as_deref(), &vars, &data).await.map_err(err_js)?);
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write_with_projections_outcome(
@@ -1556,6 +1568,7 @@ impl CacheEngine {
             let mut state = state.lock().await;
             state.ensure_callable()?;
             let mut projections = dirty_projection_mutations(&keys);
+            projections.extend(soup_filter_cache_adapter::mail::dirty_updates(&keys));
             projections.extend(
                 notification_deletion_updates(state.engine_mut()?.storage(), &keys, true)
                     .await
@@ -1699,6 +1712,7 @@ impl CacheEngine {
                 }
             };
             state.engine = Some(build_engine(storage, hot_capacity));
+            state.mail_generation = soup_filter_cache_adapter::mail::new_generation();
             state.reset_required = false;
             Ok(JsValue::UNDEFINED)
         })

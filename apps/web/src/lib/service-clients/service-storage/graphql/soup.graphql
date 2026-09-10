@@ -1,6 +1,7 @@
 query Soup($input: SoupInput!) {
 	user {
 		id
+		emailLinks @cacheOnly { id emailAddress photoUrl }
 		soup(input: $input) {
 			items {
 				...SoupItemFields
@@ -13,6 +14,7 @@ query Soup($input: SoupInput!) {
 query SoupBackfill($input: SoupInput!) {
 	user {
 		id @cacheOnly
+		emailLinks @cacheOnly { id emailAddress photoUrl }
 		soup(input: $input) {
 			items @cacheOnly {
 				...SoupItemFields
@@ -30,6 +32,24 @@ query SoupBackfill($input: SoupInput!) {
 			}
 			nextCursor
 		}
+	}
+}
+
+query SoupMailBackfill($input: SoupInput!) {
+	user {
+		id @cacheOnly
+		emailLinks @cacheOnly { id emailAddress photoUrl }
+		soup(input: $input) {
+			items @cacheOnly { ...SoupItemFields }
+			nextCursor
+		}
+	}
+}
+
+query MailAccounts {
+	user {
+		id
+		emailLinks { id emailAddress photoUrl }
 	}
 }
 
@@ -106,6 +126,8 @@ fragment SoupItemFields on GraphqlSoupEntity {
 		inboxVisible
 		linkId
 		latestInboundMessageTs
+		latestNonSpamMessageTs @cacheOnly
+		hasNonTrashedMessages @cacheOnly
 		emailName: name
 		snippet
 		senderEmail

@@ -1737,6 +1737,10 @@ input GraphqlEmailLiteral @oneOf {
 	"""
 	read: Boolean
 	"""
+	Inbox visibility: false selects archived (done) mail, independently of notifications.
+	"""
+	inboxVisible: Boolean
+	"""
 	The shared option.
 	"""
 	shared: GraphqlSharedEmailFilter
@@ -5058,6 +5062,14 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	Timestamp of the latest inbound message, in RFC 3339 format.
 	"""
 	latestInboundMessageTs: String
+	"""
+	Stable ALL-view recency, independent of which preview is currently selected.
+	"""
+	latestNonSpamMessageTs: String
+	"""
+	Whether the canonical thread has any non-trashed message eligible for Mail.
+	"""
+	hasNonTrashedMessages: Boolean!
 	"""
 	A page of messages in this thread, newest first.
 	"""

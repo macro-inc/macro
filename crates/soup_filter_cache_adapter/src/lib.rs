@@ -24,6 +24,7 @@ use soup_filter_projection::{
 use std::collections::HashSet;
 
 mod notifications;
+pub mod mail;
 pub use notifications::{
     notification_deletion_updates, notification_projection_updates, optimistic_notification_updates,
 };
