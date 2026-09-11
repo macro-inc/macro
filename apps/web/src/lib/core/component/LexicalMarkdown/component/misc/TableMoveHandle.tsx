@@ -1,6 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { getScrollParentElement } from '@core/util/scrollParent';
 import {
   $computeTableMap,
   $createTableSelection,
@@ -239,7 +240,9 @@ export function TableMoveHandle() {
       ?.getBoundingClientRect();
     // Vertical scroll viewport of the editor; its top is the highest the
     // handle may sit before it would float over the gray area above.
-    const scrollTop = mdData.scrollContainer?.getBoundingClientRect().top;
+    const scrollTop = getScrollParentElement(
+      currentEditor.getRootElement()
+    )?.getBoundingClientRect().top;
 
     return {
       // Clamp to the scroll wrapper's visible right edge so a cell scrolled
