@@ -132,7 +132,7 @@ export function MediaSelector() {
     <Dropdown open={imageSelectorOpen()} onOpenChange={setImageSelectorOpen}>
       <Dropdown.Trigger
         variant="ghost"
-        size="icon-md"
+        size="icon-sm"
         label="Media"
         tabIndex={-1}
       >

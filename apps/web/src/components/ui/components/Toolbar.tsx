@@ -36,6 +36,12 @@ export type ToolbarProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'> & {
  * size/variant for its `Toolbar.Button` children, so callers compose controls
  * without restyling them. Pair with a positioning wrapper (e.g.
  * `PopupPositioner`) when it needs to float against an anchor.
+ *
+ * @do Cluster related controls with `Toolbar.Group` and separate distinct
+ *   action sets with `Toolbar.Divider`.
+ * @do Set shared button size and variant on the Toolbar root.
+ * @dont Do not recreate the toolbar's background, border, padding, or shadow
+ *   at the call site.
  */
 export function Toolbar(props: ToolbarProps) {
   const [local, rest] = splitProps(props, [

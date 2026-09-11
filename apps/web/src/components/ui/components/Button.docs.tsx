@@ -2,7 +2,7 @@ import { defineDoc } from '@app/features/ui-gallery/types';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import TrashIcon from '@phosphor/trash.svg';
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { Button, type ButtonVariant } from './Button';
 import { ButtonGroup } from './ButtonGroup';
 
@@ -82,10 +82,18 @@ function IconOnlyDemo() {
 
 // #region demo:size-compositions
 function SizeCompositionsDemo() {
+  const sizes = [
+    { size: 'xs', iconSize: 'icon-xs' },
+    { size: 'sm', iconSize: 'icon-sm' },
+    { size: 'md', iconSize: 'icon-md' },
+    { size: 'lg', iconSize: 'icon-lg' },
+    { size: 'xl', iconSize: undefined },
+  ] as const;
+
   return (
     <div class="flex w-full flex-col gap-3">
-      <For each={['xs', 'sm', 'md', 'lg', 'xl'] as const}>
-        {(size) => (
+      <For each={sizes}>
+        {({ size, iconSize }) => (
           <div class="flex items-center gap-3">
             <span class="w-8 shrink-0 font-mono text-xs text-ink-subtle">
               {size}
@@ -100,6 +108,17 @@ function SizeCompositionsDemo() {
               <PlusIcon />
               With icon
             </Button>
+            <Show when={iconSize}>
+              {(resolvedIconSize) => (
+                <Button
+                  variant="outline"
+                  size={resolvedIconSize()}
+                  label={resolvedIconSize()}
+                >
+                  <PlusIcon />
+                </Button>
+              )}
+            </Show>
           </div>
         )}
       </For>
@@ -185,7 +204,7 @@ export default defineDoc({
       id: 'size-compositions',
       title: 'Compositions by size',
       description:
-        'Square icon-only, text-only, and text-with-icon buttons shown together at every size.',
+        'Square regular-size, text-only, text-with-icon, and matching dedicated `icon-*` buttons shown together for direct comparison.',
       render: SizeCompositionsDemo,
       fill: true,
     },

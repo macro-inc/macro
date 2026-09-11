@@ -64,9 +64,9 @@ export const buttonGroupVariants = createVariants(
       'icon-sm':
         'rounded-md data-[orientation=horizontal]:h-6 data-[orientation=vertical]:w-6',
       'icon-md':
-        'rounded-md data-[orientation=horizontal]:h-9 data-[orientation=vertical]:w-9',
+        'rounded-md data-[orientation=horizontal]:h-8 data-[orientation=vertical]:w-8',
       'icon-lg':
-        'rounded-md data-[orientation=horizontal]:h-11 data-[orientation=vertical]:w-11',
+        'rounded-md data-[orientation=horizontal]:h-9 data-[orientation=vertical]:w-9',
     },
   },
   {
