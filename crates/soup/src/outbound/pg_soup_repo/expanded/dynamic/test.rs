@@ -10,7 +10,8 @@ fn grouped_access_shape() {
         group_key: None,
         per_group_limit: None,
     };
-    let (builder, _) = build_grouped_query(&filter, false, &grouping);
+    let (builder, _) =
+        build_grouped_query(&filter, false, &grouping, SimpleSortMethod::ViewedUpdated);
     let candidates = builder.sql().split("GroupedItems AS").next().unwrap();
     assert!(!candidates.contains("AccessibleItems"));
     for (id, entity_type) in [("d.id", "document"), ("c.id", "chat"), ("p.id", "project")] {
@@ -21,6 +22,57 @@ fn grouped_access_shape() {
     assert!(candidates.contains("link.link_id = event.source_link_id"));
     assert!(candidates.contains("link.primary_macro_id = $1"));
     assert!(candidates.contains("THEN 'TASK'::property_entity_type"));
+}
+
+#[test]
+fn grouped_candidate_sort_shape() {
+    for sort in [
+        SimpleSortMethod::CreatedAt,
+        SimpleSortMethod::UpdatedAt,
+        SimpleSortMethod::ViewedAt,
+        SimpleSortMethod::ViewedUpdated,
+    ] {
+        for group_key in [None, Some("document".to_string())] {
+            let filter = EntityFilterAst::mock_empty();
+            let grouping = GroupingConfig {
+                field: GroupByField::Property {
+                    property_definition_id: SystemPropertyKey::ASSIGNEES_UUID,
+                    entity_type: Some("TASK".to_string()),
+                },
+                group_key,
+                per_group_limit: None,
+            };
+            let (builder, entity_type) = build_grouped_query(&filter, true, &grouping, sort);
+            let sql = builder.sql();
+            let (candidates, rest) = sql.split_once("GroupedItems AS").unwrap();
+            assert_eq!(entity_type.as_deref(), Some("TASK"));
+            assert!(!candidates.contains("CASE $2"));
+            assert!(!candidates.contains("ORDER BY all_items.sort_ts"));
+            assert_eq!(
+                candidates.matches("LEFT JOIN \"UserHistory\"").count(),
+                if top_needs_user_history(sort) { 3 } else { 0 }
+            );
+            for alias in ["d", "c", "p"] {
+                assert!(candidates.contains(&format!(
+                    "{}::timestamptz as sort_ts",
+                    top_sort_expr(alias, sort)
+                )));
+            }
+            assert!(candidates.contains("LEFT JOIN document_sub_type dt"));
+            assert!(candidates.contains("fa.id IS NULL AND ("));
+            assert!(candidates.contains("(all_items.sort_ts, all_items.id::text) < ($4, $5)"));
+            assert_eq!(rest.matches("LEFT JOIN \"UserHistory\"").count(), 3);
+            assert!(rest.contains("COUNT(*) OVER (PARTITION BY"));
+            assert!(rest.contains("ORDER BY t.sort_ts DESC, t.id DESC"));
+            assert!(rest.contains("AND ep.entity_type = $10"));
+            assert!(rest.contains("\"group_key\", \"sort_ts\" DESC, \"id\" DESC"));
+            assert_eq!(sql.ends_with("LIMIT $3"), grouping.group_key.is_some());
+            assert_eq!(
+                rest.contains("row_in_group <= 10"),
+                grouping.group_key.is_none()
+            );
+        }
+    }
 }
 
 /// Bounded, synthetic diagnostic. SQLx creates an isolated database; never point
@@ -114,7 +166,7 @@ async fn grouped_query_explain_local(pool: PgPool) -> anyhow::Result<()> {
                 .as_ref()
                 .map(|_| "2026-01-02T00:00:00Z".parse::<DateTime<Utc>>().unwrap());
             let cursor_id = grouping.group_key.as_ref().map(|_| ids[60].clone());
-            let (builder, entity_type) = build_grouped_query(&filter, false, &grouping);
+            let (builder, entity_type) = build_grouped_query(&filter, false, &grouping, sort);
             // Dynamic AST/grouping SQL cannot use a compile-time macro. Mirror
             // production's positional binds, including unused reserved slots.
             let sql = format!(
