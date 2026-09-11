@@ -23,13 +23,22 @@ Changing filters or resetting the cache discards prior reconciliation evidence. 
 lists, unsupported filters/sorts, and native/non-cache transports keep their existing
 network behavior.
 
-For Documents (including Tasks), Projects, and Chats, exact `UNSEEN`/`SEEN`
-notification filters also reconcile locally with created/updated timestamp sorts.
+For Documents (including Tasks), Projects, Chats, and participating Channels,
+exact `UNSEEN`/`SEEN` notification filters also reconcile locally with
+created/updated timestamp sorts.
 Marking a notification done removes only that notification's contribution immediately;
 other active notifications can keep the entity in the list. Seen/reopen operations
 update filter membership on the authoritative reply, not from a guessed optimistic
 state. Rollback restores only the failed operation's contribution. `DONE` predicates,
 other entity partitions, and notified-at sorting still use the network path.
+
+Channels use the same general Soup reconciliation path, not a separate local page
+chain. Channel ID, type, team, organization, importance, and participant-scoped
+filters operate over synchronized channel metadata. The default channel scope
+requires active participation. Filters that widen to unjoined team channels,
+message sender/mentions, and channel threads remain network-only. Missing channel
+metadata or notification snapshots are unknown, not empty. The existing core
+backfill checkpoint is refreshed to index channel rows; queued work is preserved.
 
 Notification facts use the existing active-only GraphQL edge and primary entity
 association. Missing/partial or over-budget snapshots remain incomplete, never an

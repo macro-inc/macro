@@ -6,6 +6,8 @@ const host = createWorkerCacheHost({
   scope: `notification-projection-${crypto.randomUUID()}`,
   requestTimeoutMs: 30_000,
 });
+const channel = new URL(location.href).searchParams.get('entity') === 'channel';
+const entityType = channel ? 'CHANNEL' : 'PROJECT';
 const projectId = '00000000-0000-0000-0000-000000000001';
 const ids = [
   '00000000-0000-0000-0000-000000000011',
@@ -17,6 +19,9 @@ const snapshotQuery = `query Snapshot {
     __typename id cacheProjection
     notifications { id entityId entityType state }
     ... on GraphqlSoupProject { ownerId parentId createdAt updatedAt }
+    ... on GraphqlSoupChannel {
+      ownerId channelType channelTeamId: teamId organizationId isParticipant createdAt updatedAt
+    }
   } } }
 }`;
 const updateQuery = `mutation Update($input: UpdateNotificationsInput!) {
@@ -26,10 +31,10 @@ const notification = (id: string, state: string) => ({
   __typename: 'GraphqlNotification',
   id,
   entityId: projectId,
-  entityType: 'PROJECT',
+  entityType,
   state,
 });
-const unhydratedNotifications = ['DOCUMENT', 'PROJECT', 'CHAT'].map(
+const unhydratedNotifications = ['DOCUMENT', 'PROJECT', 'CHAT', 'CHANNEL'].map(
   (entityType, index) => ({
     ...notification(`00000000-0000-0000-0000-00000000002${index}`, 'UNSEEN'),
     entityType,
@@ -39,10 +44,14 @@ const unhydratedNotifications = ['DOCUMENT', 'PROJECT', 'CHAT'].map(
 const filters = (state: string) => ({
   calendarEventFilter: { literal: { id: nil } },
   documentFilter: { literal: { id: nil } },
-  projectFilter: { literal: { notificationState: state } },
+  projectFilter: {
+    literal: channel ? { projectIdSelf: nil } : { notificationState: state },
+  },
   chatFilter: { literal: { chatId: nil } },
   emailFilter: { tree: { literal: { threadId: nil } } },
-  channelFilter: { literal: { channelId: nil } },
+  channelFilter: {
+    literal: channel ? { notificationState: state } : { channelId: nil },
+  },
   channelThreadFilter: { literal: { threadId: nil } },
   callFilter: { literal: { callId: nil } },
   crmCompanyFilter: { literal: { id: nil } },
@@ -83,7 +92,11 @@ const snapshot = (
       soup: {
         items: [
           {
-            __typename: 'GraphqlSoupProject',
+            __typename: channel ? 'GraphqlSoupChannel' : 'GraphqlSoupProject',
+            channelType: 'team',
+            channelTeamId: '00000000-0000-0000-0000-000000000050',
+            organizationId: null,
+            isParticipant: true,
             id: entityId,
             cacheProjection: null,
             ownerId: 'macro|viewer@example.com',
