@@ -26,8 +26,9 @@ session-specific.
 
 ## Message composer
 
-The shared `@` menu also offers `Recent agent sessions` (the latest 500 accessible
-sessions, searchable by title or persona). These inline chips show the shared
+The shared `@` menu also offers `Recent agent sessions` after Channels and
+before Companies (the latest 500 accessible sessions, searchable by title or
+persona). These inline chips show the shared
 agent icon and an underlined session name, and open the existing session when clicked.
 They are references, not bot invocations: selecting a session does not start a new
 agent run. Sending or editing a message that references a session you own grants

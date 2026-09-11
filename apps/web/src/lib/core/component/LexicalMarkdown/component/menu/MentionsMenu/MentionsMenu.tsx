@@ -257,8 +257,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const combined: MentionItem[] = [
       ...users,
       ...(docs() ?? []),
-      ...agentSessions(),
       ...(channels() ?? []),
+      ...agentSessions(),
       ...(companies() ?? []),
       ...(emails() ?? []),
       ...(dates() ?? []),
@@ -305,12 +305,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     const buckets: BucketConfig[] = [
       {
-        id: 'agentSessions',
-        label: 'Recent agent sessions',
-        getData: agentSessions,
-        getFullCount: () => agentSessions().length,
-      },
-      {
         id: 'users',
         label: groups().length > 0 ? 'People & Groups' : 'People',
         getData: () => usersAndGroups() ?? [],
@@ -333,6 +327,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         hasMore: channelsMention.hasMore,
         isLoadingMore: channelsMention.isLoadingMore,
         loadMore: channelsMention.loadMore,
+      },
+      {
+        id: 'agentSessions',
+        label: 'Recent agent sessions',
+        getData: agentSessions,
+        getFullCount: () => agentSessions().length,
       },
       {
         id: 'companies',
