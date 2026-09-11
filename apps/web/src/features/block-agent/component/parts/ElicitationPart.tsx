@@ -61,13 +61,11 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
     elicitation.pending()?.requestId === props.part.requestId;
 
   const agentName = () => bot()?.name ?? 'The agent';
-  // Controls are inert while an answer is on the wire and for anyone who is
-  // not the owner.
+  // Controls are inert while an answer is on the wire and for anyone
+  // without edit access.
   const locked = () => elicitation.answering() || !elicitation.canAnswer();
   const waitingFor = () =>
-    elicitation.canAnswer()
-      ? 'Waiting for you'
-      : `Waiting for ${elicitation.ownerName()}`;
+    elicitation.canAnswer() ? 'Waiting for you' : 'Waiting for an editor';
 
   return (
     <Show when={live()} fallback={<ResolvedElicitation part={props.part} />}>
@@ -81,7 +79,7 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
           <div class="text-sm text-ink">{props.part.message}</div>
           <Show when={!elicitation.canAnswer()}>
             <div class="text-xs text-ink-extra-muted">
-              Only {elicitation.ownerName()} can answer this.
+              Only people who can edit this session can answer.
             </div>
           </Show>
           {match(props.part.request)
@@ -144,7 +142,6 @@ function LiveUserTool(props: {
           fallback={fallback}
           review={{
             canAnswer: elicitation.canAnswer,
-            ownerName: elicitation.ownerName,
             answering: elicitation.answering,
             respond: props.onRespond,
           }}

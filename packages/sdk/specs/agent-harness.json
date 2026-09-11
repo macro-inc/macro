@@ -1255,6 +1255,7 @@
           "id",
           "name",
           "ownerId",
+          "canEdit",
           "botId",
           "model",
           "harness",
@@ -1273,6 +1274,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The bot running the agent."
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "Whether the caller may drive the session - prompt it, answer its\nquestions, stop it - rather than only watch. Edit access; the\ncreator owns the session, so a create response always says so."
           },
           "createdAt": {
             "type": "string",

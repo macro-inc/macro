@@ -146,7 +146,7 @@ fn settled_without_a_turn_record_notifies_nobody() {
 }
 
 #[test]
-fn waiting_for_input_goes_to_the_owner_alone() {
+fn waiting_for_input_goes_to_the_audience() {
     let actions = plan(&AgentSessionLifecycleEvent::WaitingForInput(
         WaitingForInputMetadata {
             identity: identity(),
@@ -160,7 +160,10 @@ fn waiting_for_input_goes_to_the_owner_alone() {
     let [PlannedNotification::WaitingForInput(notify)] = actions.as_slice() else {
         panic!("expected one waiting notification, got {actions:#?}");
     };
-    assert_eq!(notify.recipients, vec![owner()]);
+    assert_eq!(
+        notify.recipients,
+        vec![owner(), user("alice@macro.com"), user("bob@macro.com")]
+    );
     assert_eq!(notify.metadata.question, "Which approach?");
     assert_eq!(notify.metadata.turn, 3);
     assert_eq!(

@@ -11,7 +11,7 @@
 //! | fact | notification | recipients |
 //! | --- | --- | --- |
 //! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it |
-//! | `waiting_for_input` | [`AgentSessionWaitingForInputMetadata`] | the owner - the one person who may answer |
+//! | `waiting_for_input` | [`AgentSessionWaitingForInputMetadata`] | the same audience - anyone with edit access may answer, and these are the people already driving it |
 //! | `mentioned` | [`AgentSessionMentionedMetadata`] | the users the prompt named (already narrowed to those with access) |
 //!
 //! Everything else is nobody's news. Retracting a notification once it is
@@ -98,7 +98,7 @@ where
 pub enum PlannedNotification {
     /// Tell the audience the agent finished.
     Settled(Notify<AgentSessionSettledMetadata>),
-    /// Tell the owner the agent is waiting on them.
+    /// Tell the session's audience the agent is waiting on an answer.
     WaitingForInput(Notify<AgentSessionWaitingForInputMetadata>),
     /// Tell the people a prompt named.
     Mentioned(Notify<AgentSessionMentionedMetadata>),
@@ -164,9 +164,9 @@ fn plan_waiting(waiting: &WaitingForInputMetadata) -> Vec<PlannedNotification> {
         ),
         entity,
         secondary_entity,
-        // Only the owner may answer; anyone else would tap through to a
-        // form they cannot fill.
-        recipients: vec![waiting.identity.owner_id.clone()],
+        // Anyone with edit access may answer; the people who have driven the
+        // session are the ones to ask.
+        recipients: audience(&waiting.identity),
         metadata: AgentSessionWaitingForInputMetadata {
             session: session_ref(&waiting.identity, waiting.announcement_message_id),
             turn: waiting.turn.0,

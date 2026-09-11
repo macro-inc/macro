@@ -62,8 +62,8 @@ is separate from notification lifecycle state.
 
 Agent sessions notify through the same inbox. `<bot> finished <session>` goes to the
 owner and everyone who has prompted or answered in that session when a turn ends with
-nothing queued; `<bot> needs your answer in <session>` goes to the owner alone when the
-agent stops to ask; `<user> mentioned you in <session>` goes to users @-mentioned in a
+nothing queued; `<bot> needs your answer in <session>` goes to the same people when the
+agent stops to ask (anyone with edit access may answer); `<user> mentioned you in <session>` goes to users @-mentioned in a
 prompt who can already open the session. All three are filed under the session itself:
 the inbox shows an agent-session row (agent icon, session name, the bot or mentioner as
 sender, the excerpt or question as the body) and clicking it opens the session. They are
