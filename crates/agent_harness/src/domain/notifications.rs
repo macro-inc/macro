@@ -1,9 +1,10 @@
 //! From one lifecycle fact to the notifications it warrants.
 //!
-//! Pure: the fact comes in with everything it needs (the harness resolves the
-//! audience before publishing), and what comes out is a list of things to do
-//! against the notification service. The adapter that runs the list is
-//! elsewhere; this is the part worth testing exhaustively.
+//! Pure: the fact carries everything needed (the audience is resolved before
+//! publishing), and what comes out is the notifications to send through the
+//! [`AgentSessionNotifier`](super::ports::AgentSessionNotifier) port. The
+//! adapter that sends them lives in `outbound::notifications`; this is the
+//! part worth testing exhaustively.
 //!
 //! # Who hears what
 //!
@@ -13,10 +14,10 @@
 //! | `waiting_for_input` | [`AgentSessionWaitingForInputMetadata`] | the owner - the one person who may answer |
 //! | `mentioned` | [`AgentSessionMentionedMetadata`] | the users the prompt named (already narrowed to those with access) |
 //!
-//! Everything else on the topic is somebody else's business. Retracting a
-//! notification once it is stale (the question answered, the next turn
-//! started) is deliberately not done yet: the notification service has no
-//! producer-facing door for marking done, and adding one is its own change.
+//! Everything else is nobody's news. Retracting a notification once it is
+//! stale (the question answered, the next turn started) is deliberately not
+//! done yet: the notification ingress has no producer-facing way to mark
+//! done, and adding one is its own change.
 //!
 //! # Ids
 //!
@@ -37,6 +38,7 @@ use agent_session::domain::events::{
 };
 use agent_session::domain::model::TurnId;
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 use model_entity::{Entity, EntityType};
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
@@ -45,7 +47,6 @@ use model_notifications::{
 use notification::domain::models::apple::PushNotificationData;
 use notification::domain::models::request::SendNotificationRequestBuilder;
 use notification::domain::models::{Notification, SendNotificationRequest};
-use uuid::Uuid;
 
 /// The namespace agent-session notification ids are derived in. Fixed
 /// forever: changing it would orphan every retraction of a notification

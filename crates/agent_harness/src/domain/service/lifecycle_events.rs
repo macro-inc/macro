@@ -5,6 +5,8 @@ use agent_session::domain::events::{
     AgentSessionLifecycleEvent, SessionIdentity, SessionMentionedMetadata, SessionOpenedMetadata,
 };
 use agent_session::domain::lifecycle::session_identity;
+
+use crate::domain::notifications::plan;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
@@ -43,17 +45,27 @@ where
         Ok(session_identity(session, &bot, participants))
     }
 
-    /// Publish one fact about `session_id`, built once its identity is known.
+    /// Publish one fact about `session_id`, built once its identity is known,
+    /// then send whoever it is news to their notification.
     ///
     /// Never fails the command it rides on: a session whose identity cannot be
     /// loaded is logged and skipped, because the fact itself already happened.
+    /// The notifications are derived from the very event that was published,
+    /// so the two cannot disagree.
     pub(super) async fn publish_lifecycle(
         &self,
         session_id: AgentSessionId,
         build: impl FnOnce(SessionIdentity) -> AgentSessionLifecycleEvent,
     ) {
         match self.identity(session_id).await {
-            Ok(identity) => self.lifecycle_publisher.publish(build(identity)).await,
+            Ok(identity) => {
+                let event = build(identity);
+                let notifications = plan(&event);
+                self.lifecycle_publisher.publish(event).await;
+                for notification in notifications {
+                    self.notifier.notify(notification).await;
+                }
+            }
             Err(error) => tracing::warn!(
                 error = ?error,
                 %session_id,

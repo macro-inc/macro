@@ -17,6 +17,7 @@ use super::model::{
     AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, HarnessCommand, PriorChannelMessage,
     ProvisionedEgress, SandboxEgress, SessionAnnouncement, SpawnContainer,
 };
+use super::notifications::PlannedNotification;
 use super::sandbox::SandboxResizeEffect;
 
 /// The distributed destination for a forwarded command.
@@ -165,6 +166,39 @@ impl PromptMentions for NoPromptMentions {
         _prompt_markdown: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+}
+
+/// Delivers the notifications a lifecycle fact warrants to whoever sends
+/// them on. Object-safe and held erased, like the lifecycle publisher.
+pub trait AgentSessionNotifier: Send + Sync + 'static {
+    /// Send one notification. Resolves once the send has been attempted; a
+    /// failure is the adapter's to log, never the fact's to fail on.
+    fn notify(
+        &self,
+        notification: PlannedNotification,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+}
+
+impl<Notifier: AgentSessionNotifier + ?Sized> AgentSessionNotifier for Arc<Notifier> {
+    fn notify(
+        &self,
+        notification: PlannedNotification,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        (**self).notify(notification)
+    }
+}
+
+/// An [`AgentSessionNotifier`] that tells nobody: tests and tooling.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopAgentSessionNotifier;
+
+impl AgentSessionNotifier for NoopAgentSessionNotifier {
+    fn notify(
+        &self,
+        _notification: PlannedNotification,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async {})
     }
 }
 

@@ -5,3 +5,4 @@ pub mod announcer;
 pub mod containers;
 pub mod egress;
 pub mod mentions;
+pub mod notifier;

@@ -264,7 +264,10 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mockall",
+ "model-entity",
+ "model_notifications",
  "model_user",
+ "notification",
  "opentelemetry",
  "pipedream_mcp",
  "redis",
@@ -296,7 +299,6 @@ dependencies = [
  "agent_inmem",
  "agent_runtime_protocol",
  "agent_session",
- "agent_session_notifications",
  "agent_trigger",
  "ai_tools",
  "ai_usage",
@@ -461,26 +463,6 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "utoipa",
- "workspace-hack",
-]
-
-[[package]]
-name = "agent_session_notifications"
-version = "0.1.0"
-dependencies = [
- "agent_runtime_protocol",
- "agent_session",
- "bots",
- "macro_user_id",
- "model-entity",
- "model_notifications",
- "notification",
- "rootcause",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "uuid",
  "workspace-hack",
 ]
 

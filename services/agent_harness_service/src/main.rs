@@ -52,6 +52,7 @@ use agent_harness::outbound::daytona::{
 use agent_harness::outbound::egress::EgressProvisioner;
 use agent_harness::outbound::forward::RedisCommandForwarder;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
+use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
 use agent_harness::outbound::prompt_mentions::LexicalPromptMentions;
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
@@ -72,7 +73,6 @@ use agent_session::outbound::broker_lifecycle_publisher::BrokerLifecyclePublishe
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::name_generator::HaikuAgentSessionNameGenerator;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
-use agent_session_notifications::outbound::notifying_publisher::NotifyingLifecyclePublisher;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use anyhow::Context as _;
 use bot_id::BotId;
@@ -233,13 +233,7 @@ async fn run() -> anyhow::Result<()> {
             macro_queues::NotificationIngressQueue::new().to_string(),
         ),
     });
-    // Every lifecycle fact goes on the broker and, when it is news to
-    // someone (finished, asking, mentioned), to the notification ingress -
-    // the same queue channel messages notify through.
-    let lifecycle_publisher = Arc::new(NotifyingLifecyclePublisher::new(
-        BrokerLifecyclePublisher::new(broker.clone()),
-        Arc::clone(&notifications),
-    ));
+    let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
@@ -486,7 +480,7 @@ async fn run() -> anyhow::Result<()> {
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(connection_gateway.clone()),
-        NotificationChannelSender::new(notifications),
+        NotificationChannelSender::new(Arc::clone(&notifications)),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
     .with_macro_event_broker(broker);
@@ -556,6 +550,9 @@ async fn run() -> anyhow::Result<()> {
         Arc::clone(&lifecycle_publisher),
         pending_commands,
         prompt_mentions,
+        // Finished / asking / mentioned reach people through the same
+        // notification ingress channel messages use.
+        IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
     ));
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.

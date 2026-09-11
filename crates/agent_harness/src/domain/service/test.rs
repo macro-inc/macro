@@ -50,6 +50,7 @@ use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
 use crate::testing::helpers::egress::{EgressProvisionerMock, test_egress};
 use crate::testing::helpers::mentions::PromptMentionsMock;
+use crate::testing::helpers::notifier::NotifierMock;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::ReplicaId;
 use agent_session::domain::ports::{NoOpAgentSessionNameGenerator, NoOpTurnObserver};
@@ -267,6 +268,7 @@ impl agent_session::domain::ports::SessionTurnObserver for SignallingTurnObserve
 struct TurnSignals {
     ended: mpsc::UnboundedReceiver<AgentSessionId>,
     lifecycle: RecordingLifecyclePublisher,
+    notifier: NotifierMock,
 }
 
 impl TurnSignals {
@@ -330,6 +332,7 @@ fn harness_with_mentions(
     // One recorder for both publishers, as in production: renames come from
     // the session service, everything else from the harness.
     let lifecycle = RecordingLifecyclePublisher::new();
+    let notifier = NotifierMock::new();
     let service = AgentHarnessService::new(
         AgentSessionServiceImpl::new(
             repo.clone(),
@@ -356,6 +359,7 @@ fn harness_with_mentions(
         lifecycle.clone(),
         crate::domain::pending::PendingCommands::new(),
         mentions,
+        notifier.clone(),
     );
     let (ended, ended_rx) = mpsc::unbounded_channel();
     turn_observer.bind(SignallingTurnObserver {
@@ -367,6 +371,7 @@ fn harness_with_mentions(
         TurnSignals {
             ended: ended_rx,
             lifecycle,
+            notifier,
         },
     )
 }
@@ -1876,6 +1881,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
         crate::domain::ports::NoPromptMentions,
+        crate::domain::ports::NoopAgentSessionNotifier,
     );
 
     let session = service
@@ -2323,6 +2329,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
         crate::domain::ports::NoPromptMentions,
+        crate::domain::ports::NoopAgentSessionNotifier,
     );
 
     service
@@ -2373,6 +2380,7 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
         crate::domain::ports::NoPromptMentions,
+        crate::domain::ports::NoopAgentSessionNotifier,
     );
     let session = service
         .open_external_session(open_external_request("/srv/agent"))
@@ -2488,6 +2496,22 @@ mod lifecycle_events {
         assert_eq!(settled.identity.session_id, id);
         // The mention's sender prompted the session and owns it: once each.
         assert_eq!(settled.identity.audience, vec![sender()]);
+    }
+
+    #[tokio::test]
+    async fn settled_notifies_the_audience_through_the_notifier() {
+        let ((_, _, _, _, _), turns, id, _container) = settled_session().await;
+
+        let notified = turns.notifier.notified();
+        assert!(
+            matches!(
+                notified.as_slice(),
+                [crate::domain::notifications::PlannedNotification::Settled(notify)]
+                    if notify.recipients == vec![sender()]
+                        && notify.metadata.session.session_id == id.as_uuid()
+            ),
+            "one settled notification for the owner: {notified:#?}"
+        );
     }
 
     #[tokio::test]

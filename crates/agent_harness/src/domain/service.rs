@@ -51,8 +51,9 @@ use crate::domain::model::{
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
-    AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager, PromptMentions,
-    RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
+    AgentPromptComposer, AgentSessionNotifier, ChannelPromptContext, CommandForwarder,
+    ContainerManager, PromptMentions, RuntimeConnections, SandboxEgressProvisioner,
+    SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
@@ -97,6 +98,8 @@ struct AgentHarnessInner<
     lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
     /// Who a prompt names; erased for the same reason.
     mentions: Arc<dyn PromptMentions>,
+    /// Where the notifications a fact warrants go; erased for the same reason.
+    notifier: Arc<dyn AgentSessionNotifier>,
 }
 
 /// Turns trigger commands into running, announced agent sessions.
@@ -183,6 +186,7 @@ where
         lifecycle_publisher: impl AgentSessionLifecyclePublisher,
         pending: PendingCommands,
         mentions: impl PromptMentions,
+        notifier: impl AgentSessionNotifier,
     ) -> Self {
         Self {
             inner: Arc::new(AgentHarnessInner {
@@ -199,6 +203,7 @@ where
                 busy: pending,
                 lifecycle_publisher: Arc::new(lifecycle_publisher),
                 mentions: Arc::new(mentions),
+                notifier: Arc::new(notifier),
             }),
             workers: Arc::new(DashMap::new()),
         }
