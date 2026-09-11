@@ -313,18 +313,20 @@ The app is served at `<proxy>/app/`. The bundle resolves its backend from the or
 
 ### Init Snapshots
 
-`stack up` caches the expensive infrastructure initialization. The first cold run:
+`just run_local` and `stack up` both cache the expensive infrastructure initialization. The first cold run:
 
 - Migrates the database
+- Creates the Kafka topics
 - Waits for the FusionAuth kickstart
 - Creates the search indices
 
-It saves these volumes as an init snapshot. The snapshot is content-addressed and stored under `infra/local/generated/.snapshots`. Later runs restore the snapshot and skip the initialization. An input change causes a cache miss and a normal full init.
+It saves these volumes as an init snapshot. The snapshot is content-addressed and stored under `infra/local/generated/.snapshots`. Later runs restore the snapshot and skip the initialization. An input change causes a cache miss and a normal full init — the key *is* the definition of clean state, so the full-delete/full-create guarantee is unchanged.
 
 Useful commands:
 
 ```bash
-just stack up --no-snapshot   # skip the snapshot cache
+just run_local --no-snapshot  # skip the snapshot cache
+just stack up --no-snapshot   # same flag, headless
 ```
 
 Cursor Cloud bakes the snapshot during environment install. Later `stack up` restores it.
@@ -361,6 +363,16 @@ Drop, recreate, and migrate an instance database:
 
 ```bash
 just reset_local --instance agent-a
+```
+
+### Finding out where a bring-up spent its time
+
+Every run prints its slowest stages before the summary. To compare runs, point
+`MACRO_LOCAL_TIMINGS` at a file — each run appends one JSON line of every stage
+and its duration:
+
+```bash
+MACRO_LOCAL_TIMINGS=/tmp/run-local-timings.jsonl just run_local
 ```
 
 For the default instance, omit `--instance`.

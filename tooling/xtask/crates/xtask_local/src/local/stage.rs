@@ -10,8 +10,9 @@
 //! cannot deadlock by filling a pipe buffer while we wait. `indicatif` only
 //! animates — it never reads the child's pipes.
 
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
@@ -102,6 +103,10 @@ pub struct Stage {
     /// notes are suppressed (commands still run + capture). Used to fold a
     /// multi-step action under a single parent spinner.
     quiet: bool,
+    /// Every resolved stage's label + elapsed, in completion order. Shared with
+    /// [`Stage::quiet`] children so folded sub-steps are recorded too, and with
+    /// the threads that run the background lanes.
+    timings: Arc<Mutex<Vec<(String, Duration)>>>,
 }
 
 impl Stage {
@@ -116,6 +121,7 @@ impl Stage {
             verbose: env_flag("MACRO_LOCAL_VERBOSE"),
             dry_run: env_flag("MACRO_LOCAL_DRY_RUN"),
             quiet: false,
+            timings: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -152,6 +158,85 @@ impl Stage {
             verbose: self.verbose,
             dry_run: self.dry_run,
             quiet: true,
+            timings: Arc::clone(&self.timings),
+        }
+    }
+
+    /// A handle that records into the same timing table from another thread
+    /// (the background teardown / frontend-build lanes). Output stays quiet:
+    /// a lane that races the foreground stages cannot share the spinner.
+    pub fn background(&self) -> Stage {
+        self.quiet()
+    }
+
+    fn record(&self, label: &str, elapsed: Duration) {
+        if let Ok(mut timings) = self.timings.lock() {
+            timings.push((label.to_owned(), elapsed));
+        }
+    }
+
+    /// Print the slowest stages of the run, and append a JSON line to
+    /// `MACRO_LOCAL_TIMINGS` when that env var names a file. This is how a
+    /// change to the bring-up is shown to be faster rather than argued to be.
+    // xtask is host tooling; reading the process environment directly is correct.
+    #[allow(clippy::disallowed_methods)]
+    pub fn print_timings(&self, title: &str) {
+        let Ok(timings) = self.timings.lock() else {
+            return;
+        };
+        if timings.is_empty() {
+            return;
+        }
+        const SUM_LABEL: &str = "sum of stages (lanes overlap)";
+        let total: Duration = timings.iter().map(|(_, d)| *d).sum();
+        let mut slowest: Vec<&(String, Duration)> = timings.iter().collect();
+        slowest.sort_by_key(|(_, d)| std::cmp::Reverse(*d));
+        let shown = &slowest[..slowest.len().min(10)];
+        // Labels run past the stage-line column ("Building search_processing…"),
+        // so size this table to its own longest row rather than clipping.
+        let width = shown
+            .iter()
+            .map(|(label, _)| label.chars().count())
+            .chain([SUM_LABEL.len(), WIDTH])
+            .max()
+            .unwrap_or(WIDTH);
+
+        self.section(&format!("{title} — slowest stages"));
+        for (label, elapsed) in shown {
+            println!(
+                "  {label:<width$} {:>8}",
+                Style::new().bold().apply_to(format_elapsed(*elapsed))
+            );
+        }
+        println!(
+            "  {:<width$} {:>8}",
+            Style::new().dim().apply_to(SUM_LABEL),
+            Style::new().dim().apply_to(format_elapsed(total)),
+        );
+
+        if let Some(path) = std::env::var_os("MACRO_LOCAL_TIMINGS") {
+            let entries: Vec<String> = timings
+                .iter()
+                .map(|(label, d)| {
+                    format!(
+                        "{{\"label\":{},\"seconds\":{:.3}}}",
+                        serde_json::Value::from(label.as_str()),
+                        d.as_secs_f64()
+                    )
+                })
+                .collect();
+            let line = format!("{{\"stages\":[{}]}}\n", entries.join(","));
+            if let Err(e) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .and_then(|mut f| f.write_all(line.as_bytes()))
+            {
+                self.note(&format!(
+                    "could not write MACRO_LOCAL_TIMINGS to {}: {e}",
+                    std::path::Path::new(&path).display()
+                ));
+            }
         }
     }
 
@@ -284,6 +369,7 @@ impl Stage {
         let mut captured = out_handle.join().unwrap_or_default();
         captured.extend(err_handle.join().unwrap_or_default());
         if self.quiet {
+            self.record(label, start.elapsed());
             // Silent on success; on failure bubble the captured output up in the
             // error so the parent stage can show it after its spinner clears.
             return match status {
@@ -315,11 +401,15 @@ impl Stage {
             return Ok(());
         }
         if self.quiet {
-            return f();
+            let start = Instant::now();
+            let result = f();
+            self.record(label, start.elapsed());
+            return result;
         }
         let start = Instant::now();
         let spinner = self.spinner(label);
         let result = f();
+        self.record(label, start.elapsed());
         let elapsed = format_elapsed(start.elapsed());
         match result {
             Ok(()) => {
@@ -359,6 +449,7 @@ impl Stage {
         program: &str,
         args: &[String],
     ) -> Result<()> {
+        self.record(label, start.elapsed());
         let elapsed = format_elapsed(start.elapsed());
         match outcome {
             Ok((status, _captured)) if status.success() => {
