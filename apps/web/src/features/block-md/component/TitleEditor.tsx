@@ -131,10 +131,15 @@ function titleNavigationPlugin(
 }
 
 export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
-  const { documentId, kind, documentSource, permissions, state } =
-    useMarkdownDocument();
+  const {
+    documentId,
+    kind,
+    documentSource,
+    permissions,
+    state: documentState,
+  } = useMarkdownDocument();
   const canEdit = permissions.canEdit;
-  const { md: mdData, setMd: setMdData } = state.editor;
+  const { md: mdData, setMd: setMdData } = documentState.editor;
   const renameDocumentMutation = createRenameDssEntityMutation();
   const {
     persistedName: persistedDocumentName,

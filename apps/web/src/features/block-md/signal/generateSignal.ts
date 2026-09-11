@@ -9,6 +9,7 @@ import type {
   Completion,
   GenerateMenuOpen,
 } from '@core/component/LexicalMarkdown/plugins';
+
 // import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 // import { createCognitionWebsocketBlockEffect } from '@service-cognition/websocket';
 

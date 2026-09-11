@@ -90,9 +90,7 @@ export function InlineTaskProperties() {
             entityType={entityType}
             class="bg-surface-2"
           />
-          <Show
-            when={documentKind === 'task' && state.editor.md.progressStats}
-          >
+          <Show when={documentKind === 'task' && state.editor.md.progressStats}>
             {(progressStats) => (
               <Show when={progressStats().total > 0}>
                 <ProgressChip stats={progressStats()} />

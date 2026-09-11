@@ -158,8 +158,11 @@ export const useSetNodeCommentThreadId = () => {
 };
 
 export function useScrollToCommentThread() {
-  const { documentId: getDocumentId, element: blockElement, state } =
-    useMarkdownDocument();
+  const {
+    documentId: getDocumentId,
+    element: blockElement,
+    state,
+  } = useMarkdownDocument();
   const commentState = state.comments;
   const documentId = getDocumentId();
   // Captured at setup: block stores resolve their block context at access
@@ -194,9 +197,7 @@ export function useScrollToCommentThread() {
       const wait = until(() => {
         const anchorId = commentState.threads[threadId]?.anchorId;
         return anchorId != null
-          ? Object.values(
-              commentState.marks[anchorId]?.markNodes ?? {}
-            )[0]
+          ? Object.values(commentState.marks[anchorId]?.markNodes ?? {})[0]
           : undefined;
       });
       disposePendingWait = wait.dispose;

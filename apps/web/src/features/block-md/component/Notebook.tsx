@@ -397,9 +397,7 @@ export function Notebook(props: {
           hidden: !showComments(),
         }}
       >
-        <CommentMargin
-          wideEnough={showComments() && commentBreakpoints.md()}
-        />
+        <CommentMargin wideEnough={showComments() && commentBreakpoints.md()} />
       </div>
     </div>
   );

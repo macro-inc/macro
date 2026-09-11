@@ -152,10 +152,7 @@ export function MarkdownSidePanelSections() {
         entityType={propertiesEntityType()}
         order={40}
       />
-      <GithubSectionConditional
-        documentId={documentId()}
-        isTask={isTask()}
-      />
+      <GithubSectionConditional documentId={documentId()} isTask={isTask()} />
       <NotificationsSectionConditional entity={entity()} />
       <ReferencesSectionConditional documentId={documentId()} />
       <Show when={isTask()}>

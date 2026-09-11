@@ -91,8 +91,7 @@ export const CommentsProvider: VoidComponent<{
   useCommentRealtime();
 
   /** Communicates comment ready to block. */
-  const initComments = () =>
-    setCommentState('commentMarksInitialized', true);
+  const initComments = () => setCommentState('commentMarksInitialized', true);
 
   const addCommentMark = (
     markId: string,
@@ -141,13 +140,7 @@ export const CommentsProvider: VoidComponent<{
         deleteComment({ commentId: rootId });
         return;
       }
-      setCommentState(
-        'marks',
-        markId,
-        'markNodes',
-        markNodeKey,
-        undefined
-      );
+      setCommentState('marks', markId, 'markNodes', markNodeKey, undefined);
       return;
     }
   };
@@ -382,8 +375,7 @@ export const CommentsProvider: VoidComponent<{
       ops: {
         add: addCommentMark,
         remove: removeCommentMark,
-        setActiveIds: (markIds) =>
-          setCommentState('activeMarkIds', markIds),
+        setActiveIds: (markIds) => setCommentState('activeMarkIds', markIds),
         init: initComments,
       },
       peerId: currentPeerId,

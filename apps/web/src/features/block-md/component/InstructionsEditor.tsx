@@ -80,10 +80,12 @@ export function InstructionsEditor(props: {
   const blockId = documentId();
 
   const saveDocumentMutation = createSaveMarkdownDocumentMutation();
-  const { setMd: setMdStore, error: editorError, setError: setEditorError } =
-    documentState.editor;
-  const saveBlocked = () =>
-    documentState.comments.activeCommentThread === -1;
+  const {
+    setMd: setMdStore,
+    error: editorError,
+    setError: setEditorError,
+  } = documentState.editor;
+  const saveBlocked = () => documentState.comments.activeCommentThread === -1;
 
   const IS_SYNC = () => documentSource().type === 'sync';
 

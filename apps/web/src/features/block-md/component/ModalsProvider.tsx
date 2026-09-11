@@ -13,8 +13,11 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownName } from './MarkdownNameProvider';
 
 export function ModalsProvider(props: ParentProps) {
-  const { documentId, kind, permissions: documentPermissions } =
-    useMarkdownDocument();
+  const {
+    documentId,
+    kind,
+    permissions: documentPermissions,
+  } = useMarkdownDocument();
   const { displayName } = useMarkdownName();
   const notificationSource = useGlobalNotificationSource();
   const metadataQuery = useDocumentMetadataQuery(documentId);

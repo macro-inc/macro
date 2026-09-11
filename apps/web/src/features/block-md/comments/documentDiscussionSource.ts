@@ -67,8 +67,7 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   } = useMarkdownDocument();
   const documentId = getDocumentId();
   const documentKind = kind();
-  const entityBlockName =
-    documentKind === 'document' ? 'md' : documentKind;
+  const entityBlockName = documentKind === 'document' ? 'md' : documentKind;
   // Comment affordances gate on can-comment (main switched tasks off can-edit).
   const userId = useUserId();
   const urlParams = useUrlParams(URL_PARAMS);

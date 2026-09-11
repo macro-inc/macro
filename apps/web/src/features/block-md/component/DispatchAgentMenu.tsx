@@ -174,9 +174,7 @@ export function useDispatchAgentAction() {
 
   const buildPrompt = createCallback(() => {
     const docName = name() ?? '';
-    const content = editor
-      ? editorStateAsMarkdown(editor, 'external')
-      : '';
+    const content = editor ? editorStateAsMarkdown(editor, 'external') : '';
     const threads = discussionThreads() ?? [];
     return generateTaskPrompt(blockId, docName, content, threads);
   });

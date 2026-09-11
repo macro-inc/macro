@@ -238,8 +238,7 @@ export function MarkdownEditor(props: {
     setFindAndReplace: setFindAndReplaceStore,
   } = documentState.editor;
   const { revisions, setRevisions } = documentState.rewrite;
-  const saveBlocked = () =>
-    documentState.comments.activeCommentThread === -1;
+  const saveBlocked = () => documentState.comments.activeCommentThread === -1;
 
   const IS_SYNC = () => documentSource().type === 'sync';
 
