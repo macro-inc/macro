@@ -343,83 +343,96 @@ pub async fn projection_updates_for_write<S: Storage>(
 pub fn optimistic_updates(updates: Vec<ProjectionMutation>) -> Vec<OptimisticProjectionMutation> {
     updates
         .into_iter()
-        .map(|update| match update {
-            ProjectionMutation::Patch {
-                record_key,
-                profile,
-                partition,
-                exact,
-                integers,
-                sorts,
-            } => OptimisticProjectionMutation::Patch {
-                record_key,
-                profile,
-                partition,
-                exact,
-                integers,
-                sorts,
-            },
-            ProjectionMutation::Replace(document) => {
-                // Patches cannot remove sort facts. A full replacement that
-                // omits one must hide the old base instead of retaining it.
-                if SORT_ATTRIBUTES.iter().any(|attribute| {
-                    !document
-                        .sort_facts
+        .flat_map(|update| {
+            let mut sort_uncertainty = None;
+            let mutation = match update {
+                ProjectionMutation::Patch {
+                    record_key,
+                    profile,
+                    partition,
+                    exact,
+                    integers,
+                    sorts,
+                } => OptimisticProjectionMutation::Patch {
+                    record_key,
+                    profile,
+                    partition,
+                    exact,
+                    integers,
+                    sorts,
+                },
+                ProjectionMutation::Replace(document) => {
+                    // Missing INBOX/SENT timestamps are normal. Apply the complete
+                    // attribute patch even when these optional sorts are absent.
+                    // Sort patches cannot delete old values, so only queries using
+                    // those missing sorts need uncertainty, not the whole row.
+                    let missing_sorts = SORT_ATTRIBUTES
                         .iter()
-                        .any(|fact| fact.attribute.as_str() == *attribute)
-                }) {
-                    return OptimisticProjectionMutation::Unknown {
+                        .filter(|attribute| {
+                            !document
+                                .sort_facts
+                                .iter()
+                                .any(|fact| fact.attribute.as_str() == **attribute)
+                        })
+                        .map(|attribute| vocabulary::token(attribute))
+                        .collect::<Vec<_>>();
+                    if !missing_sorts.is_empty() {
+                        sort_uncertainty = Some(OptimisticProjectionMutation::Unknown {
+                            record_key: document.record_key.clone(),
+                            profile: document.profile.clone(),
+                            partition: document.partition.clone(),
+                            affected_attributes: missing_sorts,
+                        });
+                    }
+                    OptimisticProjectionMutation::Patch {
                         record_key: document.record_key,
                         profile: document.profile,
                         partition: document.partition,
-                        affected_attributes: vec![],
-                    };
+                        // Full replacements cover every attribute, including empty
+                        // sets for removed preview references and optional facts.
+                        exact: EXACT_ATTRIBUTES
+                            .iter()
+                            .map(|attribute| ExactAttributePatch {
+                                attribute: vocabulary::token(attribute),
+                                values: document
+                                    .exact_facts
+                                    .iter()
+                                    .filter(|fact| fact.attribute.as_str() == *attribute)
+                                    .map(|fact| fact.value.clone())
+                                    .collect(),
+                            })
+                            .collect(),
+                        integers: SORT_ATTRIBUTES
+                            .iter()
+                            .map(|attribute| predicate_index::IntegerAttributePatch {
+                                attribute: vocabulary::token(attribute),
+                                values: document
+                                    .integer_facts
+                                    .iter()
+                                    .filter(|fact| fact.attribute.as_str() == *attribute)
+                                    .map(|fact| fact.value)
+                                    .collect(),
+                            })
+                            .collect(),
+                        sorts: document.sort_facts,
+                    }
                 }
-                OptimisticProjectionMutation::Patch {
-                    record_key: document.record_key,
-                    profile: document.profile,
-                    partition: document.partition,
-                    // Full replacements cover every attribute, including empty
-                    // sets for removed preview references and optional facts.
-                    exact: EXACT_ATTRIBUTES
-                        .iter()
-                        .map(|attribute| ExactAttributePatch {
-                            attribute: vocabulary::token(attribute),
-                            values: document
-                                .exact_facts
-                                .iter()
-                                .filter(|fact| fact.attribute.as_str() == *attribute)
-                                .map(|fact| fact.value.clone())
-                                .collect(),
-                        })
-                        .collect(),
-                    integers: SORT_ATTRIBUTES
-                        .iter()
-                        .map(|attribute| predicate_index::IntegerAttributePatch {
-                            attribute: vocabulary::token(attribute),
-                            values: document
-                                .integer_facts
-                                .iter()
-                                .filter(|fact| fact.attribute.as_str() == *attribute)
-                                .map(|fact| fact.value)
-                                .collect(),
-                        })
-                        .collect(),
-                    sorts: document.sort_facts,
-                }
-            }
-            ProjectionMutation::MarkIncomplete {
-                record_key,
-                profile,
-                partition,
-                ..
-            } => OptimisticProjectionMutation::Unknown {
-                record_key,
-                profile,
-                partition,
-                affected_attributes: vec![],
-            },
-            _ => unreachable!("Mail projection update family"),
+                ProjectionMutation::MarkIncomplete {
+                    record_key,
+                    profile,
+                    partition,
+                    ..
+                } => OptimisticProjectionMutation::Unknown {
+                    record_key,
+                    profile,
+                    partition,
+                    affected_attributes: vec![],
+                },
+                _ => unreachable!("Mail projection update family"),
+            };
+            // Mark uncertainty after patching: the empty integer replacements
+            // would otherwise clear it while leaving an old sort value intact.
+            [Some(mutation), sort_uncertainty].into_iter().flatten()
         })
         .collect()
 }
