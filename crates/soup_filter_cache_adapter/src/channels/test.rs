@@ -12,6 +12,7 @@ const QUERY: &str = r#"query ChannelSeed { user { id soup(input: {initial: {}}) 
     ... on GraphqlSoupChannel {
         ownerId channelType channelTeamId: teamId organizationId isParticipant createdAt updatedAt
     }
+    ... on GraphqlSoupProject { ownerId parentId createdAt updatedAt }
 } } } }"#;
 const PATCH: &str = r#"query ChannelPatch { user { id soup(input: {initial: {}}) { items {
     __typename id ... on GraphqlSoupChannel { channelTeamId: teamId isParticipant updatedAt }
@@ -149,9 +150,63 @@ fn partial_and_invalid_channel_snapshots_do_not_invent_completeness() {
     ));
 }
 
+#[test]
+fn full_channel_optimism_does_not_create_authoritative_access() {
+    use cache_core::predicate::{ProjectionMutationLayer, compose_effective_optimistic_projection};
+    let mutations = optimistic_projection_mutations(&data(vec![row(1)]), 1);
+    assert!(matches!(
+        mutations.as_slice(),
+        [OptimisticProjectionMutation::Patch { .. }]
+    ));
+    let shadow = compose_effective_optimistic_projection(
+        &key(1),
+        None,
+        &[ProjectionMutationLayer {
+            owner: 1,
+            mutations: &mutations,
+        }],
+    )
+    .unwrap()
+    .unwrap();
+    assert!(matches!(
+        shadow.state,
+        predicate_index::OptimisticProjectionState::Incomplete { .. }
+    ));
+}
+
 async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
     let mut engine = Engine::new(storage);
-    write(&mut engine, QUERY, &data(vec![row(1), row(2), row(3)])).await;
+    let project = json!({"__typename":"GraphqlSoupProject","id":id(7),"cacheProjection":null,
+        "ownerId":"macro|viewer@example.com","parentId":null,"createdAt":"2025-01-01T00:00:00Z","updatedAt":"2025-01-02T00:00:00.000001Z",
+        "notifications":[{"id":id(107),"entityId":id(7),"entityType":"PROJECT","state":"UNSEEN"}]
+    });
+    write(
+        &mut engine,
+        QUERY,
+        &data(vec![row(1), row(2), row(3), project]),
+    )
+    .await;
+    let mut mixed = filters(json!({"literal":{"notificationState":"UNSEEN"}}));
+    mixed["projectFilter"] = json!({"literal":{"notificationState":"UNSEEN"}});
+    let SoupFilterCompileOutcome::Supported(query) =
+        compile_filter_request(mixed, "UPDATED_AT", "DESC", 20).unwrap()
+    else {
+        panic!("mixed Soup filter")
+    };
+    let found = engine
+        .reconcile_predicate_index(&query, &[])
+        .await
+        .unwrap()
+        .value
+        .keys;
+    assert_eq!(
+        found,
+        [
+            RecordKey::new(format!("GraphqlSoupProject:{}", id(7))).unwrap(),
+            key(2),
+            key(1)
+        ]
+    );
     let unseen = json!({"literal":{"notificationState":"UNSEEN"}});
     assert_eq!(keys(&mut engine, unseen.clone()).await, [key(2), key(1)]);
     let patch = data(vec![
