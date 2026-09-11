@@ -3,7 +3,7 @@
 //! Typed owner reference for Macro entities.
 //!
 //! [`Owner`] is the domain value. [`OwnerType`] is the closed string set for
-//! the Postgres `entity_owner_type` enum and the matching wire discriminator.
+//! the sqlx type `entity_owner_type` and the matching wire discriminator.
 //!
 //! ```
 //! use model_owner::{Owner, OwnerType};
@@ -44,7 +44,7 @@ pub enum Owner {
     Team(Uuid),
 }
 
-/// Closed owner-type set for the `entity_owner_type` enum.
+/// Closed owner-type set for the sqlx type `entity_owner_type`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type))]
@@ -113,7 +113,7 @@ impl Owner {
         }
     }
 
-    /// Parse a principal by prefix. For legacy columns that store only the id.
+    /// Parse a principal by prefix.
     pub fn from_principal_str(value: &str) -> Result<Self, OwnerParseError> {
         if value.starts_with(USER_PRINCIPAL_PREFIX) {
             Self::parse(OwnerType::User, value)
