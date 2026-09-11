@@ -10,6 +10,7 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { EntityTopBarLiveIndicators } from '@core/component/LiveIndicators';
 import { Permissions } from '@core/component/SharePermissions';
 import {
   ShareDialogContext,
@@ -122,6 +123,14 @@ export function AgentSplitHeader(props: {
       <SplitHeaderLeft>
         <StaticSplitLabel iconType="agent" label={title()} />
       </SplitHeaderLeft>
+
+      {/* Same connection-gateway presence as channels/docs. Track the
+          session, not `useBlockId()` — a launcher-created block keeps its
+          placeholder id after adopt (see `Block.tsx`). */}
+      <EntityTopBarLiveIndicators
+        entityType="agent_session"
+        entityId={sessionId}
+      />
 
       {/* Tools live on the header row itself — `ResponsiveBlockToolbar`
           would push non-Share tools onto a second toolbar row. Markup

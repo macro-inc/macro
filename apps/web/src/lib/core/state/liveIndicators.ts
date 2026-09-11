@@ -24,8 +24,13 @@ createWebsocketEventEffect(
     setIndicatorStore(update.entity_id, update.user_ids);
   }
 );
-export const useUserIndicators = () => {
+
+export const useUserIndicators = (entityId?: () => string | undefined) => {
   if (!ENABLE_LIVE_INDICATORS) return () => [];
-  const indicators = () => unwrap(indicatorStore[useBlockId()]);
+  const indicators = () => {
+    const id = entityId ? entityId() : useBlockId();
+    if (!id) return [];
+    return unwrap(indicatorStore[id]);
+  };
   return indicators;
 };

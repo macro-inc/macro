@@ -141,7 +141,9 @@ sits on top and a footer row holds the model name (left, e.g. `Auto ⌄`) and
 model with a check on the current one — pick a row to switch. On desktop the
 transcript and composer use the shared channel message width so expanding **Context** only
 grows vertically; your messages are right-aligned bubbles and the model pill
-sits above the box. Tap the session title
+sits above the box. The header shows the same live viewer avatars as channels
+and documents: teammates currently viewing the session appear as a small stack
+(you are omitted). Hidden on touch. Tap the session title
 to open the title menu (caret), then **Rename** — that opens the generic entity
 rename dialog. Do not expect a tap on the name itself to start
 an inline edit.
