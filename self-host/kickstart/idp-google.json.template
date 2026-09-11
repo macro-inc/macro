@@ -1,0 +1,74 @@
+[
+  {
+    "method": "POST",
+    "url": "/api/lambda/@@RECONCILE_LAMBDA_ID@@",
+    "body": {
+      "lambda": {
+        "id": "@@RECONCILE_LAMBDA_ID@@",
+        "name": "Reconcile Secondary IdP Link",
+        "type": "OpenIDReconcile",
+        "enabled": true,
+        "body": "@@RECONCILE_LAMBDA_BODY@@"
+      }
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/identity-provider/@@GOOGLE_IDP_ID@@",
+    "body": {
+      "identityProvider": {
+        "type": "OpenIDConnect",
+        "name": "google",
+        "enabled": true,
+        "buttonText": "Google",
+        "linkingStrategy": "LinkByEmail",
+        "oauth2": {
+          "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth?prompt=consent&access_type=offline",
+          "token_endpoint": "https://oauth2.googleapis.com/token",
+          "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
+          "client_id": "@@GOOGLE_CLIENT_ID@@",
+          "client_secret": "@@GOOGLE_CLIENT_SECRET_KEY@@",
+          "clientAuthenticationMethod": "client_secret_basic",
+          "scope": "openid profile email",
+          "uniqueIdClaim": "sub",
+          "emailClaim": "email",
+          "emailVerifiedClaim": "email_verified",
+          "usernameClaim": "preferred_username"
+        },
+        "applicationConfiguration": {
+          "@@FUSIONAUTH_CLIENT_ID@@": { "enabled": true, "createRegistration": true }
+        }
+      }
+    }
+  },
+  {
+    "method": "POST",
+    "url": "/api/identity-provider/@@GOOGLE_GMAIL_IDP_ID@@",
+    "body": {
+      "identityProvider": {
+        "type": "OpenIDConnect",
+        "name": "google_gmail",
+        "enabled": true,
+        "buttonText": "GoogleGmail",
+        "linkingStrategy": "LinkByEmail",
+        "lambdaConfiguration": { "reconcileId": "@@RECONCILE_LAMBDA_ID@@" },
+        "oauth2": {
+          "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth?prompt=consent&access_type=offline",
+          "token_endpoint": "https://oauth2.googleapis.com/token",
+          "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
+          "client_id": "@@GOOGLE_CLIENT_ID@@",
+          "client_secret": "@@GOOGLE_CLIENT_SECRET_KEY@@",
+          "clientAuthenticationMethod": "client_secret_basic",
+          "scope": "openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic https://www.googleapis.com/auth/calendar",
+          "uniqueIdClaim": "sub",
+          "emailClaim": "email",
+          "emailVerifiedClaim": "email_verified",
+          "usernameClaim": "preferred_username"
+        },
+        "applicationConfiguration": {
+          "@@FUSIONAUTH_CLIENT_ID@@": { "enabled": true, "createRegistration": true }
+        }
+      }
+    }
+  }
+]

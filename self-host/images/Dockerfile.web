@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1
+#
+# The built frontend bundle. Not a server — a one-shot that unpacks the bundle
+# into the volume Caddy serves, so the app is static files behind the same
+# origin as the APIs.
+#
+# The bundle is built with VITE_LOCAL_BACKEND_ORIGIN=same-origin, which is what
+# makes one image work on any hostname: the app calls /auth, /dss, /email …
+# relative to wherever it is served from, so moving domains needs no rebuild.
+FROM busybox:1.37-musl
+
+ARG DIST_DIR=dist
+ARG MACRO_VERSION=dev
+
+LABEL org.opencontainers.image.title="Macro web" \
+      org.opencontainers.image.source="https://github.com/macro-inc/macro" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.version="${MACRO_VERSION}"
+
+COPY ${DIST_DIR}/ /srv/frontend/
+
+# Overridden by compose, which copies the bundle into the shared volume.
+CMD ["sh", "-c", "cp -a /srv/frontend/. /out/"]

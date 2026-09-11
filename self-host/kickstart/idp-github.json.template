@@ -1,0 +1,30 @@
+[
+  {
+    "method": "POST",
+    "url": "/api/identity-provider/@@GITHUB_IDP_ID@@",
+    "body": {
+      "identityProvider": {
+        "type": "OpenIDConnect",
+        "name": "github",
+        "enabled": true,
+        "buttonText": "GitHub",
+        "linkingStrategy": "LinkByEmail",
+        "oauth2": {
+          "authorization_endpoint": "https://github.com/login/oauth/authorize",
+          "token_endpoint": "https://github.com/login/oauth/access_token",
+          "userinfo_endpoint": "https://api.github.com/user",
+          "client_id": "@@GITHUB_CLIENT_ID@@",
+          "client_secret": "@@GITHUB_CLIENT_SECRET@@",
+          "clientAuthenticationMethod": "client_secret_basic",
+          "scope": "read:user user:email",
+          "uniqueIdClaim": "id",
+          "emailClaim": "email",
+          "usernameClaim": "login"
+        },
+        "applicationConfiguration": {
+          "@@FUSIONAUTH_CLIENT_ID@@": { "enabled": true, "createRegistration": true }
+        }
+      }
+    }
+  }
+]

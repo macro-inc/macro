@@ -63,13 +63,31 @@ impl Notification for InviteToMacro {
 
 const MINUTES_PER_WEEK: u64 = 60 * 24 * 7;
 
+macro_env_var::maybe_env_vars! {
+    /// The app's public root on a self-hosted deployment.
+    struct AppBaseUrl;
+    /// The frontend's port on a local development stack.
+    struct FrontendPort;
+}
+
 fn frontend_host(env: Environment) -> Url {
+    // `APP_BASE_URL` names the deployment's own origin, which no environment
+    // default can know. Only its origin is taken: callers set their own path.
+    // Unset in Macro's own environments, which keep the defaults below.
+    if let Some(base) = AppBaseUrl::new()
+        && let Ok(url) = Url::parse(base.as_ref())
+        && let Ok(origin) = Url::parse(&url.origin().ascii_serialization())
+    {
+        return origin;
+    }
+
     let host = match env {
         Environment::Production => "https://macro.com".to_string(),
         Environment::Develop => "https://dev.macro.com".to_string(),
         Environment::Local => {
-            #[expect(clippy::disallowed_methods, reason = "Only used when running locally")]
-            let port = std::env::var("FRONTEND_PORT").unwrap_or_else(|_| "3000".to_string());
+            let port = FrontendPort::new()
+                .map(|port| port.to_string())
+                .unwrap_or_else(|| "3000".to_string());
             format!("http://localhost:{port}")
         }
     };

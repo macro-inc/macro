@@ -9,6 +9,7 @@ use url::Url;
 
 maybe_env_vars! {
     struct FrontendPort;
+    struct AppBaseUrl;
 }
 
 /// Generates a random 25 character session code
@@ -47,7 +48,17 @@ pub fn generate_session_code() -> String {
 }
 
 /// Returns the default redirect url based on the environment
+///
+/// `APP_BASE_URL` takes precedence when set. A self-hosted deployment serves
+/// the app from a domain no built-in default can know, and without it every
+/// post-login redirect would land on `localhost`. Unset in Macro's own
+/// environments, which keep the per-environment defaults below.
 pub fn default_redirect_url() -> Url {
+    if let Some(base) = AppBaseUrl::new() {
+        if let Ok(url) = base.as_ref().parse::<Url>() {
+            return url;
+        }
+    }
     match Environment::new_or_prod() {
         Environment::Local => {
             let port = FrontendPort::new()
