@@ -8,6 +8,7 @@ import type {
   SoupInput,
 } from '@service-storage/graphql/generated/graphql';
 import { botsQueryOptions } from '../bots/bots';
+import { firstPartyBotName } from '../bots/first-party-bot-name';
 import { queryClient } from '../client';
 import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 import {
@@ -51,11 +52,18 @@ export function agentSessionMentionInput(ids?: string[]): SoupInput {
 async function withSessionPersonaNames(
   sessions: AgentSessionMentionData[]
 ): Promise<AgentSessionMentionData[]> {
-  if (sessions.every((session) => session.bot?.name)) return sessions;
+  const namedSessions = sessions.map((session) => {
+    if (session.bot?.name) return session;
+    const name = firstPartyBotName(session.botId);
+    return name
+      ? { ...session, bot: { ...session.bot, id: session.botId, name } }
+      : session;
+  });
+  if (namedSessions.every((session) => session.bot?.name)) return namedSessions;
   try {
     const bots = await queryClient.ensureQueryData(botsQueryOptions());
     const byId = new Map(bots.map((bot) => [bot.id, bot]));
-    return sessions.map((session) => {
+    return namedSessions.map((session) => {
       if (session.bot?.name) return session;
       const bot = byId.get(session.botId);
       if (!bot) return session;
@@ -66,7 +74,7 @@ async function withSessionPersonaNames(
     });
   } catch (error) {
     console.warn('Failed to load agent session persona names', error);
-    return sessions;
+    return namedSessions;
   }
 }
 

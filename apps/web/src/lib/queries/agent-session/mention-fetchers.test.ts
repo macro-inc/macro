@@ -192,6 +192,77 @@ describe('mention transport adapters', () => {
     expect(clients.preview).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])(
+    'resolves built-in personas without the manageable bots list (GraphQL: %s)',
+    async (graphql) => {
+      const sessions = [
+        {
+          ...session,
+          id: 'cursor',
+          botId: '00000000-0000-0000-0000-00000000c5c5',
+          bot: undefined,
+        },
+        {
+          ...session,
+          id: 'macro-new',
+          botId: '00000000-0000-0000-0000-00000000a2a2',
+          bot: undefined,
+        },
+      ];
+      clients.graphql.mockResolvedValue(sessions);
+      clients.soup.mockResolvedValue(
+        ok({ items: sessions.map((data) => ({ tag: 'agentSession', data })) })
+      );
+      clients.preview.mockResolvedValue(
+        ok({
+          previews: sessions.map((data) => ({
+            ...data,
+            type: 'access',
+            modifiedAt: '',
+            status: { kind: 'no_messages' },
+          })),
+        })
+      );
+      expect(await fetchRecentAgentSessionMentions(graphql)).toMatchObject([
+        { id: 'cursor', bot: { name: 'Cursor' } },
+        { id: 'macro-new', bot: { name: 'macro(new)' } },
+      ]);
+      expect(clients.bots).not.toHaveBeenCalled();
+    }
+  );
+
+  it('preserves API names and built-in names when custom persona lookup fails', async () => {
+    clients.graphql.mockResolvedValue([
+      {
+        ...session,
+        id: 'renamed',
+        botId: '00000000-0000-0000-0000-00000000c5c5',
+        bot: {
+          id: '00000000-0000-0000-0000-00000000c5c5',
+          name: 'API persona',
+        },
+      },
+      {
+        ...session,
+        id: 'macro-new',
+        botId: '00000000-0000-0000-0000-00000000a2a2',
+        bot: null,
+      },
+      { ...session, bot: null },
+    ]);
+    clients.bots.mockResolvedValue(err(new Error('unavailable')));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(await fetchRecentAgentSessionMentions(true)).toMatchObject([
+        { id: 'renamed', bot: { name: 'API persona' } },
+        { id: 'macro-new', bot: { name: 'macro(new)' } },
+        { id: 'one', bot: null },
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('keeps sessions visible when the optional persona lookup fails', async () => {
     clients.graphql.mockResolvedValue([{ ...session, bot: null }]);
     clients.bots.mockResolvedValue(err(new Error('unavailable')));
