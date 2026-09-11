@@ -41,7 +41,7 @@ export function MonthDrawer(props: MonthDrawerProps) {
       </MobileDrawer.Trigger>
 
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content aria-label="Choose month">
           <MobileDrawer.Handle />
           <MobileDrawer.Section class="mb-3 overflow-visible">

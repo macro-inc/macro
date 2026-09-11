@@ -23,7 +23,9 @@ export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
   if (!isEditableInput(e.target as Element) || scrollTimer !== undefined)
     return;
   const input = e.target as HTMLElement;
-  const container = e.currentTarget as HTMLElement;
+  const container =
+    input.closest<HTMLElement>('[data-drawer-scroll-body]') ??
+    (e.currentTarget as HTMLElement);
   // Has to be delayed until after browser's native keyboard-show scroll completes
   scrollTimer = setTimeout(() => {
     scrollTimer = undefined;
@@ -40,10 +42,8 @@ export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
  * Drop-in replacement for `Drawer.Content` that handles mobile keyboard
  * behaviour automatically:
  *
- * - Positions itself above the virtual keyboard via `bottom-(--virtual-keyboard-height)`
- * - Switches between `pb-(--safe-bottom)` and `pb-0` based on whether any
- *   input/textarea inside the drawer currently has focus (detected via
- *   bubbling focusin/focusout — no per-input wiring needed)
+ * - Keeps an 8px gutter above the screen edge or virtual keyboard.
+ * - Clamps its height to the visible viewport when the keyboard opens.
  * - When a `MobileDrawer.ScrollBody` is present, hands the safe-area padding
  *   to it so the scroll viewport reaches the drawer's bottom edge
  *
@@ -80,30 +80,47 @@ function MobileDrawerContent(
           scrollToFocusedInput(e);
         }}
         style={{
-          '--drawer-max-h': `${maxHeight()}vh`,
+          '--drawer-max-h': `${maxHeight()}dvh`,
           ...(targetHeight() != null
-            ? { '--drawer-h': `${targetHeight()}vh` }
+            ? { '--drawer-h': `${targetHeight()}dvh` }
             : {}),
         }}
         class={cn(
           'portal-scope',
-          'bottom-0 fixed inset-x-0 z-modal bg-surface rounded-t-2xl flex flex-col max-h-(--drawer-max-h) data-transitioning:transition-transform data-transitioning:duration-200 ease-out',
+          'fixed! inset-x-2 bottom-[calc(var(--virtual-keyboard-height,0px)+8px)] z-modal mobile-sheet glass bg-menu-glass [--color-dialog:var(--color-menu-glass)] flex flex-col max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px))] data-transitioning:transition-transform data-transitioning:duration-200 ease-out motion-reduce:transition-none',
           targetHeight() != null ? 'h-(--drawer-h)' : 'h-fit',
           virtualKeyboardVisible()
-            ? [
-                'pb-(--virtual-keyboard-height) max-h-[calc(100vh-var(--safe-top))] overflow-y-auto',
-                // A fixed-height drawer grows by the keyboard so its content
-                // keeps its designed height; a fit-content drawer has no
-                // --drawer-h and just clamps.
-                targetHeight() != null &&
-                  'h-[min(calc(100vh-var(--safe-top)),calc(var(--drawer-h)+var(--virtual-keyboard-height)))]',
-              ]
-            : 'pb-(--safe-bottom) has-[[data-drawer-scroll-body]]:pb-0',
+            ? 'pb-4 has-[[data-drawer-scroll-body]]:pb-0'
+            : 'pb-[max(16px,var(--mobile-sheet-safe-padding))] has-[[data-drawer-scroll-body]]:pb-0',
           local.class
         )}
         {...rest}
       />
     </Layer>
+  );
+}
+
+function MobileDrawerOverlay(props: ComponentProps<typeof Drawer.Overlay>) {
+  const [local, rest] = splitProps(props, ['class']);
+  return (
+    <Drawer.Overlay
+      class={cn('fixed inset-0 z-modal-overlay scrim-glass', local.class)}
+      {...rest}
+    />
+  );
+}
+
+function MobileDrawerItem(props: ComponentProps<'button'>) {
+  const [local, rest] = splitProps(props, ['class']);
+  return (
+    <button
+      type="button"
+      class={cn(
+        'flex min-h-11 w-full items-center gap-3 rounded-[20px] px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-ink/6 active:bg-ink/10 aria-checked:bg-ink/8 focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40',
+        local.class
+      )}
+      {...rest}
+    />
   );
 }
 
@@ -122,7 +139,7 @@ function MobileDrawerSectionLabel<T extends ValidComponent = 'div'>(
     <Dynamic
       component={local.as ?? 'div'}
       class={cn(
-        'px-3 pb-2 text-xs font-medium text-ink-muted uppercase tracking-wide',
+        'px-6 pb-2 text-xs font-medium text-ink-extra-muted',
         local.class
       )}
       {...rest}
@@ -143,7 +160,7 @@ function MobileDrawerSection<T extends ValidComponent = 'div'>(
     <Layer depth={2}>
       <Dynamic
         component={(local.as ?? 'div') as ValidComponent}
-        class={cn('rounded-2xl mx-3 overflow-clip', local.class)}
+        class={cn('rounded-3xl mx-3 p-1 bg-ink/3 overflow-clip', local.class)}
         {...rest}
       >
         {local.children}
@@ -177,8 +194,10 @@ function MobileDrawerScrollBody<T extends ValidComponent = 'div'>(
       component={(local.as ?? 'div') as ValidComponent}
       data-drawer-scroll-body
       class={cn(
-        'flex min-h-0 flex-auto flex-col overflow-y-auto',
-        !virtualKeyboardVisible() && 'pb-(--safe-bottom)',
+        'flex min-h-0 flex-auto flex-col overflow-y-auto rounded-b-(--mobile-sheet-radius) [corner-shape:inherit]',
+        virtualKeyboardVisible()
+          ? 'pb-4'
+          : 'pb-[max(16px,var(--mobile-sheet-safe-padding))]',
         local.class
       )}
       {...rest}
@@ -199,10 +218,10 @@ function MobileDrawerHandle<T extends ValidComponent = 'div'>(
   return (
     <Dynamic
       component={local.as ?? 'div'}
-      class={cn('flex justify-center pt-3 pb-2 shrink-0', local.class)}
+      class={cn('flex justify-center pt-2 pb-3 shrink-0', local.class)}
       {...rest}
     >
-      {local.children ?? <div class="w-10 h-1 rounded-full bg-edge-muted" />}
+      {local.children ?? <div class="w-9 h-1 rounded-full bg-ink/15" />}
     </Dynamic>
   );
 }
@@ -223,12 +242,13 @@ export const MobileDrawer = Object.assign(
   {
     Trigger: Drawer.Trigger,
     Portal: Drawer.Portal,
-    Overlay: Drawer.Overlay,
+    Overlay: MobileDrawerOverlay,
     Content: MobileDrawerContent,
     Close: Drawer.Close,
     ScrollBody: MobileDrawerScrollBody,
     Handle: MobileDrawerHandle,
     Section: MobileDrawerSection,
     Label: MobileDrawerSectionLabel,
+    Item: MobileDrawerItem,
   }
 );

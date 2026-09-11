@@ -618,7 +618,7 @@ export const SoupViewContextProvider: FlowComponent<
   // List/board display mode — per-entry state so back/forward restores the
   // mode the user left each entry with.
   const [viewMode, setViewMode] = useEntryState<SoupViewMode>('soup.viewMode', {
-    default: 'board',
+    default: isTouchDevice() ? 'list' : 'board',
   });
   const [readFilter, setReadFilter] = makeFlaggedPersisted(
     useEntryState<ReadFilter>('soup.readFilter', { default: 'all' }),

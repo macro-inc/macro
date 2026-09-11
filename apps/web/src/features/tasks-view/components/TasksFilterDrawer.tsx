@@ -1,8 +1,7 @@
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { Accordion } from '@kobalte/core/accordion';
-import CheckIcon from '@phosphor/check.svg';
-import { createMemo, For, Show } from 'solid-js';
+import { createMemo, For } from 'solid-js';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
 import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
@@ -28,18 +27,13 @@ export function TasksFilterDrawer() {
             const selected = () => primarySort() === option.id;
 
             return (
-              <button
-                type="button"
-                role="radio"
-                aria-checked={selected()}
-                class="flex w-full items-center gap-3 bg-surface px-3 py-2.5 text-left text-sm transition-colors not-last:border-edge-muted not-last:border-b hover:bg-hover"
-                onClick={() => setPrimarySort(option.id)}
+              <MobileFilterDrawer.Option
+                selectionMode="single"
+                checked={selected()}
+                onChange={() => setPrimarySort(option.id)}
               >
-                <span class="min-w-0 flex-1 truncate">{option.label}</span>
-                <Show when={selected()}>
-                  <CheckIcon class="size-3.5 shrink-0 text-accent" />
-                </Show>
-              </button>
+                {option.label}
+              </MobileFilterDrawer.Option>
             );
           }}
         </For>
@@ -57,18 +51,13 @@ export function TasksFilterDrawer() {
             const selected = () => state.groupBy === option.id;
 
             return (
-              <button
-                type="button"
-                role="radio"
-                aria-checked={selected()}
-                class="flex w-full items-center gap-3 bg-surface px-3 py-2.5 text-left text-sm transition-colors not-last:border-edge-muted not-last:border-b hover:bg-hover"
-                onClick={() => setState('groupBy', option.id)}
+              <MobileFilterDrawer.Option
+                selectionMode="single"
+                checked={selected()}
+                onChange={() => setState('groupBy', option.id)}
               >
-                <span class="min-w-0 flex-1 truncate">{option.label}</span>
-                <Show when={selected()}>
-                  <CheckIcon class="size-3.5 shrink-0 text-accent" />
-                </Show>
-              </button>
+                {option.label}
+              </MobileFilterDrawer.Option>
             );
           }}
         </For>

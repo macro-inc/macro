@@ -1,5 +1,6 @@
 import { InputActionButton } from '@channel/Input/ActionButton';
 import { useInputCommands } from '@channel/Input/context';
+import { createCollapsedInputState } from '@channel/Input/create-collapsed-input-state';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { Input } from '@channel/Input/Input';
 import type {
@@ -14,13 +15,15 @@ import {
   applyNodeFormat,
 } from '@channel/Input/utils/formatting';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import { isIOS } from '@solid-primitives/platform';
-import { ComposerSurface } from '@ui';
+import { CollapsedInput, ComposerSurface } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -39,6 +42,8 @@ export type DiscussionInputProps = InputCallbacks & {
   children?: JSX.Element;
   /** Whether to auto-focus the input on mount. Defaults to `!isMobile()`. */
   autofocus?: boolean;
+  /** Use the channel-style compact mobile composer until tapped. */
+  collapsible?: boolean;
 };
 
 function AttachImagesAction() {
@@ -99,6 +104,8 @@ export function DiscussionInput(props: DiscussionInputProps) {
   const [mentions, setMentions] = createSignal<ItemMention[]>([]);
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isSending, setIsSending] = createSignal(false);
+  let isInternalRefocus = false;
+  let collapsedFilePicker: HTMLInputElement | undefined;
 
   const inputView = () => ({
     ...props.input,
@@ -176,20 +183,35 @@ export function DiscussionInput(props: DiscussionInputProps) {
     },
   };
 
+  const collapsedInput = createCollapsedInputState({
+    inputId: () => props.input.id,
+    attachFiles: commands.attachFiles,
+  });
+  const isCollapsed = () => !!props.collapsible && collapsedInput.isCollapsed();
+  const focusEditor = () => {
+    collapsedInput.expand();
+    markdownEditor.controls.focus();
+  };
+
   props.onReady?.({
     clear: () => {
       // On iOS, blur before clearing so dictation finalizes and discards its buffer
-      if (isIOS) {
+      const root = markdownEditor.lexical.getRootElement();
+      if (isIOS && root?.contains(document.activeElement)) {
+        isInternalRefocus = true;
         markdownEditor.controls.blur();
         markdownEditor.controls.clear();
-        requestAnimationFrame(() => markdownEditor.controls.focus());
+        requestAnimationFrame(() => {
+          markdownEditor.controls.focus();
+          isInternalRefocus = false;
+        });
       } else {
         markdownEditor.controls.clear();
       }
       setValue('');
       setMentions([]);
     },
-    focus: () => markdownEditor.controls.focus(),
+    focus: focusEditor,
     send: () => commands.send(),
     attachFiles: async (files: File[]) => {
       // Insert images into the editor
@@ -201,13 +223,53 @@ export function DiscussionInput(props: DiscussionInputProps) {
       markdownEditor.controls.setMarkdown(snapshot.value);
       setMentions(snapshot.mentions);
       setValue(snapshot.value);
-      markdownEditor.controls.focus();
+      focusEditor();
     },
   });
 
   return (
     <Input.Root input={inputView()} commands={commands}>
-      <ComposerSurface class="h-auto">
+      <Show when={isCollapsed()}>
+        <input
+          ref={collapsedFilePicker}
+          type="file"
+          class="hidden"
+          multiple
+          accept="image/*"
+          onChange={collapsedInput.onFilePickerChange}
+        />
+        <CollapsedInput
+          class="touch:rounded-full touch:island"
+          draft={value()}
+          renderDraft={(draft) => (
+            <StaticMarkdown
+              markdown={draft()}
+              theme={singleLineMarkdownTheme}
+              singleLine
+            />
+          )}
+          placeholder={props.input.placeholder}
+          pending={isSending()}
+          disabled={!value().trim()}
+          getFocusTarget={() => {
+            // Expand synchronously so iOS can focus within the tap gesture.
+            collapsedInput.expand();
+            return markdownEditor.lexical.getRootElement();
+          }}
+          onAttach={() => collapsedFilePicker?.click()}
+          onOpen={collapsedInput.expand}
+          onSend={() => void commands.send()}
+        />
+      </Show>
+      <ComposerSurface
+        class={isCollapsed() ? 'hidden' : 'h-auto'}
+        onFocusOut={(event) => {
+          const next = event.relatedTarget as Node | null;
+          if (next && event.currentTarget.contains(next)) return;
+          if (isInternalRefocus) return;
+          collapsedInput.collapse();
+        }}
+      >
         <Input.Layout>
           <Input.FormatRibbon>
             <FormatButtons

@@ -190,7 +190,7 @@ export function OnboardingInbox() {
         }}
       >
         <MobileDrawer.Portal>
-          <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay" />
+          <MobileDrawer.Overlay />
           <MobileDrawer.Content aria-label="Entity actions">
             <MobileDrawer.Handle />
 

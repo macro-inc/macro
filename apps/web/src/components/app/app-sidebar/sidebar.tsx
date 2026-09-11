@@ -91,7 +91,6 @@ import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import GearIcon from '@phosphor/gear.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import XIcon from '@phosphor/x.svg';
@@ -124,6 +123,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { CalendarSidebarPreview } from './calendar-sidebar-preview';
+import { SidebarSearchMenu } from './sidebar-search-menu';
 
 // TODO(sidebar-next): move to app-sidebar/navigation.tsx once SidebarRail ships.
 export interface SidebarItem {
@@ -772,7 +772,7 @@ const SidebarHeaderSearchButton = (props: { link: SidebarItem }) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
 
-  const openSearch = (event: MouseEvent) => {
+  const openSearch = () => {
     analytics.track('sidebar_click', { view: props.link.id });
     let currentContentHandle = globalSplitManager()?.activeSplit();
     const content = currentContentHandle?.content();
@@ -790,7 +790,7 @@ const SidebarHeaderSearchButton = (props: { link: SidebarItem }) => {
     currentContentHandle = navigateToSidebarView({
       viewId: props.link.id,
       params: props.link.params,
-      shiftKey: event.shiftKey,
+      shiftKey: false,
       activeSplit: currentContentHandle,
       openWithSplit: layout.openWithSplit,
       referredFrom: 'sidebar',
@@ -800,19 +800,14 @@ const SidebarHeaderSearchButton = (props: { link: SidebarItem }) => {
   };
 
   return (
-    <Button
-      size="icon-sm"
-      class="[&_svg]:size-4!"
-      label="Search"
-      hotkey={props.link.hotkeyToken}
-      onMouseDown={(e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
+    <SidebarSearchMenu
+      onSearch={openSearch}
+      triggerProps={{
+        size: 'icon-sm',
+        class: '[&_svg]:size-4!',
+        hotkey: props.link.hotkeyToken,
       }}
-      onClick={openSearch}
-    >
-      <MagnifyingGlassIcon />
-    </Button>
+    />
   );
 };
 

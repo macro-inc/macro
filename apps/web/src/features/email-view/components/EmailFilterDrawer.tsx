@@ -26,7 +26,7 @@ export function EmailFilterDrawer() {
     >
       <MobileDrawer.Label class="pt-4">Filters</MobileDrawer.Label>
       <div class="px-3 pb-3 empty:hidden">
-        <EmailInboxSelector />
+        <EmailInboxSelector class="h-13 gap-3 rounded-3xl border-0 bg-ink/3 px-4 font-normal [&>svg]:size-5" />
       </div>
       <Accordion multiple collapsible defaultValue={[filters.groups[0].id]}>
         <div class="flex flex-col gap-3">

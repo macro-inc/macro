@@ -29,12 +29,10 @@ import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { Accordion } from '@kobalte/core/accordion';
-import CheckIcon from '@phosphor/check.svg';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { useContacts } from '@queries/contacts/contacts';
-import { cn } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ConsolidatedFilterChip } from './consolidated-filter-chip';
 import { useInboxPicker } from './inbox-picker';
@@ -321,25 +319,14 @@ export const MobileFilterDrawer = (props: {
               {(option) => {
                 const active = () => activeSort() === option.value;
                 return (
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={active()}
-                    class="w-full bg-surface flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left not-last:mb-px"
-                    onClick={() => setSort(option.value)}
+                  <FilterDrawer.Option
+                    selectionMode="single"
+                    checked={active()}
+                    onChange={() => setSort(option.value)}
+                    icon={option.icon?.()}
                   >
-                    <Show when={option.icon}>
-                      {(icon) => (
-                        <span class="size-4 flex items-center justify-center shrink-0 text-ink-muted">
-                          {icon()()}
-                        </span>
-                      )}
-                    </Show>
-                    <span class="flex-1 truncate">{option.label}</span>
-                    <Show when={active()}>
-                      <CheckIcon class="size-3.5 text-accent shrink-0" />
-                    </Show>
-                  </button>
+                    {option.label}
+                  </FilterDrawer.Option>
                 );
               }}
             </For>
@@ -377,44 +364,19 @@ export const MobileFilterDrawer = (props: {
                     return ids.length === 1 && ids[0] === option.id;
                   };
                   return (
-                    <div class="w-full flex items-stretch bg-surface not-last:mb-px">
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={active()}
-                        class="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left"
-                        onClick={() => toggleInbox(option.id)}
+                    <div class="w-full flex items-stretch gap-1">
+                      <FilterDrawer.Option
+                        class="min-w-0 flex-1"
+                        checked={active()}
+                        onChange={() => toggleInbox(option.id)}
+                        icon={option.icon?.()}
                       >
-                        <span
-                          class={cn(
-                            'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                            active() ? 'bg-accent border-accent' : 'border-edge'
-                          )}
-                        >
-                          <Show when={active()}>
-                            <CheckIcon class="size-2.5 text-surface" />
-                          </Show>
-                        </span>
-                        <Show when={option.icon}>
-                          {(icon) => (
-                            <span class="size-4 flex items-center justify-center shrink-0">
-                              {icon()()}
-                            </span>
-                          )}
-                        </Show>
-                        <span
-                          class={cn(
-                            'flex-1 truncate',
-                            active() ? 'text-ink' : 'text-ink-muted'
-                          )}
-                        >
-                          {option.label}
-                        </span>
-                      </button>
+                        {option.label}
+                      </FilterDrawer.Option>
                       <Show when={picker.hasMultiple()}>
                         <button
                           type="button"
-                          class="shrink-0 px-3 text-xs text-ink-muted hover:text-ink hover:bg-hover transition-colors"
+                          class="shrink-0 rounded-xl px-3 text-xs text-ink-muted hover:text-ink hover:bg-ink/6 transition-colors"
                           aria-label={
                             isSole()
                               ? 'Show all inboxes'
@@ -430,16 +392,15 @@ export const MobileFilterDrawer = (props: {
                 }}
               </For>
               <Show when={multiInboxFlag().enabled}>
-                <button
+                <MobileDrawer.Item
                   type="button"
-                  class="w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-hover transition-colors text-left bg-surface not-last:mb-px"
                   onClick={() => void addInbox()}
                 >
                   <span class="size-4 flex items-center justify-center shrink-0">
                     <PlusIcon class="size-4 text-ink-muted" />
                   </span>
                   <span class="flex-1 truncate">Connect another account</span>
-                </button>
+                </MobileDrawer.Item>
               </Show>
             </FilterDrawer.Section>
           </Show>
@@ -489,7 +450,7 @@ export const MobileFilterDrawer = (props: {
               activeCount={assigneeFilter().length}
             >
               {/* Search */}
-              <div class="flex items-center gap-2 px-3 py-2 muted bg-surface mb-px">
+              <div class="flex min-h-11 items-center gap-2 rounded-[20px] px-3 py-2 bg-ink/5 mb-1">
                 <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                 <input
                   type="text"
@@ -497,7 +458,7 @@ export const MobileFilterDrawer = (props: {
                   value={assigneeSearch()}
                   onInput={(e) => setAssigneeSearch(e.currentTarget.value)}
                   placeholder="Search assignees..."
-                  class="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-placeholder"
+                  class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
                 />
               </div>
               <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
@@ -505,35 +466,13 @@ export const MobileFilterDrawer = (props: {
                   {(option) => {
                     const active = () => assigneeFilter().includes(option.id);
                     return (
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={active()}
-                        class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left bg-surface not-last:mb-px"
-                        onClick={() => toggleAssignee(option.id)}
+                      <FilterDrawer.Option
+                        checked={active()}
+                        onChange={() => toggleAssignee(option.id)}
+                        icon={option.icon()}
                       >
-                        <span
-                          class={cn(
-                            'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                            active() ? 'bg-accent border-accent' : 'border-edge'
-                          )}
-                        >
-                          <Show when={active()}>
-                            <CheckIcon class="size-2.5 text-surface" />
-                          </Show>
-                        </span>
-                        <span class="size-4 flex items-center justify-center shrink-0">
-                          {option.icon()}
-                        </span>
-                        <span
-                          class={cn(
-                            'flex-1 truncate',
-                            active() ? 'text-ink' : 'text-ink-muted'
-                          )}
-                        >
-                          {option.label}
-                        </span>
-                      </button>
+                        {option.label}
+                      </FilterDrawer.Option>
                     );
                   }}
                 </For>
@@ -552,7 +491,7 @@ export const MobileFilterDrawer = (props: {
               label="Created by"
               activeCount={createdByIds().length}
             >
-              <div class="flex items-center gap-2 px-3 py-2 muted bg-surface mb-px">
+              <div class="flex min-h-11 items-center gap-2 rounded-[20px] px-3 py-2 bg-ink/5 mb-1">
                 <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                 <input
                   type="text"
@@ -560,7 +499,7 @@ export const MobileFilterDrawer = (props: {
                   value={createdBySearch()}
                   onInput={(e) => setCreatedBySearch(e.currentTarget.value)}
                   placeholder="Search creators..."
-                  class="flex-1 bg-transparent text-sm outline-none placeholder:text-ink-placeholder"
+                  class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
                 />
               </div>
               <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
@@ -568,35 +507,13 @@ export const MobileFilterDrawer = (props: {
                   {(option) => {
                     const active = () => createdByIds().includes(option.id);
                     return (
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={active()}
-                        class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-hover transition-colors text-left bg-surface not-last:mb-px"
-                        onClick={() => toggleCreatedBy(option.id)}
+                      <FilterDrawer.Option
+                        checked={active()}
+                        onChange={() => toggleCreatedBy(option.id)}
+                        icon={option.icon()}
                       >
-                        <span
-                          class={cn(
-                            'size-4 flex items-center justify-center shrink-0 rounded border transition-colors',
-                            active() ? 'bg-accent border-accent' : 'border-edge'
-                          )}
-                        >
-                          <Show when={active()}>
-                            <CheckIcon class="size-2.5 text-surface" />
-                          </Show>
-                        </span>
-                        <span class="size-4 flex items-center justify-center shrink-0">
-                          {option.icon()}
-                        </span>
-                        <span
-                          class={cn(
-                            'flex-1 truncate',
-                            active() ? 'text-ink' : 'text-ink-muted'
-                          )}
-                        >
-                          {option.label}
-                        </span>
-                      </button>
+                        {option.label}
+                      </FilterDrawer.Option>
                     );
                   }}
                 </For>

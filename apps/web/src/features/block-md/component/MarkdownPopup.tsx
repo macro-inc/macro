@@ -1052,7 +1052,7 @@ export function MarkdownPopup(props: {
           preventScrollbarShift={false}
         >
           <MobileDrawer.Portal>
-            <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+            <MobileDrawer.Overlay />
             <MobileDrawer.Content aria-label="Edit with AI">
               <MobileDrawer.Handle class="pb-1" />
               <div class="flex items-center gap-2 px-4 pb-3">

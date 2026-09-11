@@ -1,4 +1,6 @@
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
+import { MobilePageCreateButton } from '@components/app/mobile/MobilePageCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
@@ -18,11 +20,12 @@ import {
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { createEffect, onMount } from 'solid-js';
+import { createEffect, Show } from 'solid-js';
 
 function SoupChatInputInner() {
   const splitPanelContext = useSplitPanelOrThrow();
@@ -48,12 +51,6 @@ function SoupChatInputInner() {
   });
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
-
-  let containerRef!: HTMLDivElement;
-
-  onMount(() => {
-    attachHotkeys(containerRef);
-  });
 
   // cmd+j - Focus AI chat
   registerHotkey({
@@ -119,14 +116,19 @@ function SoupChatInputInner() {
   };
 
   return (
-    <FloatRegionOrInline region="accessory">
+    <FloatRegionOrInline
+      region="accessory"
+      priority={-0.5}
+      active={() => !SearchState.isOpen()}
+    >
       <div
-        ref={containerRef}
-        class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none touch:static touch:pb-0 touch:px-(--mobile-chrome-gutter)"
+        ref={attachHotkeys}
+        class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none touch:static touch:pb-0 touch:px-(--mobile-chrome-gutter) touch:items-end touch:gap-(--mobile-chrome-gutter)"
       >
-        <div class="w-full max-w-3xl">
+        <div class="w-full min-w-0 max-w-3xl touch:flex-1 touch:max-w-none">
           <div class="pointer-events-auto">
             <ChatInput
+              variant="default"
               editor={editor}
               onSend={handleSend}
               onEscape={() => {
@@ -138,6 +140,9 @@ function SoupChatInputInner() {
             />
           </div>
         </div>
+        <Show when={isTouchDevice()}>
+          <MobilePageCreateButton />
+        </Show>
       </div>
     </FloatRegionOrInline>
   );

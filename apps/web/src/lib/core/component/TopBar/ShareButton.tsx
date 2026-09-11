@@ -398,7 +398,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
       initialFocusEl={getShareDrawerRecipientInput() ?? undefined}
     >
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content
           aria-label="Share"
           class="h-[80vh] overflow-y-auto"

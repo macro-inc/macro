@@ -89,8 +89,9 @@ With the new app views enabled, mobile and tablet Email use a floating, horizont
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the
 view is the email list, which scrolls beneath the header and supports pull to refresh
 and swiping left to mark emails done in Signal and Noise. The filter button opens a
-bottom drawer for status, done, attachment and calendar filters, plus the inbox
-selector when available. `Clear all`
+glass bottom sheet for status, done, attachment and calendar filters, plus the inbox
+selector when available. Rows have trailing selection checkmarks; the Close filters
+button dismisses the sheet without resetting its selections. `Clear all`
 resets those filters and the inbox selection. Desktop keeps its sidebar, search field,
 filter menu and preview control.
 
@@ -256,6 +257,10 @@ Discussion composers on companies, contacts, documents, tasks, and PRs use the
 shared channel/AI glass surface, 22px desktop corners, 15px desktop text, and
 a circular neutral Send button. Document comment replies/edits and Edit with AI
 use the same composer treatment. Attachment and formatting actions stay available.
+On mobile, open documents and tasks put their new-comment composer in the
+accessory dock above navigation, using the channel input's compact pill and
+expanded surface. Ask AI and New are hidden in these open views; their list
+screens keep those controls. Users without comment permission have no composer.
 
 On touch devices, an email thread's floating action bar has Previous email and
 Next email arrows beside the larger Mark done checkmark. The arrows follow the
@@ -266,3 +271,7 @@ The mobile reply/forward drawer uses matching circular glass buttons for
 discard, attachments, and send, with the dock's button/icon sizing and regular
 Phosphor icons. Send remains disabled until the draft is valid and shows a
 spinner while sending.
+
+The mobile new-email composer nests the channel-style Send button inside its
+top-right glass toolbar, with an even 5px inset on the top, bottom, and right.
+The toolbar is 46px tall; attachment and schedule controls align with Send.

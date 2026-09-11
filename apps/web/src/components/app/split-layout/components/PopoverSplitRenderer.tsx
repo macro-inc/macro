@@ -199,10 +199,9 @@ function PopoverSplitModal(props: {
         onOpenChange={onOpenChange}
       >
         <MobileDrawer.Portal>
-          <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay" />
+          <MobileDrawer.Overlay />
           <MobileDrawer.Content
             ref={attachPanel}
-            class="bg-dialog"
             aria-label={
               props.popover.content.id === 'task-compose'
                 ? 'New task'

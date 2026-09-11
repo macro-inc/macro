@@ -24,6 +24,7 @@ import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideTo
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, ComposerSurface, cn, SendButton as UiSendButton } from '@ui';
@@ -229,7 +230,9 @@ export function ChatInput(props: ChatInputComponentProps) {
       aria-label="Attach files"
       onClick={() => setShowAttachMenu((prev) => !prev)}
     >
-      <PaperclipIcon />
+      <Show when={isTouchDevice()} fallback={<PaperclipIcon />}>
+        <PlusIcon />
+      </Show>
     </Button>
   );
 
@@ -295,8 +298,12 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   const isTallVariant = createMemo(
-    () => props.variant === 'tall' || isTouchDevice()
+    () =>
+      props.variant === 'tall' ||
+      (isTouchDevice() && props.variant !== 'default')
   );
+  const isCompactMobile = () =>
+    isTouchDevice() && !isTallVariant() && !isMultiline();
 
   return (
     <div class="relative">
@@ -349,6 +356,8 @@ export function ChatInput(props: ChatInputComponentProps) {
             ref={setLineEl}
             class={cn('relative px-2 py-1.5 touch:min-h-12.5 touch:py-[9px]', {
               'flex flex-col px-2 py-2 touch:p-0': isTallVariant(),
+              'touch:h-(--mobile-chrome-button-size) touch:min-h-0 touch:py-0 touch:flex touch:items-center':
+                isCompactMobile(),
             })}
           >
             {/* Invisible reference of the fully-expanded control row laid out
@@ -379,10 +388,11 @@ export function ChatInput(props: ChatInputComponentProps) {
               id={CHAT_INPUT_TEXT_AREA_ID}
               class={cn(
                 'text-[15px] leading-5 touch:text-sm text-ink touch:px-3 touch:py-2',
+                isCompactMobile() && 'w-full touch:py-0',
                 !isTouchDevice() && (isMultiline() || isTallVariant()) && 'pl-2'
               )}
               classList={{
-                'pl-8': !isMultiline() && !isTallVariant(),
+                'pl-8 touch:pl-10': !isMultiline() && !isTallVariant(),
                 'pb-8 touch:pb-10': isMultiline() && !isTallVariant(),
                 'max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto':
                   isMobile() && isMultiline(),
@@ -400,6 +410,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               ref={mdRef}
             >
               <MarkdownShell
+                class={isCompactMobile() ? 'min-h-5' : undefined}
                 config={props.editor}
                 placeholder={
                   isTouchDevice() ? 'Ask AI…' : 'Ask AI, @mention anything'
@@ -428,7 +439,9 @@ export function ChatInput(props: ChatInputComponentProps) {
               <div
                 class={cn(
                   !isTallVariant() &&
-                    'absolute left-2 bottom-2 touch:bottom-[7px]'
+                    'absolute left-2 bottom-2 touch:bottom-[7px]',
+                  isCompactMobile() &&
+                    'touch:top-1/2 touch:bottom-auto touch:-translate-y-1/2'
                 )}
               >
                 <LeftButton />
@@ -437,7 +450,9 @@ export function ChatInput(props: ChatInputComponentProps) {
               <div
                 class={cn(
                   !isTallVariant() &&
-                    'absolute right-2 bottom-2 touch:right-2 touch:bottom-[7px]'
+                    'absolute right-2 bottom-2 touch:right-2 touch:bottom-[7px]',
+                  isCompactMobile() &&
+                    'touch:right-[5px] touch:top-1/2 touch:bottom-auto touch:-translate-y-1/2'
                 )}
               >
                 <RightControls />

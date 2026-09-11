@@ -1,0 +1,6 @@
+.mobile-create-sheet {
+  --create-menu-max-height: min(
+    75dvh,
+    calc(100dvh - var(--virtual-keyboard-height, 0px) - var(--safe-top) - var(--safe-bottom) - 32px)
+  );
+}

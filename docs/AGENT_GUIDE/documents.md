@@ -43,11 +43,15 @@ fetch cascade.
 
 ## Comments (Discussion)
 
-Below the editor: `Discussion` section with a `Leave a comment...` contenteditable, buttons
+On desktop, below the editor: `Discussion` section with a `Leave a comment...` contenteditable, buttons
 `Attach images`, `Format`, and `Send comment` (disabled until text exists). Click the
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
-user.
+user. On mobile, the new-comment composer is docked above the navigation bar,
+replacing Ask AI and New in open documents and tasks. Tap `Leave a comment...`
+to expand the channel-style input; use Send comment to submit (Enter inserts a
+newline on mobile). The plus opens image attachments. Comments remain in the
+Discussion section, and collapsing that section does not hide the docked composer.
 
 ## Side panel
 

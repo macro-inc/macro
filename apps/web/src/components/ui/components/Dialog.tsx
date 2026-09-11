@@ -1,3 +1,4 @@
+import { isMobile } from '@core/mobile/isMobile';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
 import type { JSX, Ref } from 'solid-js';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
@@ -25,6 +26,7 @@ export type DialogProps = {
 };
 
 export function Dialog(props: DialogProps) {
+  const useSheet = () => isMobile() && !props.fullscreen;
   const [animateOnOpen, setAnimateOnOpen] = createSignal(false);
   let countedOpen = false;
 
@@ -83,9 +85,11 @@ export function Dialog(props: DialogProps) {
               ? 'inset-0'
               : cn(
                   'justify-center px-2',
-                  props.position === 'center'
-                    ? 'items-center'
-                    : 'items-start pt-[10vh]'
+                  useSheet()
+                    ? 'items-end pb-2 pt-[calc(var(--safe-top,0px)+8px)]'
+                    : props.position === 'center'
+                      ? 'items-center'
+                      : 'items-start pt-[10vh]'
                 )
           )}
         >
@@ -101,16 +105,28 @@ export function Dialog(props: DialogProps) {
               props.fullscreen
                 ? 'size-full'
                 : 'w-200 max-w-[calc(100vw-16px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)] [&>[data-surface]]:border-0!',
+              useSheet() &&
+                'touch:mobile-sheet max-h-[calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px)] overflow-y-auto pb-[max(16px,var(--mobile-sheet-safe-padding))] [&>[data-surface]]:rounded-none [&>[data-surface]]:bg-transparent',
               animateOnOpen() &&
-                (props.fullscreen
-                  ? 'dialog-fullscreen-open-animation'
-                  : 'dialog-content-open-animation'),
+                (useSheet()
+                  ? 'mobile-sheet-open-animation'
+                  : props.fullscreen
+                    ? 'dialog-fullscreen-open-animation'
+                    : 'dialog-content-open-animation'),
               props.class
             )}
             onCloseAutoFocus={props.onCloseAutoFocus}
             onEscapeKeyDown={props.onEscapeKeyDown}
             onOpenAutoFocus={props.onOpenAutoFocus}
           >
+            {useSheet() && (
+              <div
+                aria-hidden="true"
+                class="flex h-5 shrink-0 justify-center pt-2"
+              >
+                <div class="h-1 w-9 rounded-full bg-ink/15" />
+              </div>
+            )}
             {props.children}
           </KobalteDialog.Content>
         </div>

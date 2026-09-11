@@ -22,7 +22,16 @@ const tokens: ThemeV2Tokens = {
   c4: { l: 0.55, c: 0, h: 21 },
 };
 
-export const macroDarkTheme = defineLegacyDefaultTheme({
+const baseTheme = defineLegacyDefaultTheme({
   id: 'Macro Dark',
   tokens,
 });
+
+export const macroDarkTheme: typeof baseTheme = {
+  ...baseTheme,
+  colorTokens: {
+    ...baseTheme.colorTokens,
+    edge: '#1c1c1c',
+    'edge-muted': '#181818',
+  },
+};

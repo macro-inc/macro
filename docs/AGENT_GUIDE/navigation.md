@@ -29,7 +29,10 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 
 ## Sidebar (a11y names are load-bearing)
 
-- Top: buttons `Search` and `Create`.
+- Top: buttons `Search` and `Create`. Clicking sidebar `Search` opens a menu
+  with `Command Menu` (⌘K on Mac / Ctrl+K elsewhere) and `Search everything`
+  (`/`). Choose the first to open commands, or the second to open and focus
+  global search. This works in both the compact rail and expanded sidebar.
 - Nav: `Go to Home`, `Go to Getting Started`, `Go to Notifications`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
   `Go to Calendar`, `Go to Agents`, `Go to Customers`.
@@ -54,20 +57,48 @@ changes roll back rather than becoming committed local favorites.
 ## Create menu
 
 On mobile, the bottom dock contains Notifications, Calendar (always visible, independent of feature flags),
-Email, Channels, Files, and More views. More views contains only Settings,
-Calls, Tasks, and Agents. Search is the separate bottom-right button; it opens
+Email, Channels, Files, and More views. More views contains Settings,
+Calls, Tasks, Agents, and CRM (when enabled). Search is the separate bottom-right button; it opens
 the search input and scope pills.
 
-The separate button one row above Search opens the current page's creation
-flow directly: new task on Tasks, email on Email, message on Channels or
-Notifications, document on Files, agent session on Agents, and event on
-Calendar. It does not open a create menu. It hides during search, while the
-keyboard is open, and on entity/detail pages with their own reply or compose
-controls.
+Fresh mobile CRM visits default to list view, including when
+applying a default saved view; explicitly selected saved views and back/forward
+navigation retain their layout. The mobile **+ Company** button opens the
+company-creation sheet.
+
+The labeled glass button one row above Search opens the current page's creation
+flow directly: **+ Task** on Tasks, **+ Email** on Email, **+ Message** on Channels,
+**+ Document** on Files, and **+ Event** on Calendar. On Home/Notifications,
+**+ New** opens a blurred backdrop and a stack of glass actions: Email, Message,
+Document, Event, Task, More. The plus rotates into an X; tap it or the backdrop,
+or press Escape, to dismiss. More opens the full create menu as a glass bottom
+sheet on mobile, with broad, screen-scaled corners and an even 8px outer inset;
+home-indicator clearance is inside the glass. It retains its search and keyboard controls. Other views
+show **+ New** for that full menu. The AI composer narrows beside this
+button; on Agents it fills the row with no duplicate create action. The row
+hides during search or when a page supplies its own reply or compose controls.
+
+Mobile drawers and floating dialogs share this inset glass sheet treatment,
+including filters, task/event creation, file/message actions, sharing, and model
+pickers. Drawers retain their drag handle and dismissal behavior. With the
+keyboard open, the sheet stays 8px above it and its body scrolls to keep inputs
+and actions reachable. Fullscreen takeovers retain their fullscreen layout.
+
+Filter sheets have a visible heading and Close filters button. Sort and filter
+options use rounded rows with trailing checkmarks; accordion sections retain
+their selection counts. Clear all resets selections without dismissing the sheet.
 
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
 Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task and Channel open dialogs.
+
+Mobile glass presses animate the enclosing surface over 300ms. Round buttons
+retain roughly 30% growth; wide pills and grouped controls extend their glass
+fill and rim by up to 3px per edge, with 8% icon growth around each icon's center.
+Labels and layout stay fixed. A subtle radial sheen spreads from the tap
+location and fades on release. Release, cancellation, or dragging outside
+restores the surface. Disabled controls stay still; reduced motion keeps only
+the static highlight.
 
 ## Command menu (Ctrl+K)
 

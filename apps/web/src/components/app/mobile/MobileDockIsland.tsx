@@ -23,6 +23,7 @@ import type { ParentProps } from 'solid-js';
 export function MobileDockIsland(props: ParentProps<{ class?: string }>) {
   return (
     <div
+      data-mobile-dock-island
       class={cn(
         'island pointer-events-auto flex items-center rounded-full',
         props.class

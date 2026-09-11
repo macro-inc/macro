@@ -202,15 +202,13 @@ export function ActionDrawer() {
       restoreFocus={false}
     >
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content
           aria-label="Message actions"
           class={showEmojiSearch() ? 'h-[80vh]' : undefined}
         >
           {/* Drag handle */}
-          <div class="flex justify-center pt-3 pb-2 shrink-0">
-            <div class="w-10 h-1 rounded-full bg-edge-muted" />
-          </div>
+          <MobileDrawer.Handle />
 
           <Show
             when={!showEmojiSearch()}
@@ -259,10 +257,9 @@ export function ActionDrawer() {
                 <MobileDrawer.Section class="flex flex-col shrink-0">
                   <For each={nonDestructiveActions()}>
                     {(action) => (
-                      <button
+                      <MobileDrawer.Item
                         type="button"
                         data-message-action={action.id}
-                        class="flex items-center gap-3 px-4 py-3 text-sm text-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-surface"
                         ref={(el) => {
                           const getTarget = action.getFocusTarget;
                           if (getTarget) focusInput(el, () => ({ getTarget }));
@@ -273,7 +270,7 @@ export function ActionDrawer() {
                           {renderIcon(action.icon)}
                         </span>
                         {action.label}
-                      </button>
+                      </MobileDrawer.Item>
                     )}
                   </For>
                 </MobileDrawer.Section>
@@ -284,10 +281,10 @@ export function ActionDrawer() {
                 <MobileDrawer.Section class="flex flex-col shrink-0 mt-3">
                   <For each={destructiveActions()}>
                     {(action) => (
-                      <button
+                      <MobileDrawer.Item
                         type="button"
                         data-message-action={action.id}
-                        class="flex items-center gap-3 px-4 py-3 text-sm text-failure-ink hover:bg-hover hover-transition-bg text-left not-last:mb-px bg-surface"
+                        class="text-failure-ink"
                         ref={(el) => {
                           const getTarget = action.getFocusTarget;
                           if (getTarget) focusInput(el, () => ({ getTarget }));
@@ -298,7 +295,7 @@ export function ActionDrawer() {
                           {renderIcon(action.icon)}
                         </span>
                         {action.label}
-                      </button>
+                      </MobileDrawer.Item>
                     )}
                   </For>
                 </MobileDrawer.Section>

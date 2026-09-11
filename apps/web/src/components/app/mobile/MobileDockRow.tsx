@@ -1,23 +1,18 @@
-import { useCreateMenuBlocks } from '@app/features/command/Launcher';
 import {
   MobileAskAiButton,
   MobileSearchInput,
 } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { useOpenEventComposer } from '@block-calendar/components/use-open-event-composer';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import IconGear from '@phosphor/gear.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
-import CreateIcon from '@phosphor/plus.svg';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { FloatRegion } from './float-regions/FloatRegion';
 import { MobileDockIsland } from './MobileDockIsland';
 import { MobileBottomEdgeFade } from './MobileEdgeFade';
 import {
@@ -25,7 +20,6 @@ import {
   MobileTouchMenu,
 } from './MobileTouchMenu';
 import { useMobileDockViews } from './mobile-dock-views';
-import { mobilePageCreateLabel } from './mobile-page-create-action';
 import { pressPulse } from './pressPulse';
 import {
   type MobileDockNavId,
@@ -35,47 +29,6 @@ import {
 
 // Keeps the directive import from being tree-shaken / lint-flagged.
 false && pressPulse;
-
-function MobilePageCreateButton() {
-  const foregroundView = useForegroundMobileView();
-  const createBlocks = useCreateMenuBlocks();
-  const openEventComposer = useOpenEventComposer();
-  const action = () => {
-    if (foregroundView() === 'calendar') {
-      return { label: 'New event', run: () => openEventComposer() };
-    }
-    const label = mobilePageCreateLabel(foregroundView());
-    if (!label) return undefined;
-    const block = createBlocks().find((entry) => entry.label === label);
-    if (!block?.keyDownHandler) return undefined;
-    return { label: `New ${label.toLowerCase()}`, run: block.keyDownHandler };
-  };
-
-  return (
-    <FloatRegion
-      region="accessory"
-      priority={-1}
-      active={() =>
-        !!action() && !SearchState.isOpen() && !virtualKeyboardVisible()
-      }
-    >
-      <Show when={action()}>
-        {(create) => (
-          <div class="flex justify-end px-(--mobile-chrome-gutter)">
-            <MobileDockIsland>
-              <MobileDockButton
-                icon={CreateIcon}
-                animateIcon={false}
-                ariaLabel={create().label}
-                onClick={() => create().run()}
-              />
-            </MobileDockIsland>
-          </div>
-        )}
-      </Show>
-    </FloatRegion>
-  );
-}
 
 type MobileDockButtonProps = {
   icon: MobileTouchIconComponent;
@@ -258,7 +211,6 @@ export function MobileDockRow(props: MobileDockRowProps) {
       )}
     >
       <MobileBottomEdgeFade />
-      <MobilePageCreateButton />
       <Show when={SearchState.isOpen()} fallback={<MobileCompactDockRow />}>
         <MobileSearchInput />
         <MobileAskAiButton />

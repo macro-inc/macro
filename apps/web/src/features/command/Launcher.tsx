@@ -1,3 +1,4 @@
+import './Launcher.css';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
@@ -1005,10 +1006,17 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   return (
     // The shared shell stopped painting its own pane (cmd+k gets one from the
     // app Dialog wrapper); this raw-Kobalte dialog carries it here.
-    <div class="w-200 max-w-[calc(100vw-16px)] rounded-xl glass bg-menu-glass [--color-dialog:var(--color-menu-glass)]">
+    <div class="create-menu-pane w-200 max-w-[calc(100vw-16px)] rounded-xl touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)]">
+      <div
+        aria-hidden="true"
+        class="hidden touch:flex h-5 shrink-0 items-center justify-center"
+      >
+        <div class="h-1 w-9 rounded-full bg-ink/15" />
+      </div>
       <CommandMenuShell
         depth={2}
-        class="h-auto w-full outline-none"
+        hideBorder
+        class="h-auto w-full max-h-[var(--create-menu-max-height,75vh)] outline-none touch:rounded-none"
         ref={ref}
         tabindex={-1}
       >
@@ -1052,12 +1060,12 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             class="ml-auto flex-row-reverse gap-1.5 px-2 py-1"
           />
         </CommandMenuShell.Header>
-        <CommandMenuShell.Body>
+        <CommandMenuShell.Body class="touch:flex touch:flex-col">
           <CommandMenuList
             items={blocks()}
             selectedIndex={focusedIndex()}
             scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
-            class="max-h-[min(60vh,26rem)]"
+            class="max-h-[min(60vh,26rem)] touch:min-h-0"
             itemId={(item) => `create-menu-${launcherItemKey(item)}`}
             onSelect={(item) => runLauncherItem(item)}
             onItemMouseMove={(index) =>
@@ -1073,7 +1081,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             )}
           </CommandMenuList>
         </CommandMenuShell.Body>
-        <CommandMenuShell.Footer>
+        <CommandMenuShell.Footer class="touch:px-6 touch:py-4">
           <style>{`
               @keyframes shift-ripple {
                 0%   { transform: scale(1); opacity: 0.6; }
@@ -1134,24 +1142,25 @@ export const Launcher = (props: LauncherProps) => {
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass dialog-overlay-open-animation" />
-        <Dialog.Content class="[--color-surface:var(--color-dialog)]">
-          <div
-            class={cn(
-              'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal w-screen flex justify-center px-2',
-              isMobile() ? 'items-center' : 'items-start pt-[10vh]'
-            )}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                props.onOpenChange(false);
-              }
-            }}
-          >
-            <LauncherInner
-              onClose={(shouldReturnFocus) =>
-                props.onOpenChange(false, shouldReturnFocus)
-              }
-            />
-          </div>
+        <Dialog.Content
+          aria-label="Create New"
+          class={cn(
+            'fixed inset-x-0 z-modal flex justify-center px-2 outline-none [--color-surface:var(--color-dialog)]',
+            isMobile()
+              ? 'mobile-create-sheet mobile-sheet-open-animation bottom-(--virtual-keyboard-height,0) pb-2'
+              : 'top-0 bottom-(--virtual-keyboard-height,0) items-start pt-[10vh]'
+          )}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              props.onOpenChange(false);
+            }
+          }}
+        >
+          <LauncherInner
+            onClose={(shouldReturnFocus) =>
+              props.onOpenChange(false, shouldReturnFocus)
+            }
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>

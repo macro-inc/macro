@@ -190,7 +190,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
       preventScrollbarShift={false}
     >
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content
           aria-label={props.event.title}
           class="overflow-hidden"

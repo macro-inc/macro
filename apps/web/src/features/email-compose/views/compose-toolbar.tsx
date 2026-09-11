@@ -164,45 +164,45 @@ function MobileToolbar(props: {
 
   return (
     <SplitHeaderRight>
-      <HeaderIsland>
-        <div class="flex items-center gap-1 pl-2">
-          <Show when={!ctx.hideAttachments}>
-            <div class="relative" ref={props.attachButtonRef}>
-              <Button
-                ref={(el) =>
-                  fileSelector(el, () => ({
-                    multiple: true,
-                    onSelect: props.handleAddAttachments,
-                  }))
-                }
-                size="icon-sm"
-                disabled={ctx.disabled()}
-              >
-                <PaperclipIcon />
-              </Button>
-            </div>
-          </Show>
+      <HeaderIsland class="h-(--mobile-chrome-button-size) p-[5px]">
+        <Show when={!ctx.hideAttachments}>
+          <div class="relative" ref={props.attachButtonRef}>
+            <Button
+              ref={(el) =>
+                fileSelector(el, () => ({
+                  multiple: true,
+                  onSelect: props.handleAddAttachments,
+                }))
+              }
+              size="icon-sm"
+              disabled={ctx.disabled()}
+            >
+              <PaperclipIcon />
+            </Button>
+          </div>
+        </Show>
 
-          <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
-            <EmailDateSelector
-              mobile={ctx.isMobile()}
-              sendTime={ctx.sendTime()}
-              onSendTimeChange={ctx.onSendTimeChange}
-              disabled={ctx.scheduleSendDisabled?.()}
-              compact
-            />
-          </Show>
-          <SendButton
-            disabled={
-              ctx.isSending() ||
-              ctx.isSavingDraft?.() ||
-              ctx.disabled() ||
-              !!ctx.sendTime()
-            }
-            pending={ctx.isSending()}
-            onClick={() => ctx.onSend()}
+        <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
+          <EmailDateSelector
+            mobile={ctx.isMobile()}
+            sendTime={ctx.sendTime()}
+            onSendTimeChange={ctx.onSendTimeChange}
+            disabled={ctx.scheduleSendDisabled?.()}
+            compact
           />
-        </div>
+        </Show>
+        <SendButton
+          appearance="composer"
+          tooltip="Send email"
+          disabled={
+            ctx.isSending() ||
+            ctx.isSavingDraft?.() ||
+            ctx.disabled() ||
+            !!ctx.sendTime()
+          }
+          pending={ctx.isSending()}
+          onClick={() => ctx.onSend()}
+        />
       </HeaderIsland>
     </SplitHeaderRight>
   );

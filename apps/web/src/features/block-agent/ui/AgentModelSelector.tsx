@@ -129,7 +129,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         <CaretDown class="size-3.5 shrink-0" />
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content aria-label="Choose a model">
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody>
@@ -148,12 +148,11 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                   >
                     <For each={group.options}>
                       {(option) => (
-                        <button
+                        <MobileDrawer.Item
                           type="button"
                           role="radio"
                           aria-checked={option.id === shown()}
                           title={option.description ?? undefined}
-                          class="flex w-full items-center gap-3 bg-surface px-4 py-3 text-left text-sm text-ink hover:bg-hover hover-transition-bg not-last:mb-px"
                           onClick={() => pick(option.id)}
                         >
                           <span class="min-w-0 flex-1 truncate">
@@ -162,7 +161,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                           <Show when={option.id === shown()}>
                             <Check class="size-3.5 shrink-0 text-accent" />
                           </Show>
-                        </button>
+                        </MobileDrawer.Item>
                       )}
                     </For>
                   </MobileDrawer.Section>

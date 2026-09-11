@@ -1,4 +1,5 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { SoupChatInput } from '@app/features/chat/SoupChatInput';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
@@ -372,6 +373,13 @@ export function SplitPanel(props: SplitPanelProps) {
                 </Show>
               </Panel.Body>
             </Panel>
+            <Show
+              when={isTouchDevice() && props.handle.content().type !== 'md'}
+            >
+              <Suspense>
+                <SoupChatInput />
+              </Suspense>
+            </Show>
           </div>
         </SplitDrawerGroup>
       </SplitPanelContext.Provider>

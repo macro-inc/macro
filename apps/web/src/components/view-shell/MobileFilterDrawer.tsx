@@ -63,18 +63,32 @@ function Root(props: MobileFilterDrawerProps) {
         </Show>
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content
           aria-label={props.label ?? 'Filters'}
           class="h-[80vh]"
         >
           <MobileDrawer.Handle class="pb-1" />
+          <div class="flex shrink-0 items-center justify-between gap-3 px-6 pb-3">
+            <h2 class="truncate text-lg font-semibold text-ink">
+              {props.label ?? 'Filters'}
+            </h2>
+            <MobileDrawer.Close
+              as={Button}
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Close filters"
+              class="shrink-0 rounded-full bg-ink/6"
+            >
+              <XIcon class="size-4" />
+            </MobileDrawer.Close>
+          </div>
           <div class="relative min-h-0 flex-1">
             <ScrollIndicators scrollRef={scrollRef} noBorderStart noBorderEnd />
             <div
               ref={setScrollRef}
               onFocusIn={(e) => scrollToFocusedInput(e)}
-              class="h-full overflow-y-auto pb-1 scrollbar-hidden"
+              class="h-full overflow-y-auto pb-3 scrollbar-hidden"
             >
               <ScrollContext.Provider value={scrollRef}>
                 {props.children}
@@ -82,13 +96,13 @@ function Root(props: MobileFilterDrawerProps) {
             </div>
           </div>
           <Show when={props.activeCount > 0}>
-            <div class="shrink-0 border-t border-edge-muted p-2">
+            <div class="shrink-0 px-6 pt-3 pb-2">
               <div class="flex flex-wrap items-center gap-2">
                 {props.footer}
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
-                  class="min-h-10 rounded-lg bg-active!"
+                  class="min-h-10 rounded-full bg-ink/6 px-4"
                   onClick={() => props.onClear()}
                 >
                   <XIcon class="size-3!" />
@@ -137,7 +151,8 @@ function Section(props: {
     >
       <Accordion.Header>
         <Accordion.Trigger
-          class="group mb-px flex w-full items-center justify-between bg-surface p-3 text-sm text-ink outline-none transition-colors hover:bg-hover"
+          as={MobileDrawer.Item}
+          class="group justify-between font-medium data-expanded:bg-ink/5"
           onClick={scrollToSection}
         >
           <span class="font-medium">{props.label}</span>
@@ -147,11 +162,11 @@ function Section(props: {
                 {props.activeCount}
               </span>
             </Show>
-            <CaretDownIcon class="size-3.5 text-ink-muted transition-transform duration-200 group-data-expanded:rotate-180" />
+            <CaretDownIcon class="size-4 text-ink-muted transition-transform duration-200 group-data-expanded:rotate-180" />
           </div>
         </Accordion.Trigger>
       </Accordion.Header>
-      <Accordion.Content>{props.children}</Accordion.Content>
+      <Accordion.Content class="pt-1">{props.children}</Accordion.Content>
     </MobileDrawer.Section>
   );
 }
@@ -162,35 +177,29 @@ function Option(props: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   selectionMode?: 'single' | 'multiple';
+  class?: string;
 }) {
   return (
-    <button
-      type="button"
+    <MobileDrawer.Item
       role={props.selectionMode === 'single' ? 'radio' : 'checkbox'}
       aria-checked={props.checked}
-      class="flex w-full items-center gap-3 bg-surface px-3 py-2.5 text-left text-sm transition-colors hover:bg-hover not-last:mb-px"
+      class={props.class}
       onClick={() => props.onChange(!props.checked)}
     >
-      <span
-        class={cn(
-          'flex size-4 shrink-0 items-center justify-center border transition-colors',
-          props.selectionMode === 'single' && 'rounded-full',
-          props.checked ? 'border-accent bg-accent' : 'border-edge'
-        )}
-      >
-        <Show when={props.checked}>
-          <CheckIcon class="size-2.5 text-surface" />
-        </Show>
-      </span>
       <Show when={props.icon}>
         {(icon) => (
-          <span class="flex size-4 shrink-0 items-center justify-center">
+          <span class="flex size-5 shrink-0 items-center justify-center text-ink-muted [&>svg]:size-5">
             {icon()}
           </span>
         )}
       </Show>
       <span class="min-w-0 flex-1 truncate">{props.children}</span>
-    </button>
+      <span class="flex size-5 shrink-0 items-center justify-center">
+        <Show when={props.checked}>
+          <CheckIcon class="size-4 text-accent" />
+        </Show>
+      </span>
+    </MobileDrawer.Item>
   );
 }
 

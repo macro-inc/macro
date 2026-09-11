@@ -8,8 +8,19 @@
 
 ## Start a standalone chat
 
-On mobile, the Agents list has an AI composer directly above the bottom dock
-instead of a floating plus button. Type a prompt, optionally choose a model or
+On mobile, every screen has a single-line AI composer directly above the bottom
+dock. A labeled glass button beside it opens the current view's create action:
+**+ Email**, **+ Task**, **+ Document**, **+ Message**, or **+ Event**. Home’s
+**+ New** unfolds Email, Message, Document, Event, Task, and More above the button;
+More opens the full create menu in a glass bottom sheet. Other views show
+**+ New** for that full menu. The AI input narrows to fit the button, ending
+to the left of the navigation pill's right edge below. Agents has no separate
+create button; its AI input fills the row.
+The composer's compact height is 46px, matching the mobile chrome buttons,
+with a plus attachment control and centered text and actions. It expands for
+longer prompts. Screens with their own composer or reply controls show those
+instead; opening mobile search temporarily hides the AI composer. Type a
+prompt, optionally choose a model or
 attach context, and tap **Send** to create the chat and send its first message.
 The composer stays above the software keyboard; the list reserves space for it
 so its last row remains reachable.
@@ -213,7 +224,8 @@ The compact model menus use the standard menu text size and a 240px width
 
 Chat title icons follow the selected model's provider, including the agent
 system's live model. Soup and recent-chat rows resolve the provider through the
-shared chat query cache. Anthropic, OpenAI, and Google use their provider logos;
+shared chat query cache. Claude models use the Claude sunburst logo in model
+pickers, chat titles, and list rows; OpenAI and Google use their provider logos;
 loading or unknown providers reserve the icon space without the Macro star.
 
 Both AI composers display their model trigger label at the input text size

@@ -82,6 +82,7 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
+import { installGlassPress } from './mobile/glassPress';
 import { MobileDockRow } from './mobile/MobileDockRow';
 import { MobileViewsRow } from './mobile/MobileViewsRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
@@ -418,6 +419,7 @@ function LayoutInner(props: RouteSectionProps) {
   });
 
   onMount(() => {
+    onCleanup(installGlassPress());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');

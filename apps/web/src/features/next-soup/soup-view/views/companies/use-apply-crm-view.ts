@@ -1,6 +1,7 @@
 import type { Query } from '@app/features/next-soup/filters/filter-store';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { batch } from 'solid-js';
 
 /**
@@ -45,7 +46,7 @@ export function useApplyCrmView() {
       if (owners.length > 0 !== soup.predicates.isActive('company-owner')) {
         soup.predicates.toggle({ and: ['company-owner'] });
       }
-      setViewMode(config.viewMode ?? 'board');
+      setViewMode(config.viewMode ?? (isTouchDevice() ? 'list' : 'board'));
     });
   };
 }
