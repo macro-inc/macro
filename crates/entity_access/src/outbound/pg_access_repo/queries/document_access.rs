@@ -3,11 +3,13 @@
 #[cfg(test)]
 mod test;
 
+#[cfg(feature = "explain_binary")]
 use crate::{
-    domain::models::{AccessGrant, AccessLevel},
-    outbound::pg_access_repo::queries::{SourceIds, list_entity_access_grants},
+    domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+#[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -136,6 +138,7 @@ pub async fn get_document_access(
     Ok(highest_level)
 }
 
+#[cfg(feature = "explain_binary")]
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn explain_document_access(
     pool: &PgPool,
@@ -156,6 +159,7 @@ pub async fn explain_document_access(
     Ok(grants)
 }
 
+#[cfg(feature = "explain_binary")]
 async fn explain_document_link_shares(
     pool: &PgPool,
     document_id: &uuid::Uuid,
@@ -221,6 +225,7 @@ async fn explain_document_link_shares(
     Ok(grants)
 }
 
+#[cfg(feature = "explain_binary")]
 async fn explain_document_email_attachments(
     pool: &PgPool,
     document_id: &uuid::Uuid,

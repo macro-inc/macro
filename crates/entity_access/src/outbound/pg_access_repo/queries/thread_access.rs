@@ -3,14 +3,16 @@
 #[cfg(test)]
 mod test;
 
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+#[cfg(feature = "explain_binary")]
 use crate::{
-    domain::models::{AccessGrant, AccessLevel, TeamRole},
-    outbound::pg_access_repo::queries::{SourceIds, list_entity_access_grants},
+    domain::models::{AccessGrant, TeamRole},
+    outbound::pg_access_repo::queries::list_entity_access_grants,
 };
-use macro_user_id::{
-    lowercased::Lowercase,
-    user_id::{MacroUserId, MacroUserIdStr},
-};
+#[cfg(feature = "explain_binary")]
+use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+#[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -267,6 +269,7 @@ pub async fn get_thread_access(
     Ok([highest_level, crm_level].into_iter().flatten().max())
 }
 
+#[cfg(feature = "explain_binary")]
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn explain_thread_access(
     pool: &PgPool,
@@ -291,6 +294,7 @@ pub async fn explain_thread_access(
     Ok(grants)
 }
 
+#[cfg(feature = "explain_binary")]
 async fn explain_thread_inbox(
     pool: &PgPool,
     thread_id: &Uuid,
@@ -334,6 +338,7 @@ async fn explain_thread_inbox(
     }
 }
 
+#[cfg(feature = "explain_binary")]
 async fn explain_thread_link_shares(
     pool: &PgPool,
     thread_id: &Uuid,
@@ -402,6 +407,7 @@ async fn explain_thread_link_shares(
     Ok(grants)
 }
 
+#[cfg(feature = "explain_binary")]
 async fn explain_thread_containing_project(
     pool: &PgPool,
     thread_id: &Uuid,
@@ -431,6 +437,7 @@ async fn explain_thread_containing_project(
         .collect())
 }
 
+#[cfg(feature = "explain_binary")]
 async fn explain_thread_crm(
     pool: &PgPool,
     thread_id: &Uuid,

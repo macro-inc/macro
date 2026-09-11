@@ -9,8 +9,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(feature = "explain_binary")]
 mod access_explanation;
 
+#[cfg(feature = "explain_binary")]
 pub use access_explanation::{
     AccessExplanation, AccessGrant, EmailAttachmentReason, ForeignEntityAuthEntity,
 };

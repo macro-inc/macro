@@ -523,6 +523,7 @@ async fn email_direct_document_grant_wins_over_inherited_view(pool: PgPool) -> a
     Ok(())
 }
 
+#[cfg(feature = "explain_binary")]
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn explain_lists_public_and_entity_access_and_matches_effective(
     pool: PgPool,
@@ -566,6 +567,7 @@ async fn explain_lists_public_and_entity_access_and_matches_effective(
     Ok(())
 }
 
+#[cfg(feature = "explain_binary")]
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn explain_email_attachment_reasons(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, INBOX_OWNER).await?;
@@ -625,6 +627,7 @@ async fn explain_email_attachment_reasons(pool: PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "explain_binary")]
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn explain_team_link_matches_access_level(pool: PgPool) -> anyhow::Result<()> {
     let owner_team_id = Uuid::new_v4();

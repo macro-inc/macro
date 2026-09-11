@@ -1,8 +1,10 @@
 //! Query for foreign entity access.
 
-use crate::domain::models::AccessGrant;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+#[cfg(feature = "explain_binary")]
+use crate::domain::models::AccessGrant;
 
 /// Check whether any stored-for source pair grants access to a foreign entity.
 #[tracing::instrument(err, skip(pool, source_ids, source_auth_entities))]
@@ -46,6 +48,7 @@ pub async fn has_foreign_entity_access(
     .await
 }
 
+#[cfg(feature = "explain_binary")]
 #[tracing::instrument(err, skip(pool, source_ids, source_auth_entities))]
 pub async fn list_foreign_entity_grants(
     pool: &PgPool,

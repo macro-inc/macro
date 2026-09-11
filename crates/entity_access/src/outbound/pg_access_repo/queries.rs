@@ -5,7 +5,6 @@
 #[cfg(not(test))]
 use cached::proc_macro::cached;
 
-use crate::domain::models::{AccessGrant, AccessLevel};
 use anyhow::Context;
 use bot_id::BotIdStr;
 use macro_user_id::{
@@ -14,8 +13,12 @@ use macro_user_id::{
     user_id::{MacroUserId, MacroUserIdStr},
 };
 use model_entity::EntityType;
-use models_entity_access_management::EntityAccessSourceType;
 use sqlx::{Pool, Postgres};
+
+#[cfg(feature = "explain_binary")]
+use crate::domain::models::{AccessGrant, AccessLevel};
+#[cfg(feature = "explain_binary")]
+use models_entity_access_management::EntityAccessSourceType;
 
 pub mod agent_session_access;
 pub mod call_access;
@@ -235,6 +238,7 @@ pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
         .collect())
 }
 
+#[cfg(feature = "explain_binary")]
 #[tracing::instrument(skip(pool, source_ids), err)]
 pub async fn list_entity_access_grants(
     pool: &Pool<Postgres>,

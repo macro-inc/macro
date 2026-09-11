@@ -4,10 +4,12 @@
 
 use super::models::EntityType;
 use crate::domain::models::{
-    AccessError, AccessExplanation, AccessGrant, AccessLevel, BotAccessScope, BotId,
-    CallChannelInfo, ChannelRoleResult, CrmEntityAccess, EntityAccessReceipt, EntityPermission,
-    RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+    AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, ChannelRoleResult,
+    CrmEntityAccess, EntityAccessReceipt, EntityPermission, RequiredPermission, TeamRole,
+    UserTeamInfo, ViewAccessLevel,
 };
+#[cfg(feature = "explain_binary")]
+use crate::domain::models::{AccessExplanation, AccessGrant};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use std::{collections::HashMap, future::Future};
 use uuid::Uuid;
@@ -240,6 +242,7 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
 }
 
 /// Repository that returns labeled grant paths instead of a collapsed level.
+#[cfg(feature = "explain_binary")]
 pub trait ExplainAccessRepository: Clone + Send + Sync + 'static {
     /// List every grant path that gives `user_id` access to the entity.
     ///
@@ -254,6 +257,7 @@ pub trait ExplainAccessRepository: Clone + Send + Sync + 'static {
 }
 
 /// Service that explains how a user can reach an entity.
+#[cfg(feature = "explain_binary")]
 pub trait ExplainAccessService: Clone + Send + Sync + 'static {
     /// Explain every grant path for `user_id` on the entity.
     ///

@@ -3,7 +3,9 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::models::{AccessGrant, ChannelRoleResult, ParticipantRole};
+#[cfg(feature = "explain_binary")]
+use crate::domain::models::AccessGrant;
+use crate::domain::models::{ChannelRoleResult, ParticipantRole};
 use bot_id::BotIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -13,6 +15,7 @@ struct ChannelRoleRow {
     role: Option<String>,
     channel_type: String,
     org_id: Option<i64>,
+    #[cfg_attr(not(feature = "explain_binary"), allow(dead_code))]
     team_id: Option<Uuid>,
     is_team_member: bool,
 }
@@ -122,6 +125,7 @@ pub async fn get_channel_role(
     Ok(ChannelRoleResult::NoAccess)
 }
 
+#[cfg(feature = "explain_binary")]
 #[tracing::instrument(err, skip(pool))]
 pub async fn explain_channel_access(
     pool: &PgPool,

@@ -111,13 +111,16 @@ async fn matching_team_member_without_participant_is_view_only(pool: PgPool) -> 
 
     assert_eq!(role, ChannelRoleResult::ViewOnly);
 
-    let grants = explain_channel_access(&pool, &channel_id, "macro|member@team.com").await?;
-    assert_eq!(
-        grants,
-        vec![crate::domain::models::AccessGrant::ChannelTeamViewOnly {
-            team_id: TEAM_ALPHA
-        }]
-    );
+    #[cfg(feature = "explain_binary")]
+    {
+        let grants = explain_channel_access(&pool, &channel_id, "macro|member@team.com").await?;
+        assert_eq!(
+            grants,
+            vec![crate::domain::models::AccessGrant::ChannelTeamViewOnly {
+                team_id: TEAM_ALPHA
+            }]
+        );
+    }
     Ok(())
 }
 
@@ -135,13 +138,16 @@ async fn active_team_channel_participant_receives_stored_role(pool: PgPool) -> a
 
     assert_eq!(role, ChannelRoleResult::Role(ParticipantRole::Admin));
 
-    let grants = explain_channel_access(&pool, &channel_id, user_id).await?;
-    assert_eq!(
-        grants,
-        vec![crate::domain::models::AccessGrant::ChannelParticipant {
-            role: ParticipantRole::Admin
-        }]
-    );
+    #[cfg(feature = "explain_binary")]
+    {
+        let grants = explain_channel_access(&pool, &channel_id, user_id).await?;
+        assert_eq!(
+            grants,
+            vec![crate::domain::models::AccessGrant::ChannelParticipant {
+                role: ParticipantRole::Admin
+            }]
+        );
+    }
     Ok(())
 }
 
