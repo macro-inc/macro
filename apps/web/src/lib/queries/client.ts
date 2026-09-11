@@ -8,7 +8,7 @@ import { onlineManager } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { setupQueryPersistence } from './persistence';
 import { createQueryPersistenceScopes } from './persistence-scopes';
-import { initSoupNormalizer } from './soup/cache';
+import { initSoupNormalizer } from './soup/normalized-cache/normalizer';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
