@@ -14,6 +14,8 @@ import type { SessionBotAvatarUrl } from './sessionBotAvatarUrl';
 export interface SessionBot {
   /** Avatar, when it has one. */
   avatarUrl?: SessionBotAvatarUrl;
+  /** Stable `@` handle, without a leading `@`. */
+  handle: string;
   /** The bot's id. A message it sent has `"bot|{id}"` as its sender. */
   id: BotId;
   /** Display name. */
