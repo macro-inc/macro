@@ -110,3 +110,11 @@ export const unsupportedEntityEvent: ActivityEventFieldsFragment = {
   entityId: 'team-1',
   action: { __typename: 'GraphqlActivityCreated' },
 };
+
+export const agentSessionCreatedEvent: ActivityEventFieldsFragment = {
+  ...BASE,
+  id: 'evt-13',
+  entityType: 'AGENT_SESSION',
+  entityId: 'session-1',
+  action: { __typename: 'GraphqlActivityCreated' },
+};

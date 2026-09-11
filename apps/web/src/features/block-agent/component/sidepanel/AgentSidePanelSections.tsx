@@ -5,11 +5,11 @@
  * `<SidePanel.Section>` elements that self-register into the enclosing
  * `<SidePanel.Layout>`.
  *
- * Everything rendered here is derived from state the block already holds —
- * the session record, the fold's metadata, and pure summaries over the
- * folded transcript (`state/session-summary.ts`).
+ * The Details/Plan/files/session-stats sections are derived from state the
+ * block already holds. Activity is the shared entity-activity timeline.
  */
 
+import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -33,7 +33,8 @@ import {
 import { harnessTitle } from '../AgentSplitHeader';
 
 export function AgentSidePanelSections() {
-  const { session, bot, metadata, messages, status } = useAgentSession();
+  const { sessionId, session, bot, metadata, messages, status } =
+    useAgentSession();
 
   const plan = createMemo(() => latestPlan(messages()));
   const files = createMemo(() => changedFiles(messages()));
@@ -180,12 +181,17 @@ export function AgentSidePanelSections() {
       </Show>
 
       <Show when={activity().some((item) => item.count > 0)}>
-        <SidePanel.Section id="activity" title="Activity" order={30}>
+        <SidePanel.Section id="session-stats" title="This session" order={30}>
           <div class="text-xs text-ink-muted">
             <CountSummary items={activity()} />
           </div>
         </SidePanel.Section>
       </Show>
+      <EntityActivitySectionConditional
+        entityId={sessionId() ?? ''}
+        entityType="AGENT_SESSION"
+        order={35}
+      />
     </>
   );
 }

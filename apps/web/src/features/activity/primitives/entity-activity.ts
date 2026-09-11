@@ -1,8 +1,10 @@
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo } from 'solid-js';
 import type { ActivityContext } from '../context/activity-context';
 import type { ActivityEvent } from '../core/event';
-import { createEntityActivityQuery } from '../queries/entity-query';
+import {
+  createEntityActivityQuery,
+  type EntityActivityEntityType,
+} from '../queries/entity-query';
 
 export type EntityActivityView =
   | { t: 'loading' }
@@ -22,7 +24,10 @@ export type EntityActivityState = {
  */
 export function createEntityActivityState(
   context: Pick<ActivityContext, 'graphql'>,
-  options: { entityId: Accessor<string>; entityType: Accessor<EntityType> }
+  options: {
+    entityId: Accessor<string>;
+    entityType: Accessor<EntityActivityEntityType>;
+  }
 ): EntityActivityState {
   const query = createEntityActivityQuery(context, {
     entityType: options.entityType,

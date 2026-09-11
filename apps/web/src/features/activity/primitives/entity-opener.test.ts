@@ -60,6 +60,19 @@ describe('createEntityOpener', () => {
     expect(opener()).toBeUndefined();
   });
 
+  it('resolves agent sessions as a linkable entity', () => {
+    const onOpen = vi.fn();
+    const opener = setup(createMockActivityContext(), 'agent-session', onOpen);
+    expect(opener()?.display.name()).toBe('Entity doc-1');
+    opener()?.handlers?.onClick(click(false));
+    expect(onOpen).toHaveBeenCalledWith({
+      block: 'md',
+      id: 'doc-1',
+      params: undefined,
+      newSplit: false,
+    });
+  });
+
   it('does nothing when the display has no block mapping', () => {
     const onOpen = vi.fn();
     const context = createMockActivityContext({

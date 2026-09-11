@@ -20,6 +20,7 @@ export type ActivityEntityType =
   | 'email-thread'
   | 'channel'
   | 'user'
+  | 'agent-session'
   | { kind: 'unsupported'; raw: string };
 
 export type ActivityEvent = {
@@ -54,9 +55,12 @@ export type PropertyEntityType =
   | 'CHANNEL'
   | 'USER';
 
-export function toPropertyEntityType(
+/** Entity kinds the activity UI can resolve a name, icon, and link for. */
+export type ActivityDisplayEntityType = PropertyEntityType | 'AGENT_SESSION';
+
+export function toDisplayEntityType(
   entityType: ActivityEntityType
-): PropertyEntityType | undefined {
+): ActivityDisplayEntityType | undefined {
   return match(entityType)
     .with({ kind: 'unsupported' }, () => undefined)
     .with('document', () => 'DOCUMENT' as const)
@@ -65,5 +69,6 @@ export function toPropertyEntityType(
     .with('email-thread', () => 'THREAD' as const)
     .with('channel', () => 'CHANNEL' as const)
     .with('user', () => 'USER' as const)
+    .with('agent-session', () => 'AGENT_SESSION' as const)
     .exhaustive();
 }

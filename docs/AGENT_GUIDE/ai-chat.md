@@ -146,6 +146,10 @@ to open the title menu (caret), then **Rename** — that opens the generic entit
 rename dialog. Do not expect a tap on the name itself to start
 an inline edit.
 
+The side panel (toggle with `]`) includes Details, Plan, Changed files, This
+session (tool-call counts for the current transcript), and Activity (the same
+glyph-rail history as `/app/component/activity`: created, prompted, renamed).
+
 ### Sharing a session
 
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;

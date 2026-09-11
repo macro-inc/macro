@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decodeActivityEvent } from './decode';
 import {
+  agentSessionCreatedEvent,
   callStartedEvent,
   createdEvent,
   deletedEvent,
@@ -55,6 +56,9 @@ describe('decodeActivityEvent', () => {
     expect(decodeActivityEvent(createdEvent).entityType).toBe('document');
     expect(decodeActivityEvent(messagedEvent).entityType).toBe('channel');
     expect(decodeActivityEvent(sentEvent).entityType).toBe('email-thread');
+    expect(decodeActivityEvent(agentSessionCreatedEvent).entityType).toBe(
+      'agent-session'
+    );
   });
 
   it('keeps the unknown-action tag so describeAction can humanize it', () => {

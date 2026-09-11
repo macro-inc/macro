@@ -1,6 +1,5 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import CaretUpDownIcon from '@phosphor/caret-up-down.svg';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui';
 import {
   createMemo,
@@ -24,6 +23,7 @@ import type { RailEnds } from '../core/feed-rows';
 import { foldPanel } from '../core/fold-panel';
 import { createActorName } from '../primitives/actor-name';
 import { createEntityActivityState } from '../primitives/entity-activity';
+import type { EntityActivityEntityType } from '../queries/entity-query';
 import { useEntityActivityFlag } from '../use-entity-activity-flag';
 
 /** Newest entries shown before the section folds behind its toggle. */
@@ -31,7 +31,7 @@ const PANEL_HEAD_LIMIT = 3;
 
 export interface EntityActivitySectionProps {
   entityId: string;
-  entityType: EntityType;
+  entityType: EntityActivityEntityType;
   order?: number;
 }
 
