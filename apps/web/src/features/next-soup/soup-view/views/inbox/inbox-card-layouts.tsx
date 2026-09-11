@@ -41,6 +41,8 @@ import ChatCircleIcon from '@phosphor-icons/core/regular/chat-circle.svg?compone
 import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
+import QuestionIcon from '@phosphor-icons/core/regular/question.svg?component-solid';
+import RobotIcon from '@phosphor-icons/core/regular/robot.svg?component-solid';
 import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import {
   PropertiesProvider,
@@ -122,7 +124,12 @@ const getNotificationSenderFallbackName = (
   notification: Notification
 ): string | undefined => {
   const content = notification.notification_metadata.content as
-    | { sender?: string; senderGithubLogin?: string }
+    | {
+        sender?: string;
+        senderGithubLogin?: string;
+        botName?: string;
+        mentionedBy?: string;
+      }
     | undefined;
 
   switch (notification.notification_metadata.tag) {
@@ -130,6 +137,11 @@ const getNotificationSenderFallbackName = (
       return content?.sender ?? undefined;
     case 'ai_response':
       return 'Macro agent';
+    case 'agent_session_settled':
+    case 'agent_session_waiting_for_input':
+      return content?.botName;
+    case 'agent_session_mentioned':
+      return content?.mentionedBy ?? content?.botName;
     case 'channel_message_send':
       return content?.sender ?? notification.sender_id ?? undefined;
     case 'github_pr_status_changed':
@@ -274,6 +286,15 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('call_started', () => () => <PhoneIcon class={AVATAR_GLYPH_CLASS} />)
+    .with('agent_session_settled', () => () => (
+      <RobotIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('agent_session_waiting_for_input', () => () => (
+      <QuestionIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('agent_session_mentioned', () => () => (
+      <AtIcon class={AVATAR_GLYPH_CLASS} />
+    ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
       <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
@@ -807,6 +828,7 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
 
   const senderName = createSenderDisplayName(senderId);
   const currentUserId = useUserId();
+
   const senderLabel = () =>
     senderId() === currentUserId() ? 'You' : senderName();
 
@@ -1146,6 +1168,76 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
       title={text().title}
     >
       <CardClampedMarkdown text={text().content} />
+    </BaseCard>
+  );
+}
+
+/**
+ * An agent session the user was notified about: it finished, it is asking
+ * them something, or a prompt named them. The row is the session - title,
+ * agent icon, click opens it - and the body is what the agent said or
+ * asked, attributed to the bot (or to whoever wrote the mentioning prompt).
+ */
+export function AgentSessionCardLayout(props: InboxCardLayoutProps) {
+  const meta = () => {
+    const meta = props.item.notification?.notification_metadata;
+    return meta?.tag === 'agent_session_settled' ||
+      meta?.tag === 'agent_session_waiting_for_input' ||
+      meta?.tag === 'agent_session_mentioned'
+      ? meta
+      : undefined;
+  };
+  const mentionedBy = () => {
+    const current = meta();
+    return current?.tag === 'agent_session_mentioned'
+      ? (current.content.mentionedBy ?? undefined)
+      : undefined;
+  };
+  const mentionedByName = createSenderDisplayName(mentionedBy);
+  const currentUserId = useUserId();
+  const senderLabel = () => {
+    const current = meta();
+    if (!current) return undefined;
+    if (mentionedBy()) {
+      return mentionedBy() === currentUserId() ? 'You' : mentionedByName();
+    }
+    return current.content.botName;
+  };
+  const content = () => itemContent(props.item.entity, props.item.notification);
+
+  return (
+    <BaseCard
+      {...props}
+      icon={
+        <Show
+          when={props.item.notification}
+          fallback={
+            <EntityIcon
+              class={AVATAR_GLYPH_CLASS}
+              targetType={getEntityIconType(props.item.entity)}
+              size="fill"
+            />
+          }
+        >
+          <ActionBubble tag={getNotificationTag(props.item.notification)} />
+        </Show>
+      }
+      title={props.item.entity.name}
+    >
+      <InboxCard.Content class="text-sm text-ink/60 line-clamp-2">
+        <Show when={senderLabel()}>
+          {(label) => <span class="mr-1 whitespace-nowrap">{label()}:</span>}
+        </Show>
+        <Show when={content()?.trim()}>
+          {(text) => (
+            <StaticMarkdown
+              markdown={text()}
+              singleLine
+              theme={unifiedListMarkdownTheme}
+            />
+          )}
+        </Show>
+      </InboxCard.Content>
     </BaseCard>
   );
 }
@@ -1614,6 +1706,9 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
       </Match>
       <Match when={props.item.entity.type === 'channel_thread'}>
         <ChannelThreadCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'agent_session'}>
+        <AgentSessionCardLayout {...props} />
       </Match>
       <Match when={props.item.entity.type === 'reminder'}>
         <ReminderCardLayout {...props} />

@@ -453,6 +453,10 @@ pub struct AgentSessionResponse {
     pub name: String,
     /// The user who created and owns the session.
     pub owner_id: String,
+    /// Whether the caller may drive the session - prompt it, answer its
+    /// questions, stop it - rather than only watch. Edit access; the
+    /// creator owns the session, so a create response always says so.
+    pub can_edit: bool,
     /// The root message of the thread the session was created from, if any.
     pub thread_id: Option<Uuid>,
     /// The channel `thread_id` lives in, when the session was spawned from a
@@ -515,12 +519,14 @@ impl From<ExternalSession> for ExternalSessionResponse {
     }
 }
 
-impl From<AgentSession> for AgentSessionResponse {
-    fn from(session: AgentSession) -> Self {
+impl AgentSessionResponse {
+    /// Describe `session` to a caller whose edit access is `can_edit`.
+    pub fn new(session: AgentSession, can_edit: bool) -> Self {
         Self {
             id: session.id.as_uuid(),
             name: session.name,
             owner_id: session.owner_id.to_string(),
+            can_edit,
             thread_id: session.thread_id,
             thread_channel_id: session.thread_channel_id,
             originating_message_id: session.originating_message_id,
@@ -560,7 +566,7 @@ pub async fn get_agent_session_handler<
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    _access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
     State(state): State<AgentSessionRouterState<T, Access, Auth>>,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<AgentSessionResponse>, AgentSessionApiError> {
@@ -568,8 +574,12 @@ pub async fn get_agent_session_handler<
         .service
         .get_session(AgentSessionId::new_from_uuid(session_id))
         .await?;
+    let can_edit = access
+        .entity_access_receipt
+        .entity_permission()
+        .satisfies::<EditAccessLevel>();
 
-    Ok(Json(session.into()))
+    Ok(Json(AgentSessionResponse::new(session, can_edit)))
 }
 
 /// Request body for `POST /agent-sessions/preview`.
@@ -1685,7 +1695,7 @@ pub async fn create_agent_session_handler<
         return Ok((
             StatusCode::CREATED,
             Json(CreateAgentSessionResponse {
-                session: session.into(),
+                session: AgentSessionResponse::new(session, true),
             }),
         ));
     };
@@ -1771,7 +1781,7 @@ pub async fn create_agent_session_handler<
     Ok((
         StatusCode::CREATED,
         Json(CreateAgentSessionResponse {
-            session: session.into(),
+            session: AgentSessionResponse::new(session, true),
         }),
     ))
 }

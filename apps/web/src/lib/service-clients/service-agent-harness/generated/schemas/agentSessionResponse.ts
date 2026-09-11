@@ -24,6 +24,10 @@ export interface AgentSessionResponse {
   acpSessionId?: AgentSessionResponseAcpSessionId;
   /** The bot running the agent. */
   botId: string;
+  /** Whether the caller may drive the session - prompt it, answer its
+questions, stop it - rather than only watch. Edit access; the
+creator owns the session, so a create response always says so. */
+  canEdit: boolean;
   /** When the session was created. */
   createdAt: string;
   external?: AgentSessionResponseExternal;

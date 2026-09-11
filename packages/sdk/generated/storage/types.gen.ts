@@ -240,6 +240,12 @@ export type AgentSessionLifecycleEvent = {
      */
     metadata: InputReceivedMetadata;
 } | {
+    event_type: 'agent_session.mentioned';
+    /**
+     * A prompt named other users who can open the session.
+     */
+    metadata: SessionMentionedMetadata;
+} | {
     event_type: 'agent_session.stopped';
     /**
      * The session's live actor is gone.
@@ -7422,6 +7428,12 @@ export type SessionDeletedMetadata = {
  */
 export type SessionIdentity = {
     /**
+     * Everyone with a stake in what happens next: the owner plus every user
+     * who has prompted or answered this session. Resolved by the emitter so
+     * a consumer fanning out never has to read the session's log.
+     */
+    audience?: Array<MacroUserIdStr>;
+    /**
      * Bot the session runs for.
      */
     bot_id: BotId;
@@ -7442,6 +7454,28 @@ export type SessionIdentity = {
      * User-facing session name at the time of the event.
      */
     session_name: string;
+};
+
+/**
+ * A prompt named other users who can open the session. Published when the
+ * prompt is accepted, not when it is answered: "come look at this" should
+ * not wait for the turn.
+ */
+export type SessionMentionedMetadata = {
+    /**
+     * The action carrying the prompt.
+     */
+    action_id: AgentActionId;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * The users named, already narrowed to those who can open the session
+     * and never including the author.
+     */
+    mentioned: Array<MacroUserIdStr>;
+    mentioned_by?: null | MacroUserIdStr;
 };
 
 /**

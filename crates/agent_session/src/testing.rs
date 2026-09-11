@@ -520,6 +520,25 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
         self.create_log(log)
     }
 
+    async fn participants(
+        &self,
+        agent_session_id: AgentSessionId,
+    ) -> Result<Vec<MacroUserIdStr<'static>>> {
+        let logs = self.logs.lock().unwrap();
+        let mut users: Vec<MacroUserIdStr<'static>> = Vec::new();
+        for user in logs
+            .get(&agent_session_id)
+            .into_iter()
+            .flatten()
+            .filter_map(|row| row.entry.user_id.clone())
+        {
+            if !users.contains(&user) {
+                users.push(user);
+            }
+        }
+        Ok(users)
+    }
+
     async fn create_fenced(
         &self,
         log: AgentSessionLog,

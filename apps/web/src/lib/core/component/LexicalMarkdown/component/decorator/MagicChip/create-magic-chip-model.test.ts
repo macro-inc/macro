@@ -12,13 +12,11 @@ const sessionFold = vi.hoisted(() => ({
   subscribeAgentSessionLog: vi.fn(),
 }));
 const serviceClient = vi.hoisted(() => ({ get: vi.fn(), control: vi.fn() }));
-const viewer = vi.hoisted(() => ({ id: 'macro|wolf@macro.com' }));
 
 vi.mock('@queries/agent-session/session-fold', () => sessionFold);
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: serviceClient,
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => viewer.id }));
 vi.mock('@core/user', () => ({
   tryMacroId: (id: string) => (id.startsWith('macro|') ? id : undefined),
   getDisplayName: (id: string) =>
@@ -87,7 +85,6 @@ const settle = async () => {
 describe('createMagicChipModel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    viewer.id = 'macro|wolf@macro.com';
     sessionFold.subscribeAgentSessionLog.mockReturnValue(vi.fn());
     sessionFold.acquireAgentSessionFold.mockResolvedValue({
       messages: [prompt, response],
@@ -99,6 +96,7 @@ describe('createMagicChipModel', () => {
       value: {
         status: { kind: 'disconnected' },
         ownerId: 'macro|alice@macro.com',
+        canEdit: true,
       },
     });
     serviceClient.control.mockResolvedValue({ isErr: () => false });
@@ -242,8 +240,7 @@ describe('createMagicChipModel', () => {
     dispose();
   });
 
-  it('offers a question asked in its turn, to the owner, and answers on the request id', async () => {
-    viewer.id = 'macro|alice@macro.com';
+  it('offers a question asked in its turn to an editor, and answers on the request id', async () => {
     sessionFold.acquireAgentSessionFold.mockResolvedValue({
       messages: [prompt, openResponse],
       metadata: metadata(question),
@@ -260,7 +257,7 @@ describe('createMagicChipModel', () => {
     expect(model.presentation()).toEqual({
       kind: 'asking',
       markdown: 'Setting that up.',
-      asking: { question, canAnswer: true, ownerName: 'Alice Owner' },
+      asking: { question, canAnswer: true },
     });
     expect(await model.elicitation.respond({ action: 'decline' })).toBe(true);
     expect(serviceClient.control).toHaveBeenCalledWith('session', {
@@ -278,6 +275,14 @@ describe('createMagicChipModel', () => {
       metadata: metadata(question),
       release: vi.fn(),
     });
+    serviceClient.get.mockResolvedValue({
+      isOk: () => true,
+      value: {
+        status: { kind: 'disconnected' },
+        ownerId: 'macro|alice@macro.com',
+        canEdit: false,
+      },
+    });
     let model!: ReturnType<typeof createMagicChipModel>;
     const dispose = createRoot((rootDispose) => {
       model = createMagicChipModel(props);
@@ -290,7 +295,6 @@ describe('createMagicChipModel', () => {
     expect(presentation.kind).toBe('asking');
     if (presentation.kind === 'asking') {
       expect(presentation.asking.canAnswer).toBe(false);
-      expect(presentation.asking.ownerName).toBe('Alice Owner');
     }
     expect(await model.elicitation.respond({ action: 'decline' })).toBe(false);
     expect(serviceClient.control).not.toHaveBeenCalled();

@@ -115,7 +115,11 @@ plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and U
 `Open` button that only opens a new tab after you click it. Once answered the card collapses
 to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
 continues. Messages typed while a question is open queue behind it; the composer's `Stop`
-square cancels the question and the turn.
+square cancels the question and the turn. Anyone with edit access to the session may
+answer; viewers see the form locked with `Waiting for an editor`. The owner and everyone
+who has prompted or answered the session also receive an `agent_session_waiting_for_input`
+notification (inbox, browser, and iOS push) when the question is asked; it stays until
+marked done.
 
 ## In channels
 
@@ -137,6 +141,9 @@ Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread). An agent-session chip with
 `"expanded":true` renders as the Magic Chip card that follows the session's
 latest turn.
+`@mention` a person in a prompt and, if you can edit the session, they are granted edit
+access and get an `agent_session_mentioned` notification that opens the session; a viewer's
+mention only notifies people who could already open it.
 
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it

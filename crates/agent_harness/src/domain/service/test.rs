@@ -49,6 +49,8 @@ use crate::testing::helpers::agent::FakeAgent;
 use crate::testing::helpers::announcer::AnnouncerMock;
 use crate::testing::helpers::containers::{ContainerMock, ContainerSender, MockContainerManager};
 use crate::testing::helpers::egress::{EgressProvisionerMock, test_egress};
+use crate::testing::helpers::mentions::PromptMentionsMock;
+use crate::testing::helpers::notifier::NotifierMock;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::ReplicaId;
 use agent_session::domain::ports::{NoOpAgentSessionNameGenerator, NoOpTurnObserver};
@@ -211,6 +213,9 @@ type TestHarness = AgentHarnessService<
     PromptContextMock,
     PromptComposerMock,
     EgressProvisionerMock,
+    RecordingLifecyclePublisher,
+    PromptMentionsMock,
+    NotifierMock,
 >;
 
 /// Bot-to-harness bindings for tests: every bot maps to the harness sharing
@@ -266,6 +271,7 @@ impl agent_session::domain::ports::SessionTurnObserver for SignallingTurnObserve
 struct TurnSignals {
     ended: mpsc::UnboundedReceiver<AgentSessionId>,
     lifecycle: RecordingLifecyclePublisher,
+    notifier: NotifierMock,
 }
 
 impl TurnSignals {
@@ -311,6 +317,14 @@ fn harness_with_signals(
     prompt_context: PromptContextMock,
     prompt_composer: PromptComposerMock,
 ) -> (TestBench, TurnSignals) {
+    harness_with_mentions(prompt_context, prompt_composer, PromptMentionsMock::new())
+}
+
+fn harness_with_mentions(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+    mentions: PromptMentionsMock,
+) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
@@ -321,6 +335,7 @@ fn harness_with_signals(
     // One recorder for both publishers, as in production: renames come from
     // the session service, everything else from the harness.
     let lifecycle = RecordingLifecyclePublisher::new();
+    let notifier = NotifierMock::new();
     let service = AgentHarnessService::new(
         AgentSessionServiceImpl::new(
             repo.clone(),
@@ -346,6 +361,8 @@ fn harness_with_signals(
         },
         lifecycle.clone(),
         crate::domain::pending::PendingCommands::new(),
+        mentions,
+        notifier.clone(),
     );
     let (ended, ended_rx) = mpsc::unbounded_channel();
     turn_observer.bind(SignallingTurnObserver {
@@ -357,6 +374,7 @@ fn harness_with_signals(
         TurnSignals {
             ended: ended_rx,
             lifecycle,
+            notifier,
         },
     )
 }
@@ -1865,6 +1883,8 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         .with_managed_bot(inmem_bot),
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
+        crate::domain::ports::NoPromptMentions,
+        crate::domain::ports::NoopAgentSessionNotifier,
     );
 
     let session = service
@@ -2311,6 +2331,8 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
         },
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
+        crate::domain::ports::NoPromptMentions,
+        crate::domain::ports::NoopAgentSessionNotifier,
     );
 
     service
@@ -2360,6 +2382,8 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
         },
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
+        crate::domain::ports::NoPromptMentions,
+        crate::domain::ports::NoopAgentSessionNotifier,
     );
     let session = service
         .open_external_session(open_external_request("/srv/agent"))
@@ -2461,6 +2485,139 @@ mod lifecycle_events {
                     })
             ),
             "one full turn, in order: {events:#?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn settled_carries_everyone_who_drove_the_session() {
+        let ((_, _, _, _, _), turns, id, _container) = settled_session().await;
+
+        let events = turns.lifecycle();
+        let Some(Lifecycle::Settled(settled)) = events.last() else {
+            panic!("the first turn settles: {events:#?}");
+        };
+        assert_eq!(settled.identity.session_id, id);
+        // The mention's sender prompted the session and owns it: once each.
+        assert_eq!(settled.identity.audience, vec![sender()]);
+    }
+
+    #[tokio::test]
+    async fn settled_notifies_the_audience_through_the_notifier() {
+        let ((_, _, _, _, _), turns, id, _container) = settled_session().await;
+
+        let notified = turns.notifier.notified();
+        assert!(
+            matches!(
+                notified.as_slice(),
+                [crate::domain::notifications::PlannedNotification::Settled(notify)]
+                    if notify.recipients == vec![sender()]
+                        && notify.metadata.session.session_id == id.as_uuid()
+            ),
+            "one settled notification for the owner: {notified:#?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_prompt_naming_others_publishes_mentioned_without_its_author() {
+        let mentions = PromptMentionsMock::new();
+        let reviewer = MacroUserIdStr::try_from_email("reviewer@macro.com").unwrap();
+        let ((service, _, containers, _, _), turns) = harness_with_mentions(
+            PromptContextMock::default(),
+            PromptComposerMock::default(),
+            mentions.clone(),
+        );
+        let id = AgentSessionId::new();
+        let _container = live_session(&service, &containers, id).await;
+        turns.lifecycle_published(4).await;
+        // The author names themself and a reviewer; only the reviewer is news.
+        mentions.mentions(vec![staff_sender(), reviewer.clone()]);
+
+        service
+            .execute(
+                id,
+                HarnessCommand::Deliver(forward_message("@reviewer look")),
+            )
+            .await
+            .expect("the prompt is accepted");
+        turns.lifecycle_published(6).await;
+
+        let events = turns.lifecycle();
+        assert!(
+            matches!(
+                &events[4..6],
+                [Lifecycle::Mentioned(mentioned), Lifecycle::TurnStarted(_)]
+                    if mentioned.identity.session_id == id
+                        && mentioned.mentioned_by == Some(staff_sender())
+                        && mentioned.mentioned == vec![reviewer.clone()]
+            ),
+            "mentioned is published on accept, before the turn starts: {events:#?}"
+        );
+        assert_eq!(
+            mentions.prompts().last(),
+            Some(&"@reviewer look".to_owned())
+        );
+    }
+
+    #[tokio::test]
+    async fn a_prompt_naming_only_its_author_publishes_nothing() {
+        let mentions = PromptMentionsMock::new();
+        mentions.mentions(vec![staff_sender()]);
+        let ((service, _, containers, _, _), turns) = harness_with_mentions(
+            PromptContextMock::default(),
+            PromptComposerMock::default(),
+            mentions,
+        );
+        let id = AgentSessionId::new();
+        let _container = live_session(&service, &containers, id).await;
+        turns.lifecycle_published(4).await;
+
+        service
+            .execute(id, HarnessCommand::Deliver(forward_message("note to self")))
+            .await
+            .expect("the prompt is accepted");
+        turns.lifecycle_published(5).await;
+
+        assert!(
+            matches!(
+                turns.lifecycle().as_slice(),
+                [.., Lifecycle::TurnStarted(_)]
+            ),
+            "no mentioned event: {:#?}",
+            turns.lifecycle()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_mention_lookup_failure_never_holds_up_the_prompt() {
+        let mentions = PromptMentionsMock::new();
+        mentions.fails("lexical service unreachable");
+        let ((service, _, containers, _, _), turns) = harness_with_mentions(
+            PromptContextMock::default(),
+            PromptComposerMock::default(),
+            mentions,
+        );
+        let id = AgentSessionId::new();
+        let container = live_session(&service, &containers, id).await;
+        turns.lifecycle_published(4).await;
+
+        service
+            .execute(id, HarnessCommand::Deliver(forward_message("@someone")))
+            .await
+            .expect("the prompt is accepted despite the failure");
+        turns.lifecycle_published(5).await;
+
+        assert!(
+            matches!(
+                turns.lifecycle().as_slice(),
+                [.., Lifecycle::TurnStarted(_)]
+            ),
+            "the turn starts and nothing about mentions is published: {:#?}",
+            turns.lifecycle()
+        );
+        assert_eq!(
+            prompts(&container.agent()).len(),
+            2,
+            "the prompt reached the agent"
         );
     }
 
