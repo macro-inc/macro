@@ -49,6 +49,10 @@ composer, `type_text`, then click `Send comment` (Enter also submits). The comme
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
 user.
 
+Comments anchored to selected text open in a floating margin card on desktop and
+a `Comments` drawer on touch devices. New comments, replies, and edits use the
+composer surface on desktop; touch inputs use the drawer's background directly.
+
 ## Side panel
 
 Right side of a doc (toggle with `Hide/Show Side Panel`):

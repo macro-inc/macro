@@ -261,6 +261,10 @@ On touch devices, an email thread's floating action bar has Previous email and
 Next email arrows beside the larger Mark done checkmark. The arrows follow the
 source list's filtered order, skip non-email items, and disable at its ends.
 They do not wrap; a thread opened without a source list has disabled arrows.
+Mark done archives the current thread and opens the next email in that same
+filtered list, loading the next page when needed. At the end it opens the previous
+email; with no neighboring email it stays on the archived thread. Mark as not done
+does not advance. Undo restores the archived email and returns to it.
 
 The mobile reply/forward drawer uses matching circular glass buttons for
 discard, attachments, and send, with the dock's button/icon sizing and regular
