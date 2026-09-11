@@ -8,6 +8,8 @@ import {
   type RespondToElicitation,
   UserToolComposer,
 } from '@app/features/block-agent/component/parts/LiveElicitation';
+import { WorkingVerb } from '@app/features/block-agent/ui/WorkingVerb';
+import { WORKING_LABEL } from '@app/features/block-agent/ui/working-verbs';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
@@ -104,16 +106,25 @@ type ChipAsking = {
 /** The shimmering label plus its muted detail. */
 const ActivityText: Component<{ activity: MagicChipActivity }> = (props) => (
   <>
-    <span
-      class="shrink-0"
-      classList={{
-        'magic-chip-shimmer': props.activity.busy,
-        'text-ink-muted': !props.activity.busy,
-      }}
-      aria-live="polite"
+    <Show
+      when={props.activity.label === WORKING_LABEL && props.activity.busy}
+      fallback={
+        <span
+          class="shrink-0"
+          classList={{
+            'magic-chip-shimmer': props.activity.busy,
+            'text-ink-muted': !props.activity.busy,
+          }}
+          aria-live="polite"
+        >
+          {props.activity.label}
+        </span>
+      }
     >
-      {props.activity.label}
-    </span>
+      <span class="shrink-0" aria-live="polite">
+        <WorkingVerb />
+      </span>
+    </Show>
     <Show when={props.activity.detail}>
       {(detail) => (
         <>

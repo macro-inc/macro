@@ -11,6 +11,12 @@ const session = vi.hoisted(() => ({
   touch: false,
   top: () => 40,
   bottom: (): number => 80,
+  working: () => false,
+  sending: () => false,
+  pending: () => false,
+  resuming: () => false,
+  blockedOnUser: () => false,
+  composer: { sending: () => false },
 }));
 vi.mock('../context/AgentSessionContext', () => ({
   useAgentSession: () => session,
@@ -89,6 +95,12 @@ beforeEach(() => {
   rowHeight = 96;
   session.touch = false;
   session.bottom = () => 80;
+  session.working = () => false;
+  session.sending = () => false;
+  session.pending = () => false;
+  session.resuming = () => false;
+  session.blockedOnUser = () => false;
+  session.composer = { sending: () => session.sending() };
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -381,5 +393,22 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     view.setMessages((list) => [...list, message(50)]);
     await settle();
     expect(view.scroller.scrollTop).toBe(view.scroller.scrollHeight - viewport);
+  });
+
+  it('shows the working row after a send, before the agent reply exists', async () => {
+    session.working = () => true;
+    const view = mount([
+      {
+        agentSessionId: 'session',
+        turn: 0,
+        author: { kind: 'user', userId: null },
+        parts: [{ kind: 'text', text: 'hi' }],
+        stop: null,
+      } as FoldedMessage,
+    ]);
+    await settle();
+    expect(
+      view.container.querySelector('[data-agent-working-line]')
+    ).not.toBeNull();
   });
 });

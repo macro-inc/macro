@@ -37,6 +37,7 @@ import {
   ToolCard,
   ToolErrorCard,
   ToolStatusTitle,
+  WorkingLine,
 } from '../ui';
 
 /**
@@ -644,6 +645,10 @@ export default function AgentUiGallery() {
               text="The incremental machine is the right default."
               defaultOpen
             />
+          </Item>
+
+          <Item label="WorkingLine">
+            <WorkingLine />
           </Item>
 
           <Item label="ToolStatusTitle / TextShimmer">

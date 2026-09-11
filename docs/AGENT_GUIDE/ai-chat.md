@@ -131,7 +131,11 @@ An agent session is `/app/agent/<uuid>`. The composer placeholder is
 Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `@` to insert the same mention chips
 used in chat and channels; they serialize as `<m-document-mention>` tags in the prompt
 the agent sees. Agent replies that emit those tags render as clickable chips in the
-transcript (and in the originating channel thread).
+transcript (and in the originating channel thread). While a turn is open and
+the agent is not streaming a thought, running a tool, or waiting on you, the
+transcript shows a **Working** row with rotating verbs — including the wait
+after you send, before the first thought. The channel magic chip uses the
+same working label in those gaps so the card is never still.
 
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it

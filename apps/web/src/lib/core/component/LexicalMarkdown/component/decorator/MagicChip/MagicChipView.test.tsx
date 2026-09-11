@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+import { WORKING_LABEL } from '@app/features/block-agent/ui/working-verbs';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
@@ -147,6 +148,20 @@ describe('MagicChipView', () => {
     expect(label?.textContent).toContain('Cursor Agent');
     expect(label?.textContent).toContain('Claude Opus 5');
     expect(label?.textContent).toContain('Thinking');
+  });
+
+  it('rotates the working verb in the header while the turn is quietly open', () => {
+    const { container } = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={{
+          kind: 'working',
+          activity: { label: WORKING_LABEL, busy: true },
+        }}
+      />
+    ));
+    expect(headerLabel(container)?.textContent).toContain(WORKING_LABEL);
+    expect(container.querySelector('[data-magic-chip-pending]')).toBeTruthy();
   });
 
   it('keeps the same answer height once the answer streams in', () => {

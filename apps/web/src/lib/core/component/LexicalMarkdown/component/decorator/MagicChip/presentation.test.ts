@@ -1,3 +1,4 @@
+import { WORKING_LABEL } from '@app/features/block-agent/ui/working-verbs';
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
 import {
@@ -22,6 +23,47 @@ describe('deriveMagicChipPresentation', () => {
     ).toMatchObject({
       kind: 'working',
       activity: { label: 'Booting agent', busy: true },
+    });
+  });
+
+  it('uses the working label while a prompt waits for the first thought', () => {
+    expect(
+      deriveMagicChipPresentation({
+        persistedStatus: 'acp_ready',
+        prompt: {
+          agentSessionId: 'session',
+          requestId: null,
+          turn: 0,
+          author: { kind: 'user', userId: null },
+          parts: [{ kind: 'text', text: 'hi' }],
+          stop: null,
+        },
+      })
+    ).toEqual({
+      kind: 'working',
+      activity: { label: WORKING_LABEL, busy: true },
+    });
+  });
+
+  it('keeps the working label after a tool finishes, before the next thought', () => {
+    expect(
+      deriveMagicChipPresentation({
+        persistedStatus: 'acp_ready',
+        response: response({
+          parts: [
+            {
+              kind: 'tool_use',
+              id: 'done',
+              name: { kind: 'native', name: 'Read' },
+              status: 'completed',
+              detail: { kind: 'read', paths: ['README.md'] },
+            },
+          ],
+        }),
+      })
+    ).toEqual({
+      kind: 'working',
+      activity: { label: WORKING_LABEL, busy: true },
     });
   });
 
@@ -267,7 +309,7 @@ describe('deriveMagicChipPresentation', () => {
       markdown: 'Looking at t',
       activity: {
         label: 'Writing response',
-        busy: false,
+        busy: true,
       },
     });
   });
@@ -430,7 +472,7 @@ describe('the latest passage', () => {
     ).toEqual({
       kind: 'answering',
       markdown: 'They pass.',
-      activity: { label: 'Writing response', busy: false },
+      activity: { label: 'Writing response', busy: true },
     });
   });
 

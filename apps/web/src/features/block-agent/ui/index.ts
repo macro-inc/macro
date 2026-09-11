@@ -57,4 +57,5 @@ export {
   type ToolStatus,
 } from './types';
 export { WorkingLine } from './WorkingLine';
+export { WorkingVerb } from './WorkingVerb';
 export { createVerbDraw, WORKING_LABEL } from './working-verbs';

@@ -12,6 +12,7 @@ import type {
 import { For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
+import { showsWorkingLine } from '../state/working-line';
 import { ActionLine, Thought, WorkingLine } from '../ui';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
@@ -53,27 +54,6 @@ function AgentMessagePart(props: {
     .with({ kind: 'control' }, (part) => <ControlPart part={part} />)
     .with({ kind: 'elicitation' }, (part) => <ElicitationPart part={part} />)
     .exhaustive();
-}
-
-/**
- * Whether an open turn should show the working row at its tail.
- *
- * Skipped wherever the transcript already shows the turn is alive — prose
- * streaming in, a thought shimmering — and wherever it is not: a permission
- * or elicitation prompt is waiting on the reader, not working.
- */
-function showsWorkingLine(message: FoldedMessage): boolean {
-  const last = message.parts[message.parts.length - 1];
-  if (last === undefined) return true;
-  return match(last)
-    .with(
-      { kind: 'text' },
-      { kind: 'thought' },
-      { kind: 'permission' },
-      { kind: 'elicitation' },
-      () => false
-    )
-    .otherwise(() => true);
 }
 
 /**

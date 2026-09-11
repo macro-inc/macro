@@ -1,3 +1,4 @@
+import { WORKING_LABEL } from '@app/features/block-agent/ui/working-verbs';
 import type { MagicChipStatus } from '@macro-inc/lexical-core';
 import type {
   FoldedMessage,
@@ -150,7 +151,7 @@ function toolActivity(
 
 function partActivity(part: MessagePart): MagicChipActivity {
   return match(part)
-    .with({ kind: 'text' }, () => ({ label: 'Writing response', busy: false }))
+    .with({ kind: 'text' }, () => ({ label: 'Writing response', busy: true }))
     .with({ kind: 'thought' }, ({ text }) => ({
       label: 'Thinking',
       detail: text.trim() || undefined,
@@ -301,7 +302,7 @@ function turnInFlightActivity(
 /** The session's persisted lifecycle, when the fold has nothing livelier. */
 function statusActivity(status: MagicChipStatus): MagicChipActivity {
   return match(status)
-    .with('no_messages', () => ({ label: 'Starting session', busy: false }))
+    .with('no_messages', () => ({ label: WORKING_LABEL, busy: true }))
     .with('booting', () => ({
       label: 'Booting agent',
       detail: 'Preparing workspace',
@@ -384,15 +385,59 @@ export function deriveMagicChipPresentation(
     turnEndedActivity(response) ??
     liveEventActivity(latestEvent, 'disconnected') ??
     turnInFlightActivity(response) ??
-    (prompt ? { label: 'Waiting for agent', busy: true } : undefined) ??
+    (prompt ? { label: WORKING_LABEL, busy: true } : undefined) ??
     liveEventActivity(latestEvent, 'acp_ready') ??
     statusActivity(persistedStatus);
+
+  const live = keepWorking(activity, response);
 
   // Prose the turn has not closed on yet. The fold appends into the trailing
   // text part as chunks land, so this is the answer being written, and the
   // activity stays alongside it to say what the agent is doing between
   // sentences.
-  if (markdown) return { kind: 'answering', markdown, activity };
+  if (markdown) return { kind: 'answering', markdown, activity: live };
 
-  return { kind: 'working', activity };
+  return { kind: 'working', activity: live };
+}
+
+/**
+ * An open turn whose latest part has gone idle (a finished tool, a settled
+ * control) would otherwise drop the shimmer. Keep the working label until
+ * the next thought or tool, unless the reader is the one being waited on.
+ */
+function keepWorking(
+  activity: MagicChipActivity,
+  response: FoldedMessage | undefined
+): MagicChipActivity {
+  if (
+    activity.busy ||
+    !response ||
+    response.stop ||
+    waitingOnReader(response)
+  ) {
+    return activity;
+  }
+  return { label: WORKING_LABEL, busy: true };
+}
+
+function waitingOnReader(response: FoldedMessage | undefined): boolean {
+  if (!response) return false;
+  return response.parts.some((part) => {
+    if (
+      part.kind === 'permission' &&
+      (part.outcome.kind === 'pending' ||
+        part.outcome.kind === 'errored' ||
+        part.outcome.kind === 'unrecognized')
+    ) {
+      return true;
+    }
+    if (part.kind === 'elicitation' && part.outcome.kind === 'pending') {
+      return true;
+    }
+    return (
+      part.kind === 'tool_use' &&
+      part.detail.kind === 'user_tool' &&
+      part.detail.outcome.kind === 'pending'
+    );
+  });
 }
