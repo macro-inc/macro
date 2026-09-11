@@ -8086,6 +8086,10 @@ export type SoupChatSoupPropertiesField = {
      */
     isPersistent: boolean;
     /**
+     * The last model selected for a sent message (`provider/model` id).
+     */
+    model?: string | null;
+    /**
      * The name of the chat
      */
     name: string;
