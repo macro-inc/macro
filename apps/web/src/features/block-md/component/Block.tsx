@@ -28,7 +28,7 @@ import {
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import { type ParentProps, Show, Suspense } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import type {
   MarkdownDocumentKind,
   MarkdownDocumentSource,
@@ -55,10 +55,6 @@ export interface BlockMarkdownProps {
 function ManagedTopBar() {
   const { displayName } = useMarkdownName();
   return <TopBar name={displayName} />;
-}
-
-function ManagedMarkdownProviders(props: ParentProps) {
-  return <ModalsProvider>{props.children}</ModalsProvider>;
 }
 
 export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
@@ -133,20 +129,20 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
 
   return (
     <DocumentBlockContainer>
-      <ManagedMarkdownProviders>
-        <MarkdownDocument
-          documentId={documentId}
-          kind={kind}
-          state={markdownState}
-          documentSource={documentSource()}
-          permissions={{
-            canComment: canComment(),
-            canEdit: canEdit(),
-            isOwner: isOwner(),
-          }}
-          persistedName={persistedName()}
-          fallbackName={fallbackName()}
-        >
+      <MarkdownDocument
+        documentId={documentId}
+        kind={kind}
+        state={markdownState}
+        documentSource={documentSource()}
+        permissions={{
+          canComment: canComment(),
+          canEdit: canEdit(),
+          isOwner: isOwner(),
+        }}
+        persistedName={persistedName()}
+        fallbackName={fallbackName()}
+      >
+        <ModalsProvider>
           <OldOverlay />
           <SidePanel.Layout>
             <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructions()}>
@@ -197,8 +193,8 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
               />
             </div>
           </SidePanel.Layout>
-        </MarkdownDocument>
-      </ManagedMarkdownProviders>
+        </ModalsProvider>
+      </MarkdownDocument>
     </DocumentBlockContainer>
   );
 }
