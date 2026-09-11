@@ -7,6 +7,10 @@ import {
   IDBSnapshotStore,
   LORO_SNAPSHOT_DB_NAME,
 } from '@macro-inc/collaboration/collab/snapshot-store';
+import type {
+  InitialSync,
+  TimeoutError,
+} from '@macro-inc/collaboration/collab/source';
 import {
   BrowserWALStore,
   LORO_WAL_DB_NAME,
@@ -14,6 +18,7 @@ import {
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import type { Span } from '@macro-inc/observability';
 import { Scroll } from '@ui';
+import type { ResultAsync } from 'neverthrow';
 import {
   createEffect,
   createSignal,
@@ -24,7 +29,6 @@ import {
 } from 'solid-js';
 import {
   type MarkdownDocumentContextValue,
-  type MarkdownDocumentData,
   type MarkdownDocumentProps,
   MarkdownDocumentProvider,
   useMarkdownDocument,
@@ -136,7 +140,7 @@ async function ingestLocalSnapshot(
 
 async function ingestRemoteSnapshot(
   loroManager: MarkdownLoroManager,
-  doInitialSync: MarkdownDocumentData['doInitialSync']
+  doInitialSync: () => ResultAsync<InitialSync, TimeoutError>
 ): Promise<SnapshotResult> {
   const sync = await doInitialSync();
   if (sync.isErr()) {
@@ -175,8 +179,10 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
   const context: MarkdownDocumentContextValue = {
     documentId: () => props.documentId,
     kind: () => props.kind,
-    data: () => props.data,
-    source: () => props.source,
+    isReady: () => props.isReady,
+    mode: () => props.mode,
+    dssFile: () => props.dssFile,
+    syncSource: () => props.syncSource,
     permissions: {
       canComment: () => props.permissions.canComment,
       canEdit: () => props.permissions.canEdit,
@@ -206,6 +212,7 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
 }
 
 type MarkdownSnapshotIngestOptions = {
+  doInitialSync?: () => ResultAsync<InitialSync, TimeoutError>;
   optimisticSnapshot?: Uint8Array<ArrayBufferLike>;
   loadCachedSnapshot?: () => Promise<Uint8Array | undefined>;
   onDataReady?: () => void;
@@ -224,36 +231,39 @@ function useMarkdownSnapshotIngest(
   const walStore = new BrowserWALStore<RawUpdate>(LORO_WAL_DB_NAME, documentId);
 
   createEffect(
-    on(markdownDocument.data, (data) => {
-      if (!data) return;
-      options.onDataReady?.();
+    on(
+      () => options.doInitialSync,
+      (doInitialSync) => {
+        if (!doInitialSync) return;
+        options.onDataReady?.();
 
-      const span = resumeDocumentSpan(documentId);
-      if (options.optimisticSnapshot) {
-        startSnapshotIngest(span, 'optimistic', loroManager, async () => {
-          const seeded = await loroManager.ingest({
-            kind: 'optimistic',
-            snapshot: options.optimisticSnapshot!,
+        const span = resumeDocumentSpan(documentId);
+        if (options.optimisticSnapshot) {
+          startSnapshotIngest(span, 'optimistic', loroManager, async () => {
+            const seeded = await loroManager.ingest({
+              kind: 'optimistic',
+              snapshot: options.optimisticSnapshot!,
+            });
+            return {
+              outcome: seeded ? 'seeded' : 'discarded',
+              bytes: options.optimisticSnapshot!.length,
+            };
           });
-          return {
-            outcome: seeded ? 'seeded' : 'discarded',
-            bytes: options.optimisticSnapshot!.length,
-          };
-        });
+        }
+        startSnapshotIngest(span, 'local', loroManager, () =>
+          ingestLocalSnapshot(loroManager, snapshotStore, walStore)
+        );
+        startSnapshotIngest(span, 's3', loroManager, () =>
+          ingestS3Snapshot(
+            loroManager,
+            options.loadCachedSnapshot ?? (async () => undefined)
+          )
+        );
+        startSnapshotIngest(span, 'remote', loroManager, () =>
+          ingestRemoteSnapshot(loroManager, doInitialSync)
+        );
       }
-      startSnapshotIngest(span, 'local', loroManager, () =>
-        ingestLocalSnapshot(loroManager, snapshotStore, walStore)
-      );
-      startSnapshotIngest(span, 's3', loroManager, () =>
-        ingestS3Snapshot(
-          loroManager,
-          options.loadCachedSnapshot ?? (async () => undefined)
-        )
-      );
-      startSnapshotIngest(span, 'remote', loroManager, () =>
-        ingestRemoteSnapshot(loroManager, data.doInitialSync)
-      );
-    })
+    )
   );
 }
 

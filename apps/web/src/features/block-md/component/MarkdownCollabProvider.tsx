@@ -2,7 +2,6 @@ import { useMarkdownBlockError } from '@block-md/signal/error';
 import { CollabProvider } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
-import { isSourceSyncService } from '@core/util/source';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import type { LexicalEditor } from 'lexical';
@@ -37,8 +36,7 @@ export type MarkdownCollabProviderProps = {
  */
 export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   const markdownDocument = useMarkdownDocument();
-  const docSource = markdownDocument.source;
-  const syncSource = () => markdownDocument.data()?.syncSource;
+  const syncSource = markdownDocument.syncSource;
   const canEdit = markdownDocument.permissions.canEdit;
   const canComment = markdownDocument.permissions.canComment;
   const [editorError] = useMarkdownBlockError();
@@ -55,10 +53,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       setEditorError={props.setEditorError}
       loroManager={props.loroManager}
       syncSource={syncSource}
-      sourceReady={() => {
-        const source = docSource();
-        return !!source && isSourceSyncService(source);
-      }}
+      sourceReady={() => markdownDocument.mode() === 'sync'}
       canEdit={canEdit}
       canComment={canComment}
       editorError={editorError}

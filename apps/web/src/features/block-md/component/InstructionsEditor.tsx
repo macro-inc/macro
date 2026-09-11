@@ -37,7 +37,6 @@ import {
   setEditorStateFromMarkdown,
 } from '@core/component/LexicalMarkdown/utils';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
-import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
@@ -61,7 +60,7 @@ import {
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
-import { useMarkdownData, useMdStore } from '../signal/markdownBlockData';
+import { useMdStore } from '../signal/markdownBlockData';
 import { useBlockSave } from '../signal/save';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
@@ -74,7 +73,6 @@ export function InstructionsEditor(props: {
   onLexicalStateDebuggerClose?: () => void;
 }) {
   const markdownDocument = useMarkdownDocument();
-  const markdownData = useMarkdownData();
   const blockId = markdownDocument.documentId();
 
   const saveDocumentMutation = createSaveMarkdownDocumentMutation();
@@ -82,11 +80,8 @@ export function InstructionsEditor(props: {
   const [, setMdStore] = useMdStore();
   const canEdit = markdownDocument.permissions.canEdit;
   const blockElement = markdownDocument.element;
-  const docSource = markdownDocument.source;
 
-  const IS_SYNC = () => {
-    return docSource() && isSourceSyncService(docSource()!);
-  };
+  const IS_SYNC = () => markdownDocument.mode() === 'sync';
 
   const debouncedSaveState = debounce(() => {
     const state_ = state();
@@ -275,17 +270,15 @@ export function InstructionsEditor(props: {
 
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
   createEffect(() => {
-    const file = markdownDocument.data()?.dssFile;
+    const file = markdownDocument.dssFile();
     if (!file) return;
 
     file.arrayBuffer().then(setFileArrayBuffer);
   });
 
   createEffect(() => {
-    const source = docSource();
-    if (!source) return;
-    if (!isSourceDSS(source)) return;
-    if (!markdownData()) return;
+    if (markdownDocument.mode() !== 'dss') return;
+    if (!markdownDocument.isReady()) return;
     if (editorReady()) return;
 
     const buf = fileArrayBuffer();

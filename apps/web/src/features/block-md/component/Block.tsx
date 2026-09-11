@@ -24,11 +24,11 @@ import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { type ParentProps, Show, Suspense } from 'solid-js';
 import type {
-  MarkdownDocumentData,
   MarkdownDocumentKind,
+  MarkdownDocumentMode,
 } from '../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
-import type { MarkdownBlockSpec } from '../definition';
+import type { MarkdownBlockSpec, MarkdownData } from '../definition';
 import { OldOverlay } from '../history/OldOverlay';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
 import { CollabStatus } from './CollabStatus';
@@ -110,9 +110,14 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const rawData = blockLoaderDataSignal.get;
   const data = () => {
     const value = rawData() as
-      | (MarkdownDocumentData & { __block?: string })
+      | (MarkdownData & { __block?: string })
       | undefined;
     return value?.__block === 'md' ? value : undefined;
+  };
+  const mode = (): MarkdownDocumentMode | undefined => {
+    const source = blockSourceSignal.get();
+    if (source?.type === 'sync-service') return 'sync';
+    if (source?.type === 'dss') return 'dss';
   };
 
   const setLoadError = blockErrorSignal.set;
@@ -127,8 +132,10 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
           documentId={documentId}
           kind={kind}
           state={markdownState}
-          data={data()}
-          source={blockSourceSignal.get()}
+          isReady={data() !== undefined}
+          mode={mode()}
+          dssFile={data()?.dssFile}
+          syncSource={data()?.syncSource}
           permissions={{
             canComment: canComment(),
             canEdit: canEdit(),
@@ -168,6 +175,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
                 isInstructions={isInstructions()}
                 hotkeyScope={blockHotkeyScopeSignal.get()}
                 autoFocus={canAutofocus && !navigatedFromJK()}
+                doInitialSync={data()?.doInitialSync}
                 optimisticSnapshot={props.optimisticSnapshot}
                 loadCachedSnapshot={() =>
                   loadMarkdownCachedSnapshot(documentId)

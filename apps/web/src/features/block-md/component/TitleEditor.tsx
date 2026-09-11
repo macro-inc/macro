@@ -46,7 +46,7 @@ import {
   untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { useMarkdownData, useMdStore } from '../signal/markdownBlockData';
+import { useMdStore } from '../signal/markdownBlockData';
 import { useMarkdownName } from './MarkdownNameProvider';
 
 /**
@@ -134,7 +134,6 @@ function titleNavigationPlugin(
 export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const markdownDocument = useMarkdownDocument();
   const [mdData, setMdData] = useMdStore();
-  const markdownData = useMarkdownData();
 
   const canEdit = markdownDocument.permissions.canEdit;
   const renameDocumentMutation = createRenameDssEntityMutation();
@@ -274,7 +273,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     editor.setEditable(canEdit() ?? false);
   });
 
-  const dataReady = createMemo(() => markdownData() !== undefined);
+  const dataReady = markdownDocument.isReady;
 
   const hasLocalTitleEdit = createMemo(() => {
     if (!titleFocused()) return false;

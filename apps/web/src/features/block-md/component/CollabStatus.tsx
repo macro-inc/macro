@@ -9,7 +9,7 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export function CollabStatus() {
   const markdownDocument = useMarkdownDocument();
-  const syncSource = () => markdownDocument.data()?.syncSource;
+  const syncSource = markdownDocument.syncSource;
 
   const status = () => syncSource()?.status();
   const showStatus = () =>

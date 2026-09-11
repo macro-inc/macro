@@ -1,17 +1,11 @@
-import type { Source } from '@core/source';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
-import type {
-  InitialSync,
-  LiveSyncSource,
-  TimeoutError,
-} from '@macro-inc/collaboration/collab/source';
-import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
-import type { ResultAsync } from 'neverthrow';
+import type { LiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import type { Accessor, ParentComponent } from 'solid-js';
 import { createContext, useContext } from 'solid-js';
 import type { MarkdownDocumentState } from './markdown-document-state';
 
 export type MarkdownDocumentKind = 'document' | 'task' | 'snippet' | 'skill';
+export type MarkdownDocumentMode = 'dss' | 'sync';
 
 export type MarkdownDocumentPermissions = {
   canComment: boolean;
@@ -19,19 +13,14 @@ export type MarkdownDocumentPermissions = {
   isOwner: boolean;
 };
 
-export type MarkdownDocumentData = {
-  documentMetadata: DocumentMetadata;
-  doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
-  dssFile?: IDocumentStorageServiceFile;
-  syncSource?: LiveSyncSource;
-};
-
 export type MarkdownDocumentProps = {
   documentId: string;
   kind: MarkdownDocumentKind;
   state?: MarkdownDocumentState;
-  data: MarkdownDocumentData | undefined;
-  source: Source | undefined;
+  isReady: boolean;
+  mode: MarkdownDocumentMode | undefined;
+  dssFile: IDocumentStorageServiceFile | undefined;
+  syncSource: LiveSyncSource | undefined;
   permissions: MarkdownDocumentPermissions;
   persistedName: string | undefined;
   fallbackName: string | undefined;
@@ -40,8 +29,10 @@ export type MarkdownDocumentProps = {
 export type MarkdownDocumentContextValue = {
   documentId: Accessor<string>;
   kind: Accessor<MarkdownDocumentKind>;
-  data: Accessor<MarkdownDocumentData | undefined>;
-  source: Accessor<Source | undefined>;
+  isReady: Accessor<boolean>;
+  mode: Accessor<MarkdownDocumentMode | undefined>;
+  dssFile: Accessor<IDocumentStorageServiceFile | undefined>;
+  syncSource: Accessor<LiveSyncSource | undefined>;
   permissions: {
     canComment: Accessor<boolean>;
     canEdit: Accessor<boolean>;

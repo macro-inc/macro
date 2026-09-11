@@ -9,8 +9,6 @@ import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
-export const useMarkdownData = () => useMarkdownDocument().data;
-
 /**
  * Store for the data and helpful ui refs for the Notebook/MD block
  * @property editor The Editor instance
@@ -43,9 +41,4 @@ export type MdData = {
 export function useMdStore() {
   const { md, setMd } = useMarkdownDocument().state.editor;
   return [md, setMd] as const;
-}
-
-export function useIsTask() {
-  const data = useMarkdownData();
-  return () => data()?.documentMetadata.subType === 'task';
 }
