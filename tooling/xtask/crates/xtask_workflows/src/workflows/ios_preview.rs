@@ -81,13 +81,9 @@ fn preview() -> Job {
         )
         .add_step(steps::checkout(false, false))
         .add_step(steps::install_nix_macos())
-        // The build reaches bun through `nix develop`, but the publish and
-        // comment steps run outside the shell and need it on PATH themselves.
-        .add_step(steps::setup_bun())
         .add_step(build_simulator_app())
         .add_step(upload_app_artifact().if_condition(Expression::new("always()")))
-        .add_step(upload_to_appetize())
-        .add_step(comment_on_pr())
+        .add_step(publish_preview())
 }
 
 fn build_simulator_app() -> Step<Run> {
@@ -110,62 +106,30 @@ fn upload_app_artifact() -> Step<Use> {
     .add_with(("if-no-files-found", "warn"))
 }
 
-/// The PR number, branch and SHA are attacker-controlled, so they reach the
-/// script through the environment — an env expansion can never become script
-/// text. Same convention as `cleanup_preview::get_preview_id`.
-fn upload_to_appetize() -> Step<Run> {
-    Step::new("Publish to Appetize")
-        .run(indoc::indoc! {r#"
-            PUBLIC_KEY=$(bun scripts/ios-preview/upload-appetize.ts \
-              --archive "../../$ARCHIVE_PATH" \
-              --pr "$PR_NUMBER" \
-              --repo "$REPO" \
-              --token "$GITHUB_TOKEN" \
-              --note "PR #$PR_NUMBER $SHA $BRANCH")
-            echo "public-key=$PUBLIC_KEY" >> $GITHUB_OUTPUT
-        "#})
-        .id("appetize")
-        .shell("bash")
+/// Uploads the archive and posts the comment. The PR number, branch and SHA
+/// are attacker-controlled, so they reach the script through the environment —
+/// an env expansion can never become script text. Same convention as
+/// `cleanup_preview::get_preview_id`.
+fn publish_preview() -> Step<Run> {
+    publish_step("Publish to Appetize and comment")
         .if_condition(Expression::new("github.event_name == 'pull_request'"))
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(Env::new("APPETIZE_API_TOKEN", vars::APPETIZE_API_TOKEN))
         .add_env(Env::new("ARCHIVE_PATH", ARCHIVE_PATH))
-        .add_env(Env::new("GITHUB_TOKEN", "${{ secrets.GITHUB_TOKEN }}"))
-        .add_env(Env::new("REPO", "${{ github.repository }}"))
-        .add_env(Env::new(
-            "PR_NUMBER",
-            "${{ github.event.pull_request.number }}",
-        ))
         .add_env(Env::new("BRANCH", "${{ github.head_ref }}"))
         .add_env(Env::new("SHA", "${{ github.event.pull_request.head.sha }}"))
 }
 
-fn comment_on_pr() -> Step<Run> {
-    Step::new("Comment on PR")
-        .run(indoc::indoc! {r#"
-            bun scripts/ios-preview/post-ios-comment.ts \
-              --pr "$PR_NUMBER" \
-              --repo "$REPO" \
-              --token "$GITHUB_TOKEN" \
-              --public-key "$PUBLIC_KEY" \
-              --branch "$BRANCH" \
-              --sha "$SHA"
-        "#})
+/// The publish and cleanup steps run the same script; `CLEANUP` picks the mode.
+fn publish_step(name: &str) -> Step<Run> {
+    Step::new(name)
+        .run(include_str!("scripts/publish_ios_preview.sh"))
         .shell("bash")
-        .if_condition(Expression::new("github.event_name == 'pull_request'"))
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(Env::new("GITHUB_TOKEN", "${{ secrets.GITHUB_TOKEN }}"))
+        .add_env(Env::new("APPETIZE_API_TOKEN", vars::APPETIZE_API_TOKEN))
+        .add_env(Env::new("GH_TOKEN", "${{ secrets.GITHUB_TOKEN }}"))
         .add_env(Env::new("REPO", "${{ github.repository }}"))
         .add_env(Env::new(
             "PR_NUMBER",
             "${{ github.event.pull_request.number }}",
         ))
-        .add_env(Env::new(
-            "PUBLIC_KEY",
-            "${{ steps.appetize.outputs.public-key }}",
-        ))
-        .add_env(Env::new("BRANCH", "${{ github.head_ref }}"))
-        .add_env(Env::new("SHA", "${{ github.event.pull_request.head.sha }}"))
 }
 
 /// Appetize apps outlive their PR unless something deletes them, and the key
@@ -184,24 +148,5 @@ fn cleanup() -> Job {
                 .pull_requests(Level::Read),
         )
         .add_step(steps::checkout(false, false))
-        .add_step(steps::setup_bun())
-        .add_step(
-            Step::new("Delete Appetize app")
-                .run(indoc::indoc! {r#"
-                    bun scripts/ios-preview/upload-appetize.ts \
-                      --pr "$PR_NUMBER" \
-                      --repo "$REPO" \
-                      --token "$GITHUB_TOKEN" \
-                      --cleanup
-                "#})
-                .shell("bash")
-                .working_directory(xtask_paths::repo_dir!("apps/web"))
-                .add_env(Env::new("APPETIZE_API_TOKEN", vars::APPETIZE_API_TOKEN))
-                .add_env(Env::new("GITHUB_TOKEN", "${{ secrets.GITHUB_TOKEN }}"))
-                .add_env(Env::new("REPO", "${{ github.repository }}"))
-                .add_env(Env::new(
-                    "PR_NUMBER",
-                    "${{ github.event.pull_request.number }}",
-                )),
-        )
+        .add_step(publish_step("Delete Appetize app").add_env(Env::new("CLEANUP", "1")))
 }
