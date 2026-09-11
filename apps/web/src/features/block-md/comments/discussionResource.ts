@@ -19,7 +19,7 @@ function isDiscussionThread(ct: CommentThread): boolean {
 }
 
 export function useDiscussionThreads() {
-  const data = useMarkdownDocument().state.comments.commentThreads;
+  const data = useMarkdownDocument().state.commentThreads;
   return () => {
     const threads = data() ?? [];
     return threads

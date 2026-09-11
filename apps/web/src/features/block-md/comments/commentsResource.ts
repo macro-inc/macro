@@ -29,7 +29,7 @@ export const sortComments = (a: Comment, b: Comment) => {
 
 function useHandleCreateComment() {
   const { mutate: mutateCommentThreads } =
-    useMarkdownDocument().state.comments.commentThreadActions;
+    useMarkdownDocument().state.commentThreadActions;
 
   return async (response: CreateCommentResponse) => {
     const commentThread: CommentThread = {
@@ -37,9 +37,9 @@ function useHandleCreateComment() {
       comments: response.comments,
     };
     batch(() => {
-      let mutatedExistingThread = false;
       mutateCommentThreads((prev = []) => {
-        let out: CommentThread[] = [];
+        let mutatedExistingThread = false;
+        const out: CommentThread[] = [];
         for (const thread of prev) {
           if (thread.thread.threadId === commentThread.thread.threadId) {
             mutatedExistingThread = true;
@@ -82,11 +82,11 @@ function useCreateComment() {
 
 function useHandleEditComment() {
   const { mutate: mutateCommentThreads } =
-    useMarkdownDocument().state.comments.commentThreadActions;
+    useMarkdownDocument().state.commentThreadActions;
 
   return async (response: EditCommentResponse) => {
     mutateCommentThreads((prev = []) => {
-      let out: CommentThread[] = [];
+      const out: CommentThread[] = [];
       for (const thread of prev) {
         if (thread.thread.threadId === response.threadId) {
           const commentThread = {
@@ -133,11 +133,10 @@ export function useEditCommentResource() {
 
 function useHandleDeleteComment() {
   const { mutate: mutateCommentThreads } =
-    useMarkdownDocument().state.comments.commentThreadActions;
+    useMarkdownDocument().state.commentThreadActions;
 
   return async (response: DeleteCommentResponse) => {
     return batch(() => {
-      // either delete single comment or entire thread
       if (response.thread.deleted) {
         mutateCommentThreads((prev = []) =>
           prev.filter((t) => t.thread.threadId !== response.thread.threadId)
@@ -147,7 +146,7 @@ function useHandleDeleteComment() {
         };
       } else {
         mutateCommentThreads((prev = []) => {
-          let out: CommentThread[] = [];
+          const out: CommentThread[] = [];
           for (const commentThread of prev) {
             if (commentThread.thread.threadId === response.thread.threadId) {
               const comments = commentThread.comments.filter(

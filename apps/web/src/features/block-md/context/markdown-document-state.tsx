@@ -20,6 +20,17 @@ import {
 import type { MdData } from '../signal/markdownBlockData';
 import type { Diff } from '../signal/rewriteSignal';
 
+type MarkdownCommentsState = {
+  marks: MarkStore;
+  activeMarkIds: string[];
+  activeCommentThread: number | null;
+  highlightedCommentId: number | null;
+  comments: CommentStore;
+  threads: ThreadStore;
+  commentMarksInitialized: boolean;
+  highlightedCommentThreads: number[];
+};
+
 export function createMarkdownDocumentState(documentId: string) {
   const params = createParamsState();
   const [md, setMd] = createStore<MdData>({});
@@ -38,21 +49,16 @@ export function createMarkdownDocumentState(documentId: string) {
     createSignal<boolean>();
   const [generateContext, setGenerateContext] = createSignal<string>();
 
-  const [marks, setMarks] = createStore<MarkStore>({});
-  const [activeMarkIds, setActiveMarkIds] = createSignal<string[]>([]);
-  const [activeCommentThread, setActiveCommentThread] = createSignal<
-    number | null
-  >(null);
-  const [highlightedCommentId, setHighlightedCommentId] = createSignal<
-    number | null
-  >(null);
-  const [comments, setComments] = createStore<CommentStore>({});
-  const [threads, setThreads] = createStore<ThreadStore>({});
-  const [commentMarksInitialized, setCommentMarksInitialized] =
-    createSignal(false);
-  const [highlightedCommentThreads, setHighlightedCommentThreads] =
-    createSignal<number[]>([]);
-  const [wideEnoughForComments, setWideEnoughForComments] = createSignal(true);
+  const [comments, setCommentState] = createStore<MarkdownCommentsState>({
+    marks: {},
+    activeMarkIds: [],
+    activeCommentThread: null,
+    highlightedCommentId: null,
+    comments: {},
+    threads: {},
+    commentMarksInitialized: false,
+    highlightedCommentThreads: [],
+  });
   const [commentThreads, commentThreadActions] = createResource<
     CommentThread[],
     string
@@ -86,28 +92,10 @@ export function createMarkdownDocumentState(documentId: string) {
       generateContext,
       setGenerateContext,
     },
-    comments: {
-      marks,
-      setMarks,
-      activeMarkIds,
-      setActiveMarkIds,
-      activeCommentThread,
-      setActiveCommentThread,
-      highlightedCommentId,
-      setHighlightedCommentId,
-      comments,
-      setComments,
-      threads,
-      setThreads,
-      commentMarksInitialized,
-      setCommentMarksInitialized,
-      highlightedCommentThreads,
-      setHighlightedCommentThreads,
-      wideEnoughForComments,
-      setWideEnoughForComments,
-      commentThreads,
-      commentThreadActions,
-    },
+    comments,
+    setCommentState,
+    commentThreads,
+    commentThreadActions,
   };
 }
 

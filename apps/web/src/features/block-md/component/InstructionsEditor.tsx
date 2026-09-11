@@ -76,7 +76,7 @@ export function InstructionsEditor(props: {
   const { setMd: setMdStore, error: editorError, setError: setEditorError } =
     markdownDocument.state.editor;
   const saveBlocked = () =>
-    markdownDocument.state.comments.activeCommentThread() === -1;
+    markdownDocument.state.comments.activeCommentThread === -1;
   const canEdit = markdownDocument.permissions.canEdit;
   const blockElement = markdownDocument.element;
   const documentSource = markdownDocument.documentSource;

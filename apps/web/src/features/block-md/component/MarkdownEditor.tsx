@@ -233,7 +233,7 @@ export function MarkdownEditor(props: {
   } = markdownDocument.state.editor;
   const { revisions, setRevisions } = markdownDocument.state.rewrite;
   const saveBlocked = () =>
-    markdownDocument.state.comments.activeCommentThread() === -1;
+    markdownDocument.state.comments.activeCommentThread === -1;
   const canEdit = markdownDocument.permissions.canEdit;
   const canComment = markdownDocument.permissions.canComment;
   const documentSource = markdownDocument.documentSource;

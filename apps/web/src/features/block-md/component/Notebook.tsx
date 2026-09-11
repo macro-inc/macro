@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import {
@@ -78,19 +79,14 @@ enum CommentLayoutMode {
   none = 'none',
 }
 
-const BreaksPoints: Record<CommentLayoutMode, number> = {
-  lg: NoteTargetWidth + 2 * CommentTargetWidth + 3 * GapTargetWidth,
-  md: (3 / 4) * NoteTargetWidth + CommentTargetWidth + GapTargetWidth,
-  xs: 0,
-  none: 0,
-};
-
-const widthToMode = (width: number): CommentLayoutMode => {
-  if (width >= BreaksPoints.lg) return CommentLayoutMode.lg;
-  if (width >= BreaksPoints.md) return CommentLayoutMode.md;
-  if (width >= BreaksPoints.xs) return CommentLayoutMode.xs;
-  return CommentLayoutMode.none;
-};
+const CommentBreakpoints = {
+  lg: {
+    min: NoteTargetWidth + 2 * CommentTargetWidth + 3 * GapTargetWidth,
+  },
+  md: {
+    min: (3 / 4) * NoteTargetWidth + CommentTargetWidth + GapTargetWidth,
+  },
+} as const;
 
 function useCanUseLexicalStateDebugger() {
   const isMacroTeam = useIsMacroTeam();
@@ -109,8 +105,7 @@ export function Notebook(props: {
   const markdownDocument = useMarkdownDocument();
   const blockElement = markdownDocument.element;
   const { md, setMd } = markdownDocument.state.editor;
-  const { comments, setWideEnoughForComments } =
-    markdownDocument.state.comments;
+  const commentState = markdownDocument.state.comments;
   const { displayName: documentName } = useMarkdownName();
   const scopeId = () => props.hotkeyScope;
   const history = useHistory();
@@ -126,24 +121,32 @@ export function Notebook(props: {
   const outlinePortalMount = () =>
     notebookRef.closest<HTMLElement>('.portal-scope') ?? notebookRef;
 
-  const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
-  const [width, setWidth] = createSignal(0);
+  const [width, setWidth] = createSignal<number>();
   const [leftFloatX, setLeftFloatX] = createSignal(0);
+  const commentBreakpoints = createSizeBreakpoints(width, CommentBreakpoints);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
   const outline = useMarkdownOutline({
     editor: () => md.editor,
     enabled: () =>
-      width() >= OutlineMinWidth && !history.isOpen() && !isMobile(),
+      (width() ?? 0) >= OutlineMinWidth && !history.isOpen() && !isMobile(),
   });
 
   const hasComment = createMemo(() => {
     if (!ENABLE_MARKDOWN_COMMENTS) return false;
-    return Object.keys(comments).length > 0;
+    return Object.keys(commentState.comments).length > 0;
   });
   // On phones the margin is hidden entirely (no minimized rail); the touch
   // comment drawer is the only comment surface. CommentMargin stays mounted
   // inside the hidden wrapper — it hosts the drawer.
   const showComments = () => hasComment() && !history.isOpen() && !isMobile();
+  const layoutMode = (): CommentLayoutMode => {
+    if (!showComments() || width() === undefined) {
+      return CommentLayoutMode.none;
+    }
+    if (commentBreakpoints.lg()) return CommentLayoutMode.lg;
+    if (commentBreakpoints.md()) return CommentLayoutMode.md;
+    return CommentLayoutMode.xs;
+  };
 
   const currentEditorState = () => {
     const editor = md.editor;
@@ -164,8 +167,6 @@ export function Notebook(props: {
     const observeCallback = () => {
       const { width, left } = notebookRef.getBoundingClientRect();
       setWidth(width);
-      const mode = showComments() ? widthToMode(width) : CommentLayoutMode.none;
-      setLayoutMode(mode);
       const leftFloat =
         contentRef.getBoundingClientRect().right - left + GapTargetWidth;
       setLeftFloatX(leftFloat);
@@ -188,22 +189,6 @@ export function Notebook(props: {
     setTimeout(() => {
       goToTempRedirect(documentId, recentState);
     }, 0);
-  });
-
-  createEffect(() => {
-    if (!showComments()) {
-      setLayoutMode(CommentLayoutMode.none);
-    } else {
-      setLayoutMode(widthToMode(untrack(width)));
-    }
-  });
-
-  createEffect(() => {
-    if (showComments()) {
-      setWideEnoughForComments(width() >= BreaksPoints.md);
-    } else {
-      setWideEnoughForComments(false);
-    }
   });
 
   createEffect(() => {
@@ -413,7 +398,9 @@ export function Notebook(props: {
           hidden: !showComments(),
         }}
       >
-        <CommentMargin />
+        <CommentMargin
+          wideEnough={showComments() && commentBreakpoints.md()}
+        />
       </div>
     </div>
   );

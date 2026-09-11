@@ -99,13 +99,8 @@ function PinnedReplyComposer(props: {
  */
 export function CommentThreadDrawer() {
   const markdownDocument = useMarkdownDocument();
-  const {
-    threads,
-    marks,
-    activeCommentThread,
-    setActiveCommentThread,
-    setHighlightedCommentThreads,
-  } = markdownDocument.state.comments;
+  const commentState = markdownDocument.state.comments;
+  const setCommentState = markdownDocument.state.setCommentState;
   const { md } = markdownDocument.state.editor;
 
   const parentCommentsContext = useContext(CommentsContext);
@@ -128,18 +123,18 @@ export function CommentThreadDrawer() {
   };
 
   const activeRoot = createMemo<Root | undefined>(() => {
-    const active = activeCommentThread();
-    return active == null ? undefined : threads[active];
+    const active = commentState.activeCommentThread;
+    return active == null ? undefined : commentState.threads[active];
   });
 
   const firstMarkElement = (root: Root) =>
-    Object.values(marks[root.anchorId]?.markNodes ?? {})[0];
+    Object.values(commentState.marks[root.anchorId]?.markNodes ?? {})[0];
 
   // Server threads in document order, from their marks' positions (viewport
   // rects preserve relative document order; this works with the margin
   // hidden, since marks live in the editor itself).
   const orderedThreadIds = createMemo(() => {
-    return Object.values(threads)
+    return Object.values(commentState.threads)
       .filter((root): root is Root => !!root && root.threadId !== -1)
       .map((root) => {
         const rect = firstMarkElement(root)?.getBoundingClientRect();
@@ -154,7 +149,7 @@ export function CommentThreadDrawer() {
   });
 
   const pagerIndex = createMemo(() => {
-    const active = activeCommentThread();
+    const active = commentState.activeCommentThread;
     return active == null ? -1 : orderedThreadIds().indexOf(active);
   });
 
@@ -170,9 +165,9 @@ export function CommentThreadDrawer() {
     // editor update (see CommentsProvider) — and the old selection has
     // served its purpose anyway.
     md.editor?.update(() => $setSelection(null));
-    setActiveCommentThread(target);
-    setHighlightedCommentThreads([target]);
-    const root = threads[target];
+    setCommentState('activeCommentThread', target);
+    setCommentState('highlightedCommentThreads', [target]);
+    const root = commentState.threads[target];
     if (root) {
       firstMarkElement(root)?.scrollIntoView({
         behavior: 'smooth',
@@ -187,8 +182,8 @@ export function CommentThreadDrawer() {
     // selection still sits inside the comment mark. Clear it so tapping the
     // highlight again registers as a selection change and reopens the drawer.
     md.editor?.update(() => $setSelection(null));
-    setActiveCommentThread(null);
-    setHighlightedCommentThreads([]);
+    setCommentState('activeCommentThread', null);
+    setCommentState('highlightedCommentThreads', []);
   };
 
   return (

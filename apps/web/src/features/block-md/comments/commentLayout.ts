@@ -36,7 +36,7 @@ const LAYOUT_THROTTLE = 60;
 export function createCommentLayout() {
   const markdownDocument = useMarkdownDocument();
   const { md } = markdownDocument.state.editor;
-  const { activeMarkIds, marks } = markdownDocument.state.comments;
+  const commentState = markdownDocument.state.comments;
 
   const notebookSize = createElementSize(() => md.notebook);
   const notebookHeight = createMemo(() => notebookSize.height);
@@ -98,8 +98,8 @@ export function createCommentLayout() {
 
   createEffect(() => {
     const updateMarkPositions = () => {
-      for (const markId in marks) {
-        const mark = marks[markId];
+      for (const markId in commentState.marks) {
+        const mark = commentState.marks[markId];
         if (!mark) continue;
 
         const markEls = Object.values(mark.markNodes).filter((el) => !!el);
@@ -144,7 +144,7 @@ export function createCommentLayout() {
   const [markLayouts, setMarkLayouts] = createSignal<MarkLayout[]>([]);
 
   createEffect(() => {
-    const layouts = Object.values(marks)
+    const layouts = Object.values(commentState.marks)
       .filter((m) => m !== undefined)
       .map((m) => {
         const top = markLocationTops[m.id];
@@ -229,7 +229,7 @@ export function createCommentLayout() {
       .flatMap((layout) => {
         if (!layout.layout) return [];
         let threadHeight = 0;
-        const mark = marks[layout.id];
+        const mark = commentState.marks[layout.id];
         const threadId = mark?.thread?.threadId;
         if (threadId) {
           threadHeight = threadHeights[threadId] ?? 0;
@@ -252,7 +252,7 @@ export function createCommentLayout() {
 
     // if no threads is active by default
     // position threads as if the first one is active
-    const activeMarkIdsValue = untrack(activeMarkIds);
+    const activeMarkIdsValue = untrack(() => commentState.activeMarkIds);
     const middleMarkId =
       activeMarkIdsValue[Math.floor(activeMarkIdsValue.length / 2)];
     const anchorPositionId =
