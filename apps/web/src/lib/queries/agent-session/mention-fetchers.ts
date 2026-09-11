@@ -7,6 +7,8 @@ import type {
   GraphqlAgentSessionExpr,
   SoupInput,
 } from '@service-storage/graphql/generated/graphql';
+import { botsQueryOptions } from '../bots/bots';
+import { queryClient } from '../client';
 import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 import {
   type AgentSessionMentionData,
@@ -45,6 +47,29 @@ export function agentSessionMentionInput(ids?: string[]): SoupInput {
   };
 }
 
+/** Older preview responses may identify the persona only by botId. */
+async function withSessionPersonaNames(
+  sessions: AgentSessionMentionData[]
+): Promise<AgentSessionMentionData[]> {
+  if (sessions.every((session) => session.bot?.name)) return sessions;
+  try {
+    const bots = await queryClient.ensureQueryData(botsQueryOptions());
+    const byId = new Map(bots.map((bot) => [bot.id, bot]));
+    return sessions.map((session) => {
+      if (session.bot?.name) return session;
+      const bot = byId.get(session.botId);
+      if (!bot) return session;
+      return {
+        ...session,
+        bot: { id: bot.id, name: bot.name, avatarUrl: bot.avatar_url },
+      };
+    });
+  } catch (error) {
+    console.warn('Failed to load agent session persona names', error);
+    return sessions;
+  }
+}
+
 export async function fetchRecentAgentSessionMentions(
   graphql: boolean
 ): Promise<AgentSessionMentionData[]> {
@@ -52,10 +77,12 @@ export async function fetchRecentAgentSessionMentions(
     const items = await fetchGraphqlAgentSessionMentions(
       agentSessionMentionInput()
     );
-    return items.map((item) => ({
-      ...item,
-      status: normalizeAgentSessionStatus(item.status),
-    }));
+    return withSessionPersonaNames(
+      items.map((item) => ({
+        ...item,
+        status: normalizeAgentSessionStatus(item.status),
+      }))
+    );
   }
   const page = await throwOnErr(() =>
     storageServiceClient.getSoupItems({
@@ -80,10 +107,12 @@ export async function fetchRecentAgentSessionMentions(
   const previews = new Map(
     (await Promise.all(batches)).flatMap((batch) => [...batch])
   );
-  return ids.flatMap((id) => {
-    const preview = previews.get(id);
-    return preview?.access === 'access' ? [preview.data] : [];
-  });
+  return withSessionPersonaNames(
+    ids.flatMap((id) => {
+      const preview = previews.get(id);
+      return preview?.access === 'access' ? [preview.data] : [];
+    })
+  );
 }
 
 export async function fetchAgentSessionMentionPreviews(

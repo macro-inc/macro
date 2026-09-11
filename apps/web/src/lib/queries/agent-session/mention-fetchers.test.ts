@@ -1,4 +1,4 @@
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const clients = vi.hoisted(() => ({
@@ -26,7 +26,7 @@ vi.mock('@service-storage/client', () => ({
 }));
 vi.mock('../client', () => ({
   queryClient: {
-    fetchQuery: ({ queryFn }: { queryFn: () => unknown }) => queryFn(),
+    ensureQueryData: ({ queryFn }: { queryFn: () => unknown }) => queryFn(),
   },
 }));
 
@@ -152,5 +152,56 @@ describe('mention transport adapters', () => {
         sort_method: 'updated_at',
       },
     });
+  });
+  it('resolves a persona from botId when the REST preview omits bot metadata', async () => {
+    clients.soup.mockResolvedValue(
+      ok({
+        items: [{ tag: 'agentSession', data: { ...session, bot: undefined } }],
+      })
+    );
+    clients.preview.mockResolvedValue(
+      ok({
+        previews: [
+          {
+            ...session,
+            bot: undefined,
+            type: 'access',
+            modifiedAt: '',
+            status: { kind: 'no_messages' },
+          },
+        ],
+      })
+    );
+    clients.bots.mockResolvedValue(
+      ok([{ id: 'bot', name: 'cursor', avatar_url: null }])
+    );
+    expect(await fetchRecentAgentSessionMentions(false)).toMatchObject([
+      { id: 'one', bot: { id: 'bot', name: 'cursor' } },
+    ]);
+    expect(clients.bots).toHaveBeenCalledOnce();
+  });
+
+  it('resolves missing GraphQL persona metadata from the same cached bot list', async () => {
+    clients.graphql.mockResolvedValue([{ ...session, bot: null }]);
+    clients.bots.mockResolvedValue(
+      ok([{ id: 'bot', name: 'cursor', avatar_url: null }])
+    );
+    expect(await fetchRecentAgentSessionMentions(true)).toMatchObject([
+      { id: 'one', bot: { name: 'cursor' } },
+    ]);
+    expect(clients.preview).not.toHaveBeenCalled();
+  });
+
+  it('keeps sessions visible when the optional persona lookup fails', async () => {
+    clients.graphql.mockResolvedValue([{ ...session, bot: null }]);
+    clients.bots.mockResolvedValue(err(new Error('unavailable')));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(await fetchRecentAgentSessionMentions(true)).toMatchObject([
+        { id: 'one', bot: null },
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
