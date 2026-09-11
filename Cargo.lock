@@ -296,6 +296,7 @@ dependencies = [
  "agent_inmem",
  "agent_runtime_protocol",
  "agent_session",
+ "agent_session_notifications",
  "agent_trigger",
  "ai_tools",
  "ai_usage",
@@ -469,19 +470,15 @@ version = "0.1.0"
 dependencies = [
  "agent_runtime_protocol",
  "agent_session",
- "anyhow",
  "bots",
- "kafka_util",
- "macro_event_broker",
  "macro_user_id",
  "model-entity",
  "model_notifications",
  "notification",
- "rdkafka",
  "rootcause",
+ "serde",
  "serde_json",
  "tokio",
- "tokio-retry",
  "tracing",
  "uuid",
  "workspace-hack",
@@ -11305,7 +11302,6 @@ dependencies = [
 name = "notification_service"
 version = "0.1.0"
 dependencies = [
- "agent_session_notifications",
  "anyhow",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",

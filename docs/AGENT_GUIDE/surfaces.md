@@ -66,10 +66,10 @@ nothing queued; `<bot> needs your answer in <session>` goes to the owner alone w
 agent stops to ask; `<user> mentioned you in <session>` goes to users @-mentioned in a
 prompt who can already open the session. All three are filed under the session itself:
 the inbox shows an agent-session row (agent icon, session name, the bot or mentioner as
-sender, the excerpt or question as the body) and clicking it opens the session. Answering
-the question marks its notification done; the next turn marks the previous "finished"
-done. The chip announcement post itself no longer notifies the thread. Settings →
-notifications lists them under `AI`.
+sender, the excerpt or question as the body) and clicking it opens the session. They are
+not retracted automatically yet: answering the question or starting the next turn leaves
+the earlier notification until you mark it done. The chip announcement post itself no
+longer notifies the thread. Settings → notifications lists them under `AI`.
 
 ## Tasks — `/app/component/tasks`
 

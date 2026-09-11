@@ -72,6 +72,7 @@ use agent_session::outbound::broker_lifecycle_publisher::BrokerLifecyclePublishe
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::name_generator::HaikuAgentSessionNameGenerator;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
+use agent_session_notifications::outbound::notifying_publisher::NotifyingLifecyclePublisher;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use anyhow::Context as _;
 use bot_id::BotId;
@@ -226,7 +227,19 @@ async fn run() -> anyhow::Result<()> {
             .context("failed to create kafka event publisher")?,
         macro_event_broker::GlobalSpawner,
     );
-    let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
+    let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
+        queue: notification::outbound::queue::SqsQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            macro_queues::NotificationIngressQueue::new().to_string(),
+        ),
+    });
+    // Every lifecycle fact goes on the broker and, when it is news to
+    // someone (finished, asking, mentioned), to the notification ingress -
+    // the same queue channel messages notify through.
+    let lifecycle_publisher = Arc::new(NotifyingLifecyclePublisher::new(
+        BrokerLifecyclePublisher::new(broker.clone()),
+        Arc::clone(&notifications),
+    ));
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
@@ -464,12 +477,6 @@ async fn run() -> anyhow::Result<()> {
     let containers =
         RoutedContainerManager::new(sandbox_and_inmem, cursor_manager, session_repo.clone());
 
-    let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
-        queue: notification::outbound::queue::SqsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::NotificationIngressQueue::new().to_string(),
-        ),
-    });
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),

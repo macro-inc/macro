@@ -187,8 +187,6 @@ pub async fn main() -> anyhow::Result<()> {
         },
         KafkaNotificationRealtimePublisher::new(realtime_event_broker.clone()),
     );
-    let lifecycle_connection_gateway_url = connection_gateway_url.clone();
-    let lifecycle_realtime_event_broker = realtime_event_broker.clone();
     let notification_events_receiver = PgNotificationEventsReceiver::new(db.clone());
     let mut notification_events_listener = NotificationEventsListener::new(
         notification_events_receiver,
@@ -305,47 +303,37 @@ pub async fn main() -> anyhow::Result<()> {
         .await
         .context("failed to get redis connection for last online checker")?;
 
-    // Built twice: once for the SQS ingress worker, once for the agent
-    // session lifecycle consumer below. The service owns its state-machine
-    // driver, and neither is shareable; the adapters underneath are cheap
-    // handles on the same pool and Redis connections.
-    let build_ingress_service = || {
-        let ingress_state_machine =
-            ::notification::domain::models::email_notification_digest::StateMachineDriverA::new_with_defaults(
-                ::notification::outbound::user_existence_checker::DbUserExistenceChecker::new(
-                    db.clone(),
-                ),
-                ::notification::outbound::push_notification_checker::PushNotificationCheckerImpl::new(
-                    ::notification::outbound::repository::DbNotificationRepository::new(db.clone()),
-                ),
-                ::notification::outbound::last_online_checker::LastOnlineCheckerImpl::new(
-                    last_online_tracker::domain::services::LastOnlineService::new(
-                        last_online_tracker::outbound::time::DefaultTime,
-                        last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
-                            last_online_redis_conn.clone(),
-                        ),
+    let ingress_state_machine =
+        ::notification::domain::models::email_notification_digest::StateMachineDriverA::new_with_defaults(
+            ::notification::outbound::user_existence_checker::DbUserExistenceChecker::new(
+                db.clone(),
+            ),
+            ::notification::outbound::push_notification_checker::PushNotificationCheckerImpl::new(
+                ::notification::outbound::repository::DbNotificationRepository::new(db.clone()),
+            ),
+            ::notification::outbound::last_online_checker::LastOnlineCheckerImpl::new(
+                last_online_tracker::domain::services::LastOnlineService::new(
+                    last_online_tracker::outbound::time::DefaultTime,
+                    last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
+                        last_online_redis_conn,
                     ),
                 ),
-                ::notification::outbound::digest_batcher::RedisDigestBatcher::new(
-                    ingress_redis_conn.clone(),
-                ),
-                model_notifications::digest_state::digest_email_block_list(),
-            );
-
-        let ingress_repository =
-            ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
-        let ingress_delivery_queue = ::notification::outbound::queue::SqsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::NotificationQueue::new().to_string(),
+            ),
+            ::notification::outbound::digest_batcher::RedisDigestBatcher::new(ingress_redis_conn),
+            model_notifications::digest_state::digest_email_block_list(),
         );
-        ::notification::domain::service::NotificationIngressService::new(
-            ingress_repository,
-            ingress_delivery_queue,
-            ingress_state_machine,
-        )
-    };
-    let ingress_service = build_ingress_service();
-    let lifecycle_ingress_service = build_ingress_service();
+
+    let ingress_repository =
+        ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+    let ingress_delivery_queue = ::notification::outbound::queue::SqsQueue::new(
+        aws_sdk_sqs::Client::new(&aws_config),
+        macro_queues::NotificationQueue::new().to_string(),
+    );
+    let ingress_service = ::notification::domain::service::NotificationIngressService::new(
+        ingress_repository,
+        ingress_delivery_queue,
+        ingress_state_machine,
+    );
 
     let ingress_queue = ::notification::outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
@@ -357,58 +345,6 @@ pub async fn main() -> anyhow::Result<()> {
     tokio::spawn(async move {
         tracing::info!("starting notification ingress worker");
         ingress_worker.run().await
-    });
-
-    // Agent-session lifecycle facts (the agent finished, is asking, someone
-    // was mentioned) become notifications here, straight off Kafka. Its own
-    // reader service, because retracting a stale notification is a reader
-    // operation and the API's reader is owned by the router state.
-    let lifecycle_reader_service = ::notification::domain::service::NotificationReaderService {
-        repository: ::notification::outbound::repository::DbNotificationRepository::new(db.clone()),
-        queue: ::notification::outbound::queue::SqsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::NotificationQueue::new().to_string(),
-        ),
-        sns_endpoint: ::notification::outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
-            aws_sdk_sns::Client::new(&aws_config),
-        ),
-        platform_config: ::notification::domain::service::PlatformArnConfig {
-            apns_platform_arn: config.sns_apns_platform_arn.as_ref().to_string(),
-            fcm_platform_arn: config.sns_fcm_platform_arn.as_ref().to_string(),
-            apns_voip_platform_arn: config.sns_apns_voip_platform_arn().to_string(),
-        },
-        realtime: FanoutNotificationRealtimePublisher::new(
-            WebSocketGatewayAdapter {
-                gateway: ConnectionGatewayClient::new(
-                    config.internal_api_key.as_ref().to_string(),
-                    lifecycle_connection_gateway_url,
-                ),
-            },
-            KafkaNotificationRealtimePublisher::new(lifecycle_realtime_event_broker),
-        ),
-    };
-    let lifecycle_brokers = config.kafka_brokers.as_ref().to_string();
-    tokio::spawn(async move {
-        loop {
-            tracing::info!("starting agent session notification consumer");
-            let result = agent_session_notifications::inbound::kafka_consumer::run_agent_session_notification_consumer(
-                &lifecycle_brokers,
-                &lifecycle_ingress_service,
-                &lifecycle_reader_service,
-                std::future::pending(),
-            )
-            .await;
-            match result {
-                Ok(()) => {
-                    tracing::error!("agent session notification consumer exited unexpectedly")
-                }
-                Err(error) => tracing::error!(
-                    error = ?error,
-                    "agent session notification consumer exited unexpectedly"
-                ),
-            }
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-        }
     });
 
     api::setup_and_serve(

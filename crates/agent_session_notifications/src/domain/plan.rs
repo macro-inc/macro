@@ -12,18 +12,19 @@
 //! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it |
 //! | `waiting_for_input` | [`AgentSessionWaitingForInputMetadata`] | the owner - the one person who may answer |
 //! | `mentioned` | [`AgentSessionMentionedMetadata`] | the users the prompt named (already narrowed to those with access) |
-//! | `input_received` | marks the question's notification done | the owner |
-//! | `turn_started` | marks the previous turn's `settled` done | the audience |
 //!
-//! Everything else on the topic is somebody else's business.
+//! Everything else on the topic is somebody else's business. Retracting a
+//! notification once it is stale (the question answered, the next turn
+//! started) is deliberately not done yet: the notification service has no
+//! producer-facing door for marking done, and adding one is its own change.
 //!
 //! # Ids
 //!
 //! A notification's id is derived from what it is about - the session, the
 //! turn (or prompt), and the kind - not from the event that carried it. The
-//! notification service creates idempotently on id, so a redelivered event is
-//! a no-op, and a later fact (the answer arriving) can name the notification
-//! it retracts without looking anything up.
+//! notification service creates idempotently on id, so publishing the same
+//! fact twice is a no-op, and a later retraction can name the notification
+//! without looking anything up.
 
 #[cfg(test)]
 mod test;
@@ -91,75 +92,54 @@ where
     }
 }
 
-/// One thing to do against the notification service.
+/// One notification to send, planned from a fact.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Action {
+pub enum PlannedNotification {
     /// Tell the audience the agent finished.
     Settled(Notify<AgentSessionSettledMetadata>),
     /// Tell the owner the agent is waiting on them.
     WaitingForInput(Notify<AgentSessionWaitingForInputMetadata>),
     /// Tell the people a prompt named.
     Mentioned(Notify<AgentSessionMentionedMetadata>),
-    /// A notification is no longer news for `user`: mark it done, which also
-    /// clears its push from their lock screen.
-    MarkDone {
-        /// Whose copy of the notification.
-        user: MacroUserIdStr<'static>,
-        /// The notification, by the id it was created with.
-        notification_id: Uuid,
-    },
 }
 
-/// The notifications and retractions one lifecycle fact warrants.
+impl PlannedNotification {
+    /// The kind's wire name, for logs.
+    #[must_use]
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Settled(_) => AgentSessionSettledMetadata::TYPE_NAME,
+            Self::WaitingForInput(_) => AgentSessionWaitingForInputMetadata::TYPE_NAME,
+            Self::Mentioned(_) => AgentSessionMentionedMetadata::TYPE_NAME,
+        }
+    }
+}
+
+/// The notifications one lifecycle fact warrants.
 #[must_use]
-pub fn plan(event: &AgentSessionLifecycleEvent) -> Vec<Action> {
+pub fn plan(event: &AgentSessionLifecycleEvent) -> Vec<PlannedNotification> {
     match event {
         AgentSessionLifecycleEvent::Settled(settled) => plan_settled(settled),
         AgentSessionLifecycleEvent::WaitingForInput(waiting) => plan_waiting(waiting),
         AgentSessionLifecycleEvent::Mentioned(mentioned) => plan_mentioned(mentioned),
-        AgentSessionLifecycleEvent::InputReceived(received) => vec![Action::MarkDone {
-            user: received.identity.owner_id.clone(),
-            notification_id: waiting_notification_id(
-                received.identity.session_id.as_uuid(),
-                received.turn,
-            ),
-        }],
-        // A new turn makes the previous "finished" stale for everyone who
-        // heard it. Turns are the fold's contiguous positions, so the
-        // previous turn is one less; a turn that never settled (a queued
-        // prompt followed it) has no notification and the update is a no-op.
-        AgentSessionLifecycleEvent::TurnStarted(started) => match started.turn.0.checked_sub(1) {
-            Some(previous) => {
-                let id = settled_notification_id(
-                    started.identity.session_id.as_uuid(),
-                    TurnId(previous),
-                );
-                audience(&started.identity)
-                    .into_iter()
-                    .map(|user| Action::MarkDone {
-                        user,
-                        notification_id: id,
-                    })
-                    .collect()
-            }
-            None => Vec::new(),
-        },
         AgentSessionLifecycleEvent::Opened(_)
+        | AgentSessionLifecycleEvent::TurnStarted(_)
         | AgentSessionLifecycleEvent::TurnEnded(_)
+        | AgentSessionLifecycleEvent::InputReceived(_)
         | AgentSessionLifecycleEvent::Stopped(_)
         | AgentSessionLifecycleEvent::Renamed(_)
         | AgentSessionLifecycleEvent::Deleted(_) => Vec::new(),
     }
 }
 
-fn plan_settled(settled: &SessionSettledMetadata) -> Vec<Action> {
+fn plan_settled(settled: &SessionSettledMetadata) -> Vec<PlannedNotification> {
     // "Settled" without the turn's record is a fact nobody can act on: no
     // excerpt, no chip, no turn to key the id by.
     let Some(turn) = &settled.last_turn else {
         return Vec::new();
     };
     let (entity, secondary_entity) = entities(&settled.identity);
-    vec![Action::Settled(Notify {
+    vec![PlannedNotification::Settled(Notify {
         notification_id: settled_notification_id(settled.identity.session_id.as_uuid(), turn.turn),
         entity,
         secondary_entity,
@@ -174,9 +154,9 @@ fn plan_settled(settled: &SessionSettledMetadata) -> Vec<Action> {
     })]
 }
 
-fn plan_waiting(waiting: &WaitingForInputMetadata) -> Vec<Action> {
+fn plan_waiting(waiting: &WaitingForInputMetadata) -> Vec<PlannedNotification> {
     let (entity, secondary_entity) = entities(&waiting.identity);
-    vec![Action::WaitingForInput(Notify {
+    vec![PlannedNotification::WaitingForInput(Notify {
         notification_id: waiting_notification_id(
             waiting.identity.session_id.as_uuid(),
             waiting.turn,
@@ -194,12 +174,12 @@ fn plan_waiting(waiting: &WaitingForInputMetadata) -> Vec<Action> {
     })]
 }
 
-fn plan_mentioned(mentioned: &SessionMentionedMetadata) -> Vec<Action> {
+fn plan_mentioned(mentioned: &SessionMentionedMetadata) -> Vec<PlannedNotification> {
     if mentioned.mentioned.is_empty() {
         return Vec::new();
     }
     let (entity, secondary_entity) = entities(&mentioned.identity);
-    vec![Action::Mentioned(Notify {
+    vec![PlannedNotification::Mentioned(Notify {
         notification_id: mentioned_notification_id(
             mentioned.identity.session_id.as_uuid(),
             mentioned.action_id.as_uuid(),

@@ -59,9 +59,9 @@ fn settled(identity: SessionIdentity, turn: u32) -> AgentSessionLifecycleEvent {
     })
 }
 
-fn one_settled(actions: Vec<Action>) -> Notify<AgentSessionSettledMetadata> {
+fn one_settled(actions: Vec<PlannedNotification>) -> Notify<AgentSessionSettledMetadata> {
     match actions.as_slice() {
-        [Action::Settled(notify)] => notify.clone(),
+        [PlannedNotification::Settled(notify)] => notify.clone(),
         other => panic!("expected one settled notification, got {other:#?}"),
     }
 }
@@ -157,7 +157,7 @@ fn waiting_for_input_goes_to_the_owner_alone() {
         },
     ));
 
-    let [Action::WaitingForInput(notify)] = actions.as_slice() else {
+    let [PlannedNotification::WaitingForInput(notify)] = actions.as_slice() else {
         panic!("expected one waiting notification, got {actions:#?}");
     };
     assert_eq!(notify.recipients, vec![owner()]);
@@ -167,65 +167,6 @@ fn waiting_for_input_goes_to_the_owner_alone() {
         notify.notification_id,
         waiting_notification_id(SESSION, TurnId(3))
     );
-}
-
-#[test]
-fn an_answer_retracts_the_question_for_the_owner() {
-    let actions = plan(&AgentSessionLifecycleEvent::InputReceived(
-        InputReceivedMetadata {
-            identity: identity(),
-            turn: TurnId(3),
-            action_id: AgentActionId::mint(),
-        },
-    ));
-
-    assert_eq!(
-        actions,
-        vec![Action::MarkDone {
-            user: owner(),
-            notification_id: waiting_notification_id(SESSION, TurnId(3)),
-        }]
-    );
-}
-
-#[test]
-fn a_new_turn_retracts_the_previous_settled_for_the_audience() {
-    let actions = plan(&AgentSessionLifecycleEvent::TurnStarted(
-        TurnStartedMetadata {
-            identity: identity(),
-            turn: TurnId(5),
-            action_id: AgentActionId::mint(),
-            actor: Some(owner()),
-            announcement_message_id: None,
-        },
-    ));
-
-    let previous = settled_notification_id(SESSION, TurnId(4));
-    assert_eq!(
-        actions,
-        [owner(), user("alice@macro.com"), user("bob@macro.com")]
-            .into_iter()
-            .map(|user| Action::MarkDone {
-                user,
-                notification_id: previous,
-            })
-            .collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn the_first_turn_has_nothing_to_retract() {
-    let actions = plan(&AgentSessionLifecycleEvent::TurnStarted(
-        TurnStartedMetadata {
-            identity: identity(),
-            turn: TurnId(0),
-            action_id: AgentActionId::mint(),
-            actor: Some(owner()),
-            announcement_message_id: None,
-        },
-    ));
-
-    assert!(actions.is_empty());
 }
 
 #[test]
@@ -244,7 +185,7 @@ fn mentioned_notifies_exactly_the_people_named() {
         },
     ));
 
-    let [Action::Mentioned(notify)] = actions.as_slice() else {
+    let [PlannedNotification::Mentioned(notify)] = actions.as_slice() else {
         panic!("expected one mention notification, got {actions:#?}");
     };
     assert_eq!(
@@ -276,6 +217,19 @@ fn a_mention_of_nobody_is_nothing() {
 #[test]
 fn facts_that_are_not_news_to_people_plan_nothing() {
     for event in [
+        // Retractions are deliberately not planned yet; see the module docs.
+        AgentSessionLifecycleEvent::InputReceived(InputReceivedMetadata {
+            identity: identity(),
+            turn: TurnId(3),
+            action_id: AgentActionId::mint(),
+        }),
+        AgentSessionLifecycleEvent::TurnStarted(TurnStartedMetadata {
+            identity: identity(),
+            turn: TurnId(5),
+            action_id: AgentActionId::mint(),
+            actor: Some(owner()),
+            announcement_message_id: None,
+        }),
         AgentSessionLifecycleEvent::Opened(SessionOpenedMetadata {
             identity: identity(),
             model: "claude".to_owned(),
