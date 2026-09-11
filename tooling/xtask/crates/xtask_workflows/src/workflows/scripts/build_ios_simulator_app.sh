@@ -112,6 +112,7 @@ fi
 # Boot the same simulator Appetize would, launch the app, and photograph it.
 # The screenshot is uploaded either way — it is the single most useful artifact
 # when a preview misbehaves.
+mkdir -p artifacts
 DEVICE="$(xcrun simctl create ios-preview-smoke com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro)"
 trap 'xcrun simctl delete "$DEVICE" >/dev/null 2>&1 || true' EXIT
 xcrun simctl boot "$DEVICE"
@@ -123,7 +124,19 @@ xcrun simctl launch "$DEVICE" com.macro.app.prod
 # The webview needs a moment to load and paint before the shot is worth taking.
 sleep 25
 xcrun simctl io "$DEVICE" screenshot artifacts/launch.png
-xcrun simctl spawn "$DEVICE" log collect --output artifacts/launch.logarchive 2>/dev/null || true
+
+# The app's own log, filtered by process name as AGENTS.md prescribes for
+# diagnosing iOS freezes. Kept whether or not the shot looks right — it is what
+# says *why* a screen was blank.
+xcrun simctl spawn "$DEVICE" log show --predicate 'process == "macro"' \
+  --last 3m --style compact >artifacts/launch.log 2>&1 || true
+echo "--- last 40 app log lines ---"
+tail -40 artifacts/launch.log || true
+
+if [ ! -f artifacts/launch.png ]; then
+  echo "simctl produced no screenshot." >&2
+  exit 1
+fi
 
 # A blank screen compresses to almost nothing, while any real UI carries
 # detail. This is a coarse signal deliberately: it cannot say the app is
@@ -139,5 +152,4 @@ fi
 # `ditto`, not `zip`: the Apple-supported way to archive a bundle, preserving
 # the symlinks and exec bits that Appetize (and anyone re-running this locally)
 # needs. The same archive is both the CI artifact and the upload payload.
-mkdir -p artifacts
 ditto -c -k --sequesterRsrc --keepParent "$APP" artifacts/macro-sim.zip
