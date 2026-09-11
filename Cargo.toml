@@ -60,6 +60,7 @@ members = [
   "crates/macro_sync_service_jwt",
   "crates/maybe_send",
   "crates/memory",
+  "crates/model_owner",
   "crates/mcp_select",
   "crates/mcp_toolset",
   "crates/notification_state",

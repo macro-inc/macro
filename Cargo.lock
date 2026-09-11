@@ -10708,6 +10708,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "model_owner"
+version = "0.1.0"
+dependencies = [
+ "bot_id",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "model_user"
 version = "0.1.0"
 dependencies = [

@@ -5555,6 +5555,13 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "model_owner": [
+      "crates/bot_id",
+      "crates/cowlike",
+      "crates/macro_user_id",
+      "crates/model_owner",
+      "crates/workspace-hack"
+    ],
     "model_user": [
       "crates/cowlike",
       "crates/macro_user_id",
