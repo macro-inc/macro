@@ -3,7 +3,6 @@ import { UserIcon } from '@core/component/UserIcon';
 import type { ChannelEntity } from '@entity';
 import ClockIcon from '@phosphor/clock.svg';
 import EmailIcon from '@phosphor/envelope.svg';
-import Robot from '@phosphor/robot.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { cn } from '@ui';
 import { createEffect, Show } from 'solid-js';
@@ -56,20 +55,7 @@ export function MentionsMenuItem(props: {
         );
 
       case 'agentSession':
-        return (
-          <Show
-            when={props.item.data.bot?.avatarUrl}
-            fallback={<Robot class="size-4 text-ink-muted" />}
-          >
-            {(url) => (
-              <img
-                src={url()}
-                alt=""
-                class="size-4 rounded-full object-cover"
-              />
-            )}
-          </Show>
-        );
+        return <EntityIcon targetType="agent" size="xs" />;
       case 'group':
         return <UsersIcon class="size-4 text-ink-muted" />;
 

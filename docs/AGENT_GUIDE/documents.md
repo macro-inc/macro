@@ -37,12 +37,13 @@ their relative depths and order.
 
 The `@` menu includes `Recent agent sessions`, searched by session or persona name
 within the 500 most recently updated accessible sessions. Selecting one inserts an
-inline reference showing the persona avatar/name, session title, and last-known
-status. Click it (or select the node and press Enter) to open `/app/agent/<id>`.
+inline reference showing the shared agent icon and an underlined session title.
+Chips omit persona avatars and status. Click it (or select the node and press
+Enter) to open `/app/agent/<id>`.
 It references an existing session; it does not invoke the persona, attach its
 transcript to AI context, or grant access. Private/deleted sessions show an
-unavailable label. Owner status events update live; mounted references refresh
-every 30 seconds while the tab is active for shared-viewer status and access checks.
+unavailable label. Mounted references refresh every 30 seconds while the tab is
+active to update titles and check access.
 
 Hover a document reference chip to open its preview without navigating. With
 `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`

@@ -115,14 +115,9 @@ export function WideLayout(props: LayoutProps) {
         placement="content"
         class="ph-no-capture font-medium truncate items-center gap-2 flex"
       >
-        <Show when={props.entity.type !== 'agent_session'}>
-          <div class="size-4 shrink-0">
-            <Entity.Icon
-              entity={props.entity}
-              streamState={props.streamState}
-            />
-          </div>
-        </Show>
+        <div class="size-4 shrink-0">
+          <Entity.Icon entity={props.entity} streamState={props.streamState} />
+        </div>
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
             {(entity) => (

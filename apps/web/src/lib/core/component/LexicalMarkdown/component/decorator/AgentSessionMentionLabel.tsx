@@ -1,49 +1,15 @@
-import {
-  type SessionStatusLike,
-  SessionStatusPill,
-} from '@core/component/AgentSessionStatusPill';
-import Robot from '@phosphor/robot.svg';
-import { Show } from 'solid-js';
+import AgentIcon from '@icon/wide-star.svg';
 
-/** Presentational contents shared by the live decorator and browser fixture. */
-export function AgentSessionMentionLabel(props: {
-  label: string;
-  bot?: { name: string; avatarUrl?: string | null } | null;
-  status?: SessionStatusLike;
-}) {
+/** A session reference uses the same icon and underline treatment as other mentions. */
+export function AgentSessionMentionLabel(props: { label: string }) {
   return (
-    <>
-      <Show
-        when={props.bot?.avatarUrl}
-        fallback={<Robot class="size-4 shrink-0 text-ink-muted" />}
-      >
-        {(url) => (
-          <img
-            src={url()}
-            alt=""
-            class="size-4 shrink-0 rounded-full object-cover"
-          />
-        )}
-      </Show>
-      <Show when={props.bot?.name}>
-        {(name) => (
-          <span
-            class="max-w-24 shrink-0 truncate text-ink-muted"
-            title={name()}
-          >
-            {name()} ·
-          </span>
-        )}
-      </Show>
-      <span
-        class="min-w-0 truncate underline decoration-edge-muted"
-        title={props.label}
-      >
+    <span class="pointer-events-auto">
+      <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
+        <AgentIcon class="size-full text-chat" />
+      </span>
+      <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         {props.label}
       </span>
-      <Show when={props.status}>
-        {(status) => <SessionStatusPill status={status()} />}
-      </Show>
-    </>
+    </span>
   );
 }

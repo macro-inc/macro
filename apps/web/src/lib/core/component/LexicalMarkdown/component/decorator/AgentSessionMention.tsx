@@ -2,9 +2,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import type { AgentSessionMentionDecoratorProps } from '@macro-inc/lexical-core';
-import { createAgentSessionMentionStatus } from '@queries/agent-session/mention-status';
 import { useAgentSessionMentionPreview } from '@queries/agent-session/mentions';
-import { subscribeAgentSessionLog } from '@queries/agent-session/session-fold';
 import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import { useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
@@ -24,19 +22,6 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
     const current = preview();
     return current?.access === 'access' ? current.data : undefined;
   };
-  const status = createAgentSessionMentionStatus(
-    () => session()?.id,
-    () => {
-      const current = session();
-      return current
-        ? {
-            status: current.status,
-            updatedAt: query.isSuccess ? query.data.requestedAt : 0,
-          }
-        : undefined;
-    },
-    subscribeAgentSessionLog
-  );
   const label = () => {
     const current = preview();
     if (current?.access === 'no_access') return 'Private agent session';
@@ -80,16 +65,12 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
       data-agent-session-mention="true"
       data-agent-session-id={props.id}
       data-agent-session-label={label()}
-      class="inline-flex max-w-full items-center gap-1 rounded-xs px-1 align-middle text-sm hover:bg-hover"
+      class="py-0.5 rounded-xs hover:bg-hover focus:bg-active"
       classList={{ 'bg-active': selected() }}
-      title={[session()?.bot?.name, label()].filter(Boolean).join(' · ')}
+      title={label()}
       {...navigation}
     >
-      <AgentSessionMentionLabel
-        label={label()}
-        bot={session()?.bot}
-        status={session() ? status() : undefined}
-      />
+      <AgentSessionMentionLabel label={label()} />
     </span>
   );
 }

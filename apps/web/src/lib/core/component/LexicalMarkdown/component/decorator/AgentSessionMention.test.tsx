@@ -43,7 +43,7 @@ beforeEach(() => {
 });
 
 describe('agent session mention rendering', () => {
-  it('shows persona, session, avatar and status, and opens the agent block', () => {
+  it('shows only the agent icon and underlined title, and opens the agent block', () => {
     const view = render(() => (
       <AgentSessionMention
         id="session"
@@ -52,12 +52,15 @@ describe('agent session mention rendering', () => {
         theme={{}}
       />
     ));
-    expect(view.container.textContent).toContain('Ada');
+    expect(view.container.textContent).not.toContain('Ada');
     expect(view.container.textContent).toContain('Fix mentions');
-    expect(view.container.textContent).toContain('Disconnected');
-    expect(view.container.querySelector('img')?.getAttribute('src')).toBe(
-      'https://example.com/avatar.png'
-    );
+    expect(view.container.textContent).not.toContain('Disconnected');
+    expect(view.container.querySelector('img')).toBeNull();
+    expect(view.container.querySelector('svg')).not.toBeNull();
+    expect(
+      screen.getByText('Fix mentions').classList.contains('underline')
+    ).toBe(true);
+    expect(mocks.subscribe).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText('Fix mentions'));
     expect(mocks.open).toHaveBeenCalledWith(
       { type: 'agent', id: 'session' },
