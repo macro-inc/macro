@@ -6,6 +6,7 @@ import { type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { type EntityData, isGithubPrEntity } from '../types/entity';
 import { isSearchEntity } from '../types/search';
+import { AgentSessionTitle } from './agent-session-title';
 
 function extractRawTitle(entity: EntityData): JSX.Element {
   return (
@@ -20,6 +21,7 @@ function extractRawTitle(entity: EntityData): JSX.Element {
       .with({ type: 'channel_message' }, (e) => e.channelName)
       .with({ type: 'channel_thread' }, (e) => e.name)
       .with({ type: 'email' }, (e) => e.name || '(No Subject)')
+      .with({ type: 'agent_session' }, (e) => <AgentSessionTitle entity={e} />)
       .with({ type: 'chat' }, (e) => e.name)
       .with({ type: 'call' }, (e) => e.name || blockNameToDefaultFile('call'))
       .with(

@@ -104,7 +104,7 @@ export function teamsFilter(entity: EntityData): boolean {
 }
 
 export function agentFilter(entity: EntityData): boolean {
-  return entity.type === 'chat';
+  return entity.type === 'chat' || entity.type === 'agent_session';
 }
 
 export function automationFilter(entity: EntityData): boolean {
@@ -267,6 +267,12 @@ export function filesAndFolderFilter(entity: EntityData): boolean {
 }
 
 export function activeAgentFilter(entity: EntityData): boolean {
+  if (entity.type === 'agent_session')
+    return (
+      entity.status !== 'no_messages' &&
+      entity.status !== 'disconnected' &&
+      entity.status !== 'session/end'
+    );
   if (entity.type !== 'chat') return false;
 
   // [TODO] Check status of agent

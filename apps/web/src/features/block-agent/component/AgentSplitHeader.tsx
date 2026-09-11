@@ -1,3 +1,4 @@
+import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-block-entity-commands';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
@@ -9,30 +10,22 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
-import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
+import { openExternalUrl } from '@core/util/url';
+import type { AgentSessionEntity } from '@entity';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
-import LinkIcon from '@phosphor/link.svg';
-import RenameIcon from '@phosphor/pencil-line.svg';
-import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
-import { createSignal, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
-import { AgentRenameModal } from './AgentRenameModal';
 import { harnessTitle } from './compose-agent-session-options';
 
 export { harnessTitle };
 
 /**
  * Agent-session identity in the split header chrome plus the standard split
- * toolbar, matching the PR block's shape for non-document blocks: static
- * label (names the split tab), copy-link tool, and a file menu with the
- * session's repository.
+ * toolbar: static label, shared entity actions, and session-specific
+ * repository and external-provider links.
  *
  * Rename lives on the title menu (channel / automation), not on a tap of
  * the name — `StaticSplitLabel` without `onRename` so a touch tap opens
@@ -47,8 +40,6 @@ export function AgentSplitHeader(props: {
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
   const { sessionId } = useAgentSession();
-  const userId = useUserId();
-  const [renameOpen, setRenameOpen] = createSignal(false);
   const title = () => {
     const persistedName = props.session?.name;
     if (persistedName && persistedName !== 'Agent Session')
@@ -56,36 +47,23 @@ export function AgentSplitHeader(props: {
     return props.title ?? persistedName ?? harnessTitle(props.session?.harness);
   };
 
-  const rename = async (name: string) => {
+  const entity = (): AgentSessionEntity | undefined => {
+    const session = props.session;
     const id = sessionId();
-    if (!id) return;
-    const result = await agentHarnessServiceClient.rename(id, name);
-    if (result.isErr()) {
-      toast.failure('Failed to rename agent session');
-      return;
-    }
-    handleAgentSessionRenamed({ agentSessionId: id, name });
+    if (!session || !id) return undefined;
+    return {
+      type: 'agent_session',
+      id,
+      name: title(),
+      ownerId: session.ownerId,
+      botId: session.botId,
+      status:
+        session.status.kind === 'event'
+          ? session.status.event
+          : session.status.kind,
+    };
   };
-
-  const copyLink = async () => {
-    const id = sessionId();
-    if (!id) return;
-    await navigator.clipboard.writeText(
-      buildSimpleEntityUrl({ type: 'agent', id })
-    );
-    toast.success('Link copied to clipboard');
-  };
-
-  const canRename = () => props.session?.ownerId === userId();
-
-  const renameTool: BlockTool = {
-    group: 'file',
-    label: 'Rename',
-    icon: RenameIcon,
-    hotkeyToken: TOKENS.entity.action.rename,
-    action: () => setRenameOpen(true),
-    condition: canRename,
-  };
+  useBlockEntityCommands(entity);
 
   const tools: BlockTool[] = [
     {
@@ -101,16 +79,11 @@ export function AgentSplitHeader(props: {
       },
       condition: () => Boolean(props.session?.external?.url),
     },
-    {
-      label: 'Copy link',
-      icon: LinkIcon,
-      action: copyLink,
-      // Nothing to link to until the session exists.
-      condition: () => sessionId() !== undefined,
-    },
   ];
 
   const ops: FileOperation[] = [
+    { op: 'rename' },
+    { op: 'delete' },
     {
       label: 'Open repository',
       icon: GitBranch,
@@ -147,17 +120,12 @@ export function AgentSplitHeader(props: {
 
       <ResponsiveBlockToolbar
         tools={[]}
-        menuTools={[renameTool, ...tools]}
-        ops={ops}
+        menuTools={tools}
+        ops={entity() ? ops : []}
         id={sessionId() ?? ''}
-        itemType="foreign"
+        itemType="agent_session"
+        entity={entity()}
         name={title()}
-      />
-      <AgentRenameModal
-        isOpen={renameOpen}
-        setIsOpen={setRenameOpen}
-        name={title()}
-        onRename={(name) => void rename(name)}
       />
     </>
   );

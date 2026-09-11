@@ -1,4 +1,5 @@
 import type {
+  GraphqlAgentSessionLiteral,
   GraphqlCalendarEventLiteral as GraphqlCalendarEventLiteralInput,
   GraphqlCallLiteral as GraphqlCallLiteralInput,
   GraphqlCallStatus,
@@ -59,6 +60,7 @@ type TargetAstKey =
   | 'callf'
   | 'ccf'
   | 'fef'
+  | 'asf'
   | 'remf'
   | 'propf';
 
@@ -590,6 +592,18 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
     filters.foreignEntityFilter = compileExpr(
       body.fef,
       mapForeignEntityLiteral
+    );
+  }
+  if (body.asf) {
+    filters.agentSessionFilter = compileExpr(
+      body.asf,
+      (literal): GraphqlAgentSessionLiteral => {
+        const [field, value] = singleLiteralField(literal);
+        if (field === 'inc' && value === true) return { include: true };
+        if (field === 'id' && typeof value === 'string') return { id: value };
+        if (field === 'o' && typeof value === 'string') return { owner: value };
+        return unsupported(`agent session literal ${field}`);
+      }
     );
   }
   if (body.remf) {

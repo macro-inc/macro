@@ -441,6 +441,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 continue;
             }
             previews.push(AgentSessionPreview::Access(AgentSessionPreviewData {
+                bot: None,
                 id,
                 name: row.name,
                 owner_id: MacroUserIdStr::try_from(row.owner_id)

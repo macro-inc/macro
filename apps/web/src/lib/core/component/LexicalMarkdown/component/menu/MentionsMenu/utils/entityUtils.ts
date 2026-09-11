@@ -44,6 +44,10 @@ export function getMentionItemName(item: MentionItem): string {
       return `@${item.data.groupAlias}`;
     case 'date':
       return item.data.displayText;
+    case 'agentSession':
+      return [item.data.bot?.name, item.data.name || 'Agent session']
+        .filter(Boolean)
+        .join(' · ');
     case 'entity':
       return item.data.name ?? (item.bucket === 'email' ? 'No Subject' : '');
   }

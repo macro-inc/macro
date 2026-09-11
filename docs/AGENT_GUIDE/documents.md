@@ -35,6 +35,15 @@ their relative depths and order.
 
 ## Reference hover previews
 
+The `@` menu includes `Recent agent sessions`, searched by session or persona name
+within the 500 most recently updated accessible sessions. Selecting one inserts an
+inline reference showing the persona avatar/name, session title, and last-known
+status. Click it (or select the node and press Enter) to open `/app/agent/<id>`.
+It references an existing session; it does not invoke the persona, attach its
+transcript to AI context, or grant access. Private/deleted sessions show an
+unavailable label. Owner status events update live; mounted references refresh
+every 30 seconds while the tab is active for shared-viewer status and access checks.
+
 Hover a document reference chip to open its preview without navigating. With
 `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
 batch, including task properties and viewer permission, without another fetch.

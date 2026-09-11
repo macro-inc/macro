@@ -3,6 +3,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import type { ChannelEntity } from '@entity';
 import ClockIcon from '@phosphor/clock.svg';
 import EmailIcon from '@phosphor/envelope.svg';
+import Robot from '@phosphor/robot.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { cn } from '@ui';
 import { createEffect, Show } from 'solid-js';
@@ -54,6 +55,21 @@ export function MentionsMenuItem(props: {
           />
         );
 
+      case 'agentSession':
+        return (
+          <Show
+            when={props.item.data.bot?.avatarUrl}
+            fallback={<Robot class="size-4 text-ink-muted" />}
+          >
+            {(url) => (
+              <img
+                src={url()}
+                alt=""
+                class="size-4 rounded-full object-cover"
+              />
+            )}
+          </Show>
+        );
       case 'group':
         return <UsersIcon class="size-4 text-ink-muted" />;
 
@@ -89,6 +105,9 @@ export function MentionsMenuItem(props: {
         e.preventDefault();
         e.stopPropagation();
       }}
+      on:pointerdown={(e) => {
+        e.preventDefault();
+      }}
       on:mousedown={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -107,6 +126,7 @@ export function MentionsMenuItem(props: {
       <div class="flex min-w-0 grow items-center gap-2">
         <span
           class="ph-no-capture min-w-0 max-w-full overflow-hidden text-nowrap text-ink text-xs sm:text-sm font-medium"
+          title={name()}
           style={{ 'text-overflow': 'ellipsis' }}
         >
           <Show when={userParts()} fallback={name()}>

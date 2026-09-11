@@ -172,6 +172,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
                 None => AgentSessionPreview::DoesNotExist(*id),
                 Some(session) if session.owner_id != *viewer => AgentSessionPreview::NoAccess(*id),
                 Some(session) => AgentSessionPreview::Access(AgentSessionPreviewData {
+                    bot: None,
                     id: *id,
                     name: session.name.clone(),
                     owner_id: session.owner_id.clone(),

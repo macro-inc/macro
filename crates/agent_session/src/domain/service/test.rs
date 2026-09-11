@@ -56,6 +56,31 @@ fn fixture() -> Fixture {
 }
 
 #[tokio::test]
+async fn previews_hydrate_bot_identity_only_for_accessible_sessions() {
+    let fx = fixture();
+    let session = fx.repo.get(fx.session).await.unwrap();
+    let previews = fx
+        .service
+        .preview_sessions(&session.owner_id, vec![fx.session, fx.session])
+        .await
+        .unwrap();
+    assert_eq!(previews.len(), 1);
+    let AgentSessionPreview::Access(data) = &previews[0] else {
+        panic!("expected access")
+    };
+    assert_eq!(data.bot.as_ref().unwrap().name, "Test Agent");
+    let other =
+        macro_user_id::user_id::MacroUserIdStr::try_from_email("other@example.com").unwrap();
+    assert_eq!(
+        fx.service
+            .preview_sessions(&other, vec![fx.session])
+            .await
+            .unwrap(),
+        vec![AgentSessionPreview::NoAccess(fx.session)]
+    );
+}
+
+#[tokio::test]
 async fn only_the_first_prompt_is_selected_for_automatic_naming() {
     let repo = InMemoryAgentSessionRepo::new();
     let session = test_session();

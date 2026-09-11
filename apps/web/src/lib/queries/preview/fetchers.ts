@@ -1,5 +1,8 @@
 import { itemToSafeName } from '@core/constant/allBlocks';
-
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
 import type { ApiThread } from '@service-email/generated/schemas';
@@ -7,11 +10,35 @@ import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { formatDocumentName } from '@service-storage/util/filename';
 import type { InfiniteData } from '@tanstack/solid-query';
+import { fetchAgentSessionMentionPreviews } from '../agent-session/mention-fetchers';
 import { normalizeMessageSender } from '../channel/message-sender';
 import { queryClient } from '../client';
 import { emailKeys } from '../email/keys';
 import { threadQueryOptions } from '../email/thread';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
+
+async function fetchSessionPreviews(ids: string[]): Promise<PreviewItem[]> {
+  const previews = await fetchAgentSessionMentionPreviews(
+    ids,
+    isFeatureEnabled(enableGraphqlSoup)
+  );
+  return [...previews].map(([id, preview]): PreviewItem => {
+    const base = {
+      id,
+      type: 'agent_session' as const,
+      loading: false as const,
+    };
+    if (preview.access !== 'access') return { ...base, access: preview.access };
+    return {
+      ...base,
+      access: 'access',
+      name: preview.data.name,
+      rawName: preview.data.name,
+      owner: preview.data.ownerId,
+      updatedAt: preview.data.updatedAt,
+    };
+  });
+}
 
 async function fetchChannelPreviews(
   channelIds: string[]
@@ -420,6 +447,7 @@ export async function fetchRestPreviewBatch(
   items: ItemEntity[]
 ): Promise<Map<string, PreviewItem>> {
   const results = await Promise.all([
+    doFetch(fetchSessionPreviews, filterMapToId(items, 'agent_session')),
     doFetch(fetchChatPreviews, filterMapToId(items, 'chat')),
     doFetch(fetchCallPreviews, filterMapToId(items, 'call')),
     doFetch(fetchChannelPreviews, filterMapToId(items, 'channel')),

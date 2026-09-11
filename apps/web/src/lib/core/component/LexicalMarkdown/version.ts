@@ -18,6 +18,7 @@
  * Version 2.5 - Aug 2026. Added expandable AgentContextNode.
  * Version 2.6 - Aug 2026. PasteNode origin: pasted (default) or referenced.
  * Version 3.0 - Sep 2026. Added ReplyTargetNode.
+ * Version 4.0 - Sep 2026. Added AgentSessionMentionNode.
  * Version 3.1 - Sep 2026. Added ConnectAppNode (agent "connect this app" chip).
  */
-export const MARKDOWN_VERSION_COUNTER = 3.1;
+export const MARKDOWN_VERSION_COUNTER = 4.0;

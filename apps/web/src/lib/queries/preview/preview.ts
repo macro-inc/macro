@@ -53,6 +53,7 @@ function itemPreviewQueryOptions(
   enabled = true,
   staleTime = PREVIEW_STALE_TIME
 ) {
+  if (item.type === 'agent_session') staleTime = Math.min(staleTime, 30_000);
   if (item.type === 'calendar_event') {
     staleTime = Math.min(staleTime, CALENDAR_EVENT_PREVIEW_STALE_TIME);
   }

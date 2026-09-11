@@ -73,6 +73,7 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
     return { type: 'channel', id: data.channelId };
   }
 
+  if (data.type === 'agent_session') return { type: 'agent', id: data.id };
   if (data.type === 'foreign') return undefined;
 
   // A reminder has no block of its own — it is opened through the entity it

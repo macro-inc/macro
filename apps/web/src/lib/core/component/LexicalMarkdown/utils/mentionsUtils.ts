@@ -384,7 +384,19 @@ export type GroupMentionItem = {
  * MentionItem = QuickAccessItem + Date + Group.
  * Used in MentionsMenu to unify all mentionable item types.
  */
-export type MentionItem = QuickAccessItem | DateMentionItem | GroupMentionItem;
+export type AgentSessionMentionItem = {
+  kind: 'agentSession';
+  id: string;
+  data: import('@queries/agent-session/mention-types').AgentSessionMentionData;
+  searchText: string;
+  timestamps: { createdAt: Date; updatedAt: Date };
+};
+
+export type MentionItem =
+  | QuickAccessItem
+  | DateMentionItem
+  | GroupMentionItem
+  | AgentSessionMentionItem;
 
 /**
  * Type guard for DateMentionItem.

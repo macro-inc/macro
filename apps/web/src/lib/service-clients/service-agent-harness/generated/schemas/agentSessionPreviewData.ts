@@ -4,6 +4,7 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+import type { AgentSessionPreviewDataBot } from './agentSessionPreviewDataBot';
 import type { SessionStatusDto } from './sessionStatusDto';
 
 /**
@@ -12,6 +13,7 @@ import type { SessionStatusDto } from './sessionStatusDto';
 Clients deserialize this, so both derives are used.
  */
 export interface AgentSessionPreviewData {
+  bot?: AgentSessionPreviewDataBot;
   /** The bot running the agent. */
   botId: string;
   /** When the session was created. */

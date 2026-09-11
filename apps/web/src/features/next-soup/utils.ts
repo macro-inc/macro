@@ -899,6 +899,10 @@ function getEntitySplitContent(entity: EntityData) {
       .with({ type: 'foreign' }, (entity) => {
         return { type: 'unknown' as const, id: entity.id };
       })
+      .with({ type: 'agent_session' }, (entity) => ({
+        type: 'agent' as const,
+        id: entity.id,
+      }))
       .with({ type: 'crm_company' }, (entity) => {
         return { type: 'company' as const, id: entity.id };
       })

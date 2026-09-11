@@ -4,6 +4,10 @@ import type {
 } from '@lexical/markdown';
 import type { ElementNode, LexicalNode, TextNode } from 'lexical';
 import {
+  AgentSessionMentionNode,
+  buildAgentSessionMentionMarkdown,
+} from '../nodes/AgentSessionMentionNode';
+import {
   CONNECT_APP_TAG,
   ConnectAppNode,
   isConnectAppSlug,
@@ -350,6 +354,69 @@ export const E_PR_MENTION: ElementTransformer = {
     if (!hostname) return label;
 
     const prUrl = `https://${hostname}/app/pr/${id}`;
+    return `[${label}](${prUrl})`;
+  },
+  replace: (
+    _parentNode: ElementNode,
+    _children: Array<LexicalNode>,
+    _match: Array<string>,
+    _isImport: boolean
+  ) => {
+    return false;
+  },
+};
+
+// Internal Agent Session Mentions
+
+export const I_AGENT_SESSION_MENTION: TextMatchTransformer = {
+  dependencies: [AgentSessionMentionNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: /<m-agent-session-mention>(.*?)<\/m-agent-session-mention>/,
+  importRegExp: /<m-agent-session-mention>(.*?)<\/m-agent-session-mention>/,
+  export: (node) => {
+    if (!(node instanceof AgentSessionMentionNode)) return null;
+    return buildAgentSessionMentionMarkdown({
+      id: node.getId(),
+      label: node.getLabel(),
+      mentionUuid: node.getMentionUuid(),
+    });
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const data = JSON.parse(match[1]);
+      if (!('id' in data) || typeof data.id !== 'string') {
+        throw new Error('Missing field id');
+      }
+      const prMentionNode = new AgentSessionMentionNode(
+        data.id,
+        typeof data.label === 'string' ? data.label : undefined,
+        typeof data.mentionUuid === 'string' ? data.mentionUuid : undefined
+      );
+      node.replace(prMentionNode);
+    } catch (e) {
+      console.error('Error in I_AGENT_SESSION_MENTION replace:', e);
+      replaceTextWithUnknownMention(node, 'Unknown Agent Session');
+    }
+  },
+};
+
+// External Agent Session Mentions
+
+export const E_AGENT_SESSION_MENTION: ElementTransformer = {
+  dependencies: [AgentSessionMentionNode],
+  type: 'element',
+  regExp: /$^/,
+  export: (node) => {
+    if (!(node instanceof AgentSessionMentionNode)) return null;
+
+    const id = node.getId();
+    if (!id) return null;
+
+    const label = node.getLabel() || 'Agent session';
+    const hostname = currentBrowserHostname();
+    if (!hostname) return label;
+
+    const prUrl = `https://${hostname}/app/agent/${id}`;
     return `[${label}](${prUrl})`;
   },
   replace: (

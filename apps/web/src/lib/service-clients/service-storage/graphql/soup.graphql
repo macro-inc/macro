@@ -37,6 +37,18 @@ fragment SoupItemFields on GraphqlSoupEntity {
 	__typename
 	cacheProjection @cacheOnly
 	...SoupEntityCoreFields
+	... on GraphqlSoupAgentSession {
+		sessionName: name
+		ownerId
+		botId
+		bot { id name avatarUrl }
+		threadId
+		status
+		createdAt
+		updatedAt
+		viewedAt
+		properties { ...SoupPropertyFields }
+	}
 	frecencyScore
 					... on GraphqlSoupDocument {
 						documentName: name

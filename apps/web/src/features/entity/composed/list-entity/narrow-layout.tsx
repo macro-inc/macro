@@ -44,9 +44,14 @@ export function NarrowLayout(props: LayoutProps) {
         placement="title"
         class="ph-no-capture flex items-center gap-2 truncate font-semibold"
       >
-        <div class="size-4 shrink-0">
-          <Entity.Icon entity={props.entity} streamState={props.streamState} />
-        </div>
+        <Show when={props.entity.type !== 'agent_session'}>
+          <div class="size-4 shrink-0">
+            <Entity.Icon
+              entity={props.entity}
+              streamState={props.streamState}
+            />
+          </div>
+        </Show>
         <Show
           when={isChannelMessageEntity(props.entity) && props.entity}
           fallback={<Entity.Title entity={props.entity} />}

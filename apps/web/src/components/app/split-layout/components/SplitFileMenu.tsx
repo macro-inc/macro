@@ -106,6 +106,7 @@ export type SplitFileMenuViews = {
  * hook's callers.
  */
 const BLOCKS_WITH_ENTITY_HOTKEYS: ReadonlySet<BlockName> = new Set<BlockName>([
+  'agent',
   'canvas',
   'channel',
   'chat',
@@ -526,15 +527,12 @@ export function SplitFileMenu(props: {
         if (isDefaultFileOperation(op)) {
           switch (op.op) {
             case 'delete':
-              if (!isOwner()) return null;
+              if (props.entity ? props.entity.ownerId !== userId() : !isOwner())
+                return null;
               return {
                 label: 'Delete',
                 action: () => {
-                  const entity = buildEntityData({
-                    id: props.id,
-                    name: props.name,
-                    blockName: aliasedBlockName,
-                  });
+                  const entity = menuEntity();
                   if (!entity) return;
                   setOpen(false);
                   openBulkEditModal({
@@ -552,15 +550,12 @@ export function SplitFileMenu(props: {
               };
 
             case 'rename':
-              if (!isOwner()) return null;
+              if (props.entity ? props.entity.ownerId !== userId() : !isOwner())
+                return null;
               return {
                 label: 'Rename',
                 action: () => {
-                  const entity = buildEntityData({
-                    id: props.id,
-                    name: props.name,
-                    blockName: aliasedBlockName,
-                  });
+                  const entity = menuEntity();
                   if (!entity) return;
                   setOpen(false);
                   openBulkEditModal({

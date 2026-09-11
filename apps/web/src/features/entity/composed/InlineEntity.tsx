@@ -1,3 +1,4 @@
+import { Show } from 'solid-js';
 import { Entity } from '../entity';
 import type { EntityData } from '../types/entity';
 
@@ -9,9 +10,11 @@ import type { EntityData } from '../types/entity';
 export function InlineEntity(props: { entity: EntityData }) {
   return (
     <div class="flex items-center gap-1 min-w-0 truncate">
-      <span class="size-[1.25em] shrink-0">
-        <Entity.Icon entity={props.entity} />
-      </span>
+      <Show when={props.entity.type !== 'agent_session'}>
+        <span class="size-[1.25em] shrink-0">
+          <Entity.Icon entity={props.entity} />
+        </span>
+      </Show>
       <Entity.Title entity={props.entity} />
     </div>
   );

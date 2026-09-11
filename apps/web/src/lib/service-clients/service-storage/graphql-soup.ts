@@ -1159,7 +1159,6 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
   const frecency = item.frecencyScore ?? 0;
 
   return match(item)
-    .with({ __typename: 'GraphqlSoupAgentSession' }, () => null)
     .with(
       { __typename: 'GraphqlSoupDocument' },
       (entity) =>
@@ -1180,6 +1179,29 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             documentVersionId: 0,
             properties: mapGraphqlProperties(entity.properties),
             subType: mapDocumentSubType(entity.subType),
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupAgentSession' },
+      (entity) =>
+        ({
+          tag: 'agentSession',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            name: entity.sessionName,
+            ownerId: entity.ownerId,
+            botId: entity.botId,
+            bot: entity.bot,
+            threadId: entity.threadId,
+            status: entity.status,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+            viewedAt: entity.viewedAt,
+            properties: mapGraphqlProperties(entity.properties),
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem

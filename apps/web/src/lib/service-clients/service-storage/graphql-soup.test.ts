@@ -1,6 +1,46 @@
 import type { BrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout-policy';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+it('maps agent sessions without discarding persona, favorites or notifications', async () => {
+  const { mapGraphqlSoupItem } = await import('./graphql-soup');
+  const mapped = mapGraphqlSoupItem({
+    __typename: 'GraphqlSoupAgentSession',
+    id: 'session',
+    entityType: 'AGENT_SESSION',
+    displayName: 'Fix mentions',
+    sessionName: 'Fix mentions',
+    ownerId: 'macro|owner@example.com',
+    botId: 'bot',
+    bot: {
+      id: 'bot',
+      name: 'Ada',
+      avatarUrl: null,
+    },
+    threadId: null,
+    status: 'acp_ready',
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-02',
+    viewedAt: null,
+    cacheProjection: null,
+    isFavorited: true,
+    notifications: [],
+    properties: [],
+    frecencyScore: 5,
+  });
+  expect(mapped).toMatchObject({
+    tag: 'agentSession',
+    is_favorited: true,
+    frecency_score: 5,
+    data: {
+      id: 'session',
+      name: 'Fix mentions',
+      bot: { name: 'Ada' },
+      status: 'acp_ready',
+      notifications: [],
+    },
+  });
+});
+
 const mocks = vi.hoisted(() => {
   let enabled = true;
   let graphqlEnabled = true;

@@ -190,6 +190,13 @@ export type GroupMentionNode = Id & {
   groupAlias: string;
 };
 
+export type AgentSessionMentionNode = Id & {
+  type: 'agent-session-mention';
+  version: number;
+  id: string;
+  label?: string;
+};
+
 export type PullRequestMentionNode = Id & {
   type: 'pr-mention';
   version: number;
@@ -246,6 +253,7 @@ export type KnownNode =
   | DocumentMentionNode
   | ContactMentionNode
   | GroupMentionNode
+  | AgentSessionMentionNode
   | PullRequestMentionNode
   | TagMentionNode
   | ThemeMentionNode

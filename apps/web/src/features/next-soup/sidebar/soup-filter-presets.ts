@@ -262,7 +262,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            include: { chatOwnerId: [ctx.userId] },
+            include: {
+              chatOwnerId: [ctx.userId],
+              agentSessionOwnerId: [ctx.userId],
+            },
           }),
           clientFilters: { and: ['agent'] },
         };
@@ -271,7 +274,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            include: { chatOwnerId: [ctx.userId] },
+            include: {
+              chatOwnerId: [ctx.userId],
+              agentSessionOwnerId: [ctx.userId],
+            },
           }),
           clientFilters: { and: ['agent', 'owned-entity'] },
         };
@@ -280,7 +286,11 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         if (!ctx.userId) return undefined;
         return {
           filters: defineQueryFilters({
-            exclude: { chatOwnerId: [ctx.userId] },
+            include: { includeAgentSessions: true },
+            exclude: {
+              chatOwnerId: [ctx.userId],
+              agentSessionOwnerId: [ctx.userId],
+            },
           }),
           clientFilters: { and: ['agent', 'shared-entity'] },
         };

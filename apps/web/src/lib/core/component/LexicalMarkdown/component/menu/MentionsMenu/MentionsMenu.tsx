@@ -13,6 +13,8 @@ import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
+import { searchAgentSessionMentions } from '@queries/agent-session/mention-types';
+import { useRecentAgentSessionMentions } from '@queries/agent-session/mentions';
 import type { HistoryItem as Item } from '@queries/history/history';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { createVirtualizer } from '@tanstack/solid-virtual';
@@ -35,6 +37,7 @@ import { floatWithSelection } from '../../../directive/floatWithSelection';
 import { CLOSE_INLINE_SEARCH_COMMAND } from '../../../plugins';
 import type { MenuOperations } from '../../../shared/inlineMenu';
 import type {
+  AgentSessionMentionItem,
   DateMentionItem,
   MentionItem,
   UserMentionRecord,
@@ -95,6 +98,27 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
   const hasCustomEntities = () => !!props.entities;
+  const sessionsEnabled = () =>
+    !hasCustomEntities() &&
+    (!props.sources || props.sources.includes('agentSessions'));
+  const sessionQuery = useRecentAgentSessionMentions(
+    () => props.menu.isOpen() && sessionsEnabled()
+  );
+  const agentSessions = createLazyMemo((): AgentSessionMentionItem[] => {
+    if (!sessionsEnabled() || !sessionQuery.isSuccess) return [];
+    return searchAgentSessionMentions(sessionQuery.data, searchTerm()).map(
+      (data) => ({
+        kind: 'agentSession',
+        id: data.id,
+        data,
+        searchText: `${data.name} ${data.bot?.name ?? ''}`,
+        timestamps: {
+          createdAt: new Date(data.createdAt),
+          updatedAt: new Date(data.updatedAt),
+        },
+      })
+    );
+  });
 
   const quickAccess = hasCustomEntities() ? undefined : useQuickAccess();
   const allItems = props.entities ?? quickAccess!.useList().items;
@@ -242,6 +266,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const combined: MentionItem[] = [
       ...users,
       ...(docs() ?? []),
+      ...agentSessions(),
       ...(channels() ?? []),
       ...(companies() ?? []),
       ...(emails() ?? []),
@@ -260,6 +285,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           getFullCount: () =>
             (usersAndGroups()?.length ?? 0) +
             docsMention.totalCount() +
+            agentSessions().length +
             channelsMention.totalCount() +
             (companyMention?.totalCount() ?? 0) +
             totalEmailCount() +
@@ -287,6 +313,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }
 
     const buckets: BucketConfig[] = [
+      {
+        id: 'agentSessions',
+        label: 'Recent agent sessions',
+        getData: agentSessions,
+        getFullCount: () => agentSessions().length,
+      },
       {
         id: 'users',
         label: groups().length > 0 ? 'People & Groups' : 'People',
@@ -348,7 +380,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     const sourcesFilter = props.sources;
     const filtered = sourcesFilter
-      ? buckets.filter((bucket) => sourcesFilter.includes(bucket.id as any))
+      ? buckets.filter((bucket) => sourcesFilter.includes(bucket.id))
       : buckets;
 
     return filtered.filter((bucket) => bucket.getFullCount() > 0);

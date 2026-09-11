@@ -637,6 +637,9 @@ pub struct AgentSessionPreviewData {
     pub owner_id: String,
     /// The bot running the agent.
     pub bot_id: Uuid,
+    /// Minimal identity of the session's bot, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bot: Option<SessionBot>,
     /// The session's last known status.
     pub status: SessionStatusDto,
     /// When the session was created.
@@ -653,6 +656,7 @@ impl From<AgentSessionPreview> for AgentSessionPreviewDto {
                 name: data.name,
                 owner_id: data.owner_id.to_string(),
                 bot_id: data.bot_id.as_uuid(),
+                bot: data.bot,
                 status: data.status.into(),
                 created_at: data.created_at,
                 modified_at: data.modified_at,

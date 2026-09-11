@@ -1142,9 +1142,10 @@ pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
     /// Error type for reference share-permission operations.
     type Err: Into<anyhow::Error> + Send;
 
-    /// Update channel share permissions for referenced items that `actor` can view.
+    /// Update channel share permissions according to the referenced entity's policy.
     ///
     /// Implementations must not grant access for an item the actor cannot already view.
+    /// Agent sessions require ownership and grant edit access; other references grant view.
     fn update_channel_share_permissions_for_referenced_items(
         &self,
         actor: MacroUserIdStr<'static>,

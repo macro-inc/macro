@@ -3,6 +3,10 @@ import type {
   AgentContextDecoratorProps,
   AgentContextNode,
 } from './nodes/AgentContextNode';
+import type {
+  AgentSessionMentionDecoratorProps,
+  AgentSessionMentionNode,
+} from './nodes/AgentSessionMentionNode';
 import type { AwaitDecoratorProps, AwaitNode } from './nodes/AwaitNode';
 import type {
   ConnectAppDecoratorProps,
@@ -130,6 +134,10 @@ export interface NodeDecoratorMap {
   DateMentionNode: {
     klass: typeof DateMentionNode;
     props: DateMentionDecoratorProps;
+  };
+  AgentSessionMentionNode: {
+    klass: typeof AgentSessionMentionNode;
+    props: AgentSessionMentionDecoratorProps;
   };
   PullRequestMentionNode: {
     klass: typeof PullRequestMentionNode;

@@ -10,6 +10,7 @@ import {
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import type {
+  AgentSessionEntity,
   CalendarEventEntity,
   CalendarEventEntityTime,
   CallEntity,
@@ -63,18 +64,11 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-/**
- * Soup items the frontend knows how to render. Agent sessions are opt-in on
- * the backend and have no entity mapping here yet, so they are excluded until
- * the frontend grows an `AgentSessionEntity`.
- */
-type DisplayableSoupItem = Exclude<
-  SoupPage['items'][number],
-  { tag: 'agentSession' }
->;
+type DisplayableSoupItem = SoupPage['items'][number];
 type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
+  | AgentSessionEntity
   | DocumentEntity
   | ChatEntity
   | ProjectEntity
@@ -655,7 +649,7 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => Boolean(item) && item.tag !== 'agentSession';
+): item is DisplayableSoupItem => Boolean(item);
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread
@@ -706,6 +700,7 @@ function toReferencedEntity(
       P.union(
         'document',
         'chat',
+        'agent_session',
         'project',
         'channel',
         'channel_message',
@@ -729,6 +724,12 @@ export const mapApiSoupItemToEntity = (
   item: DisplayableSoupItem
 ): SoupEntity => {
   const entity = match(item)
+    .with({ tag: 'agentSession' }, (item) => ({
+      ...item.data,
+      type: 'agent_session' as const,
+      name: item.data.name || 'Agent session',
+      frecencyScore: item.frecency_score,
+    }))
     .with({ tag: 'chat' }, (item) => ({
       ...item.data,
       createdAt: item.data.createdAt,

@@ -2,7 +2,7 @@
 
 use crate::domain::{
     models::{ReferencedShareItem, ReferencedShareItemType},
-    ports::ChannelReferenceSharePermissions,
+    reference_sharing::{ReferenceShareRepository, ReferenceShareService},
 };
 use anyhow::Context;
 use entity_access::domain::{models::EntityType, ports::EntityAccessService};
@@ -18,54 +18,58 @@ use uuid::Uuid;
 
 /// Postgres-backed share-permission adapter for channel message references.
 #[derive(Clone)]
-pub struct PgChannelReferenceSharePermissions<E> {
+pub struct PgReferenceShareRepository<E> {
     pool: PgPool,
     entity_access_service: Arc<E>,
 }
 
-impl<E> PgChannelReferenceSharePermissions<E> {
+/// Postgres-backed domain reference-sharing service.
+pub type PgChannelReferenceSharePermissions<E> =
+    ReferenceShareService<PgReferenceShareRepository<E>>;
+
+impl<E> ReferenceShareService<PgReferenceShareRepository<E>> {
     /// Create a Postgres-backed reference share-permission adapter.
     pub fn new(pool: PgPool, entity_access_service: Arc<E>) -> Self {
-        Self {
+        Self::from_repository(PgReferenceShareRepository {
             pool,
             entity_access_service,
-        }
+        })
     }
 }
 
-impl<E> ChannelReferenceSharePermissions for PgChannelReferenceSharePermissions<E>
+impl<E> ReferenceShareRepository for PgReferenceShareRepository<E>
 where
     E: EntityAccessService,
 {
-    type Err = anyhow::Error;
-
-    async fn update_channel_share_permissions_for_referenced_items(
+    async fn access(
         &self,
-        actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
-        items: Vec<ReferencedShareItem>,
-    ) -> Result<(), Self::Err> {
-        for item in items {
-            ensure_referenced_item_visible_to_channel(
-                &self.pool,
-                &*self.entity_access_service,
-                &actor,
-                channel_id,
-                &item,
+        actor: &MacroUserIdStr<'_>,
+        item: &ReferencedShareItem,
+    ) -> anyhow::Result<Option<AccessLevel>> {
+        self.entity_access_service
+            .get_access_level(
+                Some(actor),
+                item.entity_id(),
+                entity_access_type_for(item.entity_type()),
             )
-            .await?;
-        }
-
-        Ok(())
+            .await
+            .context("failed to get user access level")
+    }
+    async fn grant(
+        &self,
+        channel_id: Uuid,
+        item: &ReferencedShareItem,
+        level: AccessLevel,
+    ) -> anyhow::Result<()> {
+        ensure_referenced_item_visible_to_channel(&self.pool, channel_id, item, level).await
     }
 }
 
 async fn ensure_referenced_item_visible_to_channel(
     db: &PgPool,
-    entity_access_service: &impl EntityAccessService,
-    actor: &MacroUserIdStr<'_>,
     channel_id: Uuid,
     item: &ReferencedShareItem,
+    level: AccessLevel,
 ) -> anyhow::Result<()> {
     let entity_id = macro_uuid::string_to_uuid(item.entity_id())?;
 
@@ -75,18 +79,21 @@ async fn ensure_referenced_item_visible_to_channel(
             .context("failed to insert thread share permissions")?;
     }
 
-    let entity_type = entity_access_type_for(item.entity_type());
-    let user_access_level = entity_access_service
-        .get_access_level(Some(actor), item.entity_id(), entity_type)
-        .await
-        .context("failed to get user access level")?;
-
-    if user_access_level.is_none() {
-        tracing::info!(
-            item_id = item.entity_id(),
-            item_type = item.entity_type().as_str(),
-            "user does not have access to the item, not modifying share permissions"
-        );
+    // Sessions use direct entity-access rows, not legacy SharePermission rows.
+    if item.entity_type() == ReferencedShareItemType::AgentSession {
+        let mut transaction = db.begin().await?;
+        entity_access_db_utils::update_entity_access_channel_share_permissions(
+            &mut transaction,
+            &entity_id,
+            entity_access_db_utils::EntityType::AgentSession,
+            &[UpdateChannelSharePermission {
+                channel_id: channel_id.to_string(),
+                operation: UpdateOperation::Add,
+                access_level: Some(level),
+            }],
+        )
+        .await?;
+        transaction.commit().await?;
         return Ok(());
     }
 
@@ -103,7 +110,7 @@ async fn ensure_referenced_item_visible_to_channel(
         &mut *transaction,
         &share_permission_id,
         &channel_id.to_string(),
-        AccessLevel::View,
+        level,
     )
     .await
     .context("failed to insert channel share permission")?;
@@ -119,7 +126,7 @@ async fn ensure_referenced_item_visible_to_channel(
         &[UpdateChannelSharePermission {
             channel_id: channel_id.to_string(),
             operation: UpdateOperation::Add,
-            access_level: Some(AccessLevel::View),
+            access_level: Some(level),
         }],
     )
     .await
@@ -131,6 +138,7 @@ async fn ensure_referenced_item_visible_to_channel(
 
 fn entity_access_type_for(item_type: ReferencedShareItemType) -> EntityType {
     match item_type {
+        ReferencedShareItemType::AgentSession => EntityType::AgentSession,
         ReferencedShareItemType::Document => EntityType::Document,
         ReferencedShareItemType::Chat => EntityType::Chat,
         ReferencedShareItemType::Project => EntityType::Project,
@@ -143,6 +151,7 @@ fn entity_access_db_type_for(
     item_type: ReferencedShareItemType,
 ) -> entity_access_db_utils::EntityType {
     match item_type {
+        ReferencedShareItemType::AgentSession => entity_access_db_utils::EntityType::AgentSession,
         ReferencedShareItemType::Document => entity_access_db_utils::EntityType::Document,
         ReferencedShareItemType::Chat => entity_access_db_utils::EntityType::Chat,
         ReferencedShareItemType::Project => entity_access_db_utils::EntityType::Project,

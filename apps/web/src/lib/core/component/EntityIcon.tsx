@@ -545,6 +545,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     // reminder first, and what it points at is iconed beside its name instead
     // — see `reminderReferenceIconType`.
     .with({ type: 'reminder' }, () => 'reminder')
+    .with({ type: 'agent_session' }, () => 'agent')
     .with({ type: 'calendar_event' }, () => 'calendar')
     .otherwise((e) => e.type);
 

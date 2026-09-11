@@ -15,6 +15,7 @@ const EXCLUDE: string[] = [NIL_UUID];
 
 // Base filter that excludes all entity types by default
 export const QUERY_FILTERS_BASE: SoupItemsQueryFilters = {
+  agent_session_filters: { ids: EXCLUDE },
   calendar_event_filters: { calendar_event_ids: EXCLUDE },
   call_filters: { call_ids: EXCLUDE },
   channel_filters: { channel_ids: EXCLUDE },
@@ -168,7 +169,9 @@ export function filterSoupItemByRequestBody(
     )
     .with(
       { tag: 'agentSession' },
-      ({ data }) => !isIdFilteredOut(body.agent_session_filters?.ids, data.id)
+      ({ data }) =>
+        !isIdFilteredOut(body.agent_session_filters?.ids, data.id) &&
+        !isValueFilteredOut(body.agent_session_filters?.owners, data.ownerId)
     )
     .exhaustive();
 }
@@ -186,6 +189,11 @@ function queryIncludeToRequestBody(query: Query): SoupBody {
       document_ids: include.documentId,
       owners: include.documentOwnerId,
       sub_types: include.subType,
+    },
+    agent_session_filters: {
+      ids: include.agentSessionId,
+      owners: include.agentSessionOwnerId,
+      include: include.includeAgentSessions,
     },
     chat_filters: { chat_ids: include.chatId },
     channel_filters: {

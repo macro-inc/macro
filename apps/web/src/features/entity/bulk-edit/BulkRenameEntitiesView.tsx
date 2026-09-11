@@ -91,9 +91,13 @@ export const BulkRenameEntitiesView = (props: {
     }
 
     try {
-      await renameMutation.mutateAsync(
+      const results = await renameMutation.mutateAsync(
         props.entities.map((e) => ({ entity: e, newName: renameFn(e.name) }))
       );
+      if (results.some((result) => !result.success)) {
+        props.onError?.(new Error('Some entities could not be renamed'));
+        return;
+      }
       props.onFinish();
     } catch (error) {
       console.error('Failed to rename entities:', error);

@@ -878,6 +878,7 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
     let mut expected = vec![
         AgentSessionPreview::Access(AgentSessionPreviewData {
             id: from_channel.id,
+            bot: None,
             name: DEFAULT_AGENT_SESSION_NAME.to_string(),
             owner_id: user_id(OWNER),
             bot_id,
@@ -887,6 +888,7 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
         }),
         AgentSessionPreview::Access(AgentSessionPreviewData {
             id: private.id,
+            bot: None,
             name: DEFAULT_AGENT_SESSION_NAME.to_string(),
             owner_id: user_id(OWNER),
             bot_id,
