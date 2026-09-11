@@ -692,9 +692,9 @@ describe('DocumentEditor — mention methods require a valid block id', () => {
     expect(() => ed().mentionGroup('nope', 0, { groupAlias: 'g' })).toThrow(
       /nope/
     );
-    expect(() =>
-      ed().mentionAgentSession('nope', 0, { id: 's' })
-    ).toThrow(/nope/);
+    expect(() => ed().mentionAgentSession('nope', 0, { id: 's' })).toThrow(
+      /nope/
+    );
     expect(() => ed().mentionDate('nope', 0, '2026-01-01')).toThrow(/nope/);
   });
 });

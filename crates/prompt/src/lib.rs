@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn mentions_prompt_covers_date_and_agent_session_chips() {
-        let instructions = mentions::PROMPT.instructions;
+        let instructions = mentions::PROMPT.instructions.as_ref();
         assert!(instructions.contains("<m-date-mention>"));
         assert!(instructions.contains("<m-agent-session-mention>"));
         assert!(instructions.contains("<m-user-mention>"));

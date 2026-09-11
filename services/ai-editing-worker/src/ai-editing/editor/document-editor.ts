@@ -66,7 +66,7 @@ export class DocumentEditor {
     if (typeof id !== 'string') {
       throw new EditError(
         `expected a node id string but got ${describeBadId(id)}. ` +
-          'Insert helpers return the new node\'s id directly, so use that value ' +
+          "Insert helpers return the new node's id directly, so use that value " +
           'as-is rather than a property of it.'
       );
     }
