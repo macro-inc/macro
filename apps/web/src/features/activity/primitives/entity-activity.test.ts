@@ -13,9 +13,7 @@ afterEach(() => {
   for (const dispose of disposals.splice(0)) dispose();
 });
 
-function setup(
-  entityType: 'DOCUMENT' | 'USER' | 'AGENT_SESSION' = 'DOCUMENT'
-) {
+function setup(entityType: 'DOCUMENT' | 'USER' | 'AGENT_SESSION' = 'DOCUMENT') {
   const context = createMockActivityContext();
   let state!: EntityActivityState;
   const dispose = createRoot((rootDispose) => {

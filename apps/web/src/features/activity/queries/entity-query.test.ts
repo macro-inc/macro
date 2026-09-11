@@ -8,17 +8,17 @@ const NIL = '00000000-0000-0000-0000-000000000000';
 
 describe('buildEntityActivityInput', () => {
   it('opts agent sessions into Soup by id', () => {
-    expect(buildEntityActivityInput('AGENT_SESSION', 'session-1')).toMatchObject(
-      {
-        initial: {
-          limit: 1,
-          filters: {
-            documentFilter: { literal: { id: NIL } },
-            agentSessionFilter: { literal: { id: 'session-1' } },
-          },
+    expect(
+      buildEntityActivityInput('AGENT_SESSION', 'session-1')
+    ).toMatchObject({
+      initial: {
+        limit: 1,
+        filters: {
+          documentFilter: { literal: { id: NIL } },
+          agentSessionFilter: { literal: { id: 'session-1' } },
         },
-      }
-    );
+      },
+    });
   });
 
   it('does not issue a lookup for users', () => {
