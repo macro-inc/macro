@@ -1,9 +1,11 @@
+import { listOwnedSlotName } from '@app/components/list';
 import { isListViewID } from '@app/constants/list-views';
 import {
   isDuplicatePreviewEntityOpen,
   notifyDuplicateContentOpen,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
+import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type {
@@ -12,6 +14,7 @@ import type {
   SplitEventPayload,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
+import { withSplitPanelOwner } from '@components/app/split-layout/layoutUtils';
 import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -30,7 +33,8 @@ type UseSoupNavigationHotkeysOptions = {
   hasNextPage?: Accessor<boolean>;
   isFetching?: Accessor<boolean>;
   isFetchingNextPage?: Accessor<boolean>;
-  fetchNextPage?: () => void;
+  fetchNextPage?: () => Promise<void>;
+  error?: Accessor<Error | null>;
 };
 
 export const useSoupNavigationHotkeys = (
@@ -59,6 +63,28 @@ export const useSoupNavigationHotkeys = (
     const referredFrom = splitHandle.referredFrom();
     return isListViewID(referredFrom) ? referredFrom : undefined;
   });
+
+  const viewId = navigationReferredFrom();
+  if (viewId) {
+    // Keep navigation available when the list view leaves the split's content.
+    withSplitPanelOwner(listOwnedSlotName('navigation-source'), () =>
+      registerListNavigationSource(splitHandle, {
+        viewId,
+        entities: () =>
+          soup
+            .rows()
+            .flatMap((row) =>
+              row.getIsGrouped() || row.getIsLoadMore() ? [] : [row.original]
+            ),
+        hasMore: () => options.hasNextPage?.() ?? false,
+        loadMore: async () => {
+          await options.fetchNextPage?.();
+          const error = options.error?.();
+          if (error) throw error;
+        },
+      })
+    );
+  }
 
   // Row focus moves instantly on every keypress; the (expensive) block swap in
   // the Viewer trails the last press. mergeHistory keeps the Viewer's

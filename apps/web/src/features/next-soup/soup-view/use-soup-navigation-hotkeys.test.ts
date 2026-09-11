@@ -29,6 +29,12 @@ vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => undefined,
 }));
 
+vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  withSplitPanelOwner: vi.fn((_name: string, factory: () => unknown) =>
+    factory()
+  ),
+}));
+
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ bulkMarkAsRead: vi.fn() }),
 }));
@@ -60,7 +66,14 @@ vi.mock('@core/hotkey/tokens', () => ({
   },
 }));
 
+import {
+  getListNavigationSource,
+  listNavigationSourceId,
+  withListNavigationSource,
+} from '@app/features/soup/collection/list-navigation-source';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
+import { withSplitPanelOwner } from '@components/app/split-layout/layoutUtils';
+import { createOwnedSlots } from '@components/app/split-layout/utils/createOwnedSlots';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import type { EntityData } from '@entity';
@@ -123,6 +136,7 @@ const createSplitHandleStub = () =>
     referredFrom: () => undefined,
     isControllerSplit: () => false,
     viewerId: () => undefined,
+    registerEntryStateCaptor: () => () => {},
   }) as unknown as SplitHandle;
 
 const handlerFor = (key: ValidHotkey) => {
@@ -154,6 +168,78 @@ const setupHotkeys = () =>
 describe('useSoupNavigationHotkeys', () => {
   beforeEach(() => {
     vi.mocked(registerHotkey).mockClear();
+    vi.mocked(withSplitPanelOwner).mockImplementation((_name, factory) =>
+      factory()
+    );
+  });
+
+  it('makes the legacy list available to a separate native detail split', async () => {
+    let finishLoading!: () => void;
+    const fetchNextPage = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishLoading = resolve;
+        })
+    );
+    const { soup, source, dispose } = createRoot((dispose) => {
+      const slots = createOwnedSlots();
+      vi.mocked(withSplitPanelOwner).mockImplementation(slots.replace);
+      const soup = createSoupState();
+      setGroupedRows(soup);
+      const list = createSplitHandleStub();
+      list.content = () => ({ type: 'component', id: 'mail' });
+      const disposeView = createRoot((disposeView) => {
+        useSoupNavigationHotkeys({
+          scopeId: 'test-scope',
+          soup,
+          splitHandle: list,
+          virtualizerHandle: () => undefined,
+          hasNextPage: () => true,
+          fetchNextPage,
+        });
+        return disposeView;
+      });
+      disposeView();
+      const detail = {
+        ...list,
+        id: 'native-detail' as SplitHandle['id'],
+        content: () =>
+          withListNavigationSource({ type: 'email', id: 'a1' }, list),
+      };
+      const source = getListNavigationSource(listNavigationSourceId(detail));
+      return { soup, source, dispose };
+    });
+    try {
+      expect(source?.viewId).toBe('mail');
+      expect(source?.entities().map((entity) => entity.id)).toEqual([
+        'a1',
+        'a2',
+        'b1',
+        'b2',
+      ]);
+      expect(source?.hasMore()).toBe(true);
+      let loaded = false;
+      const loading = (async () => {
+        await source!.loadMore();
+        loaded = true;
+      })();
+      await Promise.resolve();
+      expect(fetchNextPage).toHaveBeenCalledOnce();
+      expect(loaded).toBe(false);
+      soup.setRows([
+        soup.buildRow({
+          id: 'next',
+          index: 0,
+          original: createTestEntity('next'),
+        }),
+      ]);
+      finishLoading();
+      await loading;
+      expect(source?.entities().map((entity) => entity.id)).toEqual(['next']);
+    } finally {
+      dispose();
+    }
+    expect(getListNavigationSource('split-test')).toBeUndefined();
   });
 
   it('j and k step through entities without focusing group headers', () => {

@@ -939,6 +939,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     isFetching: source.isFetching,
     isFetchingNextPage: source.isFetchingNextPage,
     fetchNextPage: source.fetchNextPage,
+    error: source.error,
   });
 
   // Register entity action hotkeys

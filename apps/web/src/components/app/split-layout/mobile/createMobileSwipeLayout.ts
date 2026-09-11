@@ -106,6 +106,8 @@ export function createMobileSwipeLayout(
 
     // If the target is already mounted in BG, promote it instead of recreating it.
     if (bgHandle && sameContent(bgHandle.content(), content)) {
+      // Reopening from a list supplies a new source even for the same entity.
+      bgHandle.replace({ next: content, referredFrom, mergeHistory: true });
       if (forwardNavigationTrigger) {
         forwardNavigationTrigger();
       } else {
