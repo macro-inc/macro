@@ -195,10 +195,10 @@ where
             }
         }
         let complete = failure.is_none();
-        if succeeded == 0 {
-            if let Some(error) = failure {
-                return Err(error);
-            }
+        if succeeded == 0
+            && let Some(error) = failure
+        {
+            return Err(error);
         }
 
         // Two installations can cover the same repository - a user's own and
