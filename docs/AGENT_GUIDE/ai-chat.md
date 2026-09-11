@@ -142,8 +142,8 @@ model with a check on the current one — pick a row to switch. On desktop the
 transcript and composer use the shared channel message width so expanding **Context** only
 grows vertically; your messages are right-aligned bubbles and the model pill
 sits above the box. Tap the session title
-to open the title menu (caret), then **Rename** — that opens the same style of
-rename dialog automations use. Do not expect a tap on the name itself to start
+to open the title menu (caret), then **Rename** — that opens the generic entity
+rename dialog. Do not expect a tap on the name itself to start
 an inline edit.
 
 ### Sharing a session
@@ -151,7 +151,8 @@ an inline edit.
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;
 on mobile, open the session title menu and choose **Share**. The owner can
 select people or channels and send the session with an optional message using
-the same sharing composer as documents. People receive it through a direct or
+the same Share dialog and mobile drawer as documents. Sessions also support
+**Share** from entity list menus and the entity sharing shortcut. People receive it through a direct or
 group message. Recipients can view and control the session; there is no access
 level selector. Cancel closes the composer without sending.
 
