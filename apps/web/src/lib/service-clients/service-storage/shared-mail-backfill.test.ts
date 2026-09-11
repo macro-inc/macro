@@ -1,4 +1,5 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { parseCacheRevision } from '@graphql-cache/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import { createSharedMailBackfillFetcher } from './shared-mail-backfill';
 
@@ -18,7 +19,7 @@ function host() {
       keys: [key('old'), key('kept')],
       nextCursor: null,
       sortTimestamps: [],
-      revision: '1',
+      revision: parseCacheRevision('1'),
       optimistic: false,
     }),
     invalidate: vi.fn(async () => ({ revision: '2', affectedOps: [] })),
@@ -78,10 +79,13 @@ describe('Shared Mail scope refresh', () => {
         keys: [key('old')],
         nextCursor: 'local-next',
         sortTimestamps: [],
-        revision: '1',
+        revision: parseCacheRevision('1'),
         optimistic: false,
       })
-      .mockResolvedValueOnce({ kind: 'stale-cursor', revision: '2' });
+      .mockResolvedValueOnce({
+        kind: 'stale-cursor',
+        revision: parseCacheRevision('2'),
+      });
     const fetch = vi
       .fn()
       .mockResolvedValueOnce({ nextCursor: 'network-next', entityIds: ['new'] })
