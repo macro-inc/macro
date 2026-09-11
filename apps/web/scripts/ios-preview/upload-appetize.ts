@@ -27,11 +27,24 @@ import { fetchIssueComments } from './github';
 const APPETIZE_API = 'https://api.appetize.io/v1/apps';
 
 /**
- * Appetize's inactivity timeout, in seconds. Reviewers read code and switch
- * tabs; the 120s default drops them constantly. Only the values in Appetize's
- * enum are accepted.
+ * Streaming is what Appetize bills, so both limits exist to stop a forgotten
+ * browser tab costing money.
+ *
+ * `timeout` frees the device after this long with no interaction — the common
+ * case, someone wandering off mid-review. Only the values in Appetize's enum
+ * are accepted (30/60/90/120/180/300/600/1800/3600/7200); 180 is short enough
+ * that an abandoned tab stops quickly and long enough to read a screen. Booting
+ * again is one click.
+ *
+ * `timeLimit` is the backstop `timeout` cannot provide: a page that keeps
+ * poking the session stays "active" indefinitely, so cap the session outright.
+ * Unlike `timeout` it takes any number of seconds.
  */
-const SESSION_TIMEOUT_SECONDS = '600';
+const SESSION_INACTIVITY_TIMEOUT_SECONDS = '180';
+const SESSION_HARD_LIMIT_SECONDS = '1800';
+
+/** One reviewer at a time per PR; a preview is not a shared demo environment. */
+const MAX_CONCURRENT_SESSIONS = '2';
 
 interface Args {
   /** Zipped .app produced by `build_ios_simulator_app.sh`. */
@@ -111,7 +124,9 @@ async function publish(args: Args, publicKey: string | null): Promise<string> {
   form.set('file', new Blob([await Bun.file(archive).arrayBuffer()]), 'app.zip');
   form.set('platform', 'ios');
   form.set('fileType', 'zip');
-  form.set('timeout', SESSION_TIMEOUT_SECONDS);
+  form.set('timeout', SESSION_INACTIVITY_TIMEOUT_SECONDS);
+  form.set('timeLimit', SESSION_HARD_LIMIT_SECONDS);
+  form.set('maxConcurrent', MAX_CONCURRENT_SESSIONS);
   form.set('note', args.note);
   // A leaked link cannot drain the account, and the embed is only reachable
   // from a PR page.
