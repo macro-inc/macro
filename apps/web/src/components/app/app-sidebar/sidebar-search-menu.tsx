@@ -1,7 +1,9 @@
 import { CommandState } from '@app/features/command';
+import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { TOKENS } from '@core/hotkey/tokens';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import { Dropdown, Hotkey } from '@ui';
+import { Dropdown } from '@ui';
 import type { ComponentProps } from 'solid-js';
 
 /** Shared discovery menu for the expanded sidebar and compact rail. */
@@ -20,37 +22,35 @@ export function SidebarSearchMenu(props: {
       <Dropdown.Trigger {...props.triggerProps} label="Search">
         <MagnifyingGlassIcon />
       </Dropdown.Trigger>
-      <Dropdown.Content
-        class="min-w-64"
-        // Open the destination after dismissal so the menu cannot steal its focus.
-        onCloseAutoFocus={(event) => {
-          if (!selectedAction) return;
-          event.preventDefault();
-          selectedAction();
-          selectedAction = undefined;
-        }}
-      >
-        <Dropdown.Item
-          onSelect={() => {
-            selectedAction = () => CommandState.open();
+      <DropdownMenu.Portal>
+        <ContextMenuContent
+          contentComponent={DropdownMenu.Content}
+          class="z-tool-tip! min-w-56 text-xs text-ink-muted"
+          // Open the destination after dismissal so the menu cannot steal its focus.
+          onCloseAutoFocus={(event) => {
+            if (!selectedAction) return;
+            event.preventDefault();
+            // Let Kobalte restore trigger focus before focusing the destination.
+            queueMicrotask(selectedAction);
+            selectedAction = undefined;
           }}
         >
-          <span class="flex-1">Command Menu</span>
-          <Hotkey shortcut="cmd+k" theme="subtle" class="ml-6" />
-        </Dropdown.Item>
-        <Dropdown.Item
-          onSelect={() => {
-            selectedAction = props.onSearch;
-          }}
-        >
-          <span class="flex-1">Search everything</span>
-          <Hotkey
-            token={TOKENS.sidebar.goTo.search}
-            theme="subtle"
-            class="ml-6"
+          <MenuItem
+            text="Command Menu"
+            shortcut="cmd+k"
+            onClick={() => {
+              selectedAction = () => CommandState.open();
+            }}
           />
-        </Dropdown.Item>
-      </Dropdown.Content>
+          <MenuItem
+            text="Search everything"
+            hotkeyToken={TOKENS.sidebar.goTo.search}
+            onClick={() => {
+              selectedAction = props.onSearch;
+            }}
+          />
+        </ContextMenuContent>
+      </DropdownMenu.Portal>
     </Dropdown>
   );
 }

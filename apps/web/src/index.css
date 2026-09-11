@@ -513,6 +513,12 @@ body.tauri-ios {
 
 /* scuffed: might wan to use signals for this */
 @custom-variant touch (&:where(html[data-touch-device="true"] *));
+@custom-variant not-touch (&:where(html:not([data-touch-device="true"]) *));
+
+/* The glass shimmer replaces the browser's tap highlight on mobile controls. */
+html[data-touch-device='true'] :is(button, a, [role="button"], [role="tab"], [data-press-pulse]) {
+  -webkit-tap-highlight-color: transparent;
+}
 
 @custom-variant mobile {
   &:where(html[data-touch-device="true"] *) {
