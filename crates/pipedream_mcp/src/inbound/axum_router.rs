@@ -21,6 +21,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 
+#[cfg(test)]
+mod test;
+
 /// Hook invoked after a connect flow completes and the record is saved.
 /// Hosts use this to react to a connection the moment it exists (e.g. start
 /// import gather jobs); implementations must be quick or spawn.
@@ -136,6 +139,86 @@ where
             get(browse_catalog_handler::<S, P, Auth>),
         )
         .with_state(state)
+}
+
+/// The public Pipedream webhook route.
+///
+/// Pipedream posts connect-flow outcomes here, including the failures that
+/// happen inside its hosted Connect UI — those never reach an authenticated
+/// endpoint of ours, so without this the only evidence a flow died is a
+/// minted token with no matching completion. Unauthenticated by necessity
+/// (Pipedream is the caller), so the configured `webhook_uri` carries a
+/// shared secret that every request is checked against.
+///
+/// Mounted outside the authenticated router, alongside the MCP OAuth
+/// callback.
+pub fn pipedream_webhook_router<Global>(secret: String) -> Router<Global>
+where
+    Global: Send + Sync,
+{
+    Router::new()
+        .route("/pipedream/mcp/webhook", post(pipedream_webhook))
+        .with_state(PipedreamWebhookState {
+            secret: Arc::from(secret),
+        })
+}
+
+/// State for the public webhook route: the shared secret, nothing else.
+#[derive(Clone)]
+pub struct PipedreamWebhookState {
+    secret: Arc<str>,
+}
+
+/// Query parameters carried by the configured `webhook_uri`.
+#[derive(Debug, Deserialize)]
+pub struct PipedreamWebhookQuery {
+    /// Shared secret, compared against the configured one.
+    secret: Option<String>,
+}
+
+/// Record a connect-flow outcome reported by Pipedream.
+///
+/// The body is taken as raw JSON on purpose. The payload shape is
+/// Pipedream's to change, and an endpoint whose whole job is telling us why
+/// connections fail must not start dropping events with a 422 the day they
+/// add a field. Known keys are pulled out so they can be indexed; the rest
+/// is logged verbatim.
+#[tracing::instrument(skip_all)]
+async fn pipedream_webhook(
+    State(state): State<PipedreamWebhookState>,
+    Query(query): Query<PipedreamWebhookQuery>,
+    Json(payload): Json<serde_json::Value>,
+) -> StatusCode {
+    if query.secret.as_deref() != Some(state.secret.as_ref()) {
+        // Anyone can reach this route, so the payload stays out of the log.
+        tracing::warn!("rejected Pipedream webhook with a bad or missing secret");
+        return StatusCode::UNAUTHORIZED;
+    }
+
+    let event = payload.get("event").and_then(serde_json::Value::as_str);
+    let external_user_id = payload
+        .get("external_user_id")
+        .and_then(serde_json::Value::as_str);
+    let failed = payload.get("error").is_some()
+        || event.is_some_and(|e| e.to_ascii_uppercase().contains("ERROR"));
+
+    if failed {
+        tracing::warn!(
+            event = event,
+            external_user_id = external_user_id,
+            payload = %payload,
+            "Pipedream connect flow failed"
+        );
+    } else {
+        tracing::info!(
+            event = event,
+            external_user_id = external_user_id,
+            payload = %payload,
+            "Pipedream connect flow event"
+        );
+    }
+
+    StatusCode::NO_CONTENT
 }
 
 // -- request / response types ------------------------------------------------

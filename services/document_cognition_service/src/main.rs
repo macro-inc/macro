@@ -461,14 +461,29 @@ async fn main() -> anyhow::Result<()> {
 
     // The Pipedream MCP stack, fully separate from the native one above
     // (own endpoints, own table, own toolset). Without credentials its
-    // endpoints answer 501 and its toolsets come up empty.
+    // endpoints answer 501 and its toolsets come up empty. Connect-flow
+    // webhooks need both URI and secret; a half-set pair is ignored so we
+    // never mint a callback we cannot serve.
     let pipedream_client: ai_tools::ToolPipedreamConnection = match (
         config.pipedream_client_id.value(),
         config.pipedream_client_secret.value(),
         config.pipedream_project_id.value(),
     ) {
-        (Some(client_id), Some(client_secret), Some(project_id)) => Some(Arc::new(
-            pipedream_mcp::outbound::api::PipedreamClient::new(
+        (Some(client_id), Some(client_secret), Some(project_id)) => {
+            let webhook_uri = match (
+                config.pipedream_webhook_uri.value(),
+                config.pipedream_webhook_secret.value(),
+            ) {
+                (Some(uri), Some(_)) => Some(uri.to_owned()),
+                (None, None) => None,
+                _ => {
+                    tracing::warn!(
+                        "ignoring incomplete Pipedream webhook config; set both PIPEDREAM_WEBHOOK_URI and PIPEDREAM_WEBHOOK_SECRET"
+                    );
+                    None
+                }
+            };
+            let client = pipedream_mcp::outbound::api::PipedreamClient::new(
                 pipedream_mcp::outbound::api::PipedreamConfig {
                     client_id: client_id.to_owned(),
                     client_secret: client_secret.to_owned(),
@@ -508,8 +523,12 @@ async fn main() -> anyhow::Result<()> {
                     },
                 },
             )
-            .context("failed to build Pipedream client")?,
-        )),
+            .context("failed to build Pipedream client")?;
+            Some(Arc::new(match webhook_uri {
+                Some(uri) => client.with_webhook_uri(uri),
+                None => client,
+            }))
+        }
         _ => {
             tracing::info!("Pipedream credentials not set; Pipedream MCP connectors disabled");
             None
