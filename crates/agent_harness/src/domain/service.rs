@@ -105,6 +105,34 @@ struct AgentHarnessInner<
     notifier: Notifier,
 }
 
+/// One handle on the orchestrator's state, shared by the service's clones
+/// and every session worker it spawns.
+type SharedInner<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> = Arc<
+    AgentHarnessInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >,
+>;
+
 /// Turns trigger commands into running, announced agent sessions.
 pub struct AgentHarnessService<
     Sessions,
@@ -118,19 +146,17 @@ pub struct AgentHarnessService<
     Mentions,
     Notifier,
 > {
-    inner: Arc<
-        AgentHarnessInner<
-            Sessions,
-            Containers,
-            Announcer,
-            Runtimes,
-            PromptContext,
-            PromptComposer,
-            Egress,
-            Lifecycle,
-            Mentions,
-            Notifier,
-        >,
+    inner: SharedInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >,
     workers: Arc<SessionWorkers>,
 }

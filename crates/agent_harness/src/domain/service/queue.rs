@@ -721,19 +721,17 @@ pub(super) async fn run_session_worker<
     Notifier,
 >(
     session_id: AgentSessionId,
-    inner: Arc<
-        AgentHarnessInner<
-            Sessions,
-            Containers,
-            Announcer,
-            Runtimes,
-            PromptContext,
-            PromptComposer,
-            Egress,
-            Lifecycle,
-            Mentions,
-            Notifier,
-        >,
+    inner: SharedInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
