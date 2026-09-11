@@ -1,4 +1,3 @@
-import { blockDataSignalAs, createBlockStore } from '@core/block';
 import type {
   PluginManager,
   ProgressStats,
@@ -6,12 +5,11 @@ import type {
   WordcountStats,
 } from '@core/component/LexicalMarkdown/plugins';
 import type { NodeIdMappings } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
-import { createCallback } from '@solid-primitives/rootless';
 import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
-import type { MarkdownData } from '../definition';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
-export const blockDataSignal = blockDataSignalAs<MarkdownData>('md');
+export const useMarkdownData = () => useMarkdownDocument().data;
 
 /**
  * Store for the data and helpful ui refs for the Notebook/MD block
@@ -42,8 +40,12 @@ export type MdData = {
   locationReady?: boolean;
 };
 
-export const mdStore = createBlockStore<MdData>({});
+export function useMdStore() {
+  const { md, setMd } = useMarkdownDocument().state.editor;
+  return [md, setMd] as const;
+}
 
-export const useIsTask = createCallback(() => {
-  return () => blockDataSignal()?.documentMetadata.subType === 'task';
-});
+export function useIsTask() {
+  const data = useMarkdownData();
+  return () => data()?.documentMetadata.subType === 'task';
+}

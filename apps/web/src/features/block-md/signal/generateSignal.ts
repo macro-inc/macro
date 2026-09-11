@@ -3,7 +3,6 @@
    note: Temporarily disabled pending port to connection-gateway
    guy: Eric Hayes
  */
-import { createBlockSignal } from '@core/block';
 // import { replaceCitations } from "@core/component/LexicalMarkdown/citationsUtils";
 import type { generateCallback } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
 import type {
@@ -12,20 +11,13 @@ import type {
 } from '@core/component/LexicalMarkdown/plugins';
 // import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 // import { createCognitionWebsocketBlockEffect } from '@service-cognition/websocket';
-import { uuid } from 'short-uuid';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
-// Generating simple completion
-export const isGeneratingSignal = createBlockSignal<boolean>(false);
+export type { Completion, GenerateMenuOpen };
 
-// Done generating and waiting for user input
-export const generatedAndWaitingSignal = createBlockSignal<boolean>(false);
-
-export const completionSignal = createBlockSignal<Completion>();
-export const generateMenuSignal: GenerateMenuOpen = createBlockSignal();
-export const generateContextSignal = createBlockSignal<string>();
-export const generateCompletionId = createBlockSignal('');
-
-export const generateNotesSignal = createBlockSignal<boolean>(false);
+export function useGenerateState() {
+  return useMarkdownDocument().state.generation;
+}
 
 export const generateContentCallback: generateCallback = (
   _userRequest: string
@@ -77,18 +69,6 @@ export const generateContentCallback: generateCallback = (
 // 		});
 // 	}
 // });
-
-export const generateNotesContentCallback = (_documentIds: string[]) => {
-  const id = uuid();
-  generateCompletionId.set(id);
-  // cognitionWebsocketServiceClient.streamSimpleCompletion({
-  // 	prompt: PROMPT,
-  // 	user_request: NOTES_PROMPTS,
-  // 	model: "anthropic/claude-sonnet-4",
-  // 	content_document_ids: documentIds,
-  // 	completion_id: id,
-  // });
-};
 
 export const PROMPT = `You are a helpful writing assistant. You will use provided context with a user selection to answer user queries.
 Users will ask you to write things. Your response will be directly inserted into their document.

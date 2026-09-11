@@ -24,17 +24,12 @@ import {
 } from 'solid-js';
 import { reconcile } from 'solid-js/store';
 import { useDeleteComment, useDeleteNewComments } from './commentOperations';
+import { useCommentState } from './commentStore';
 import {
-  activeCommentThreadSignal,
-  activeMarkIdsSignal,
-  commentMarksInitializedSignal,
-  commentsStore,
-  highlightedCommentIdSignal,
-  highlightedCommentThreadsSignal,
-  markStore,
-  threadStore,
-} from './commentStore';
-import { commentThreadsResource, sortComments } from './commentsResource';
+  sortComments,
+  useCommentRealtime,
+  useCommentThreadsResource,
+} from './commentsResource';
 import type { Mark, ThreadMetadata, ThreadStore } from './commentType';
 
 const DISCUSSION_MARK_PREFIX = 'DISCUSSION:';
@@ -93,14 +88,28 @@ export const CommentsProvider: VoidComponent<{
 
   const currentPeerId = () => props.loroManager.peerIdStr;
 
-  const [marks, setMarks] = markStore;
-  const [commentThreadsData] = commentThreadsResource;
-  const [, setCommentsInitialized] = commentMarksInitializedSignal;
-  const [highlightedId, setHighlightedId] = highlightedCommentIdSignal;
-  const setActiveMarkIds = activeMarkIdsSignal.set;
+  const {
+    marks,
+    setMarks,
+    activeMarkIds,
+    setActiveMarkIds,
+    activeCommentThread,
+    setActiveCommentThread,
+    highlightedCommentId,
+    setHighlightedCommentId,
+    comments,
+    setComments,
+    threads,
+    setThreads,
+    commentMarksInitialized,
+    setCommentMarksInitialized,
+    setHighlightedCommentThreads,
+  } = useCommentState();
+  const [commentThreadsData] = useCommentThreadsResource();
+  useCommentRealtime();
 
   /** Communicates comment ready to block. */
-  const initComments = () => setCommentsInitialized(true);
+  const initComments = () => setCommentMarksInitialized(true);
 
   const addCommentMark = (
     markId: string,
@@ -156,17 +165,17 @@ export const CommentsProvider: VoidComponent<{
 
   // Remove the temporary draft comment when the active thread is cleared
   createEffect(() => {
-    const activeThreadId = activeCommentThreadSignal();
+    const activeThreadId = activeCommentThread();
     if (!activeThreadId) {
       deleteNewComments(false);
       return;
     }
 
-    const thread = threadStore.get[activeThreadId];
+    const thread = threads[activeThreadId];
     if (!thread) return;
 
     const markId = thread.anchorId;
-    const existingMarkIds = untrack(activeMarkIdsSignal);
+    const existingMarkIds = untrack(activeMarkIds);
     if (
       existingMarkIds.length > 0 &&
       existingMarkIds.every((id) => id === markId)
@@ -179,19 +188,19 @@ export const CommentsProvider: VoidComponent<{
 
   // Sync active mark selections to thread signals
   createEffect(() => {
-    const activeMarkIds = activeMarkIdsSignal();
-    if (activeMarkIds.length === 0) {
-      activeCommentThreadSignal.set(null);
-      highlightedCommentThreadsSignal.set([]);
+    const activeIds = activeMarkIds();
+    if (activeIds.length === 0) {
+      setActiveCommentThread(null);
+      setHighlightedCommentThreads([]);
       return;
     }
 
     const threadIds: number[] = [];
-    for (const id of activeMarkIds) {
+    for (const id of activeIds) {
       const mark = marks[id];
       if (!mark) continue;
       if (mark.thread == null) {
-        activeCommentThreadSignal.set(-1);
+        setActiveCommentThread(-1);
         return;
       } else {
         threadIds.push(mark.thread.threadId);
@@ -202,10 +211,10 @@ export const CommentsProvider: VoidComponent<{
     // "Show comment") active while the caret still sits in its mark — this
     // effect re-runs on every editor update, and clobbering it would snap
     // the comment drawer shut right after it opens.
-    activeCommentThreadSignal.set((current) =>
+    setActiveCommentThread((current) =>
       current != null && threadIds.includes(current) ? current : null
     );
-    highlightedCommentThreadsSignal.set(threadIds);
+    setHighlightedCommentThreads(threadIds);
   });
 
   // Compute visible comment threads from marks
@@ -247,9 +256,6 @@ export const CommentsProvider: VoidComponent<{
 
   // Sync highlight comments to commentsStore and threadStore
   createEffect(() => {
-    const setComments = commentsStore.set;
-    const setThreads = threadStore.set;
-
     setComments(reconcile({}));
 
     const combinedComments = highlightComments() ?? [];
@@ -267,7 +273,7 @@ export const CommentsProvider: VoidComponent<{
 
   // Map server comment threads to mark metadata once marks are initialized
   createEffect(() => {
-    if (!commentMarksInitializedSignal()) return;
+    if (!commentMarksInitialized()) return;
     if (commentThreadsData.loading || commentThreadsData.error) return;
 
     const commentThreads = commentThreadsData() ?? [];
@@ -336,7 +342,7 @@ export const CommentsProvider: VoidComponent<{
     const rawId = pendingTargetCommentId;
     if (!rawId) return;
 
-    if (!commentMarksInitializedSignal()) return;
+    if (!commentMarksInitialized()) return;
     const commentId = Number(rawId);
     if (isNaN(commentId)) return;
 
@@ -348,21 +354,21 @@ export const CommentsProvider: VoidComponent<{
       | ThreadMetadata
       | undefined;
     if (targetMetadata?.markId?.startsWith(DISCUSSION_MARK_PREFIX)) {
-      activeCommentThreadSignal.set(null);
-      highlightedCommentIdSignal.set(null);
+      setActiveCommentThread(null);
+      setHighlightedCommentId(null);
       pendingTargetCommentId = undefined;
       return;
     }
 
-    const comment = commentsStore.get[commentId];
+    const comment = comments[commentId];
     if (!comment) return;
-    highlightedCommentIdSignal.set(commentId);
+    setHighlightedCommentId(commentId);
     const mark = marks[comment.anchorId];
     if (mark) {
       const firstEl = Object.values(mark.markNodes)[0];
       firstEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    activeCommentThreadSignal.set(comment.threadId);
+    setActiveCommentThread(comment.threadId);
     pendingTargetCommentId = undefined;
   });
 
@@ -370,8 +376,8 @@ export const CommentsProvider: VoidComponent<{
     editor.registerCommand(
       SELECTION_CHANGE_COMMAND,
       () => {
-        if (highlightedId() === null) return false;
-        setHighlightedId(null);
+        if (highlightedCommentId() === null) return false;
+        setHighlightedCommentId(null);
         return false;
       },
       COMMAND_PRIORITY_LOW

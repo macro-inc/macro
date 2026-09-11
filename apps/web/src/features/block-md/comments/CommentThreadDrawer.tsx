@@ -1,10 +1,5 @@
-import {
-  activeCommentThreadSignal,
-  highlightedCommentThreadsSignal,
-  markStore,
-  threadStore,
-} from '@block-md/comments/commentStore';
-import { mdStore } from '@block-md/signal/markdownBlockData';
+import { useCommentState } from '@block-md/comments/commentStore';
+import { useMdStore } from '@block-md/signal/markdownBlockData';
 import {
   MobileDrawer,
   scrollToFocusedInput,
@@ -104,13 +99,14 @@ function PinnedReplyComposer(props: {
  * Must be mounted inside the `CommentsContext` provider (see CommentMargin).
  */
 export function CommentThreadDrawer() {
-  const threads = threadStore.get;
-  const [marks] = markStore;
-  const md = mdStore.get;
-
-  const activeCommentThread = activeCommentThreadSignal.get;
-  const setActiveCommentThread = activeCommentThreadSignal.set;
-  const setHighlightedCommentThreads = highlightedCommentThreadsSignal.set;
+  const {
+    threads,
+    marks,
+    activeCommentThread,
+    setActiveCommentThread,
+    setHighlightedCommentThreads,
+  } = useCommentState();
+  const [md] = useMdStore();
 
   const parentCommentsContext = useContext(CommentsContext);
   // Messages report their inline-edit state; while any edit input is open,

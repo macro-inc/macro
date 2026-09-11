@@ -1,11 +1,9 @@
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import type { SplitFileMenuAction } from '@components/app/split-layout/context';
-import { useBlockId } from '@core/block';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
@@ -23,10 +21,12 @@ import { Button, ButtonGroup, Dropdown } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
-  discussionThreads,
   sortComments,
+  useDiscussionThreads,
 } from '../comments/discussionResource';
-import { mdStore } from '../signal/markdownBlockData';
+import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useMdStore } from '../signal/markdownBlockData';
+import { useMarkdownName } from './MarkdownNameProvider';
 
 const LAST_USED_KEY = 'dispatch-agent-last-used';
 
@@ -164,15 +164,16 @@ const [lastUsedKey, setLastUsedKey] = makePersisted(
 );
 
 export function useDispatchAgentAction() {
-  const blockId = useBlockId();
-  const name = useBlockDocumentName();
-  const [store] = mdStore;
+  const blockId = useMarkdownDocument().documentId;
+  const { displayName: name } = useMarkdownName();
+  const [store] = useMdStore();
+  const discussionThreads = useDiscussionThreads();
 
   const lastUsed = () =>
     ALL_ACTIONS.find((a) => a.key === lastUsedKey()) ?? COPY_ACTION;
 
   const buildPrompt = createCallback(() => {
-    const docName = name();
+    const docName = name() ?? '';
     const content = store.editor
       ? editorStateAsMarkdown(store.editor, 'external')
       : '';

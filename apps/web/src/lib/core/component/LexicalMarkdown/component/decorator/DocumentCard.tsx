@@ -1,5 +1,6 @@
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
+  isInBlock,
   type PreviewState,
   useBlockOwner,
   useMaybeBlockName,
@@ -87,6 +88,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const editor = () => wrapper?.editor;
   const selection = () => wrapper?.selection;
+  const portalMount = isInBlock() ? blockElementSignal.get : () => undefined;
 
   const currentBlockName = useMaybeBlockName();
 
@@ -366,7 +368,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
             <Dropdown.Trigger size="icon-sm" variant="ghost">
               <DotsThree />
             </Dropdown.Trigger>
-            <Dropdown.Content mount={blockElementSignal.get()}>
+            <Dropdown.Content mount={portalMount()}>
               <Dropdown.Group>
                 <Dropdown.Item onSelect={convertToMention}>
                   <Minimize class="size-4 shrink-0" />

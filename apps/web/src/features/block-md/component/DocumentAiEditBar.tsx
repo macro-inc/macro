@@ -1,4 +1,4 @@
-import { mdStore } from '@block-md/signal/markdownBlockData';
+import { useMdStore } from '@block-md/signal/markdownBlockData';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -16,7 +16,7 @@ false && clickOutside;
  * into a prompt card matching the Discussion composer.
  */
 export function DocumentAiEditBar(props: { documentId: string }) {
-  const md = mdStore.get;
+  const [md] = useMdStore();
 
   const [expanded, setExpanded] = createSignal(false);
   const [editing, setEditing] = createSignal(false);

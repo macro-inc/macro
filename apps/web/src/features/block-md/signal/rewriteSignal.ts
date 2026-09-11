@@ -1,4 +1,4 @@
-import { createBlockSignal } from '@core/block';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export interface Diff {
   operation: string;
@@ -10,16 +10,11 @@ export type MarkdownRewriteOutput = {
   diffs: Diff[];
 };
 
-export const rewriteSignal = createBlockSignal<boolean>(false);
-export const isRewritingSignal = createBlockSignal<boolean>(false);
-
 export interface NodeWithText {
   key: string;
   markdown: string;
 }
 
-export const nodesAndTextSignal = createBlockSignal<NodeWithText[] | undefined>(
-  undefined
-);
-
-export const revisionsSignal = createBlockSignal<Diff[] | undefined>(undefined);
+export function useRewriteState() {
+  return useMarkdownDocument().state.rewrite;
+}

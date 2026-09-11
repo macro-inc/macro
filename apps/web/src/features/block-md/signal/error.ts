@@ -1,5 +1,6 @@
-import { createBlockSignal } from '@core/block';
-import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
-export const markdownBlockErrorSignal =
-  createBlockSignal<MarkdownEditorErrors | null>(null);
+export function useMarkdownBlockError() {
+  const { error, setError } = useMarkdownDocument().state.editor;
+  return [error, setError] as const;
+}

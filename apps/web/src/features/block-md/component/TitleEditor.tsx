@@ -1,8 +1,3 @@
-import {
-  createBlockSignal,
-  useBlockAliasedName,
-  useBlockId,
-} from '@core/block';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
@@ -21,7 +16,6 @@ import {
   trimWhitespace,
 } from '@core/component/LexicalMarkdown/utils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
-import { useCanEdit } from '@core/signal/permissions';
 import { mergeRegister } from '@lexical/utils';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -50,7 +44,8 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
+import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useMarkdownData, useMdStore } from '../signal/markdownBlockData';
 import { useRenameMarkdownDocument } from '../signal/save';
 import { useMarkdownName } from './MarkdownNameProvider';
 
@@ -136,14 +131,12 @@ function titleNavigationPlugin(
     );
 }
 
-export const TitlePlaceholderSignal = createBlockSignal<string | undefined>();
-
 export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
-  const mdData = mdStore.get;
-  const setMdData = mdStore.set;
-  const blockData = blockDataSignal.get;
+  const markdownDocument = useMarkdownDocument();
+  const [mdData, setMdData] = useMdStore();
+  const markdownData = useMarkdownData();
 
-  const canEdit = useCanEdit();
+  const canEdit = markdownDocument.permissions.canEdit;
   const renameMarkdownDocument = useRenameMarkdownDocument();
   const {
     persistedName: persistedDocumentName,
@@ -152,16 +145,17 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   } = useMarkdownName();
 
   const [showFallback, setShowFallback] = createSignal(true);
-  const [titlePlaceholder, _setTitlePlaceholder] = TitlePlaceholderSignal;
+  const [titlePlaceholder] = createSignal<string>();
   const [titleFocused, setTitleFocused] = createSignal(false);
 
-  const blockId = useBlockId();
-  const blockName = useBlockAliasedName();
+  const blockId = markdownDocument.documentId;
+  const documentKind = markdownDocument.kind;
+  const entityBlockName = documentKind === 'document' ? 'md' : documentKind;
   const documentTags = useDocTags(
     blockId,
-    blockName === 'task' ? EntityType.TASK : EntityType.DOCUMENT
+    documentKind === 'task' ? EntityType.TASK : EntityType.DOCUMENT
   );
-  const titlePlaceholderFallback = blockNameToDefaultFile(blockName);
+  const titlePlaceholderFallback = blockNameToDefaultFile(entityBlockName);
 
   let pendingRename:
     | {
@@ -273,7 +267,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     editor.setEditable(canEdit() ?? false);
   });
 
-  const dataReady = createMemo(() => blockData() !== undefined);
+  const dataReady = createMemo(() => markdownData() !== undefined);
 
   const hasLocalTitleEdit = createMemo(() => {
     if (!titleFocused()) return false;

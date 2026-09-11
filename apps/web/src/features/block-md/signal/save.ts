@@ -1,67 +1,38 @@
-import { activeCommentThreadSignal } from '@block-md/comments/commentStore';
-import { useBlockId } from '@core/block';
+import { useCommentState } from '@block-md/comments/commentStore';
 import {
   editorStateAsMarkdown,
   getSaveState,
 } from '@core/component/LexicalMarkdown/utils';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-
-import { utf8Encode } from '@core/util/string';
-import { createRenameDssEntityMutation } from '@entity';
-import { refetchHistory } from '@queries/history/history';
-import { storageServiceClient } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { createMemo } from 'solid-js';
-import { mdStore } from './markdownBlockData';
+import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useMdStore } from './markdownBlockData';
 
 export const useBlockSave = () => {
-  const pendingComment = createMemo(() => activeCommentThreadSignal() === -1);
+  const { activeCommentThread } = useCommentState();
+  const pendingComment = createMemo(() => activeCommentThread() === -1);
 
   return pendingComment;
 };
 
 export function useSaveMarkdownDocument() {
   const blockSave = useBlockSave();
-  const documentId = useBlockId();
+  const saveDocument = useMarkdownDocument().saveDocument;
 
   return createCallback(async (text: string) => {
     if (blockSave()) return;
-
-    const buffer = utf8Encode(text);
-
-    const saveRes = await storageServiceClient.simpleSave({
-      documentId,
-      file: new Blob([buffer], { type: 'text/markdown' }),
-    });
-
-    if (saveRes.isErr()) {
-      console.error('error on markdown save');
-      return;
-    }
-
-    await refetchHistory();
+    await saveDocument(text);
   });
 }
 
 export function useRenameMarkdownDocument() {
-  const documentId = useBlockId();
-  const renameMutation = createRenameDssEntityMutation();
-
-  return (newName: string, oldName: string) => {
-    renameMutation.mutate({
-      entity: {
-        type: 'document',
-        name: oldName,
-        id: documentId,
-      },
-      newName,
-    });
-  };
+  return useMarkdownDocument().renameDocument;
 }
 
 export function useDownloadDocumentAsMarkdownText() {
-  const [store] = mdStore;
-  const fileName = useBlockDocumentName();
+  const [store] = useMdStore();
+  const { persistedName, fallbackName } = useMarkdownDocument();
+  const fileName = () => persistedName() || fallbackName();
 
   return createCallback(() => {
     const editor = store.editor;
@@ -81,8 +52,9 @@ export function useDownloadDocumentAsMarkdownText() {
 }
 
 export function useDownloadDocumentAsJson() {
-  const [store] = mdStore;
-  const fileName = useBlockDocumentName();
+  const [store] = useMdStore();
+  const { persistedName, fallbackName } = useMarkdownDocument();
+  const fileName = () => persistedName() || fallbackName();
 
   return createCallback(() => {
     const editor = store.editor;

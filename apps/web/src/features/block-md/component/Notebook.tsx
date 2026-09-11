@@ -1,16 +1,10 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
-import {
-  commentsStore,
-  commentWidthSignal,
-} from '@block-md/comments/commentStore';
+import { useCommentState } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
-import { mdStore } from '@block-md/signal/markdownBlockData';
+import { useMdStore } from '@block-md/signal/markdownBlockData';
 import { SidePanel } from '@components/app/side-panel';
-import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
-import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
-import { useBlockAliasedName, useBlockId } from '@core/block';
 import {
   editorFocusSignal,
   getSaveState,
@@ -28,13 +22,7 @@ import { useIsMacroTeam } from '@core/context/team';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import {
-  blockElementSignal,
-  blockHotkeyScopeSignal,
-} from '@core/signal/blockElement';
 import { tempRedirectLocation } from '@core/signal/location';
-import { useCanEdit } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
@@ -47,6 +35,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useHistory } from '../history/HistoryContext';
 import { HistoryOverlay } from '../history/HistoryOverlay';
 import { DispatchAgentButton } from './DispatchAgentMenu';
@@ -56,6 +45,7 @@ import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
 import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
+import { useMarkdownName } from './MarkdownNameProvider';
 import {
   MARKDOWN_OUTLINE_WIDTH,
   MarkdownOutline,
@@ -119,19 +109,17 @@ export function Notebook(props: {
   loroManager: LoroManager;
   documentId: string;
 }) {
-  const blockElement = blockElementSignal.get;
-  const blockId = useBlockId();
-  const blockAliasedName = useBlockAliasedName();
-  const setStore = mdStore.set;
-  const setWideEnoughForComments = commentWidthSignal.set;
-  const documentName = useBlockDocumentName();
-  const scopeId = blockHotkeyScopeSignal.get;
-  const md = mdStore.get;
+  const markdownDocument = useMarkdownDocument();
+  const blockElement = markdownDocument.element;
+  const blockId = markdownDocument.documentId;
+  const documentKind = markdownDocument.kind;
+  const [md, setMd] = useMdStore();
+  const { comments, setWideEnoughForComments } = useCommentState();
+  const { displayName: documentName } = useMarkdownName();
+  const scopeId = markdownDocument.hotkeyScope;
   const history = useHistory();
-  const { navigatedFromJK } = useNavigatedFromJK();
-  const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const documentId = props.documentId;
-  const canEdit = useCanEdit();
+  const canEdit = markdownDocument.permissions.canEdit;
   const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
 
   let notebookRef!: HTMLDivElement;
@@ -152,7 +140,6 @@ export function Notebook(props: {
       width() >= OutlineMinWidth && !history.isOpen() && !isMobile(),
   });
 
-  const comments = commentsStore.get;
   const hasComment = createMemo(() => {
     if (!ENABLE_MARKDOWN_COMMENTS) return false;
     return Object.keys(comments).length > 0;
@@ -169,13 +156,13 @@ export function Notebook(props: {
 
   // Set the refs on the block store.
   onMount(() => {
-    setStore({
+    setMd({
       notebook: notebookRef,
       commentMargin: commentMarginRef,
       contentRef: contentRef,
     });
     onCleanup(() => {
-      setStore({ notebook: undefined, commentMargin: undefined });
+      setMd({ notebook: undefined, commentMargin: undefined });
     });
 
     const observeCallback = () => {
@@ -224,11 +211,12 @@ export function Notebook(props: {
   });
 
   createEffect(() => {
-    if (!scopeId()) return;
+    const currentScopeId = scopeId();
+    if (!currentScopeId) return;
     untrack(() =>
       registerHotkey({
         hotkey: 'enter',
-        scopeId: scopeId(),
+        scopeId: currentScopeId,
         hotkeyToken: TOKENS.block.focus,
         description: 'Focus Title or Markdown Editor',
         keyDownHandler: () => {
@@ -260,12 +248,19 @@ export function Notebook(props: {
     onCleanup(cleanup);
   });
   createEffect(() => {
-    if (!scopeId()) return;
+    const currentScopeId = scopeId();
+    if (!currentScopeId) return;
     const group = untrack(() =>
-      registerMarkdownCommands(scopeId(), () => md.editor, editorHasFocus, {
-        canUseStateDebugger: canUseLexicalStateDebugger,
-        toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
-      })
+      registerMarkdownCommands(
+        currentScopeId,
+        () => md.editor,
+        editorHasFocus,
+        {
+          canUseStateDebugger: canUseLexicalStateDebugger,
+          toggleStateDebugger: () =>
+            setShowLexicalStateDebugger((prev) => !prev),
+        }
+      )
     );
     onCleanup(() => group.dispose());
   });
@@ -279,7 +274,7 @@ export function Notebook(props: {
   let hasRun = false;
   createEffect(() => {
     if (hasRun) return;
-    if (!canAutofocusSplitContent) return;
+    if (!markdownDocument.autoFocus) return;
     if (!blockElement()) return;
     blockElement()?.focus();
     hasRun = true;
@@ -376,17 +371,19 @@ export function Notebook(props: {
               entity={{
                 type: 'document',
                 id: blockId,
-                name: documentName(),
+                name: documentName() ?? '',
                 fileType: 'md',
               }}
             />
-            <Show when={blockAliasedName === 'task' && !isMobile()}>
+            <Show when={documentKind === 'task' && !isMobile()}>
               <DispatchAgentButton showPrimaryLabel />
             </Show>
           </div>
         </SidePanel.Section>
         <TitleEditor
-          autoFocusOnMount={canAutofocusSplitContent && !navigatedFromJK()}
+          autoFocusOnMount={
+            markdownDocument.autoFocus && !markdownDocument.navigatedFromJK()
+          }
         />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
@@ -451,8 +448,9 @@ export function Notebook(props: {
 }
 
 export function InstructionsNotebook(props: { loroManager: LoroManager }) {
-  const setStore = mdStore.set;
-  const scopeId = blockHotkeyScopeSignal.get;
+  const markdownDocument = useMarkdownDocument();
+  const [, setMd] = useMdStore();
+  const scopeId = markdownDocument.hotkeyScope;
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   let notebookRef!: HTMLDivElement;
@@ -460,13 +458,13 @@ export function InstructionsNotebook(props: { loroManager: LoroManager }) {
 
   // Set the refs on the block store.
   onMount(() => {
-    setStore({
+    setMd({
       notebook: notebookRef,
       commentMargin: undefined,
       contentRef: contentRef,
     });
     onCleanup(() => {
-      setStore({
+      setMd({
         notebook: undefined,
         commentMargin: undefined,
       });
@@ -474,9 +472,10 @@ export function InstructionsNotebook(props: { loroManager: LoroManager }) {
   });
 
   createEffect(() => {
-    if (!scopeId()) return;
+    const currentScopeId = scopeId();
+    if (!currentScopeId) return;
     const group = untrack(() =>
-      registerLexicalStateDebuggerCommand(scopeId(), {
+      registerLexicalStateDebuggerCommand(currentScopeId, {
         canUseStateDebugger: canUseLexicalStateDebugger,
         toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
       })

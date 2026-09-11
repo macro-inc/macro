@@ -2,15 +2,11 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { CommentsProvider } from '@block-md/comments/CommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
-import { markdownBlockErrorSignal } from '@block-md/signal/error';
-import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
-import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
+import { useMarkdownBlockError } from '@block-md/signal/error';
+import { useFindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
+import { useRewriteState } from '@block-md/signal/rewriteSignal';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
-import {
-  type BlockName,
-  useBlockId,
-  useMaybeBlockAliasedName,
-} from '@core/block';
+import type { BlockName } from '@core/block';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
@@ -150,15 +146,7 @@ import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { createMethodRegistration } from '@core/orchestrator';
-import {
-  blockFileSignal,
-  blockHandleSignal,
-  blockSourceSignal,
-} from '@core/signal/load';
 import { trackMention } from '@core/signal/mention';
-import { useCanComment, useCanEdit } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
@@ -192,15 +180,12 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import {
-  completionSignal,
   generateContentCallback,
-  generateContextSignal,
-  generatedAndWaitingSignal,
-  generateMenuSignal,
-  isGeneratingSignal,
+  useGenerateState,
 } from '../signal/generateSignal';
-import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
+import { useMarkdownData, useMdStore } from '../signal/markdownBlockData';
 import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { EditorSystemMessage } from './EditorSystemMessage';
@@ -232,27 +217,29 @@ export function MarkdownEditor(props: {
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
 }) {
-  const blockData = blockDataSignal.get;
-  const blockId = useBlockId();
+  const markdownDocument = useMarkdownDocument();
+  const markdownData = useMarkdownData();
+  const blockId = markdownDocument.documentId;
   const userId = useUserId();
-  const blockName = useMaybeBlockAliasedName();
+  const documentKind = markdownDocument.kind;
+  const sourceBlockName = documentKind === 'document' ? 'md' : documentKind;
   const documentTags = useDocTags(
     blockId,
-    blockName === 'task' ? EntityType.TASK : EntityType.DOCUMENT
+    documentKind === 'task' ? EntityType.TASK : EntityType.DOCUMENT
   );
   const tagApplyTargetLabel = () =>
-    blockName === 'task' ? 'Task' : 'Document';
+    documentKind === 'task' ? 'Task' : 'Document';
 
-  const mdDocumentName = useBlockDocumentName('');
+  const mdDocumentName = markdownDocument.persistedName;
 
-  const blockHandle = blockHandleSignal.get;
   const saveMarkdownDocument = useSaveMarkdownDocument();
-  const setMdStore = mdStore.set;
-  const md = mdStore.get;
-  const canEdit = useCanEdit();
-  const canComment = useCanComment();
-  const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;
-  const docSource = blockSourceSignal.get;
+  const [md, setMdStore] = useMdStore();
+  const canEdit = markdownDocument.permissions.canEdit;
+  const canComment = markdownDocument.permissions.canComment;
+  const [findAndReplaceStore, setFindAndReplaceStore] =
+    useFindAndReplaceStore();
+  const { revisions, setRevisions, setRewriting } = useRewriteState();
+  const docSource = markdownDocument.source;
 
   const IS_SYNC = () => {
     return docSource() && isSourceSyncService(docSource()!);
@@ -280,12 +267,36 @@ export function MarkdownEditor(props: {
   let editorContainerRef!: HTMLDivElement;
 
   const [clickTargetHeight, setClickTargetHeight] = createSignal(0);
-  const [isGenerating, setIsGenerating] = isGeneratingSignal;
-  const generatedAndWaiting = generatedAndWaitingSignal.get;
-  const [generateMenuOpen, _setGenerateMenuOpen] = generateMenuSignal;
+  const generation = useGenerateState();
+  const {
+    isGenerating,
+    setIsGenerating,
+    generatedAndWaiting,
+    completion,
+    setCompletion,
+    generateMenuOpen,
+    setGenerateMenuOpen,
+    setGenerateContext,
+  } = generation;
+  const completionSignal = [completion, setCompletion] as [
+    typeof completion,
+    typeof setCompletion,
+  ];
+  const isGeneratingSignal = [isGenerating, setIsGenerating] as [
+    typeof isGenerating,
+    typeof setIsGenerating,
+  ];
+  const generatedAndWaitingSignal = [
+    generatedAndWaiting,
+    generation.setGeneratedAndWaiting,
+  ] as [typeof generatedAndWaiting, typeof generation.setGeneratedAndWaiting];
+  const generateMenuSignal = [generateMenuOpen, setGenerateMenuOpen] as [
+    typeof generateMenuOpen,
+    typeof setGenerateMenuOpen,
+  ];
 
   const [editorReady, setEditorReady] = createSignal<boolean>(false);
-  const [editorError, setEditorError] = markdownBlockErrorSignal;
+  const [editorError, setEditorError] = useMarkdownBlockError();
 
   const [highlightLayerRef, setHighlightLayerRef] =
     createSignal<HTMLDivElement>();
@@ -622,7 +633,7 @@ export function MarkdownEditor(props: {
     .use(
       checkboxToTaskPlugin({
         currentUserId: userId(),
-        parentTaskId: blockName === 'task' ? blockId : undefined,
+        parentTaskId: documentKind === 'task' ? blockId : undefined,
       })
     )
     .use(
@@ -672,7 +683,7 @@ export function MarkdownEditor(props: {
   if (ENABLE_MARKDOWN_DIFF) {
     plugins.use(
       diffPlugin({
-        revisionsSignal: revisionsSignal,
+        revisionsSignal: [revisions, setRevisions],
         nodeIdMap: lexicalWrapper.mapping!,
       })
     );
@@ -686,7 +697,7 @@ export function MarkdownEditor(props: {
         isGeneratingSignal,
         generatedAndWaitingSignal,
         menuSignal: generateMenuSignal,
-        setContext: generateContextSignal[1],
+        setContext: setGenerateContext,
         accessories: accessoryStore,
         setAccessories: setAccessoryStore,
       })
@@ -857,7 +868,7 @@ export function MarkdownEditor(props: {
 
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
   createEffect(() => {
-    const file = blockFileSignal();
+    const file = markdownDocument.data()?.dssFile;
     if (!file) return;
 
     file.arrayBuffer().then(setFileArrayBuffer);
@@ -867,7 +878,7 @@ export function MarkdownEditor(props: {
     const source = docSource();
     if (!source) return;
     if (!isSourceDSS(source)) return;
-    if (!blockData()) return;
+    if (!markdownData()) return;
     if (editorReady()) return;
 
     const buf = fileArrayBuffer();
@@ -943,19 +954,13 @@ export function MarkdownEditor(props: {
     generateContentCallback(userRequest);
   });
 
-  const setRewriteSignal = rewriteSignal.set;
-  const setRevisionSignal = revisionsSignal.set;
-
-  createMethodRegistration(blockHandle, {
+  markdownDocument.registerMethods({
     setPatches: (args: { patches: MarkdownRewriteOutput['diffs'] }) => {
-      setRewriteSignal(false);
-      setRevisionSignal(args.patches);
+      setRewriting(false);
+      setRevisions(args.patches);
     },
-  });
-
-  createMethodRegistration(blockHandle, {
     setIsRewriting: () => {
-      setRewriteSignal(true);
+      setRewriting(true);
     },
   });
 
@@ -1124,21 +1129,21 @@ export function MarkdownEditor(props: {
           menu={actionsMenuOperations}
           actionContext={{
             sourceDocumentId: blockId,
-            sourceBlockName: blockName,
+            sourceBlockName,
           }}
         />
 
         <FloatingMenuGroup>
           <FloatingLinkMenu autoLinkMatchMode="common-tlds" />
-          <FloatingEquationMenu />
-          <FloatingTableMenu />
+          <FloatingEquationMenu canEdit={canEdit} />
+          <FloatingTableMenu canEdit={canEdit} />
           <MarkdownPopup
             highlightLayerRef={highlightLayerRef() ?? editorContainerRef}
             lexicalMapping={lexicalWrapper.mapping}
           />
         </FloatingMenuGroup>
 
-        <Show when={FindAndReplaceStore.get.searchIsOpen}>
+        <Show when={findAndReplaceStore.searchIsOpen}>
           <SearchHighlight
             anchorElem={highlightLayerRef() ?? editorContainerRef}
           />
@@ -1173,6 +1178,8 @@ export function MarkdownEditor(props: {
             generateCallback={_generateContentCallback}
             menuOpen={generateMenuSignal}
             completionSignal={completionSignal[0]}
+            generatedAndWaiting={generatedAndWaiting}
+            isGenerating={isGenerating}
             editor={editor}
           />
         </Show>

@@ -4,7 +4,7 @@
  * menu for the clipboard and no format popup for table selections. On
  * desktop, merge/split live in the normal selection popup (FormatTools).
  */
-import { mdStore } from '@block-md/signal/markdownBlockData';
+import { useMdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -53,7 +53,7 @@ import { createLayoutTick } from './createLayoutTick';
 false && floatWithElement;
 
 export function TableSelectionActionBar() {
-  const mdData = mdStore.get;
+  const [mdData] = useMdStore();
   const editor = () => mdData.editor;
 
   const [anchorCellKey, setAnchorCellKey] = createSignal<string>();

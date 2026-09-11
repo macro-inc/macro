@@ -1,4 +1,4 @@
-import { mdStore } from '@block-md/signal/markdownBlockData';
+import { useMdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   $computeTableMapSkipCellCheck,
@@ -36,7 +36,7 @@ type InsertTarget = {
 };
 
 export function TableInsertButton() {
-  const mdData = mdStore.get;
+  const [mdData] = useMdStore();
   const editor = () => mdData.editor;
 
   const [insertTarget, setInsertTarget] = createSignal<InsertTarget>();

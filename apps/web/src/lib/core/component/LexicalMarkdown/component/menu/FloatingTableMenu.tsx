@@ -5,6 +5,7 @@ import { INSERT_TABLE_COMMAND } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {
+  type Accessor,
   createEffect,
   createSignal,
   Index,
@@ -36,8 +37,8 @@ const MAX_GRID_SIZE = 12;
  * Arrow keys resize the selection, Enter inserts, Escape cancels. The mouse
  * can hover/click the grid as well. The editor keeps focus throughout.
  */
-export function FloatingTableMenu() {
-  const canEdit = useCanEdit();
+export function FloatingTableMenu(props: { canEdit?: Accessor<boolean> } = {}) {
+  const canEdit = props.canEdit ?? useCanEdit();
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const plugins = () => lexicalWrapper?.plugins;
   const editor = () => lexicalWrapper?.editor;

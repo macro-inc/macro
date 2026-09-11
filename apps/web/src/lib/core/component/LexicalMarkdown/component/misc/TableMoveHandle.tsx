@@ -1,4 +1,4 @@
-import { mdStore } from '@block-md/signal/markdownBlockData';
+import { useMdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -122,7 +122,7 @@ type DragShape = {
  * pasting a copied range.
  */
 export function TableMoveHandle() {
-  const mdData = mdStore.get;
+  const [mdData] = useMdStore();
   const editor = () => mdData.editor;
 
   const [anchorCellKey, setAnchorCellKey] = createSignal<string>();

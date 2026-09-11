@@ -15,7 +15,7 @@ import { Dropdown } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { mdStore } from '../signal/markdownBlockData';
+import { useMdStore } from '../signal/markdownBlockData';
 
 false && fileSelector;
 false && fileDrop;
@@ -58,7 +58,7 @@ type MediaSelectorProps = {
 
 export function MediaSelector(props: MediaSelectorProps) {
   const { mediaTypes = ['image', 'video'] } = props;
-  const mdData = mdStore.get;
+  const [mdData] = useMdStore();
   const editor = () => mdData.editor;
 
   const historyQuery = useHistoryQuery();

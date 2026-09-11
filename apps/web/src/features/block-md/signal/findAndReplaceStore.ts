@@ -1,9 +1,9 @@
-import { createBlockStore } from '@core/block';
 import type { NodekeyOffset } from '@core/component/LexicalMarkdown/plugins';
 import type { FloatingStyle } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 // Store Variables
-interface FindAndReplaceStore {
+export interface FindAndReplaceState {
   searchIsOpen: boolean;
 
   isSearching: boolean;
@@ -21,7 +21,7 @@ interface FindAndReplaceStore {
 }
 
 // Initial state
-const initialState: FindAndReplaceStore = {
+export const initialFindAndReplaceState: FindAndReplaceState = {
   searchIsOpen: false,
 
   isSearching: false,
@@ -38,6 +38,8 @@ const initialState: FindAndReplaceStore = {
   currentQuery: '',
 };
 
-// Create the store
-export const FindAndReplaceStore =
-  createBlockStore<FindAndReplaceStore>(initialState);
+export function useFindAndReplaceStore() {
+  const { findAndReplace, setFindAndReplace } =
+    useMarkdownDocument().state.editor;
+  return [findAndReplace, setFindAndReplace] as const;
+}

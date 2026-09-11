@@ -1,5 +1,5 @@
-import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
-import { mdStore } from '@block-md/signal/markdownBlockData';
+import { useFindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
+import { useMdStore } from '@block-md/signal/markdownBlockData';
 import { mergeRegister } from '@lexical/utils';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
@@ -38,7 +38,8 @@ export function SearchHighlight({
 }: {
   anchorElem?: HTMLElement;
 }): null {
-  const mdData = mdStore.get;
+  const [mdData] = useMdStore();
+  const [findAndReplace, setFindAndReplace] = useFindAndReplaceStore();
   const editor = () => mdData.editor;
   let stateListOffsetRef: NodekeyOffset[] = [];
   let animationFrame: number | undefined;
@@ -76,8 +77,8 @@ export function SearchHighlight({
         }
       });
 
-      FindAndReplaceStore.set('styles', newStyles);
-      FindAndReplaceStore.set('matches', matches);
+      setFindAndReplace('styles', newStyles);
+      setFindAndReplace('matches', matches);
     }
   );
 
@@ -98,7 +99,7 @@ export function SearchHighlight({
   });
 
   createEffect(() => {
-    stateListOffsetRef = FindAndReplaceStore.get.listOffset;
+    stateListOffsetRef = findAndReplace.listOffset;
     update();
   });
 
@@ -132,15 +133,17 @@ export function SearchHighlight({
 }
 
 export function FloatingSearchHighlight(props: { anchorElem?: HTMLElement }) {
+  const [findAndReplace] = useFindAndReplaceStore();
+
   return (
     <Portal mount={props.anchorElem}>
-      <For each={FindAndReplaceStore.get.styles}>
+      <For each={findAndReplace.styles}>
         {(item) => (
           <div
             style={item.style}
             class={cn(
               'z-10 m-0 text-transparent h-4.5 absolute top-0 left-0 opacity-50 pointer-events-none',
-              item.idx === FindAndReplaceStore.get.currentMatch + 1
+              item.idx === findAndReplace.currentMatch + 1
                 ? 'bg-accent'
                 : 'bg-accent/50'
             )}

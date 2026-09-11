@@ -1,16 +1,14 @@
-import { markdownBlockErrorSignal } from '@block-md/signal/error';
+import { useMarkdownBlockError } from '@block-md/signal/error';
 import { CollabProvider } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
-import { blockSourceSignal, blockSyncSourceSignal } from '@core/signal/load';
-import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { isSourceSyncService } from '@core/util/source';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Setter } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { endDocumentSpan, resumeDocumentSpan } from '../observability';
-import { CollabStatus } from './CollabStatus';
 
 // The sync tags and force-sync command live with the generic provider now;
 // re-exported here so existing md-block imports keep working.
@@ -38,11 +36,12 @@ export type MarkdownCollabProviderProps = {
  * the block's document tracing spans, with the CollabStatus chrome.
  */
 export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
-  const docSource = blockSourceSignal.get;
-  const syncSource = blockSyncSourceSignal.get;
-  const canEdit = useCanEdit();
-  const canComment = useCanComment();
-  const [editorError] = markdownBlockErrorSignal;
+  const markdownDocument = useMarkdownDocument();
+  const docSource = markdownDocument.source;
+  const syncSource = () => markdownDocument.data()?.syncSource;
+  const canEdit = markdownDocument.permissions.canEdit;
+  const canComment = markdownDocument.permissions.canComment;
+  const [editorError] = useMarkdownBlockError();
 
   return (
     <CollabProvider
@@ -67,7 +66,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
         resumeSpan: resumeDocumentSpan,
         endSpan: endDocumentSpan,
       }}
-      statusChrome={<CollabStatus />}
+      statusChrome={markdownDocument.renderCollaborationStatus?.()}
     />
   );
 }

@@ -66,7 +66,7 @@ import {
 import { useHistory } from '../../history/HistoryContext';
 import { HistoryScrubber } from '../../history/HistoryScrubber';
 import { HistorySessionList } from '../../history/HistorySessionList';
-import { mdStore } from '../../signal/markdownBlockData';
+import { useMdStore } from '../../signal/markdownBlockData';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
 interface MarkdownSidePanelSectionsProps {
@@ -436,7 +436,7 @@ function PropertiesSectionContent(props: {
   documentName: string;
 }) {
   const blockId = useBlockId();
-  const mdData = mdStore.get;
+  const [mdData] = useMdStore();
 
   const blockName = useBlockAliasedName();
   const entityType: PropertiesEntityType =
@@ -507,7 +507,7 @@ const PINNED_ORDER: readonly string[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StatsSectionContent() {
-  const md = mdStore.get;
+  const [md] = useMdStore();
 
   return (
     <Show

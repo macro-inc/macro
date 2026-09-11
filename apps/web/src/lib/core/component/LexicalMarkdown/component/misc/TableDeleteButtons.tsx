@@ -1,4 +1,4 @@
-import { mdStore } from '@block-md/signal/markdownBlockData';
+import { useMdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   $computeTableMap,
@@ -117,7 +117,7 @@ function readSelectionDeletePixels(
 }
 
 export function TableDeleteButtons() {
-  const mdData = mdStore.get;
+  const [mdData] = useMdStore();
   const editor = () => mdData.editor;
 
   const [target, setTarget] = createSignal<DeleteTarget>();

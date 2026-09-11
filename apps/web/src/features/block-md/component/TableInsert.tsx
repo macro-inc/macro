@@ -3,7 +3,7 @@ import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import { createSignal, Index, type ParentProps } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { mdStore } from '../signal/markdownBlockData';
+import { useMdStore } from '../signal/markdownBlockData';
 
 const MAX_NUMBER_OF_ROWS = 50;
 const MAX_NUMBER_OF_COLS = 20;
@@ -109,7 +109,7 @@ export function TableInsert(
     onMenuClose?: () => void;
   }>
 ) {
-  const mdData = mdStore.get;
+  const [mdData] = useMdStore();
   const editor = () => mdData.editor;
 
   const [rows, setRows] = createSignal<number>();

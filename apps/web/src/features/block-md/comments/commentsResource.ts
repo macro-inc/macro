@@ -1,12 +1,6 @@
-import {
-  createBlockMemo,
-  createBlockResource,
-  useBlockId,
-  useBlockName,
-} from '@core/block';
 import { compareDateAsc } from '@core/util/date';
 
-import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
+import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type { AnnotationIncrementalUpdate } from '@service-storage/generated/schemas/annotationIncrementalUpdate';
 import type { Comment } from '@service-storage/generated/schemas/comment';
@@ -19,13 +13,9 @@ import type { DeleteCommentResponse } from '@service-storage/generated/schemas/d
 import type { EditCommentRequest } from '@service-storage/generated/schemas/editCommentRequest';
 import type { EditCommentResponse } from '@service-storage/generated/schemas/editCommentResponse';
 import { batch } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useCommentState } from './commentStore';
 import type { MarkId, ThreadMetadata } from './commentType';
-
-const isMdBlock = createBlockMemo(() => useBlockName() === 'md');
-export const commentThreadsResource = createBlockResource(
-  isMdBlock,
-  fetchComments
-);
 
 export const sortComments = (a: Comment, b: Comment) => {
   if (a.order != null && b.order != null) {
@@ -38,19 +28,13 @@ export const sortComments = (a: Comment, b: Comment) => {
   return compareDateAsc(a.createdAt, b.createdAt);
 };
 
-async function fetchComments() {
-  const documentId = useBlockId();
-  const commentThreads = await storageServiceClient.annotations.getComments({
-    documentId,
-  });
-  if (commentThreads.isErr()) {
-    throw new Error('Unable to fetch comments');
-  }
-  return commentThreads.value.data;
+export function useCommentThreadsResource() {
+  const { commentThreads, commentThreadActions } = useCommentState();
+  return [commentThreads, commentThreadActions] as const;
 }
 
 function useHandleCreateComment() {
-  const [, { mutate: mutateCommentThreads }] = commentThreadsResource;
+  const [, { mutate: mutateCommentThreads }] = useCommentThreadsResource();
 
   return async (response: CreateCommentResponse) => {
     const commentThread: CommentThread = {
@@ -59,7 +43,7 @@ function useHandleCreateComment() {
     };
     batch(() => {
       let mutatedExistingThread = false;
-      mutateCommentThreads((prev) => {
+      mutateCommentThreads((prev = []) => {
         let out: CommentThread[] = [];
         for (const thread of prev) {
           if (thread.thread.threadId === commentThread.thread.threadId) {
@@ -79,7 +63,7 @@ function useHandleCreateComment() {
 }
 
 function useCreateComment() {
-  const documentId = useBlockId();
+  const documentId = useMarkdownDocument().documentId;
   const handleCreateComment = useHandleCreateComment();
 
   return async (body: CreateCommentRequest) => {
@@ -102,10 +86,10 @@ function useCreateComment() {
 }
 
 function useHandleEditComment() {
-  const [, { mutate: mutateCommentThreads }] = commentThreadsResource;
+  const [, { mutate: mutateCommentThreads }] = useCommentThreadsResource();
 
   return async (response: EditCommentResponse) => {
-    mutateCommentThreads((prev) => {
+    mutateCommentThreads((prev = []) => {
       let out: CommentThread[] = [];
       for (const thread of prev) {
         if (thread.thread.threadId === response.threadId) {
@@ -152,20 +136,20 @@ export function useEditCommentResource() {
 }
 
 function useHandleDeleteComment() {
-  const [, { mutate: mutateCommentThreads }] = commentThreadsResource;
+  const [, { mutate: mutateCommentThreads }] = useCommentThreadsResource();
 
   return async (response: DeleteCommentResponse) => {
     return batch(() => {
       // either delete single comment or entire thread
       if (response.thread.deleted) {
-        mutateCommentThreads((prev) =>
+        mutateCommentThreads((prev = []) =>
           prev.filter((t) => t.thread.threadId !== response.thread.threadId)
         );
         return {
           threadDeleted: true,
         };
       } else {
-        mutateCommentThreads((prev) => {
+        mutateCommentThreads((prev = []) => {
           let out: CommentThread[] = [];
           for (const commentThread of prev) {
             if (commentThread.thread.threadId === response.thread.threadId) {
@@ -243,47 +227,45 @@ export function useCreateThreadReplyResource() {
 }
 
 // TODO: enable for live updates when live collab is a thing
-createConnectionBlockWebsocketEffect((msg) => {
-  const currentDocumentId = useBlockId();
-  const blockName = useBlockName();
-
+export function useCommentRealtime() {
+  const documentId = useMarkdownDocument().documentId;
   const handleCommentUpdate = useHandleCreateComment();
   const handleEditComment = useHandleEditComment();
   const handleDeleteComment = useHandleDeleteComment();
 
-  if (blockName !== 'md') return;
-
-  if (msg.type === 'comment') {
-    let incrementalUpdate: AnnotationIncrementalUpdate;
-    try {
-      incrementalUpdate = JSON.parse(msg.data) as AnnotationIncrementalUpdate;
-      if (incrementalUpdate.payload.documentId !== currentDocumentId) {
+  createConnectionWebsocketEffect((msg) => {
+    if (msg.type === 'comment') {
+      let incrementalUpdate: AnnotationIncrementalUpdate;
+      try {
+        incrementalUpdate = JSON.parse(msg.data) as AnnotationIncrementalUpdate;
+        if (incrementalUpdate.payload.documentId !== documentId) {
+          return;
+        }
+      } catch (error) {
+        console.warn('unable to parse annotation incremental update', error);
         return;
       }
-    } catch (e) {
-      console.warn('unable to parse annotation incremental update', e);
-      return;
-    }
 
-    switch (incrementalUpdate.updateType) {
-      case 'create-comment':
-        handleCommentUpdate(incrementalUpdate.payload.response);
-        break;
-      case 'create-anchor':
-        break;
-      case 'edit-comment':
-        handleEditComment(incrementalUpdate.payload.response);
-        break;
-      case 'edit-anchor':
-        break;
-      case 'delete-comment':
-        handleDeleteComment(incrementalUpdate.payload.response);
-        break;
-      case 'delete-anchor':
-        break;
-      default:
-        console.error('unknown comment update type', msg);
-        break;
+      switch (incrementalUpdate.updateType) {
+        case 'create-comment':
+          handleCommentUpdate(incrementalUpdate.payload.response);
+          break;
+        case 'create-anchor':
+          break;
+        case 'edit-comment':
+          handleEditComment(incrementalUpdate.payload.response);
+          break;
+        case 'edit-anchor':
+          break;
+        case 'delete-comment':
+          handleDeleteComment(incrementalUpdate.payload.response);
+          break;
+        case 'delete-anchor':
+          break;
+        default:
+          console.error('unknown comment update type', msg);
+          break;
+      }
     }
-  }
-});
+  });
+}

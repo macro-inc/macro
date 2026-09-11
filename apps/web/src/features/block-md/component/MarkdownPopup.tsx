@@ -1,13 +1,9 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
-import {
-  activeCommentThreadSignal,
-  highlightedCommentThreadsSignal,
-} from '@block-md/comments/commentStore';
+import { useCommentState } from '@block-md/comments/commentStore';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useIsAuthenticated } from '@core/auth';
-import { useBlockId } from '@core/block';
 import type { Completion } from '@core/client/completion';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
@@ -55,9 +51,7 @@ import {
   readNativePasteboardText,
   setNativeEditMenuSuppressed,
 } from '@core/mobile/nativeEditMenu';
-import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { createMarkdownFile } from '@core/util/create';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { debouncedDependent } from '@core/util/debounce';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import MacroGridLoader from '@icon/macro-grid-noise-loader-4.svg';
@@ -102,6 +96,7 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { FormatTools } from './FormatTools';
 import { TouchSelectionToolbar } from './TouchSelectionToolbar';
 
@@ -111,7 +106,10 @@ export function MarkdownPopup(props: {
   highlightLayerRef: HTMLDivElement;
   lexicalMapping: NodeIdMappings;
 }) {
-  const blockId = useBlockId();
+  const markdownDocument = useMarkdownDocument();
+  const blockId = markdownDocument.documentId;
+  const name = () =>
+    markdownDocument.persistedName() || markdownDocument.fallbackName();
 
   const { editor, plugins } = useContext(LexicalWrapperContext) ?? {};
   if (!editor || !plugins) {
@@ -197,13 +195,13 @@ export function MarkdownPopup(props: {
     setNativeEditMenuSuppressed(false);
   });
 
-  const canEdit = useCanEdit();
+  const canEdit = markdownDocument.permissions.canEdit;
   const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
-  const canComment = useCanComment();
+  const canComment = markdownDocument.permissions.canComment;
   const currentUserId = useUserId();
 
-  const highlightedCommentThreads = highlightedCommentThreadsSignal.get;
-  const setActiveCommentThread = activeCommentThreadSignal.set;
+  const { highlightedCommentThreads, setActiveCommentThread } =
+    useCommentState();
 
   const [copied, setCopied] = createSignal(false);
   const [locationCopied, setLocationCopied] = createSignal(false);
@@ -558,7 +556,6 @@ export function MarkdownPopup(props: {
       setPopupVisible(false);
     });
 
-    const name = useBlockDocumentName();
     const handleEditInMarkdown = createCallback(async () => {
       setIsLoading(true);
       const content = completion()?.content;

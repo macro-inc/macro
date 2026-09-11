@@ -10,7 +10,7 @@
  * pointer captured so the drag survives leaving the editor; Escape /
  * pointercancel restores the pre-drag width or height.
  */
-import { mdStore } from '@block-md/signal/markdownBlockData';
+import { useMdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $isTableCellNode, getDOMCellFromTarget } from '@lexical/table';
@@ -53,7 +53,7 @@ const [dragEdge, setDragEdge] = createSignal<ResizeEdge>();
 export const tableColumnResizeEdge = dragEdge;
 
 export function TableCellResizer() {
-  const mdData = mdStore.get;
+  const [mdData] = useMdStore();
   const editor = () => mdData.editor;
 
   // Cell whose border carries the handle: the hovered cell on pointer

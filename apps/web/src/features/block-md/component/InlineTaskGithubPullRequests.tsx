@@ -1,5 +1,4 @@
 import { GithubPullRequestStatusIcon } from '@components/app/side-panel';
-import { useBlockAliasedName, useBlockId } from '@core/block';
 import { TOKENS } from '@core/hotkey/tokens';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import GithubIcon from '@icon/mcp-github.svg';
@@ -9,6 +8,7 @@ import type { GithubPullRequest } from '@service-storage/generated/schemas';
 import { Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 const PILL_CLASS = cn(
   'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted',
@@ -152,8 +152,9 @@ function InlineTaskGithubPullRequestsContent(props: {
 }
 
 export function InlineTaskGithubPullRequests(): JSX.Element {
-  const blockId = useBlockId();
-  const isTask = useBlockAliasedName() === 'task';
+  const markdownDocument = useMarkdownDocument();
+  const blockId = markdownDocument.documentId;
+  const isTask = markdownDocument.kind === 'task';
 
   return (
     <Show when={isTask}>

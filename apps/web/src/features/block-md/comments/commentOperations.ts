@@ -1,6 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { mdStore } from '@block-md/signal/markdownBlockData';
-import { useBlockId } from '@core/block';
+import { useMdStore } from '@block-md/signal/markdownBlockData';
 import type { DeleteCommentInfo } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import {
@@ -10,7 +9,6 @@ import {
   SET_COMMENT_THREAD_ID_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { isMobile } from '@core/mobile/isMobile';
-import { blockElementSignal } from '@core/signal/blockElement';
 import type {
   CreateCommentRequest,
   EditCommentRequest,
@@ -19,12 +17,8 @@ import type { CreateCommentResponse } from '@service-storage/generated/schemas/c
 import { until } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { onCleanup } from 'solid-js';
-import {
-  activeCommentThreadSignal,
-  commentsStore,
-  markStore,
-  threadStore,
-} from './commentStore';
+import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useCommentState } from './commentStore';
 import {
   useCreateHighlightCommentResource,
   useCreateThreadReplyResource,
@@ -38,10 +32,10 @@ export function useCreateComment() {
   const deleteNewComments = useDeleteNewComments();
   const createHighlightComment = useCreateHighlightCommentResource();
   const createThreadReply = useCreateThreadReplyResource();
-  const threads = threadStore.get;
+  const { threads, setActiveCommentThread } = useCommentState();
   const updateNodeThreadId = useSetNodeCommentThreadId();
-  const setActiveThread = activeCommentThreadSignal.set;
-  const editor = mdStore.get.editor;
+  const [md] = useMdStore();
+  const editor = md.editor;
 
   return createCallback(
     async (info: CreateCommentRequest & { threadId: number }) => {
@@ -49,7 +43,7 @@ export function useCreateComment() {
       const { threadId, text, mentions } = info;
 
       if (threadId === -1) {
-        setActiveThread(threadId);
+        setActiveCommentThread(threadId);
 
         const comment = threads[threadId];
         if (!comment) {
@@ -104,8 +98,9 @@ export function useDeleteComment() {
 
   const deleteComment = useDeleteCommentResource();
   const deleteNewComments = useDeleteNewComments();
-  const editor = mdStore.get.editor;
-  const comments = commentsStore.get;
+  const [md] = useMdStore();
+  const { comments } = useCommentState();
+  const editor = md.editor;
 
   return createCallback(async (info: DeleteCommentInfo) => {
     analytics.track('comment_delete', { blockType: 'md' });
@@ -135,8 +130,9 @@ export function useDeleteComment() {
 }
 
 export function useDeleteNewComments() {
-  const [marks, setMarks] = markStore;
-  const editor = mdStore.get.editor;
+  const { marks, setMarks } = useCommentState();
+  const [md] = useMdStore();
+  const editor = md.editor;
 
   return createCallback((discardPending = true) => {
     // console.trace('delete new comments');
@@ -153,7 +149,8 @@ export function useDeleteNewComments() {
 }
 
 export const useSetNodeCommentThreadId = () => {
-  const editor = mdStore.get.editor;
+  const [md] = useMdStore();
+  const editor = md.editor;
 
   return createCallback(
     ({ markId, threadId }: { markId: string; threadId: number }) => {
@@ -166,12 +163,12 @@ export const useSetNodeCommentThreadId = () => {
 };
 
 export function useScrollToCommentThread() {
-  const blockElement = blockElementSignal.get;
-  const documentId = useBlockId();
+  const markdownDocument = useMarkdownDocument();
+  const blockElement = markdownDocument.element;
+  const documentId = markdownDocument.documentId;
   // Captured at setup: block stores resolve their block context at access
   // time, which the returned callback no longer has.
-  const threads = threadStore.get;
-  const [marks] = markStore;
+  const { threads, marks } = useCommentState();
   // At most one mobile wait-for-mark may be outstanding — a newer deep
   // link supersedes an older still-pending one, so a slow-syncing thread
   // can't later yank the scroll and the active thread away from the one

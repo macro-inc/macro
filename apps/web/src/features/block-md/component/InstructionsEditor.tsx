@@ -1,7 +1,6 @@
-import { markdownBlockErrorSignal } from '@block-md/signal/error';
-import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
+import { useMarkdownBlockError } from '@block-md/signal/error';
+import { useRewriteState } from '@block-md/signal/rewriteSignal';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
-import { useBlockId } from '@core/block';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import { LexicalStateDebugger } from '@core/component/LexicalMarkdown/component/debug/LexicalStateDebugger';
@@ -39,14 +38,6 @@ import {
   setEditorStateFromMarkdown,
 } from '@core/component/LexicalMarkdown/utils';
 import { ENABLE_MARKDOWN_LIVE_COLLABORATION } from '@core/constant/featureFlags';
-import { createMethodRegistration } from '@core/orchestrator';
-import { blockElementSignal } from '@core/signal/blockElement';
-import {
-  blockFileSignal,
-  blockHandleSignal,
-  blockSourceSignal,
-} from '@core/signal/load';
-import { useCanEdit } from '@core/signal/permissions';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
@@ -69,7 +60,8 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
+import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useMarkdownData, useMdStore } from '../signal/markdownBlockData';
 import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { EditorSystemMessage } from './EditorSystemMessage';
@@ -82,18 +74,18 @@ export function InstructionsEditor(props: {
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
 }) {
-  const blockData = blockDataSignal.get;
-  const blockId = useBlockId();
+  const markdownDocument = useMarkdownDocument();
+  const markdownData = useMarkdownData();
+  const blockId = markdownDocument.documentId;
 
   const saveMarkdownDocument = useSaveMarkdownDocument();
-  const setMdStore = mdStore.set;
-  const canEdit = useCanEdit();
-  const [blockElement] = blockElementSignal;
-  const docSource = blockSourceSignal.get;
+  const [, setMdStore] = useMdStore();
+  const canEdit = markdownDocument.permissions.canEdit;
+  const blockElement = markdownDocument.element;
+  const docSource = markdownDocument.source;
 
-  const blockHandle = blockHandleSignal.get;
-  createMethodRegistration(blockHandle, {
-    goToLocationFromParams: (_params: Record<string, any>) => {},
+  markdownDocument.registerMethods({
+    goToLocationFromParams: (_params: Record<string, unknown>) => {},
   });
 
   const IS_SYNC = () => {
@@ -124,7 +116,7 @@ export function InstructionsEditor(props: {
   const [clickTargetHeight, setClickTargetHeight] = createSignal(0);
 
   const [editorReady, setEditorReady] = createSignal<boolean>(false);
-  const [editorError, setEditorError] = markdownBlockErrorSignal;
+  const [editorError, setEditorError] = useMarkdownBlockError();
 
   createEffect(() => {
     // We still want the editor to be locked down (for certain things like click events on check
@@ -285,7 +277,7 @@ export function InstructionsEditor(props: {
 
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
   createEffect(() => {
-    const file = blockFileSignal();
+    const file = markdownDocument.data()?.dssFile;
     if (!file) return;
 
     file.arrayBuffer().then(setFileArrayBuffer);
@@ -295,7 +287,7 @@ export function InstructionsEditor(props: {
     const source = docSource();
     if (!source) return;
     if (!isSourceDSS(source)) return;
-    if (!blockData()) return;
+    if (!markdownData()) return;
     if (editorReady()) return;
 
     const buf = fileArrayBuffer();
@@ -353,19 +345,15 @@ export function InstructionsEditor(props: {
     setEditorReady(true);
   });
 
-  const setRewriteSignal = rewriteSignal.set;
-  const setRevisionSignal = revisionsSignal.set;
+  const { setRewriting, setRevisions } = useRewriteState();
 
-  createMethodRegistration(blockHandle, {
+  markdownDocument.registerMethods({
     setPatches: (args: { patches: MarkdownRewriteOutput['diffs'] }) => {
-      setRewriteSignal(false);
-      setRevisionSignal(args.patches);
+      setRewriting(false);
+      setRevisions(args.patches);
     },
-  });
-
-  createMethodRegistration(blockHandle, {
     setIsRewriting: () => {
-      setRewriteSignal(true);
+      setRewriting(true);
     },
   });
 

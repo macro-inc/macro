@@ -1,4 +1,3 @@
-import { useBlockAliasedName, useBlockId } from '@core/block';
 import type {
   DiscussionComment,
   DiscussionSource,
@@ -7,19 +6,19 @@ import type {
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { useUrlParams } from '@core/component/ParamsProvider';
 import { useUserId } from '@core/context/user';
-import { useCanComment } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import type { CreateCommentRequestMentions } from '@service-storage/generated/schemas/createCommentRequestMentions';
 import { createMemo } from 'solid-js';
 import { URL_PARAMS } from '../constants';
-import { mdStore } from '../signal/markdownBlockData';
+import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useMdStore } from '../signal/markdownBlockData';
 import {
-  discussionThreads,
   sortComments,
   useCreateDiscussionReply,
   useCreateDiscussionThread,
   useDeleteDiscussionComment,
+  useDiscussionThreads,
   useEditDiscussionComment,
 } from './discussionResource';
 
@@ -58,13 +57,15 @@ function toViewThread(ct: CommentThread): DiscussionThread {
  * `DISCUSSION:`-marked threads on a markdown document. Quarantines the numeric
  * id ↔ string adaptation and the document-specific request shapes so the
  * shared discussion UI stays backend-agnostic. Must be called within a
- * block/component owner (it wires the existing block resources).
+ * Markdown surface owner (it wires the surface-scoped resources).
  */
 export function createDocumentDiscussionSource(): DiscussionSource {
-  const blockId = useBlockId();
-  const blockAliasedName = useBlockAliasedName();
+  const markdownDocument = useMarkdownDocument();
+  const documentId = markdownDocument.documentId;
+  const entityBlockName =
+    markdownDocument.kind === 'document' ? 'md' : markdownDocument.kind;
   // Comment affordances gate on can-comment (main switched tasks off can-edit).
-  const canComment = useCanComment();
+  const canComment = markdownDocument.permissions.canComment;
   const userId = useUserId();
   const urlParams = useUrlParams(URL_PARAMS);
 
@@ -72,7 +73,8 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   const createReplyFn = useCreateDiscussionReply();
   const editFn = useEditDiscussionComment();
   const deleteFn = useDeleteDiscussionComment();
-  const md = mdStore.get;
+  const [md] = useMdStore();
+  const discussionThreads = useDiscussionThreads();
 
   const threads = createMemo(() =>
     (discussionThreads() ?? []).map(toViewThread)
@@ -127,7 +129,7 @@ export function createDocumentDiscussionSource(): DiscussionSource {
     },
     buildCommentLink(comment) {
       return buildSimpleEntityUrl(
-        { type: blockAliasedName, id: blockId },
+        { type: entityBlockName, id: documentId },
         { [URL_PARAMS.commentId]: comment.id }
       );
     },

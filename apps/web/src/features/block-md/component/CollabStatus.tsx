@@ -1,14 +1,15 @@
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
-import { blockSyncSourceSignal } from '@core/signal/load';
 import { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import CloudIcon from '@phosphor/cloud.svg';
 import CloudWarningIcon from '@phosphor/cloud-warning.svg';
 import { Button } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export function CollabStatus() {
-  const syncSource = blockSyncSourceSignal.get;
+  const markdownDocument = useMarkdownDocument();
+  const syncSource = () => markdownDocument.data()?.syncSource;
 
   const status = () => syncSource()?.status() ?? SyncSourceStatus.Disconnected;
   const showStatus = () =>
