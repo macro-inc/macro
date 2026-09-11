@@ -150,6 +150,16 @@ jobs:
           exit 1
         fi
 
+        # A bundle with no web assets builds, links, uploads and launches — to a black
+        # screen. Nothing upstream fails, so the first report comes from whoever opened
+        # the preview. Prove the frontend is actually in there.
+        if [ ! -f "$APP/index.html" ] || [ -z "$(ls -A "$APP/assets" 2>/dev/null)" ]; then
+          echo "The app bundle carries no frontend: index.html or assets/ is missing." >&2
+          echo "frontendDist is most likely absent from the tauri --config override." >&2
+          ls -la "$APP" >&2 || true
+          exit 1
+        fi
+
         # `ditto`, not `zip`: the Apple-supported way to archive a bundle, preserving
         # the symlinks and exec bits that Appetize (and anyone re-running this locally)
         # needs. The same archive is both the CI artifact and the upload payload.

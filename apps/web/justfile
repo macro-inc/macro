@@ -34,9 +34,12 @@ ios-build-sim prebuilt="false": ios-prepare
     #!/usr/bin/env bash
     set -euo pipefail
     if [ "{{prebuilt}}" != "true" ]; then just build-tauri-dev; fi
+    # frontendDist is restated because this override replaces the build table:
+    # dropping it silently produces an app with an empty assets/ and no
+    # index.html, which installs and launches to a black screen.
     cd tauri/src-tauri && cargo tauri ios build \
       --target aarch64-sim --debug --ci --no-sign -v \
-      --config '{"build":{"beforeBuildCommand":""}}' \
+      --config '{"build":{"beforeBuildCommand":"","frontendDist":"../../dist"}}' \
       -- --no-default-features
 
 # iOS generated project prep. Keep native bundle metadata in sync with
