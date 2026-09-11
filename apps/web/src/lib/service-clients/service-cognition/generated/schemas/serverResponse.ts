@@ -17,4 +17,6 @@ export interface ServerResponse {
   server_name: string;
   /** The MCP server URL. */
   url: string;
+  /** Custom request headers set for this server. */
+  headers: Record<string, string>;
 }

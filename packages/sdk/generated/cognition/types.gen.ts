@@ -21,6 +21,10 @@ export type AddServerRequest = {
      * The MCP server's streamable HTTP URL.
      */
     url: string;
+    /**
+     * Custom request headers to send with every request (key-value pairs).
+     */
+    headers?: Record<string, string>;
 };
 
 /**
@@ -1252,6 +1256,10 @@ export type ServerResponse = {
      * The MCP server URL.
      */
     url: string;
+    /**
+     * Custom request headers set for this server.
+     */
+    headers: Record<string, string>;
 };
 
 /**
@@ -1459,6 +1467,10 @@ export type UpdateServerRequest = {
      * The server URL to update.
      */
     url: string;
+    /**
+     * Custom request headers to send with every request (key-value pairs).
+     */
+    headers?: Record<string, string>;
 };
 
 export type UpdateSharePermissionRequestV2 = {

@@ -19,6 +19,7 @@ base64.workspace = true
 async-openai.workspace = true
 axum.workspace = true
 futures.workspace = true
+http.workspace = true
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ] }
@@ -31,7 +32,7 @@ rmcp = { workspace = true, features = ["auth", "client", "transport-streamable-h
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sqlx.workspace = true
+sqlx = { workspace = true, features = ["json"] }
 thiserror.workspace = true
 tracing.workspace = true
 utoipa.workspace = true

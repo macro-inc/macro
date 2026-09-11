@@ -13,4 +13,6 @@ export interface AddServerRequest {
   server_name: string;
   /** The MCP server's streamable HTTP URL. */
   url: string;
+  /** Custom request headers to send with every request (key-value pairs). */
+  headers?: Record<string, string>;
 }
