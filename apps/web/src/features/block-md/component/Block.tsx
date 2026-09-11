@@ -1,6 +1,12 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import {
+  CollaborationStatusIndicator,
+  isCollaborationStatusVisible,
+} from '@components/app/CollaborationStatusIndicator';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockAliasedName, useBlockId } from '@core/block';
@@ -31,7 +37,6 @@ import { createMarkdownDocumentState } from '../context/markdown-document-state'
 import type { MarkdownBlockSpec, MarkdownData } from '../definition';
 import { OldOverlay } from '../history/OldOverlay';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
-import { CollabStatus } from './CollabStatus';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
 import { useMarkdownName } from './MarkdownNameProvider';
@@ -109,6 +114,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
       | undefined;
     return value?.__block === 'md' ? value : undefined;
   };
+  const collaborationStatus = () => data()?.syncSource?.status();
   const mode = (): MarkdownDocumentMode | undefined => {
     const source = blockSourceSignal.get();
     if (source?.type === 'sync-service') return 'sync';
@@ -146,7 +152,17 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
             </Show>
             <div class="flex flex-col size-full">
               <div class="relative shrink-0">
-                <CollabStatus />
+                <SplitHeaderRight>
+                  <Show
+                    when={isCollaborationStatusVisible(collaborationStatus())}
+                  >
+                    <HeaderIsland class="-order-1">
+                      <CollaborationStatusIndicator
+                        status={collaborationStatus()}
+                      />
+                    </HeaderIsland>
+                  </Show>
+                </SplitHeaderRight>
                 <Suspense>
                   <Show when={isInstructions()} fallback={<ManagedTopBar />}>
                     <InstructionsTopBar />
