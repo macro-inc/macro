@@ -267,7 +267,6 @@ pub async fn get_thread_access(
     Ok([highest_level, crm_level].into_iter().flatten().max())
 }
 
-/// List every email-thread grant path for the caller.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn explain_thread_access(
     pool: &PgPool,
@@ -428,7 +427,6 @@ async fn explain_thread_containing_project(
         .into_iter()
         .map(|row| AccessGrant::ContainingProject {
             project_id: row.project_id,
-            access_level: AccessLevel::View,
         })
         .collect())
 }

@@ -51,7 +51,6 @@ pub async fn get_agent_session_access(
     Ok(highest_level)
 }
 
-/// List every agent-session grant path for the caller.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn explain_agent_session_access(
     pool: &PgPool,

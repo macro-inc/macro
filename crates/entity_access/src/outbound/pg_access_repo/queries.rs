@@ -235,7 +235,6 @@ pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
         .collect())
 }
 
-/// Return every `entity_access` row that matches the caller's source ids.
 #[tracing::instrument(skip(pool, source_ids), err)]
 pub async fn list_entity_access_grants(
     pool: &Pool<Postgres>,

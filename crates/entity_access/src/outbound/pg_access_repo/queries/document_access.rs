@@ -136,7 +136,6 @@ pub async fn get_document_access(
     Ok(highest_level)
 }
 
-/// List every document grant path for the caller.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn explain_document_access(
     pool: &PgPool,
@@ -234,16 +233,15 @@ async fn explain_document_email_attachments(
         SELECT
             t.id AS thread_id,
             CASE
-                WHEN l.macro_id = $3
-                  OR EXISTS (
-                      SELECT 1
-                      FROM macro_user_links mul
-                      WHERE mul.link_id = l.id
-                        AND mul.primary_macro_id = $3
-                  )
-                THEN 'edit'
-                ELSE 'view'
-            END AS "access_level!"
+                WHEN l.macro_id = $3 THEN 'inbox_owner'
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM macro_user_links mul
+                    WHERE mul.link_id = l.id
+                      AND mul.primary_macro_id = $3
+                ) THEN 'inbox_delegate'
+                ELSE 'thread_grant'
+            END AS "reason!"
         FROM document_email de
         JOIN email_attachments ea ON ea.id = de.email_attachment_id
         JOIN email_messages em ON em.id = ea.message_id
@@ -277,12 +275,12 @@ async fn explain_document_email_attachments(
     Ok(rows
         .into_iter()
         .filter_map(|row| {
-            AccessLevel::from_str(&row.access_level)
-                .ok()
-                .map(|access_level| AccessGrant::EmailAttachmentThread {
+            AccessGrant::email_attachment_reason(&row.reason).map(|reason| {
+                AccessGrant::EmailAttachmentThread {
                     thread_id: row.thread_id,
-                    access_level,
-                })
+                    reason,
+                }
+            })
         })
         .collect())
 }

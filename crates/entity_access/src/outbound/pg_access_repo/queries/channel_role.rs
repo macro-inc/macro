@@ -13,6 +13,7 @@ struct ChannelRoleRow {
     role: Option<String>,
     channel_type: String,
     org_id: Option<i64>,
+    team_id: Option<Uuid>,
     is_team_member: bool,
 }
 
@@ -22,15 +23,6 @@ struct TeamChannelRoleRow {
     is_matching_team_channel: bool,
 }
 
-/// Row returned from the channel explain query.
-struct ChannelExplainRow {
-    role: Option<String>,
-    channel_type: String,
-    org_id: Option<i64>,
-    team_id: Option<Uuid>,
-    is_team_member: bool,
-}
-
 /// Parse a participant role string from the database.
 fn parse_role(s: &str) -> ParticipantRole {
     match s {
@@ -38,6 +30,36 @@ fn parse_role(s: &str) -> ParticipantRole {
         "admin" => ParticipantRole::Admin,
         _ => ParticipantRole::Member,
     }
+}
+
+async fn fetch_channel_role_row(
+    pool: &PgPool,
+    channel_id: &Uuid,
+    user_id: &str,
+) -> Result<Option<ChannelRoleRow>, sqlx::Error> {
+    sqlx::query_as!(
+        ChannelRoleRow,
+        r#"
+        SELECT
+            cp.role::text as "role?",
+            c.channel_type::text as "channel_type!",
+            c.org_id as "org_id?",
+            c.team_id as "team_id?",
+            EXISTS (
+                SELECT 1
+                FROM team_user tu
+                WHERE tu.user_id = $2 AND tu.team_id = c.team_id
+            ) as "is_team_member!"
+        FROM comms_channels c
+        LEFT JOIN comms_channel_participants cp
+            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
+        WHERE c.id = $1
+        "#,
+        channel_id,
+        user_id,
+    )
+    .fetch_optional(pool)
+    .await
 }
 
 /// Get the user's role in a channel, considering channel type rules.
@@ -61,30 +83,7 @@ pub async fn get_channel_role(
     user_id: &str,
     user_org_id: Option<i64>,
 ) -> Result<ChannelRoleResult, sqlx::Error> {
-    let row = sqlx::query_as!(
-        ChannelRoleRow,
-        r#"
-        SELECT
-            cp.role::text as "role?",
-            c.channel_type::text as "channel_type!",
-            c.org_id as "org_id?",
-            EXISTS (
-                SELECT 1
-                FROM team_user tu
-                WHERE tu.user_id = $2 AND tu.team_id = c.team_id
-            ) as "is_team_member!"
-        FROM comms_channels c
-        LEFT JOIN comms_channel_participants cp
-            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
-        WHERE c.id = $1
-        "#,
-        channel_id,
-        user_id,
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    let Some(row) = row else {
+    let Some(row) = fetch_channel_role_row(pool, channel_id, user_id).await? else {
         return Ok(ChannelRoleResult::NotFound);
     };
 
@@ -123,43 +122,13 @@ pub async fn get_channel_role(
     Ok(ChannelRoleResult::NoAccess)
 }
 
-/// Explain channel access using the role path (extractors / GraphQL).
 #[tracing::instrument(err, skip(pool))]
-#[expect(
-    clippy::disallowed_methods,
-    reason = "same query shape as get_channel_role"
-)]
 pub async fn explain_channel_access(
     pool: &PgPool,
     channel_id: &Uuid,
     user_id: &str,
-    user_org_id: Option<i64>,
 ) -> Result<Vec<AccessGrant>, sqlx::Error> {
-    let row = sqlx::query_as!(
-        ChannelExplainRow,
-        r#"
-        SELECT
-            cp.role::text as "role?",
-            c.channel_type::text as "channel_type!",
-            c.org_id as "org_id?",
-            c.team_id as "team_id?",
-            EXISTS (
-                SELECT 1
-                FROM team_user tu
-                WHERE tu.user_id = $2 AND tu.team_id = c.team_id
-            ) as "is_team_member!"
-        FROM comms_channels c
-        LEFT JOIN comms_channel_participants cp
-            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
-        WHERE c.id = $1
-        "#,
-        channel_id,
-        user_id,
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    let Some(row) = row else {
+    let Some(row) = fetch_channel_role_row(pool, channel_id, user_id).await? else {
         return Ok(vec![]);
     };
 
@@ -170,29 +139,12 @@ pub async fn explain_channel_access(
     }
 
     match row.channel_type.as_str() {
-        "public" => Ok(vec![AccessGrant::ChannelPublicDefault {
-            role: ParticipantRole::Member,
-        }]),
-        "organization" => {
-            let org_match = user_org_id
-                .zip(row.org_id)
-                .is_some_and(|(user_org, ch_org)| user_org == ch_org);
-            if let (true, Some(org_id)) = (org_match, row.org_id) {
-                Ok(vec![AccessGrant::ChannelOrganization {
-                    org_id,
-                    role: ParticipantRole::Member,
-                }])
-            } else {
-                Ok(vec![])
-            }
-        }
-        "team" if row.is_team_member => {
-            if let Some(team_id) = row.team_id {
-                Ok(vec![AccessGrant::ChannelTeamViewOnly { team_id }])
-            } else {
-                Ok(vec![])
-            }
-        }
+        "public" => Ok(vec![AccessGrant::ChannelPublicDefault]),
+        "team" if row.is_team_member => Ok(row
+            .team_id
+            .map(|team_id| AccessGrant::ChannelTeamViewOnly { team_id })
+            .into_iter()
+            .collect()),
         _ => Ok(vec![]),
     }
 }

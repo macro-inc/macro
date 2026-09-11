@@ -37,7 +37,6 @@ where
         user_id: &MacroUserId<Lowercase<'_>>,
         entity_id: &str,
         entity_type: EntityType,
-        user_org_id: Option<i64>,
     ) -> Result<AccessExplanation, AccessError> {
         if !supports_explain(entity_type) {
             return Err(AccessError::BadRequest("Unsupported entity type"));
@@ -45,7 +44,7 @@ where
 
         let grants = self
             .repo
-            .list_access_grants(user_id, entity_id, entity_type, user_org_id)
+            .list_access_grants(user_id, entity_id, entity_type)
             .await?;
 
         Ok(AccessExplanation::from_grants(

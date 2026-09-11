@@ -11,7 +11,9 @@ use uuid::Uuid;
 
 mod access_explanation;
 
-pub use access_explanation::{AccessExplanation, AccessGrant};
+pub use access_explanation::{
+    AccessExplanation, AccessGrant, EmailAttachmentReason, ForeignEntityAuthEntity,
+};
 pub use bot_id::{BotId, BotIdStr};
 pub use model_entity::EntityType;
 pub use models_entity_access_management::EntityAccessSourceType;

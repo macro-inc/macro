@@ -104,7 +104,6 @@ pub async fn get_call_access(
     Ok(highest_level)
 }
 
-/// List every call grant path for the caller.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn explain_call_access(
     pool: &PgPool,

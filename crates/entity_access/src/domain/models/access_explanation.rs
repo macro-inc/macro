@@ -1,5 +1,3 @@
-//! Labeled grant paths that explain why a user can reach an entity.
-
 #[cfg(test)]
 mod test;
 
@@ -78,6 +76,80 @@ impl Display for AccessExplanation {
     }
 }
 
+/// Why a document is reachable through an attached email thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EmailAttachmentReason {
+    /// The caller owns the attached thread's inbox.
+    InboxOwner,
+    /// The caller is delegated the attached thread's inbox.
+    InboxDelegate,
+    /// The caller has an `entity_access` row on the attached thread.
+    ThreadGrant,
+}
+
+impl EmailAttachmentReason {
+    fn access_level(self) -> AccessLevel {
+        match self {
+            Self::InboxOwner | Self::InboxDelegate => AccessLevel::Edit,
+            Self::ThreadGrant => AccessLevel::View,
+        }
+    }
+
+    fn parse_db(value: &str) -> Option<Self> {
+        match value {
+            "inbox_owner" => Some(Self::InboxOwner),
+            "inbox_delegate" => Some(Self::InboxDelegate),
+            "thread_grant" => Some(Self::ThreadGrant),
+            _ => None,
+        }
+    }
+}
+
+impl Display for EmailAttachmentReason {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.write_str(match self {
+            Self::InboxOwner => "inbox_owner",
+            Self::InboxDelegate => "inbox_delegate",
+            Self::ThreadGrant => "thread_grant",
+        })
+    }
+}
+
+/// Principal kind stored on a foreign entity row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ForeignEntityAuthEntity {
+    /// Stored for a user.
+    User,
+    /// Stored for a team.
+    Team,
+}
+
+impl ForeignEntityAuthEntity {
+    /// Wire value stored in `foreign_entity.stored_for_auth_entity`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::Team => "team",
+        }
+    }
+
+    fn parse_db(value: &str) -> Option<Self> {
+        match value {
+            "user" => Some(Self::User),
+            "team" => Some(Self::Team),
+            _ => None,
+        }
+    }
+}
+
+impl Display for ForeignEntityAuthEntity {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.write_str(self.as_str())
+    }
+}
+
 /// One concrete path that grants a user access to an entity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -116,15 +188,13 @@ pub enum AccessGrant {
     ContainingProject {
         /// The project that granted View.
         project_id: String,
-        /// Always View for this path.
-        access_level: AccessLevel,
     },
     /// A document reachable because it is attached to a thread the caller can see.
     EmailAttachmentThread {
         /// The linked email thread.
         thread_id: Uuid,
-        /// Edit for inbox owner or delegate, View for a thread-level grant.
-        access_level: AccessLevel,
+        /// Which thread path produced this grant.
+        reason: EmailAttachmentReason,
     },
     /// CRM access via membership on the entity's owning team.
     CrmTeam {
@@ -141,17 +211,7 @@ pub enum AccessGrant {
         role: ParticipantRole,
     },
     /// A public channel with no participant row defaults to Member.
-    ChannelPublicDefault {
-        /// Always Member.
-        role: ParticipantRole,
-    },
-    /// Leftover organization-channel rule. The type no longer exists in the DB.
-    ChannelOrganization {
-        /// Channel org id that matched the caller.
-        org_id: i64,
-        /// Role granted by the org match.
-        role: ParticipantRole,
-    },
+    ChannelPublicDefault,
     /// A team channel visible because the caller is on the owning team.
     ChannelTeamViewOnly {
         /// The channel's owning team.
@@ -172,8 +232,8 @@ pub enum AccessGrant {
     ForeignEntity {
         /// The stored-for principal.
         stored_for_id: String,
-        /// `user` or `team`.
-        stored_for_auth_entity: String,
+        /// User or team.
+        stored_for_auth_entity: ForeignEntityAuthEntity,
     },
     /// Current static-file policy. Every caller gets View.
     StaticFileAlwaysView,
@@ -186,10 +246,14 @@ impl AccessGrant {
             Self::EntityAccess { access_level, .. }
             | Self::PublicLink { access_level }
             | Self::TeamLink { access_level, .. }
-            | Self::ContainingProject { access_level, .. }
-            | Self::EmailAttachmentThread { access_level, .. }
             | Self::CrmTeam { access_level, .. } => EntityPermission::AccessLevel {
                 access_level: *access_level,
+            },
+            Self::ContainingProject { .. } => EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            },
+            Self::EmailAttachmentThread { reason, .. } => EntityPermission::AccessLevel {
+                access_level: reason.access_level(),
             },
             Self::InboxOwner | Self::ReminderOwner | Self::CalendarOwner => {
                 EntityPermission::AccessLevel {
@@ -199,22 +263,29 @@ impl AccessGrant {
             Self::InboxDelegate { .. } => EntityPermission::AccessLevel {
                 access_level: AccessLevel::Owner,
             },
-            Self::CalendarInboxDelegate
-            | Self::StaticFileAlwaysView
-            | Self::ForeignEntity { .. } => EntityPermission::AccessLevel {
-                access_level: match self {
-                    Self::CalendarInboxDelegate => AccessLevel::Edit,
-                    _ => AccessLevel::View,
-                },
+            Self::CalendarInboxDelegate => EntityPermission::AccessLevel {
+                access_level: AccessLevel::Edit,
             },
-            Self::ChannelParticipant { role }
-            | Self::ChannelPublicDefault { role }
-            | Self::ChannelOrganization { role, .. } => {
-                EntityPermission::ChannelRole { role: *role }
+            Self::StaticFileAlwaysView | Self::ForeignEntity { .. } => {
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::View,
+                }
             }
+            Self::ChannelParticipant { role } => EntityPermission::ChannelRole { role: *role },
+            Self::ChannelPublicDefault => EntityPermission::ChannelRole {
+                role: ParticipantRole::Member,
+            },
             Self::ChannelTeamViewOnly { .. } => EntityPermission::ChannelViewOnly,
             Self::TeamMembership { role } => EntityPermission::TeamRole { role: *role },
         }
+    }
+
+    pub(crate) fn email_attachment_reason(value: &str) -> Option<EmailAttachmentReason> {
+        EmailAttachmentReason::parse_db(value)
+    }
+
+    pub(crate) fn foreign_entity_auth(value: &str) -> Option<ForeignEntityAuthEntity> {
+        ForeignEntityAuthEntity::parse_db(value)
     }
 }
 
@@ -246,14 +317,12 @@ impl Display for AccessGrant {
             Self::InboxDelegate { mailbox_owner } => {
                 write!(f, "inbox_delegate mailbox={mailbox_owner}")
             }
-            Self::ContainingProject {
-                project_id,
-                access_level,
-            } => write!(f, "containing_project {project_id} {access_level}"),
-            Self::EmailAttachmentThread {
-                thread_id,
-                access_level,
-            } => write!(f, "email_attachment_thread {thread_id} {access_level}"),
+            Self::ContainingProject { project_id } => {
+                write!(f, "containing_project {project_id}")
+            }
+            Self::EmailAttachmentThread { thread_id, reason } => {
+                write!(f, "email_attachment_thread {thread_id} {reason}")
+            }
             Self::CrmTeam {
                 team_id,
                 team_role,
@@ -266,18 +335,7 @@ impl Display for AccessGrant {
             Self::ChannelParticipant { role } => {
                 write!(f, "channel_participant {}", format_participant_role(*role))
             }
-            Self::ChannelPublicDefault { role } => {
-                write!(
-                    f,
-                    "channel_public_default {}",
-                    format_participant_role(*role)
-                )
-            }
-            Self::ChannelOrganization { org_id, role } => write!(
-                f,
-                "channel_organization org={org_id} {}",
-                format_participant_role(*role)
-            ),
+            Self::ChannelPublicDefault => write!(f, "channel_public_default"),
             Self::ChannelTeamViewOnly { team_id } => {
                 write!(f, "channel_team_view_only {team_id}")
             }

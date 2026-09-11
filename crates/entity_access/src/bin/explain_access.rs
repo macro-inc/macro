@@ -1,5 +1,3 @@
-//! Explain how a Macro user can reach an entity.
-
 use clap::{Parser, ValueEnum};
 use database_env_vars::DatabaseUrl;
 use entity_access::{
@@ -32,10 +30,6 @@ struct Args {
     #[arg(long, value_parser = parse_cli_entity_type)]
     entity_type: EntityType,
 
-    /// Organization id. Only used by the leftover organization-channel arm.
-    #[arg(long)]
-    user_org_id: Option<i64>,
-
     /// Output format.
     #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
     format: OutputFormat,
@@ -65,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 
     let service = ExplainAccessServiceImpl::new(PgExplainAccessRepository::new(pool));
     let explanation = service
-        .explain_access(&user, &args.entity_id, args.entity_type, args.user_org_id)
+        .explain_access(&user, &args.entity_id, args.entity_type)
         .await?;
 
     match args.format {

@@ -87,7 +87,6 @@ pub async fn get_chat_access(
     Ok(highest_level)
 }
 
-/// List every chat grant path for the caller.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn explain_chat_access(
     pool: &PgPool,

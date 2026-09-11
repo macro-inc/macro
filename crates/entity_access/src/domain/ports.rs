@@ -250,7 +250,6 @@ pub trait ExplainAccessRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
         entity_id: &str,
         entity_type: EntityType,
-        user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<Vec<AccessGrant>, AccessError>> + Send;
 }
 
@@ -266,7 +265,6 @@ pub trait ExplainAccessService: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
         entity_id: &str,
         entity_type: EntityType,
-        user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<AccessExplanation, AccessError>> + Send;
 }
 

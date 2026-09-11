@@ -1,5 +1,7 @@
 use super::*;
-use crate::domain::models::{AccessLevel, Entity, EntityPermission, EntityType, ParticipantRole};
+use crate::domain::models::{
+    AccessLevel, EmailAttachmentReason, Entity, EntityPermission, EntityType, ParticipantRole,
+};
 use models_entity_access_management::EntityAccessSourceType;
 use uuid::Uuid;
 
@@ -105,6 +107,54 @@ fn calendar_delegate_is_edit() {
         AccessGrant::CalendarInboxDelegate.permission(),
         EntityPermission::AccessLevel {
             access_level: AccessLevel::Edit
+        }
+    );
+}
+
+#[test]
+fn containing_project_is_view() {
+    assert_eq!(
+        AccessGrant::ContainingProject {
+            project_id: "project-1".to_string(),
+        }
+        .permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    );
+}
+
+#[test]
+fn channel_public_default_is_member() {
+    assert_eq!(
+        AccessGrant::ChannelPublicDefault.permission(),
+        EntityPermission::ChannelRole {
+            role: ParticipantRole::Member
+        }
+    );
+}
+
+#[test]
+fn email_attachment_reason_maps_level() {
+    let thread_id = Uuid::nil();
+    assert_eq!(
+        AccessGrant::EmailAttachmentThread {
+            thread_id,
+            reason: EmailAttachmentReason::InboxOwner,
+        }
+        .permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    );
+    assert_eq!(
+        AccessGrant::EmailAttachmentThread {
+            thread_id,
+            reason: EmailAttachmentReason::ThreadGrant,
+        }
+        .permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
         }
     );
 }

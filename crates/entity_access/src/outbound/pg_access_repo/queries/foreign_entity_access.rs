@@ -46,7 +46,6 @@ pub async fn has_foreign_entity_access(
     .await
 }
 
-/// Return every stored-for pair that grants the caller access to the foreign entity.
 #[tracing::instrument(err, skip(pool, source_ids, source_auth_entities))]
 pub async fn list_foreign_entity_grants(
     pool: &PgPool,
@@ -86,9 +85,13 @@ pub async fn list_foreign_entity_grants(
 
     Ok(rows
         .into_iter()
-        .map(|row| AccessGrant::ForeignEntity {
-            stored_for_id: row.stored_for_id,
-            stored_for_auth_entity: row.stored_for_auth_entity,
+        .filter_map(|row| {
+            AccessGrant::foreign_entity_auth(&row.stored_for_auth_entity).map(
+                |stored_for_auth_entity| AccessGrant::ForeignEntity {
+                    stored_for_id: row.stored_for_id,
+                    stored_for_auth_entity,
+                },
+            )
         })
         .collect())
 }

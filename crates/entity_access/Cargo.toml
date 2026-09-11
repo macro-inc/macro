@@ -47,10 +47,11 @@ model-entity = { path = "../model-entity" }
 models_entity_access_management = { path = "../models_entity_access_management" }
 models_permissions = { path = "../models_permissions" }
 
-# Async runtime (for ports)
 clap = { workspace = true, optional = true }
 database_env_vars = { path = "../database_env_vars", optional = true }
 macro_entrypoint = { path = "../macro_entrypoint", optional = true }
+
+# Async runtime (for ports)
 tokio = { workspace = true, optional = true }
 
 # Axum dependencies (for inbound)

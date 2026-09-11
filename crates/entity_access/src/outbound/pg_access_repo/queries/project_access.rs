@@ -89,7 +89,6 @@ pub async fn get_project_access(
     Ok(highest_level)
 }
 
-/// List every project grant path for the caller.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn explain_project_access(
     pool: &PgPool,

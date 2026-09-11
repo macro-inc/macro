@@ -16,8 +16,7 @@ impl ExplainAccessRepository for FakeRepo {
         _user_id: &MacroUserId<Lowercase<'_>>,
         _entity_id: &str,
         _entity_type: EntityType,
-        _user_org_id: Option<i64>,
-    ) -> impl Future<Output = Result<Vec<AccessGrant>, AccessError>> + Send {
+    ) -> impl Future<Output = Result<Vec<AccessGrant>, AccessError>> + Send {}
         let grants = self.grants.clone();
         async move { Ok(grants) }
     }
@@ -38,7 +37,7 @@ async fn unsupported_types_are_bad_request() {
         EntityType::Skill,
     ] {
         let error = service
-            .explain_access(&user, "id", entity_type, None)
+            .explain_access(&user, "id", entity_type)
             .await
             .unwrap_err();
         assert!(matches!(error, AccessError::BadRequest(_)));
@@ -51,7 +50,7 @@ async fn empty_grants_are_success_with_no_access() {
     let user = user();
 
     let explanation = service
-        .explain_access(&user, "doc-1", EntityType::Document, None)
+        .explain_access(&user, "doc-1", EntityType::Document)
         .await
         .unwrap();
 
@@ -69,7 +68,7 @@ async fn service_keeps_repo_grants_and_computes_effective() {
     let user = user();
 
     let explanation = service
-        .explain_access(&user, "doc-1", EntityType::Document, None)
+        .explain_access(&user, "doc-1", EntityType::Document)
         .await
         .unwrap();
 

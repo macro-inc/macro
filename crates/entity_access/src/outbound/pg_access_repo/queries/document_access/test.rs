@@ -567,6 +567,65 @@ async fn explain_lists_public_and_entity_access_and_matches_effective(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn explain_email_attachment_reasons(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, INBOX_OWNER).await?;
+    insert_user(&pool, DELEGATE).await?;
+    insert_user(&pool, OTHER_USER).await?;
+    let (link_id, thread_id, document_id) = insert_attachment_document(&pool, INBOX_OWNER).await;
+    insert_delegation(&pool, DELEGATE, INBOX_OWNER, link_id).await;
+    insert_thread_entity_access(&pool, thread_id, OTHER_USER, AccessLevel::Edit).await;
+
+    let owner = user(INBOX_OWNER);
+    let owner_grants = explain_document_access(
+        &pool,
+        &document_id,
+        &SourceIds(vec![INBOX_OWNER.to_string()]),
+        Some(&*owner),
+    )
+    .await?;
+    assert!(owner_grants.iter().any(|grant| matches!(
+        grant,
+        crate::domain::models::AccessGrant::EmailAttachmentThread {
+            reason: crate::domain::models::EmailAttachmentReason::InboxOwner,
+            ..
+        }
+    )));
+
+    let delegate = user(DELEGATE);
+    let delegate_grants = explain_document_access(
+        &pool,
+        &document_id,
+        &SourceIds(vec![DELEGATE.to_string()]),
+        Some(&*delegate),
+    )
+    .await?;
+    assert!(delegate_grants.iter().any(|grant| matches!(
+        grant,
+        crate::domain::models::AccessGrant::EmailAttachmentThread {
+            reason: crate::domain::models::EmailAttachmentReason::InboxDelegate,
+            ..
+        }
+    )));
+
+    let other = user(OTHER_USER);
+    let other_grants = explain_document_access(
+        &pool,
+        &document_id,
+        &SourceIds(vec![OTHER_USER.to_string()]),
+        Some(&*other),
+    )
+    .await?;
+    assert!(other_grants.iter().any(|grant| matches!(
+        grant,
+        crate::domain::models::AccessGrant::EmailAttachmentThread {
+            reason: crate::domain::models::EmailAttachmentReason::ThreadGrant,
+            ..
+        }
+    )));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn explain_team_link_matches_access_level(pool: PgPool) -> anyhow::Result<()> {
     let owner_team_id = Uuid::new_v4();
     insert_user(&pool, OWNER_WITH_TEAM).await?;

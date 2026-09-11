@@ -1,7 +1,5 @@
-//! PostgreSQL implementation of [`ExplainAccessRepository`].
-
 use crate::domain::{
-    models::{AccessError, AccessGrant, EntityType, UserTeamInfo},
+    models::{AccessError, AccessGrant, EntityType, ForeignEntityAuthEntity, UserTeamInfo},
     ports::ExplainAccessRepository,
 };
 use crate::outbound::pg_access_repo::queries;
@@ -27,11 +25,11 @@ fn foreign_entity_source_pairs(
     user_team: Option<UserTeamInfo>,
 ) -> (Vec<String>, Vec<String>) {
     let mut source_ids = vec![user_id.as_ref().to_string()];
-    let mut source_auth_entities = vec!["user".to_string()];
+    let mut source_auth_entities = vec![ForeignEntityAuthEntity::User.as_str().to_string()];
 
     if let Some(user_team) = user_team {
         source_ids.push(user_team.team_id.to_string());
-        source_auth_entities.push("team".to_string());
+        source_auth_entities.push(ForeignEntityAuthEntity::Team.as_str().to_string());
     }
 
     (source_ids, source_auth_entities)
@@ -48,7 +46,6 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
         user_id: &MacroUserId<Lowercase<'_>>,
         entity_id: &str,
         entity_type: EntityType,
-        user_org_id: Option<i64>,
     ) -> Result<Vec<AccessGrant>, AccessError> {
         match entity_type {
             EntityType::Document => {
@@ -127,7 +124,6 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                     &self.pool,
                     &channel_id,
                     user_id.as_ref(),
-                    user_org_id,
                 )
                 .await?)
             }
@@ -194,9 +190,7 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                 .await?)
             }
             EntityType::StaticFile => Ok(vec![AccessGrant::StaticFileAlwaysView]),
-            EntityType::User | EntityType::ChannelMessage | EntityType::Skill => {
-                Err(AccessError::BadRequest("Unsupported entity type"))
-            }
+            EntityType::User | EntityType::ChannelMessage | EntityType::Skill => Ok(vec![]),
         }
     }
 }
