@@ -5,10 +5,9 @@ import type {
   LiveSyncSource,
   TimeoutError,
 } from '@macro-inc/collaboration/collab/source';
-import type { NotificationSource } from '@notifications';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import type { ResultAsync } from 'neverthrow';
-import type { Accessor, Component, JSX, ParentComponent } from 'solid-js';
+import type { Accessor, ParentComponent } from 'solid-js';
 import { createContext, useContext } from 'solid-js';
 import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import type { MarkdownDocumentState } from './markdown-document-state';
@@ -16,9 +15,9 @@ import type { MarkdownDocumentState } from './markdown-document-state';
 export type MarkdownDocumentKind = 'document' | 'task' | 'snippet' | 'skill';
 
 export type MarkdownDocumentPermissions = {
-  canComment: Accessor<boolean>;
-  canEdit: Accessor<boolean>;
-  isOwner: Accessor<boolean>;
+  canComment: boolean;
+  canEdit: boolean;
+  isOwner: boolean;
 };
 
 export type MarkdownDocumentData = {
@@ -37,42 +36,33 @@ export type MarkdownDocumentMethods = Partial<{
 }>;
 
 export type MarkdownDocumentProps = {
-  documentId: string;
-  kind: MarkdownDocumentKind;
-  data: Accessor<MarkdownDocumentData | undefined>;
-  source: Accessor<Source | undefined>;
+  documentId: Accessor<string>;
+  kind: Accessor<MarkdownDocumentKind>;
+  data: MarkdownDocumentData | undefined;
+  source: Source | undefined;
   permissions: MarkdownDocumentPermissions;
-  persistedName: Accessor<string | undefined>;
-  fallbackName: Accessor<string | undefined>;
-  isInstructions?: Accessor<boolean>;
-  hostElement?: Accessor<HTMLElement | undefined>;
-  hotkeyScope?: Accessor<string | undefined>;
-  autoFocus?: boolean;
-  navigatedFromJK?: Accessor<boolean>;
-  renderCollaborationStatus?: () => JSX.Element;
-  notificationSource?: NotificationSource;
-  optimisticSnapshot?: Uint8Array<ArrayBufferLike>;
-  loadCachedSnapshot?: () => Promise<Uint8Array | undefined>;
-  onDataReady?: () => void;
-  registerMethods?: (methods: MarkdownDocumentMethods) => void;
+  persistedName: string | undefined;
+  fallbackName: string | undefined;
   saveDocument: (text: string) => Promise<void>;
   renameDocument: (newName: string, oldName: string) => void;
-  topBar?: Component;
-  instructionsTopBar?: Component;
-  sidePanel?: Component;
-  historyOverlay?: Component;
 };
 
-export type MarkdownDocumentContextValue = MarkdownDocumentProps & {
+export type MarkdownDocumentContextValue = {
+  documentId: Accessor<string>;
+  kind: Accessor<MarkdownDocumentKind>;
+  data: Accessor<MarkdownDocumentData | undefined>;
+  source: Accessor<Source | undefined>;
+  permissions: {
+    canComment: Accessor<boolean>;
+    canEdit: Accessor<boolean>;
+    isOwner: Accessor<boolean>;
+  };
+  persistedName: Accessor<string | undefined>;
+  fallbackName: Accessor<string | undefined>;
+  saveDocument: MarkdownDocumentProps['saveDocument'];
+  renameDocument: MarkdownDocumentProps['renameDocument'];
   state: MarkdownDocumentState;
   element: Accessor<HTMLElement | undefined>;
-  isInstructions: Accessor<boolean>;
-  hotkeyScope: Accessor<string | undefined>;
-  autoFocus: boolean;
-  navigatedFromJK: Accessor<boolean>;
-  loadCachedSnapshot: () => Promise<Uint8Array | undefined>;
-  onDataReady: () => void;
-  registerMethods: (methods: MarkdownDocumentMethods) => void;
 };
 
 const MarkdownDocumentContext = createContext<MarkdownDocumentContextValue>();

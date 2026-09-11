@@ -1,4 +1,3 @@
-import { SidePanel } from '@components/app/side-panel';
 import {
   createLoroManager,
   type LoroManager,
@@ -14,13 +13,20 @@ import {
 } from '@macro-inc/collaboration/collab/wal';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import type { Span } from '@macro-inc/observability';
-import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { Scroll } from '@ui';
-import { createEffect, createSignal, on, Show, Suspense } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  on,
+  type ParentProps,
+  Show,
+  Suspense,
+} from 'solid-js';
 import {
   type MarkdownDocumentContextValue,
   type MarkdownDocumentData,
+  type MarkdownDocumentMethods,
   type MarkdownDocumentProps,
   MarkdownDocumentProvider,
   useMarkdownDocument,
@@ -28,7 +34,6 @@ import {
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
 import { HistoryProvider } from '../history/HistoryContext';
 import { resumeDocumentSpan, stampLoroSnapshotState } from '../observability';
-import { FindAndReplace } from './FindAndReplace';
 import { MarkdownNameProvider } from './MarkdownNameProvider';
 import { InstructionsNotebook, Notebook } from './Notebook';
 
@@ -164,46 +169,56 @@ async function ingestS3Snapshot(
   };
 }
 
-export function MarkdownDocument(props: MarkdownDocumentProps) {
+export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
   const [surfaceElement, setSurfaceElement] = createSignal<HTMLElement>();
-  const state = createMarkdownDocumentState(props.documentId);
+  const state = createMarkdownDocumentState(props.documentId());
   const context: MarkdownDocumentContextValue = {
-    ...props,
+    documentId: props.documentId,
+    kind: props.kind,
+    data: () => props.data,
+    source: () => props.source,
+    permissions: {
+      canComment: () => props.permissions.canComment,
+      canEdit: () => props.permissions.canEdit,
+      isOwner: () => props.permissions.isOwner,
+    },
+    persistedName: () => props.persistedName,
+    fallbackName: () => props.fallbackName,
+    saveDocument: props.saveDocument,
+    renameDocument: props.renameDocument,
     state,
-    element: () => props.hostElement?.() ?? surfaceElement(),
-    isInstructions: props.isInstructions ?? (() => false),
-    hotkeyScope: props.hotkeyScope ?? (() => undefined),
-    autoFocus: props.autoFocus ?? false,
-    navigatedFromJK: props.navigatedFromJK ?? (() => false),
-    loadCachedSnapshot: props.loadCachedSnapshot ?? (async () => undefined),
-    onDataReady: props.onDataReady ?? (() => {}),
-    registerMethods: props.registerMethods ?? (() => {}),
+    element: surfaceElement,
   };
 
   return (
     <MarkdownDocumentProvider context={context}>
       <MarkdownNameProvider>
-        <MarkdownDocumentContent
-          {...props}
-          setSurfaceElement={setSurfaceElement}
-        />
+        <div
+          ref={setSurfaceElement}
+          class="size-full select-none overscroll-none overflow-hidden flex flex-col relative"
+          tabIndex={-1}
+        >
+          <HistoryProvider documentId={props.documentId}>
+            {props.children}
+          </HistoryProvider>
+        </div>
       </MarkdownNameProvider>
     </MarkdownDocumentProvider>
   );
 }
 
-function MarkdownDocumentContent(
-  props: MarkdownDocumentProps & {
-    setSurfaceElement: (element: HTMLElement) => void;
-  }
-) {
-  const [scrollRef, setScrollRef] = createSignal<HTMLDivElement>();
-  const markdownDocument = useMarkdownDocument();
-  const documentId = markdownDocument.documentId;
+type MarkdownSnapshotIngestOptions = {
+  optimisticSnapshot?: Uint8Array<ArrayBufferLike>;
+  loadCachedSnapshot?: () => Promise<Uint8Array | undefined>;
+  onDataReady?: () => void;
+};
 
-  const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
-    documentId,
-  });
+function useMarkdownSnapshotIngest(
+  loroManager: MarkdownLoroManager,
+  options: MarkdownSnapshotIngestOptions
+) {
+  const markdownDocument = useMarkdownDocument();
+  const documentId = markdownDocument.documentId();
   const snapshotStore = new IDBSnapshotStore<RawUpdate>(
     LORO_SNAPSHOT_DB_NAME,
     documentId
@@ -213,18 +228,18 @@ function MarkdownDocumentContent(
   createEffect(
     on(markdownDocument.data, (data) => {
       if (!data) return;
-      markdownDocument.onDataReady();
+      options.onDataReady?.();
 
       const span = resumeDocumentSpan(documentId);
-      if (props.optimisticSnapshot) {
+      if (options.optimisticSnapshot) {
         startSnapshotIngest(span, 'optimistic', loroManager, async () => {
           const seeded = await loroManager.ingest({
             kind: 'optimistic',
-            snapshot: props.optimisticSnapshot!,
+            snapshot: options.optimisticSnapshot!,
           });
           return {
             outcome: seeded ? 'seeded' : 'discarded',
-            bytes: props.optimisticSnapshot!.length,
+            bytes: options.optimisticSnapshot!.length,
           };
         });
       }
@@ -232,84 +247,75 @@ function MarkdownDocumentContent(
         ingestLocalSnapshot(loroManager, snapshotStore, walStore)
       );
       startSnapshotIngest(span, 's3', loroManager, () =>
-        ingestS3Snapshot(loroManager, markdownDocument.loadCachedSnapshot)
+        ingestS3Snapshot(
+          loroManager,
+          options.loadCachedSnapshot ?? (async () => undefined)
+        )
       );
       startSnapshotIngest(span, 'remote', loroManager, () =>
         ingestRemoteSnapshot(loroManager, data.doInitialSync)
       );
     })
   );
+}
 
-  createEffect(() => {
-    const element = scrollRef();
-    if (element) {
-      markdownDocument.state.editor.setMd({ scrollContainer: element });
-    }
+export type MarkdownDocumentContentProps = MarkdownSnapshotIngestOptions & {
+  isInstructions?: boolean;
+  hotkeyScope?: string;
+  autoFocus?: boolean;
+  navigatedFromJK?: boolean;
+  renderCollaborationStatus?: () => JSX.Element;
+  registerMethods?: (methods: MarkdownDocumentMethods) => void;
+};
+
+export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
+  const markdownDocument = useMarkdownDocument();
+  const documentId = markdownDocument.documentId();
+
+  const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
+    documentId,
   });
 
-  const TopBar = () =>
-    markdownDocument.isInstructions() ? props.instructionsTopBar : props.topBar;
+  useMarkdownSnapshotIngest(loroManager, props);
+
+  const isInstructions = () => props.isInstructions ?? false;
 
   return (
-    <div
-      ref={props.setSurfaceElement}
-      class="size-full select-none overscroll-none overflow-hidden flex flex-col relative"
-      tabIndex={-1}
-    >
-      <HistoryProvider documentId={() => documentId}>
-        {props.historyOverlay ? (
-          <Dynamic component={props.historyOverlay} />
-        ) : null}
-        <SidePanel.Layout>
-          <Show when={!markdownDocument.isInstructions()}>
-            {props.sidePanel ? <Dynamic component={props.sidePanel} /> : null}
-          </Show>
-          <div class="flex flex-col size-full">
-            <div class="relative shrink-0">
-              <Suspense>
-                <Dynamic component={TopBar()} />
-              </Suspense>
-              <Suspense>
-                <Show when={!markdownDocument.isInstructions()}>
-                  <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">
-                    <FindAndReplace />
-                  </div>
-                </Show>
-              </Suspense>
-            </div>
-            <Show when={markdownDocument.notificationSource}>
-              {(notificationSource) => (
-                <DocumentDebouncedNotificationReadMarker
-                  notificationSource={notificationSource()}
-                  documentId={documentId}
+    <div class="w-full grow overflow-hidden relative" data-block-content>
+      <Scroll
+        class="relative"
+        scrollRef={(element) => {
+          markdownDocument.state.editor.setMd({
+            scrollContainer: element,
+          });
+        }}
+      >
+        <div class="relative portal-scope touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+          <Suspense>
+            <Show
+              when={!isInstructions()}
+              fallback={
+                <InstructionsNotebook
+                  loroManager={loroManager}
+                  hotkeyScope={props.hotkeyScope}
+                  renderCollaborationStatus={props.renderCollaborationStatus}
+                  registerMethods={props.registerMethods}
                 />
-              )}
-            </Show>
-            <div
-              class="w-full grow overflow-hidden relative"
-              data-block-content
+              }
             >
-              <Scroll class="relative" scrollRef={setScrollRef}>
-                <div class="relative portal-scope touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-                  <Suspense>
-                    <Show
-                      when={!markdownDocument.isInstructions()}
-                      fallback={
-                        <InstructionsNotebook loroManager={loroManager} />
-                      }
-                    >
-                      <Notebook
-                        loroManager={loroManager}
-                        documentId={documentId}
-                      />
-                    </Show>
-                  </Suspense>
-                </div>
-              </Scroll>
-            </div>
-          </div>
-        </SidePanel.Layout>
-      </HistoryProvider>
+              <Notebook
+                loroManager={loroManager}
+                documentId={documentId}
+                hotkeyScope={props.hotkeyScope}
+                autoFocus={props.autoFocus ?? false}
+                navigatedFromJK={props.navigatedFromJK ?? false}
+                renderCollaborationStatus={props.renderCollaborationStatus}
+                registerMethods={props.registerMethods}
+              />
+            </Show>
+          </Suspense>
+        </div>
+      </Scroll>
     </div>
   );
 }

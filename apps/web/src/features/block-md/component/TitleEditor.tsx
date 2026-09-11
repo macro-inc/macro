@@ -148,8 +148,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const [titlePlaceholder] = createSignal<string>();
   const [titleFocused, setTitleFocused] = createSignal(false);
 
-  const blockId = markdownDocument.documentId;
-  const documentKind = markdownDocument.kind;
+  const blockId = markdownDocument.documentId();
+  const documentKind = markdownDocument.kind();
   const entityBlockName = documentKind === 'document' ? 'md' : documentKind;
   const documentTags = useDocTags(
     blockId,

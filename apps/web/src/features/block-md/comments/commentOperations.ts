@@ -165,7 +165,7 @@ export const useSetNodeCommentThreadId = () => {
 export function useScrollToCommentThread() {
   const markdownDocument = useMarkdownDocument();
   const blockElement = markdownDocument.element;
-  const documentId = markdownDocument.documentId;
+  const documentId = markdownDocument.documentId();
   // Captured at setup: block stores resolve their block context at access
   // time, which the returned callback no longer has.
   const { threads, marks } = useCommentState();

@@ -61,9 +61,9 @@ function toViewThread(ct: CommentThread): DiscussionThread {
  */
 export function createDocumentDiscussionSource(): DiscussionSource {
   const markdownDocument = useMarkdownDocument();
-  const documentId = markdownDocument.documentId;
+  const documentId = markdownDocument.documentId();
   const entityBlockName =
-    markdownDocument.kind === 'document' ? 'md' : markdownDocument.kind;
+    markdownDocument.kind() === 'document' ? 'md' : markdownDocument.kind();
   // Comment affordances gate on can-comment (main switched tasks off can-edit).
   const canComment = markdownDocument.permissions.canComment;
   const userId = useUserId();

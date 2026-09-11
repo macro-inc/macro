@@ -107,7 +107,7 @@ export function MarkdownPopup(props: {
   lexicalMapping: NodeIdMappings;
 }) {
   const markdownDocument = useMarkdownDocument();
-  const blockId = markdownDocument.documentId;
+  const blockId = markdownDocument.documentId();
   const name = () =>
     markdownDocument.persistedName() || markdownDocument.fallbackName();
 

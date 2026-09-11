@@ -22,8 +22,8 @@ import { useMarkdownName } from './MarkdownNameProvider';
 export function InlineTaskProperties() {
   const markdownDocument = useMarkdownDocument();
   const [md] = useMdStore();
-  const blockId = markdownDocument.documentId;
-  const documentKind = markdownDocument.kind;
+  const blockId = markdownDocument.documentId();
+  const documentKind = markdownDocument.kind();
   const canEdit = markdownDocument.permissions.canEdit;
   const { displayName: documentName } = useMarkdownName();
   const entityType = documentKind === 'task' ? 'TASK' : 'DOCUMENT';

@@ -1,5 +1,6 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { SidePanel } from '@components/app/side-panel';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockAliasedName, useBlockId } from '@core/block';
@@ -7,10 +8,7 @@ import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { blockDataSignal as blockLoaderDataSignal } from '@core/internal/BlockLoader';
 import { createMethodRegistration } from '@core/orchestrator';
-import {
-  blockElementSignal,
-  blockHotkeyScopeSignal,
-} from '@core/signal/blockElement';
+import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import {
   blockErrorSignal,
   blockHandleSignal,
@@ -23,8 +21,9 @@ import {
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { createRenameDssEntityMutation } from '@entity';
+import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import { type ParentProps, Show } from 'solid-js';
+import { type ParentProps, Show, Suspense } from 'solid-js';
 import type {
   MarkdownDocumentData,
   MarkdownDocumentKind,
@@ -35,7 +34,8 @@ import {
   saveMarkdownDocument,
 } from '../queries/markdown-document-operations';
 import { CollabStatus } from './CollabStatus';
-import { MarkdownDocument } from './MarkdownDocument';
+import { FindAndReplace } from './FindAndReplace';
+import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
 import { useMarkdownName } from './MarkdownNameProvider';
 import { ModalsProvider } from './ModalsProvider';
 import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
@@ -86,6 +86,9 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const persistedName = useBlockDocumentName('');
   const fallbackName = useBlockDocumentName();
   const instructionsMdId = useInstructionsMdIdQuery();
+  const isInstructions = () =>
+    instructionsMdId.isSuccess && documentId === instructionsMdId.data;
+  const notificationSource = useGlobalNotificationSource();
 
   const rawData = blockLoaderDataSignal.get;
   const data = () => {
@@ -98,38 +101,25 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const blockHandle = blockHandleSignal.get;
   const setLoadError = blockErrorSignal.set;
   const renameDocument = createRenameDssEntityMutation();
-  const permissions = {
-    canComment: useCanComment(),
-    canEdit: useCanEdit(),
-    isOwner: useIsDocumentOwner(),
-  };
+  const canComment = useCanComment();
+  const canEdit = useCanEdit();
+  const isOwner = useIsDocumentOwner();
 
   return (
     <DocumentBlockContainer>
       <ManagedMarkdownProviders>
         <MarkdownDocument
-          documentId={documentId}
-          kind={kind}
-          data={data}
-          source={blockSourceSignal.get}
-          permissions={permissions}
-          persistedName={persistedName}
-          fallbackName={fallbackName}
-          isInstructions={() =>
-            instructionsMdId.isSuccess && documentId === instructionsMdId.data
-          }
-          hostElement={blockElementSignal.get}
-          hotkeyScope={blockHotkeyScopeSignal.get}
-          autoFocus={canAutofocus}
-          navigatedFromJK={navigatedFromJK}
-          renderCollaborationStatus={() => <CollabStatus />}
-          notificationSource={useGlobalNotificationSource()}
-          optimisticSnapshot={props.optimisticSnapshot}
-          loadCachedSnapshot={() => loadMarkdownCachedSnapshot(documentId)}
-          onDataReady={() => setLoadError(null)}
-          registerMethods={(methods) =>
-            createMethodRegistration(blockHandle, methods)
-          }
+          documentId={() => documentId}
+          kind={() => kind}
+          data={data()}
+          source={blockSourceSignal.get()}
+          permissions={{
+            canComment: canComment(),
+            canEdit: canEdit(),
+            isOwner: isOwner(),
+          }}
+          persistedName={persistedName()}
+          fallbackName={fallbackName()}
           saveDocument={(text) => saveMarkdownDocument(documentId, text)}
           renameDocument={(newName, oldName) => {
             renameDocument.mutate({
@@ -141,11 +131,51 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
               newName,
             });
           }}
-          topBar={ManagedTopBar}
-          instructionsTopBar={InstructionsTopBar}
-          sidePanel={ManagedSidePanel}
-          historyOverlay={OldOverlay}
-        />
+        >
+          <OldOverlay />
+          <SidePanel.Layout>
+            <Show when={!isInstructions()}>
+              <ManagedSidePanel />
+            </Show>
+            <div class="flex flex-col size-full">
+              <div class="relative shrink-0">
+                <Suspense>
+                  <Show when={isInstructions()} fallback={<ManagedTopBar />}>
+                    <InstructionsTopBar />
+                  </Show>
+                </Suspense>
+                <Suspense>
+                  <Show when={!isInstructions()}>
+                    <div class="absolute right-4 top-1.5 z-action-menu flex justify-end">
+                      <FindAndReplace
+                        hotkeyScope={blockHotkeyScopeSignal.get()}
+                      />
+                    </div>
+                  </Show>
+                </Suspense>
+              </div>
+              <DocumentDebouncedNotificationReadMarker
+                notificationSource={notificationSource}
+                documentId={documentId}
+              />
+              <MarkdownDocumentContent
+                isInstructions={isInstructions()}
+                hotkeyScope={blockHotkeyScopeSignal.get()}
+                autoFocus={canAutofocus}
+                navigatedFromJK={navigatedFromJK()}
+                renderCollaborationStatus={() => <CollabStatus />}
+                registerMethods={(methods) =>
+                  createMethodRegistration(blockHandle, methods)
+                }
+                optimisticSnapshot={props.optimisticSnapshot}
+                loadCachedSnapshot={() =>
+                  loadMarkdownCachedSnapshot(documentId)
+                }
+                onDataReady={() => setLoadError(null)}
+              />
+            </div>
+          </SidePanel.Layout>
+        </MarkdownDocument>
       </ManagedMarkdownProviders>
     </DocumentBlockContainer>
   );

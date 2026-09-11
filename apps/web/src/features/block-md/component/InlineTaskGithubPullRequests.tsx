@@ -153,8 +153,8 @@ function InlineTaskGithubPullRequestsContent(props: {
 
 export function InlineTaskGithubPullRequests(): JSX.Element {
   const markdownDocument = useMarkdownDocument();
-  const blockId = markdownDocument.documentId;
-  const isTask = markdownDocument.kind === 'task';
+  const blockId = markdownDocument.documentId();
+  const isTask = markdownDocument.kind() === 'task';
 
   return (
     <Show when={isTask}>

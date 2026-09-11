@@ -52,7 +52,7 @@ const useCommentsContext = (
   const updateComment = useUpdateComment();
   const deleteComment = useDeleteComment();
 
-  const documentId = markdownDocument.documentId;
+  const documentId = markdownDocument.documentId();
   const isDocumentOwner = markdownDocument.permissions.isOwner;
   const canComment = markdownDocument.permissions.canComment;
 

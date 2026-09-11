@@ -63,7 +63,7 @@ function useHandleCreateComment() {
 }
 
 function useCreateComment() {
-  const documentId = useMarkdownDocument().documentId;
+  const documentId = useMarkdownDocument().documentId();
   const handleCreateComment = useHandleCreateComment();
 
   return async (body: CreateCommentRequest) => {
@@ -228,7 +228,7 @@ export function useCreateThreadReplyResource() {
 
 // TODO: enable for live updates when live collab is a thing
 export function useCommentRealtime() {
-  const documentId = useMarkdownDocument().documentId;
+  const documentId = useMarkdownDocument().documentId();
   const handleCommentUpdate = useHandleCreateComment();
   const handleEditComment = useHandleEditComment();
   const handleDeleteComment = useHandleDeleteComment();

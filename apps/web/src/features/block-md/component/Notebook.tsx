@@ -30,12 +30,16 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  type JSX,
   onCleanup,
   onMount,
   Show,
   untrack,
 } from 'solid-js';
-import { useMarkdownDocument } from '../context/markdown-document-context';
+import {
+  type MarkdownDocumentMethods,
+  useMarkdownDocument,
+} from '../context/markdown-document-context';
 import { useHistory } from '../history/HistoryContext';
 import { HistoryOverlay } from '../history/HistoryOverlay';
 import { DispatchAgentButton } from './DispatchAgentMenu';
@@ -108,15 +112,20 @@ function useCanUseLexicalStateDebugger() {
 export function Notebook(props: {
   loroManager: LoroManager;
   documentId: string;
+  hotkeyScope: string | undefined;
+  autoFocus: boolean;
+  navigatedFromJK: boolean;
+  renderCollaborationStatus?: () => JSX.Element;
+  registerMethods?: (methods: MarkdownDocumentMethods) => void;
 }) {
   const markdownDocument = useMarkdownDocument();
   const blockElement = markdownDocument.element;
-  const blockId = markdownDocument.documentId;
-  const documentKind = markdownDocument.kind;
+  const blockId = markdownDocument.documentId();
+  const documentKind = markdownDocument.kind();
   const [md, setMd] = useMdStore();
   const { comments, setWideEnoughForComments } = useCommentState();
   const { displayName: documentName } = useMarkdownName();
-  const scopeId = markdownDocument.hotkeyScope;
+  const scopeId = () => props.hotkeyScope;
   const history = useHistory();
   const documentId = props.documentId;
   const canEdit = markdownDocument.permissions.canEdit;
@@ -274,7 +283,7 @@ export function Notebook(props: {
   let hasRun = false;
   createEffect(() => {
     if (hasRun) return;
-    if (!markdownDocument.autoFocus) return;
+    if (!props.autoFocus) return;
     if (!blockElement()) return;
     blockElement()?.focus();
     hasRun = true;
@@ -381,9 +390,7 @@ export function Notebook(props: {
           </div>
         </SidePanel.Section>
         <TitleEditor
-          autoFocusOnMount={
-            markdownDocument.autoFocus && !markdownDocument.navigatedFromJK()
-          }
+          autoFocusOnMount={props.autoFocus && !props.navigatedFromJK}
         />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
@@ -397,6 +404,8 @@ export function Notebook(props: {
           <div class="relative">
             <MarkdownEditor
               loroManager={props.loroManager}
+              renderCollaborationStatus={props.renderCollaborationStatus}
+              registerMethods={props.registerMethods}
               showLexicalStateDebugger={
                 canUseLexicalStateDebugger() && showLexicalStateDebugger()
               }
@@ -447,10 +456,14 @@ export function Notebook(props: {
   );
 }
 
-export function InstructionsNotebook(props: { loroManager: LoroManager }) {
-  const markdownDocument = useMarkdownDocument();
+export function InstructionsNotebook(props: {
+  loroManager: LoroManager;
+  hotkeyScope: string | undefined;
+  renderCollaborationStatus?: () => JSX.Element;
+  registerMethods?: (methods: MarkdownDocumentMethods) => void;
+}) {
   const [, setMd] = useMdStore();
-  const scopeId = markdownDocument.hotkeyScope;
+  const scopeId = () => props.hotkeyScope;
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 
   let notebookRef!: HTMLDivElement;
@@ -496,6 +509,8 @@ export function InstructionsNotebook(props: { loroManager: LoroManager }) {
       <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
         <InstructionsEditor
           loroManager={props.loroManager}
+          renderCollaborationStatus={props.renderCollaborationStatus}
+          registerMethods={props.registerMethods}
           showLexicalStateDebugger={
             canUseLexicalStateDebugger() && showLexicalStateDebugger()
           }

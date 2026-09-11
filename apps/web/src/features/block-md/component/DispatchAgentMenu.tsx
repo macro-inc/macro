@@ -164,7 +164,7 @@ const [lastUsedKey, setLastUsedKey] = makePersisted(
 );
 
 export function useDispatchAgentAction() {
-  const blockId = useMarkdownDocument().documentId;
+  const blockId = useMarkdownDocument().documentId();
   const { displayName: name } = useMarkdownName();
   const [store] = useMdStore();
   const discussionThreads = useDiscussionThreads();

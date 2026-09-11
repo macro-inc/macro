@@ -57,10 +57,14 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  type JSX,
   onCleanup,
   Show,
 } from 'solid-js';
-import { useMarkdownDocument } from '../context/markdown-document-context';
+import {
+  type MarkdownDocumentMethods,
+  useMarkdownDocument,
+} from '../context/markdown-document-context';
 import { useMarkdownData, useMdStore } from '../signal/markdownBlockData';
 import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
@@ -71,12 +75,14 @@ const EDITOR_PADDING_BOTTOM = 120;
 
 export function InstructionsEditor(props: {
   loroManager: LoroManager;
+  renderCollaborationStatus?: () => JSX.Element;
+  registerMethods?: (methods: MarkdownDocumentMethods) => void;
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
 }) {
   const markdownDocument = useMarkdownDocument();
   const markdownData = useMarkdownData();
-  const blockId = markdownDocument.documentId;
+  const blockId = markdownDocument.documentId();
 
   const saveMarkdownDocument = useSaveMarkdownDocument();
   const [, setMdStore] = useMdStore();
@@ -84,7 +90,7 @@ export function InstructionsEditor(props: {
   const blockElement = markdownDocument.element;
   const docSource = markdownDocument.source;
 
-  markdownDocument.registerMethods({
+  props.registerMethods?.({
     goToLocationFromParams: (_params: Record<string, unknown>) => {},
   });
 
@@ -347,7 +353,7 @@ export function InstructionsEditor(props: {
 
   const { setRewriting, setRevisions } = useRewriteState();
 
-  markdownDocument.registerMethods({
+  props.registerMethods?.({
     setPatches: (args: { patches: MarkdownRewriteOutput['diffs'] }) => {
       setRewriting(false);
       setRevisions(args.patches);
@@ -392,6 +398,7 @@ export function InstructionsEditor(props: {
             setEditorReady={setEditorReady}
             setEditorError={setEditorError}
             loroManager={props.loroManager}
+            statusChrome={props.renderCollaborationStatus?.()}
           />
         </Show>
 

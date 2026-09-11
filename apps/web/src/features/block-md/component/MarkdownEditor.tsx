@@ -174,13 +174,17 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  type JSX,
   on,
   onCleanup,
   Show,
   Suspense,
   untrack,
 } from 'solid-js';
-import { useMarkdownDocument } from '../context/markdown-document-context';
+import {
+  type MarkdownDocumentMethods,
+  useMarkdownDocument,
+} from '../context/markdown-document-context';
 import {
   generateContentCallback,
   useGenerateState,
@@ -214,14 +218,16 @@ function getBlankMarkdownPlaceholder(canEdit: boolean) {
 export function MarkdownEditor(props: {
   autoFocusOnMount?: boolean;
   loroManager: LoroManager;
+  renderCollaborationStatus?: () => JSX.Element;
+  registerMethods?: (methods: MarkdownDocumentMethods) => void;
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
 }) {
   const markdownDocument = useMarkdownDocument();
   const markdownData = useMarkdownData();
-  const blockId = markdownDocument.documentId;
+  const blockId = markdownDocument.documentId();
   const userId = useUserId();
-  const documentKind = markdownDocument.kind;
+  const documentKind = markdownDocument.kind();
   const sourceBlockName = documentKind === 'document' ? 'md' : documentKind;
   const documentTags = useDocTags(
     blockId,
@@ -954,7 +960,7 @@ export function MarkdownEditor(props: {
     generateContentCallback(userRequest);
   });
 
-  markdownDocument.registerMethods({
+  props.registerMethods?.({
     setPatches: (args: { patches: MarkdownRewriteOutput['diffs'] }) => {
       setRewriting(false);
       setRevisions(args.patches);
@@ -1033,6 +1039,7 @@ export function MarkdownEditor(props: {
             setEditorReady={setEditorReady}
             setEditorError={setEditorError}
             loroManager={props.loroManager}
+            statusChrome={props.renderCollaborationStatus?.()}
           />
         </Show>
 
