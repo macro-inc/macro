@@ -24,7 +24,7 @@ use miniserde::json::Value as JsonValue;
 use model::response::ErrorResponse;
 use referral::domain::ports::ReferralService;
 use roles_and_permissions::domain::{
-    model::{ProductTier, RoleId, SubscriptionStatus},
+    model::{ProductTier, SubscriptionStatus},
     port::UserRolesAndPermissionsService,
 };
 use serde::Serialize;
@@ -324,11 +324,7 @@ async fn handle_payment_event(
             subscription_status,
             &team_id,
             &email,
-            TeamPlanSync {
-                owner,
-                plan,
-                period,
-            },
+            TeamPlanSync { owner, period },
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
                 fbp: fbp.clone(),
@@ -412,39 +408,26 @@ async fn sync_personal_billing_period(
     }
 }
 
-/// What a team subscription event tells us about the team's plan.
+/// What a team subscription event tells us about the team's billing period.
+///
+/// Seat plans are per member (recorded on the membership and re-stamped as
+/// roles by the teams service), so the subscription's prices say nothing the
+/// team does not already know; only the period anchor is taken from Stripe.
 #[derive(Debug, Clone)]
 struct TeamPlanSync {
     /// The team owner (the payer), from subscription metadata.
     owner: Option<MacroUserIdStr<'static>>,
-    /// The plan the seat price maps to.
-    plan: Option<PaidPlan>,
     /// The subscription's current period.
     period: Option<(DateTime<Utc>, DateTime<Utc>)>,
 }
 
-/// Team members carry `sub_opus` from the teams service; the owner's tier
-/// role is what the AI allowance reads for every seat. Keep it in step with
-/// the seat price, and anchor the owner's billing period.
-async fn sync_team_owner_plan(ctx: &ApiContext, sync: &TeamPlanSync, active: bool) {
+/// Anchor the team's pooled AI allowance to the subscription's period.
+/// Best-effort: the allowance falls back to the calendar month without it.
+async fn sync_team_billing_period(ctx: &ApiContext, sync: &TeamPlanSync) {
     let Some(owner) = sync.owner.as_ref() else {
-        tracing::warn!("team subscription without owner_id metadata; skipping plan sync");
+        tracing::warn!("team subscription without owner_id metadata; skipping period sync");
         return;
     };
-    let max_role = [RoleId::SubMax];
-    let max_role = non_empty::NonEmpty::new(max_role.as_slice()).expect("one role");
-    let result = if active && sync.plan == Some(PaidPlan::Max) {
-        ctx.user_roles_and_permissions_service
-            .dangerous_upsert_roles_for_user(owner, max_role)
-            .await
-    } else {
-        ctx.user_roles_and_permissions_service
-            .dangerous_remove_roles_from_user(owner, &max_role)
-            .await
-    };
-    if let Err(e) = result {
-        tracing::warn!(error = ?e, owner = %owner, "failed to sync team owner plan role");
-    }
     if let Some((start, end)) = sync.period
         && let Err(e) = ctx.ai_billing_service.sync_period(owner, start, end).await
     {
@@ -615,8 +598,10 @@ async fn handle_customer_subscription_event(
     let is_new_subscription = matches!(event_type, EventType::CustomerSubscriptionCreated)
         || is_transition_from_incomplete;
 
-    // The seat price says which plan this is; the first item carries the
-    // current period on this API version.
+    // For a personal subscription the seat price says which plan this is (a
+    // team subscription may carry one item per plan; its members' plans are
+    // recorded on the team). The first item carries the current period on
+    // this API version.
     let plan = subscription
         .items
         .data
@@ -641,11 +626,7 @@ async fn handle_customer_subscription_event(
             subscription_status,
             &team_id,
             &email,
-            TeamPlanSync {
-                owner,
-                plan,
-                period,
-            },
+            TeamPlanSync { owner, period },
             SubscriptionTrackingData {
                 ga_client_id: ga_client_id.clone(),
                 fbp: fbp.clone(),
@@ -837,13 +818,12 @@ async fn handle_team_subscription_event<'a>(
 
     match subscription_status {
         "active" | "trialing" => {
+            // Restore stamps every member (owner included) with the team
+            // subscriber role and the tier role of their own seat's plan.
             ctx.teams_service
                 .restore_permissions_for_team_members(team_id)
                 .await?;
-            // After restore: it stamps every member (owner included) with the
-            // Premium tier role, and the owner's tier is what the AI allowance
-            // reads for the whole team.
-            sync_team_owner_plan(ctx, &plan_sync, true).await;
+            sync_team_billing_period(ctx, &plan_sync).await;
 
             ctx.teams_service
                 .patch_team_payment_status(team_id, true)
@@ -860,7 +840,7 @@ async fn handle_team_subscription_event<'a>(
             ctx.teams_service
                 .revoke_permissions_for_team_members(team_id)
                 .await?;
-            sync_team_owner_plan(ctx, &plan_sync, false).await;
+            sync_team_billing_period(ctx, &plan_sync).await;
             ctx.teams_service
                 .patch_team_payment_status(team_id, false)
                 .await?;

@@ -409,6 +409,7 @@ async fn only_the_payer_manages_billing_and_needs_a_paid_plan() {
     let member = user("member@x.com");
     let team = Entitlement {
         tier: PlanTier::Premium,
+        seat_tiers: vec![PlanTier::Premium, PlanTier::Premium],
         unlimited: false,
         payer: owner.clone(),
         billed_users: vec![owner.clone(), member.clone()],

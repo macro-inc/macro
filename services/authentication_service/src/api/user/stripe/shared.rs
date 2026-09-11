@@ -4,31 +4,16 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use model::response::ErrorResponse;
-use roles_and_permissions::domain::model::{ProductTier, UserRolesAndPermissionsError};
-use serde::{Deserialize, Serialize};
+use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
+use serde::Serialize;
 use stripe::{ParseIdError, StripeError};
+use teams::domain::model::{CustomerError, SeatPrices, SetTeamMemberPlanError};
 use thiserror::Error;
 use utoipa::ToSchema;
 
-/// The paid plans a customer can subscribe to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum PaidPlan {
-    /// $40/seat/month.
-    Premium,
-    /// $200/seat/month with a 5x AI allowance.
-    Max,
-}
-
-impl PaidPlan {
-    /// The role tier recorded on subscribers of this plan.
-    pub fn product_tier(self) -> ProductTier {
-        match self {
-            PaidPlan::Premium => ProductTier::Opus,
-            PaidPlan::Max => ProductTier::Max,
-        }
-    }
-}
+/// The paid plans a customer can subscribe to. One seat's plan; a team may
+/// mix them.
+pub use teams::domain::model::SeatPlan as PaidPlan;
 
 /// The Stripe price ids behind each paid plan's per-seat subscription item.
 #[derive(Debug, Clone)]
@@ -64,9 +49,15 @@ impl StripePrices {
 
     /// Every price that carries a seat item.
     pub fn seat_price_ids(&self) -> Vec<String> {
-        std::iter::once(self.premium.clone())
-            .chain(self.max.clone())
-            .collect()
+        self.seat_prices().all()
+    }
+
+    /// The same prices, for the teams crate's per-plan seat items.
+    pub fn seat_prices(&self) -> SeatPrices {
+        SeatPrices {
+            premium: self.premium.clone(),
+            max: self.max.clone(),
+        }
     }
 }
 
@@ -99,6 +90,10 @@ pub enum StripeOperationError {
     NoSubscription,
     #[error("Already on this plan")]
     AlreadyOnPlan,
+    #[error("Only team admins can change plans on a team")]
+    NotTeamAdmin,
+    #[error("Team plan change failed")]
+    TeamPlanErr(#[from] SetTeamMemberPlanError),
 }
 
 impl IntoResponse for StripeOperationError {
@@ -120,6 +115,16 @@ impl IntoResponse for StripeOperationError {
             StripeOperationError::PlanUnavailable => StatusCode::BAD_REQUEST,
             StripeOperationError::NoSubscription => StatusCode::NOT_FOUND,
             StripeOperationError::AlreadyOnPlan => StatusCode::CONFLICT,
+            StripeOperationError::NotTeamAdmin => StatusCode::FORBIDDEN,
+            StripeOperationError::TeamPlanErr(e) => match e {
+                SetTeamMemberPlanError::TeamNotPaying => StatusCode::PAYMENT_REQUIRED,
+                SetTeamMemberPlanError::CustomerError(CustomerError::PlanUnavailable(_)) => {
+                    StatusCode::BAD_REQUEST
+                }
+                SetTeamMemberPlanError::TeamError(_)
+                | SetTeamMemberPlanError::CustomerError(_)
+                | SetTeamMemberPlanError::RolesError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            },
         };
         (
             status,

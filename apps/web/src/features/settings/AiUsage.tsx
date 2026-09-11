@@ -194,7 +194,8 @@ export function AiUsageControls(props: {
       fallback={
         <p class="text-xs text-ink-extra-muted">
           AI usage for your team is managed by the team owner. Ask them to add
-          credits or turn on usage billing.
+          credits or turn on usage billing, or ask a team admin to move your
+          seat to Max.
         </p>
       }
     >

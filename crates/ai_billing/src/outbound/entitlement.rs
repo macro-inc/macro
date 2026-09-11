@@ -9,8 +9,9 @@ use teams::domain::team_repo::TeamRepository;
 /// [`EntitlementSource`] over the roles service and the teams repository.
 ///
 /// - A member of a paying (or enterprise) team is billed through the team
-///   owner: the owner's tier applies to every seat, usage pools on the owner,
-///   and enterprise teams are unlimited.
+///   owner: usage pools on the owner and every seat adds its own plan's
+///   allowance (a team may mix Premium and Max seats). Each member's plan is
+///   the one recorded on their membership; enterprise teams are unlimited.
 /// - Everyone else is a personal account on whatever tier their roles say.
 #[derive(Clone)]
 pub struct RolesTeamsEntitlementSource<P, T> {
@@ -77,34 +78,41 @@ where
             .map_err(entitlement_err)?
             .into_owned();
         let is_owner = owner.as_ref() == user.as_ref();
-        let tier = if is_owner {
-            own_tier
-        } else {
-            self.tier_of(&owner).await?
-        };
-        // Members carry the team's paid role even when the owner's own tier
-        // role is missing (enterprise teams are provisioned by hand).
-        let tier = if tier.is_paid() {
-            tier
-        } else {
-            PlanTier::Premium
-        };
 
+        // Every membership row (the owner has one too) carries the plan its
+        // seat is billed at. A team member row that somehow lacks one, or an
+        // owner without a row, counts as a Premium seat: that is the plan
+        // every seat starts on.
         let members = self
             .teams
             .get_team_members(team.id())
             .await
             .map_err(entitlement_err)?;
-        let mut billed_users = vec![owner.clone()];
-        billed_users.extend(
-            members
-                .into_iter()
-                .map(|m| m.user_id.into_owned())
-                .filter(|m| m.as_ref() != owner.as_ref()),
-        );
+        let mut seats: Vec<(MacroUserIdStr<'static>, PlanTier)> =
+            Vec::with_capacity(members.len() + 1);
+        for member in members {
+            let member_id = member.user_id.into_owned();
+            if seats
+                .iter()
+                .any(|(id, _)| id.as_ref() == member_id.as_ref())
+            {
+                continue;
+            }
+            seats.push((member_id, PlanTier::from(member.plan)));
+        }
+        if !seats.iter().any(|(id, _)| id.as_ref() == owner.as_ref()) {
+            seats.insert(0, (owner.clone(), PlanTier::Premium));
+        }
+        let tier = seats
+            .iter()
+            .find(|(id, _)| id.as_ref() == user.as_ref())
+            .map(|(_, tier)| *tier)
+            .unwrap_or(PlanTier::Premium);
+        let (billed_users, seat_tiers): (Vec<_>, Vec<_>) = seats.into_iter().unzip();
 
         Ok(Entitlement {
             tier,
+            seat_tiers,
             unlimited: team.enterprise(),
             payer: owner,
             billed_users,

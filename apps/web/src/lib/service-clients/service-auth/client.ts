@@ -995,6 +995,17 @@ export const authServiceClient = {
     ).map(() => undefined);
   },
 
+  /** Move one team member's seat between paid plans (team admins only). */
+  async setTeamMemberPlan(userId: string, plan: PaidPlan) {
+    return await fetchWithAuth<TeamMemberPlan>(
+      `${authHost}/team/members/${encodeURIComponent(userId)}/plan`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ plan }),
+      }
+    );
+  },
+
   async removeUserFromTeam(userId: string) {
     return (
       await fetchWithAuth<{}>(`${authHost}/team/remove/${userId}`, {

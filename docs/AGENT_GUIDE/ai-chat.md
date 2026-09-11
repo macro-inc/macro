@@ -44,8 +44,10 @@ request, sending a message answers HTTP 402 and the app opens the
 **AI usage limit** dialog (title `You've used this month's included AI`, or the
 spending-limit / failed-charge variants). It shows the same meter and controls
 as Settings → Billing: credit-pack buttons, the `Usage billing` toggle, an
-`Open billing settings` button, and `Upgrade to Max` for Premium payers. Team
-members who are not the payer see a note to ask the team owner instead.
+`Open billing settings` button, and `Upgrade to Max` for Premium payers (on a
+team this moves only the payer's own seat). Team members who are not the payer
+see a note to ask the team owner, or a team admin to move their seat to Max.
+A team's pool is the sum of its seats' allowances, so Premium and Max seats mix.
 
 ## Start a doc-scoped chat
 

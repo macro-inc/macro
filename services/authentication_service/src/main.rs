@@ -356,7 +356,7 @@ async fn main() -> anyhow::Result<()> {
 
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
     let customer_repo_impl =
-        CustomerRepositoryImpl::new(stripe_client.clone(), stripe_prices.seat_price_ids());
+        CustomerRepositoryImpl::new(stripe_client.clone(), stripe_prices.seat_prices());
     let favorites_service = favorites::domain::service::FavoritesServiceImpl::new(
         favorites::outbound::pg_favorites_repo::PgFavoritesRepo::new(db.clone()),
     );
