@@ -148,7 +148,7 @@ an inline edit.
 
 The side panel (toggle with `]`) includes Details, Plan, Changed files, This
 session (tool-call counts for the current transcript), and Activity (the same
-glyph-rail history as `/app/component/activity`: created, prompted, renamed).
+glyph-rail history as `/app/component/activity`: created, sent a message, edited).
 
 ### Sharing a session
 
