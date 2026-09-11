@@ -90,6 +90,13 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
     /// Construct the email-thread-specific edge object.
     fn email_thread_edges(email_thread_id: Uuid) -> Self::EmailThreadEdges;
 
+    /// Resolve the encoded server-only Mail projection supplement.
+    fn resolve_email_cache_projection(
+        &self,
+        ctx: &Context<'_>,
+        email_thread_id: Uuid,
+    ) -> impl Future<Output = async_graphql::Result<Option<String>>> + Send;
+
     /// Additional fields attached only to agent-session entities.
     type AgentSessionEdges: ObjectType + Clone + Send + Sync + 'static;
 
@@ -1187,9 +1194,16 @@ where
         GraphqlSoupEntityType::EmailThread
     }
 
-    /// Opaque cache projection metadata, unavailable for this entity variant.
-    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
-        None
+    /// Opaque server-only facts used by the offline Mail projection.
+    async fn cache_projection(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<SoupCacheProjection>> {
+        Ok(self
+            .1
+            .resolve_email_cache_projection(ctx, self.0.thread.id)
+            .await?
+            .map(SoupCacheProjection))
     }
 
     /// User-visible display name.

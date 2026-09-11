@@ -5,9 +5,12 @@ use cache_core::{
     store::InMemoryStorage,
 };
 use serde_json::json;
+use soup_filter_projection::{
+    MailCacheProjectionFacts, SoupCacheProjectionSupplement, encode_cache_projection_supplement,
+};
 
 const VIEWER: &str = "macro|mail@example.com";
-const QUERY: &str = r#"query MailSeed { user { id emailLinks { id } soup(input: {initial:{limit:100,emailView:ALL}}) { items { __typename id ... on GraphqlSoupEmailThread { linkId ownerId inboxVisible isRead isSignal hasNonTrashedMessages latestInboundMessageTs latestNonSpamMessageTs latestOutboundMessageTs hasCalendarAttachment hasThreadShare mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id } updatedAt } } } } }"#;
+const QUERY: &str = r#"query MailSeed { user { id emailLinks { id } soup(input: {initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection ... on GraphqlSoupEmailThread { linkId ownerId inboxVisible isRead isSignal latestInboundMessageTs mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id } updatedAt } } } } }"#;
 const PARTIAL: &str = r#"query Partial { user { id soup(input:{initial:{limit:1}}) { items { __typename id ... on GraphqlSoupEmailThread { isRead inboxVisible } } } } }"#;
 fn id(n: u128) -> String {
     uuid::Uuid::from_u128(n).to_string()
@@ -16,20 +19,33 @@ fn filters() -> Value {
     let nil = id(0);
     json!({"documentFilter":{"literal":{"id":nil}},"projectFilter":{"literal":{"projectIdSelf":nil}},"chatFilter":{"literal":{"chatId":nil}},"calendarEventFilter":{"literal":{"id":nil}},"channelFilter":{"literal":{"channelId":nil}},"channelThreadFilter":{"literal":{"threadId":nil}},"callFilter":{"literal":{"callId":nil}},"crmCompanyFilter":{"literal":{"id":nil}},"foreignEntityFilter":{"literal":{"id":nil}}})
 }
+fn micros(value: &str) -> i64 {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .unwrap()
+        .timestamp_micros()
+}
+fn capsule(n: u128, has_thread_share: bool) -> String {
+    encode_cache_projection_supplement(&SoupCacheProjectionSupplement::mail(
+        RecordKey::new(format!("{TYPE}:{}", id(n))).unwrap(),
+        MailCacheProjectionFacts::new(
+            Some(micros("2025-01-03T00:00:00.000003Z")),
+            (n.is_multiple_of(4) && n != 4).then(|| micros("2025-01-01T00:00:00Z")),
+            n.is_multiple_of(5),
+            has_thread_share,
+        ),
+    ))
+    .unwrap()
+}
+fn default_capsule(n: u128) -> String {
+    capsule(n, n == 1 || n == 60 || (71..=74).contains(&n))
+}
 fn row(n: u128) -> Value {
-    let mut row = json!({"__typename":"GraphqlSoupEmailThread","id":id(n),"linkId":id(if n<=50 {1000}else if n<=70 {1001}else {9999}),"inboxVisible":n.is_multiple_of(2),"isRead":false,"isSignal":n.is_multiple_of(3),"hasNonTrashedMessages":n!=7,"latestInboundMessageTs":if n==2 {Value::Null}else {json!("2025-01-02T00:00:00.000002Z")},"latestNonSpamMessageTs":"2025-01-03T00:00:00.000003Z","updatedAt":"2025-01-04T00:00:00.000004Z"});
+    let mut row = json!({"__typename":"GraphqlSoupEmailThread","id":id(n),"linkId":id(if n<=50 {1000}else if n<=70 {1001}else {9999}),"inboxVisible":n.is_multiple_of(2),"isRead":false,"isSignal":n.is_multiple_of(3),"cacheProjection":default_capsule(n),"latestInboundMessageTs":if n != 2 { Some("2025-01-02T00:00:00.000002Z") } else { None },"updatedAt":"2025-01-04T00:00:00.000004Z"});
     row["ownerId"] = json!(if n <= 50 {
         VIEWER
     } else {
         "macro|other@example.com"
     });
-    row["latestOutboundMessageTs"] = if n.is_multiple_of(4) && n != 4 {
-        json!("2025-01-01T00:00:00Z")
-    } else {
-        Value::Null
-    };
-    row["hasCalendarAttachment"] = json!(n.is_multiple_of(5));
-    row["hasThreadShare"] = json!(n == 1 || n == 60 || (71..=74).contains(&n));
     row["mailAllPreview"] = if n != 7 {
         json!({"id":id(n+10000)})
     } else {
@@ -190,7 +206,7 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
     );
     let mut revoked = seed();
     revoked["user"]["soup"]["items"] = json!([row(72)]);
-    revoked["user"]["soup"]["items"][0]["hasThreadShare"] = json!(false);
+    revoked["user"]["soup"]["items"][0]["cacheProjection"] = json!(capsule(72, false));
     write(&mut engine, QUERY, &revoked).await;
     assert_eq!(
         all_keys(&mut engine, shared, "ALL").await.len(),
@@ -506,7 +522,8 @@ async fn cleared_inbox_timestamp<S: PredicateIndexStorage>(storage: S) {
     assert_eq!(keys, [key.as_str()]);
 
     let partial = json!({"user":{"id":VIEWER,"soup":{"items":[{
-        "__typename":TYPE,"id":id(4),"latestInboundMessageTs":null
+        "__typename":TYPE,"id":id(4),"cacheProjection":capsule(4, false),
+        "latestInboundMessageTs":null
     }]}}});
     let updates = projection_updates(engine.storage(), QUERY, None, &Map::new(), &partial)
         .await
@@ -591,7 +608,7 @@ fn missing_proof_is_not_a_false_fact() {
         data["user"]["soup"]["items"][0]
             .as_object_mut()
             .unwrap()
-            .remove("hasNonTrashedMessages");
+            .remove("cacheProjection");
         write(&mut engine, QUERY, &data).await;
         let key = RecordKey::new(format!("{TYPE}:{}", id(1))).unwrap();
         assert!(matches!(

@@ -1,4 +1,7 @@
-use crate::domain::models::{EmailPreview, EmailThreadMetadata, MessageRow, ThreadRow};
+use crate::domain::models::{
+    EmailPreview, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
+    EmailThreadMetadata, MessageRow, ThreadRow,
+};
 use chrono::Utc;
 use sqlx::{PgPool, types::Json};
 use std::collections::HashMap;
@@ -32,9 +35,34 @@ pub(super) async fn thread_by_id(
 #[tracing::instrument(err, skip(pool, thread_ids))]
 pub(super) async fn thread_metadata_by_ids(
     pool: &PgPool,
-    viewer: macro_user_id::user_id::MacroUserIdStr<'_>,
     thread_ids: &[Uuid],
 ) -> Result<Vec<EmailThreadMetadata>, sqlx::Error> {
+    if thread_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    sqlx::query_as!(
+        EmailThreadMetadata,
+        r#"
+        SELECT
+            id AS "thread_id!",
+            link_id,
+            latest_inbound_message_ts
+        FROM email_threads
+        WHERE id = ANY($1)
+        "#,
+        thread_ids,
+    )
+    .fetch_all(pool)
+    .await
+}
+
+#[tracing::instrument(err, skip(pool, thread_ids))]
+pub(super) async fn thread_mail_projections_by_ids(
+    pool: &PgPool,
+    viewer: macro_user_id::user_id::MacroUserIdStr<'_>,
+    thread_ids: &[Uuid],
+) -> Result<Vec<EmailThreadMailProjection>, sqlx::Error> {
     if thread_ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -98,18 +126,19 @@ pub(super) async fn thread_metadata_by_ids(
     ).fetch_all(pool).await?;
     Ok(rows
         .into_iter()
-        .map(|row| EmailThreadMetadata {
+        .map(|row| EmailThreadMailProjection {
             thread_id: row.thread_id,
-            link_id: row.link_id,
-            latest_inbound_message_ts: row.latest_inbound_message_ts,
-            latest_non_spam_message_ts: row.latest_non_spam_message_ts,
-            latest_outbound_message_ts: row.latest_outbound_message_ts,
-            has_calendar_attachment: row.has_calendar_attachment,
-            has_thread_share: row.has_thread_share,
-            has_non_trashed_messages: row.all_preview.is_some(),
-            all_preview: row.all_preview.map(|Json(preview)| preview),
-            draft_preview: row.draft_preview.map(|Json(preview)| preview),
-            sent_preview: row.sent_preview.map(|Json(preview)| preview),
+            cache_facts: EmailThreadMailCacheFacts {
+                latest_non_spam_message_ts: row.latest_non_spam_message_ts,
+                latest_outbound_message_ts: row.latest_outbound_message_ts,
+                has_calendar_attachment: row.has_calendar_attachment,
+                has_thread_share: row.has_thread_share,
+            },
+            previews: EmailThreadMailPreviews {
+                all: row.all_preview.map(|Json(preview)| preview),
+                draft: row.draft_preview.map(|Json(preview)| preview),
+                sent: row.sent_preview.map(|Json(preview)| preview),
+            },
         })
         .collect())
 }

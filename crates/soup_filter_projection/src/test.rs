@@ -195,7 +195,7 @@ fn document_supplement_contains_only_authoritative_relation_state() {
     assert_eq!(supplement.target_profile(), &vocabulary::profile_v3());
     assert_eq!(supplement.partition(), &vocabulary::document_partition());
     assert_eq!(supplement.record_key(), &document_key(id));
-    assert!(!supplement.is_email_attachment());
+    assert_eq!(supplement.is_email_attachment(), Some(false));
     assert_eq!(supplement.is_important(), Some(true));
     assert_eq!(supplement.status_option_ids(), Some(&[] as &[Uuid]));
 
@@ -324,6 +324,34 @@ fn supplement_capsule_v2_native_golden_round_trip_is_deterministic() {
 }
 
 #[test]
+fn mail_supplement_golden_round_trip_preserves_server_only_facts() {
+    let supplement = SoupCacheProjectionSupplement::mail(
+        RecordKey::new("GraphqlSoupEmailThread:00000000-0000-0000-0000-000000000001").unwrap(),
+        MailCacheProjectionFacts::new(Some(1_735_862_400_000_000), None, false, true),
+    );
+    let encoded = encode_cache_projection_supplement(&supplement).unwrap();
+    assert_eq!(
+        encoded,
+        "Awxzb3VwLW1haWwtdjI7R3JhcGhxbFNvdXBFbWFpbFRocmVhZDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEFZW1haWwBgIDZ276wlQYAAAE"
+    );
+    let decoded = decode_cache_projection_supplement(&encoded).unwrap();
+    assert_eq!(decoded, supplement);
+    assert_eq!(
+        decoded.target_profile(),
+        &item_filter_index::mail::profile()
+    );
+    assert_eq!(decoded.partition(), &item_filter_index::mail::partition());
+    let facts = decoded.mail_facts().unwrap();
+    assert_eq!(
+        facts.latest_non_spam_message_ts(),
+        Some(1_735_862_400_000_000)
+    );
+    assert_eq!(facts.latest_outbound_message_ts(), None);
+    assert!(!facts.has_calendar_attachment());
+    assert!(facts.has_thread_share());
+}
+
+#[test]
 fn complete_v3_projection_contains_viewer_importance_and_status_facts() {
     let id = Uuid::from_u128(1);
     let status_a = Uuid::from_u128(11);
@@ -380,8 +408,8 @@ fn complete_v3_projection_contains_viewer_importance_and_status_facts() {
 #[test]
 fn supplement_decoder_rejects_unknown_oversized_and_trailing_frames() {
     assert!(matches!(
-        decode_cache_projection_supplement(&STANDARD_NO_PAD.encode([0x03])),
-        Err(SoupCacheProjectionWireError::UnsupportedWireVersion(0x03))
+        decode_cache_projection_supplement(&STANDARD_NO_PAD.encode([0x04])),
+        Err(SoupCacheProjectionWireError::UnsupportedWireVersion(0x04))
     ));
     assert!(matches!(
         decode_cache_projection_supplement(

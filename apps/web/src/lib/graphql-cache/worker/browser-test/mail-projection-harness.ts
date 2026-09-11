@@ -4,6 +4,7 @@ import {
 } from '../../../queries/soup/graphql/mail-view';
 import type { MailItemFieldsFragment } from '../../../service-clients/service-storage/graphql/generated/graphql';
 import { createWorkerCacheHost } from '../../host/worker-host';
+import { mailProjectionCapsules } from './mail-projection-capsules';
 
 const host = createWorkerCacheHost({
   scope: `offline-mail-${crypto.randomUUID()}`,
@@ -20,7 +21,7 @@ const nil = id(0);
 const previewFields =
   'id subject snippet isDraft senderEmail senderName senderPhotoUrl';
 const previews = `mailAllPreview { ${previewFields} } mailDraftPreview { ${previewFields} } mailSentPreview { ${previewFields} }`;
-const query = `query MailSeed { user { id emailLinks { id } soup(input:{initial:{limit:100,emailView:ALL}}) { items { __typename id ... on GraphqlSoupEmailThread { name linkId ownerId isRead inboxVisible isSignal hasNonTrashedMessages latestInboundMessageTs latestNonSpamMessageTs latestOutboundMessageTs hasCalendarAttachment hasThreadShare ${previews} updatedAt } } } } }`;
+const query = `query MailSeed { user { id emailLinks { id } soup(input:{initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection ... on GraphqlSoupEmailThread { name linkId ownerId isRead inboxVisible isSignal latestInboundMessageTs ${previews} updatedAt } } } } }`;
 const fragment = `fragment MailRow on GraphqlSoupEmailThread { __typename id emailName:name isRead inboxVisible ${previews} }`;
 const preview = (n: number, subject: string, isDraft: boolean) => ({
   id: id(n),
@@ -133,10 +134,7 @@ await host.writeQuery({
             name: `Wrong last-query preview ${n}`,
             ownerId:
               n <= 50 ? 'offline-mail-viewer' : 'macro|other@example.com',
-            hasThreadShare: n === 1 || n === 60 || (n >= 71 && n <= 74),
-            hasCalendarAttachment: n % 5 === 0,
-            latestOutboundMessageTs:
-              n % 4 === 0 && n !== 4 ? '2025-01-01T00:00:00Z' : null,
+            cacheProjection: mailProjectionCapsules[index],
             mailAllPreview:
               n === 7 ? null : preview(n + 10000, `Email ${n}`, false),
             mailDraftPreview:
@@ -151,9 +149,7 @@ await host.writeQuery({
             isRead: n % 4 === 0,
             inboxVisible: n % 2 === 0,
             isSignal: n % 3 === 0,
-            hasNonTrashedMessages: n !== 7,
             latestInboundMessageTs: n === 2 ? null : '2025-01-02T00:00:00Z',
-            latestNonSpamMessageTs: '2025-01-03T00:00:00Z',
             updatedAt: '2025-01-04T00:00:00Z',
           };
         }),

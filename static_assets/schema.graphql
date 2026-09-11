@@ -4962,7 +4962,7 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
-	Opaque cache projection metadata, unavailable for this entity variant.
+	Opaque server-only facts used by the offline Mail projection.
 	"""
 	cacheProjection: SoupCacheProjection
 	"""
@@ -5097,26 +5097,6 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	Timestamp of the latest inbound message, in RFC 3339 format.
 	"""
 	latestInboundMessageTs: String
-	"""
-	Stable ALL-view recency, independent of which preview is currently selected.
-	"""
-	latestNonSpamMessageTs: String
-	"""
-	Whether the canonical thread has any non-trashed message eligible for Mail.
-	"""
-	hasNonTrashedMessages: Boolean!
-	"""
-	Canonical Sent timestamp, independent of the currently selected preview.
-	"""
-	latestOutboundMessageTs: String
-	"""
-	Authoritative calendar attachment classification used by the Calendar tab.
-	"""
-	hasCalendarAttachment: Boolean!
-	"""
-	Whether the viewer has a thread share grant through their user, team or active channel.
-	"""
-	hasThreadShare: Boolean!
 	"""
 	Latest eligible message for ALL, INBOX, Calendar and Shared, without bodies.
 	"""

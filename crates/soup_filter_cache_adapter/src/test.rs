@@ -1337,7 +1337,7 @@ fn soup_flat_v2_supplement_goldens_lock_typed_server_fact_wire() {
         assert_eq!(decoded.partition().as_str(), case.capsule.partition);
         assert_eq!(
             decoded.is_email_attachment(),
-            case.capsule.is_email_attachment
+            Some(case.capsule.is_email_attachment)
         );
         assert_eq!(
             encode_cache_projection_supplement(&decoded)
@@ -1376,7 +1376,7 @@ fn soup_flat_v3_supplement_goldens_lock_viewer_relative_wire() {
         assert_eq!(decoded.partition().as_str(), case.capsule.partition);
         assert_eq!(
             decoded.is_email_attachment(),
-            case.capsule.is_email_attachment
+            Some(case.capsule.is_email_attachment)
         );
         assert_eq!(decoded.is_important(), Some(case.capsule.is_important));
         assert_eq!(

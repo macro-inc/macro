@@ -1,12 +1,15 @@
+use std::sync::Arc;
+
 use async_graphql::{Context, ID, Object, SimpleObject, dataloader::DataLoader};
 use email::domain::models::{
-    AttachmentDraft, AttachmentForwarded, ContactInfo, EmailThreadMetadata, Message,
-    MessageAttachment, ParsedLabel, ParsedMessage,
+    AttachmentDraft, AttachmentForwarded, ContactInfo, EmailThreadMailProjection,
+    EmailThreadMetadata, Message, MessageAttachment, ParsedLabel, ParsedMessage,
 };
 
 use crate::loaders::{
     EmailContentKey, EmailContentLoad, EmailContentLoader, EmailContentMessage,
-    EmailThreadMetadataLoad, EmailThreadMetadataLoader, SoupEmailContentEdgeReader,
+    EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader, EmailThreadMetadataLoad,
+    EmailThreadMetadataLoader, SoupEmailContentEdgeReader, SoupEmailThreadMailProjectionEdgeReader,
     SoupEmailThreadMetadataEdgeReader,
 };
 
@@ -432,6 +435,24 @@ where
     }
 }
 
+/// Load Mail-specific cache facts and canonical previews for an email thread.
+pub async fn load_email_thread_mail_projection<R>(
+    ctx: &Context<'_>,
+    thread_id: uuid::Uuid,
+) -> async_graphql::Result<Arc<EmailThreadMailProjection>>
+where
+    R: SoupEmailThreadMailProjectionEdgeReader,
+{
+    let loader = ctx.data::<DataLoader<EmailThreadMailProjectionLoader<R>>>()?;
+    match loader.load_one(thread_id).await? {
+        Some(EmailThreadMailProjectionLoad::Found(projection)) => Ok(projection),
+        Some(EmailThreadMailProjectionLoad::Missing | EmailThreadMailProjectionLoad::Failed)
+        | None => Err(async_graphql::Error::new(
+            "email thread Mail projection is unavailable",
+        )),
+    }
+}
+
 /// Load a paginated adaptively hydrated message page for an email thread.
 pub async fn load_email_messages<R>(
     ctx: &Context<'_>,
@@ -519,12 +540,22 @@ mod tests {
                             thread_id,
                             link_id: Uuid::from_u128(3),
                             latest_inbound_message_ts: None,
-                            latest_non_spam_message_ts: None,
-                            has_non_trashed_messages: true,
-                            ..Default::default()
                         }),
                     )
                 })
+                .collect()
+        }
+    }
+
+    impl SoupEmailThreadMailProjectionEdgeReader for ContentReader {
+        async fn get_email_thread_mail_projections(
+            &self,
+            _user_id: &MacroUserIdStr<'static>,
+            thread_ids: Vec<Uuid>,
+        ) -> HashMap<Uuid, EmailThreadMailProjectionLoad> {
+            thread_ids
+                .into_iter()
+                .map(|thread_id| (thread_id, EmailThreadMailProjectionLoad::Missing))
                 .collect()
         }
     }

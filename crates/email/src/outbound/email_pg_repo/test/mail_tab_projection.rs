@@ -17,58 +17,64 @@ async fn canonical_tab_previews_and_share_facts(pool: Pool<Postgres>) -> anyhow:
     let left = uuid::uuid!("20000009-0000-0000-0000-000000000009");
     let repo = EmailPgRepo::new(pool.clone());
     let rows = repo
-        .thread_metadata_by_ids(viewer.clone(), &[thread, direct, team, active, left])
+        .mail_projections_by_ids(viewer.clone(), &[thread, direct, team, active, left])
         .await?;
     let get = |id| rows.iter().find(|row| row.thread_id == id).unwrap();
     let metadata = get(thread);
     assert_eq!(
-        metadata.all_preview.as_ref().unwrap().id,
+        metadata.previews.all.as_ref().unwrap().id,
         uuid::uuid!("30000001-0000-0000-0000-000000000001")
     );
     assert_eq!(
-        metadata.draft_preview.as_ref().unwrap().subject.as_deref(),
+        metadata.previews.draft.as_ref().unwrap().subject.as_deref(),
         Some("Older draft")
     );
     assert_eq!(
-        metadata.sent_preview.as_ref().unwrap().subject.as_deref(),
+        metadata.previews.sent.as_ref().unwrap().subject.as_deref(),
         Some("Older sent")
     );
-    assert!(metadata.has_calendar_attachment);
-    assert!(!metadata.has_thread_share, "ownership is not a share grant");
-    assert!(get(direct).has_thread_share);
-    assert!(get(team).has_thread_share);
-    assert!(get(active).has_thread_share);
+    assert!(metadata.cache_facts.has_calendar_attachment);
     assert!(
-        !get(left).has_thread_share,
+        !metadata.cache_facts.has_thread_share,
+        "ownership is not a share grant"
+    );
+    assert!(get(direct).cache_facts.has_thread_share);
+    assert!(get(team).cache_facts.has_thread_share);
+    assert!(get(active).cache_facts.has_thread_share);
+    assert!(
+        !get(left).cache_facts.has_thread_share,
         "left channel participants grant no scope"
     );
-    assert!(!get(left).has_non_trashed_messages);
     assert!(
-        get(left).draft_preview.is_none(),
+        get(left).previews.all.is_none(),
+        "trashed messages do not qualify"
+    );
+    assert!(
+        get(left).previews.draft.is_none(),
         "trashed drafts do not qualify"
     );
     let other = repo
-        .thread_metadata_by_ids(
+        .mail_projections_by_ids(
             MacroUserIdStr::parse_from_str("macro|user2@test.com")?,
             &[direct],
         )
         .await?;
     assert!(
-        !other[0].has_thread_share,
+        !other[0].cache_facts.has_thread_share,
         "share facts are viewer scoped even for the owner"
     );
     for (view, preview) in [
         (
             PreviewViewStandardLabel::All,
-            metadata.all_preview.as_ref().unwrap(),
+            metadata.previews.all.as_ref().unwrap(),
         ),
         (
             PreviewViewStandardLabel::Drafts,
-            metadata.draft_preview.as_ref().unwrap(),
+            metadata.previews.draft.as_ref().unwrap(),
         ),
         (
             PreviewViewStandardLabel::Sent,
-            metadata.sent_preview.as_ref().unwrap(),
+            metadata.previews.sent.as_ref().unwrap(),
         ),
     ] {
         let filter = Arc::new(Expr::val(EmailLiteral::ThreadId(thread)));

@@ -22,8 +22,7 @@ use graphql_channel::{
 };
 use graphql_common::{parse_id, require_authorized_user};
 use graphql_email::{
-    GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader,
-    SoupEmailContentEdgeReader,
+    GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader, SoupEmailEdgeReader,
 };
 use graphql_entity_mutation::EntityMutationRoot;
 use graphql_favorite::{
@@ -121,7 +120,7 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader;
@@ -318,7 +317,7 @@ where
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -375,7 +374,7 @@ where
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -431,7 +430,7 @@ where
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -464,7 +463,7 @@ where
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -487,7 +486,7 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -518,7 +517,7 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -552,7 +551,7 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,

@@ -48,6 +48,14 @@ impl SoupEntityEdges for TestSoupEdges {
         TestEmailThreadEdges { available: true }
     }
 
+    async fn resolve_email_cache_projection(
+        &self,
+        _ctx: &Context<'_>,
+        _email_thread_id: uuid::Uuid,
+    ) -> async_graphql::Result<Option<String>> {
+        Ok(None)
+    }
+
     fn agent_session_edges(_bot_id: uuid::Uuid) -> Self::AgentSessionEdges {
         TestAgentSessionEdges { available: true }
     }

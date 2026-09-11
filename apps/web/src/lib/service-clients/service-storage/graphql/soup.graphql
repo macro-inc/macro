@@ -159,11 +159,6 @@ fragment SoupItemFields on GraphqlSoupEntity {
 		inboxVisible
 		linkId
 		latestInboundMessageTs
-		latestNonSpamMessageTs @cacheOnly
-		hasNonTrashedMessages @cacheOnly
-		latestOutboundMessageTs @cacheOnly
-		hasCalendarAttachment @cacheOnly
-		hasThreadShare @cacheOnly
 		mailAllPreview @cacheOnly { ...MailPreviewFields }
 		mailDraftPreview @cacheOnly { ...MailPreviewFields }
 		mailSentPreview @cacheOnly { ...MailPreviewFields }

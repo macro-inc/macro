@@ -11,6 +11,8 @@ use item_filter_index::mail as vocabulary;
 use predicate_index::{ExactFact, IntegerFact};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use soup_filter_projection::decode_cache_projection_supplement;
+use std::borrow::Cow;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
@@ -22,13 +24,9 @@ const FIELDS: &[&str] = &[
     "isRead",
     "inboxVisible",
     "isSignal",
-    "hasNonTrashedMessages",
+    "cacheProjection",
     "latestInboundMessageTs",
-    "latestNonSpamMessageTs",
     "updatedAt",
-    "latestOutboundMessageTs",
-    "hasCalendarAttachment",
-    "hasThreadShare",
     "mailAllPreview",
     "mailDraftPreview",
     "mailSentPreview",
@@ -39,6 +37,13 @@ fn error(e: impl std::fmt::Display) -> SoupFilterCacheAdapterError {
 fn string<'a>(r: &'a Record, field: &str) -> Option<&'a str> {
     match r.fields.get(field)? {
         CacheValue::String(s) => Some(s),
+        _ => None,
+    }
+}
+fn opaque_string<'a>(r: &'a Record, field: &str) -> Option<Cow<'a, str>> {
+    match r.fields.get(field)? {
+        CacheValue::String(value) => Some(Cow::Borrowed(value)),
+        CacheValue::Opaque(value) => serde_json::from_str::<String>(value).ok().map(Cow::Owned),
         _ => None,
     }
 }
@@ -55,9 +60,12 @@ fn bool_fact(r: &Record, field: &str, attribute: &str) -> Option<ExactFact> {
     let CacheValue::Bool(value) = r.fields.get(field)? else {
         return None;
     };
+    boolean_fact(*value, attribute)
+}
+fn boolean_fact(value: bool, attribute: &str) -> Option<ExactFact> {
     Some(ExactFact {
         attribute: vocabulary::token(attribute),
-        value: ExactValue::new([u8::from(*value)]).ok()?,
+        value: ExactValue::new([u8::from(value)]).ok()?,
     })
 }
 fn uuid_fact(attribute: &str, value: &str) -> Option<ExactFact> {
@@ -78,6 +86,15 @@ fn preview_ref(record: &Record, field: &str) -> Option<Option<uuid::Uuid>> {
 
 fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
     let id = key.as_str().strip_prefix(&format!("{TYPE}:"))?;
+    let encoded = opaque_string(record, "cacheProjection")?;
+    let supplement = decode_cache_projection_supplement(&encoded).ok()?;
+    if supplement.record_key() != &key
+        || supplement.target_profile() != &vocabulary::profile()
+        || supplement.partition() != &vocabulary::partition()
+    {
+        return None;
+    }
+    let cache_facts = supplement.mail_facts()?;
     let owner = string(record, "ownerId")?;
     if owner.is_empty() {
         return None;
@@ -87,23 +104,21 @@ fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
             attribute: vocabulary::token("mail-owner"),
             value: ExactValue::utf8(owner).ok()?,
         },
-        bool_fact(record, "hasCalendarAttachment", "mail-calendar")?,
-        bool_fact(record, "hasThreadShare", "mail-shared")?,
+        boolean_fact(cache_facts.has_calendar_attachment(), "mail-calendar")?,
+        boolean_fact(cache_facts.has_thread_share(), "mail-shared")?,
         uuid_fact("id", id)?,
         uuid_fact("mail-link-id", string(record, "linkId")?)?,
         bool_fact(record, "isRead", "mail-read")?,
         bool_fact(record, "inboxVisible", "mail-inbox")?,
         bool_fact(record, "isSignal", "mail-signal")?,
-        bool_fact(record, "hasNonTrashedMessages", "mail-has-message")?,
     ];
     let all = preview_ref(record, "mailAllPreview")?;
     let draft = preview_ref(record, "mailDraftPreview")?;
     let sent = preview_ref(record, "mailSentPreview")?;
-    if record.fields.get("hasNonTrashedMessages") != Some(&CacheValue::Bool(all.is_some()))
-        || (all.is_none() && (draft.is_some() || sent.is_some()))
-    {
+    if all.is_none() && (draft.is_some() || sent.is_some()) {
         return None;
     }
+    facts.push(boolean_fact(all.is_some(), "mail-has-message")?);
     for (attribute, id) in [
         ("mail-all-message", all),
         ("mail-draft-message", draft),
@@ -114,7 +129,7 @@ fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
         }
     }
     let updated = timestamp(record, "updatedAt")??;
-    let all = timestamp(record, "latestNonSpamMessageTs")?.unwrap_or(updated);
+    let all = cache_facts.latest_non_spam_message_ts().unwrap_or(updated);
     let mut times = vec![IntegerFact {
         attribute: vocabulary::token("mail-all-ts"),
         value: all,
@@ -125,7 +140,7 @@ fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
             value: inbound,
         });
     }
-    if let Some(outbound) = timestamp(record, "latestOutboundMessageTs")? {
+    if let Some(outbound) = cache_facts.latest_outbound_message_ts() {
         times.push(IntegerFact {
             attribute: vocabulary::token("mail-sent-ts"),
             value: outbound,
@@ -213,30 +228,41 @@ pub async fn projection_updates_for_write<S: Storage>(
             if full {
                 return Some(ProjectionMutation::Replace(document));
             }
-            // Sort patches cannot express deletion. Suppress this projection until
-            // a full snapshot arrives rather than retaining a cleared inbox timestamp.
+            // Sort patches cannot express deletion. Suppress a capsule-only
+            // projection until a full snapshot replaces cleared INBOX/SENT sorts.
             if changed.contains("latestInboundMessageTs")
-                && timestamp(&merged, "latestInboundMessageTs") == Some(None)
+                && timestamp(&merged, "latestInboundMessageTs")?.is_none()
             {
                 return Some(incomplete());
+            }
+            if changed.contains("cacheProjection") {
+                let encoded = opaque_string(&merged, "cacheProjection")?;
+                let supplement = decode_cache_projection_supplement(&encoded).ok()?;
+                if supplement
+                    .mail_facts()?
+                    .latest_outbound_message_ts()
+                    .is_none()
+                {
+                    return Some(incomplete());
+                }
             }
             let affected = |attribute: &str| match attribute {
                 "mail-link-id" => changed.contains("linkId"),
                 "mail-owner" => changed.contains("ownerId"),
-                "mail-calendar" => changed.contains("hasCalendarAttachment"),
-                "mail-shared" => changed.contains("hasThreadShare"),
+                "mail-calendar" | "mail-shared" | "mail-sent-ts" => {
+                    changed.contains("cacheProjection")
+                }
+                "mail-inbox-ts" => changed.contains("latestInboundMessageTs"),
                 "mail-all-message" => changed.contains("mailAllPreview"),
                 "mail-draft-message" => changed.contains("mailDraftPreview"),
                 "mail-sent-message" => changed.contains("mailSentPreview"),
-                "mail-sent-ts" => changed.contains("latestOutboundMessageTs"),
                 "mail-read" => changed.contains("isRead"),
                 "mail-inbox" => changed.contains("inboxVisible"),
                 "mail-signal" => changed.contains("isSignal"),
-                "mail-has-message" => changed.contains("hasNonTrashedMessages"),
+                "mail-has-message" => changed.contains("mailAllPreview"),
                 "mail-all-ts" => {
-                    changed.contains("latestNonSpamMessageTs") || changed.contains("updatedAt")
+                    changed.contains("cacheProjection") || changed.contains("updatedAt")
                 }
-                "mail-inbox-ts" => changed.contains("latestInboundMessageTs"),
                 _ => false,
             };
             let exact = [

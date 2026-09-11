@@ -37,7 +37,9 @@ macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 notification = { path = "../notification" }
+predicate-index = { path = "../predicate_index" }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
+soup-filter-projection = { path = "../soup_filter_projection", default-features = false }
 soup_realtime = { path = "../soup_realtime", default-features = false, features = [
   "ports",
 ] }

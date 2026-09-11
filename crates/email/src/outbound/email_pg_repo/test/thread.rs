@@ -6,12 +6,12 @@ use super::*;
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
-async fn mail_metadata_excludes_trashed_messages(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn mail_projection_excludes_trashed_messages(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool);
     let draft = uuid::uuid!("20000008-0000-0000-0000-000000000008");
     let trash = uuid::uuid!("20000009-0000-0000-0000-000000000009");
     let rows = repo
-        .thread_metadata_by_ids(
+        .mail_projections_by_ids(
             macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user1@test.com")?,
             &[draft, trash],
         )
@@ -20,14 +20,17 @@ async fn mail_metadata_excludes_trashed_messages(pool: Pool<Postgres>) -> anyhow
         rows.iter()
             .find(|row| row.thread_id == draft)
             .unwrap()
-            .has_non_trashed_messages
+            .previews
+            .all
+            .is_some()
     );
     assert!(
-        !rows
-            .iter()
+        rows.iter()
             .find(|row| row.thread_id == trash)
             .unwrap()
-            .has_non_trashed_messages
+            .previews
+            .all
+            .is_none()
     );
     Ok(())
 }
@@ -86,10 +89,7 @@ async fn thread_metadata_by_ids_returns_canonical_rows(pool: Pool<Postgres>) -> 
     let canonical_link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     let mut metadata = repo
-        .thread_metadata_by_ids(
-            macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user1@test.com")?,
-            &[first_id, missing_id, second_id],
-        )
+        .thread_metadata_by_ids(&[first_id, missing_id, second_id])
         .await?;
     metadata.sort_by_key(|row| row.thread_id);
 
@@ -97,9 +97,6 @@ async fn thread_metadata_by_ids_returns_canonical_rows(pool: Pool<Postgres>) -> 
     assert_eq!(metadata[0].thread_id, first_id);
     assert_eq!(metadata[0].link_id, canonical_link_id);
     assert!(metadata[0].latest_inbound_message_ts.is_some());
-    assert!(metadata[0].latest_non_spam_message_ts.is_some());
-    assert!(metadata[0].has_non_trashed_messages);
-    assert!(metadata[1].has_non_trashed_messages);
     assert_eq!(metadata[1].thread_id, second_id);
     assert_eq!(metadata[1].link_id, canonical_link_id);
 

@@ -5,11 +5,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use axum::http::{Request as HttpRequest, header};
 use email::domain::models::{
     AttachmentDraft, AttachmentForwarded, CreateDraftInput, CreatedDraft, EmailErr, EmailFilter,
-    EmailSyncStatus, EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest,
-    LabelListVisibility, LabelType, Link, LinkLabel, Message, MessageAttachment,
-    MessageListVisibility, ParsedMessage, ParsedThread, SenderPolicy, Thread,
-    UpdateThreadLabelsResult, UpsertEmailFilterInput, UserEmailLink, UserEmailLinkSettings,
-    UserProvider,
+    EmailSyncStatus, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
+    EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest, LabelListVisibility,
+    LabelType, Link, LinkLabel, Message, MessageAttachment, MessageListVisibility, ParsedMessage,
+    ParsedThread, SenderPolicy, Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
+    UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
@@ -530,10 +530,40 @@ impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentR
                         link_id: Uuid::from_u128(900 + thread_id.as_u128()),
                         latest_inbound_message_ts: (thread_id.as_u128() % 2 == 1)
                             .then(Default::default),
-                        latest_non_spam_message_ts: None,
-                        has_non_trashed_messages: true,
-                        ..Default::default()
                     }),
+                )
+            })
+            .collect()
+    }
+}
+
+impl graphql_email::SoupEmailThreadMailProjectionEdgeReader for RecordingEmailContentReader {
+    async fn get_email_thread_mail_projections(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+    ) -> HashMap<Uuid, graphql_email::EmailThreadMailProjectionLoad> {
+        thread_ids
+            .into_iter()
+            .map(|thread_id| {
+                (
+                    thread_id,
+                    graphql_email::EmailThreadMailProjectionLoad::Found(Arc::new(
+                        EmailThreadMailProjection {
+                            thread_id,
+                            cache_facts: EmailThreadMailCacheFacts {
+                                latest_non_spam_message_ts: None,
+                                latest_outbound_message_ts: None,
+                                has_calendar_attachment: false,
+                                has_thread_share: false,
+                            },
+                            previews: EmailThreadMailPreviews {
+                                all: None,
+                                draft: None,
+                                sent: None,
+                            },
+                        },
+                    )),
                 )
             })
             .collect()
@@ -1071,6 +1101,10 @@ impl TestHarness {
                 self.email_content_reader.clone(),
             ))
             .data(graphql_email::email_thread_metadata_loader(
+                user_id.clone(),
+                self.email_content_reader.clone(),
+            ))
+            .data(graphql_email::email_thread_mail_projection_loader(
                 user_id,
                 self.email_content_reader.clone(),
             ))
@@ -1294,7 +1328,7 @@ async fn soup_passes_team_receipt_to_raw_path() {
 }
 
 #[tokio::test]
-async fn flat_soup_emits_document_server_fact_supplement_only() {
+async fn flat_soup_emits_server_fact_supplements_for_documents_and_mail() {
     let harness = harness();
     let document_id = Uuid::from_u128(88);
     let email_thread_id = Uuid::from_u128(89);
@@ -1327,7 +1361,16 @@ async fn flat_soup_emits_document_server_fact_supplement_only() {
         .find(|item| item["__typename"] == "GraphqlSoupEmailThread")
         .unwrap();
     assert_eq!(email["id"], email_thread_id.to_string());
-    assert!(email["cacheProjection"].is_null());
+    let mail_supplement = soup_filter_projection::decode_cache_projection_supplement(
+        email["cacheProjection"].as_str().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        mail_supplement.record_key(),
+        &predicate_index::RecordKey::new(format!("GraphqlSoupEmailThread:{email_thread_id}"))
+            .unwrap()
+    );
+    assert!(mail_supplement.mail_facts().is_some());
     for (typename, id) in [
         ("GraphqlSoupProject", project_id),
         ("GraphqlSoupChat", chat_id),
