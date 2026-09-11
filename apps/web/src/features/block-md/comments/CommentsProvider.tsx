@@ -24,6 +24,7 @@ import {
 } from 'solid-js';
 import { reconcile } from 'solid-js/store';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useMarkdownCommentsQuery } from '../queries/markdown-comments';
 import { useDeleteComment, useDeleteNewComments } from './commentOperations';
 import { sortComments, useCommentRealtime } from './commentsResource';
 import type { Mark, ThreadMetadata, ThreadStore } from './commentType';
@@ -87,7 +88,9 @@ export const CommentsProvider: VoidComponent<{
 
   const commentState = markdownDocument.state.comments;
   const setCommentState = markdownDocument.state.setCommentState;
-  const commentThreadsData = markdownDocument.state.commentThreads;
+  const commentThreadsQuery = useMarkdownCommentsQuery(
+    markdownDocument.documentId
+  );
   useCommentRealtime();
 
   /** Communicates comment ready to block. */
@@ -266,9 +269,9 @@ export const CommentsProvider: VoidComponent<{
   // Map server comment threads to mark metadata once marks are initialized
   createEffect(() => {
     if (!commentState.commentMarksInitialized) return;
-    if (commentThreadsData.loading || commentThreadsData.error) return;
+    if (!commentThreadsQuery.isSuccess) return;
 
-    const commentThreads = commentThreadsData() ?? [];
+    const commentThreads = commentThreadsQuery.data ?? [];
     const validAnchorIds = new Set<string>();
 
     const mappedAnchors = commentThreads.map((commentThread) => {
@@ -335,10 +338,11 @@ export const CommentsProvider: VoidComponent<{
     if (!rawId) return;
 
     if (!commentState.commentMarksInitialized) return;
+    if (!commentThreadsQuery.isSuccess) return;
     const commentId = Number(rawId);
     if (isNaN(commentId)) return;
 
-    const commentThreads = commentThreadsData() ?? [];
+    const commentThreads = commentThreadsQuery.data ?? [];
     const targetThread = commentThreads.find((thread) =>
       thread.comments.some((comment) => comment.commentId === commentId)
     );

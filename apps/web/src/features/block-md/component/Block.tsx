@@ -80,7 +80,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const instructionsMdId = useInstructionsMdIdQuery();
   const isInstructions = () =>
     instructionsMdId.isSuccess && documentId === instructionsMdId.data;
-  const markdownState = createMarkdownDocumentState(documentId);
+  const markdownState = createMarkdownDocumentState();
   const { setRevisions, setRewriting } = markdownState.rewrite;
   createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: markdownState.params.navigate,

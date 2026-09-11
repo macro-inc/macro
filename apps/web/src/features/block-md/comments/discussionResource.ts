@@ -2,6 +2,7 @@ import { compareDateAsc } from '@core/util/date';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import type { CreateCommentRequestMentions } from '@service-storage/generated/schemas/createCommentRequestMentions';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useMarkdownCommentsQuery } from '../queries/markdown-comments';
 import {
   sortComments,
   useCreateHighlightCommentResource,
@@ -19,9 +20,10 @@ function isDiscussionThread(ct: CommentThread): boolean {
 }
 
 export function useDiscussionThreads() {
-  const data = useMarkdownDocument().state.commentThreads;
+  const markdownDocument = useMarkdownDocument();
+  const commentsQuery = useMarkdownCommentsQuery(markdownDocument.documentId);
   return () => {
-    const threads = data() ?? [];
+    const threads = commentsQuery.isSuccess ? commentsQuery.data : [];
     return threads
       .filter(isDiscussionThread)
       .sort((a, b) => compareDateAsc(a.thread.createdAt, b.thread.createdAt));

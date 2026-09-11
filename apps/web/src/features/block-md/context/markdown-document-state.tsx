@@ -4,15 +4,13 @@ import type {
   GenerateMenuOpen,
 } from '@core/component/LexicalMarkdown/plugins';
 import { createParamsState } from '@core/component/ParamsProvider';
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
-import { createResource, createSignal } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type {
   CommentStore,
   MarkStore,
   ThreadStore,
 } from '../comments/commentType';
-import { fetchMarkdownComments } from '../queries/markdown-comments';
 import {
   type FindAndReplaceState,
   initialFindAndReplaceState,
@@ -31,7 +29,7 @@ type MarkdownCommentsState = {
   highlightedCommentThreads: number[];
 };
 
-export function createMarkdownDocumentState(documentId: string) {
+export function createMarkdownDocumentState() {
   const params = createParamsState();
   const [md, setMd] = createStore<MdData>({});
   const [error, setError] = createSignal<MarkdownEditorErrors | null>(null);
@@ -59,10 +57,6 @@ export function createMarkdownDocumentState(documentId: string) {
     commentMarksInitialized: false,
     highlightedCommentThreads: [],
   });
-  const [commentThreads, commentThreadActions] = createResource<
-    CommentThread[],
-    string
-  >(() => (md.editor ? documentId : undefined), fetchMarkdownComments);
 
   return {
     params,
@@ -94,8 +88,6 @@ export function createMarkdownDocumentState(documentId: string) {
     },
     comments,
     setCommentState,
-    commentThreads,
-    commentThreadActions,
   };
 }
 

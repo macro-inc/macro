@@ -174,7 +174,7 @@ async function ingestS3Snapshot(
 export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
   const [surfaceElement, setSurfaceElement] = createSignal<HTMLElement>();
 
-  const state = props.state ?? createMarkdownDocumentState(props.documentId);
+  const state = props.state ?? createMarkdownDocumentState();
 
   const context: MarkdownDocumentContextValue = {
     documentId: () => props.documentId,

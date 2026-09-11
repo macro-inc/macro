@@ -12,8 +12,9 @@ import type { DeleteCommentRequest } from '@service-storage/generated/schemas/de
 import type { DeleteCommentResponse } from '@service-storage/generated/schemas/deleteCommentResponse';
 import type { EditCommentRequest } from '@service-storage/generated/schemas/editCommentRequest';
 import type { EditCommentResponse } from '@service-storage/generated/schemas/editCommentResponse';
-import { batch } from 'solid-js';
+import { useQueryClient } from '@tanstack/solid-query';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { markdownCommentKeys } from '../queries/markdown-comments';
 import type { MarkId, ThreadMetadata } from './commentType';
 
 export const sortComments = (a: Comment, b: Comment) => {
@@ -28,16 +29,17 @@ export const sortComments = (a: Comment, b: Comment) => {
 };
 
 function useHandleCreateComment() {
-  const { mutate: mutateCommentThreads } =
-    useMarkdownDocument().state.commentThreadActions;
+  const documentId = useMarkdownDocument().documentId();
+  const queryClient = useQueryClient();
 
-  return async (response: CreateCommentResponse) => {
+  return (response: CreateCommentResponse) => {
     const commentThread: CommentThread = {
       thread: response.thread,
       comments: response.comments,
     };
-    batch(() => {
-      mutateCommentThreads((prev = []) => {
+    queryClient.setQueryData<CommentThread[]>(
+      markdownCommentKeys.document(documentId).queryKey,
+      (prev = []) => {
         let mutatedExistingThread = false;
         const out: CommentThread[] = [];
         for (const thread of prev) {
@@ -52,8 +54,8 @@ function useHandleCreateComment() {
           out.push(commentThread);
         }
         return out;
-      });
-    });
+      }
+    );
   };
 }
 
@@ -81,31 +83,34 @@ function useCreateComment() {
 }
 
 function useHandleEditComment() {
-  const { mutate: mutateCommentThreads } =
-    useMarkdownDocument().state.commentThreadActions;
+  const documentId = useMarkdownDocument().documentId();
+  const queryClient = useQueryClient();
 
-  return async (response: EditCommentResponse) => {
-    mutateCommentThreads((prev = []) => {
-      const out: CommentThread[] = [];
-      for (const thread of prev) {
-        if (thread.thread.threadId === response.threadId) {
-          const commentThread = {
-            thread: thread.thread,
-            comments: thread.comments.map((comment) => {
-              if (comment.commentId === response.commentId) {
-                const editedComment: Comment = response;
-                return editedComment;
-              }
-              return comment;
-            }),
-          };
-          out.push(commentThread);
-        } else {
-          out.push(thread);
+  return (response: EditCommentResponse) => {
+    queryClient.setQueryData<CommentThread[]>(
+      markdownCommentKeys.document(documentId).queryKey,
+      (prev = []) => {
+        const out: CommentThread[] = [];
+        for (const thread of prev) {
+          if (thread.thread.threadId === response.threadId) {
+            const commentThread = {
+              thread: thread.thread,
+              comments: thread.comments.map((comment) => {
+                if (comment.commentId === response.commentId) {
+                  const editedComment: Comment = response;
+                  return editedComment;
+                }
+                return comment;
+              }),
+            };
+            out.push(commentThread);
+          } else {
+            out.push(thread);
+          }
         }
+        return out;
       }
-      return out;
-    });
+    );
   };
 }
 
@@ -132,38 +137,35 @@ export function useEditCommentResource() {
 }
 
 function useHandleDeleteComment() {
-  const { mutate: mutateCommentThreads } =
-    useMarkdownDocument().state.commentThreadActions;
+  const documentId = useMarkdownDocument().documentId();
+  const queryClient = useQueryClient();
 
-  return async (response: DeleteCommentResponse) => {
-    return batch(() => {
-      if (response.thread.deleted) {
-        mutateCommentThreads((prev = []) =>
-          prev.filter((t) => t.thread.threadId !== response.thread.threadId)
-        );
-        return {
-          threadDeleted: true,
-        };
-      } else {
-        mutateCommentThreads((prev = []) => {
-          const out: CommentThread[] = [];
-          for (const commentThread of prev) {
-            if (commentThread.thread.threadId === response.thread.threadId) {
-              const comments = commentThread.comments.filter(
-                (c) => c.commentId !== response.commentId
-              );
-              out.push({ thread: commentThread.thread, comments });
-            } else {
-              out.push(commentThread);
-            }
+  return (response: DeleteCommentResponse) => {
+    const threadDeleted = response.thread.deleted;
+    queryClient.setQueryData<CommentThread[]>(
+      markdownCommentKeys.document(documentId).queryKey,
+      (prev = []) => {
+        if (threadDeleted) {
+          return prev.filter(
+            (thread) => thread.thread.threadId !== response.thread.threadId
+          );
+        }
+
+        const out: CommentThread[] = [];
+        for (const commentThread of prev) {
+          if (commentThread.thread.threadId === response.thread.threadId) {
+            const comments = commentThread.comments.filter(
+              (comment) => comment.commentId !== response.commentId
+            );
+            out.push({ thread: commentThread.thread, comments });
+          } else {
+            out.push(commentThread);
           }
-          return out;
-        });
-        return {
-          threadDeleted: false,
-        };
+        }
+        return out;
       }
-    });
+    );
+    return { threadDeleted };
   };
 }
 
