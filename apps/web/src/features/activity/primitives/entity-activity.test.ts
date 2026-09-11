@@ -13,7 +13,7 @@ afterEach(() => {
   for (const dispose of disposals.splice(0)) dispose();
 });
 
-function setup(entityType: 'DOCUMENT' | 'USER' = 'DOCUMENT') {
+function setup(entityType: 'DOCUMENT' | 'USER' | 'AGENT_SESSION' = 'DOCUMENT') {
   const context = createMockActivityContext();
   let state!: EntityActivityState;
   const dispose = createRoot((rootDispose) => {
@@ -76,5 +76,10 @@ describe('createEntityActivityState', () => {
     const { state, graphql } = setup('USER');
     expect(state.isEnabled()).toBe(false);
     expect(graphql.pending).toHaveLength(0);
+  });
+
+  it('is enabled for agent sessions', () => {
+    const { state } = setup('AGENT_SESSION');
+    expect(state.isEnabled()).toBe(true);
   });
 });

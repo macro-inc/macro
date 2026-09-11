@@ -35,7 +35,7 @@ schema = ["dep:utoipa", "agent_runtime_protocol/utoipa", "macro_user_id/schema"]
 test-utils = ["dep:mockall", "agent_fold/test-utils"]
 
 [dependencies]
-
+activity = { path = "../activity", default-features = false }
 agent-client-protocol = { workspace = true }
 harness_id = { path = "../harness_id" }
 agent = { path = "../agent", optional = true }

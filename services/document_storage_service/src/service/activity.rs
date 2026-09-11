@@ -6,6 +6,7 @@
 //! machinery lives in the `activity` crate. These arms are pure wiring.
 
 use activity::Ingest;
+use agent_session::domain::events::AgentSessionLifecycleMacroEvent;
 use call::domain::events::CallMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use chat::domain::events::ChatMacroEvent;
@@ -28,6 +29,7 @@ mod source {
             EmailMacroEvent,
             PropertyMacroEvent,
             CallMacroEvent,
+            AgentSessionLifecycleMacroEvent,
     );
 }
 pub(crate) use source::ActivitySourceEvent;
@@ -48,5 +50,6 @@ pub(crate) fn ingest(event: &ActivitySourceEvent) -> Ingest {
         ActivitySourceEvent::EmailMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::PropertyMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::CallMacroEvent(e) => arm(e.event()),
+        ActivitySourceEvent::AgentSessionLifecycleMacroEvent(e) => arm(e.event()),
     }
 }

@@ -28,6 +28,7 @@ function decodeToolEntityType(raw: string): ActivityEntityType {
     .with('email_thread', () => 'email-thread' as const)
     .with('channel', () => 'channel' as const)
     .with('user', () => 'user' as const)
+    .with('agent_session', () => 'agent-session' as const)
     .otherwise((value) => ({ kind: 'unsupported' as const, raw: value }));
 }
 

@@ -16,6 +16,13 @@ vi.mock('@property/editor/hooks/useAllProperties', () => ({
   useAllProperties: () => () => [],
 }));
 vi.mock('@property/hooks', () => ({ usePropertyEntityDisplay: () => ({}) }));
+vi.mock('@queries/preview', () => ({
+  useItemPreview: () => [() => undefined],
+  isAccessiblePreviewItem: () => false,
+}));
+vi.mock('@core/component/EntityIcon', () => ({
+  EntityIcon: () => null,
+}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({}),
 }));
