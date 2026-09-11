@@ -1,8 +1,10 @@
+import { analytics } from '@app/lib/analytics';
 import {
   ThrownResultError,
   thrownResultErrorHasCode,
   throwOnErr,
 } from '@core/util/result';
+import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import {
   type ApiChannelMessage,
   type ApiResolvedChannelMessage,
@@ -29,6 +31,7 @@ import {
   captureThreadPreviewReplySnapshot,
   insertReplyIntoThreadPreview,
   removeReplyFromThreadPreview,
+  replaceReplyCreatedAtInThreadPreview,
   replaceReplyIdInThreadPreview,
   replaceReplyReactionsInThreadPreview,
   restoreReplyToThreadPreview,
@@ -58,6 +61,122 @@ type ChannelMessagesPageParam = {
   next_cursor: string | null;
   previous_cursor: string | null;
 };
+
+export type ChannelMessagesLoadReason =
+  | 'watermark'
+  | 'list_ahead'
+  | 'no_cache'
+  | 'cache_not_at_latest'
+  | 'load_around'
+  | 'delta_overflow'
+  | 'catch_up_error';
+
+export type ChannelWatermark =
+  | { kind: 'no_cache' }
+  | { kind: 'cache_not_at_latest' }
+  | {
+      kind: 'ready';
+      after: string;
+      firstPage: ChannelMessagesPage;
+      listAhead: boolean;
+    };
+
+function isNewerCreatedAt(candidate: string, current: string): boolean {
+  const candidateMs = Date.parse(candidate);
+  const currentMs = Date.parse(current);
+  if (candidateMs !== currentMs) {
+    return candidateMs > currentMs;
+  }
+  return candidate > current;
+}
+
+function newestCreatedAt(items: ApiChannelMessage[]): string | null {
+  let newest: string | null = null;
+  for (const item of items) {
+    if (newest === null || isNewerCreatedAt(item.created_at, newest)) {
+      newest = item.created_at;
+    }
+  }
+  return newest;
+}
+
+export function readChannelWatermark(channelId: string): ChannelWatermark {
+  const cached = queryClient.getQueryData<ChannelMessagesData>(
+    getChannelMessagesQueryKey(channelId, null)
+  );
+  const firstPage = cached?.pages[0];
+  if (!cached || !firstPage || firstPage.items.length === 0) {
+    return { kind: 'no_cache' };
+  }
+  if (cached.pageParams[0] != null || firstPage.previous_cursor) {
+    return { kind: 'cache_not_at_latest' };
+  }
+  const after = newestCreatedAt(cached.pages.flatMap((page) => page.items));
+  if (!after) {
+    return { kind: 'no_cache' };
+  }
+  const cachedIds = new Set(
+    cached.pages.flatMap((page) => page.items.map((item) => item.id))
+  );
+  const list = queryClient.getQueryData<ApiChannelWithLatest[]>(
+    channelKeys.listChannels.queryKey
+  );
+  const latestId = list?.find((channel) => channel.id === channelId)
+    ?.latest_non_thread_message?.message_id;
+  return {
+    kind: 'ready',
+    after,
+    firstPage,
+    listAhead: latestId != null && !cachedIds.has(latestId),
+  };
+}
+
+export function mergeCatchUpPage(
+  delta: ChannelMessagesPage,
+  firstPage: ChannelMessagesPage
+): ChannelMessagesPage {
+  const deltaIds = new Set(delta.items.map((item) => item.id));
+  const items = [
+    ...delta.items,
+    ...firstPage.items.filter((item) => !deltaIds.has(item.id)),
+  ];
+  items.sort((left, right) => {
+    if (isNewerCreatedAt(left.created_at, right.created_at)) return -1;
+    if (isNewerCreatedAt(right.created_at, left.created_at)) return 1;
+    return 0;
+  });
+  return {
+    items,
+    next_cursor: firstPage.next_cursor,
+    previous_cursor: null,
+  };
+}
+
+function trackChannelMessagesLoad(payload: {
+  channelId: string;
+  path: 'catch_up' | 'full';
+  reason: ChannelMessagesLoadReason;
+  after?: string;
+}) {
+  analytics.track('channel_messages_load', payload);
+}
+
+async function fetchChannelMessagesPage(
+  channelId: string,
+  pageParam: ChannelMessagesPageParam | null,
+  loadAroundMessageId: string | null
+): Promise<ChannelMessagesPage> {
+  const page = await throwOnErr(async () =>
+    storageServiceClient.getChannelMessages({
+      channel_id: channelId,
+      limit: pageParam ? 100 : 50,
+      next_cursor: pageParam?.next_cursor ?? null,
+      previous_cursor: pageParam?.previous_cursor ?? null,
+      load_around_message_id: !pageParam ? loadAroundMessageId : null,
+    })
+  );
+  return normalizeChannelMessagesPageSenders(page);
+}
 
 export function isMissingChannelMessageError(error: unknown): boolean {
   return (
@@ -100,17 +219,84 @@ export function channelMessagesQueryOptions(
     }: {
       pageParam: ChannelMessagesPageParam | null;
     }) => {
-      const page = await throwOnErr(
-        async () =>
-          await storageServiceClient.getChannelMessages({
-            channel_id: channelId,
-            limit: pageParam ? 100 : 50,
-            next_cursor: pageParam?.next_cursor ?? null,
-            previous_cursor: pageParam?.previous_cursor ?? null,
-            load_around_message_id: !pageParam ? loadAroundMessageId : null,
-          })
-      );
-      return normalizeChannelMessagesPageSenders(page);
+      if (pageParam) {
+        return fetchChannelMessagesPage(channelId, pageParam, null);
+      }
+      if (loadAroundMessageId) {
+        const page = await fetchChannelMessagesPage(
+          channelId,
+          null,
+          loadAroundMessageId
+        );
+        trackChannelMessagesLoad({
+          channelId,
+          path: 'full',
+          reason: 'load_around',
+        });
+        return page;
+      }
+      const watermark = readChannelWatermark(channelId);
+      if (watermark.kind !== 'ready') {
+        const page = await fetchChannelMessagesPage(channelId, null, null);
+        trackChannelMessagesLoad({
+          channelId,
+          path: 'full',
+          reason: watermark.kind,
+        });
+        return page;
+      }
+      try {
+        const delta = normalizeChannelMessagesPageSenders(
+          await throwOnErr(() =>
+            storageServiceClient.getChannelMessagesCatchUp({
+              channel_id: channelId,
+              after: watermark.after,
+              limit: 50,
+              next_cursor: null,
+              previous_cursor: null,
+            })
+          )
+        );
+        if (delta.next_cursor) {
+          const page = await fetchChannelMessagesPage(channelId, null, null);
+          trackChannelMessagesLoad({
+            channelId,
+            path: 'full',
+            reason: 'delta_overflow',
+            after: watermark.after,
+          });
+          return page;
+        }
+        const liveFirstPage = queryClient.getQueryData<ChannelMessagesData>(
+          getChannelMessagesQueryKey(channelId, null)
+        )?.pages[0];
+        const merged = mergeCatchUpPage(
+          delta,
+          liveFirstPage ?? watermark.firstPage
+        );
+        trackChannelMessagesLoad({
+          channelId,
+          path: 'catch_up',
+          reason: watermark.listAhead ? 'list_ahead' : 'watermark',
+          after: watermark.after,
+        });
+        return merged;
+      } catch (error) {
+        if (
+          thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+          thrownResultErrorHasCode(error, 'FORBIDDEN')
+        ) {
+          throw error;
+        }
+        const page = await fetchChannelMessagesPage(channelId, null, null);
+        trackChannelMessagesLoad({
+          channelId,
+          path: 'full',
+          reason: 'catch_up_error',
+          after: watermark.after,
+        });
+        return page;
+      }
     },
     initialPageParam: null as ChannelMessagesPageParam | null,
     getNextPageParam: (lastPage: ChannelMessagesPage) =>
@@ -315,6 +501,21 @@ export function replaceTopLevelMessageIdInChannelMessages(
   );
 }
 
+export function replaceTopLevelMessageCreatedAtInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  messageIds: readonly string[],
+  createdAt: string
+): ChannelMessagesData | undefined {
+  if (!data || messageIds.length === 0) return data;
+  const ids = new Set(messageIds);
+
+  return mapChannelMessagesItems(data, (message) =>
+    ids.has(message.id) && message.created_at !== createdAt
+      ? { ...message, created_at: createdAt }
+      : message
+  );
+}
+
 export function replaceTopLevelMessageReactionsInChannelMessages(
   data: ChannelMessagesData | undefined,
   messageId: string,
@@ -453,6 +654,25 @@ export function removeThreadReplyFromChannelMessages(
   return mapChannelMessagesItems(data, (message) => {
     if (message.id !== threadId) return message;
     const thread = removeReplyFromThreadPreview(message.thread, replyId);
+    return thread === message.thread ? message : { ...message, thread };
+  });
+}
+
+export function replaceThreadReplyCreatedAtInChannelMessages(
+  data: ChannelMessagesData | undefined,
+  threadId: string,
+  replyIds: readonly string[],
+  createdAt: string
+): ChannelMessagesData | undefined {
+  if (!data) return data;
+
+  return mapChannelMessagesItems(data, (message) => {
+    if (message.id !== threadId) return message;
+    const thread = replaceReplyCreatedAtInThreadPreview(
+      message.thread,
+      replyIds,
+      createdAt
+    );
     return thread === message.thread ? message : { ...message, thread };
   });
 }

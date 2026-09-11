@@ -5,6 +5,27 @@ export type ClientOptions = {
 };
 
 /**
+ * Filters for agent sessions.
+ */
+export type AgentSessionFilters = {
+    /**
+     * Agent session ids to filter by. Empty to include all accessible sessions.
+     */
+    ids?: Array<string>;
+    /**
+     * Opt this query into agent sessions at all. Agent sessions are off by
+     * default — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].
+     * Asking for specific `ids` or `owners` also opts in.
+     */
+    include?: boolean;
+    /**
+     * Filter by session owner. Examples: ['macro|user1@user.com']. Empty to
+     * include every owner.
+     */
+    owners?: Array<string>;
+};
+
+/**
  * Filters for canonical calendar-event entities.
  */
 export type CalendarEventFilters = {
@@ -1199,6 +1220,10 @@ export type EmptyResponse = {
  * a bundle of all of the filters for each entity type
  */
 export type EntityFilters = {
+    /**
+     * the bundled [AgentSessionFilters]
+     */
+    agent_session_filters?: AgentSessionFilters;
     /**
      * the bundled [CalendarEventFilters]
      */

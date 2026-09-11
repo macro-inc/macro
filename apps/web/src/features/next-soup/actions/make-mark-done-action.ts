@@ -38,6 +38,9 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   'mail-important',
   'mail-all',
   'mail-noise',
+  // Calendar lists invite threads from the "all" email view, so done rows
+  // stay in place and flip to the done state exactly like mail "All".
+  'mail-calendar',
   'mail-shared',
   // Completing a reminder is the whole point of the Reminders view: without
   // it the only way to clear one is to delete it. Done is listed too so a

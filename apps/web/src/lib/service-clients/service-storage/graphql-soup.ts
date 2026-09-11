@@ -1159,6 +1159,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
   const frecency = item.frecencyScore ?? 0;
 
   return match(item)
+    .with({ __typename: 'GraphqlSoupAgentSession' }, () => null)
     .with(
       { __typename: 'GraphqlSoupDocument' },
       (entity) =>

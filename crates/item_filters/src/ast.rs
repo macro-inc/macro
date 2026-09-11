@@ -2,10 +2,11 @@
 //! This is used to construct a strictly typed ast for the input filters, allowing consumers to have a logical represenation of the required operations
 
 use crate::{
-    CalendarEventFilters, CallFilters, ChannelFilters, ChannelThreadFilters, ChatFilters,
-    CrmCompanyFilters, DocumentFilters, EmailFilters, EntityFilters, ForeignEntityFilters,
-    ProjectFilters, PropertyFilter, ReminderFilters,
+    AgentSessionFilters, CalendarEventFilters, CallFilters, ChannelFilters, ChannelThreadFilters,
+    ChatFilters, CrmCompanyFilters, DocumentFilters, EmailFilters, EntityFilters,
+    ForeignEntityFilters, ProjectFilters, PropertyFilter, ReminderFilters,
     ast::{
+        agent_session::AgentSessionLiteral,
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
@@ -25,6 +26,8 @@ use serde::{Deserialize, Serialize};
 use std::{marker::PhantomData, sync::Arc};
 use thiserror::Error;
 
+/// contains the ast literal value for agent sessions
+pub mod agent_session;
 /// contains the ast literal value for calendar events
 pub mod calendar_event;
 /// contains the ast literal value for calls
@@ -226,6 +229,10 @@ pub struct EntityFilterAst {
     #[serde(default, rename = "remf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
     pub reminder_filter: LiteralTree<ReminderLiteral>,
+    /// the filters that should be applied to agent sessions
+    #[serde(default, rename = "asf")]
+    #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
+    pub agent_session_filter: LiteralTree<AgentSessionLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -277,6 +284,10 @@ impl EntityFilterAst {
             .map(Arc::new),
             reminder_filter: ReminderFilters::expand_ast(entity_filter.reminder_filters)?
                 .map(Arc::new),
+            agent_session_filter: AgentSessionFilters::expand_ast(
+                entity_filter.agent_session_filters,
+            )?
+            .map(Arc::new),
             properties_filter: Vec::<PropertyFilter>::expand_ast(entity_filter.property_filters)?
                 .map(Arc::new),
         }))
@@ -315,6 +326,7 @@ impl EntityFilterAst {
             crm_company_filter: None,
             foreign_entity_filter: None,
             reminder_filter: None,
+            agent_session_filter: None,
             properties_filter: None,
         }
     }
@@ -349,6 +361,7 @@ impl IsEmpty for EntityFilterAst {
             crm_company_filter,
             foreign_entity_filter,
             reminder_filter,
+            agent_session_filter,
             properties_filter,
         } = self;
         calendar_event_filter.is_none()
@@ -362,6 +375,7 @@ impl IsEmpty for EntityFilterAst {
             && crm_company_filter.is_none()
             && foreign_entity_filter.is_none()
             && reminder_filter.is_none()
+            && agent_session_filter.is_none()
             && properties_filter.is_none()
     }
 }

@@ -30,11 +30,11 @@ export function EmailFilterDrawer() {
       <Accordion
         multiple
         collapsible
-        defaultValue={[INBOX_SECTION_ID, filters.groups[0].id]}
+        defaultValue={[INBOX_SECTION_ID, filters.groups()[0].id]}
       >
         <div class="flex flex-col gap-3">
           <EmailInboxDrawerSection value={INBOX_SECTION_ID} />
-          <For each={filters.groups}>
+          <For each={filters.groups()}>
             {(group) => (
               <MobileFilterDrawer.Section
                 value={group.id}

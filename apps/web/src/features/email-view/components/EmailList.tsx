@@ -36,6 +36,7 @@ import {
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
@@ -89,8 +90,10 @@ export function EmailList(props: EmailListProps) {
   const { state, setOpenThreadId } = useEmailView();
   const panel = useSplitPanelOrThrow();
 
+  const tagSets = useTagSets();
+  const tagSetsReady = useTagSetsReady();
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
-    useEmailDataSource(state)
+    useEmailDataSource(state, { tagSets, tagSetsReady })
   );
 
   function openEntity(

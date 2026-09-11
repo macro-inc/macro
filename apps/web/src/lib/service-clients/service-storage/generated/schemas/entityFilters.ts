@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { AgentSessionFilters } from './agentSessionFilters';
 import type { CalendarEventFilters } from './calendarEventFilters';
 import type { CallFilters } from './callFilters';
 import type { ChannelFilters } from './channelFilters';
@@ -22,6 +23,8 @@ import type { TagFilterMode } from './tagFilterMode';
  * a bundle of all of the filters for each entity type
  */
 export interface EntityFilters {
+  /** the bundled [AgentSessionFilters] */
+  agent_session_filters?: AgentSessionFilters;
   /** the bundled [CalendarEventFilters] */
   calendar_event_filters?: CalendarEventFilters;
   /** the bundled [CallFilters] */

@@ -10,23 +10,46 @@ import {
   MACRO_AGENT_HANDLE,
   MACRO_AGENT_NAME,
 } from '@core/constant/macroAgent';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { idToDisplayName } from '@core/user/util';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
-import CpuIcon from '@phosphor/cpu.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
+import {
+  useAgentSessionControlMutation,
+  useCreateAgentSessionMutation,
+} from '@queries/agent-session/mutations';
 import { useAgentsQuery } from '@queries/agents/agents';
+import { useAgentModelsQuery } from '@queries/agents/models';
 import {
   useCursorApiKeyStatusQuery,
   useCursorModelsQuery,
 } from '@queries/auth/cursor-api-key';
-import { Avatar, Button, badgeTriggerClasses, cn, Dropdown, Hotkey } from '@ui';
-import { createSignal, For, onMount, Show } from 'solid-js';
-import { startPendingSession } from '../context/pending-session';
+import { useNavigate } from '@solidjs/router';
 import {
-  harnessDisplayName,
+  Button,
+  badgeTriggerClasses,
+  cn,
+  Dropdown,
+  SendButton,
+  Surface,
+} from '@ui';
+import {
+  createMemo,
+  createSignal,
+  For,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { createRecentAgentSelections } from '../context/recent-agent-selections';
+import { AgentPicker } from './AgentPicker';
+import {
+  agentRuntimeDescription,
   isManagedHarness,
   type ModelOption,
   type ModelShortlist,
@@ -52,11 +75,8 @@ const PILL_CLASS = badgeTriggerClasses({
   variant: 'outline',
   size: 'sm',
   class:
-    'max-w-64 gap-1.5 pl-1.5 pr-2 text-ink-muted data-expanded:bg-hover data-expanded:text-ink',
+    'max-w-64 gap-1.5 px-2 text-ink-muted data-expanded:bg-hover data-expanded:text-ink',
 });
-
-/** Long harness catalogs scroll instead of growing the menu without bound. */
-const MENU_LIST_CLASS = 'max-h-72 overflow-y-auto overscroll-contain';
 
 export interface ComposeAgentSessionProps {
   /** Open the new session in a fresh split instead of the current one. */
@@ -65,27 +85,55 @@ export interface ComposeAgentSessionProps {
 
 /** Task-style preflight composer for a new managed agent session. */
 export function ComposeAgentSession(props: ComposeAgentSessionProps) {
+  return (
+    <Suspense>
+      <ComposeAgentSessionContent {...props} />
+    </Suspense>
+  );
+}
+
+function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   const splitPanel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
+  const { openSettings } = useSettingsState();
+  const navigate = useNavigate();
   const agentsQuery = useAgentsQuery();
   const cursorStatus = useCursorApiKeyStatusQuery();
   const cursorConnected = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
+  const cursorNeedsConnection = () =>
+    cursorStatus.isSuccess &&
+    !cursorStatus.isPlaceholderData &&
+    !cursorStatus.data.registered;
   const cursorModels = useCursorModelsQuery(cursorConnected);
+  const macroDefaults = useAgentModelsQuery(() => ({ harness: 'in-memory' }));
+  const cursorDefaults = useAgentModelsQuery(
+    () => ({ harness: 'cursor' }),
+    cursorConnected
+  );
+  const createSessionMutation = useCreateAgentSessionMutation();
+  const controlMutation = useAgentSessionControlMutation();
+  const userId = useUserId();
+  const recentAgents = createRecentAgentSelections(userId());
   const [prompt, setPrompt] = createSignal('');
   const [personaId, setPersonaId] = createSignal(MACRO_PERSONA_ID);
   const [modelOverride, setModelOverride] = createSignal('');
   const [submitting, setSubmitting] = createSignal(false);
+  const [sessionId, setSessionId] = createSignal<string>();
+  const [error, setError] = createSignal<string>();
+  let appliedModel: string | undefined;
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
-  let promptRef: HTMLTextAreaElement | undefined;
 
-  // The two first-party coders lead, then the user's own personas.
-  const personas = (): PersonaOption[] => [
+  // The two first-party agents lead, then the user's own personas.
+  const personas = createMemo<PersonaOption[]>(() => [
     {
       id: MACRO_PERSONA_ID,
       name: MACRO_AGENT_NAME,
       handle: MACRO_AGENT_HANDLE,
       harness: 'in-memory',
+      defaultModel: macroDefaults.isSuccess
+        ? (macroDefaults.data.currentModel ?? undefined)
+        : undefined,
     },
     {
       id: CURSOR_BOT_ID,
@@ -94,12 +142,15 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
       handle: CURSOR_BOT_HANDLE,
       harness: 'cursor',
       defaultModel: cursorStatus.isSuccess
-        ? (cursorStatus.data.defaultModelId ?? undefined)
+        ? (cursorStatus.data.defaultModelId ??
+          (cursorDefaults.isSuccess
+            ? (cursorDefaults.data.currentModel ?? undefined)
+            : undefined))
         : undefined,
       unavailableReason: cursorConnected()
         ? undefined
         : 'Connect Cursor in Settings → Harness',
-      unavailableLabel: cursorConnected() ? undefined : 'Not connected',
+      connectLabel: cursorNeedsConnection() ? 'Connect Cursor' : undefined,
     },
     ...(agentsQuery.isSuccess ? agentsQuery.data : [])
       // Only runtimes Macro provisions can be started from here; a persona on
@@ -110,13 +161,27 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
         botId: agent.bot.id,
         name: agent.bot.name,
         handle: agent.bot.handle,
+        description: agent.bot.description ?? undefined,
         avatarUrl: agent.bot.avatar_url ?? undefined,
         harness: agent.harness,
         defaultModel: agent.default_model,
+        ownerId:
+          agent.bot.owner?.type === 'user'
+            ? agent.bot.owner.user_id
+            : (agent.bot.created_by ?? undefined),
       })),
-  ];
+  ]);
   const selectedPersona = () =>
     personas().find((persona) => persona.id === personaId()) ?? personas()[0];
+  const runtimeDescription = () => {
+    const persona = selectedPersona();
+    return agentRuntimeDescription(
+      persona,
+      persona?.harness === 'macrod' && persona.ownerId
+        ? idToDisplayName(persona.ownerId)
+        : undefined
+    );
+  };
   const availableModels = (): ModelOption[] => {
     if (selectedPersona()?.harness === 'cursor') {
       return cursorModels.isSuccess
@@ -131,26 +196,97 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
   };
   const modelShortlist = () =>
     shortlistModelOptions(selectedPersona(), availableModels());
+  const modelsForPersona = (persona: PersonaOption): ModelOption[] => {
+    const defaults =
+      persona.harness === 'cursor' ? cursorDefaults : macroDefaults;
+    const models =
+      persona.harness === 'cursor'
+        ? cursorModels.isSuccess
+          ? cursorModels.data.models.map(({ id, displayName }) => ({
+              id,
+              name: displayName,
+            }))
+          : []
+        : IN_MEMORY_MODELS;
+    return defaults.isSuccess
+      ? [
+          ...models,
+          ...defaults.data.models.map(({ id, name }) => ({ id, name })),
+        ]
+      : models;
+  };
 
   const close = () => splitPanel.handle.close();
+  const openCreateAgent = () => {
+    if (submitting() || sessionId()) return;
+    close();
+    navigate('/settings/agents?createAgent=true');
+  };
+  const connectPersona = (id: string) => {
+    if (submitting() || sessionId()) return;
+    const persona = personas().find((item) => item.id === id);
+    if (persona?.harness !== 'cursor' || !persona.connectLabel) return;
+    close();
+    openSettings('Harness');
+  };
   const setPersona = (id: string) => {
+    if (submitting() || sessionId()) return;
     setPersonaId(id);
     setModelOverride('');
   };
-  const createSession = () => {
-    if (submitting()) return;
-    setSubmitting(true);
-    const persona = selectedPersona();
-    const placeholder = startPendingSession({
-      botId: persona?.botId,
-      prompt: prompt().trim() || undefined,
-      modelOverride: modelOverride() || undefined,
-    });
+  const openSession = (id: string) => {
     close();
     openWithSplit(
-      { type: 'agent', id: placeholder },
+      { type: 'agent', id },
       { referredFrom: 'launcher', preferNewSplit: props.preferNewSplit }
     );
+  };
+  const createSession = async () => {
+    const persona = selectedPersona();
+    if (submitting() || !persona || persona.unavailableReason) return;
+    setSubmitting(true);
+    setError(undefined);
+    const model = modelOverride();
+    const firstPrompt = prompt().trim();
+    let id = sessionId();
+    let failureMessage =
+      'Could not create the agent session. Please try again.';
+    try {
+      if (!id) {
+        const created = await createSessionMutation.mutateAsync({
+          ...(persona.botId ? { botId: persona.botId } : {}),
+        });
+        id = created.session.id;
+        // Keep the real session even if a subsequent control request fails.
+        // Retrying setup must not create a second session.
+        setSessionId(id);
+        recentAgents.remember(persona.id);
+      }
+      if (model && model !== appliedModel) {
+        failureMessage =
+          'Session created, but the model could not be changed. Retry or open the session.';
+        await controlMutation.mutateAsync({
+          sessionId: id,
+          request: { type: 'setModel', model },
+        });
+        appliedModel = model;
+      }
+      if (firstPrompt) {
+        failureMessage =
+          'Session created, but the prompt could not be sent. Retry or open the session.';
+        await controlMutation.mutateAsync({
+          sessionId: id,
+          request: { type: 'prompt', prompt: firstPrompt },
+        });
+      }
+    } catch (cause) {
+      console.error(failureMessage, cause);
+      setError(failureMessage);
+      return;
+    } finally {
+      setSubmitting(false);
+    }
+    openSession(id);
   };
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope(
@@ -160,17 +296,13 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
   onMount(() => {
     const container = containerRef();
     if (container) attachHotkeys(container);
-    // The dialog's focus scope lands on its first focusable child once the
-    // popover has mounted; take the prompt after that so typing can start
-    // immediately.
-    requestAnimationFrame(() => promptRef?.focus());
   });
   registerHotkey({
     hotkey: 'cmd+enter',
     scopeId: hotkeyScope,
     description: 'Create agent session',
     keyDownHandler: () => {
-      createSession();
+      void createSession();
       return true;
     },
     runWithInputFocused: true,
@@ -178,36 +310,69 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
 
   return (
     <div
-      class="portal-scope relative flex h-full max-h-full min-h-0 flex-col gap-4 p-4"
+      class="portal-scope relative flex max-h-full min-h-0 min-w-0 flex-col overflow-y-auto px-4 pt-8 pb-10 sm:px-9 sm:pt-10 sm:pb-12"
       tabIndex={-1}
       ref={setContainerRef}
       data-agent-session-composer
     >
-      <div class="flex items-center gap-1">
-        <div class="flex flex-1 items-center gap-2 px-2 text-xs font-medium text-ink-extra-muted">
-          <RobotIcon class="size-3.5" />
-          New agent session
-        </div>
+      <div class="mb-8 shrink-0 text-center">
+        <h1 class="text-3xl/9 font-medium text-ink">Start a session</h1>
         <Show when={splitPanel.handle.isPopover()}>
           <Button
             onMouseDown={close}
             tabIndex={-1}
             tooltip="Close"
             size="icon-sm"
+            class="absolute top-3 right-3"
           >
             <XIcon />
           </Button>
         </Show>
       </div>
 
-      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <Surface
+        class="mb-3 flex h-auto shrink-0 items-stretch gap-2 rounded-xl p-1.5"
+        depth={1}
+        solid
+      >
+        <div class="min-w-0 flex-1">
+          <AgentPicker
+            personas={personas()}
+            recentIds={recentAgents.ids()}
+            selected={selectedPersona()}
+            loading={agentsQuery.isPending}
+            error={agentsQuery.isError}
+            disabled={submitting() || !!sessionId()}
+            onSelect={setPersona}
+            onConnect={connectPersona}
+          />
+        </div>
+        <Button
+          variant="accent"
+          size="sm"
+          class="h-auto shrink-0 gap-1.5 rounded-lg px-3"
+          disabled={submitting() || !!sessionId()}
+          onClick={openCreateAgent}
+        >
+          <PlusIcon class="size-4" />
+          Create agent
+        </Button>
+      </Surface>
+
+      <Surface
+        role="group"
+        aria-label="New session prompt"
+        class="flex h-auto min-h-36 shrink-0 flex-col rounded-xl touch:rounded-2xl"
+        depth={1}
+        solid
+      >
         <textarea
-          ref={promptRef}
-          rows={4}
+          rows={3}
           aria-label="Task for the agent"
-          class="ph-no-capture min-h-24 w-full grow resize-none bg-transparent px-2 text-xl/7 font-medium text-ink outline-none placeholder:text-ink-placeholder"
-          placeholder="Give your agent a prompt..."
+          class="ph-no-capture min-h-20 w-full flex-1 resize-none bg-transparent px-4 pt-4 pb-2 text-sm/6 text-ink outline-none placeholder:text-ink-placeholder touch:text-base"
+          placeholder={`What would you like ${selectedPersona()?.name ?? MACRO_AGENT_NAME} to work on?`}
           value={prompt()}
+          disabled={submitting()}
           onInput={(event) => setPrompt(event.currentTarget.value)}
           onKeyDown={(event) => {
             // Escape inside the prompt steps out to the dialog first, matching
@@ -219,158 +384,63 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
             }
           }}
         />
-      </div>
 
-      <PersonaGrid
-        personas={personas()}
-        selected={selectedPersona()}
-        loading={agentsQuery.isPending}
-        error={agentsQuery.isError}
-        onSelect={setPersona}
-      />
+        <Show when={error()}>
+          {(message) => (
+            <div role="alert" class="px-2 text-sm text-negative">
+              {message()}
+              <Show when={sessionId()}>
+                {(id) => (
+                  <Button
+                    disabled={submitting()}
+                    onClick={() => openSession(id())}
+                  >
+                    Open session
+                  </Button>
+                )}
+              </Show>
+            </div>
+          )}
+        </Show>
 
-      <div class="flex shrink-0 flex-wrap items-end justify-between gap-2">
-        <div class="m-px flex min-h-7 flex-wrap items-center gap-2 text-sm">
-          <ModelPicker
-            persona={selectedPersona()}
-            available={availableModels()}
-            shortlist={modelShortlist()}
-            value={modelOverride()}
-            loading={
-              selectedPersona()?.harness === 'cursor' && cursorModels.isPending
+        <div class="mt-auto flex shrink-0 items-center justify-between gap-2 px-4 pt-1 pb-3">
+          <div class="m-px flex min-h-7 min-w-0 flex-wrap items-center gap-2 text-sm">
+            <Suspense>
+              <ModelPicker
+                persona={selectedPersona()}
+                available={modelsForPersona(selectedPersona())}
+                shortlist={modelShortlist()}
+                value={modelOverride()}
+                loading={
+                  selectedPersona()?.harness === 'cursor' &&
+                  cursorModels.isPending
+                }
+                disabled={submitting() || !!sessionId()}
+                onSelect={setModelOverride}
+              />
+            </Suspense>
+          </div>
+
+          <SendButton
+            type="button"
+            aria-label={
+              submitting() ? 'Starting…' : error() ? 'Retry' : 'Start session'
             }
-            onSelect={setModelOverride}
+            tooltip={error() ? 'Retry' : 'Start session'}
+            shortcut="cmd+enter"
+            pending={submitting()}
+            disabled={submitting() || !!selectedPersona()?.unavailableReason}
+            onClick={() => void createSession()}
           />
         </div>
-
-        <Button
-          type="button"
-          variant="accent"
-          depth={3}
-          class="gap-3 rounded-lg border-0"
-          disabled={submitting()}
-          onClick={createSession}
-        >
-          {submitting() ? 'Creating…' : 'Create Session'}
-          <Hotkey shortcut="cmd+enter" theme="current" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Personas as a visible radio grid rather than a menu: the user sees every
- * choice without opening anything. Cards auto-fit the row and stretch to
- * fill it, so the grid is even at any count. Arrow keys move the selection;
- * Tab lands on the current choice and moves on.
- */
-function PersonaGrid(props: {
-  personas: PersonaOption[];
-  selected: PersonaOption | undefined;
-  loading: boolean;
-  error: boolean;
-  onSelect: (id: string) => void;
-}) {
-  let groupRef: HTMLDivElement | undefined;
-  const selectable = () =>
-    props.personas.filter((persona) => !persona.unavailableReason);
-
-  const moveSelection = (event: KeyboardEvent, step: 1 | -1) => {
-    const options = selectable();
-    const index = options.findIndex(
-      (persona) => persona.id === props.selected?.id
-    );
-    const next = options[(index + step + options.length) % options.length];
-    if (!next) return;
-    event.preventDefault();
-    props.onSelect(next.id);
-    queueMicrotask(() => {
-      groupRef
-        ?.querySelector<HTMLElement>(`[data-persona-id="${next.id}"]`)
-        ?.focus();
-    });
-  };
-
-  return (
-    <section class="flex shrink-0 flex-col gap-2 px-2" aria-label="Agent">
-      <div class="flex items-center justify-between text-xxs font-medium uppercase text-ink-extra-muted">
-        <span>Agent</span>
-        <Show when={props.loading}>
-          <span class="normal-case">Loading yours…</span>
-        </Show>
-      </div>
-      <div
-        ref={groupRef}
-        role="radiogroup"
-        aria-label="Agent"
-        class="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2"
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-            moveSelection(event, 1);
-          } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-            moveSelection(event, -1);
-          }
-        }}
+      </Surface>
+      <p
+        aria-live="polite"
+        class="mt-7 shrink-0 text-center text-sm text-ink-muted"
       >
-        <For each={props.personas}>
-          {(persona) => {
-            const selected = () => persona.id === props.selected?.id;
-            const disabled = () => persona.unavailableReason !== undefined;
-            return (
-              <button
-                type="button"
-                role="radio"
-                aria-checked={selected()}
-                aria-disabled={disabled()}
-                data-persona-id={persona.id}
-                tabIndex={selected() ? 0 : -1}
-                title={persona.unavailableReason}
-                class={cn(
-                  'flex h-12 min-w-0 items-center gap-2.5 rounded-lg border px-2.5 text-left outline-none transition-colors',
-                  'focus-visible:ring-2 focus-visible:ring-accent/30',
-                  selected()
-                    ? 'border-accent bg-accent-bg text-ink'
-                    : 'border-edge-muted bg-surface-2 text-ink-muted hover:bg-hover hover:text-ink',
-                  disabled() &&
-                    'cursor-not-allowed opacity-50 hover:bg-surface-2'
-                )}
-                onClick={() => {
-                  if (!disabled()) props.onSelect(persona.id);
-                }}
-              >
-                <PersonaAvatar persona={persona} />
-                <span class="flex min-w-0 flex-1 flex-col leading-tight">
-                  <span class="truncate text-sm font-medium">
-                    {persona.name}
-                  </span>
-                  <span class="truncate text-xs text-ink-extra-muted">
-                    @{persona.handle}
-                    {' · '}
-                    {disabled()
-                      ? (persona.unavailableLabel ?? 'Unavailable')
-                      : harnessDisplayName(persona.harness)}
-                  </span>
-                </span>
-                {/* Always laid out so selecting a card never changes its width. */}
-                <CheckIcon
-                  class={cn(
-                    'size-3.5 shrink-0 text-accent',
-                    !selected() && 'invisible'
-                  )}
-                />
-              </button>
-            );
-          }}
-        </For>
-      </div>
-      <Show when={props.error}>
-        <p class="text-xs text-negative">
-          Your saved agents could not be loaded. You can still start with{' '}
-          {MACRO_AGENT_NAME} or {CURSOR_BOT_NAME}.
-        </p>
-      </Show>
-    </section>
+        {runtimeDescription()}
+      </p>
+    </div>
   );
 }
 
@@ -380,6 +450,7 @@ function ModelPicker(props: {
   shortlist: ModelShortlist;
   value: string;
   loading: boolean;
+  disabled: boolean;
   onSelect: (id: string) => void;
 }) {
   const label = () =>
@@ -391,16 +462,16 @@ function ModelPicker(props: {
         size="sm"
         class={PILL_CLASS}
         aria-label="Model override"
+        disabled={props.disabled}
         tooltip={props.value ? 'Model override' : 'Model (agent default)'}
       >
-        <CpuIcon class="size-3.5 shrink-0" />
         <span class={cn('min-w-0 truncate', props.value && 'text-ink')}>
           {label()}
         </span>
         <CaretDownIcon class="size-3 shrink-0 text-current/70" />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-72 max-w-[min(24rem,calc(100vw-1rem))]">
-        <Dropdown.Group class={MENU_LIST_CLASS}>
+        <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
           <Dropdown.GroupLabel>Model</Dropdown.GroupLabel>
           <ModelRow
             label={personaDefaultLabel(props.persona, props.available)}
@@ -426,7 +497,7 @@ function ModelPicker(props: {
                 </span>
               </Dropdown.SubTrigger>
               <Dropdown.SubContent class="w-72 max-w-[min(24rem,calc(100vw-1rem))]">
-                <Dropdown.Group class={MENU_LIST_CLASS}>
+                <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
                   <For each={props.shortlist.more}>
                     {(model) => (
                       <ModelRow
@@ -477,27 +548,5 @@ function ModelRow(props: {
         <CheckIcon class="size-3.5 shrink-0 text-accent" />
       </Show>
     </Dropdown.Item>
-  );
-}
-
-function PersonaAvatar(props: { persona: PersonaOption }) {
-  return (
-    <Avatar size="md" class="shrink-0 bg-surface text-accent">
-      <Show
-        when={props.persona.avatarUrl}
-        fallback={
-          <Avatar.Fallback>
-            <RobotIcon class="size-4" />
-          </Avatar.Fallback>
-        }
-      >
-        {(avatarUrl) => (
-          <Avatar.Image
-            src={avatarUrl()}
-            alt={`${props.persona.name} avatar`}
-          />
-        )}
-      </Show>
-    </Avatar>
   );
 }

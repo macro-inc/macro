@@ -45,8 +45,8 @@ use utoipa::ToSchema;
 
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
-    AgentSession, AgentSessionId, ExternalSession, Message, SandboxSize, SessionBot, SessionStatus,
-    StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionPreview, ExternalSession, Message, SandboxSize,
+    SessionBot, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
@@ -172,6 +172,10 @@ where
     S: Clone + Send + Sync + 'static,
 {
     Router::new()
+        .route(
+            "/preview",
+            post(preview_agent_sessions_handler::<T, Access, Auth>),
+        )
         .route(
             "/{session_id}",
             get(get_agent_session_handler::<T, Access, Auth>),
@@ -301,6 +305,9 @@ impl IntoResponse for AgentSessionApiError {
             ) => (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response(),
             Self::Domain(error @ AgentSessionError::ControlQueueFull(_)) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()
+            }
+            Self::Domain(error @ AgentSessionError::TooManyPreviewIds(_)) => {
+                (StatusCode::BAD_REQUEST, error.to_string()).into_response()
             }
             Self::Domain(error) => {
                 if let AgentSessionError::InvalidName(message) = error {
@@ -563,6 +570,146 @@ pub async fn get_agent_session_handler<
         .await?;
 
     Ok(Json(session.into()))
+}
+
+/// Request body for `POST /agent-sessions/preview`.
+///
+/// Clients serialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewAgentSessionsRequest {
+    /// The sessions to preview. Duplicates are collapsed server-side; at most
+    /// [`MAX_PREVIEW_SESSION_IDS`](crate::domain::model::MAX_PREVIEW_SESSION_IDS)
+    /// distinct ids per request.
+    pub session_ids: Vec<Uuid>,
+}
+
+/// Response body for `POST /agent-sessions/preview`: one entry per distinct
+/// requested id, in no particular order.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewAgentSessionsResponse {
+    /// What the caller may see of each requested session.
+    pub previews: Vec<AgentSessionPreviewDto>,
+}
+
+/// What one requested id resolved to, on the wire.
+///
+/// Tagged the same way the chat and document preview endpoints tag theirs
+/// (`type` in `access` / `no_access` / `does_not_exist`), so a client that
+/// renders those chips can render this one with the same branch.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AgentSessionPreviewDto {
+    /// The caller may view the session.
+    Access(AgentSessionPreviewData),
+    /// The session exists but the caller holds no grant on it.
+    NoAccess(WithAgentSessionId),
+    /// No session with this id exists.
+    DoesNotExist(WithAgentSessionId),
+}
+
+/// Just a session id, for the preview variants that carry nothing else.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct WithAgentSessionId {
+    /// The session id.
+    pub id: Uuid,
+}
+
+/// The fields a chip renders for a session the caller may view.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionPreviewData {
+    /// The session id.
+    pub id: Uuid,
+    /// User-facing session name.
+    pub name: String,
+    /// The user who owns the session.
+    pub owner_id: String,
+    /// The bot running the agent.
+    pub bot_id: Uuid,
+    /// The session's last known status.
+    pub status: SessionStatusDto,
+    /// When the session was created.
+    pub created_at: DateTime<Utc>,
+    /// When the session was last modified.
+    pub modified_at: DateTime<Utc>,
+}
+
+impl From<AgentSessionPreview> for AgentSessionPreviewDto {
+    fn from(preview: AgentSessionPreview) -> Self {
+        match preview {
+            AgentSessionPreview::Access(data) => Self::Access(AgentSessionPreviewData {
+                id: data.id.as_uuid(),
+                name: data.name,
+                owner_id: data.owner_id.to_string(),
+                bot_id: data.bot_id.as_uuid(),
+                status: data.status.into(),
+                created_at: data.created_at,
+                modified_at: data.modified_at,
+            }),
+            AgentSessionPreview::NoAccess(id) => {
+                Self::NoAccess(WithAgentSessionId { id: id.as_uuid() })
+            }
+            AgentSessionPreview::DoesNotExist(id) => {
+                Self::DoesNotExist(WithAgentSessionId { id: id.as_uuid() })
+            }
+        }
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/agent-sessions/preview",
+    tag = "agent-sessions",
+    operation_id = "preview_agent_sessions",
+    request_body = PreviewAgentSessionsRequest,
+    responses(
+        (status = 200, body = PreviewAgentSessionsResponse),
+        (status = 400, body = String, description = "more than the maximum number of session ids"),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Preview a batch of agent sessions for rendering chips.
+///
+/// No per-id access extractor: a chip has to render for a session the caller
+/// cannot open, so access is answered per id in the body rather than
+/// enforced on the request. The caller learns the fields a chip shows for
+/// sessions they may view, and only existence for the rest.
+#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+pub async fn preview_agent_sessions_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    Json(request): Json<PreviewAgentSessionsRequest>,
+) -> Result<Json<PreviewAgentSessionsResponse>, AgentSessionApiError> {
+    let previews = state
+        .service
+        .preview_sessions(
+            &caller.authorization.user.macro_user_id,
+            request
+                .session_ids
+                .into_iter()
+                .map(AgentSessionId::new_from_uuid)
+                .collect(),
+        )
+        .await?;
+    Ok(Json(PreviewAgentSessionsResponse {
+        previews: previews.into_iter().map(Into::into).collect(),
+    }))
 }
 
 #[utoipa::path(

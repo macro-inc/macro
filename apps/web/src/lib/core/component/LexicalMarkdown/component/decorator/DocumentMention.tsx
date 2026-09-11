@@ -166,6 +166,26 @@ export function calendarMentionTimeLabel(
   return startDate ? formatDate(startDate) : undefined;
 }
 
+function MentionAccessories(props: {
+  blockName: BlockName | BlockAlias;
+  blockParams?: Record<string, string>;
+}) {
+  const accessories = () =>
+    mentionsAccessories(props.blockName as BlockName, props.blockParams ?? {});
+  return (
+    <span class="relative text-[0.8em] text-current/50 rounded-xs">
+      <Show when={accessories()}>
+        {(value) => (
+          <>
+            {` ${value().note ?? ''}`}
+            {getMentionsIcon(value().icon)}
+          </>
+        )}
+      </Show>
+    </span>
+  );
+}
+
 function InlinePreview(props: {
   previewData: ReturnType<typeof useItemPreviewData>;
   entity: ItemEntity;
@@ -212,6 +232,10 @@ function InlinePreview(props: {
                   <Show when={props.documentName} fallback={'Loading...'}>
                     {(name) => name().replaceAll('\n', ' ').trim()}
                   </Show>
+                  <MentionAccessories
+                    blockName={props.blockName}
+                    blockParams={props.blockParams}
+                  />
                 </span>
               }
               collapsed={props.collapsed}
@@ -244,22 +268,10 @@ function InlinePreview(props: {
                   <Show when={props.documentName} fallback={'Unknown'}>
                     {(name) => name().replaceAll('\n', ' ').trim()}
                   </Show>
-                  <span class="relative text-[0.8em] text-current/50 rounded-md">
-                    {(() => {
-                      const accessories = mentionsAccessories(
-                        props.blockName as BlockName,
-                        props.blockParams
-                      );
-                      if (accessories) {
-                        return (
-                          <>
-                            {` ${accessories.note ?? ''}`}
-                            {getMentionsIcon(accessories.icon)}
-                          </>
-                        );
-                      }
-                    })()}
-                  </span>
+                  <MentionAccessories
+                    blockName={props.blockName}
+                    blockParams={props.blockParams}
+                  />
                 </span>
               }
               collapsed={props.collapsed}
@@ -325,22 +337,10 @@ function InlinePreview(props: {
                         </Show>
                       )}
                     </Show>
-                    <span class="relative text-[0.8em] text-current/50 rounded-xs">
-                      {(() => {
-                        const accessories = mentionsAccessories(
-                          props.blockName as BlockName,
-                          props.blockParams
-                        );
-                        if (accessories) {
-                          return (
-                            <>
-                              {` ${accessories.note ?? ''}`}
-                              {getMentionsIcon(accessories.icon)}
-                            </>
-                          );
-                        }
-                      })()}
-                    </span>
+                    <MentionAccessories
+                      blockName={props.blockName}
+                      blockParams={props.blockParams}
+                    />
                     <Show when={props.blockName === 'task'}>
                       <Suspense>
                         <InlineTaskProperties
@@ -384,7 +384,7 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
     <Show
       when={props.blockName === 'skill'}
       fallback={
-        <Suspense>
+        <Suspense fallback={<DocumentMentionStatic {...props} />}>
           <DocumentMentionInner {...props} />
         </Suspense>
       }
@@ -408,7 +408,7 @@ function SkillDocumentMention(props: DocumentMentionDecoratorProps) {
         <DocumentMentionStatic {...props} />
       </Match>
       <Match when={true}>
-        <Suspense>
+        <Suspense fallback={<DocumentMentionStatic {...props} />}>
           <DocumentMentionInner {...props} />
         </Suspense>
       </Match>
@@ -434,18 +434,20 @@ function SystemSkillMention(
 }
 
 /** Lightweight mention display that skips all backend fetches. Uses only the stored name. */
-function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
+export function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
   if (props.blockName === 'skill') {
     return (
       <SkillSlashText
         documentId={props.documentId}
         name={props.documentName ?? ''}
+        collapsed={props.collapsed}
       />
     );
   }
   return (
     <MentionContainer
       icon={<EntityIcon targetType={props.blockName as any} size="fill" />}
+      collapsed={props.collapsed}
       text={
         <span
           data-document-mention="true"
@@ -453,7 +455,11 @@ function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
           data-block-name={props.blockName}
           data-document-name={props.documentName}
         >
-          {props.documentName ?? props.documentId}
+          {(props.documentName || 'Loading...').replaceAll('\n', ' ').trim()}
+          <MentionAccessories
+            blockName={verifyBlockName(props.blockName)}
+            blockParams={props.blockParams}
+          />
         </span>
       }
     />

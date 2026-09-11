@@ -9,6 +9,7 @@ import FileIcon from '@phosphor/file.svg';
 import ComposeIcon from '@phosphor/note-pencil.svg';
 import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
+import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { Button, pressHandlers } from '@ui';
 import { type Component, For } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -48,12 +49,25 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
+  const { state, showTags, isSidebarSectionOpen, setSidebarSectionOpen } =
+    useEmailView();
+
   return (
-    <ViewSidebar.Nav aria-label="Email tabs">
-      <For each={EMAIL_TABS}>
-        {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
-      </For>
-    </ViewSidebar.Nav>
+    <div class="flex flex-col gap-6">
+      <ViewSidebar.Nav aria-label="Email tabs">
+        <For each={EMAIL_TABS}>
+          {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
+        </For>
+      </ViewSidebar.Nav>
+
+      <SidebarTagsSection
+        activeIds={state.facets.tags ?? []}
+        onActiveIdsChange={showTags}
+        open={isSidebarSectionOpen('tags')}
+        onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
+        onNavigate={props.onNavigate}
+      />
+    </div>
   );
 }
 

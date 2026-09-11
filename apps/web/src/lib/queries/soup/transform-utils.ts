@@ -63,7 +63,15 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-type DisplayableSoupItem = SoupPage['items'][number];
+/**
+ * Soup items the frontend knows how to render. Agent sessions are opt-in on
+ * the backend and have no entity mapping here yet, so they are excluded until
+ * the frontend grows an `AgentSessionEntity`.
+ */
+type DisplayableSoupItem = Exclude<
+  SoupPage['items'][number],
+  { tag: 'agentSession' }
+>;
 type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
@@ -647,7 +655,7 @@ const resolveDocumentEntityName = (
 
 export const isDisplayableSoupItem = (
   item: SoupPage['items'][number]
-): item is DisplayableSoupItem => Boolean(item);
+): item is DisplayableSoupItem => Boolean(item) && item.tag !== 'agentSession';
 
 /**
  * The email soup query encodes "no sort timestamp" — e.g. a never-viewed thread

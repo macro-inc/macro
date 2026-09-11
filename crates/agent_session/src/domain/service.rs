@@ -50,10 +50,10 @@ use super::error::{AgentSessionError, Result};
 use super::lifecycle::session_identity;
 use super::model::SessionBot;
 use super::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, AgentSessionRenamed, AuthorKind, ChannelSession,
-    ClaimOutcome, CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS, Message,
-    MessageId, ReplicaId, SandboxSize, SessionClaim, SessionLog, SessionManagement,
-    StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview, AgentSessionRenamed,
+    AuthorKind, ChannelSession, ClaimOutcome, CreateAgentSessionParams, LogAppended,
+    MAX_AGENT_SESSION_NAME_CHARS, MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId,
+    SandboxSize, SessionClaim, SessionLog, SessionManagement, StoredAgentSessionLog,
 };
 use super::ports::{
     AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
@@ -87,6 +87,12 @@ struct ActiveSession {
     marker: Arc<()>,
     deleting: bool,
     stopping: bool,
+    /// Cancelled by the connector the moment its transport ends, when it
+    /// offers one - not every connector does. `deliver_action` races this
+    /// alongside its reply wait so a command sent to a session whose
+    /// transport is already known to be gone fails immediately instead of
+    /// waiting out the full command timeout for nothing.
+    transport_closed: Option<CancellationToken>,
 }
 
 type ActiveSessions = DashMap<AgentSessionId, ActiveSession>;
@@ -134,6 +140,17 @@ pub trait AgentSessionService: Send + Sync + 'static {
 
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// What `viewer` may see of each of `ids`, for rendering chips.
+    ///
+    /// Duplicate ids are collapsed, so the answer has one entry per distinct
+    /// id. More than [`MAX_PREVIEW_SESSION_IDS`] distinct ids is
+    /// [`AgentSessionError::TooManyPreviewIds`].
+    fn preview_sessions(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        ids: Vec<AgentSessionId>,
+    ) -> impl Future<Output = Result<Vec<AgentSessionPreview>>> + Send;
 
     /// Rename a session after owner access has been verified.
     fn rename_session(
@@ -366,6 +383,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     marker: marker.clone(),
                     deleting: false,
                     stopping: false,
+                    transport_closed: None,
                 });
                 Ok(AttachReservation {
                     active: self.active.clone(),
@@ -406,6 +424,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             activate(claim)?;
         }
         active.commands = Some(commands.clone());
+        active.transport_closed = attachment.closed.clone();
         drop(active);
         let (marker, stopped_tx) = reservation.commit();
 
@@ -452,10 +471,10 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         action: AgentAction,
         action_id: AgentActionId,
     ) -> Result<()> {
-        let commands = self
+        let (commands, transport_closed) = self
             .active
             .get(&id)
-            .and_then(|entry| entry.commands.clone())
+            .and_then(|entry| Some((entry.commands.clone()?, entry.transport_closed.clone())))
             .ok_or(AgentSessionError::Disconnected(id))?;
 
         let (completed, result) = oneshot::channel();
@@ -488,10 +507,26 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         // can only notice by hitting its own much longer internal deadline
         // instead of promptly.
         drop(commands);
-        match tokio::time::timeout(HANDSHAKE_TIMEOUT, result).await {
-            Ok(Ok(result)) => result,
-            Ok(Err(_)) => Err(AgentSessionError::Disconnected(id)),
-            Err(_elapsed) => {
+        // A transport that has already ended has no reply coming, however
+        // long we wait: race the connector's own closed signal (when it has
+        // one) alongside the reply so that case fails at once instead of
+        // riding out the rest of `HANDSHAKE_TIMEOUT` for nothing. A
+        // connector with no such signal just never resolves this side of
+        // the select, unchanged from before.
+        let transport_closed_first = async {
+            match &transport_closed {
+                Some(closed) => closed.cancelled().await,
+                None => std::future::pending().await,
+            }
+        };
+        let timed_out = tokio::select! {
+            res = tokio::time::timeout(HANDSHAKE_TIMEOUT, result) => Some(res),
+            () = transport_closed_first => None,
+        };
+        match timed_out {
+            Some(Ok(Ok(result))) => result,
+            Some(Ok(Err(_))) => Err(AgentSessionError::Disconnected(id)),
+            Some(Err(_elapsed)) => {
                 // The actor is presumably still stuck in the handshake, so it
                 // is stopped directly - the same "drop the sender, the actor
                 // notices and tears itself down" mechanism `close_session`
@@ -503,6 +538,18 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     Arc::ptr_eq(&active.marker, &marker) && !active.deleting
                 });
                 tracing::warn!(%id, "agent session command timed out waiting for the ACP handshake");
+                Err(AgentSessionError::Disconnected(id))
+            }
+            None => {
+                // The connector's transport already ended - no wall-clock
+                // wait can help, so stop the actor the same way a timeout
+                // does and fail now.
+                let (stopped, marker) = self.begin_stop(id, false);
+                Self::wait_stopped(stopped).await;
+                self.active.remove_if(&id, |_, active| {
+                    Arc::ptr_eq(&active.marker, &marker) && !active.deleting
+                });
+                tracing::info!(%id, "agent session command failed fast: transport already closed");
                 Err(AgentSessionError::Disconnected(id))
             }
         }
@@ -533,6 +580,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     marker: marker.clone(),
                     deleting,
                     stopping: true,
+                    transport_closed: None,
                 });
                 (stopped, marker)
             }
@@ -589,6 +637,27 @@ where
 
     async fn get_session(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn preview_sessions(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        ids: Vec<AgentSessionId>,
+    ) -> Result<Vec<AgentSessionPreview>> {
+        let ids: Vec<AgentSessionId> = ids
+            .into_iter()
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        if ids.len() > MAX_PREVIEW_SESSION_IDS {
+            return Err(AgentSessionError::TooManyPreviewIds(
+                MAX_PREVIEW_SESSION_IDS,
+            ));
+        }
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        self.repo.preview(viewer, &ids).await
     }
 
     async fn find_for_channel(
@@ -1083,6 +1152,14 @@ where
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn preview(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        ids: &[AgentSessionId],
+    ) -> Result<Vec<AgentSessionPreview>> {
+        self.repo.preview(viewer, ids).await
     }
 
     async fn find_by_egress_token_hash(

@@ -69,7 +69,10 @@ vi.mock('@app/features/next-soup/utils', () => ({
   restoreSoupFocus: vi.fn(),
 }));
 
-import { makeMarkDoneAction } from './make-mark-done-action';
+import {
+  canExecuteMarkDoneOnView,
+  makeMarkDoneAction,
+} from './make-mark-done-action';
 
 const currentEntity = {
   type: 'email',
@@ -115,6 +118,19 @@ function createAction() {
     dispose,
   }));
 }
+
+describe('canExecuteMarkDoneOnView', () => {
+  it('allows mark done on every thread-listing mail tab', () => {
+    for (const tab of ['important', 'noise', 'calendar', 'shared', 'all']) {
+      expect(canExecuteMarkDoneOnView('mail', tab)).toBe(true);
+    }
+  });
+
+  it('keeps mark done off tabs whose rows are not triaged', () => {
+    expect(canExecuteMarkDoneOnView('mail', 'drafts')).toBe(false);
+    expect(canExecuteMarkDoneOnView('mail', 'sent')).toBe(false);
+  });
+});
 
 describe('makeMarkDoneAction', () => {
   beforeEach(() => {

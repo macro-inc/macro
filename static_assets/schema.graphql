@@ -488,6 +488,63 @@ type GraphqlActivityUnknownAction {
 }
 
 """
+The two operands of a recursive `AgentSessionFilterExpr` binary expression.
+"""
+input GraphqlAgentSessionBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlAgentSessionExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlAgentSessionExpr!
+}
+
+"""
+A recursive `AgentSessionFilterExpr` filter expression.
+"""
+input GraphqlAgentSessionExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlAgentSessionBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlAgentSessionBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlAgentSessionExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlAgentSessionLiteral
+}
+
+"""
+GraphQL input representing the agent session literal.
+"""
+input GraphqlAgentSessionLiteral @oneOf {
+	"""
+	Opt this query into agent sessions at all. Agent sessions are off by
+	default, so without this (or an `id`/`owner`) Soup omits them entirely.
+	Must be `true`; there is no literal for excluding agent sessions, that
+	is the default.
+	"""
+	include: Boolean
+	"""
+	The id option.
+	"""
+	id: ID
+	"""
+	The owner option.
+	"""
+	owner: String
+}
+
+"""
 Metadata for an AI response.
 """
 type GraphqlAiResponseMetadata {
@@ -1855,6 +1912,10 @@ input GraphqlEntityFilterAst {
 	The reminder filter to apply.
 	"""
 	reminderFilter: GraphqlReminderExpr
+	"""
+	The agent session filter to apply.
+	"""
+	agentSessionFilter: GraphqlAgentSessionExpr
 	"""
 	The properties filter to apply.
 	"""
@@ -3447,6 +3508,24 @@ type GraphqlSelectOptionPropertyValue {
 }
 
 """
+Bot fields presented through an agent-session edge.
+"""
+type GraphqlSessionBot {
+	"""
+	Stable global bot identity.
+	"""
+	id: ID!
+	"""
+	Bot display name.
+	"""
+	name: String!
+	"""
+	Optional bot avatar URL.
+	"""
+	avatarUrl: String
+}
+
+"""
 A typed value accepted when setting an entity property.
 """
 input GraphqlSetPropertyValue @oneOf {
@@ -3582,6 +3661,99 @@ enum GraphqlSortDirection {
 	Newest first.
 	"""
 	DESC
+}
+
+"""
+GraphQL representation of the soup agent session.
+"""
+type GraphqlSoupAgentSession implements GraphqlSoupEntity {
+	"""
+	The unique identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Server-only projection facts are unavailable for agent sessions.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	User-visible display name.
+	"""
+	displayName: String
+	"""
+	Common agent session metadata.
+	
+	`parent` is absent: a session is reachable through the channel thread
+	it was opened from, but it is not contained by it the way a chat is
+	contained by its project.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The name.
+	"""
+	name: String!
+	"""
+	The identifier of the owner.
+	"""
+	ownerId: String!
+	"""
+	The bot running this session.
+	"""
+	botId: ID!
+	"""
+	The bot running this session, when its profile still exists.
+	"""
+	bot: GraphqlSessionBot
+	"""
+	The channel thread the session was opened from, when any.
+	"""
+	threadId: ID
+	"""
+	The session's last known status: `no_messages`, `disconnected`, or the
+	wire name of the most recent system event (for example `session/end`).
+	"""
+	status: String!
+	"""
+	The created timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	The updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	The viewed timestamp in RFC 3339 format.
+	"""
+	viewedAt: String
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications: [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
 }
 
 """
@@ -4976,6 +5148,10 @@ enum GraphqlSoupEntityType {
 	Reminder entity.
 	"""
 	REMINDER
+	"""
+	AI coding agent session entity.
+	"""
+	AGENT_SESSION
 }
 
 """

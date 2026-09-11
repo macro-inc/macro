@@ -807,6 +807,152 @@ async fn create_without_a_mention_grants_only_the_owner(pool: PgPool) {
     assert_eq!(grants[0].access_level, "owner");
 }
 
+/// Creating a session records it in the owner's history under the
+/// `agent_session` item type, the same row `POST /history/agent_session/{id}`
+/// touches later, so Soup's `viewed_at` is set from the moment it exists.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_records_the_session_in_the_owners_history(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+
+    let params = new_session(bot_id, None, None);
+    let id = params.id;
+    create_session(&repo, params).await;
+
+    let history = sqlx::query!(
+        r#"
+        SELECT "userId" AS user_id, "itemType" AS item_type
+        FROM "UserHistory"
+        WHERE "itemId" = $1
+        "#,
+        id.as_uuid().to_string(),
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read the session's history rows");
+
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].user_id, OWNER);
+    assert_eq!(history[0].item_type, "agent_session");
+}
+
+/// A preview answers every requested id one way or another: the owner sees
+/// the session's fields, a channel member sees them through the channel's
+/// grant, a stranger learns only that it exists, and an unknown id is
+/// reported as such. Duplicates in the request are the caller's problem
+/// (the service collapses them); the repo answers what it is asked.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let (channel_id, thread_id, originating_message_id) =
+        insert_originating_thread_fixture(&pool).await;
+
+    let from_channel = create_session(
+        &repo,
+        new_session(bot_id, Some(thread_id), Some(originating_message_id)),
+    )
+    .await;
+    let private = create_session(&repo, new_session(bot_id, None, None)).await;
+    append_system_event(&repo, private.id, SystemEvent::AcpReady).await;
+    let missing = AgentSessionId::new();
+
+    let member = "macro|agent-session-channel-member@example.com";
+    let stranger = "macro|agent-session-stranger@example.com";
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member')",
+        channel_id,
+        member,
+    )
+    .execute(&pool)
+    .await
+    .expect("add channel member");
+
+    let ids = [from_channel.id, private.id, missing];
+
+    let mut owner_view = repo
+        .preview(&user_id(OWNER), &ids)
+        .await
+        .expect("owner preview");
+    owner_view.sort_by_key(|preview| preview.id().as_uuid());
+    let mut expected = vec![
+        AgentSessionPreview::Access(AgentSessionPreviewData {
+            id: from_channel.id,
+            name: DEFAULT_AGENT_SESSION_NAME.to_string(),
+            owner_id: user_id(OWNER),
+            bot_id,
+            status: SessionStatus::NoMessages,
+            created_at: from_channel.created_at,
+            modified_at: from_channel.modified_at,
+        }),
+        AgentSessionPreview::Access(AgentSessionPreviewData {
+            id: private.id,
+            name: DEFAULT_AGENT_SESSION_NAME.to_string(),
+            owner_id: user_id(OWNER),
+            bot_id,
+            status: SessionStatus::Event(SystemEvent::AcpReady),
+            created_at: private.created_at,
+            // Bumped by the status event, so read back rather than assumed.
+            modified_at: AgentSessionRepo::get(&repo, private.id)
+                .await
+                .expect("reload")
+                .modified_at,
+        }),
+        AgentSessionPreview::DoesNotExist(missing),
+    ];
+    expected.sort_by_key(|preview| preview.id().as_uuid());
+    assert_eq!(owner_view, expected);
+
+    let member_view = repo
+        .preview(&user_id(member), &ids)
+        .await
+        .expect("member preview");
+    assert_eq!(member_view.len(), 3);
+    assert!(matches!(
+        member_view.iter().find(|p| p.id() == from_channel.id),
+        Some(AgentSessionPreview::Access(_))
+    ));
+    assert_eq!(
+        member_view.iter().find(|p| p.id() == private.id),
+        Some(&AgentSessionPreview::NoAccess(private.id))
+    );
+    assert_eq!(
+        member_view.iter().find(|p| p.id() == missing),
+        Some(&AgentSessionPreview::DoesNotExist(missing))
+    );
+
+    let stranger_view = repo
+        .preview(&user_id(stranger), &ids)
+        .await
+        .expect("stranger preview");
+    assert_eq!(
+        stranger_view.iter().find(|p| p.id() == from_channel.id),
+        Some(&AgentSessionPreview::NoAccess(from_channel.id))
+    );
+    assert_eq!(
+        stranger_view.iter().find(|p| p.id() == private.id),
+        Some(&AgentSessionPreview::NoAccess(private.id))
+    );
+
+    // A member who has left the channel loses the channel's grant with it.
+    sqlx::query!(
+        "UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1 AND user_id = $2",
+        channel_id,
+        member,
+    )
+    .execute(&pool)
+    .await
+    .expect("member leaves channel");
+    let left_view = repo
+        .preview(&user_id(member), &[from_channel.id])
+        .await
+        .expect("former member preview");
+    assert_eq!(
+        left_view,
+        vec![AgentSessionPreview::NoAccess(from_channel.id)]
+    );
+}
+
 /// `entity_access.entity_id` carries no foreign key, so deleting a session
 /// has to take its grants with it or they accumulate forever.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -836,6 +982,20 @@ async fn delete_removes_the_session_grants(pool: PgPool) {
     .expect("count the session's grants");
 
     assert_eq!(remaining, 0);
+
+    let remaining_history = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!"
+        FROM "UserHistory"
+        WHERE "itemId" = $1 AND "itemType" = 'agent_session'
+        "#,
+        id.as_uuid().to_string(),
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count the session's history rows");
+
+    assert_eq!(remaining_history, 0);
 }
 
 fn cursor_external(agent: &str) -> ExternalSession {

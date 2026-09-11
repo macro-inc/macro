@@ -21,6 +21,18 @@ Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote)
 text and inline mention chips (tasks, docs, channels, skills, …) by the title
 shown on the chip.
 
+On a touch device, swipe a list item right to indent one level (Apple Notes
+style) or left to outdent. Nested children move with the parent. The first
+item can indent too, even in a single-item list. Vertical scrolling and taps
+are unchanged.
+Items stay still during the swipe and change indentation only when a
+successful swipe is released; short or blocked swipes leave them in place.
+Swiping requires permission to edit the document; comment-only access does
+not allow indentation changes. Losing edit permission during a swipe cancels it.
+To verify nesting, give a list item a child and grandchild, then swipe the
+parent right and left: all three should shift one level together, preserving
+their relative depths and order.
+
 ## Reference hover previews
 
 Hover a document reference chip to open its preview without navigating. With

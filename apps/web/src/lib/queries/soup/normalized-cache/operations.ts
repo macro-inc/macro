@@ -898,6 +898,10 @@ export function buildSingleEntityFilter(
       ...base,
       reminder_filters: { ids: [entityId] },
     }))
+    .with('agentSession', () => ({
+      ...base,
+      agent_session_filters: { ids: [entityId] },
+    }))
     .exhaustive();
 }
 

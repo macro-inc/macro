@@ -299,6 +299,10 @@ fn check_soup_flat(
     if ast.reminder_filter.is_some() {
         return Eligibility::Unsupported(UnsupportedReason::Partition("reminder"));
     }
+    // Agent sessions are opt-in the same way.
+    if ast.agent_session_filter.is_some() {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("agent_session"));
+    }
 
     if !supported_expr(ast.document_filter.as_deref(), supported_document_literal)
         || (supports_status_properties

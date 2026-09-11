@@ -9,6 +9,8 @@ const TOUCH_DRAG_THRESHOLD_PX = 6;
 export type ScrollDirection = 'up' | 'down';
 
 type ScrollIntentTracker = {
+  /** Extend an existing gesture through native momentum scroll events. */
+  observeScroll: () => void;
   /**
    * Signal that a user-initiated navigation is about to cause a
    * programmatic scroll (e.g. hotkey-driven `scrollToId`).
@@ -138,5 +140,15 @@ export function createScrollIntentTracker(
     },
   };
 
-  return { markUserIntent, isUserInteracting, lastDirection, handlers };
+  const observeScroll = () => {
+    if (isUserInteracting()) activeUntil = Date.now() + INTERACTION_TIMEOUT_MS;
+  };
+
+  return {
+    markUserIntent,
+    isUserInteracting,
+    lastDirection,
+    handlers,
+    observeScroll,
+  };
 }

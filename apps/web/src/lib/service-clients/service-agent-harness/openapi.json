@@ -228,6 +228,66 @@
         }
       }
     },
+    "/agent-sessions/preview": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Preview a batch of agent sessions for rendering chips.",
+        "description": "No per-id access extractor: a chip has to render for a session the caller\ncannot open, so access is answered per id in the body rather than\nenforced on the request. The caller learns the fields a chip shows for\nsessions they may view, and only existence for the rest.",
+        "operationId": "preview_agent_sessions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewAgentSessionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewAgentSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "more than the maximum number of session ids",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}": {
       "get": {
         "tags": ["agent-sessions"],
@@ -1054,6 +1114,115 @@
           }
         }
       },
+      "AgentSessionPreviewData": {
+        "type": "object",
+        "description": "The fields a chip renders for a session the caller may view.\n\nClients deserialize this, so both derives are used.",
+        "required": [
+          "id",
+          "name",
+          "ownerId",
+          "botId",
+          "status",
+          "createdAt",
+          "modifiedAt"
+        ],
+        "properties": {
+          "botId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The bot running the agent."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session was created."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session id."
+          },
+          "modifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the session was last modified."
+          },
+          "name": {
+            "type": "string",
+            "description": "User-facing session name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "The user who owns the session."
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatusDto",
+            "description": "The session's last known status."
+          }
+        }
+      },
+      "AgentSessionPreviewDto": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentSessionPreviewData",
+                "description": "The caller may view the session."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["access"]
+                  }
+                }
+              }
+            ],
+            "description": "The caller may view the session."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WithAgentSessionId",
+                "description": "The session exists but the caller holds no grant on it."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["no_access"]
+                  }
+                }
+              }
+            ],
+            "description": "The session exists but the caller holds no grant on it."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WithAgentSessionId",
+                "description": "No session with this id exists."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["does_not_exist"]
+                  }
+                }
+              }
+            ],
+            "description": "No session with this id exists."
+          }
+        ],
+        "description": "What one requested id resolved to, on the wire.\n\nTagged the same way the chat and document preview endpoints tag theirs\n(`type` in `access` / `no_access` / `does_not_exist`), so a client that\nrenders those chips can render this one with the same branch.\n\nClients deserialize this, so both derives are used."
+      },
       "AgentSessionQueueResponse": {
         "type": "object",
         "description": "Response body for a session's queue: everything waiting, oldest first.\n\nA wrapper rather than a bare array so that anything which is about the\nresponse rather than about an entry has somewhere to go later without\nbreaking every client.",
@@ -1481,6 +1650,35 @@
         "description": "Harness names accepted by the model discovery endpoint.",
         "enum": ["in-memory", "cursor", "macrod"]
       },
+      "PreviewAgentSessionsRequest": {
+        "type": "object",
+        "description": "Request body for `POST /agent-sessions/preview`.\n\nClients serialize this, so both derives are used.",
+        "required": ["sessionIds"],
+        "properties": {
+          "sessionIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The sessions to preview. Duplicates are collapsed server-side; at most\n[`MAX_PREVIEW_SESSION_IDS`](crate::domain::model::MAX_PREVIEW_SESSION_IDS)\ndistinct ids per request."
+          }
+        }
+      },
+      "PreviewAgentSessionsResponse": {
+        "type": "object",
+        "description": "Response body for `POST /agent-sessions/preview`: one entry per distinct\nrequested id, in no particular order.\n\nClients deserialize this, so both derives are used.",
+        "required": ["previews"],
+        "properties": {
+          "previews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentSessionPreviewDto"
+            },
+            "description": "What the caller may see of each requested session."
+          }
+        }
+      },
       "QueuedActionDto": {
         "type": "object",
         "description": "One action waiting in a session's queue.\n\nClients deserialize this, so both derives are used.",
@@ -1596,6 +1794,18 @@
           }
         ],
         "description": "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
+      },
+      "WithAgentSessionId": {
+        "type": "object",
+        "description": "Just a session id, for the preview variants that carry nothing else.\n\nClients deserialize this, so both derives are used.",
+        "required": ["id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session id."
+          }
+        }
       }
     },
     "securitySchemes": {

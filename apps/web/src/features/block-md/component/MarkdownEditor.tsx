@@ -60,6 +60,7 @@ import {
   generatePlugin,
   horizontalRulePlugin,
   keyboardShortcutsPlugin,
+  listSwipeIndentPlugin,
   listToTablePlugin,
   markdownPastePlugin,
   mentionsPlugin,
@@ -545,6 +546,7 @@ export function MarkdownEditor(props: {
     .state<EditorState>(setState, 'json')
     .history(400, props.loroManager)
     .use(tabIndentationPlugin())
+    .use(listSwipeIndentPlugin(isContentEditable))
     .use(selectionDataPlugin(lexicalWrapper))
     .use(horizontalRulePlugin())
     .use(

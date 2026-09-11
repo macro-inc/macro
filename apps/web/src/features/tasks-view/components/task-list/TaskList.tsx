@@ -42,7 +42,7 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
-import { useTagSets } from '@property/tags/tag-sets-context';
+import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
@@ -124,10 +124,12 @@ export function TaskList(props: TaskListProps) {
     setState('collapsedGroupIds', toggleValue(groupId));
 
   const tagSets = useTagSets();
+  const tagSetsReady = useTagSetsReady();
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     useTasksDataSource(state, {
       userId,
       tagSets,
+      tagSetsReady,
       isGroupExpanded,
     })
   );

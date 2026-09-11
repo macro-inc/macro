@@ -47,10 +47,7 @@ const MACRO_API_TOKENS = getMacroApiToken();
 
 // ── AI tools infra ───────────────────────────────────────────────────────────
 
-const aiTools =
-  stack === 'dev'
-    ? getAiToolsInfra()
-    : { secretArns: [], queueArns: [], bucketArns: [] };
+const aiTools = getAiToolsInfra();
 
 // ── Stack references ─────────────────────────────────────────────────────────
 
@@ -65,18 +62,6 @@ const cloudStorageClusterArn = cloudStorageStack
 const cloudStorageClusterName = cloudStorageStack
   .getOutput('cloudStorageClusterName')
   .apply((value) => value as string);
-
-// ── Queues ───────────────────────────────────────────────────────────────────
-// Channel side effects use these in every environment. Dev's AI tool bundle
-// includes both plus the additional tool queues.
-
-const notificationIngressQueueArn = aws.sqs
-  .getQueueOutput({ name: `notification-ingress-queue-${stack}` })
-  .apply((queue) => queue.arn);
-
-const contactsQueueArn = aws.sqs
-  .getQueueOutput({ name: `contacts-queue-${stack}` })
-  .apply((queue) => queue.arn);
 
 // ── Service ──────────────────────────────────────────────────────────────────
 
@@ -98,10 +83,7 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
     githubSyncAppPemArn,
     ...aiTools.secretArns,
   ],
-  queueArns:
-    stack === 'dev'
-      ? [...aiTools.queueArns]
-      : [notificationIngressQueueArn, contactsQueueArn],
+  queueArns: [...aiTools.queueArns],
   bucketArns: [...aiTools.bucketArns],
   containerEnvVars: [
     {

@@ -145,6 +145,59 @@ export type AgentSessionLogResponse = {
 };
 
 /**
+ * The fields a chip renders for a session the caller may view.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type AgentSessionPreviewData = {
+    /**
+     * The bot running the agent.
+     */
+    botId: string;
+    /**
+     * When the session was created.
+     */
+    createdAt: string;
+    /**
+     * The session id.
+     */
+    id: string;
+    /**
+     * When the session was last modified.
+     */
+    modifiedAt: string;
+    /**
+     * User-facing session name.
+     */
+    name: string;
+    /**
+     * The user who owns the session.
+     */
+    ownerId: string;
+    /**
+     * The session's last known status.
+     */
+    status: SessionStatusDto;
+};
+
+/**
+ * What one requested id resolved to, on the wire.
+ *
+ * Tagged the same way the chat and document preview endpoints tag theirs
+ * (`type` in `access` / `no_access` / `does_not_exist`), so a client that
+ * renders those chips can render this one with the same branch.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type AgentSessionPreviewDto = (AgentSessionPreviewData & {
+    type: 'access';
+}) | (WithAgentSessionId & {
+    type: 'no_access';
+}) | (WithAgentSessionId & {
+    type: 'does_not_exist';
+});
+
+/**
  * Response body for a session's queue: everything waiting, oldest first.
  *
  * A wrapper rather than a bare array so that anything which is about the
@@ -511,6 +564,33 @@ export type LogFrameDto = {
 export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
 
 /**
+ * Request body for `POST /agent-sessions/preview`.
+ *
+ * Clients serialize this, so both derives are used.
+ */
+export type PreviewAgentSessionsRequest = {
+    /**
+     * The sessions to preview. Duplicates are collapsed server-side; at most
+     * [`MAX_PREVIEW_SESSION_IDS`](crate::domain::model::MAX_PREVIEW_SESSION_IDS)
+     * distinct ids per request.
+     */
+    sessionIds: Array<string>;
+};
+
+/**
+ * Response body for `POST /agent-sessions/preview`: one entry per distinct
+ * requested id, in no particular order.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type PreviewAgentSessionsResponse = {
+    /**
+     * What the caller may see of each requested session.
+     */
+    previews: Array<AgentSessionPreviewDto>;
+};
+
+/**
  * One action waiting in a session's queue.
  *
  * Clients deserialize this, so both derives are used.
@@ -600,6 +680,18 @@ export type SessionStatusDto = {
     kind: 'event';
 } | {
     kind: 'disconnected';
+};
+
+/**
+ * Just a session id, for the preview variants that carry nothing else.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type WithAgentSessionId = {
+    /**
+     * The session id.
+     */
+    id: string;
 };
 
 export type LoadAgentModelsHandlerData = {
@@ -707,6 +799,30 @@ export type CreateAgentSessionResponses = {
 };
 
 export type CreateAgentSessionResponse2 = CreateAgentSessionResponses[keyof CreateAgentSessionResponses];
+
+export type PreviewAgentSessionsData = {
+    body: PreviewAgentSessionsRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-sessions/preview';
+};
+
+export type PreviewAgentSessionsErrors = {
+    /**
+     * more than the maximum number of session ids
+     */
+    400: string;
+    401: string;
+    500: string;
+};
+
+export type PreviewAgentSessionsError = PreviewAgentSessionsErrors[keyof PreviewAgentSessionsErrors];
+
+export type PreviewAgentSessionsResponses = {
+    200: PreviewAgentSessionsResponse;
+};
+
+export type PreviewAgentSessionsResponse2 = PreviewAgentSessionsResponses[keyof PreviewAgentSessionsResponses];
 
 export type DeleteAgentSessionData = {
     body?: never;

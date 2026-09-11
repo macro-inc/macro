@@ -41,9 +41,6 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
   const slotAData = slotDataFor(mobileSwipeLayout.slotASplitId);
   const slotBData = slotDataFor(mobileSwipeLayout.slotBSplitId);
 
-  const renderKeyForSplit = (split: SplitState) =>
-    `${split.id}:${split.content.type}:${split.content.id}`;
-
   return (
     <div
       class="relative size-full overflow-hidden"
@@ -66,11 +63,14 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
             }
           >
             {/*
-             * Key by split and content so SplitPanel remounts when a slot
-             * receives a new split, even if it has the same content id.
+             * Key by split id so SplitPanel remounts when a slot receives a
+             * new split — and only then. Content changes inside a split
+             * (navigation, or the agent block adopting its real session id
+             * mid-typing) swap the mount without tearing the panel down,
+             * matching the desktop layout.
              */}
-            <Show when={renderKeyForSplit(a().split)} keyed>
-              {(_renderKey) => (
+            <Show when={a().split.id} keyed>
+              {(_splitId) => (
                 <Suspense>
                   <SplitPanel
                     split={a().split}
@@ -98,8 +98,8 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
               motion.handleTransitionEnd(e, !mobileSwipeLayout.fgIsSlotA())
             }
           >
-            <Show when={renderKeyForSplit(b().split)} keyed>
-              {(_renderKey) => (
+            <Show when={b().split.id} keyed>
+              {(_splitId) => (
                 <Suspense>
                   <SplitPanel
                     split={b().split}

@@ -49,6 +49,7 @@ use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, CommandOutcome, DeliverAction, HarnessCommand,
     HarnessDefaults, OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
 };
+use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
     RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
@@ -79,11 +80,19 @@ struct AgentHarnessInner<
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory beside the live actors this replica manages.
     queues: SessionQueues,
-    /// The sessions with a turn in flight, and which turn. Marked when a
-    /// turn-occupying action reaches the runtime, cleared by
-    /// `TurnEnded`/`SessionStopped`. Only ever touched from the session's
-    /// own command worker, which is what serializes it against dispatch.
-    busy: DashMap<AgentSessionId, InFlightTurn>,
+    /// The sessions with a command admitted and not yet resolved, and which
+    /// turn it opened once dispatch names one. Marked the moment a
+    /// turn-occupying action is admitted (queue.rs's `enqueue_then_dispatch`),
+    /// cleared by `TurnEnded`/`SessionStopped` or on admission failure. Only
+    /// ever touched from the session's own command worker, which is what
+    /// serializes it against dispatch.
+    ///
+    /// Shared (not private to this service) so a provider's idle reaper can
+    /// read it before closing a session's transport: marking on admission
+    /// rather than on delivery success is what closes the gap between "a
+    /// command was handed to this session" and "the runtime has visibly
+    /// started a turn", which a reaper watching only the latter cannot see.
+    busy: PendingCommands,
     /// Where lifecycle facts go. Erased so it is not an eighth type parameter.
     lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
 }
@@ -170,6 +179,7 @@ where
         forwarder: impl CommandForwarder,
         defaults: impl Into<HarnessDefaults>,
         lifecycle_publisher: impl AgentSessionLifecyclePublisher,
+        pending: PendingCommands,
     ) -> Self {
         Self {
             inner: Arc::new(AgentHarnessInner {
@@ -183,7 +193,7 @@ where
                 forwarder: Box::new(forwarder),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
-                busy: DashMap::new(),
+                busy: pending,
                 lifecycle_publisher: Arc::new(lifecycle_publisher),
             }),
             workers: Arc::new(DashMap::new()),

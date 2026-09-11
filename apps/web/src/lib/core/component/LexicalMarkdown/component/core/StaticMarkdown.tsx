@@ -82,7 +82,10 @@ import { ConnectApp as ConnectAppDecorator } from '../decorator/ConnectApp';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
-import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
+import {
+  DocumentMention as DocumentMentionDecorator,
+  DocumentMentionStatic,
+} from '../decorator/DocumentMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { LazyDecorator } from '../decorator/LazyDecorator';
@@ -359,13 +362,6 @@ const UserMention: TypedRenderableEntity<UserMentionNode> = {
   ),
 };
 
-const MentionPlaceholder = () => (
-  <span class="pointer-events-none inline-block align-baseline opacity-60">
-    <span class="relative top-[0.125em] size-[1em] inline-block mx-1 bg-current/15 rounded-xs" />
-    <span class="inline-block w-12 h-[0.9em] align-baseline bg-current/10 rounded-sm" />
-  </span>
-);
-
 const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
   guard: (node: LexicalNode): node is DocumentMentionNode =>
     node.__type === 'document-mention',
@@ -384,7 +380,13 @@ const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
       <span class={getTextClassName(props.node, props.theme)}>
         {shouldRenderLazy ? (
           <LazyDecorator
-            placeholder={<MentionPlaceholder />}
+            placeholder={
+              <DocumentMentionStatic
+                {...componentProps}
+                key={key}
+                theme={props.theme}
+              />
+            }
             render={mention}
           />
         ) : (

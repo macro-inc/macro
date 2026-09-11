@@ -4,7 +4,6 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
-import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import {
   favoriteSplitContent,
   useFavoriteDisplayName,
@@ -16,12 +15,12 @@ import CheckSquareIcon from '@phosphor/check-square.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import NoteIcon from '@phosphor/note-pencil.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Button } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskTab } from '../types';
 
@@ -128,56 +127,16 @@ function TaskFavorites(props: {
   );
 }
 
-function TaskTags(props: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const filters = useTaskFilters();
-  const tags = () =>
-    filters.groups().find((group) => group.id === 'tags')?.options ?? [];
-
-  return (
-    <CollapsibleSection.Root
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    >
-      <CollapsibleSection.Trigger class="text-xs">
-        <CollapsibleSection.Indicator class="order-first ml-0" />
-        <span class="truncate">Tags</span>
-      </CollapsibleSection.Trigger>
-      <CollapsibleSection.Content>
-        <ViewSidebar.Nav aria-label="Task tags">
-          <For each={tags()}>
-            {(tag) => {
-              const selected = () => filters.isSelected('tags', tag.id);
-
-              return (
-                <ViewSidebar.Item
-                  active={selected()}
-                  aria-pressed={selected()}
-                  class="font-normal"
-                  onClick={() =>
-                    filters.setSelected('tags', tag.id, !selected())
-                  }
-                >
-                  <span class="flex size-4 shrink-0 items-center justify-center">
-                    {tag.icon?.()}
-                  </span>
-                  <span class="truncate">{tag.label}</span>
-                </ViewSidebar.Item>
-              );
-            }}
-          </For>
-        </ViewSidebar.Nav>
-      </CollapsibleSection.Content>
-    </CollapsibleSection.Root>
-  );
-}
-
 export function TasksSidebar() {
   const layout = useSplitLayout();
   const panel = useSplitPanelOrThrow();
-  const { state, setState, setTab } = useTasksView();
+  const {
+    state,
+    setTab,
+    setFacets,
+    isSidebarSectionOpen,
+    setSidebarSectionOpen,
+  } = useTasksView();
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -186,15 +145,6 @@ export function TasksSidebar() {
     activeId: () => state.tab,
     setActiveId: setTab,
   });
-
-  const sectionOpen = (id: string) =>
-    !state.collapsedSidebarSectionIds.includes(id);
-
-  const setSectionOpen = (id: string, open: boolean) =>
-    setState(
-      'collapsedSidebarSectionIds',
-      open ? removeValue(id) : addUnique(id)
-    );
 
   return (
     <ViewSidebar.Root aria-label="Tasks navigation" class="gap-4 bg-panel">
@@ -228,13 +178,16 @@ export function TasksSidebar() {
         </div>
 
         <TaskFavorites
-          open={sectionOpen('favorites')}
-          onOpenChange={(open) => setSectionOpen('favorites', open)}
+          open={isSidebarSectionOpen('favorites')}
+          onOpenChange={(open) => setSidebarSectionOpen('favorites', open)}
         />
 
-        <TaskTags
-          open={sectionOpen('tags')}
-          onOpenChange={(open) => setSectionOpen('tags', open)}
+        {/* Tags narrow the current tab; switching tabs clears them like any facet. */}
+        <SidebarTagsSection
+          activeIds={state.facets.tags ?? []}
+          onActiveIdsChange={(ids) => setFacets({ ...state.facets, tags: ids })}
+          open={isSidebarSectionOpen('tags')}
+          onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
         />
       </ViewSidebar.Content>
     </ViewSidebar.Root>

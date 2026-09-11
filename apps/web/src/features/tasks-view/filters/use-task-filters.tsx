@@ -4,8 +4,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { PropertyValueIcon } from '@property/component/propertyValue';
-import { TagDot } from '@property/tags/TagDot';
-import { useTagSets } from '@property/tags/tag-sets-context';
+import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { useContacts } from '@queries/contacts/contacts';
 import { createMemo } from 'solid-js';
 import { useTasksView } from '../tasks-view-context';
@@ -22,7 +21,7 @@ export function useTaskFilters() {
   const { state, setFacets } = useTasksView();
   const contacts = useContacts();
   const currentUserId = useUserId();
-  const tagSets = useTagSets();
+  const tagGroup = useTagFilterGroup();
 
   const peopleOptions = createMemo(() => {
     const people = [...contacts()];
@@ -89,18 +88,7 @@ export function useTaskFilters() {
         label: 'Created by',
         options: peopleOptions(),
       },
-      {
-        id: 'tags',
-        label: 'Tags',
-        options: tagSets().flatMap((set) =>
-          set.options.map((option) => ({
-            id: option.id,
-            label:
-              option.value.type === 'string' ? option.value.value : option.id,
-            icon: () => <TagDot color={option.color ?? undefined} />,
-          }))
-        ),
-      },
+      tagGroup(),
     ]
   );
 

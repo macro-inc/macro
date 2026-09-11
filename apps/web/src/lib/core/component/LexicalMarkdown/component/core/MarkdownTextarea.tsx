@@ -41,6 +41,7 @@ import {
   type ItemMention,
   iosCursorScrollPlugin,
   keyboardFocusPlugin,
+  listSwipeIndentPlugin,
   mediaPlugin,
   mentionsPlugin,
   type SelectionData,
@@ -232,6 +233,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         : selectionDataPlugin(lexicalWrapper)
     )
     .use(tabIndentationPlugin())
+    .use(listSwipeIndentPlugin(props.editable))
     .use(textPastePlugin())
     .use(
       mentionsPlugin({

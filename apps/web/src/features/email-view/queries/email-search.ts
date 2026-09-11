@@ -86,13 +86,26 @@ export function buildEmailSearchRequest(
       context.inboxIds.length > 0 ? [...context.inboxIds] : [NIL_UUID];
   }
 
+  // Tags are entity-wide in the search service, so they sit beside the
+  // per-type filters rather than inside `email_filters`. Like the list
+  // query, a selected tag that no longer exists stops filtering.
+  const tagOptionIds = [...new Set(context.facets.tags ?? [])].filter((id) =>
+    context.facetContext.tagPropertyDefinitionByOptionId.has(id)
+  );
+
   return {
     params: { cursor: null, page_size: 100 },
     body: {
       query: search.query,
       match_type: search.matchType,
       search_on: 'name_content',
-      filters: { ...nonEmailFilters, email_filters: emailFilters },
+      filters: {
+        ...nonEmailFilters,
+        email_filters: emailFilters,
+        ...(tagOptionIds.length > 0
+          ? { tag_option_ids: tagOptionIds, tag_filter_mode: 'any' }
+          : {}),
+      },
     },
   };
 }

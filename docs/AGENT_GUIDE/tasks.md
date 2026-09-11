@@ -4,9 +4,13 @@
 
 `Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, and `Team tasks`.
 The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, `Filter`, and `Preview`;
-task creation is available from the `New` button in the Tasks sidebar. On mobile, the tabs
+task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
+sidebar has a collapsible `Tags` section listing every personal and team tag, with a
+`New tag` button beside the heading. Clicking a tag narrows the current tab to tasks
+carrying it (the same selection as the `Tags` group of the `Filter` menu); clicking it again
+clears it, and switching tabs clears it like any other filter. On mobile, the tabs
 are pills and the leading sliders button opens one drawer containing Sort, Group, and
-Filters. Mobile intentionally omits the search and create controls.
+Filters (including Tags). Mobile intentionally omits the search and create controls.
 
 New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced task features`,
 `How we use tasks at Macro`).

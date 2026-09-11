@@ -410,6 +410,44 @@ async fn create_user_owned_bot_records_user_owner(pool: PgPool) -> anyhow::Resul
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_profiles_batch_persisted_system_deleted_and_missing_bots(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let mut request = create_req("profile-batch");
+    request.avatar_url = Some("https://static.example/profile-batch.png".to_string());
+    let bot = service.create_bot(user_id(USER_OWNER), request).await?;
+    let missing = BotId::new_from_uuid(Uuid::new_v4());
+    let repo = PgBotsRepo::new(pool);
+
+    let profiles = repo
+        .get_bot_profiles(&[bot.id, bot_id::MACRO_NEW_BOT_ID, missing])
+        .await?;
+    let profile = profiles.get(&bot.id).expect("persisted bot profile");
+    assert_eq!(profile.id, bot.id);
+    assert_eq!(profile.name, bot.name);
+    assert_eq!(profile.avatar_url, bot.avatar_url);
+    assert_eq!(
+        profiles
+            .get(&bot_id::MACRO_NEW_BOT_ID)
+            .expect("system bot profile")
+            .name,
+        bot_id::MACRO_NEW_NAME
+    );
+    assert!(!profiles.contains_key(&missing));
+
+    service.delete_bot(user_id(USER_OWNER), bot.id).await?;
+    assert!(repo.get_bot(bot.id).await?.is_none());
+    assert!(
+        repo.get_bot_profiles(&[bot.id])
+            .await?
+            .contains_key(&bot.id)
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Result<()> {
     let service = service(&pool);
     let created = service
