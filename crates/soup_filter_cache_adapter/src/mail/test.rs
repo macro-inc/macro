@@ -601,6 +601,42 @@ fn turso_cleared_inbox_timestamp_suppresses_stale_sort_facts() {
 }
 
 #[test]
+fn invalid_capsules_invalidate_existing_mail_projections() {
+    pollster::block_on(async {
+        for invalid in [
+            Value::Null,
+            json!("not a capsule"),
+            json!(default_capsule(2)),
+            json!(
+                encode_cache_projection_supplement(&SoupCacheProjectionSupplement::document(
+                    RecordKey::new(format!("GraphqlSoupDocument:{}", id(1))).unwrap(),
+                    false,
+                    false,
+                    vec![],
+                ),)
+                .unwrap()
+            ),
+        ] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let mut data = seed();
+            data["user"]["soup"]["items"] = json!([row(1)]);
+            write(&mut engine, QUERY, &data).await;
+            data["user"]["soup"]["items"][0]["cacheProjection"] = invalid;
+            write(&mut engine, QUERY, &data).await;
+            let key = RecordKey::new(format!("{TYPE}:{}", id(1))).unwrap();
+            assert!(matches!(
+                engine
+                    .storage()
+                    .load_projection_states(&[key])
+                    .await
+                    .unwrap()[0],
+                Some(ProjectionState::Incomplete { .. })
+            ));
+        }
+    });
+}
+
+#[test]
 fn missing_proof_is_not_a_false_fact() {
     pollster::block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());

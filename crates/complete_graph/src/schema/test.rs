@@ -508,6 +508,7 @@ impl EmailService for CountingEmailService {
 struct RecordingEmailContentReader {
     calls: Arc<Mutex<Vec<Vec<graphql_email::EmailContentKey>>>>,
     metadata_calls: Arc<Mutex<Vec<Vec<Uuid>>>>,
+    mail_projection_calls: Arc<Mutex<Vec<Vec<Uuid>>>>,
 }
 
 impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentReader {
@@ -543,6 +544,10 @@ impl graphql_email::SoupEmailThreadMailProjectionEdgeReader for RecordingEmailCo
         _user_id: &MacroUserIdStr<'static>,
         thread_ids: Vec<Uuid>,
     ) -> HashMap<Uuid, graphql_email::EmailThreadMailProjectionLoad> {
+        self.mail_projection_calls
+            .lock()
+            .unwrap()
+            .push(thread_ids.clone());
         thread_ids
             .into_iter()
             .map(|thread_id| {
@@ -1656,6 +1661,43 @@ async fn email_thread_metadata_is_lazy_and_batches_across_threads() {
     assert_eq!(items[1]["linkId"], Uuid::from_u128(952).to_string());
     assert!(items[0]["latestInboundMessageTs"].as_str().is_some());
     assert!(items[1]["latestInboundMessageTs"].is_null());
+}
+
+#[tokio::test]
+async fn mail_previews_and_capsules_share_a_lazy_batched_reader() {
+    let harness = harness();
+    let first_id = Uuid::from_u128(51);
+    let second_id = Uuid::from_u128(52);
+    harness.soup_service.set_raw_response(vec![
+        soup_email_thread(first_id),
+        soup_email_thread(second_id),
+    ]);
+    let metadata = harness
+        .execute("{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id linkId latestInboundMessageTs } } } } }")
+        .await;
+    assert!(metadata.errors.is_empty(), "{:?}", metadata.errors);
+    assert!(
+        harness
+            .email_content_reader
+            .mail_projection_calls
+            .lock()
+            .unwrap()
+            .is_empty()
+    );
+
+    let response = harness
+        .execute("{ user { soup(input: {initial: {}}) { items { id cacheProjection ... on GraphqlSoupEmailThread { mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id } } } } } }")
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let mut calls = harness
+        .email_content_reader
+        .mail_projection_calls
+        .lock()
+        .unwrap()
+        .clone();
+    assert_eq!(calls.len(), 1);
+    calls[0].sort();
+    assert_eq!(calls[0], vec![first_id, second_id]);
 }
 
 fn activity_record(

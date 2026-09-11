@@ -487,6 +487,27 @@ async fn authorized_mail_projection_keys_reach_the_email_domain_in_bulk() {
 }
 
 #[tokio::test]
+async fn unauthorized_mail_projection_keys_do_not_reach_the_email_domain() {
+    let content = Arc::new(RecordingContentService::default());
+    let reader = EmailServiceEmailContentReader::new(
+        content.clone(),
+        Arc::new(TestAccessService { allow: false }),
+    );
+    let user_id = MacroUserIdStr::try_from_email("reader@example.com").unwrap();
+    let requested = Uuid::from_u128(1);
+
+    let loaded = reader
+        .get_email_thread_mail_projections(&user_id, vec![requested])
+        .await;
+
+    assert_eq!(content.mail_projection_calls.load(Ordering::SeqCst), 0);
+    assert!(matches!(
+        loaded.get(&requested),
+        Some(EmailThreadMailProjectionLoad::Missing)
+    ));
+}
+
+#[tokio::test]
 async fn unauthorized_metadata_keys_do_not_reach_the_email_domain() {
     let content = Arc::new(RecordingContentService::default());
     let reader = EmailServiceEmailContentReader::new(

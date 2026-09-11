@@ -76,9 +76,9 @@ pub(super) async fn thread_mail_projections_by_ids(
             UNION ALL SELECT team_id::text FROM team_user WHERE user_id = $2
             UNION ALL SELECT $2::text
         )
-        SELECT t.id AS "thread_id!", t.link_id,
-            t.latest_inbound_message_ts, t.latest_non_spam_message_ts,
-            t.latest_outbound_message_ts, t.has_calendar_attachment,
+        SELECT t.id AS "thread_id!",
+            t.latest_non_spam_message_ts, t.latest_outbound_message_ts,
+            t.has_calendar_attachment,
             EXISTS (SELECT 1 FROM entity_access ea
                 WHERE ea.entity_id = t.id AND ea.entity_type = 'email_thread'
                   AND ea.source_id = ANY(SELECT source_id FROM user_source_ids)
