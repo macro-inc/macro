@@ -128,10 +128,16 @@ async function publish(args: Args, publicKey: string | null): Promise<string> {
   form.set('timeLimit', SESSION_HARD_LIMIT_SECONDS);
   form.set('maxConcurrent', MAX_CONCURRENT_SESSIONS);
   form.set('note', args.note);
-  // A leaked link cannot drain the account, and the embed is only reachable
-  // from a PR page.
-  form.set('appPermissions.run', 'authenticated');
-  form.set('referrerHostnamesRestricted', 'github.com');
+  // Anyone who can open the PR can open the preview. The two tempting
+  // restrictions both lock out the reviewer this exists for:
+  // `appPermissions.run=authenticated` demands an Appetize account, and
+  // `referrerHostnamesRestricted` rejects the click outright, because GitHub
+  // marks external links rel="noreferrer" and sends no referrer at all.
+  //
+  // The session caps above are the real protection: a leaked link buys a
+  // 3-minute idle timeout, a 30-minute ceiling and two concurrent sessions,
+  // on an app that still needs a Macro login to show anything.
+  form.set('appPermissions.run', 'public');
 
   const url = publicKey ? `${APPETIZE_API}/${publicKey}` : APPETIZE_API;
   const response = await fetch(url, {
