@@ -183,7 +183,7 @@ export function AgentInput(props: AgentInputProps) {
             id={AGENT_INPUT_TEXT_AREA_ID}
             ref={bodyRef}
             class={cn(
-              'min-w-0 flex-1 pl-1 text-[15px] leading-5 text-ink touch:px-3 touch:py-2 touch:text-sm',
+              'min-w-0 flex-1 pl-1 text-sm text-ink touch:px-3 touch:py-2',
               !isTouchDevice() && isMultiline() && 'pl-3'
             )}
             classList={{
@@ -215,7 +215,6 @@ export function AgentInput(props: AgentInputProps) {
                 when={props.busy && props.onStop}
                 fallback={
                   <SendButton
-                    appearance="composer"
                     tooltip="Send"
                     disabled={!canSend()}
                     onClick={send}
@@ -241,7 +240,6 @@ export function AgentInput(props: AgentInputProps) {
                   }
                 >
                   <SendButton
-                    appearance="composer"
                     aria-label="Send next queued message"
                     tooltip="Send next queued message"
                     shortcut="Enter"

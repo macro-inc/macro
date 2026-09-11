@@ -235,7 +235,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
                 placeholder={inputView().placeholder}
                 initialValue={inputView().value}
                 autofocus={!isMobile() && (props.autofocus ?? true)}
-                class="text-[15px] leading-5 touch:text-sm"
+                class="text-sm"
               />
             </Input.Editor>
           </Input.EditorShell>

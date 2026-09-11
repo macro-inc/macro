@@ -395,7 +395,6 @@ export function TaskComposer(props: {
           {props.modeSwitch}
         </div>
         <SendButton
-          appearance="composer"
           tooltip="Create task and send"
           shortcut="cmd+enter"
           aria-label="Create task and send"

@@ -118,7 +118,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
             // Desktop: side-by-side resizable splits.
             <Resize.Zone
               direction="horizontal"
-              gutter={isTouchDevice() ? 8 : 1}
+              gutter={1}
               captureResizeCtx={splitManager.setResizeContext}
             >
               <For each={ids()}>

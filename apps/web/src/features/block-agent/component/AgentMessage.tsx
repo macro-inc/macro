@@ -88,13 +88,10 @@ function UserMessage(props: { message: FoldedMessage }) {
     <div
       class="flex w-full"
       ref={(el) =>
-        messageSendMotion(
-          el,
-          () =>
-            props.message.requestId
-              ? `agent:${props.message.agentSessionId}:${props.message.requestId}`
-              : undefined,
-          'bubble'
+        messageSendMotion(el, () =>
+          props.message.requestId
+            ? `agent:${props.message.agentSessionId}:${props.message.requestId}`
+            : undefined
         )
       }
     >

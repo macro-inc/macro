@@ -76,7 +76,9 @@ vi.mock('@service-cognition/client', () => ({
   cognitionApiServiceClient: { createChat: mocks.createChat },
 }));
 
-import { mobilePageCreateLabel } from '@components/app/mobile/mobile-page-create-action';
+import type { CreatableBlock } from '@app/features/command/types';
+import { mobilePageCreateAction } from '@components/app/mobile/mobile-page-create-action';
+import { TOKENS } from '@core/hotkey/tokens';
 import { SoupChatInput } from './SoupChatInput';
 
 afterEach(cleanup);
@@ -114,8 +116,34 @@ describe('Agents list composer', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
   });
   it('replaces the Agents floating create button without removing other page actions', () => {
-    expect(mobilePageCreateLabel('agents')).toBeUndefined();
-    expect(mobilePageCreateLabel('mail')).toBe('Email');
-    expect(mobilePageCreateLabel('tasks')).toBe('Task');
+    const blocks: CreatableBlock[] = [
+      {
+        label: 'Mail draft',
+        description: 'Create email',
+        blockName: 'email',
+        hotkeyToken: TOKENS.create.email,
+        hotkey: 'e',
+        keyDownHandler: vi.fn(() => true),
+      },
+      {
+        label: 'Task',
+        description: 'Create task',
+        blockName: 'task',
+        hotkeyToken: TOKENS.create.task,
+        hotkey: 't',
+        keyDownHandler: vi.fn(() => true),
+      },
+    ];
+
+    expect(mobilePageCreateAction('agents', blocks)).toBeUndefined();
+    expect(mobilePageCreateAction('mail', blocks)).toEqual({
+      label: 'New mail draft',
+      run: blocks[0].keyDownHandler,
+    });
+    expect(mobilePageCreateAction('tasks', blocks)).toEqual({
+      label: 'New task',
+      run: blocks[1].keyDownHandler,
+    });
+    expect(mobilePageCreateAction('mail', [])).toBeUndefined();
   });
 });

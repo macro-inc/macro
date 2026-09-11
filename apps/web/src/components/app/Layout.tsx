@@ -350,11 +350,6 @@ function LayoutInner(props: RouteSectionProps) {
   const callCtx = useCallContextOptional();
   const incomingCallWidgetVisible = useIncomingCallWidgetVisible();
   const sidebarNextEnabled = useSidebarNextFlag();
-  // The rail is always in the row; the legacy sidebar only when expanded
-  // (its slim and hidden states take no width).
-  const sidebarDividerVisible = () =>
-    isSidebarVisible() &&
-    (sidebarNextEnabled() || sidebarState() === 'expanded');
   // SidebarRail is already narrow and has no slim mode, so nothing should arm
   // the hover-peek overlay strip or the slim-mode call widget under it.
   const sidebarCollapsed = createMemo(
@@ -522,11 +517,6 @@ function LayoutInner(props: RouteSectionProps) {
                 }
               />
             </Show>
-          </Show>
-          {/* The sidebar column and the panes share one flat surface, so a
-              1px divider is the only thing that separates them. */}
-          <Show when={sidebarDividerVisible()}>
-            <div class="w-px shrink-0 self-stretch border-l-[1px] border-thread-rail" />
           </Show>
           <Show when={sidebarCollapsed()}>
             <div

@@ -486,7 +486,7 @@ export function ChannelInput(props: ChannelInputProps) {
                 placeholder={props.input.placeholder}
                 initialValue={inputState.view().value}
                 autofocus={!isTouchDevice() && (props.autofocus ?? true)}
-                class="text-[15px] leading-5 touch:text-sm"
+                class="text-sm"
                 refFn={attach}
                 onConnect={() => {
                   isEditorConnected = true;

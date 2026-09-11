@@ -157,15 +157,15 @@ type ComponentRegistration = {
 
 const REGISTRY = new Map<string, ComponentRegistration>();
 
-function registerComponent<TMeta extends Record<string, unknown>>(
+function registerComponent(
   name: string,
   factory: ComponentFactory,
-  initialMeta?: TMeta
+  initialMeta?: ComponentMeta
 ) {
   const metaWithKind = initialMeta ? { kind: name, ...initialMeta } : undefined;
   REGISTRY.set(name, {
     factory,
-    initialMeta: metaWithKind as ComponentMeta,
+    initialMeta: metaWithKind,
   });
 }
 

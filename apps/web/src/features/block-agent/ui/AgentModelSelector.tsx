@@ -32,7 +32,7 @@ import { TextShimmer } from './TextShimmer';
 
 /** Compact ghost pill — same size as the short-list trigger and chat's selector. */
 const PILL_TRIGGER_CLASS =
-  'h-6 w-auto max-w-[9rem] min-w-0 justify-start gap-1 rounded-full border-transparent bg-ink/5 px-2 text-left text-[15px] leading-5 text-ink-subtle touch:text-sm hover:bg-ink/10';
+  'h-6 w-auto max-w-[9rem] min-w-0 justify-start gap-1 rounded-full border-transparent bg-ink/5 px-2 text-left text-sm text-ink-subtle hover:bg-ink/10';
 
 /** Height of one model row — `h-7` on the item, so the cap is exact. */
 const ROW_HEIGHT_PX = 28;
@@ -119,7 +119,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         size="sm"
         aria-label="Agent model"
         disabled={disabled()}
-        class="h-8 max-w-[60vw] min-w-0 justify-start gap-1 rounded-lg border-none bg-transparent px-1.5 text-left text-[15px] leading-5 text-ink-subtle touch:text-sm hover:bg-hover"
+        class="h-8 max-w-[60vw] min-w-0 justify-start gap-1 rounded-lg border-none bg-transparent px-1.5 text-left text-sm text-ink-subtle hover:bg-hover"
       >
         <TextShimmer
           text={label()}

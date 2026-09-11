@@ -87,6 +87,8 @@ export function BottomReplyButtons(props: {
   const toggleMarkDone = () => {
     if (isDone()) {
       ctx.markThreadNotDone();
+    } else if (props.navigation) {
+      props.navigation.markDone(ctx.archiveThread);
     } else {
       ctx.archiveThread();
     }

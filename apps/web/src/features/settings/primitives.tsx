@@ -73,7 +73,7 @@ export function SettingsSection(props: {
         <div class="flex items-end justify-between gap-4 px-6">
           <div class="flex flex-col gap-0.5 min-w-0">
             <Show when={props.title}>
-              <h2 class="text-[15px] font-semibold text-ink">{props.title}</h2>
+              <h2 class="text-sm font-semibold text-ink">{props.title}</h2>
             </Show>
             <Show when={props.description}>
               <p class="text-sm text-ink-muted">{props.description}</p>

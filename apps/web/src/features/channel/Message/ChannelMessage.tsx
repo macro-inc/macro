@@ -196,7 +196,7 @@ export function ChannelMessage(props: ChannelMessageProps) {
         }
         onClick={props.onClick}
         ref={(el) => {
-          messageSendMotion(el, () => `channel:${props.message.id}`, 'channel');
+          messageSendMotion(el, () => `channel:${props.message.id}`);
           touchHandler(el, () => ({
             touchClassName: 'channel-message-long-press-highlight',
             onLongPress: () =>

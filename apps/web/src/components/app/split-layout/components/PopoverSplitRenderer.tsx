@@ -54,6 +54,7 @@ function PopoverSplitModal(props: {
   onClose: () => void;
 }) {
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
+  const [displayName, setDisplayName] = createSignal(props.popover.content.id);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
@@ -77,8 +78,8 @@ function PopoverSplitModal(props: {
     isActive: () => true,
     isFirst: () => true,
     isLast: () => true,
-    displayName: () => props.popover.content.id,
-    setDisplayName: () => {},
+    displayName,
+    setDisplayName,
     toggleSpotlight: () => {},
     isSpotLight: () => false,
     isPopover: () => true,
@@ -96,11 +97,11 @@ function PopoverSplitModal(props: {
     getUrl: () => '',
     meta: () =>
       props.popover.mount.kind === 'component'
-        ? (props.popover.mount as any).meta
+        ? props.popover.mount.meta
         : undefined,
     updateMeta:
       props.popover.mount.kind === 'component'
-        ? (props.popover.mount as any).updateMeta
+        ? props.popover.mount.updateMeta
         : undefined,
     referredFrom: () => null,
     lastNavigationCause: () => 'fresh',
@@ -153,12 +154,6 @@ function PopoverSplitModal(props: {
     },
   });
 
-  const useBottomSheet = () =>
-    isTouchDevice() &&
-    props.popover.content.type === 'component' &&
-    ['task-compose', 'calendar-event-compose'].includes(
-      props.popover.content.id
-    );
   const attachPanel = (element: HTMLElement) => {
     setPanelRef(element);
     bindHotKeyDom(element);
@@ -180,7 +175,7 @@ function PopoverSplitModal(props: {
 
   return (
     <Show
-      when={useBottomSheet()}
+      when={isTouchDevice()}
       fallback={
         <Dialog
           open={props.popover.isOpen}
@@ -203,11 +198,7 @@ function PopoverSplitModal(props: {
           <MobileDrawer.Content
             ref={attachPanel}
             class="bg-dialog"
-            aria-label={
-              props.popover.content.id === 'task-compose'
-                ? 'New task'
-                : 'Calendar event'
-            }
+            aria-label={displayName()}
             maxHeight={92}
           >
             <MobileDrawer.Handle />

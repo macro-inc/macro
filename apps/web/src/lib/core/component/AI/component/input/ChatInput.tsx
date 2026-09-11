@@ -253,7 +253,6 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const SendButton = () => (
     <UiSendButton
-      appearance="composer"
       tooltip={'Ask AI'}
       shortcut="enter"
       tooltipPlacement="top"
@@ -378,7 +377,7 @@ export function ChatInput(props: ChatInputComponentProps) {
             <div
               id={CHAT_INPUT_TEXT_AREA_ID}
               class={cn(
-                'text-[15px] leading-5 touch:text-sm text-ink touch:px-3 touch:py-2',
+                'text-sm text-ink touch:px-3 touch:py-2',
                 !isTouchDevice() && (isMultiline() || isTallVariant()) && 'pl-2'
               )}
               classList={{

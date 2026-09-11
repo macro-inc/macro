@@ -261,7 +261,7 @@ function SidePanelHeaderToggle() {
       class={cn(
         !isTouchDevice() && 'bg-surface',
         isTouchDevice() &&
-          'size-10 rounded-full border-0 bg-transparent active:text-accent',
+          'rounded-full border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
         isTouchDevice() && ctx.isOpen() && 'text-accent'
       )}
       tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}
@@ -364,10 +364,8 @@ function Section(
       order: props.order,
       component: () => (
         <Accordion.Item value={props.id}>
-          {/* One step above the pane rather than two: the sections read as
-              grouped content on the surface, not as raised cards. */}
           <Panel
-            depth={1}
+            depth={2}
             style={{ height: 'auto' }}
             class="rounded-xl bg-surface"
           >

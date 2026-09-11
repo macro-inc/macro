@@ -158,6 +158,7 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
     true
   );
   onMount(() => {
+    splitPanel.handle.setDisplayName('New agent session');
     const container = containerRef();
     if (container) attachHotkeys(container);
     // The dialog's focus scope lands on its first focusable child once the

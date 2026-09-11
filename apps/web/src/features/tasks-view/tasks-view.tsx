@@ -10,6 +10,7 @@ import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
 import { TasksViewProvider } from './tasks-view-context';
 import type { TasksViewStateOptions } from './types';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export type TasksViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -19,7 +20,7 @@ export type TasksViewProps = {
 function TasksListFallback() {
   return (
     <Surface
-      depth={0}
+      depth={isTouchDevice() ? 0 : 2}
       hideBorder
       class="grid min-h-0 min-w-0 place-items-center rounded-none bg-transparent text-ink-muted"
     >

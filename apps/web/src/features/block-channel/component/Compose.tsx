@@ -303,7 +303,7 @@ export function ChannelCompose() {
                             config={markdownEditor}
                             placeholder={placeholder()}
                             autofocus={false}
-                            class="text-[15px] leading-5 touch:text-sm"
+                            class="text-sm"
                           />
                         </Input.Editor>
                       </Input.EditorShell>

@@ -1,81 +1,66 @@
-import {
-  type Accessor,
-  createEffect,
-  createSignal,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+import { ReactiveMap } from '@solid-primitives/map';
+import { type Accessor, createEffect, on, onCleanup, untrack } from 'solid-js';
 
-// Only local sends earn an entrance. Consuming the ticket prevents replays on
-// virtual-list remounts, history loads, edits, and optimistic reconciliation.
-const pending = new Map<string, number>();
-const [revision, setRevision] = createSignal(0);
 const ENTRANCE_WINDOW_MS = 5000;
+const MAX_PENDING_SENDS = 128;
+
+// A send can be marked before or after its message mounts. Consume each marker
+// once so history loads, virtual-list remounts, and other splits don't replay it.
+const pendingSends = new ReactiveMap<string, number>();
 
 export function markMessageSent(key: string) {
-  const now = Date.now();
-  for (const [id, expires] of pending) {
-    if (expires <= now) pending.delete(id);
-  }
-  pending.set(key, now + ENTRANCE_WINDOW_MS);
-  // Bound tickets even if a transcript never mounts.
-  if (pending.size > 128) pending.delete(pending.keys().next().value!);
-  setRevision((value) => value + 1);
+  untrack(() => {
+    const now = Date.now();
+    for (const [id, expires] of pendingSends) {
+      if (expires <= now) pendingSends.delete(id);
+    }
+    pendingSends.set(key, now + ENTRANCE_WINDOW_MS);
+    // Bound markers even if a transcript never mounts.
+    if (pendingSends.size > MAX_PENDING_SENDS)
+      pendingSends.delete(pendingSends.keys().next().value!);
+  });
+}
+
+function consumeRecentSend(key: string) {
+  const expires = pendingSends.get(key);
+  if (expires === undefined) return false;
+  pendingSends.delete(key);
+  return expires > Date.now();
 }
 
 /** Attach to the message, leaving the scroll/virtualizer's layout untouched. */
 export function messageSendMotion(
   element: HTMLElement,
-  key: Accessor<string | undefined>,
-  kind: 'bubble' | 'channel'
+  key: Accessor<string | undefined>
 ) {
   let animation: Animation | undefined;
   onCleanup(() => animation?.cancel());
-  onMount(() => {
-    createEffect(() => {
-      revision();
-      const id = key();
-      if (!id) return;
-      const expires = pending.get(id);
-      if (expires === undefined) return;
-      pending.delete(id);
-      if (
-        expires <= Date.now() ||
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
-        typeof element.animate !== 'function'
-      )
-        return;
+  createEffect(
+    on(
+      () => {
+        const id = key();
+        return id && pendingSends.has(id) ? id : undefined;
+      },
+      (id) => {
+        if (!id || !consumeRecentSend(id)) return;
+        if (
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+          typeof element.animate !== 'function'
+        )
+          return;
 
-      animation?.cancel();
-      animation = element.animate(
-        kind === 'bubble'
-          ? [
-              {
-                opacity: 0,
-                transform: 'translateY(18px) scale(0.94)',
-                transformOrigin: 'bottom right',
-              },
-              {
-                opacity: 1,
-                transform: 'translateY(-1px) scale(1.005)',
-                transformOrigin: 'bottom right',
-                offset: 0.75,
-              },
-              {
-                opacity: 1,
-                transform: 'translateY(0) scale(1)',
-                transformOrigin: 'bottom right',
-              },
-            ]
-          : [
-              { opacity: 0, transform: 'translateY(10px)' },
-              { opacity: 1, transform: 'translateY(0)' },
-            ],
-        {
-          duration: kind === 'bubble' ? 420 : 300,
-          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-        }
-      );
-    });
-  });
+        animation?.cancel();
+        animation = element.animate(
+          [
+            { opacity: 0, transform: 'translateY(10px)' },
+            { opacity: 1, transform: 'translateY(0)' },
+          ],
+          {
+            duration: 300,
+            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          }
+        );
+      }
+    )
+  );
 }

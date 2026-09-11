@@ -1,5 +1,5 @@
 import { cn } from '@ui';
-import type { ParentProps } from 'solid-js';
+import type { JSX, ParentProps } from 'solid-js';
 
 /**
  * The floating pill surface for dock controls. Controls (MobileDockButton,
@@ -20,9 +20,17 @@ import type { ParentProps } from 'solid-js';
  * host is pointer-transparent); layout beyond the pill itself — height,
  * growth, distribution — is the caller's, via `class`.
  */
-export function MobileDockIsland(props: ParentProps<{ class?: string }>) {
+export function MobileDockIsland(
+  props: ParentProps<{
+    class?: string;
+    ref?: (element: HTMLDivElement) => void;
+    style?: JSX.CSSProperties;
+  }>
+) {
   return (
     <div
+      ref={props.ref}
+      style={props.style}
       class={cn(
         'island pointer-events-auto flex items-center rounded-full',
         props.class

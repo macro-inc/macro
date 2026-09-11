@@ -59,12 +59,7 @@ export type ViewShellLayout = {
 
 type ViewShellInternal = ViewShellLayout & { id: string };
 
-/**
- * Space between aside, main, and detail. On desktop it is exactly the 1px
- * divider the resize gutter paints, so the regions meet edge-to-edge; touch
- * layouts keep their wider spacing.
- */
-const RESIZE_GUTTER = isTouchDevice() ? 8 : 1;
+const RESIZE_GUTTER = 1;
 
 const ViewShellContext = createContext<ViewShellInternal>();
 

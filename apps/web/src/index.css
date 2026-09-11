@@ -227,11 +227,14 @@ body.tauri-ios {
   --layer-inset: var(--color-surface-3);
 }
 
-/* Desktop panes are flat: scope the panel semantic itself so every nested
-   bg-panel consumer (view chrome, sidebars, sticky headers) shares the page
-   surface and panes meet edge-to-edge instead of reading as lifted cards. */
-.split-panel-flat {
-  --color-panel: var(--color-page);
+/* Scope the panel semantic itself so nested bg-panel consumers share the same
+   inactive split chrome instead of only tinting the outer panel element. */
+.split-panel-inactive {
+  --color-panel: color-mix(
+    in oklch,
+    var(--theme-panel, var(--color-surface-1)) 80%,
+    var(--color-page)
+  );
 }
 
 @theme {
@@ -304,7 +307,7 @@ body.tauri-ios {
   --color-success: var(--color-green);
   --color-warning: var(--color-amber);
   --color-failure: var(--color-red);
-  --color-chrome: var(--color-surface-4);
+  --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
 
   /* Generated compatibility tokens. */
   --color-accent-bg: color-mix(in oklch, var(--color-accent) 8%, transparent);
@@ -410,7 +413,6 @@ body.tauri-ios {
   --font-sans: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-serif: "Playfair Display Variable", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: "Roboto Mono Variable",  monospace;
-  --text-xxs: 0.625rem;
 
   /* Animations */
   --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -537,28 +539,24 @@ html[data-theme-light='false'] {
    utility so it composes with variants — `mobile:island` — instead of
    hand-prefixing each part. */
 @utility island {
-  /* The glass rim and cast shadow replace the old ring + light-mode shadow:
-     Tailwind rings are box-shadows and would fight the glass box-shadow. */
-  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink glass;
-  --color-chrome: color-mix(in oklch, var(--color-surface-2) 82%, transparent);
+  /* Dark mode uses glass; light mode keeps its ring and cast shadow. */
+  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink dark-mode:glass light-mode:ring light-mode:ring-panel light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
+
   --glass-blur: 18px;
   --glass-saturate: 1.5;
 
   /* A quiet continuous edge, with broad reflections at the upper-left and
      lower-right. Unlike desktop glass, the rim never disappears entirely
-     between the highlights. Reuse glass's mask so the center stays clear. */
-  &::after {
-    padding: 1px;
-    background: linear-gradient(
-      135deg,
-      color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 0%,
-      color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 18%,
-      color-mix(in oklch, var(--glass-tint) var(--island-rim-faint), transparent) 42%,
-      color-mix(in oklch, var(--glass-tint) var(--island-rim-faint), transparent) 58%,
-      color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 82%,
-      color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 100%
-    );
-  }
+     between the highlights. Glass owns the rim's geometry and mask. */
+  --glass-rim-background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 0%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 18%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-faint), transparent) 42%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-faint), transparent) 58%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-soft), transparent) 82%,
+    color-mix(in oklch, var(--glass-tint) var(--island-rim-strong), transparent) 100%
+  );
 }
 
 /* Glass chrome: backdrop blur, a soft cast shadow, and a specular rim drawn as a 1px
@@ -566,11 +564,17 @@ html[data-theme-light='false'] {
    length). Shape and background come from the consumer, so this composes with
    any radius — the rim inherits it — and with variants (`mobile:glass`).
 
-   Desktop glass uses the marketing site's hero-ring geometry. Mobile islands
-   layer their own continuous rim, translucent fill and stronger blur on top.
-   Only geometry tokens are set here (see the `--glass-*` block in :root for
-   why the palette lives there). */
+   Desktop glass uses the marketing site's hero-ring geometry. Consumers can
+   override --glass-rim-background to customize the rim without owning its
+   pseudo-element. The palette stays in :root; the gradient reads those tokens. */
 @utility glass {
+  --glass-rim-background: linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-strong-base) * var(--glass-scale)), transparent) 0%,
+    transparent 24%,
+    transparent 76%,
+    color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale)), transparent) 100%
+  );
   position: relative;
   /* The masked rim owns the outer edge. Even a transparent border would
      inset the absolute pseudo-element by a pixel. Override Surface inline
@@ -592,13 +596,7 @@ html[data-theme-light='false'] {
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(
-      135deg,
-      color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-strong-base) * var(--glass-scale)), transparent) 0%,
-      transparent 24%,
-      transparent 76%,
-      color-mix(in oklch, var(--glass-tint) calc(var(--glass-rim-soft-base) * var(--glass-scale)), transparent) 100%
-    );
+    background: var(--glass-rim-background);
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);

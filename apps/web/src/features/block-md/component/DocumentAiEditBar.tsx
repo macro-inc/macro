@@ -132,7 +132,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
               <span class="flex h-8 w-4 shrink-0 items-center justify-center text-accent">
                 <AnimatedStarIcon triggerAnimation={focused()} />
               </span>
-              <div class="min-w-0 grow text-[15px] leading-5 touch:text-sm text-ink">
+              <div class="min-w-0 grow text-sm text-ink">
                 <MarkdownShell
                   config={editor}
                   placeholder="Describe the edit…"
@@ -142,7 +142,6 @@ export function DocumentAiEditBar(props: { documentId: string }) {
             </div>
             <div class="flex items-center justify-end">
               <SendButton
-                appearance="composer"
                 tooltip="Send edit"
                 shortcut="enter"
                 disabled={prompt().trim().length === 0}

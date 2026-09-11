@@ -410,10 +410,8 @@ export function EmailList(props: EmailListProps) {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      {/* The list sits flat on the pane surface on every platform; desktop
-          keeps a small inset so rows clear the toolbar divider. */}
       <Surface
-        depth={0}
+        depth={isTouchDevice() ? 0 : 2}
         hideBorder
         ref={(element: HTMLDivElement) => {
           setGrid(element);

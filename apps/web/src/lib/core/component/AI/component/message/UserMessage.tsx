@@ -80,9 +80,7 @@ export function UserMessage(props: {
   return (
     <div
       class="flex flex-col group"
-      ref={(el) =>
-        messageSendMotion(el, () => `chat:${props.message.id}`, 'bubble')
-      }
+      ref={(el) => messageSendMotion(el, () => `chat:${props.message.id}`)}
     >
       <Show when={quote()}>
         <div class="relative w-full text-xs flex flex-row space-x-2 items-start text-ink-muted">

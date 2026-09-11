@@ -10,6 +10,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compositeEntity, setDoneOverride } from '@notifications';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import {
@@ -259,6 +260,7 @@ export function createThreadCompletionAdapter(
       silent: opts?.silent === true,
       onUndoHandle: opts?.onUndoHandle,
       nextEntityId: opts?.nextEntityId,
+      navigateBack: opts?.navigateBack,
     };
 
     if (!thread?.db_id) return false;
@@ -269,53 +271,40 @@ export function createThreadCompletionAdapter(
     // the paths below skip archiveMutation and only mirror its thread-cache
     // handling via trackExternalThreadArchive.
     const { selectedRow, cachedItem } = resolveThreadSoupLookup(thread.db_id);
+    const entity =
+      selectedRow?.original ??
+      (cachedItem &&
+      cachedItem.tag !== 'channelThread' &&
+      cachedItem.tag !== 'calendarEvent'
+        ? mapApiSoupItemToEntity(cachedItem)
+        : buildEntityData({
+            blockName: 'email',
+            id: thread.db_id,
+            name: thread.messages.at(-1)?.subject || 'Email Thread',
+            isRead: thread.is_read,
+            done: !thread.inbox_visible,
+          }));
+    if (!entity) return false;
 
-    if (soup && selectedRow) {
+    if (opts?.navigate !== false && soup && selectedRow) {
       void trackExternalThreadArchive(
         thread.db_id,
         markAsDoneAction.executeWithSoup(
-          [selectedRow.original],
+          [entity],
           soup,
           (nextEntity) => {
             const splitHandle = splitPanel?.handle;
             if (!splitHandle) return;
             void openEntityInSplitFromUnifiedList(nextEntity, {
               splitHandle,
-              mergeHistory: true,
+              mergeHistory: !isTouchDevice(),
               referredFrom: splitHandle.referredFrom(),
             });
           },
           markDoneOpts
         )
       );
-    } else if (
-      cachedItem &&
-      cachedItem.tag !== 'channelThread' &&
-      cachedItem.tag !== 'calendarEvent'
-    ) {
-      // Not rendered inside a soup list (e.g. thread opened in a split): no
-      // row to drive the action from, so mark done via the cached soup entity
-      // so soup views drop the thread and its notifications settle.
-      void trackExternalThreadArchive(
-        thread.db_id,
-        markAsDoneAction.execute(
-          [mapApiSoupItemToEntity(cachedItem)],
-          undefined,
-          markDoneOpts
-        )
-      );
     } else {
-      // Direct navigation may have no soup entity. Use the loaded thread so
-      // notifications and archive state share the same completion and undo.
-      const entity = buildEntityData({
-        blockName: 'email',
-        id: thread.db_id,
-        name: thread.messages.at(-1)?.subject || 'Email Thread',
-        isRead: thread.is_read,
-        done: !thread.inbox_visible,
-      });
-      if (!entity) return false;
-
       void trackExternalThreadArchive(
         thread.db_id,
         markAsDoneAction.execute([entity], undefined, markDoneOpts)

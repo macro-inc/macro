@@ -1,8 +1,7 @@
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { createMemo } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { FloatRegion } from './float-regions/FloatRegion';
-import { useMobileDockViews } from './mobile-dock-views';
+import { MOBILE_DOCK_VIEWS } from './mobile-dock-views';
 import type { MobileNavViewId } from './mobile-nav-views';
 import { type PillTabItem, PillTabs } from './PillTabs';
 import {
@@ -20,11 +19,10 @@ export function MobileViewsRow() {
   // with an entity (or anything else) open, no pill is active.
   const activeView = useForegroundMobileView();
   const navigate = useMobileNavNavigate();
-  const dockViews = useMobileDockViews();
 
-  const items = createMemo<PillTabItem<MobileNavViewId>[]>(() => [
+  const items: PillTabItem<MobileNavViewId>[] = [
     { value: 'search', label: 'All' },
-    ...dockViews().map((view) =>
+    ...MOBILE_DOCK_VIEWS.map((view) =>
       view.pillIcon
         ? {
             value: view.id,
@@ -34,7 +32,7 @@ export function MobileViewsRow() {
           }
         : { value: view.id, label: view.label }
     ),
-  ]);
+  ];
 
   return (
     <FloatRegion
@@ -51,7 +49,7 @@ export function MobileViewsRow() {
       <PillTabs
         scrollable
         contentClass="px-(--mobile-chrome-gutter)"
-        items={items()}
+        items={items}
         value={activeView()}
         onChange={navigate}
       />
