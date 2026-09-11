@@ -22,7 +22,7 @@ const MAX_BULK_ENTITIES: usize = 200;
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct BulkTargetEntity {
-    /// The type of entity. Tasks are targeted as 'document'.
+    /// The type of entity. Tasks are targeted as 'document'; email threads (type 'email' in ListEntities and search results) are targeted as 'thread'.
     pub entity_type: ToolPropertyTargetEntityType,
     /// The id of the entity.
     pub entity_id: String,

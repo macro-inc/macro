@@ -65,7 +65,9 @@ pub struct SetEntityProperty {
     #[schemars(description = "The ID of the entity to update.")]
     pub entity_id: String,
 
-    #[schemars(description = "The type of entity.")]
+    #[schemars(
+        description = "The type of entity. Tasks are targeted as 'document'; email threads (type 'email' in ListEntities and search results) are targeted as 'thread'."
+    )]
     pub entity_type: ToolPropertyTargetEntityType,
 
     #[schemars(

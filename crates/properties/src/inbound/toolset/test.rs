@@ -184,3 +184,83 @@ fn print_set_output_schema() {
     let schema = schemars::schema_for!(SetEntityPropertyResponse);
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
 }
+
+mod entity_type_aliases {
+    use super::super::get_entity_properties::{ToolEntityType, ToolPropertyTargetEntityType};
+    use super::*;
+
+    /// ListEntities and search report email threads as `email`, so the
+    /// property tools accept that spelling alongside the canonical `thread`.
+    #[test]
+    fn set_entity_property_accepts_email_as_thread() {
+        let tool: SetEntityProperty = serde_json::from_value(serde_json::json!({
+            "entity_id": "01a09073-8a65-71f0-84b6-5ae47da19367",
+            "entity_type": "email",
+            "property_definition_id": "01a08770-8c51-7299-a31b-8569d2959337",
+            "add_option_ids": ["01a09083-9c93-7732-9ffc-8f2b45f508bb"],
+        }))
+        .expect("email should deserialize as a thread target");
+
+        assert!(matches!(
+            tool.entity_type,
+            ToolPropertyTargetEntityType::Thread
+        ));
+        assert_eq!(
+            model_entity::EntityType::from(tool.entity_type),
+            model_entity::EntityType::EmailThread
+        );
+    }
+
+    #[test]
+    fn bulk_set_entity_property_options_accepts_email_and_email_thread() {
+        let tool: BulkSetEntityPropertyOptions = serde_json::from_value(serde_json::json!({
+            "entities": [
+                { "entity_id": "01a09073-8a65-71f0-84b6-5ae47da19367", "entity_type": "email" },
+                { "entity_id": "01a0905a-3ab3-7c60-83fa-6987af8935fd", "entity_type": "email_thread" },
+                { "entity_id": "01a08e26-fd59-7120-8a4b-594e492eb054", "entity_type": "thread" },
+            ],
+            "property_definition_id": "01a08770-8c51-7299-a31b-8569d2959337",
+            "add_option_ids": ["01a09083-9c93-7732-9ffc-8f2b45f508bb"],
+        }))
+        .expect("email spellings should deserialize as thread targets");
+
+        assert_eq!(tool.entities.len(), 3);
+        assert!(
+            tool.entities
+                .iter()
+                .all(|entity| matches!(entity.entity_type, ToolPropertyTargetEntityType::Thread))
+        );
+    }
+
+    #[test]
+    fn get_entity_properties_accepts_email_as_thread() {
+        let tool: GetEntityProperties = serde_json::from_value(serde_json::json!({
+            "entity_id": "01a09073-8a65-71f0-84b6-5ae47da19367",
+            "entity_type": "email",
+        }))
+        .expect("email should deserialize as a thread target");
+
+        assert!(matches!(
+            tool.entity_type,
+            ToolPropertyTargetEntityType::Thread
+        ));
+    }
+
+    #[test]
+    fn entity_ref_accepts_email_as_thread() {
+        let tool: SetEntityProperty = serde_json::from_value(serde_json::json!({
+            "entity_id": "01a09073-8a65-71f0-84b6-5ae47da19367",
+            "entity_type": "document",
+            "property_definition_id": "01a08770-8c51-7299-a31b-8569d2959337",
+            "entity_ref": { "entityType": "email", "entityId": "01a0905a-3ab3-7c60-83fa-6987af8935fd" },
+        }))
+        .expect("email should deserialize as a thread reference");
+
+        let entity_ref = tool.entity_ref.expect("entity_ref should be set");
+        assert!(matches!(entity_ref.entity_type, ToolEntityType::Thread));
+        assert_eq!(
+            models_properties::EntityType::from(entity_ref.entity_type),
+            models_properties::EntityType::Thread
+        );
+    }
+}
