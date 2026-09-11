@@ -48,11 +48,16 @@ const UNIT_ALIASES: Record<string, TimeUnit> = {
 };
 
 /**
- * Parses a duration string like "3d", "1w", "36h", "2m", "1y", "30min", "3 days"
+ * Parses a duration string like "3d", "1w", "36h", "2m", "1y", "30min", "3 days",
+ * "in 2 hours", or "3 days from now".
  * Returns null if the input doesn't match the expected format
  */
 export function parseDurationString(input: string): ParsedDuration | null {
-  const s = input.trim().toLowerCase();
+  const s = input
+    .trim()
+    .toLowerCase()
+    .replace(/^in\s+/, '')
+    .replace(/\s+from\s+now$/, '');
   if (!s) return null;
 
   const firstLetter = s.search(/[a-z]/);

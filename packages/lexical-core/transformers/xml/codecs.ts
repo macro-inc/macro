@@ -255,6 +255,7 @@ export function serializeNode(node: SerNode): FxpNode {
           date: n.date,
           displayFormat: n.displayFormat,
           ...(n.mentionUuid !== undefined && { mentionUuid: n.mentionUuid }),
+          ...(n.displayMode !== undefined && { displayMode: n.displayMode }),
         })
       )
     )

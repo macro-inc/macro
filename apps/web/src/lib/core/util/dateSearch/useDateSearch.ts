@@ -190,8 +190,9 @@ function parseNaturalDate(
     'saturday',
   ];
 
+  const weekdayQuery = lowerInput.replace(/^(next|this)\s+/, '');
   const dayIndex = daysOfWeek.findIndex(
-    (day) => lowerInput === day || lowerInput === day.slice(0, 3)
+    (day) => weekdayQuery === day || weekdayQuery === day.slice(0, 3)
   );
 
   if (dayIndex !== -1) {

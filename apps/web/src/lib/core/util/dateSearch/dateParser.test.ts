@@ -86,6 +86,20 @@ describe('parseDurationString', () => {
     expect(parseDurationString('100MS')).toEqual({ value: 100, unit: 'ms' });
   });
 
+  it('should parse human phrases including in/from-now prefixes', () => {
+    expect(parseDurationString('3 days')).toEqual({ value: 3, unit: 'd' });
+    expect(parseDurationString('in 2 hours')).toEqual({ value: 2, unit: 'h' });
+    expect(parseDurationString('in 2 hrs')).toEqual({ value: 2, unit: 'h' });
+    expect(parseDurationString('3 days from now')).toEqual({
+      value: 3,
+      unit: 'd',
+    });
+    expect(parseDurationString('in 30 minutes')).toEqual({
+      value: 30,
+      unit: 'min',
+    });
+  });
+
   it('should return null for invalid input', () => {
     expect(parseDurationString('')).toBeNull();
     expect(parseDurationString('abc')).toBeNull();

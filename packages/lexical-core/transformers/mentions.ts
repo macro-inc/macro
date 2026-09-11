@@ -13,7 +13,11 @@ import {
   isConnectAppSlug,
 } from '../nodes/ConnectAppNode';
 import { ContactMentionNode } from '../nodes/ContactMentionNode';
-import { DateMentionNode } from '../nodes/DateMentionNode';
+import {
+  $createDateMentionNode,
+  DateMentionNode,
+  parseDateDisplayMode,
+} from '../nodes/DateMentionNode';
 import { DocumentCardNode } from '../nodes/DocumentCardNode';
 import { DocumentMentionNode } from '../nodes/DocumentMentionNode';
 import { GroupMentionNode } from '../nodes/GroupMentionNode';
@@ -164,6 +168,7 @@ export const I_DATE_MENTION: TextMatchTransformer = {
       date: node.getDate(),
       displayFormat: node.getDisplayFormat(),
       mentionUuid: node.getMentionUuid(),
+      displayMode: node.getDisplayMode(),
     });
     return `<m-date-mention>${data}</m-date-mention>`;
   },
@@ -173,11 +178,12 @@ export const I_DATE_MENTION: TextMatchTransformer = {
       for (const field of ['date', 'displayFormat']) {
         if (!(field in data)) throw new Error(`Missing field ${field}`);
       }
-      const dateMentionNode = new DateMentionNode(
-        data.date,
-        data.displayFormat,
-        data.mentionUuid
-      );
+      const dateMentionNode = $createDateMentionNode({
+        date: data.date,
+        displayFormat: data.displayFormat,
+        mentionUuid: data.mentionUuid,
+        displayMode: parseDateDisplayMode(data.displayMode),
+      });
       node.replace(dateMentionNode);
     } catch (e) {
       console.error('Error in I_DATE_MENTION replace:', e);

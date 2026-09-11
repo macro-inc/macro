@@ -1,7 +1,10 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
+import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
+import { DateMentionNode } from '@macro-inc/lexical-core';
+import ClockIcon from '@phosphor/clock.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
@@ -24,6 +27,8 @@ import {
   REMOVE_ACTION_SEARCH_COMMAND,
 } from '../../plugins';
 import { ACTIONS } from '../../plugins/actions/actions';
+import { insertDateMention } from '../../plugins/actions/insertDateMention';
+import { parseTimeSlashCommand } from '../../plugins/actions/timeCommands';
 import type { Action, ActionContext } from '../../plugins/actions/types';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
@@ -104,6 +109,62 @@ function ActionsMenuItem(props: {
   );
 }
 
+function DateActionsMenuItem(props: {
+  displayText: string;
+  secondaryText?: string;
+  index: number;
+  selected: boolean;
+  setIndex: (index: number) => void;
+  onSelect: () => void;
+}) {
+  let itemRef: HTMLDivElement | undefined;
+
+  createEffect(() => {
+    if (props.selected && itemRef) {
+      itemRef.scrollIntoView({ block: 'nearest' });
+    }
+  });
+
+  return (
+    <div
+      ref={itemRef}
+      on:mouseup={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      on:mousedown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      on:click={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        props.onSelect();
+      }}
+      on:mouseover={() => props.setIndex(props.index)}
+      class={cn('group flex items-center p-1.5 mx-1.5 rounded-md', {
+        'bg-ink/5': props.selected,
+      })}
+    >
+      <div class="flex flex-row gap-2 items-center w-full min-w-0">
+        <div class="size-4 flex items-center justify-center text-ink-extra-muted">
+          <ClockIcon class="size-4" />
+        </div>
+        <p class="text-sm text-ink font-medium flex-1 grow truncate">
+          {props.displayText}
+        </p>
+        <Show when={props.secondaryText}>
+          {(text) => (
+            <p class="text-xs text-ink-extra-muted truncate max-w-[45%]">
+              {text()}
+            </p>
+          )}
+        </Show>
+      </div>
+    </div>
+  );
+}
+
 export function ActionMenu(props: {
   editor: LexicalEditor;
   menu: MenuOperations;
@@ -176,10 +237,22 @@ export function ActionMenu(props: {
     debouncedSetSearchTerm(props.menu.searchTerm().toLowerCase());
   });
 
+  const timeCommand = createMemo(() => parseTimeSlashCommand(searchTerm()));
+  const dateQuery = createMemo(() => timeCommand()?.query ?? '');
+  const dateOptions = useDateSearch({ query: dateQuery });
+
   const filteredItems = createMemo(() => {
+    const command = timeCommand();
+    if (command && props.editor.hasNodes([DateMentionNode])) {
+      return dateOptions().map((option) => ({
+        kind: 'date' as const,
+        option,
+        displayMode: command.command,
+      }));
+    }
     return fuzzyFilter(searchTerm(), validActions, (item) =>
       [item.name, ...item.keywords].join(' ')
-    );
+    ).map((action) => ({ kind: 'action' as const, action }));
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
@@ -210,8 +283,14 @@ export function ActionMenu(props: {
     const items = filteredItems();
     const selectedItem = items[selectedIndex()];
     props.editor.dispatchCommand(REMOVE_ACTION_SEARCH_COMMAND, undefined);
-    if (selectedItem) {
-      selectedItem.action(props.editor, props.actionContext);
+    if (selectedItem?.kind === 'date') {
+      insertDateMention(
+        props.editor,
+        selectedItem.option.date,
+        selectedItem.displayMode
+      );
+    } else if (selectedItem?.kind === 'action') {
+      selectedItem.action.action(props.editor, props.actionContext);
     }
     setIsOpen(false);
   };
@@ -273,9 +352,32 @@ export function ActionMenu(props: {
       >
         <For each={filteredItems()}>
           {(item, index) => {
+            if (item.kind === 'date') {
+              return (
+                <DateActionsMenuItem
+                  displayText={item.option.displayText}
+                  secondaryText={item.option.secondaryText}
+                  index={index()}
+                  selected={index() === selectedIndex()}
+                  setIndex={setSelectedIndexFromMouse}
+                  onSelect={() => {
+                    props.editor.dispatchCommand(
+                      REMOVE_ACTION_SEARCH_COMMAND,
+                      undefined
+                    );
+                    insertDateMention(
+                      props.editor,
+                      item.option.date,
+                      item.displayMode
+                    );
+                    setIsOpen(false);
+                  }}
+                />
+              );
+            }
             return (
               <ActionsMenuItem
-                action={item}
+                action={item.action}
                 index={index()}
                 selected={index() === selectedIndex()}
                 editor={props.editor}

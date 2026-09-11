@@ -99,6 +99,16 @@ describe('parseNaturalDate', () => {
     expect(fri?.getDate()).toBe(21);
   });
 
+  it('should parse next/this weekday phrases', () => {
+    const nextWednesday = parseNaturalDate('next wednesday', baseDate);
+    expect(nextWednesday).toBeTruthy();
+    expect(nextWednesday?.getDay()).toBe(3);
+    expect(nextWednesday?.getDate()).toBe(19);
+
+    const thisWed = parseNaturalDate('this wed', baseDate);
+    expect(thisWed?.getTime()).toBe(nextWednesday?.getTime());
+  });
+
   it('should handle case insensitivity', () => {
     const date1 = parseNaturalDate('FEB 17', baseDate);
     const date2 = parseNaturalDate('feb 17', baseDate);
@@ -219,6 +229,36 @@ describe('useDateSearch', () => {
       expect(durationOption?.date.toDateString()).toBe(
         expectedDate.toDateString()
       );
+
+      dispose();
+    });
+  });
+
+  it('should parse human duration phrases like "in 2 hours"', () => {
+    createRoot((dispose) => {
+      const [query] = createSignal('in 2 hours');
+      const options = useDateSearch({ query });
+
+      const result = options();
+      const durationOption = result.find((opt) => opt.type === 'duration');
+      expect(durationOption).toBeTruthy();
+      expect(durationOption?.date.getTime()).toBeGreaterThan(Date.now());
+
+      dispose();
+    });
+  });
+
+  it('should parse next-weekday phrases', () => {
+    createRoot((dispose) => {
+      const [query] = createSignal('next wednesday');
+      const baseDate = new Date('2024-06-15T10:00:00');
+      const options = useDateSearch({ query, baseDate });
+
+      const result = options();
+      const naturalOption = result.find((opt) => opt.type === 'natural');
+      expect(naturalOption).toBeTruthy();
+      expect(naturalOption?.date.getDay()).toBe(3);
+      expect(naturalOption?.date.getDate()).toBe(19);
 
       dispose();
     });

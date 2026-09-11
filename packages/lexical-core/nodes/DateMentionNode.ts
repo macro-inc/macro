@@ -14,10 +14,25 @@ import {
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
+export const DATE_DISPLAY_MODES = ['date', 'countdown', 'duration'] as const;
+
+export type DateDisplayMode = (typeof DATE_DISPLAY_MODES)[number];
+
+export function parseDateDisplayMode(
+  value: string | null | undefined
+): DateDisplayMode | undefined {
+  if (value === 'date' || value === 'countdown' || value === 'duration') {
+    return value;
+  }
+  return undefined;
+}
+
 export type DateMentionInfo = {
   date: string; // ISO date string
   displayFormat: string; // How the date is displayed (e.g., "March 15, 2024")
   mentionUuid?: string;
+  /** Visual style: calendar date, live countdown, or remaining duration. */
+  displayMode?: DateDisplayMode;
 };
 
 export type SerializedDateMentionNode = Spread<
@@ -28,6 +43,7 @@ export type SerializedDateMentionNode = Spread<
 export type DateMentionDecoratorProps = {
   date: string;
   displayFormat: string;
+  displayMode?: DateDisplayMode;
   key: NodeKey;
   theme: EditorThemeClasses;
 };
@@ -38,6 +54,7 @@ export class DateMentionNode extends DecoratorNode<
   __date: string;
   __displayFormat: string;
   __mentionUuid: string | undefined;
+  __displayMode: DateDisplayMode | undefined;
 
   static getType() {
     return 'date-mention';
@@ -56,7 +73,8 @@ export class DateMentionNode extends DecoratorNode<
       node.__date,
       node.__displayFormat,
       node.__mentionUuid,
-      node.__key
+      node.__key,
+      node.__displayMode
     );
   }
 
@@ -64,12 +82,14 @@ export class DateMentionNode extends DecoratorNode<
     date: string,
     displayFormat: string,
     mentionUuid?: string,
-    key?: NodeKey
+    key?: NodeKey,
+    displayMode?: DateDisplayMode
   ) {
     super(key);
     this.__date = date;
     this.__displayFormat = displayFormat;
     this.__mentionUuid = mentionUuid;
+    this.__displayMode = displayMode;
   }
 
   static importJSON(serializedNode: SerializedDateMentionNode) {
@@ -77,6 +97,7 @@ export class DateMentionNode extends DecoratorNode<
       date: serializedNode.date,
       displayFormat: serializedNode.displayFormat,
       mentionUuid: serializedNode.mentionUuid,
+      displayMode: parseDateDisplayMode(serializedNode.displayMode),
     }).updateFromJSON(serializedNode);
     $applyIdFromSerialized(node, serializedNode);
     return node;
@@ -88,6 +109,7 @@ export class DateMentionNode extends DecoratorNode<
       date: this.__date,
       displayFormat: this.__displayFormat,
       mentionUuid: this.__mentionUuid,
+      displayMode: this.__displayMode,
       type: DateMentionNode.getType(),
       version: 1,
     };
@@ -100,6 +122,7 @@ export class DateMentionNode extends DecoratorNode<
     self.setDate(serializedNode.date);
     self.setDisplayFormat(serializedNode.displayFormat);
     self.setMentionUuid(serializedNode.mentionUuid);
+    self.setDisplayMode(parseDateDisplayMode(serializedNode.displayMode));
     return self;
   }
 
@@ -108,6 +131,7 @@ export class DateMentionNode extends DecoratorNode<
       date: this.__date,
       displayFormat: this.__displayFormat,
       mentionUuid: this.__mentionUuid,
+      displayMode: this.__displayMode,
     };
   }
 
@@ -126,6 +150,9 @@ export class DateMentionNode extends DecoratorNode<
       'data-date': this.__date,
       'data-display-format': this.__displayFormat,
       'data-mention-uuid': this.__mentionUuid || '',
+      ...(this.__displayMode
+        ? { 'data-display-mode': this.__displayMode }
+        : {}),
     };
   }
 
@@ -144,6 +171,9 @@ export class DateMentionNode extends DecoratorNode<
               const node = $createDateMentionNode({
                 date,
                 displayFormat,
+                displayMode: parseDateDisplayMode(
+                  domNode.getAttribute('data-display-mode')
+                ),
               });
               return { node };
             }
@@ -199,6 +229,15 @@ export class DateMentionNode extends DecoratorNode<
     writable.__mentionUuid = mentionUuid;
   }
 
+  getDisplayMode(): DateDisplayMode | undefined {
+    return this.__displayMode;
+  }
+
+  setDisplayMode(displayMode: DateDisplayMode | undefined) {
+    const writable = this.getWritable();
+    writable.__displayMode = displayMode;
+  }
+
   decorate(_: LexicalEditor, config: EditorConfig) {
     const decorator = getDecorator<DateMentionDecoratorProps>(DateMentionNode);
     if (decorator) {
@@ -216,11 +255,14 @@ export function $createDateMentionNode(params: {
   date: string;
   displayFormat: string;
   mentionUuid?: string;
+  displayMode?: DateDisplayMode;
 }) {
   const node = new DateMentionNode(
     params.date,
     params.displayFormat,
-    params.mentionUuid
+    params.mentionUuid,
+    undefined,
+    params.displayMode
   );
   return $applyNodeReplacement(node);
 }

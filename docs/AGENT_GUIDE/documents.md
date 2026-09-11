@@ -17,6 +17,17 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
 
+Slash commands `/date`, `/countdown`, and `/duration` insert a date chip from
+human time. Type the command, a space, then a phrase, then Enter to pick the
+top match:
+
+- `/date next wednesday` — calendar date chip
+- `/countdown 3 days` or `/countdown in 2 hours` — live remaining-time chip
+- `/duration 3 days` — remaining duration chip (`3 days`, not `in 3 days`)
+
+Bare `/date` (no phrase) lists the same presets as `@` date search (Today,
+Tomorrow, …). Click an inserted chip to change the date with the picker.
+
 `Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
 text and inline mention chips (tasks, docs, channels, skills, …) by the title
 shown on the chip.

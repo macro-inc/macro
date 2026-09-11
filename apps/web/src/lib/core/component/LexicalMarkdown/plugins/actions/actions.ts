@@ -9,17 +9,20 @@ import {
   $createDocumentMentionNode,
   AwaitNode,
   CustomCodeNode,
+  DateMentionNode,
   DocumentMentionNode,
   EquationNode,
   HorizontalRuleNode,
   ImageNode,
   VideoNode,
 } from '@macro-inc/lexical-core';
+import CalendarBlank from '@phosphor/calendar-blank.svg';
 import CheckSquare from '@phosphor/check-square.svg';
 import CodeBlock from '@phosphor/code-block.svg';
 import VideoIcon from '@phosphor/file-video.svg';
 import MathIcon from '@phosphor/function.svg';
 import TableIcon from '@phosphor/grid-four.svg';
+import Hourglass from '@phosphor/hourglass.svg';
 import ImageIcon from '@phosphor/image.svg';
 import LinkIcon from '@phosphor/link.svg';
 import ListBullets from '@phosphor/list-bullets.svg';
@@ -31,6 +34,8 @@ import TextH1 from '@phosphor/text-h-one.svg';
 import TextH3 from '@phosphor/text-h-three.svg';
 import TextH2 from '@phosphor/text-h-two.svg';
 import TextT from '@phosphor/text-t.svg';
+import Timer from '@phosphor/timer.svg';
+import { addDays } from 'date-fns';
 import type { LexicalEditor } from 'lexical';
 import { nanoid } from 'nanoid';
 import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';
@@ -44,6 +49,7 @@ import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
 import { INSERT_DOCUMENT_MENTION_COMMAND } from '../mentions/mentionsPlugin';
 import { NODE_TRANSFORM } from '../node-transform';
 import { TRY_INSERT_TABLE_PICKER_COMMAND } from '../tables';
+import { insertDateMention } from './insertDateMention';
 import { type Action, ActionCategory, type ActionContext } from './types';
 
 async function trackSlashTaskMention(
@@ -319,5 +325,38 @@ export const ACTIONS: Action[] = [
       editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined);
     },
     dependencies: [HorizontalRuleNode],
+  },
+  {
+    id: 'date',
+    name: 'Date',
+    keywords: ['date', 'when', 'calendar', 'day'],
+    category: ActionCategory.ELEMENT,
+    icon: CalendarBlank,
+    action: (editor: LexicalEditor) => {
+      insertDateMention(editor, new Date(), 'date');
+    },
+    dependencies: [DateMentionNode],
+  },
+  {
+    id: 'countdown',
+    name: 'Countdown',
+    keywords: ['countdown', 'timer', 'remaining', 'until'],
+    category: ActionCategory.ELEMENT,
+    icon: Hourglass,
+    action: (editor: LexicalEditor) => {
+      insertDateMention(editor, addDays(new Date(), 1), 'countdown');
+    },
+    dependencies: [DateMentionNode],
+  },
+  {
+    id: 'duration',
+    name: 'Duration',
+    keywords: ['duration', 'length', 'span', 'for'],
+    category: ActionCategory.ELEMENT,
+    icon: Timer,
+    action: (editor: LexicalEditor) => {
+      insertDateMention(editor, addDays(new Date(), 1), 'duration');
+    },
+    dependencies: [DateMentionNode],
   },
 ];

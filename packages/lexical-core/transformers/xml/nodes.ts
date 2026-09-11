@@ -88,6 +88,7 @@ export type DateMentionNode = Id & {
   date: string;
   displayFormat: string;
   mentionUuid?: string;
+  displayMode?: 'date' | 'countdown' | 'duration';
 };
 
 export type LinkNode = EleBase & {

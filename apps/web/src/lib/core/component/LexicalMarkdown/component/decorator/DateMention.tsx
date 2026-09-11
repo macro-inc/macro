@@ -1,5 +1,5 @@
 import { DatePicker } from '@core/component/DatePicker';
-import { formatRelativeDay } from '@core/util/dateParser';
+import { formatDateMentionLabel } from '@core/util/dateMentionDisplay';
 import type { DateMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { $isDateMentionNode } from '@macro-inc/lexical-core';
 import ClockIcon from '@phosphor/clock.svg';
@@ -9,7 +9,14 @@ import {
   COMMAND_PRIORITY_NORMAL,
   KEY_ENTER_COMMAND,
 } from 'lexical';
-import { createMemo, createSignal, Show, useContext } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  Show,
+  useContext,
+} from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
@@ -41,10 +48,25 @@ export function DateMention(props: DateMentionDecoratorProps) {
 
   const [datePickerOpen, setDatePickerOpen] = createSignal(false);
   const [hovered, setHovered] = createSignal(false);
+  const [now, setNow] = createSignal(Date.now());
   let mentionRef!: HTMLSpanElement;
 
+  const isLive = () =>
+    props.displayMode === 'countdown' || props.displayMode === 'duration';
+
+  onMount(() => {
+    if (!isLive()) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    onCleanup(() => window.clearInterval(id));
+  });
+
   const displayFormat = createMemo(() => {
-    return formatRelativeDay(new Date(props.date));
+    now();
+    return formatDateMentionLabel(
+      new Date(props.date),
+      props.displayMode,
+      new Date(now())
+    );
   });
 
   const isSelectedAsNode = () => {
@@ -61,7 +83,9 @@ export function DateMention(props: DateMentionDecoratorProps) {
       const node = $getNodeByKey(props.key);
       if ($isDateMentionNode(node)) {
         node.setDate(newDate.toISOString());
-        node.setDisplayFormat(formatRelativeDay(newDate));
+        node.setDisplayFormat(
+          formatDateMentionLabel(newDate, node.getDisplayMode())
+        );
       }
     });
 
