@@ -691,6 +691,29 @@ describe('layoutManager', () => {
   });
 
   describe('activation invariant', () => {
+    it('refreshes the list source when reopening an email already mounted in the native background', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'email', id: 'a' },
+        ]);
+        const detail = manager.getSplit(manager.splits()[0].id)!;
+        const swipeLayout = createMobileSwipeLayout(manager);
+        manager.openWithSplit({ type: 'component', id: 'mail' });
+        const list = manager.getSplit(manager.activeSplitId()!)!;
+        manager.openWithSplit(
+          withListNavigationSource({ type: 'email', id: 'a' }, list),
+          { handle: list, referredFrom: 'mail' }
+        );
+        expect(manager.activeSplitId()).toBe(detail.id);
+        expect(detail.referredFrom()).toBe('mail');
+        expect(listNavigationSourceId(detail)).toBe(list.id);
+        expect(manager.splits()).toHaveLength(2);
+        swipeLayout.swipeBack();
+        expect(manager.activeSplitId()).toBe(list.id);
+        dispose();
+      });
+    });
+
     it('preserves the native source list through repeated email steps and swipe back', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [

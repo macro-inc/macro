@@ -346,7 +346,10 @@ They do not wrap; a thread opened without a source list has disabled arrows.
 Mark done archives the current thread and opens the next email in that same
 filtered list, loading pages until another email is found or the list ends.
 On native mobile, stepping replaces the current email while preserving the
-filtered list behind it for swipe-back. Leaving the email cancels pending
+filtered list behind it for swipe-back. This works with both the legacy mobile
+list and the newer app views. To verify, open the first email from Signal or
+Noise, tap Next and then Previous, and swipe back to the same filtered list.
+Leaving the email cancels pending
 navigation and archiving while a page loads. At the end it opens the previous
 email; with no neighboring email it stays on the archived thread. Mark as not done
 does not advance. Undo restores the archived email and returns to it.
