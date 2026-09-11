@@ -6,6 +6,7 @@ import EmailIcon from '@phosphor/envelope.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { cn } from '@ui';
 import { createEffect, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
 import { isBotMentionItem } from '../utils/botMention';
 import {
@@ -33,14 +34,17 @@ export function MentionsMenuItem(props: {
 
   const name = () => getMentionItemName(props.item);
 
-  // For user items we render the email at reduced opacity (no pipe separator)
-  // instead of baking it into the display string.
-  const userParts = () => {
-    if (props.item.kind !== 'user') return undefined;
-    const { name, email } = props.item.data;
-    if (!name || name === email) return { name: email, email: undefined };
-    return { name, email };
-  };
+  const labelParts = () =>
+    match(props.item)
+      .with({ kind: 'user' }, ({ data: { name, email } }) => ({
+        name: name || email,
+        detail: name && name !== email ? email : undefined,
+      }))
+      .with({ kind: 'agentSession' }, ({ data }) => ({
+        name: data.name || 'Agent session',
+        detail: data.bot?.name ? `@${data.bot.name}` : undefined,
+      }))
+      .otherwise(() => ({ name: name(), detail: undefined }));
 
   const icon = () => {
     switch (props.item.kind) {
@@ -115,15 +119,9 @@ export function MentionsMenuItem(props: {
           title={name()}
           style={{ 'text-overflow': 'ellipsis' }}
         >
-          <Show when={userParts()} fallback={name()}>
-            {(parts) => (
-              <>
-                {parts().name}
-                <Show when={parts().email}>
-                  <span class="ml-[0.5em] opacity-50">{parts().email}</span>
-                </Show>
-              </>
-            )}
+          {labelParts().name}
+          <Show when={labelParts().detail}>
+            {(detail) => <span class="ml-[0.5em] opacity-50">{detail()}</span>}
           </Show>
         </span>
         <Show when={isBotMentionItem(props.item)}>

@@ -45,9 +45,12 @@ export function getMentionItemName(item: MentionItem): string {
     case 'date':
       return item.data.displayText;
     case 'agentSession':
-      return [item.data.bot?.name, item.data.name || 'Agent session']
+      return [
+        item.data.name || 'Agent session',
+        item.data.bot?.name ? `@${item.data.bot.name}` : undefined,
+      ]
         .filter(Boolean)
-        .join(' · ');
+        .join(' ');
     case 'entity':
       return item.data.name ?? (item.bucket === 'email' ? 'No Subject' : '');
   }
