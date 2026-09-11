@@ -37,8 +37,12 @@ ios-build-sim prebuilt="false": ios-prepare
     # frontendDist is restated because this override replaces the build table:
     # dropping it silently produces an app with an empty assets/ and no
     # index.html, which installs and launches to a black screen.
+    # Release, like every other iOS recipe here. A debug build links a ~240MB
+    # unoptimised binary, which a real Mac starts fine but Appetize's
+    # virtualised device does not — the preview launched to a black screen
+    # while the identical debug build rendered in CI's simulator.
     cd tauri/src-tauri && cargo tauri ios build \
-      --target aarch64-sim --debug --ci --no-sign -v \
+      --target aarch64-sim --ci --no-sign -v \
       --config '{"build":{"beforeBuildCommand":"","frontendDist":"../../dist"}}' \
       -- --no-default-features
 
