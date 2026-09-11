@@ -410,6 +410,72 @@ describe('Doc.insertInline — offset placement', () => {
     const out = serializeWithXml(session);
     expect(out.indexOf('hello')).toBeLessThan(out.indexOf('2026-01-01'));
   });
+
+  it('inserts user, date, agent-session, and document mention chips', () => {
+    const { session, ids } = setup('Go');
+    const doc = new Doc(session);
+    doc.apply({
+      kind: 'insertInline',
+      ref: 'u',
+      node: ids[0]!,
+      at: 3,
+      spec: {
+        inline: 'mention',
+        mention: { kind: 'user', userId: 'u1', email: 'a@b.com' },
+      },
+    });
+    doc.apply({
+      kind: 'insertInline',
+      ref: 'd',
+      node: ids[0]!,
+      at: 3,
+      spec: {
+        inline: 'date',
+        date: '2026-07-08T00:00:00.000Z',
+        displayFormat: 'Today',
+      },
+    });
+    doc.apply({
+      kind: 'insertInline',
+      ref: 's',
+      node: ids[0]!,
+      at: 3,
+      spec: {
+        inline: 'mention',
+        mention: {
+          kind: 'agent_session',
+          id: 'sess-1',
+          label: 'Fix login',
+          expanded: true,
+        },
+      },
+    });
+    doc.apply({
+      kind: 'insertInline',
+      ref: 'doc',
+      node: ids[0]!,
+      at: 3,
+      spec: {
+        inline: 'mention',
+        mention: {
+          kind: 'document',
+          documentId: 'doc-1',
+          documentName: 'Spec',
+          blockName: 'md',
+          blockParams: { foo: 'bar' },
+        },
+      },
+    });
+    const xml = serializeWithXml(session);
+    expect(xml).toContain('<user-mention');
+    expect(xml).toContain('userId="u1"');
+    expect(xml).toContain('<date-mention');
+    expect(xml).toContain('displayFormat="Today"');
+    expect(xml).toContain('<agent-session-mention');
+    expect(xml).toContain('sessionId="sess-1"');
+    expect(xml).toContain('<document-mention');
+    expect(xml).toContain('documentId="doc-1"');
+  });
 });
 
 describe('Doc — chained block-type swaps stay addressable by the original id', () => {

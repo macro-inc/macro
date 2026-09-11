@@ -129,9 +129,14 @@ An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused — on mobile that is the same
 Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `@` to insert the same mention chips
-used in chat and channels; they serialize as `<m-document-mention>` tags in the prompt
-the agent sees. Agent replies that emit those tags render as clickable chips in the
-transcript (and in the originating channel thread).
+used in chat and channels; they serialize as mention-chip tags in the prompt
+the agent sees (`<m-document-mention>` for docs/channels/chats/tasks/emails/calendar
+events/skills, `<m-date-mention>` for a day or time, `<m-agent-session-mention>`
+for an agent session, `<m-user-mention>` for a person, and the other chip tags).
+Agent replies that emit those tags render as clickable chips in the
+transcript (and in the originating channel thread). An agent-session chip with
+`"expanded":true` renders as the Magic Chip card that follows the session's
+latest turn.
 
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it

@@ -602,6 +602,16 @@ export class DocumentEditor {
       displayFormat,
     });
   }
+
+  /** @-mention a date/time. Same as `insertDate`. */
+  public mentionDate(
+    blockId: NodeId,
+    at: number,
+    isoDate: string,
+    displayFormat?: string
+  ): Ref {
+    return this.insertDate(blockId, at, isoDate, displayFormat);
+  }
   private insertInline(id: NodeId, at: number, spec: NodeSpec): Ref {
     this.requireId(id);
     if (at < 0) throw new EditError(`inline offset must be >= 0, got ${at}`);
@@ -646,9 +656,47 @@ export class DocumentEditor {
   public mentionDocument(
     blockId: NodeId,
     at: number,
-    entity: { documentId: string; documentName: string; blockName: string }
+    entity: {
+      documentId: string;
+      documentName: string;
+      blockName: string;
+      blockParams?: Record<string, string>;
+    }
   ): Ref {
     return this.insertMention(blockId, at, { kind: 'document', ...entity });
+  }
+
+  public mentionAgentSession(
+    blockId: NodeId,
+    at: number,
+    entity: { id: string; label?: string; expanded?: boolean }
+  ): Ref {
+    return this.insertMention(blockId, at, {
+      kind: 'agent_session',
+      ...entity,
+    });
+  }
+
+  public mentionPullRequest(
+    blockId: NodeId,
+    at: number,
+    entity: { id: string; label?: string }
+  ): Ref {
+    return this.insertMention(blockId, at, { kind: 'pr', ...entity });
+  }
+
+  public mentionTag(
+    blockId: NodeId,
+    at: number,
+    entity: {
+      optionId: string;
+      propertyDefinitionId: string;
+      scope: 'user' | 'team';
+      name: string;
+      color?: string;
+    }
+  ): Ref {
+    return this.insertMention(blockId, at, { kind: 'tag', ...entity });
   }
 
   public setImageAlt(id: NodeId, alt: string): this {

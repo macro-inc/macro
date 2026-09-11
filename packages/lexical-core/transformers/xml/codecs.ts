@@ -355,7 +355,11 @@ export function serializeNode(node: SerNode): FxpNode {
       el(
         'agent-session-mention',
         [],
-        nodeAttrs(n, { sessionId: n.id, ...(n.label && { label: n.label }) })
+        nodeAttrs(n, {
+          sessionId: n.id,
+          ...(n.label && { label: n.label }),
+          ...(n.expanded && { expanded: 'true' }),
+        })
       )
     )
     .with({ type: 'pr-mention' }, (n) =>

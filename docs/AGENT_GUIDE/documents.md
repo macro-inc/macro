@@ -63,7 +63,9 @@ fetch cascade.
    press Enter (or click `Send`).
 3. While running, the button row shows an author chip (e.g. `Wolf (AI)`) and a `Stop` button
    (a11y text `Stop AI edit`). Edits stream directly into the document — there is no
-   accept/reject step.
+   accept/reject step. The editor can insert the same `@` mention chips a person can:
+   dates/times, people, documents, channels, agent sessions (including the expanded
+   Magic Chip card), and the other chip types.
 4. Completion signal: the `Stop` button disappears. Poll for that with `evaluate_script`;
    do not rely on `wait_for` text.
 

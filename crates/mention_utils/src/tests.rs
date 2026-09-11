@@ -1,9 +1,9 @@
 use cool_asserts::assert_matches;
 
 use crate::parse::{
-    NullXmlFormatter, ParsedContactMention, ParsedDateMention, ParsedDocumentMention,
-    ParsedGroupMention, ParsedLink, ParsedUserMention, ParsedXmlText, PlainTextFormatter,
-    TextSegment, XmlFormatter, XmlTag,
+    NullXmlFormatter, ParsedAgentSessionMention, ParsedContactMention, ParsedDateMention,
+    ParsedDocumentMention, ParsedGroupMention, ParsedLink, ParsedPullRequestMention,
+    ParsedUserMention, ParsedXmlText, PlainTextFormatter, TextSegment, XmlFormatter, XmlTag,
 };
 
 // =============================================================================
@@ -700,6 +700,60 @@ fn parse_group_mention_with_user_mention() {
     ] => {
         assert_eq!(group_alias.as_ref(), "here");
     });
+}
+
+// =============================================================================
+// Agent session and pull request mention tests
+// =============================================================================
+
+#[test]
+fn parse_agent_session_mention() {
+    let input = r#"see <m-agent-session-mention>{"id":"sess-1","label":"Fix login"}</m-agent-session-mention>"#;
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(out.0, [
+        TextSegment::Plain("see "),
+        TextSegment::Xml(XmlTag::AgentSession(ParsedAgentSessionMention { id, label })),
+    ] => {
+        assert_eq!(id.as_ref(), "sess-1");
+        assert_eq!(label.as_deref(), Some("Fix login"));
+    });
+}
+
+#[test]
+fn parse_agent_session_mention_without_label() {
+    let input = r#"<m-agent-session-mention>{"id":"sess-1"}</m-agent-session-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Agent session");
+}
+
+#[test]
+fn parse_agent_session_mention_missing_id() {
+    let input = r#"<m-agent-session-mention>{"label":"Fix login"}</m-agent-session-mention>"#;
+    assert!(ParsedXmlText::parse(input).is_err());
+}
+
+#[test]
+fn parse_pull_request_mention() {
+    let input = r#"<m-pr-mention>{"id":"foreign-1","label":"macro/macro#123"}</m-pr-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "macro/macro#123");
+    let out = ParsedXmlText::parse(input).unwrap();
+    assert_matches!(out.0, [
+        TextSegment::Xml(XmlTag::PullRequest(ParsedPullRequestMention { id, label })),
+    ] => {
+        assert_eq!(id.as_ref(), "foreign-1");
+        assert_eq!(label.as_deref(), Some("macro/macro#123"));
+    });
+}
+
+#[test]
+fn parse_pull_request_mention_without_label() {
+    let input = r#"<m-pr-mention>{"id":"foreign-1"}</m-pr-mention>"#;
+    let parsed = ParsedXmlText::parse(input).unwrap();
+    let rendered = PlainTextFormatter::format_xml_text(parsed).0;
+    assert_eq!(rendered, "Pull request");
 }
 
 // =============================================================================

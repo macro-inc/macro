@@ -195,6 +195,7 @@ export type AgentSessionMentionNode = Id & {
   version: number;
   id: string;
   label?: string;
+  expanded?: boolean;
 };
 
 export type PullRequestMentionNode = Id & {

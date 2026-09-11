@@ -218,6 +218,18 @@ mod tests {
         let preamble = agent_session::PROMPT.to_string();
         assert!(preamble.contains("XML mention tag"));
         assert!(preamble.contains("clickable chips"));
+        assert!(preamble.contains("agent session"));
+        assert!(preamble.contains("date/time"));
+    }
+
+    #[test]
+    fn mentions_prompt_covers_date_and_agent_session_chips() {
+        let instructions = mentions::PROMPT.instructions;
+        assert!(instructions.contains("<m-date-mention>"));
+        assert!(instructions.contains("<m-agent-session-mention>"));
+        assert!(instructions.contains("<m-user-mention>"));
+        assert!(instructions.contains("\"expanded\":true"));
+        assert!(instructions.contains("\"blockName\":\"skill\""));
     }
 
     #[test]

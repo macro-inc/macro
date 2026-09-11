@@ -36,7 +36,7 @@ The writer has the complete API reference. Use this compact list to help yoursel
 ## Native Objects
 
 - Block objects: `insertDivider`, `insertImage`, `insertVideo`, `insertEquation`; or via `insertBlockAfter`/`appendBlock` with specs `document-card` (documentId, documentName, blockName, blockParams?) and `html-render` (html)
-- Inline objects: `insertInlineEquation`, `insertLineBreak`, `insertDate`, `insertMention`, `mentionUser`, `mentionContact`, `mentionGroup`, `mentionDocument`
+- Inline objects: `insertInlineEquation`, `insertLineBreak`, `insertDate`/`mentionDate` (time chip), `insertMention`, `mentionUser`, `mentionContact`, `mentionGroup`, `mentionDocument`, `mentionAgentSession`, `mentionPullRequest`, `mentionTag`
 - To place text after an inline object: `insertTextAfterInline(inlineRef, text)`. Do **not** use `appendText` for this — it targets the block's last text node and misplaces the text when an inline object is the last child.
 - Updates: `setImageAlt`, `setImageUrl`, `setVideoUrl`, `setVideoControls`, `setDate`
 

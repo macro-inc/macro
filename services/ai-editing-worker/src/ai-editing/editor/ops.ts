@@ -76,7 +76,8 @@ export type NodeSpec =
 
 export type ListKind = 'bullet' | 'number' | 'check';
 
-/** Entity-mention specs. Ids are supplied with the edit request, not looked up. */
+/** Entity-mention specs. Ids are supplied with the edit request, not looked up.
+ *  Date/time chips are `insertDate` / `{ inline: 'date' }`, not this union. */
 export type MentionSpec =
   | { kind: 'user'; userId: string; email: string }
   | {
@@ -92,6 +93,17 @@ export type MentionSpec =
       documentId: string;
       documentName: string;
       blockName: string;
+      blockParams?: Record<string, string>;
+    }
+  | { kind: 'agent_session'; id: string; label?: string; expanded?: boolean }
+  | { kind: 'pr'; id: string; label?: string }
+  | {
+      kind: 'tag';
+      optionId: string;
+      propertyDefinitionId: string;
+      scope: 'user' | 'team';
+      name: string;
+      color?: string;
     };
 
 /** Block-type targets for `setBlockType`. */
