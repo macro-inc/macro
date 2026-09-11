@@ -163,6 +163,7 @@ type MintedToken = (u64, Vec<(String, String)>);
 /// mint, so a test can assert the scope of the tokens used to read them.
 struct FakeClient {
     repositories: HashMap<u64, Vec<GithubRepository>>,
+    unavailable: Vec<u64>,
     minted: StdMutex<Vec<MintedToken>>,
     listed: StdMutex<Vec<String>>,
 }
@@ -171,6 +172,7 @@ impl FakeClient {
     fn new(repositories: HashMap<u64, Vec<GithubRepository>>) -> Self {
         Self {
             repositories,
+            unavailable: Vec::new(),
             minted: StdMutex::default(),
             listed: StdMutex::default(),
         }
@@ -198,6 +200,11 @@ impl GithubSyncClient for FakeClient {
                 .collect(),
         ));
 
+        if self.unavailable.contains(&installation_id) {
+            return Err(GithubError::Internal(anyhow::anyhow!(
+                "installation unavailable"
+            )));
+        }
         Ok(GithubInstallationAccessToken {
             token: Self::token_for(installation_id),
             expires_at: "2099-01-01T00:00:00Z".to_owned(),
@@ -446,4 +453,45 @@ fn the_https_url_is_built_from_owner_and_name() {
         repository("macro-inc", "macro").https_url(),
         "https://github.com/macro-inc/macro"
     );
+}
+
+#[tokio::test]
+async fn an_unavailable_installation_does_not_hide_working_repositories_or_cache_partial_results() {
+    let mut service = service(
+        vec![
+            (
+                "42".into(),
+                vec![GithubAppInstallationSource::User(user().to_string())],
+            ),
+            (
+                "77".into(),
+                vec![GithubAppInstallationSource::User(user().to_string())],
+            ),
+        ],
+        vec![],
+        HashMap::from([(77, vec![repository("macro-inc", "macro")])]),
+    );
+    service.client.unavailable = vec![42];
+    for _ in 0..2 {
+        assert_eq!(
+            service.for_user(&user()).await.unwrap(),
+            vec![repository("macro-inc", "macro")]
+        );
+    }
+    assert_eq!(service.client.minted.lock().unwrap().len(), 4);
+}
+
+#[tokio::test]
+async fn all_installations_unavailable_is_an_error_not_an_empty_candidate_list() {
+    let mut service = service(
+        vec![(
+            "42".into(),
+            vec![GithubAppInstallationSource::User(user().to_string())],
+        )],
+        vec![],
+        HashMap::new(),
+    );
+    service.client.unavailable = vec![42];
+    assert!(service.for_user(&user()).await.is_err());
+    assert!(service.cached_listing(&user()).is_none());
 }

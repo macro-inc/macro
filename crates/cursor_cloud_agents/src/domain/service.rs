@@ -679,7 +679,7 @@ where
                     Err(error) => {
                         tracing::warn!(error = ?error, "could not choose a repository for this session");
                         Err(SessionError::Rejected(
-                            "Couldn't decide which repository this session should work on."
+                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection."
                                 .to_owned(),
                         ))
                     }

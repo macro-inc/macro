@@ -2619,3 +2619,39 @@ async fn stalled_history_stream_times_out_and_can_be_recovered_on_next_sync() {
     assert_eq!(output.reloads().len(), 1);
     assert!(!service.has_active_turn());
 }
+
+#[tokio::test]
+async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambiguity() {
+    struct UnavailableChooser;
+    impl RepositoryChooser for UnavailableChooser {
+        async fn choose(
+            &self,
+            _: &str,
+        ) -> Result<crate::domain::ports::SessionIntent, rootcause::Report> {
+            Err(rootcause::report!("GitHub repository listing unavailable"))
+        }
+    }
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        UnavailableChooser,
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+    );
+    let id = service.new_session(vec![]);
+    for _ in 0..2 {
+        let error = service
+            .prompt(&id, "update macro-inc/macro README")
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Couldn't prepare repository access")
+        );
+    }
+    assert!(
+        cursor.calls().is_empty(),
+        "failed setup never creates remote work"
+    );
+}

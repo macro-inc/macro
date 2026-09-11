@@ -115,15 +115,18 @@ where
                 ))
             })?;
 
-        let repositories = self.list_all(&installation_ids).await?;
+        let (repositories, complete) = self.list_all(&installation_ids).await?;
 
-        self.cached.lock().expect("listing cache poisoned").put(
-            macro_user_id.clone().into_owned(),
-            CachedListing {
-                repositories: repositories.clone(),
-                fetched_at: Instant::now(),
-            },
-        );
+        // Retry unavailable installations on the next request, not in ten minutes.
+        if complete {
+            self.cached.lock().expect("listing cache poisoned").put(
+                macro_user_id.clone().into_owned(),
+                CachedListing {
+                    repositories: repositories.clone(),
+                    fetched_at: Instant::now(),
+                },
+            );
+        }
 
         Ok(repositories)
     }
@@ -150,31 +153,52 @@ where
     async fn list_all(
         &self,
         installation_ids: &[String],
-    ) -> Result<Vec<GithubRepository>, GithubError> {
+    ) -> Result<(Vec<GithubRepository>, bool), GithubError> {
         if installation_ids.is_empty() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), true));
         }
 
         let jwt = app_jwt(&self.config.client_id, &self.config.private_key_pem)?;
         let mut repositories = Vec::new();
 
+        let mut failure = None;
+        let mut succeeded = 0;
         for installation_id in installation_ids {
-            let installation = installation_id.parse::<u64>().map_err(|error| {
-                GithubError::Internal(anyhow::anyhow!(
-                    "installation id {installation_id} is not a number: {error}"
-                ))
-            })?;
-
-            let token = self
-                .client
-                .generate_installation_wide_access_token(&jwt, installation, LISTING_PERMISSIONS)
-                .await?;
-
-            repositories.extend(
+            let result = async {
+                let installation = installation_id.parse::<u64>().map_err(|error| {
+                    GithubError::Internal(anyhow::anyhow!(
+                        "installation id {installation_id} is not a number: {error}"
+                    ))
+                })?;
+                let token = self
+                    .client
+                    .generate_installation_wide_access_token(
+                        &jwt,
+                        installation,
+                        LISTING_PERMISSIONS,
+                    )
+                    .await?;
                 self.client
                     .list_installation_repositories(&token.token)
-                    .await?,
-            );
+                    .await
+            }
+            .await;
+            match result {
+                Ok(listed) => {
+                    repositories.extend(listed);
+                    succeeded += 1;
+                }
+                Err(error) => {
+                    tracing::warn!(%installation_id, error = ?error, "could not list GitHub installation repositories");
+                    failure = Some(error);
+                }
+            }
+        }
+        let complete = failure.is_none();
+        if succeeded == 0 {
+            if let Some(error) = failure {
+                return Err(error);
+            }
         }
 
         // Two installations can cover the same repository - a user's own and
@@ -183,6 +207,6 @@ where
             .sort_by(|left, right| (&left.owner, &left.name).cmp(&(&right.owner, &right.name)));
         repositories.dedup_by(|left, right| left.owner == right.owner && left.name == right.name);
 
-        Ok(repositories)
+        Ok((repositories, complete))
     }
 }
