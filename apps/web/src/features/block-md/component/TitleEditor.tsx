@@ -46,7 +46,6 @@ import {
   untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { useMdStore } from '../signal/markdownBlockData';
 import { useMarkdownName } from './MarkdownNameProvider';
 
 /**
@@ -133,7 +132,7 @@ function titleNavigationPlugin(
 
 export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const markdownDocument = useMarkdownDocument();
-  const [mdData, setMdData] = useMdStore();
+  const { md: mdData, setMd: setMdData } = markdownDocument.state.editor;
 
   const canEdit = markdownDocument.permissions.canEdit;
   const renameDocumentMutation = createRenameDssEntityMutation();

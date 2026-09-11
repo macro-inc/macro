@@ -1,5 +1,3 @@
-import { useCommentState } from '@block-md/comments/commentStore';
-import { useMdStore } from '@block-md/signal/markdownBlockData';
 import {
   MobileDrawer,
   scrollToFocusedInput,
@@ -21,6 +19,7 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import { Button } from '@ui';
 import { $setSelection } from 'lexical';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 /**
  * `baseCommentTheme` minus its `select-text` on message text. The drawer is
@@ -99,14 +98,15 @@ function PinnedReplyComposer(props: {
  * Must be mounted inside the `CommentsContext` provider (see CommentMargin).
  */
 export function CommentThreadDrawer() {
+  const markdownDocument = useMarkdownDocument();
   const {
     threads,
     marks,
     activeCommentThread,
     setActiveCommentThread,
     setHighlightedCommentThreads,
-  } = useCommentState();
-  const [md] = useMdStore();
+  } = markdownDocument.state.comments;
+  const { md } = markdownDocument.state.editor;
 
   const parentCommentsContext = useContext(CommentsContext);
   // Messages report their inline-edit state; while any edit input is open,

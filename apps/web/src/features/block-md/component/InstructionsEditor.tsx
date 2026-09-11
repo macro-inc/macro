@@ -1,4 +1,3 @@
-import { useMarkdownBlockError } from '@block-md/signal/error';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
@@ -60,8 +59,6 @@ import {
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
-import { useMdStore } from '../signal/markdownBlockData';
-import { useBlockSave } from '../signal/save';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 
@@ -76,8 +73,10 @@ export function InstructionsEditor(props: {
   const blockId = markdownDocument.documentId();
 
   const saveDocumentMutation = createSaveMarkdownDocumentMutation();
-  const blockSave = useBlockSave();
-  const [, setMdStore] = useMdStore();
+  const { setMd: setMdStore, error: editorError, setError: setEditorError } =
+    markdownDocument.state.editor;
+  const saveBlocked = () =>
+    markdownDocument.state.comments.activeCommentThread() === -1;
   const canEdit = markdownDocument.permissions.canEdit;
   const blockElement = markdownDocument.element;
   const documentSource = markdownDocument.documentSource;
@@ -86,7 +85,7 @@ export function InstructionsEditor(props: {
 
   const debouncedSaveState = debounce(() => {
     const state_ = state();
-    if (!state_ || !canEdit() || blockSave()) return;
+    if (!state_ || !canEdit() || saveBlocked()) return;
     const savableState = getSaveState(editor.getEditorState());
     saveDocumentMutation.mutate({
       documentId: blockId,
@@ -96,13 +95,13 @@ export function InstructionsEditor(props: {
 
   // flush save state after unblocking
   createEffect((prev) => {
-    const blockSave_ = blockSave();
+    const saveBlocked_ = saveBlocked();
     // no save on load
-    if (!blockSave_ && prev !== undefined) {
+    if (!saveBlocked_ && prev !== undefined) {
       debouncedSaveState();
     }
 
-    return blockSave_;
+    return saveBlocked_;
   }, undefined);
 
   let editorContainerRef!: HTMLDivElement;
@@ -110,7 +109,6 @@ export function InstructionsEditor(props: {
   const [clickTargetHeight, setClickTargetHeight] = createSignal(0);
 
   const [editorReady, setEditorReady] = createSignal<boolean>(false);
-  const [editorError, setEditorError] = useMarkdownBlockError();
 
   createEffect(() => {
     // We still want the editor to be locked down (for certain things like click events on check

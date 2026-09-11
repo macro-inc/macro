@@ -7,7 +7,6 @@ import type {
 import type { NodeIdMappings } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
-import { useMarkdownDocument } from '../context/markdown-document-context';
 
 /**
  * Store for the data and helpful ui refs for the Notebook/MD block
@@ -37,8 +36,3 @@ export type MdData = {
   contentRef?: HTMLElement;
   locationReady?: boolean;
 };
-
-export function useMdStore() {
-  const { md, setMd } = useMarkdownDocument().state.editor;
-  return [md, setMd] as const;
-}

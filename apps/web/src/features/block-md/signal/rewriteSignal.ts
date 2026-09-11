@@ -1,5 +1,3 @@
-import { useMarkdownDocument } from '../context/markdown-document-context';
-
 export interface Diff {
   operation: string;
   node_key: string;
@@ -13,8 +11,4 @@ export type MarkdownRewriteOutput = {
 export interface NodeWithText {
   key: string;
   markdown: string;
-}
-
-export function useRewriteState() {
-  return useMarkdownDocument().state.rewrite;
 }

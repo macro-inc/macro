@@ -1,9 +1,9 @@
 import { compareDateAsc } from '@core/util/date';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import type { CreateCommentRequestMentions } from '@service-storage/generated/schemas/createCommentRequestMentions';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import {
   sortComments,
-  useCommentThreadsResource,
   useCreateHighlightCommentResource,
   useCreateThreadReplyResource,
   useDeleteCommentResource,
@@ -19,7 +19,7 @@ function isDiscussionThread(ct: CommentThread): boolean {
 }
 
 export function useDiscussionThreads() {
-  const [data] = useCommentThreadsResource();
+  const data = useMarkdownDocument().state.comments.commentThreads;
   return () => {
     const threads = data() ?? [];
     return threads

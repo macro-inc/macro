@@ -67,7 +67,6 @@ import { useMarkdownDocument } from '../../context/markdown-document-context';
 import { useHistory } from '../../history/HistoryContext';
 import { HistoryScrubber } from '../../history/HistoryScrubber';
 import { HistorySessionList } from '../../history/HistorySessionList';
-import { useMdStore } from '../../signal/markdownBlockData';
 import { DispatchAgentButton } from '../DispatchAgentMenu';
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
@@ -461,7 +460,7 @@ function PropertiesSectionContent(props: {
   canEdit: boolean;
   documentName: string;
 }) {
-  const [mdData] = useMdStore();
+  const mdData = useMarkdownDocument().state.editor.md;
 
   const entityType: PropertiesEntityType = props.isTask ? 'TASK' : 'DOCUMENT';
 
@@ -532,7 +531,7 @@ const PINNED_ORDER: readonly string[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StatsSectionContent() {
-  const [md] = useMdStore();
+  const md = useMarkdownDocument().state.editor.md;
 
   return (
     <Show

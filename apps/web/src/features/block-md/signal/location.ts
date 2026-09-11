@@ -1,12 +1,13 @@
 import { useScrollToCommentThread } from '@block-md/comments/commentOperations';
-import { useCommentState } from '@block-md/comments/commentStore';
 import {
   setTempRedirectLocation,
   type TempRedirectLocation,
 } from '@core/signal/location';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export const useGoToTempRedirect = () => {
-  const { setActiveCommentThread } = useCommentState();
+  const { setActiveCommentThread } =
+    useMarkdownDocument().state.comments;
   const scrollToCommentThread = useScrollToCommentThread();
 
   return (documentId: string, state: TempRedirectLocation) => {

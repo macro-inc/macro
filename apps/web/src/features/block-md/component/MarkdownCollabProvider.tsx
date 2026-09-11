@@ -1,4 +1,3 @@
-import { useMarkdownBlockError } from '@block-md/signal/error';
 import { CollabProvider } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
@@ -43,7 +42,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   };
   const canEdit = markdownDocument.permissions.canEdit;
   const canComment = markdownDocument.permissions.canComment;
-  const [editorError] = useMarkdownBlockError();
+  const editorError = markdownDocument.state.editor.error;
 
   return (
     <CollabProvider

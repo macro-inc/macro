@@ -1,6 +1,5 @@
 import type { NodekeyOffset } from '@core/component/LexicalMarkdown/plugins';
 import type { FloatingStyle } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
-import { useMarkdownDocument } from '../context/markdown-document-context';
 
 // Store Variables
 export interface FindAndReplaceState {
@@ -37,9 +36,3 @@ export const initialFindAndReplaceState: FindAndReplaceState = {
   currentMatch: -1,
   currentQuery: '',
 };
-
-export function useFindAndReplaceStore() {
-  const { findAndReplace, setFindAndReplace } =
-    useMarkdownDocument().state.editor;
-  return [findAndReplace, setFindAndReplace] as const;
-}

@@ -11,13 +11,8 @@ import type {
 } from '@core/component/LexicalMarkdown/plugins';
 // import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 // import { createCognitionWebsocketBlockEffect } from '@service-cognition/websocket';
-import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export type { Completion, GenerateMenuOpen };
-
-export function useGenerateState() {
-  return useMarkdownDocument().state.generation;
-}
 
 export const generateContentCallback: generateCallback = (
   _userRequest: string

@@ -6,7 +6,6 @@ import type {
   ThreadHeights,
   ThreadPositions,
 } from '@block-md/comments/commentType';
-import { useMdStore } from '@block-md/signal/markdownBlockData';
 import {
   autoRegister,
   registerEditorWidthObserver,
@@ -23,7 +22,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { useCommentState } from './commentStore';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 // how much to pad the container for the "show more" buttons
 const CONTAINER_PADDING = 0;
@@ -35,8 +34,9 @@ export const MIN_THREAD_GAP = 10;
 const LAYOUT_THROTTLE = 60;
 
 export function createCommentLayout() {
-  const [md] = useMdStore();
-  const { activeMarkIds, marks } = useCommentState();
+  const markdownDocument = useMarkdownDocument();
+  const { md } = markdownDocument.state.editor;
+  const { activeMarkIds, marks } = markdownDocument.state.comments;
 
   const notebookSize = createElementSize(() => md.notebook);
   const notebookHeight = createMemo(() => notebookSize.height);

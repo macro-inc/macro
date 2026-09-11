@@ -2,9 +2,6 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { CommentsProvider } from '@block-md/comments/CommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
-import { useMarkdownBlockError } from '@block-md/signal/error';
-import { useFindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
-import { useRewriteState } from '@block-md/signal/rewriteSignal';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
 import type { BlockName } from '@core/block';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
@@ -181,12 +178,7 @@ import {
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
-import {
-  generateContentCallback,
-  useGenerateState,
-} from '../signal/generateSignal';
-import { useMdStore } from '../signal/markdownBlockData';
-import { useBlockSave } from '../signal/save';
+import { generateContentCallback } from '../signal/generateSignal';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
@@ -231,20 +223,26 @@ export function MarkdownEditor(props: {
   const mdDocumentName = markdownDocument.persistedName;
 
   const saveDocumentMutation = createSaveMarkdownDocumentMutation();
-  const blockSave = useBlockSave();
-  const [md, setMdStore] = useMdStore();
+  const {
+    md,
+    setMd: setMdStore,
+    error: editorError,
+    setError: setEditorError,
+    findAndReplace: findAndReplaceStore,
+    setFindAndReplace: setFindAndReplaceStore,
+  } = markdownDocument.state.editor;
+  const { revisions, setRevisions } = markdownDocument.state.rewrite;
+  const saveBlocked = () =>
+    markdownDocument.state.comments.activeCommentThread() === -1;
   const canEdit = markdownDocument.permissions.canEdit;
   const canComment = markdownDocument.permissions.canComment;
-  const [findAndReplaceStore, setFindAndReplaceStore] =
-    useFindAndReplaceStore();
-  const { revisions, setRevisions } = useRewriteState();
   const documentSource = markdownDocument.documentSource;
 
   const IS_SYNC = () => documentSource().type === 'sync';
 
   const debouncedSaveState = debounce(() => {
     const state_ = state();
-    if (!state_ || !canEdit() || blockSave()) return;
+    if (!state_ || !canEdit() || saveBlocked()) return;
     const savableState = getSaveState(editor.getEditorState());
     saveDocumentMutation.mutate({
       documentId: blockId,
@@ -254,19 +252,19 @@ export function MarkdownEditor(props: {
 
   // flush save state after unblocking
   createEffect((prev) => {
-    const blockSave_ = blockSave();
+    const saveBlocked_ = saveBlocked();
     // no save on load
-    if (!blockSave_ && prev !== undefined) {
+    if (!saveBlocked_ && prev !== undefined) {
       debouncedSaveState();
     }
 
-    return blockSave_;
+    return saveBlocked_;
   }, undefined);
 
   let editorContainerRef!: HTMLDivElement;
 
   const [clickTargetHeight, setClickTargetHeight] = createSignal(0);
-  const generation = useGenerateState();
+  const generation = markdownDocument.state.generation;
   const {
     isGenerating,
     setIsGenerating,
@@ -295,7 +293,6 @@ export function MarkdownEditor(props: {
   ];
 
   const [editorReady, setEditorReady] = createSignal<boolean>(false);
-  const [editorError, setEditorError] = useMarkdownBlockError();
 
   const [highlightLayerRef, setHighlightLayerRef] =
     createSignal<HTMLDivElement>();
@@ -1132,9 +1129,18 @@ export function MarkdownEditor(props: {
         <Show when={findAndReplaceStore.searchIsOpen}>
           <SearchHighlight
             anchorElem={highlightLayerRef() ?? editorContainerRef}
+            listOffset={findAndReplaceStore.listOffset}
+            onStylesChange={(styles) =>
+              setFindAndReplaceStore('styles', styles)
+            }
+            onMatchesChange={(matches) =>
+              setFindAndReplaceStore('matches', matches)
+            }
           />
           <FloatingSearchHighlight
             anchorElem={highlightLayerRef() ?? editorContainerRef}
+            styles={findAndReplaceStore.styles}
+            currentMatch={findAndReplaceStore.currentMatch}
           />
         </Show>
 

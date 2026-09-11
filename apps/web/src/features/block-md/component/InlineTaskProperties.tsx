@@ -11,7 +11,6 @@ import type { Property, PropertyApiValues } from '@property/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { useMdStore } from '../signal/markdownBlockData';
 import { InlinePropertyValue } from './InlinePropertyValue';
 import { useMarkdownName } from './MarkdownNameProvider';
 
@@ -21,7 +20,7 @@ import { useMarkdownName } from './MarkdownNameProvider';
  */
 export function InlineTaskProperties() {
   const markdownDocument = useMarkdownDocument();
-  const [md] = useMdStore();
+  const md = markdownDocument.state.editor.md;
   const blockId = markdownDocument.documentId();
   const documentKind = markdownDocument.kind();
   const canEdit = markdownDocument.permissions.canEdit;

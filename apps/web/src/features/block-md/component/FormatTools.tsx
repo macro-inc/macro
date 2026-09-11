@@ -1,4 +1,3 @@
-import { useMarkdownBlockError } from '@block-md/signal/error';
 import {
   INSERT_HORIZONTAL_RULE_COMMAND,
   NODE_TRANSFORM,
@@ -75,8 +74,6 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { useGenerateState } from '../signal/generateSignal';
-import { useMdStore } from '../signal/markdownBlockData';
 import { MediaSelector } from './MediaSelector';
 import { TableInsert } from './TableInsert';
 
@@ -345,12 +342,14 @@ const ElementFormatMenuItem = (
 };
 
 export function FormatTools(props: { withinPopup?: boolean }) {
-  const [mdData] = useMdStore();
+  const markdownDocument = useMarkdownDocument();
+  const mdData = markdownDocument.state.editor.md;
   const editor = () => mdData.editor;
   const titleEditor = () => mdData.titleEditor;
   const selection = () => mdData.selection;
-  const [editorError] = useMarkdownBlockError();
-  const { isGenerating, generatedAndWaiting } = useGenerateState();
+  const editorError = markdownDocument.state.editor.error;
+  const { isGenerating, generatedAndWaiting } =
+    markdownDocument.state.generation;
 
   const [editorHasFocus, setEditorHasFocus] = createSignal(false);
   const [, setTitleEditorHasFocus] = createSignal(false);
@@ -360,7 +359,7 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   const [lastFocusedEditor, setLastFocusedEditor] =
     createSignal<LexicalEditor>();
 
-  const permissions = useMarkdownDocument().permissions;
+  const permissions = markdownDocument.permissions;
   const editAccess = permissions.canEdit;
   const canEdit = () => editAccess();
 

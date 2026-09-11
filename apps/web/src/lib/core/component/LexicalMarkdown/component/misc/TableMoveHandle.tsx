@@ -1,4 +1,3 @@
-import { useMdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -47,7 +46,9 @@ import {
   createSignal,
   For,
   Show,
+  useContext,
 } from 'solid-js';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { lazyRegister } from '../../plugins';
 import { $moveCellRange } from '../../plugins/tables/tableMove';
@@ -122,8 +123,8 @@ type DragShape = {
  * pasting a copied range.
  */
 export function TableMoveHandle() {
-  const [mdData] = useMdStore();
-  const editor = () => mdData.editor;
+  const lexicalWrapper = useContext(LexicalWrapperContext);
+  const editor = () => lexicalWrapper?.editor;
 
   const [anchorCellKey, setAnchorCellKey] = createSignal<string>();
   const [focusCellKey, setFocusCellKey] = createSignal<string>();

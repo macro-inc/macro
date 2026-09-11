@@ -1,23 +1,14 @@
-import { useCommentState } from '@block-md/comments/commentStore';
 import {
   editorStateAsMarkdown,
   getSaveState,
 } from '@core/component/LexicalMarkdown/utils';
 import { createCallback } from '@solid-primitives/rootless';
-import { createMemo } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { useMdStore } from './markdownBlockData';
-
-export const useBlockSave = () => {
-  const { activeCommentThread } = useCommentState();
-  const pendingComment = createMemo(() => activeCommentThread() === -1);
-
-  return pendingComment;
-};
 
 export function useDownloadDocumentAsMarkdownText() {
-  const [store] = useMdStore();
-  const { persistedName, fallbackName } = useMarkdownDocument();
+  const markdownDocument = useMarkdownDocument();
+  const store = markdownDocument.state.editor.md;
+  const { persistedName, fallbackName } = markdownDocument;
   const fileName = () => persistedName() || fallbackName();
 
   return createCallback(() => {
@@ -38,8 +29,9 @@ export function useDownloadDocumentAsMarkdownText() {
 }
 
 export function useDownloadDocumentAsJson() {
-  const [store] = useMdStore();
-  const { persistedName, fallbackName } = useMarkdownDocument();
+  const markdownDocument = useMarkdownDocument();
+  const store = markdownDocument.state.editor.md;
+  const { persistedName, fallbackName } = markdownDocument;
   const fileName = () => persistedName() || fallbackName();
 
   return createCallback(() => {

@@ -23,13 +23,9 @@ import {
   type VoidComponent,
 } from 'solid-js';
 import { reconcile } from 'solid-js/store';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useDeleteComment, useDeleteNewComments } from './commentOperations';
-import { useCommentState } from './commentStore';
-import {
-  sortComments,
-  useCommentRealtime,
-  useCommentThreadsResource,
-} from './commentsResource';
+import { sortComments, useCommentRealtime } from './commentsResource';
 import type { Mark, ThreadMetadata, ThreadStore } from './commentType';
 
 const DISCUSSION_MARK_PREFIX = 'DISCUSSION:';
@@ -104,8 +100,8 @@ export const CommentsProvider: VoidComponent<{
     commentMarksInitialized,
     setCommentMarksInitialized,
     setHighlightedCommentThreads,
-  } = useCommentState();
-  const [commentThreadsData] = useCommentThreadsResource();
+    commentThreads: commentThreadsData,
+  } = useMarkdownDocument().state.comments;
   useCommentRealtime();
 
   /** Communicates comment ready to block. */

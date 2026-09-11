@@ -1,6 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
-import { useCommentState } from '@block-md/comments/commentStore';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useIsAuthenticated } from '@core/auth';
@@ -201,7 +200,7 @@ export function MarkdownPopup(props: {
   const currentUserId = useUserId();
 
   const { highlightedCommentThreads, setActiveCommentThread } =
-    useCommentState();
+    markdownDocument.state.comments;
 
   const [copied, setCopied] = createSignal(false);
   const [locationCopied, setLocationCopied] = createSignal(false);

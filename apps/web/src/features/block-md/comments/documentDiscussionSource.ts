@@ -12,7 +12,6 @@ import type { CreateCommentRequestMentions } from '@service-storage/generated/sc
 import { createMemo } from 'solid-js';
 import { URL_PARAMS } from '../constants';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { useMdStore } from '../signal/markdownBlockData';
 import {
   sortComments,
   useCreateDiscussionReply,
@@ -73,7 +72,7 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   const createReplyFn = useCreateDiscussionReply();
   const editFn = useEditDiscussionComment();
   const deleteFn = useDeleteDiscussionComment();
-  const [md] = useMdStore();
+  const md = markdownDocument.state.editor.md;
   const discussionThreads = useDiscussionThreads();
 
   const threads = createMemo(() =>

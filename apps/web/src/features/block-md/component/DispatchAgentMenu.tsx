@@ -25,7 +25,6 @@ import {
   useDiscussionThreads,
 } from '../comments/discussionResource';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { useMdStore } from '../signal/markdownBlockData';
 import { useMarkdownName } from './MarkdownNameProvider';
 
 const LAST_USED_KEY = 'dispatch-agent-last-used';
@@ -164,9 +163,10 @@ const [lastUsedKey, setLastUsedKey] = makePersisted(
 );
 
 export function useDispatchAgentAction() {
-  const blockId = useMarkdownDocument().documentId();
+  const markdownDocument = useMarkdownDocument();
+  const blockId = markdownDocument.documentId();
   const { displayName: name } = useMarkdownName();
-  const [store] = useMdStore();
+  const store = markdownDocument.state.editor.md;
   const discussionThreads = useDiscussionThreads();
 
   const lastUsed = () =>

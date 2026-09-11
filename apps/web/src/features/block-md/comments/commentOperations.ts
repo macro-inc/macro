@@ -1,5 +1,4 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useMdStore } from '@block-md/signal/markdownBlockData';
 import type { DeleteCommentInfo } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import {
@@ -18,7 +17,6 @@ import { until } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { onCleanup } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { useCommentState } from './commentStore';
 import {
   useCreateHighlightCommentResource,
   useCreateThreadReplyResource,
@@ -32,9 +30,11 @@ export function useCreateComment() {
   const deleteNewComments = useDeleteNewComments();
   const createHighlightComment = useCreateHighlightCommentResource();
   const createThreadReply = useCreateThreadReplyResource();
-  const { threads, setActiveCommentThread } = useCommentState();
+  const markdownDocument = useMarkdownDocument();
+  const { threads, setActiveCommentThread } =
+    markdownDocument.state.comments;
   const updateNodeThreadId = useSetNodeCommentThreadId();
-  const [md] = useMdStore();
+  const { md } = markdownDocument.state.editor;
   const editor = md.editor;
 
   return createCallback(
@@ -98,8 +98,9 @@ export function useDeleteComment() {
 
   const deleteComment = useDeleteCommentResource();
   const deleteNewComments = useDeleteNewComments();
-  const [md] = useMdStore();
-  const { comments } = useCommentState();
+  const markdownDocument = useMarkdownDocument();
+  const { md } = markdownDocument.state.editor;
+  const { comments } = markdownDocument.state.comments;
   const editor = md.editor;
 
   return createCallback(async (info: DeleteCommentInfo) => {
@@ -130,8 +131,9 @@ export function useDeleteComment() {
 }
 
 export function useDeleteNewComments() {
-  const { marks, setMarks } = useCommentState();
-  const [md] = useMdStore();
+  const markdownDocument = useMarkdownDocument();
+  const { marks, setMarks } = markdownDocument.state.comments;
+  const { md } = markdownDocument.state.editor;
   const editor = md.editor;
 
   return createCallback((discardPending = true) => {
@@ -149,7 +151,7 @@ export function useDeleteNewComments() {
 }
 
 export const useSetNodeCommentThreadId = () => {
-  const [md] = useMdStore();
+  const { md } = useMarkdownDocument().state.editor;
   const editor = md.editor;
 
   return createCallback(
@@ -168,7 +170,7 @@ export function useScrollToCommentThread() {
   const documentId = markdownDocument.documentId();
   // Captured at setup: block stores resolve their block context at access
   // time, which the returned callback no longer has.
-  const { threads, marks } = useCommentState();
+  const { threads, marks } = markdownDocument.state.comments;
   // At most one mobile wait-for-mark may be outstanding — a newer deep
   // link supersedes an older still-pending one, so a slow-syncing thread
   // can't later yank the scroll and the active thread away from the one

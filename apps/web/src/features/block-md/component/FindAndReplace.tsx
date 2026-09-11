@@ -1,5 +1,3 @@
-import { useFindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
-import { useMdStore } from '@block-md/signal/markdownBlockData';
 import {
   DO_REPLACE_COMMAND,
   DO_REPLACE_ONCE_COMMAND,
@@ -22,7 +20,11 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
   const markdownDocument = useMarkdownDocument();
-  const [mdData] = useMdStore();
+  const {
+    md: mdData,
+    findAndReplace: findAndReplaceStore,
+    setFindAndReplace: setFindAndReplaceStore,
+  } = markdownDocument.state.editor;
   const canEdit = markdownDocument.permissions.canEdit;
   const editor = () => mdData.editor;
   const scopeId = () => props.hotkeyScope;
@@ -30,9 +32,6 @@ export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
   let inputRef: HTMLInputElement | undefined;
   let inputReplaceRef: HTMLInputElement | undefined;
   let performSearchTimeout: ReturnType<typeof setTimeout>;
-
-  const [findAndReplaceStore, setFindAndReplaceStore] =
-    useFindAndReplaceStore();
 
   const closeSearch = () => {
     setFindAndReplaceStore('searchIsOpen', false);

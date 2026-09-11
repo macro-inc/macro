@@ -1,4 +1,3 @@
-import { useCommentState } from '@block-md/comments/commentStore';
 import { MinimizedThread } from '@core/comments/MinimizedThreads';
 import {
   CommentsContext,
@@ -30,7 +29,7 @@ const useCommentsContext = (
 ): CommentsContextType => {
   const markdownDocument = useMarkdownDocument();
   const { comments, setActiveCommentThread, highlightedCommentId } =
-    useCommentState();
+    markdownDocument.state.comments;
   const ownedCommentIds = createMemo(() => {
     const userId = useUserId()();
     if (!userId) {
@@ -83,7 +82,7 @@ export const CommentMargin = () => {
     activeCommentThread,
     highlightedCommentThreads,
     wideEnoughForComments,
-  } = useCommentState();
+  } = useMarkdownDocument().state.comments;
   const { notebookHeight, setThreadHeights, threadPositions } =
     createCommentLayout();
   const maxHeight = createMemo(() => notebookHeight() ?? undefined);

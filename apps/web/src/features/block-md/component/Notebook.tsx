@@ -1,8 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
-import { useCommentState } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
-import { useMdStore } from '@block-md/signal/markdownBlockData';
 import {
   editorFocusSignal,
   getSaveState,
@@ -110,8 +108,9 @@ export function Notebook(props: {
 }) {
   const markdownDocument = useMarkdownDocument();
   const blockElement = markdownDocument.element;
-  const [md, setMd] = useMdStore();
-  const { comments, setWideEnoughForComments } = useCommentState();
+  const { md, setMd } = markdownDocument.state.editor;
+  const { comments, setWideEnoughForComments } =
+    markdownDocument.state.comments;
   const { displayName: documentName } = useMarkdownName();
   const scopeId = () => props.hotkeyScope;
   const history = useHistory();
@@ -424,7 +423,7 @@ export function InstructionsNotebook(props: {
   loroManager: LoroManager;
   hotkeyScope: string | undefined;
 }) {
-  const [, setMd] = useMdStore();
+  const { setMd } = useMarkdownDocument().state.editor;
   const scopeId = () => props.hotkeyScope;
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 

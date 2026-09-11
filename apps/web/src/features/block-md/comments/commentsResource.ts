@@ -14,7 +14,6 @@ import type { EditCommentRequest } from '@service-storage/generated/schemas/edit
 import type { EditCommentResponse } from '@service-storage/generated/schemas/editCommentResponse';
 import { batch } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { useCommentState } from './commentStore';
 import type { MarkId, ThreadMetadata } from './commentType';
 
 export const sortComments = (a: Comment, b: Comment) => {
@@ -28,13 +27,9 @@ export const sortComments = (a: Comment, b: Comment) => {
   return compareDateAsc(a.createdAt, b.createdAt);
 };
 
-export function useCommentThreadsResource() {
-  const { commentThreads, commentThreadActions } = useCommentState();
-  return [commentThreads, commentThreadActions] as const;
-}
-
 function useHandleCreateComment() {
-  const [, { mutate: mutateCommentThreads }] = useCommentThreadsResource();
+  const { mutate: mutateCommentThreads } =
+    useMarkdownDocument().state.comments.commentThreadActions;
 
   return async (response: CreateCommentResponse) => {
     const commentThread: CommentThread = {
@@ -86,7 +81,8 @@ function useCreateComment() {
 }
 
 function useHandleEditComment() {
-  const [, { mutate: mutateCommentThreads }] = useCommentThreadsResource();
+  const { mutate: mutateCommentThreads } =
+    useMarkdownDocument().state.comments.commentThreadActions;
 
   return async (response: EditCommentResponse) => {
     mutateCommentThreads((prev = []) => {
@@ -136,7 +132,8 @@ export function useEditCommentResource() {
 }
 
 function useHandleDeleteComment() {
-  const [, { mutate: mutateCommentThreads }] = useCommentThreadsResource();
+  const { mutate: mutateCommentThreads } =
+    useMarkdownDocument().state.comments.commentThreadActions;
 
   return async (response: DeleteCommentResponse) => {
     return batch(() => {
