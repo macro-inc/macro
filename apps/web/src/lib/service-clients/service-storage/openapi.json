@@ -8605,7 +8605,7 @@
           {
             "name": "entityType",
             "in": "query",
-            "description": "Restrict to favorites of these entity types.",
+            "description": "Restrict to favorites whose entity is one of these types.",
             "required": false,
             "schema": {
               "type": "array",
@@ -8639,7 +8639,7 @@
           {
             "name": "entityId",
             "in": "query",
-            "description": "Restrict to favorites with these entity ids.",
+            "description": "Restrict to favorites whose entity is one of these ids.",
             "required": false,
             "schema": {
               "type": "array",

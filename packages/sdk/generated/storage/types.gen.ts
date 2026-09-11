@@ -12755,11 +12755,11 @@ export type ListFavoritesData = {
     path?: never;
     query?: {
         /**
-         * Restrict to favorites of these entity types.
+         * Restrict to favorites whose entity is one of these types.
          */
         entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session'>;
         /**
-         * Restrict to favorites with these entity ids.
+         * Restrict to favorites whose entity is one of these ids.
          */
         entityId?: Array<string>;
     };

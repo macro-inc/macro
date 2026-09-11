@@ -8,11 +8,11 @@ import type { ListFavoritesEntityTypeItem } from './listFavoritesEntityTypeItem'
 
 export type ListFavoritesParams = {
   /**
-   * Restrict to favorites of these entity types.
+   * Restrict to favorites whose entity is one of these types.
    */
   entityType?: ListFavoritesEntityTypeItem[];
   /**
-   * Restrict to favorites with these entity ids.
+   * Restrict to favorites whose entity is one of these ids.
    */
   entityId?: string[];
 };

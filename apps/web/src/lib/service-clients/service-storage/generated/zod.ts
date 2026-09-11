@@ -8548,11 +8548,11 @@ export const listFavoritesQueryParams = zod.object({
         .describe('The type of an entity in Macro')
     )
     .optional()
-    .describe('Restrict to favorites of these entity types.'),
+    .describe('Restrict to favorites whose entity is one of these types.'),
   entityId: zod
     .array(zod.string())
     .optional()
-    .describe('Restrict to favorites with these entity ids.'),
+    .describe('Restrict to favorites whose entity is one of these ids.'),
 });
 
 export const listFavoritesResponse = zod
