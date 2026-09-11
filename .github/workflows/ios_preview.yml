@@ -96,9 +96,23 @@ jobs:
         # cargo-tauri, bun, just, wasm-pack and the pinned toolchain (which carries
         # aarch64-apple-ios-sim, see rust-toolchain.toml) all come from the dev shell.
         nix develop --command bash -euo pipefail -c '
-          echo "xcode-select -p inside nix, before: $(xcode-select -p 2>&1)"
+          # The dev shell brings its own Apple toolchain: DEVELOPER_DIR points at
+          # nix'"'"'s apple-sdk, and `xcodebuild` resolves to the xcbuild
+          # reimplementation, which rejects real flags like -allowProvisioningUpdates.
+          # Neither can build for a device SDK we did not get from Xcode, so put the
+          # system tools in front — a dedicated dir rather than /usr/bin wholesale, so
+          # nothing else the shell provides gets shadowed.
+          echo "before: DEVELOPER_DIR=$(xcode-select -p 2>&1), xcodebuild=$(command -v xcodebuild || echo none)"
+
           export DEVELOPER_DIR="$MACRO_DEVELOPER_DIR"
-          echo "xcode-select -p inside nix, after:  $(xcode-select -p 2>&1)"
+          APPLE_TOOLS="$(mktemp -d)"
+          for tool in xcodebuild xcrun xcode-select simctl actool ibtool ditto plutil; do
+            [ -x "/usr/bin/$tool" ] && ln -sf "/usr/bin/$tool" "$APPLE_TOOLS/$tool"
+          done
+          export PATH="$APPLE_TOOLS:$PATH"
+
+          echo "after:  DEVELOPER_DIR=$(xcode-select -p 2>&1), xcodebuild=$(command -v xcodebuild)"
+          xcodebuild -version
 
           bun install --frozen-lockfile
           cd apps/web
