@@ -98,6 +98,25 @@ beforeEach(() => {
   onOpen.mockReset();
 });
 
+describe('Magic Chip inside an editor', () => {
+  it('collapses even when the editor stops delegated clicks', () => {
+    const collapse = vi.fn();
+    render(() => (
+      <div on:click={(event) => event.stopPropagation()}>
+        <MagicChipView
+          agentSessionId="session"
+          presentation={{ kind: 'settled', markdown: 'Latest answer' }}
+          onCollapse={collapse}
+        />
+      </div>
+    ));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse to mention' })
+    );
+    expect(collapse).toHaveBeenCalledOnce();
+  });
+});
+
 describe('MagicChipView', () => {
   it('reserves the answer height and reads the activity in the header while working', () => {
     const { container } = render(() => (

@@ -355,15 +355,31 @@ function Main(props: JSX.HTMLAttributes<HTMLElement>) {
   );
 }
 
+function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+  return (
+    <div
+      {...rest}
+      class={cn(
+        'flex h-12 min-w-0 shrink-0 items-center border-b border-edge px-4 py-3 touch:hidden',
+        local.class
+      )}
+      data-view-shell-top-bar=""
+    >
+      <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
+        {local.children}
+      </h1>
+    </div>
+  );
+}
+
 function Header(props: JSX.HTMLAttributes<HTMLElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   return (
     <header
       {...rest}
       class={cn(
-        // A 1px divider closes the toolbar off from the content below it,
-        // matching the pane dividers; touch layouts stay borderless.
-        'shrink-0 border-b-[1px] border-edge px-4 pb-3 pt-2 touch:border-b-0 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)]',
+        'shrink-0 border-b border-edge touch:border-b-0 px-4 py-4 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)]',
         local.class
       )}
       data-view-shell-header=""
@@ -458,6 +474,7 @@ export const ViewShell = Object.assign(Root, {
   Root,
   Aside,
   Main,
+  TopBar,
   Header,
   Content,
   Detail,

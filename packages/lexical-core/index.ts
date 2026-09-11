@@ -3,6 +3,7 @@ export * from './decoratorRegistry';
 export * from './domFactoryRegistry';
 export * from './node-list';
 export * from './nodes/AgentContextNode';
+export * from './nodes/AgentSessionMentionNode';
 export * from './nodes/AwaitNode';
 export * from './nodes/ClassedBlockNode';
 export * from './nodes/CommentNode';

@@ -440,7 +440,8 @@ dependencies = [
  "harness_id",
  "macro_authorization",
  "macro_db_migrator",
- "macro_service_urls",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -2492,6 +2493,7 @@ dependencies = [
  "axum-core",
  "bytes",
  "cookie",
+ "form_urlencoded",
  "futures-util",
  "headers",
  "http 1.4.0",
@@ -2501,6 +2503,8 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde_core",
+ "serde_html_form",
+ "serde_path_to_error",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -3003,7 +3007,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.6"
+version = "0.6.10"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3761,6 +3765,7 @@ dependencies = [
  "apollo-compiler",
  "async-graphql",
  "axum",
+ "bots",
  "chrono",
  "email",
  "entity_access",
@@ -3785,9 +3790,11 @@ dependencies = [
  "models_properties",
  "models_soup",
  "notification",
+ "predicate-index",
  "rootcause",
  "serde",
  "soup",
+ "soup-filter-projection",
  "soup_realtime",
  "tokio",
  "tracing",
@@ -6188,16 +6195,20 @@ dependencies = [
  "axum",
  "bot_id",
  "cached",
+ "clap",
  "cool_asserts",
+ "database_env_vars",
  "futures",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_entrypoint",
  "macro_user_id",
  "mockall",
  "model",
  "model-entity",
  "model-error-response",
  "model_user",
+ "models_entity_access_management",
  "models_permissions",
  "rootcause",
  "serde",
@@ -6470,20 +6481,25 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "axum-extra",
  "chrono",
  "cowlike",
  "entity_access",
+ "http-body-util",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "mockall",
  "model-entity",
  "model-error-response",
+ "model_user",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
@@ -7273,6 +7289,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "notification",
+ "notification_state",
  "rootcause",
  "serde_json",
  "tokio",
@@ -7368,6 +7385,7 @@ dependencies = [
  "item_filters",
  "macro_user_id",
  "model_file_type",
+ "notification_state",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -8778,6 +8796,7 @@ dependencies = [
  "model_file_type",
  "nom 8.0.0",
  "non_empty",
+ "notification_state",
  "rootcause",
  "schemars 1.2.1",
  "serde",
@@ -10695,6 +10714,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "model_owner"
+version = "0.1.0"
+dependencies = [
+ "bot_id",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "model_user"
 version = "0.1.0"
 dependencies = [
@@ -11168,6 +11201,7 @@ dependencies = [
  "model-error-response",
  "model_user",
  "models_pagination",
+ "notification_state",
  "rate_limit",
  "rdkafka",
  "redis",
@@ -11176,6 +11210,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "serde_with",
  "sha2 0.10.9",
  "sqlx",
  "strum 0.27.2",
@@ -11305,6 +11340,18 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "workspace-hack",
+]
+
+[[package]]
+name = "notification_state"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "utoipa",
 ]
 
 [[package]]
@@ -13580,6 +13627,7 @@ dependencies = [
  "async-trait",
  "aws-sdk-sqs",
  "axum",
+ "axum-extra",
  "chrono",
  "chrono-tz",
  "cron",
@@ -14780,6 +14828,19 @@ dependencies = [
  "aws-sdk-dynamodb",
  "base64 0.21.7",
  "serde",
+ "serde_core",
+]
+
+[[package]]
+name = "serde_html_form"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2f2d7ff8a2140333718bb329f5c40fc5f0865b84c426183ce14c97d2ab8154f"
+dependencies = [
+ "form_urlencoded",
+ "indexmap 2.14.0",
+ "itoa",
+ "ryu",
  "serde_core",
 ]
 
@@ -18038,6 +18099,8 @@ dependencies = [
 name = "webhook"
 version = "0.1.0"
 dependencies = [
+ "agent_fold",
+ "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
  "anyhow",

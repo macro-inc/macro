@@ -10,7 +10,7 @@ import {
 } from '@app/features/soup';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
 import { match } from 'ts-pattern';
-import { EMAIL_FACETS } from '../filters/email-facets';
+import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
 import type { EmailTab } from '../types';
 
 export type EmailQueryContext = {
@@ -18,6 +18,7 @@ export type EmailQueryContext = {
   /** `undefined` = every linked inbox; `[]` = none; otherwise email link ids. */
   inboxIds: string[] | undefined;
   facets: FacetSelection;
+  facetContext: EmailFacetContext;
 };
 
 /**
@@ -86,7 +87,11 @@ export function buildEmailQuery(
   if (inbox) expressions.push(inbox);
 
   const base = compileClause(confine({ ef: clause.and(...expressions) }));
-  const refinements = compileFacets(context.facets, EMAIL_FACETS, undefined);
+  const refinements = compileFacets(
+    context.facets,
+    EMAIL_FACETS,
+    context.facetContext
+  );
   const body: SoupAstBody = {
     ...mergeAst(base, refinements),
     emailView: emailViewForTab(context.tab),

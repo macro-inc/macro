@@ -10,7 +10,11 @@ Use the same 1px end tolerance for TanStack, composer/viewport resizing, and sav
 positions. Scrolling up beyond rounding tolerance stops following, even a few pixels
 from the bottom; returning to the end resumes it.
 Acknowledging a send replaces the optimistic message ID, temporarily replacing its
-measured height with an estimate. A loose end threshold treats that intermediate
+measured height with an estimate. The core patch also allows bottom following when
+the last key changes without increasing the row count (`nextCount >= prevCount`),
+so acknowledgement keeps the end anchor through remeasurement. Following still
+requires an existing bottom pin and `followOnAppend`; readers in history retain
+their position. A loose end threshold treats that intermediate
 layout as pinned and applies the estimate-to-measurement delta as a backward scroll.
 ResizeObserver measurements also run in the current frame: delaying them with
 `useAnimationFrameWithResizeObserver` exposes stale row and composer geometry.
@@ -49,8 +53,30 @@ correction, `scrollToFn` synchronously commits the current total to the sizer;
 otherwise a growing last row can clamp the scroll against the old DOM extent.
 Viewport and inset changes explicitly scroll to the end only if previously pinned.
 The offset observer distinguishes instant programmatic scrolls from user scrolling,
-so iOS does not replay deferred momentum adjustments after a navigation has already
-accounted for those measurements. Actual touch/momentum deferral remains in the core.
+so our own corrections do not prolong gesture compensation.
+
+Safari wheel scrolling and iOS touch scrolling use a separate logical offset while a gesture is
+active. Size and prepend corrections counter-shift the rows instead of writing
+`scrollTop`, which interrupts native momentum. Scroll observations and saved
+snapshots include that adjustment. After touch release and 150ms without input or scrolling,
+the adjustment is removed and committed to the DOM offset in the same task.
+The sizer retains its logical height and clips shifted overflow during this period.
+Reaching either scroll boundary releases the shifted origin; explicit message,
+reply, latest, and pinned viewport/inset navigation flush it before computing targets.
+Elastic overscroll must return in bounds before a correction is committed. Touch end
+and cancellation listeners stay on the original event target even if its row unmounts.
+The `@tanstack/virtual-core` patch adds `useIOSScrollDeferral`, enabled by default.
+This list disables it because core deferral updates row positions without applying
+the matching scroll correction, which jumps to unrelated messages during a prepend.
+Channel compensation keeps logical row positions and offsets synchronized instead.
+While compensation is active, remeasuring a row entirely above the viewport also
+preserves the anchor when scrolling upward. The core's default backward-scroll
+exception otherwise lets late-loading images move the message being read. A row
+that spans the viewport's top is not compensated when its lower content grows.
+
+Message images reserve a responsive box from attachment dimensions, with the loading
+placeholder overlaid inside it. Keep the border on the frame: a border on the image
+can change portrait/landscape sizing when intrinsic dimensions become available.
 
 Message IDs also key Solid's rendered components, preserving editors and expanded
 threads across pagination. `Key` owns each row's virtual-item accessor; a shared
@@ -62,5 +88,23 @@ with floating mobile insets. Later size changes belong to ResizeObserver.
 `targetId` keeps the pending thread mounted for precise navigation to nested replies;
 only the list translates that ID into a virtual index. Snapshot
 restoration pairs the offset with `takeSnapshot()`.
-Pagination callbacks require user scroll intent; measurement corrections alone
-must not fetch more history.
+Native scroll events extend existing user intent through momentum, rather than
+expiring 300ms after finger release. History requests start within three viewport
+heights (at least 800px) on other browsers and still require user intent there.
+Safari/iOS proactively fill six viewport heights of older history, including after
+initial positioning and explicit navigation, so idle-time prepends establish native
+scroll headroom before the next gesture. Each new oldest key rearms the request if
+the buffer is still short; once full, loading stops. The paginator guards against
+concurrent requests and stops at the actual beginning of history.
+
+This retains the normal top-origin scroller and its bottom-pinning behavior. It
+reduces pagination stops, but a fling can still exhaust the native headroom that
+existed when it started: prepends during momentum remain visually compensated
+until idle or the boundary. This is a bounded preloading strategy, not a guarantee
+of uninterrupted scrolling through arbitrarily many pages.
+
+On iOS, sending clears the composer once and commits that clear before restoring
+focus in the same task. Blur still terminates the dictation session, but refocusing
+must not wait until the next animation frame, which permits the virtual keyboard
+to hide and resize the chat. Only refocus when that editor was focused before the
+clear; an asynchronous completion must not steal focus after the user leaves.

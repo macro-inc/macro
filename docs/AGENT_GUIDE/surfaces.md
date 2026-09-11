@@ -13,14 +13,30 @@ visible; local results do not trigger the tab-loading bar. A fresh server respon
 still replaces that result, and initial loads without usable data retain normal loading
 indicators.
 
-This is a best-effort display, not proof that every matching entity is cached. Loading
-more still follows the original server cursors and preserves already loaded pages.
+This is a best-effort display, not proof that every matching entity is cached. Outside
+the supported cached-Mail slice below, loading more follows the original server cursors
+and preserves already loaded pages.
 Newly loaded server rows join the retained display immediately, without duplicates or
 waiting for local recomputation to succeed. Removing pages from the server baseline
 invalidates overlays built from those pages.
 Changing filters or resetting the cache discards prior reconciliation evidence. Grouped
 lists, unsupported filters/sorts, and native/non-cache transports keep their existing
 network behavior.
+
+For Documents (including Tasks), Projects, and Chats, exact `UNSEEN`/`SEEN`
+notification filters also reconcile locally with created/updated timestamp sorts.
+Marking a notification done removes only that notification's contribution immediately;
+other active notifications can keep the entity in the list. Seen/reopen operations
+update filter membership on the authoritative reply, not from a guessed optimistic
+state. Rollback restores only the failed operation's contribution. `DONE` predicates,
+other entity partitions, and notified-at sorting still use the network path.
+
+Notification facts use the existing active-only GraphQL edge and primary entity
+association. Missing/partial or over-budget snapshots remain incomplete, never an
+empty notification set; display metadata decoding omissions remain a best-effort
+limitation. The v4 projection tracks individual notification IDs, bounded by the
+shared 256-fact per-entity budget. This cache-format upgrade resets old cached data
+and pending cache mutations, and the bumped backfill checkpoint rebuilds projections.
 
 Realtime Soup batches coalesce repeated entity IDs (including entity type), keeping
 that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.
@@ -37,12 +53,70 @@ rows and date headers by when you were last notified about the item, so a fresh 
 on an old task sits under "Today"; with it off they order by content recency. Keyboard:
 `j`/`k` move between rows and update the preview; alternate activation opens a new split.
 
+Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
+unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`
+or `⌘Z`) returns it to seen, not unseen. The row returns to the active inbox without
+an unread badge. Applying the active Inbox preset preserves read/unread selections:
+read (`seen` or `done`) narrows to `seen`, not to all active states. Email read/unread
+is separate from notification lifecycle state.
+
+## Tasks — `/app/component/tasks`
+
+Task navigation uses `My Tasks`, `All Tasks`, and `Created by me`. The desktop
+sidebar has a full-width `New task` action, a collapsible list of task favorites,
+and a collapsible list of tags. Selecting a tag filters the current task view;
+selecting it again clears that tag filter. Favorite rows open their tasks.
+
 ## Email — `/app/component/mail`
 
 Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `Shared` /
 `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
+
+### Cached Mail filtering
+
+With browser GraphQL caching enabled and the email metadata backfill synchronized,
+All, Signal, Noise, Drafts, Sent, Calendar, and Shared support tab changes and new
+filter combinations while offline: account selection
+(including delegated inboxes), read/unread, and archive-based Done/Not Done. Mail Done
+means `inboxVisible = false`; it is **not** notification lifecycle state. Signal/Noise
+retain their Inbox scope, so archived mail is found using All + Done.
+
+A `Showing cached mail` notice identifies results over synchronized metadata, not a
+claim of complete mailbox coverage. These lists paginate locally beyond the first
+page without a server cursor. Filter, revision, or engine-generation changes restart
+the local page chain; online server results take over again when available. After
+reconnecting, `Load more` follows the same server page chain as the displayed rows,
+not a leftover local cursor. Account choices are cached in the viewer-scoped GraphQL catalog. Timestamp ordering and date
+headers use the selected Mail view's indexed timestamps, not a preview cached from
+another view. Drafts and Sent display their latest eligible message snapshot, even
+when a newer normal message is the ALL preview; no message bodies are needed.
+Sent also requires a canonical outbound timestamp. Trashed messages cannot supply
+any preview. Calendar uses the authoritative thread calendar-attachment flag.
+
+Shared requires a last-known thread grant through the viewer, a team, or an active
+channel, plus the existing Mail UI rule excluding viewer-owned threads. Merely
+having a different owner or a delegated inbox does not qualify. Shared metadata has
+its own full-scan backfill before body hydration. A successful complete scan marks
+old entries it did not return incomplete (not deleted); a failed or cancelled scan
+preserves last-known evidence. If concurrent cache changes invalidate the prior
+membership snapshot, hydration continues but that scan cannot revoke old evidence.
+Interrupted Shared scans restart at the beginning so
+scope reconciliation never mistakes a suffix for a full scan. Offline access is
+necessarily evaluated from the last synchronized grants.
+
+The lightweight metadata backfill runs before body hydration. Its refreshes scan all
+metadata: message-time watermarks alone miss archive/read changes on old threads.
+Filter availability therefore does not guarantee that opening every message body works offline. Missing
+projection proof is unknown, never false. Sender/recipient, attachment chips,
+property/tag refinements and non-created/updated sorts remain network-only or
+existing client refinements; durable offline sending/archiving is not added by this slice. No cache-format wipe is required: Mail uses a separate versioned profile
+and a new backfill checkpoint, preserving existing queued work. Deploy the backend
+schema additions before the client: it selects canonical message eligibility/recency
+fields, body-free canonical preview references, and viewer-relative share facts.
+The `soup-mail-v2` profile and new backfill checkpoint rebuild Mail proof without
+changing the persisted mutation queue format.
 
 Threads open at `/app/email/<thread-id>`. Click a message header to expand or
 collapse it; `Show N hidden messages` reveals the collapsed middle of a longer
@@ -89,10 +163,18 @@ With the new app views enabled, mobile and tablet Email use a floating, horizont
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the
 view is the email list, which scrolls beneath the header and supports pull to refresh
 and swiping left to mark emails done in Signal and Noise. The filter button opens a
-bottom drawer for status, done, attachment and calendar filters, plus the inbox
-selector when available. `Clear all`
-resets those filters and the inbox selection. Desktop keeps its sidebar, search field,
-filter menu and preview control.
+bottom drawer for status, done, attachment, calendar and tag filters, plus an `Inbox`
+section when the user can pick one: `All inboxes` or a single address, never several.
+`Clear all` resets those filters and the inbox selection. Desktop keeps its sidebar,
+search field, filter menu and preview control. The sidebar lists the inboxes above the
+tabs as plain rows; clicking one shows only that inbox, and the `+` beside
+`All inboxes` (`Connect another account`) starts the add-inbox flow. Sidebar rows,
+`New`, and the panel's back, forward and close controls act on primary-button
+mousedown, so the selection changes before the click completes; a normal click
+still works. The sidebar ends with a collapsible `Tags` section (every personal and
+team tag, plus a `New tag` button): clicking a tag opens the `All` tab filtered to
+threads carrying it, clicking it again clears it, and choosing any tab clears it like
+the other filters.
 
 ## Search
 

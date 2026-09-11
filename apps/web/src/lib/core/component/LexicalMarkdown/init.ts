@@ -1,5 +1,6 @@
 import {
   AgentContextNode,
+  AgentSessionMentionNode,
   AwaitNode,
   ConnectAppNode,
   ContactMentionNode,
@@ -29,6 +30,7 @@ import {
   setDecorator,
 } from '@macro-inc/lexical-core/decoratorRegistry';
 import { AgentContext } from './component/decorator/AgentContext';
+import { AgentSessionMention } from './component/decorator/AgentSessionMention';
 import { Await } from './component/decorator/Await';
 import { ConnectApp } from './component/decorator/ConnectApp';
 import { ContactMention } from './component/decorator/ContactMention';
@@ -67,6 +69,7 @@ export function initializeLexical() {
   setDecorator(DocumentCardNode, DocumentCard);
   setDecorator(PasteNodeClass, PasteNode);
   setDecorator(PullRequestMentionNode, PullRequestMention);
+  setDecorator(AgentSessionMentionNode, AgentSessionMention);
   setDecorator(ReplyTargetNode, ReplyTarget);
   setDecorator(ContactMentionNode, ContactMention);
   setDecorator(DateMentionNode, DateMention);

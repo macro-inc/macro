@@ -1,8 +1,3 @@
-import { CURSOR_BOT_NAME, isCursorBotId } from '@core/constant/cursorAgent';
-import { isMacroAgentId, MACRO_AGENT_NAME } from '@core/constant/macroAgent';
-import { isMacroCoderId, MACRO_CODER_NAME } from '@core/constant/macroCoder';
-import { isMacroNewId, MACRO_NEW_NAME } from '@core/constant/macroNew';
-import { isMacroSystemId, MACRO_SYSTEM_NAME } from '@core/constant/macroSystem';
 import type {
   ApiChannelMessage,
   ApiThreadReply,
@@ -10,6 +5,9 @@ import type {
 } from '@service-storage/client';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 import type { Bot } from '@service-storage/generated/schemas/bot';
+import { firstPartyBotName } from '../bots/first-party-bot-name';
+
+export { firstPartyBotName } from '../bots/first-party-bot-name';
 
 type WithMaybeSender<
   T extends { sender_id: string; sender: ApiMessageSender },
@@ -34,19 +32,6 @@ export function senderFromStorageId(senderId: string): ApiMessageSender {
   }
 
   return { type: 'user', id: senderId };
-}
-
-/**
- * Display name for a first-party bot (bare UUID or `bot|<uuid>`), resolved
- * from constants so it never waits on the bots list. Undefined for team bots.
- */
-export function firstPartyBotName(id: string): string | undefined {
-  if (isMacroAgentId(id)) return MACRO_AGENT_NAME;
-  if (isMacroCoderId(id)) return MACRO_CODER_NAME;
-  if (isMacroNewId(id)) return MACRO_NEW_NAME;
-  if (isCursorBotId(id)) return CURSOR_BOT_NAME;
-  if (isMacroSystemId(id)) return MACRO_SYSTEM_NAME;
-  return undefined;
 }
 
 /** Resolve a channel bot sender to its display name. */

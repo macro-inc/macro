@@ -788,6 +788,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     .withCode()
     .withMedia({ fileDrop: true })
     .withSelectionData()
+    .withFloatingFormatMenu()
     .withHistory()
     .onChange(setContent)
     .onFocusLeave({

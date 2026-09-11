@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH viewer_source_ids AS (\n                SELECT cp.channel_id::text AS source_id\n                FROM comms_channel_participants cp\n                WHERE cp.user_id = $2 AND cp.left_at IS NULL\n                UNION ALL\n                SELECT t.team_id::text FROM team_user t WHERE t.user_id = $2\n                UNION ALL\n                SELECT $2\n            )\n            SELECT\n                s.id,\n                s.name,\n                s.owner_id,\n                s.bot_id,\n                s.status,\n                s.status_event_name,\n                s.created_at,\n                s.modified_at,\n                EXISTS (\n                    SELECT 1 FROM entity_access ea\n                    WHERE ea.entity_id = s.id\n                      AND ea.entity_type = 'agent_session'\n                      AND ea.source_id IN (SELECT source_id FROM viewer_source_ids)\n                ) AS \"has_access!\"\n            FROM agent_session s\n            WHERE s.id = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "bot_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "status_event_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "modified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "has_access!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "7101ea0a8cc97511d2c071783abcc6d0e841215c5ebddc2e3bc8b98ac203e47c"
+}

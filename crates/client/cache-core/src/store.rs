@@ -306,6 +306,41 @@ impl InMemoryStorage {
         self.records.is_empty()
     }
 
+    fn rebase_projections(&mut self, keys: &[PredicateRecordKey]) {
+        let sources = self
+            .mutations
+            .iter()
+            .map(|(id, row)| {
+                (
+                    *id,
+                    crate::queue::decode_optimistic_source(&row.optimistic.optimistic_data_json)
+                        .expect("valid queued source"),
+                )
+            })
+            .collect::<Vec<_>>();
+        let layers = sources
+            .iter()
+            .map(
+                |(owner, source)| crate::predicate::ProjectionMutationLayer {
+                    owner: *owner,
+                    mutations: &source.projection_mutations,
+                },
+            )
+            .collect::<Vec<_>>();
+        for key in keys {
+            self.optimistic_projections.remove(key);
+            if let Some(shadow) = crate::predicate::compose_effective_optimistic_projection(
+                key,
+                self.projections.get(key),
+                &layers,
+            )
+            .expect("valid projection layers")
+            {
+                self.optimistic_projections.insert(key.clone(), shadow);
+            }
+        }
+    }
+
     /// Number of normalized-record get calls (test diagnostics).
     pub fn record_get_count(&self) -> usize {
         self.record_get_count.load(Ordering::Relaxed)
@@ -352,7 +387,12 @@ impl Storage for InMemoryStorage {
         projections: Vec<ProjectionMutation>,
     ) -> Result<(), Self::Error> {
         self.put_batch(entries).await?;
+        let keys = projections
+            .iter()
+            .map(|mutation| mutation.record_key().clone())
+            .collect::<Vec<_>>();
         apply_in_memory_projection_mutations(&mut self.projections, projections);
+        self.rebase_projections(&keys);
         Ok(())
     }
 
@@ -803,11 +843,25 @@ impl PredicateIndexStorage for InMemoryStorage {
         keys: &[EntityKey<'static>],
         projection_keys: &[PredicateRecordKey],
     ) -> Result<(), Self::Error> {
+        self.delete_batch_with_projection_changes(
+            keys,
+            projection_keys
+                .iter()
+                .cloned()
+                .map(ProjectionMutation::Delete)
+                .collect(),
+        )
+        .await
+    }
+
+    async fn delete_batch_with_projection_changes(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
         self.delete_batch(keys).await?;
-        for key in projection_keys {
-            self.projections.remove(key);
-        }
-        Ok(())
+        self.put_batch_with_projections(Vec::new(), projections)
+            .await
     }
 
     async fn query_predicate_index(

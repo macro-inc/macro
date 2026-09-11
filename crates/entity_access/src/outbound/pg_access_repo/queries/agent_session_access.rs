@@ -1,6 +1,12 @@
 //! Query for agent session access level.
 
+#[cfg(feature = "explain_binary")]
+use crate::{
+    domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
+};
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+#[cfg(feature = "explain_binary")]
+use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
 
@@ -45,4 +51,14 @@ pub async fn get_agent_session_access(
         .max();
 
     Ok(highest_level)
+}
+
+#[cfg(feature = "explain_binary")]
+#[tracing::instrument(err, skip(pool, source_ids))]
+pub async fn explain_agent_session_access(
+    pool: &PgPool,
+    agent_session_id: &uuid::Uuid,
+    source_ids: &SourceIds,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    list_entity_access_grants(pool, agent_session_id, EntityType::AgentSession, source_ids).await
 }

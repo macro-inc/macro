@@ -12,6 +12,7 @@ import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
   type AgentContextNode,
+  type AgentSessionMentionNode,
   type AwaitNode,
   type ClassedBlockNode,
   type ConnectAppNode,
@@ -77,12 +78,16 @@ import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
 import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
+import { AgentSessionMention as AgentSessionMentionDecorator } from '../decorator/AgentSessionMention';
 import { Await as AwaitDecorator } from '../decorator/Await';
 import { ConnectApp as ConnectAppDecorator } from '../decorator/ConnectApp';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
-import { DocumentMention as DocumentMentionDecorator } from '../decorator/DocumentMention';
+import {
+  DocumentMention as DocumentMentionDecorator,
+  DocumentMentionStatic,
+} from '../decorator/DocumentMention';
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { LazyDecorator } from '../decorator/LazyDecorator';
@@ -234,6 +239,7 @@ function getTextClassName(
     | TextNode
     | UserMentionNode
     | DocumentMentionNode
+    | AgentSessionMentionNode
     | ContactMentionNode
     | DateMentionNode
     | WatermarkNode,
@@ -359,13 +365,6 @@ const UserMention: TypedRenderableEntity<UserMentionNode> = {
   ),
 };
 
-const MentionPlaceholder = () => (
-  <span class="pointer-events-none inline-block align-baseline opacity-60">
-    <span class="relative top-[0.125em] size-[1em] inline-block mx-1 bg-current/15 rounded-xs" />
-    <span class="inline-block w-12 h-[0.9em] align-baseline bg-current/10 rounded-sm" />
-  </span>
-);
-
 const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
   guard: (node: LexicalNode): node is DocumentMentionNode =>
     node.__type === 'document-mention',
@@ -384,7 +383,13 @@ const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
       <span class={getTextClassName(props.node, props.theme)}>
         {shouldRenderLazy ? (
           <LazyDecorator
-            placeholder={<MentionPlaceholder />}
+            placeholder={
+              <DocumentMentionStatic
+                {...componentProps}
+                key={key}
+                theme={props.theme}
+              />
+            }
             render={mention}
           />
         ) : (
@@ -393,6 +398,20 @@ const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
       </span>
     );
   },
+};
+
+const AgentSessionMention: TypedRenderableEntity<AgentSessionMentionNode> = {
+  guard: (node: LexicalNode): node is AgentSessionMentionNode =>
+    node.__type === 'agent-session-mention',
+  render: (props) => (
+    <span class={getTextClassName(props.node, props.theme)}>
+      {AgentSessionMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
 };
 
 const ThemeMention: TypedRenderableEntity<ThemeMentionNode> = {
@@ -547,11 +566,7 @@ const MagicChip: TypedRenderableEntity<MagicChipNode> = {
     node.__type === 'magic-chip',
   render: (props) => (
     <div class="min-w-0 max-w-full overflow-x-hidden">
-      <MagicChipDecorator
-        {...props.node.exportComponentProps()}
-        key={props.node.getKey()}
-        theme={props.theme}
-      />
+      <MagicChipDecorator {...props.node.exportComponentProps()} />
     </div>
   ),
 };
@@ -904,6 +919,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(LineBreak),
   eraseRenderableEntity(UserMention),
   eraseRenderableEntity(DocumentMention),
+  eraseRenderableEntity(AgentSessionMention),
   eraseRenderableEntity(DocumentCard),
   eraseRenderableEntity(ContactMention),
   eraseRenderableEntity(DateMention),

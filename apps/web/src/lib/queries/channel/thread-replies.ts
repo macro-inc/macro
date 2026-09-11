@@ -90,6 +90,24 @@ export function removeThreadReply(
   return nextReplies.length === data.length ? data : nextReplies;
 }
 
+export function replaceThreadReplyCreatedAt(
+  data: Array<ApiThreadReply> | undefined,
+  replyIds: readonly string[],
+  createdAt: string
+): Array<ApiThreadReply> | undefined {
+  if (!data || replyIds.length === 0) return data;
+  const ids = new Set(replyIds);
+
+  let didChange = false;
+  const nextReplies = data.map((reply) => {
+    if (!ids.has(reply.id) || reply.created_at === createdAt) return reply;
+    didChange = true;
+    return { ...reply, created_at: createdAt };
+  });
+
+  return didChange ? nextReplies : data;
+}
+
 export function replaceThreadReplyId(
   data: Array<ApiThreadReply> | undefined,
   optimisticId: string,

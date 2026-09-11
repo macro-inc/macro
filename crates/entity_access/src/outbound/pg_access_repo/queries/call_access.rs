@@ -3,7 +3,13 @@
 #[cfg(test)]
 mod test;
 
+#[cfg(feature = "explain_binary")]
+use crate::{
+    domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
+};
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+#[cfg(feature = "explain_binary")]
+use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
 
@@ -98,4 +104,84 @@ pub async fn get_call_access(
         .max();
 
     Ok(highest_level)
+}
+
+#[cfg(feature = "explain_binary")]
+#[tracing::instrument(err, skip(pool, source_ids))]
+pub async fn explain_call_access(
+    pool: &PgPool,
+    call_id: &uuid::Uuid,
+    source_ids: &SourceIds,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let mut grants = list_entity_access_grants(pool, call_id, EntityType::Call, source_ids).await?;
+
+    let public_levels = sqlx::query_scalar!(
+        r#"
+        SELECT
+            share_permission."linkShareAccessLevel" AS "access_level!: AccessLevel"
+        FROM "SharePermission" share_permission
+        JOIN (
+            SELECT share_permission_id
+            FROM calls
+            WHERE id = $1
+
+            UNION ALL
+
+            SELECT share_permission_id
+            FROM call_records
+            WHERE id = $1
+            LIMIT 1
+        ) call_item ON call_item.share_permission_id = share_permission.id
+        WHERE share_permission."linkShare" = 'PUBLIC'
+          AND share_permission."linkShareAccessLevel" IS NOT NULL
+        "#,
+        call_id,
+    )
+    .fetch_all(pool)
+    .await?;
+    grants.extend(
+        public_levels
+            .into_iter()
+            .map(|access_level| AccessGrant::PublicLink { access_level }),
+    );
+
+    if source_ids.0.is_empty() {
+        return Ok(grants);
+    }
+
+    let team_rows = sqlx::query!(
+        r#"
+        SELECT
+            share_permission."linkShareAccessLevel" AS "access_level!: AccessLevel",
+            owner_team.team_id AS "owner_team_id!"
+        FROM "SharePermission" share_permission
+        JOIN (
+            SELECT share_permission_id, created_by
+            FROM calls
+            WHERE id = $1
+
+            UNION ALL
+
+            SELECT share_permission_id, created_by
+            FROM call_records
+            WHERE id = $1
+            LIMIT 1
+        ) call_item ON call_item.share_permission_id = share_permission.id
+        JOIN team_user owner_team
+          ON owner_team.user_id = call_item.created_by
+         AND owner_team.team_id::text = ANY($2)
+        WHERE share_permission."linkShare" = 'TEAM'
+          AND share_permission."linkShareAccessLevel" IS NOT NULL
+        "#,
+        call_id,
+        &source_ids.0,
+    )
+    .fetch_all(pool)
+    .await?;
+    grants.extend(team_rows.into_iter().map(|row| AccessGrant::TeamLink {
+        access_level: row.access_level,
+        owner_team_id: row.owner_team_id,
+    }));
+
+    Ok(grants)
 }

@@ -60,6 +60,7 @@ import {
   generatePlugin,
   horizontalRulePlugin,
   keyboardShortcutsPlugin,
+  listSwipeIndentPlugin,
   listToTablePlugin,
   markdownPastePlugin,
   mentionsPlugin,
@@ -395,7 +396,10 @@ export function MarkdownEditor(props: {
     const dragInsertPosition = getValidDragInsertPosition(editor, res.mousePos);
     if (!dragInsertPosition) return;
 
-    const mentionId = await trackMention(blockId, 'document', res.id);
+    const mentionId =
+      res.item.type === 'agent_session'
+        ? undefined
+        : await trackMention(blockId, 'document', res.id);
 
     let blockParams: Record<string, string> | undefined;
     if (res.blockName === 'channel') {
@@ -545,6 +549,7 @@ export function MarkdownEditor(props: {
     .state<EditorState>(setState, 'json')
     .history(400, props.loroManager)
     .use(tabIndentationPlugin())
+    .use(listSwipeIndentPlugin(isContentEditable))
     .use(selectionDataPlugin(lexicalWrapper))
     .use(horizontalRulePlugin())
     .use(

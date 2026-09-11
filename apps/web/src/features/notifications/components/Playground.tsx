@@ -108,7 +108,7 @@ function NotificationItem(props: {
   onSelect: () => void;
 }) {
   const hasData = () => hasNotificationMetadata(props.notification);
-  const isUnread = () => !props.notification.viewed_at;
+  const isUnread = () => props.notification.state === 'unseen';
 
   return (
     <button
@@ -542,7 +542,7 @@ function PlaygroundContent() {
         channelName: 'test-channel',
       },
       viewed_at: null,
-      done: false,
+      state: 'unseen',
     } as UnifiedNotification;
   });
 

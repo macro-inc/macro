@@ -3,11 +3,11 @@ import {
   NIL_UUID,
   type SoupSearchRequest,
 } from '@app/features/soup';
+import { notificationStatesForFilter } from '@notifications/notification-state';
 import type { SearchSoupQueryArgs } from '@queries/soup/search';
 import type {
   EmailFilters,
   EntityFilters,
-  NotificationFilters,
 } from '@service-search/generated/models';
 import { match } from 'ts-pattern';
 import type { EmailTab } from '../types';
@@ -51,18 +51,15 @@ const soleSelection = (selection: string[] | undefined) =>
  */
 function facetFilters(facets: FacetSelection): Partial<EmailFilters> {
   const filters: Partial<EmailFilters> = {};
-  const notification: NotificationFilters = {};
-
   const read = soleSelection(facets.read);
-  if (read === 'unread') notification.seen = false;
-  if (read === 'read') notification.seen = true;
+  if (read === 'unread') filters.is_read = false;
+  if (read === 'read') filters.is_read = true;
 
   const done = soleSelection(facets.done);
-  if (done === 'not-done') notification.done = false;
-  if (done === 'done') notification.done = true;
-
-  if (Object.keys(notification).length > 0) {
-    filters.notification_filters = notification;
+  if (done === 'not-done' || done === 'done') {
+    filters.notification_filters = {
+      states: notificationStatesForFilter('done', done === 'done'),
+    };
   }
 
   if ((facets.calendar ?? []).includes('has-calendar-invite')) {
@@ -89,13 +86,26 @@ export function buildEmailSearchRequest(
       context.inboxIds.length > 0 ? [...context.inboxIds] : [NIL_UUID];
   }
 
+  // Tags are entity-wide in the search service, so they sit beside the
+  // per-type filters rather than inside `email_filters`. Like the list
+  // query, a selected tag that no longer exists stops filtering.
+  const tagOptionIds = [...new Set(context.facets.tags ?? [])].filter((id) =>
+    context.facetContext.tagPropertyDefinitionByOptionId.has(id)
+  );
+
   return {
     params: { cursor: null, page_size: 100 },
     body: {
       query: search.query,
       match_type: search.matchType,
       search_on: 'name_content',
-      filters: { ...nonEmailFilters, email_filters: emailFilters },
+      filters: {
+        ...nonEmailFilters,
+        email_filters: emailFilters,
+        ...(tagOptionIds.length > 0
+          ? { tag_option_ids: tagOptionIds, tag_filter_mode: 'any' }
+          : {}),
+      },
     },
   };
 }

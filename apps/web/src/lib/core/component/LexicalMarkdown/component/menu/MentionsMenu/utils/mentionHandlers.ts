@@ -4,6 +4,7 @@ import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
 import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
 import {
+  INSERT_AGENT_SESSION_MENTION_COMMAND,
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_GROUP_MENTION_COMMAND,
@@ -48,6 +49,13 @@ async function handleEntityMention(
   } = dependencies;
 
   const entity = item.data;
+  if (entity.type === 'agent_session') {
+    editor.dispatchCommand(INSERT_AGENT_SESSION_MENTION_COMMAND, {
+      id: entity.id,
+      label: entity.name,
+    });
+    return;
+  }
 
   const blockNameForMention = getBlockNameFromEntity(item);
   const itemName = entityDisplayName(item);
@@ -128,6 +136,12 @@ export function createItemHandler(dependencies: HandlerDependencies) {
         return await handleDateMentionFromOption(item.data, dependencies);
       case 'group':
         return await handleGroupMentionItem(item.data, dependencies);
+      case 'agentSession':
+        dependencies.editor.dispatchCommand(
+          INSERT_AGENT_SESSION_MENTION_COMMAND,
+          { id: item.id, label: item.data.name }
+        );
+        return;
       case 'entity':
         return await handleEntityMention(item, dependencies);
     }

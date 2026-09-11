@@ -1,30 +1,37 @@
 import type { ListFilterGroup } from '@app/components/view-shell';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { createMemo } from 'solid-js';
 import { useEmailView } from '../email-view-context';
-import type { EmailFilterGroupId, EmailFilterOptionId } from '../types';
+import type { EmailFilterGroupId } from '../types';
 import { EMAIL_FILTER_GROUPS } from './email-facets';
 
-const FILTER_GROUPS: ListFilterGroup<
-  EmailFilterGroupId,
-  EmailFilterOptionId
->[] = EMAIL_FILTER_GROUPS.map((group) => ({
-  ...group,
-  options: group.options.map((option) => ({
-    ...option,
-    icon: option.iconType
-      ? () => <EntityIcon targetType={option.iconType} size="xs" />
-      : undefined,
-  })),
-}));
+type EmailFilterGroup = ListFilterGroup<EmailFilterGroupId, string>;
 
-const groupFor = (groupId: EmailFilterGroupId) =>
-  FILTER_GROUPS.find((group) => group.id === groupId);
+const STATIC_FILTER_GROUPS: EmailFilterGroup[] = EMAIL_FILTER_GROUPS.map(
+  (group) => ({
+    ...group,
+    options: group.options.map((option) => ({
+      ...option,
+      icon: option.iconType
+        ? () => <EntityIcon targetType={option.iconType} size="xs" />
+        : undefined,
+    })),
+  })
+);
 
 /** Shared selection semantics for the desktop menu and mobile drawer. */
 export function useEmailFilters() {
   const { state, setFacets } = useEmailView();
+  const tagGroup = useTagFilterGroup();
+  // Tags come last: the static groups are short, the tag list grows with use.
+  const groups = createMemo((): EmailFilterGroup[] => [
+    ...STATIC_FILTER_GROUPS,
+    tagGroup(),
+  ]);
+  const groupFor = (groupId: EmailFilterGroupId) =>
+    groups().find((group) => group.id === groupId);
   const activeFilterCount = createMemo(() =>
     Object.values(state.facets).reduce(
       (count, optionIds) => count + optionIds.length,
@@ -33,10 +40,7 @@ export function useEmailFilters() {
   );
 
   // Single-select groups carry an "All" option that stands for no selection.
-  const isSelected = (
-    groupId: EmailFilterGroupId,
-    optionId: EmailFilterOptionId
-  ) => {
+  const isSelected = (groupId: EmailFilterGroupId, optionId: string) => {
     const selected = state.facets[groupId] ?? [];
     const group = groupFor(groupId);
     if (
@@ -51,7 +55,7 @@ export function useEmailFilters() {
 
   const setSelected = (
     groupId: EmailFilterGroupId,
-    optionId: EmailFilterOptionId,
+    optionId: string,
     selected: boolean
   ) => {
     const group = groupFor(groupId);
@@ -76,7 +80,7 @@ export function useEmailFilters() {
   };
 
   return {
-    groups: FILTER_GROUPS,
+    groups,
     activeCount: activeFilterCount,
     isSelected,
     setSelected,

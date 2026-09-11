@@ -46,7 +46,7 @@ function baseNotification(
     updated_at: now,
     viewed_at: null,
     deleted_at: null,
-    done: false,
+    state: 'unseen',
     sent: true,
     sender_id: null,
     ...overrides,

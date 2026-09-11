@@ -1,3 +1,4 @@
+import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { makePersistedState } from '@app/lib/persistence';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -31,6 +32,8 @@ export type TasksViewContext = {
   setTab: (tab: TaskTab) => void;
   setFacets: (facets: TasksViewState['facets']) => void;
   setPrimarySort: (id: TaskSortId) => void;
+  isSidebarSectionOpen: (id: string) => boolean;
+  setSidebarSectionOpen: (id: string, open: boolean) => void;
 };
 
 export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
@@ -91,11 +94,22 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     setState('sort', [{ id, reversed }]);
   };
 
+  const isSidebarSectionOpen = (id: string) =>
+    !state.collapsedSidebarSectionIds.includes(id);
+
+  const setSidebarSectionOpen = (id: string, open: boolean) =>
+    setState(
+      'collapsedSidebarSectionIds',
+      setSidebarSectionCollapsed(id, open)
+    );
+
   return {
     state,
     setState,
     setTab,
     setFacets,
     setPrimarySort,
+    isSidebarSectionOpen,
+    setSidebarSectionOpen,
   };
 });

@@ -1,12 +1,10 @@
 import { ViewShell } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { Surface } from '@ui';
 import { createSignal, onMount, Suspense } from 'solid-js';
-import { TasksHeader } from './components/TasksHeader';
+import { TasksHeader, TasksTopBar } from './components/TasksHeader';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
 import { TasksViewProvider } from './tasks-view-context';
@@ -19,13 +17,9 @@ export type TasksViewProps = {
 
 function TasksListFallback() {
   return (
-    <Surface
-      depth={isTouchDevice() ? 0 : 2}
-      hideBorder
-      class="grid min-h-0 min-w-0 place-items-center rounded-none bg-transparent text-ink-muted"
-    >
+    <div class="grid size-full min-h-0 min-w-0 place-items-center text-ink-muted">
       <SpinnerIcon aria-label="Loading tasks" class="size-5 animate-spin" />
-    </Surface>
+    </div>
   );
 }
 
@@ -48,6 +42,7 @@ function TasksViewRoot() {
               <TasksSidebar />
             </ViewShell.Aside>
             <ViewShell.Main>
+              <TasksTopBar />
               <ViewShell.Header>
                 <TasksHeader onSearchEscape={() => listElement()?.focus()} />
               </ViewShell.Header>

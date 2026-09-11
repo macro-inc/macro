@@ -126,8 +126,8 @@ export class EditorConfigBuilder implements EditorBuilder {
    * Implies `.withSelectionData()`. The link button is only shown when
    * `.withLinks({ floatingMenu: true })` is also enabled.
    */
-  withFloatingFormatMenu(): this {
-    this.state.floatingFormatMenu = true;
+  withFloatingFormatMenu(options?: { extendedInlineFormats?: boolean }): this {
+    this.state.floatingFormatMenu = options ?? true;
     this.state.selectionData = true;
     return this;
   }

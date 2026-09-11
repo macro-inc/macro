@@ -1,15 +1,15 @@
 //! Bot ports.
 
 use super::models::{
-    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotToken,
-    BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotProfile,
+    BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
     CreateBotTokenResponse, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
     HarnessId, HarnessOwner, PatchBotRequest, UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
-use std::future::Future;
+use std::{collections::HashMap, future::Future};
 use uuid::Uuid;
 
 /// Bot repository.
@@ -74,6 +74,14 @@ pub trait BotRepo: Send + Sync + 'static {
     /// Get an active bot by id.
     fn get_bot(&self, bot_id: BotId)
     -> impl Future<Output = Result<Option<Bot>, Self::Err>> + Send;
+
+    /// Get presentation profiles for the requested bots.
+    ///
+    /// Historical profiles remain available after a bot is soft-deleted.
+    fn get_bot_profiles(
+        &self,
+        bot_ids: &[BotId],
+    ) -> impl Future<Output = Result<HashMap<BotId, BotProfile>, Self::Err>> + Send;
 
     /// Get an active persisted agent by bot id.
     fn get_agent(

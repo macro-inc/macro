@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod test;
 
+#[cfg(feature = "explain_binary")]
+use crate::domain::models::AccessGrant;
 use crate::domain::models::{ChannelRoleResult, ParticipantRole};
 use bot_id::BotIdStr;
 use sqlx::PgPool;
@@ -13,6 +15,8 @@ struct ChannelRoleRow {
     role: Option<String>,
     channel_type: String,
     org_id: Option<i64>,
+    #[cfg_attr(not(feature = "explain_binary"), allow(dead_code))]
+    team_id: Option<Uuid>,
     is_team_member: bool,
 }
 
@@ -29,6 +33,36 @@ fn parse_role(s: &str) -> ParticipantRole {
         "admin" => ParticipantRole::Admin,
         _ => ParticipantRole::Member,
     }
+}
+
+async fn fetch_channel_role_row(
+    pool: &PgPool,
+    channel_id: &Uuid,
+    user_id: &str,
+) -> Result<Option<ChannelRoleRow>, sqlx::Error> {
+    sqlx::query_as!(
+        ChannelRoleRow,
+        r#"
+        SELECT
+            cp.role::text as "role?",
+            c.channel_type::text as "channel_type!",
+            c.org_id as "org_id?",
+            c.team_id as "team_id?",
+            EXISTS (
+                SELECT 1
+                FROM team_user tu
+                WHERE tu.user_id = $2 AND tu.team_id = c.team_id
+            ) as "is_team_member!"
+        FROM comms_channels c
+        LEFT JOIN comms_channel_participants cp
+            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
+        WHERE c.id = $1
+        "#,
+        channel_id,
+        user_id,
+    )
+    .fetch_optional(pool)
+    .await
 }
 
 /// Get the user's role in a channel, considering channel type rules.
@@ -52,30 +86,7 @@ pub async fn get_channel_role(
     user_id: &str,
     user_org_id: Option<i64>,
 ) -> Result<ChannelRoleResult, sqlx::Error> {
-    let row = sqlx::query_as!(
-        ChannelRoleRow,
-        r#"
-        SELECT
-            cp.role::text as "role?",
-            c.channel_type::text as "channel_type!",
-            c.org_id as "org_id?",
-            EXISTS (
-                SELECT 1
-                FROM team_user tu
-                WHERE tu.user_id = $2 AND tu.team_id = c.team_id
-            ) as "is_team_member!"
-        FROM comms_channels c
-        LEFT JOIN comms_channel_participants cp
-            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
-        WHERE c.id = $1
-        "#,
-        channel_id,
-        user_id,
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    let Some(row) = row else {
+    let Some(row) = fetch_channel_role_row(pool, channel_id, user_id).await? else {
         return Ok(ChannelRoleResult::NotFound);
     };
 
@@ -112,6 +123,34 @@ pub async fn get_channel_role(
     }
 
     Ok(ChannelRoleResult::NoAccess)
+}
+
+#[cfg(feature = "explain_binary")]
+#[tracing::instrument(err, skip(pool))]
+pub async fn explain_channel_access(
+    pool: &PgPool,
+    channel_id: &Uuid,
+    user_id: &str,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let Some(row) = fetch_channel_role_row(pool, channel_id, user_id).await? else {
+        return Ok(vec![]);
+    };
+
+    if let Some(stored_role) = row.role.as_deref() {
+        return Ok(vec![AccessGrant::ChannelParticipant {
+            role: parse_role(stored_role),
+        }]);
+    }
+
+    match row.channel_type.as_str() {
+        "public" => Ok(vec![AccessGrant::ChannelPublicDefault]),
+        "team" if row.is_team_member => Ok(row
+            .team_id
+            .map(|team_id| AccessGrant::ChannelTeamViewOnly { team_id })
+            .into_iter()
+            .collect()),
+        _ => Ok(vec![]),
+    }
 }
 
 /// Get a bot's channel role while operating in its owning team's scope.

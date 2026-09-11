@@ -76,8 +76,10 @@ export type DropdownGroupProps = ComponentProps<
 export type DropdownItemProps = ComponentProps<typeof KobalteDropdownMenu.Item>;
 export type DropdownSubProps = ComponentProps<typeof KobalteDropdownMenu.Sub>;
 
+// Text size is inherited from `Dropdown.Content` (defaults to `text-sm`) so a
+// menu can be resized by passing a `text-*` class to the content.
 const ROW_CLASS =
-  'group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left font-normal text-sm cursor-default outline-none data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
+  'group rounded-lg w-full flex items-center gap-1.5 p-1.5 px-2 text-left font-normal cursor-default outline-none data-highlighted:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed';
 
 function resolvePortalMount(
   searchRef: HTMLElement | undefined,
@@ -205,7 +207,7 @@ function DropdownContent(props: DropdownContentProps) {
             // Glass: the content is the pane (blur + rim + shadow) and goes
             // transparent; the groups inside paint the menu color, which the
             // redefined --color-menu makes translucent so the blur shows.
-            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-transparent [--color-menu:var(--color-menu-glass)]',
+            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-transparent text-sm [--color-menu:var(--color-menu-glass)]',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -247,7 +249,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
       >
         <KobalteDropdownMenu.SubContent
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-transparent [--color-menu:var(--color-menu-glass)] [--color-surface:var(--color-menu)]',
+            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-transparent text-sm [--color-menu:var(--color-menu-glass)] [--color-surface:var(--color-menu)]',
             local.class
           )}
           depth={local.depth ?? 2}

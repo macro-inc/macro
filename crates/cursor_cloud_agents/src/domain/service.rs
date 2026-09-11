@@ -910,6 +910,24 @@ where
     /// One ordered path for live, foreign, and hydration ingestion. Reconnect
     /// starts at the beginning and verifies the captured content prefix. No
     /// local sequence is sent to Cursor as a remote resume token.
+    ///
+    /// One span per ingestion attempt: this is where a turn or a replay spends
+    /// its time between the run being listed and its records being journaled,
+    /// and the Cursor stream and poll calls inside it are what a stalled
+    /// handshake or turn was otherwise waiting on invisibly.
+    #[tracing::instrument(
+        name = "cursor.run.ingest",
+        skip_all,
+        fields(
+            agent.acp.session_id = ?session_id,
+            cursor.agent.id = %agent,
+            cursor.run.id = %run,
+            cursor.ingest.emit = mode.emit,
+            cursor.ingest.strict = mode.strict,
+            cursor.ingest.attempt = mode.attempt,
+        ),
+        err,
+    )]
     async fn ingest_run(
         &self,
         session_id: &SessionId,
@@ -1511,6 +1529,15 @@ where
 
     /// Reconstruct the entire session before allowing a successful load reply.
     /// The returned guard serializes the reply itself with every live writer.
+    ///
+    /// The runtime-side counterpart of the harness's handshake span: a
+    /// `session/load` that times out upstream is spent in here.
+    #[tracing::instrument(
+        name = "cursor.session.replay",
+        skip(self),
+        fields(agent.acp.session_id = ?id),
+        err,
+    )]
     pub async fn replay_session(&self, id: &SessionId) -> Result<ReplayGuard, SessionError> {
         let session = self.session(id)?;
         let gate = Arc::clone(&session.turn_gate).lock_owned().await;

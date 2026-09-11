@@ -37,6 +37,14 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 - Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
   `Settings (Ctrl ;)`, `Log out`.
 
+With the new app views enabled, the outer sidebar is an icon rail. Notifications,
+Email, and Chat show a small accent dot when the loaded data contains an unread
+item. Notifications uses Signal; Email uses Important across all linked inboxes.
+Noise does not light either dot. These are presence indicators, not counts; they
+do not fetch additional pages to find every unread item. Opening a view alone does
+not clear its dot — reading or completing the represented items does. The button's
+accessible description is `Unread items` while its dot is active.
+
 ## Favorites
 
 Use an entity's command/context menu to add or remove it from Favorites; drag rows

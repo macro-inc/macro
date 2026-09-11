@@ -18,6 +18,51 @@ const DOC_CHILD_ID: Uuid = Uuid::from_u128(0x55555555_5555_5555_5555_55555555555
 const CHAT_CHILD_ID: Uuid = Uuid::from_u128(0x66666666_6666_6666_6666_666666666666);
 const CHAT_ROOT_ID: Uuid = Uuid::from_u128(0x77777777_7777_7777_7777_777777777777);
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn session_channel_edit_grant_is_idempotent_and_removable(pool: Pool<Postgres>) {
+    let session_id = Uuid::from_u128(0x77777777_7777_7777_7777_777777777778);
+    for _ in 0..2 {
+        let mut tx = pool.begin().await.unwrap();
+        update_entity_access_channel_share_permissions(
+            &mut tx,
+            &session_id,
+            EntityType::AgentSession,
+            &[UpdateChannelSharePermission {
+                operation: UpdateOperation::Add,
+                channel_id: "session-channel".to_owned(),
+                access_level: Some(AccessLevel::Edit),
+            }],
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+    }
+    let rows = fetch_channel_rows(&pool, "session-channel").await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].entity_type, "agent_session");
+    assert_eq!(rows[0].access_level, AccessLevel::Edit);
+    assert!(rows[0].granted_from_project_id.is_none());
+    let mut tx = pool.begin().await.unwrap();
+    update_entity_access_channel_share_permissions(
+        &mut tx,
+        &session_id,
+        EntityType::AgentSession,
+        &[UpdateChannelSharePermission {
+            operation: UpdateOperation::Remove,
+            channel_id: "session-channel".to_owned(),
+            access_level: None,
+        }],
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    assert!(
+        fetch_channel_rows(&pool, "session-channel")
+            .await
+            .is_empty()
+    );
+}
+
 #[derive(Debug)]
 struct Row {
     entity_id: Uuid,

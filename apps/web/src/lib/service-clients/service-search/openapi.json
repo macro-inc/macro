@@ -173,6 +173,30 @@
   },
   "components": {
     "schemas": {
+      "AgentSessionFilters": {
+        "type": "object",
+        "description": "Filters for agent sessions.",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Agent session ids to filter by. Empty to include all accessible sessions."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into agent sessions at all. Agent sessions are off by\ndefault — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].\nAsking for specific `ids` or `owners` also opts in."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+          }
+        }
+      },
       "CalendarEventFilters": {
         "type": "object",
         "description": "Filters for canonical calendar-event entities.",
@@ -1717,6 +1741,10 @@
             },
             "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
           },
+          "is_read": {
+            "type": ["boolean", "null"],
+            "description": "Filter by the email thread's read flag, independently of notification state."
+          },
           "link_ids": {
             "type": "array",
             "items": {
@@ -2018,6 +2046,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "agent_session_filters": {
+            "$ref": "#/components/schemas/AgentSessionFilters",
+            "description": "the bundled [AgentSessionFilters]"
+          },
           "calendar_event_filters": {
             "$ref": "#/components/schemas/CalendarEventFilters",
             "description": "the bundled [CalendarEventFilters]"
@@ -2598,15 +2630,20 @@
         "type": "object",
         "description": "Notification-level filters that apply to an entity type.",
         "properties": {
-          "done": {
-            "type": ["boolean", "null"],
-            "description": "Filter by notification done state.\nNone to ignore, true to include only done notifications, false to include only not-done notifications."
-          },
-          "seen": {
-            "type": ["boolean", "null"],
-            "description": "Filter by notification seen state.\nNone to ignore, true to include only seen notifications, false to include only unseen notifications."
+          "states": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationState"
+            },
+            "description": "Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`."
           }
-        }
+        },
+        "additionalProperties": false
+      },
+      "NotificationState": {
+        "type": "string",
+        "description": "The mutually exclusive lifecycle states of a user's notification.",
+        "enum": ["unseen", "seen", "done"]
       },
       "ProjectFilters": {
         "type": "object",

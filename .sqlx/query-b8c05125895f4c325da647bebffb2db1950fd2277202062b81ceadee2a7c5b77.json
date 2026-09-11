@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            sp.\"linkShareAccessLevel\" AS \"access_level!: AccessLevel\",\n            owner_tu.team_id AS \"owner_team_id!\"\n        FROM \"SharePermission\" sp\n        JOIN \"ChatPermission\" cp ON cp.\"sharePermissionId\" = sp.id\n        JOIN \"Chat\" c ON c.id = cp.\"chatId\"\n        JOIN team_user owner_tu\n          ON owner_tu.user_id = c.\"userId\"\n         AND owner_tu.team_id::text = ANY($2)\n        WHERE cp.\"chatId\" = $1\n          AND sp.\"linkShare\" = 'TEAM'\n          AND sp.\"linkShareAccessLevel\" IS NOT NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_team_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "b8c05125895f4c325da647bebffb2db1950fd2277202062b81ceadee2a7c5b77"
+}

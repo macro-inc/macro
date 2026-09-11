@@ -1,3 +1,4 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
@@ -134,27 +135,27 @@ function ExpandedHeader() {
   };
 
   return (
-    <div class="flex shrink-0 flex-col gap-3 px-4">
-      <div class="flex items-center">
-        <SplitPanel.ControlGroup>
+    <div class="flex shrink-0 flex-col gap-3">
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
           <SplitPanel.CloseButton />
+          <ViewSidebar.Title>Chat</ViewSidebar.Title>
+        </div>
+        <SplitPanel.ControlGroup>
           <SplitPanel.BackButton />
           <SplitPanel.ForwardButton />
+          <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
         </SplitPanel.ControlGroup>
+      </ViewSidebar.Header>
+      <div class="px-4">
+        <Tabs
+          aria-label="Chat sidebar views"
+          fullWidth
+          list={CHANNEL_TABS}
+          value={rail.tab()}
+          onChange={selectTab}
+        />
       </div>
-      <div class="flex h-8 items-center gap-2">
-        <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
-        <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-          Chat
-        </h1>
-      </div>
-      <Tabs
-        aria-label="Chat sidebar views"
-        fullWidth
-        list={CHANNEL_TABS}
-        value={rail.tab()}
-        onChange={selectTab}
-      />
     </div>
   );
 }

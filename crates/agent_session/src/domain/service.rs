@@ -28,8 +28,9 @@ mod test;
 use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::SessionId;
-use agent_fold::domain::fold::FoldMachineImpl;
-use agent_fold::domain::ports::{FoldMachine, FoldedMessageRepo};
+use agent_fold::domain::lifecycle::LifecycleFold;
+use agent_fold::domain::model::TurnSignal;
+use agent_fold::domain::ports::FoldedMessageRepo;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToServerMessage};
 use dashmap::DashMap;
@@ -46,19 +47,22 @@ use bots::domain::models::BotId;
 
 use super::connection::RuntimeAttachment;
 use super::error::{AgentSessionError, Result};
+use super::lifecycle::session_identity;
+use super::model::SessionBot;
 use super::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, AgentSessionRenamed, AuthorKind, ChannelSession,
-    ClaimOutcome, CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS, Message,
-    MessageId, ReplicaId, SandboxSize, SessionClaim, SessionLog, SessionManagement,
-    StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview, AgentSessionRenamed,
+    AuthorKind, ChannelSession, ClaimOutcome, CreateAgentSessionParams, LogAppended,
+    MAX_AGENT_SESSION_NAME_CHARS, MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId,
+    SandboxSize, SessionClaim, SessionLog, SessionManagement, StoredAgentSessionLog,
 };
 use super::ports::{
-    AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionNameGenerator,
-    AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
-    NoOpAgentSessionNameGenerator, NoOpTurnObserver, SessionOwnership, SessionTurnObserver,
+    AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
+    AgentSessionNameGenerator, AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
+    Appended, NoOpAgentSessionNameGenerator, SessionOwnership, SessionTurnObserver,
 };
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 use super::session::{CloseReason, Input};
+use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
 const COMMAND_BUFFER: usize = 1028;
@@ -82,6 +86,12 @@ struct ActiveSession {
     marker: Arc<()>,
     deleting: bool,
     stopping: bool,
+    /// Cancelled by the connector the moment its transport ends, when it
+    /// offers one - not every connector does. `deliver_action` races this
+    /// alongside its reply wait so a command sent to a session whose
+    /// transport is already known to be gone fails immediately instead of
+    /// waiting out the full command timeout for nothing.
+    transport_closed: Option<CancellationToken>,
 }
 
 type ActiveSessions = DashMap<AgentSessionId, ActiveSession>;
@@ -129,6 +139,17 @@ pub trait AgentSessionService: Send + Sync + 'static {
 
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// What `viewer` may see of each of `ids`, for rendering chips.
+    ///
+    /// Duplicate ids are collapsed, so the answer has one entry per distinct
+    /// id. More than [`MAX_PREVIEW_SESSION_IDS`] distinct ids is
+    /// [`AgentSessionError::TooManyPreviewIds`].
+    fn preview_sessions(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        ids: Vec<AgentSessionId>,
+    ) -> impl Future<Output = Result<Vec<AgentSessionPreview>>> + Send;
 
     /// Rename a session after owner access has been verified.
     fn rename_session(
@@ -188,6 +209,9 @@ pub trait AgentSessionService: Send + Sync + 'static {
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
     ) -> impl Future<Output = Result<ChannelSession>> + Send;
+
+    /// The bot a session runs for, as viewers see it.
+    fn session_bot(&self, id: BotId) -> impl Future<Output = Result<SessionBot>> + Send;
 
     /// The user-message id the next prompt appended to this session will fold to.
     fn next_prompt_message_id(
@@ -254,6 +278,9 @@ pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGen
     /// Told when a session's turn ends or its actor stops - the harness's
     /// prompt-queue gate. Erased so wiring it is not another type parameter.
     turn_observer: Arc<dyn SessionTurnObserver>,
+    /// Where lifecycle facts go - renames, from here; everything else from
+    /// the harness. Erased for the same reason as the observer.
+    lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
     active: Arc<ActiveSessions>,
     /// This service's identity in the session-management lease. Minted at
     /// construction: a restarted process is a new replica, and its claims
@@ -264,56 +291,43 @@ pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGen
     lifecycle: Arc<Mutex<()>>,
 }
 
-impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
-    /// Build a service from its persistence port, fold, and realtime
-    /// publisher.
+impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
+    /// Build a service from every port it drives.
     ///
-    /// Only a live session streams, so a caller with no viewers to serve -
-    /// tests, and offline tooling - passes
-    /// [`NoOpRealtime`](super::ports::NoOpRealtime).
-    pub fn new(repo: R, folds: Folds, realtime: Rt) -> Self {
+    /// Nothing is defaulted: a caller with no viewers passes
+    /// [`NoOpRealtime`](super::ports::NoOpRealtime), one with no queue above
+    /// it passes [`NoOpTurnObserver`], one with nothing downstream passes
+    /// [`NoopLifecyclePublisher`], and one that is the only service instance
+    /// in its process mints its own [`ReplicaId`] - each choice visible at the
+    /// call site rather than hidden in a builder's default.
+    ///
+    /// `replica` is this service's identity in the session-management lease.
+    /// A restarted process is a new replica whose claims are recovered by
+    /// heartbeat staleness, never inherited. A process with more than one
+    /// attach-capable instance hands every instance the same id: commands
+    /// forward to an address, and every instance in a process shares one.
+    pub fn new(
+        repo: R,
+        folds: Folds,
+        realtime: Rt,
+        name_generator: Namer,
+        turn_observer: Arc<dyn SessionTurnObserver>,
+        lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
+        replica: ReplicaId,
+    ) -> Self {
         Self {
             repo,
             folds,
             realtime,
-            name_generator: NoOpAgentSessionNameGenerator,
-            turn_observer: Arc::new(NoOpTurnObserver),
+            name_generator,
+            turn_observer,
+            lifecycle_publisher,
             active: Arc::new(DashMap::new()),
-            replica: ReplicaId::mint(),
+            replica,
             tasks: TaskTracker::new(),
             cancellation: CancellationToken::new(),
             lifecycle: Arc::new(Mutex::new(())),
         }
-    }
-}
-
-impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
-    /// Replace the no-op name generator with a production adapter.
-    #[must_use]
-    pub fn with_name_generator<NextNamer>(
-        self,
-        name_generator: NextNamer,
-    ) -> AgentSessionServiceImpl<R, Folds, Rt, NextNamer> {
-        AgentSessionServiceImpl {
-            repo: self.repo,
-            folds: self.folds,
-            realtime: self.realtime,
-            name_generator,
-            turn_observer: self.turn_observer,
-            active: self.active,
-            replica: self.replica,
-            tasks: self.tasks,
-            cancellation: self.cancellation,
-            lifecycle: self.lifecycle,
-        }
-    }
-
-    /// Replace the no-op turn observer with whoever gates prompts on turns -
-    /// in production, the harness's queue.
-    #[must_use]
-    pub fn with_turn_observer(mut self, turn_observer: Arc<dyn SessionTurnObserver>) -> Self {
-        self.turn_observer = turn_observer;
-        self
     }
 
     /// This service's identity in the session-management lease, for the
@@ -321,19 +335,6 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
     #[must_use]
     pub fn replica_id(&self) -> ReplicaId {
         self.replica
-    }
-
-    /// Adopt a caller-minted replica identity, replacing the constructor's.
-    ///
-    /// For processes with more than one attach-capable service instance: the
-    /// lease's replica is the *process* (commands forward to an address, and
-    /// every instance in a process shares one), so the composition root mints
-    /// a single id and stamps it on each instance. The instances' session
-    /// sets are disjoint by construction, so they never contend for a lease.
-    #[must_use]
-    pub fn with_replica(mut self, replica: ReplicaId) -> Self {
-        self.replica = replica;
-        self
     }
 
     /// Stop active actors and wait for their tasks to release their transports.
@@ -366,6 +367,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     marker: marker.clone(),
                     deleting: false,
                     stopping: false,
+                    transport_closed: None,
                 });
                 Ok(AttachReservation {
                     active: self.active.clone(),
@@ -406,6 +408,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             activate(claim)?;
         }
         active.commands = Some(commands.clone());
+        active.transport_closed = attachment.closed.clone();
         drop(active);
         let (marker, stopped_tx) = reservation.commit();
 
@@ -451,10 +454,10 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         action: AgentAction,
         action_id: AgentActionId,
     ) -> Result<()> {
-        let commands = self
+        let (commands, transport_closed) = self
             .active
             .get(&id)
-            .and_then(|entry| entry.commands.clone())
+            .and_then(|entry| Some((entry.commands.clone()?, entry.transport_closed.clone())))
             .ok_or(AgentSessionError::Disconnected(id))?;
 
         let (completed, result) = oneshot::channel();
@@ -487,10 +490,26 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         // can only notice by hitting its own much longer internal deadline
         // instead of promptly.
         drop(commands);
-        match tokio::time::timeout(HANDSHAKE_TIMEOUT, result).await {
-            Ok(Ok(result)) => result,
-            Ok(Err(_)) => Err(AgentSessionError::Disconnected(id)),
-            Err(_elapsed) => {
+        // A transport that has already ended has no reply coming, however
+        // long we wait: race the connector's own closed signal (when it has
+        // one) alongside the reply so that case fails at once instead of
+        // riding out the rest of `HANDSHAKE_TIMEOUT` for nothing. A
+        // connector with no such signal just never resolves this side of
+        // the select, unchanged from before.
+        let transport_closed_first = async {
+            match &transport_closed {
+                Some(closed) => closed.cancelled().await,
+                None => std::future::pending().await,
+            }
+        };
+        let timed_out = tokio::select! {
+            res = tokio::time::timeout(HANDSHAKE_TIMEOUT, result) => Some(res),
+            () = transport_closed_first => None,
+        };
+        match timed_out {
+            Some(Ok(Ok(result))) => result,
+            Some(Ok(Err(_))) => Err(AgentSessionError::Disconnected(id)),
+            Some(Err(_elapsed)) => {
                 // The actor is presumably still stuck in the handshake, so it
                 // is stopped directly - the same "drop the sender, the actor
                 // notices and tears itself down" mechanism `close_session`
@@ -502,6 +521,18 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     Arc::ptr_eq(&active.marker, &marker) && !active.deleting
                 });
                 tracing::warn!(%id, "agent session command timed out waiting for the ACP handshake");
+                Err(AgentSessionError::Disconnected(id))
+            }
+            None => {
+                // The connector's transport already ended - no wall-clock
+                // wait can help, so stop the actor the same way a timeout
+                // does and fail now.
+                let (stopped, marker) = self.begin_stop(id, false);
+                Self::wait_stopped(stopped).await;
+                self.active.remove_if(&id, |_, active| {
+                    Arc::ptr_eq(&active.marker, &marker) && !active.deleting
+                });
+                tracing::info!(%id, "agent session command failed fast: transport already closed");
                 Err(AgentSessionError::Disconnected(id))
             }
         }
@@ -532,6 +563,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     marker: marker.clone(),
                     deleting,
                     stopping: true,
+                    transport_closed: None,
                 });
                 (stopped, marker)
             }
@@ -582,11 +614,47 @@ where
                 tracing::warn!(error = ?error, %id, "failed to publish agent session rename");
             })
             .ok();
+        publish_renamed_lifecycle(&self.repo, &self.lifecycle_publisher, id).await;
         Ok(())
     }
 
     async fn get_session(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn preview_sessions(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        ids: Vec<AgentSessionId>,
+    ) -> Result<Vec<AgentSessionPreview>> {
+        let ids: Vec<AgentSessionId> = ids
+            .into_iter()
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        if ids.len() > MAX_PREVIEW_SESSION_IDS {
+            return Err(AgentSessionError::TooManyPreviewIds(
+                MAX_PREVIEW_SESSION_IDS,
+            ));
+        }
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut previews = self.repo.preview(viewer, &ids).await?;
+        let mut profiles = std::collections::HashMap::new();
+        for preview in &mut previews {
+            let AgentSessionPreview::Access(data) = preview else {
+                continue;
+            };
+            if let std::collections::hash_map::Entry::Vacant(entry) = profiles.entry(data.bot_id) {
+                let profile = self.repo.session_bot(data.bot_id).await.inspect_err(|error| {
+                    tracing::warn!(error = ?error, bot_id = %data.bot_id, "failed to hydrate session preview bot");
+                }).ok();
+                entry.insert(profile);
+            }
+            data.bot = profiles.get(&data.bot_id).cloned().flatten();
+        }
+        Ok(previews)
     }
 
     async fn find_for_channel(
@@ -714,12 +782,17 @@ where
             spawn_initial_agent_session_rename(
                 self.repo.clone(),
                 self.realtime.clone(),
+                self.lifecycle_publisher.clone(),
                 self.name_generator.clone(),
                 id,
                 initial_prompt,
             );
         }
         Ok(())
+    }
+
+    async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
+        self.repo.session_bot(id).await
     }
 
     async fn next_prompt_message_id(&self, id: AgentSessionId) -> Result<MessageId> {
@@ -789,6 +862,7 @@ where
 fn spawn_initial_agent_session_rename<R, Rt, Namer>(
     repo: R,
     realtime: Rt,
+    lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
     name_generator: Namer,
     id: AgentSessionId,
     initial_prompt: String,
@@ -835,6 +909,7 @@ fn spawn_initial_agent_session_rename<R, Rt, Namer>(
                         name,
                     })
                     .await?;
+                publish_renamed_lifecycle(&repo, &lifecycle_publisher, id).await;
                 Ok("renamed")
             }
             .await;
@@ -851,6 +926,38 @@ fn spawn_initial_agent_session_rename<R, Rt, Namer>(
         }
         .instrument(span),
     );
+}
+
+/// Publish `agent_session.renamed` for a session whose name just changed.
+///
+/// The rename itself is already durable, so a failure to describe it here is
+/// logged and swallowed: the event is a courtesy to downstream, not part of
+/// the rename.
+async fn publish_renamed_lifecycle<R>(
+    repo: &R,
+    lifecycle_publisher: &Arc<dyn AgentSessionLifecyclePublisher>,
+    id: AgentSessionId,
+) where
+    R: AgentSessionRepo,
+{
+    let identity = async {
+        let session = repo.get(id).await?;
+        let bot = repo.session_bot(session.bot_id).await?;
+        Ok::<_, AgentSessionError>(session_identity(&session, &bot))
+    }
+    .await;
+    match identity {
+        Ok(identity) => {
+            lifecycle_publisher
+                .publish(AgentSessionLifecycleEvent::Renamed(
+                    SessionRenamedMetadata { identity },
+                ))
+                .await;
+        }
+        Err(error) => {
+            tracing::warn!(error = ?error, %id, "skipping agent_session.renamed: identity unavailable");
+        }
+    }
 }
 
 /// The telemetry shape of a log frame: its kind, and the status event it
@@ -902,7 +1009,7 @@ fn validate_agent_session_name(raw: &str) -> Result<&str> {
 pub struct LiveSessionLogWriter<R, Rt> {
     repo: R,
     realtime: Rt,
-    fold: Option<FoldMachineImpl>,
+    fold: Option<LifecycleFold>,
     /// The management claim this writer appends under, when it has one. A
     /// session actor always writes fenced; the unfenced constructor exists
     /// for writers outside any live-management contest - `seed_jsonl`
@@ -948,7 +1055,7 @@ where
         &mut self,
         log: AgentSessionLog,
         boundary: Option<crate::domain::model::HistoryBoundary>,
-    ) -> Result<macro_uuid::Uuid> {
+    ) -> Result<Appended> {
         let session = log.agent_session_id;
 
         // The wire tap: every frame of every session, both directions,
@@ -978,20 +1085,24 @@ where
             None => AgentSessionLogRepo::create(&self.repo, log.clone()).await?,
         };
 
-        if let Some(fold) = &mut self.fold {
-            let _ = fold.push(log.clone());
+        let signals = if let Some(fold) = &mut self.fold {
+            fold.push(log.clone()).signals
         } else {
             match self.catch_up(session).await {
-                Ok(fold) => self.fold = Some(fold),
+                Ok((fold, signals)) => {
+                    self.fold = Some(fold);
+                    signals
+                }
                 Err(error) => {
                     tracing::error!(
                         error = ?error,
                         %session,
                         "failed to fold agent session frame"
                     );
+                    Vec::new()
                 }
             }
-        }
+        };
 
         // Projected on every frame - idempotent, rebuildable from the log,
         // and best-effort like the stream below, so a failed write must not
@@ -999,7 +1110,7 @@ where
         if let Some(model) = self
             .fold
             .as_ref()
-            .and_then(|fold| fold.metadata().model.clone())
+            .and_then(|fold| fold.inner().metadata().model.clone())
             && let Err(error) = self.repo.set_model(session, &model).await
         {
             tracing::error!(
@@ -1012,7 +1123,7 @@ where
         // Best-effort once the durable append has succeeded: the port drops
         // frames by contract, and the log this was derived from is already
         // durable, so the worst a failure costs is a viewer who has to reload.
-        let id = stored.id;
+        let log_id = stored.id;
         if let Err(error) = self.stream(session, stored).await {
             tracing::error!(
                 error = ?error,
@@ -1020,7 +1131,7 @@ where
                 "failed to stream agent session frame"
             );
         }
-        Ok(id)
+        Ok(Appended { log_id, signals })
     }
 }
 
@@ -1038,6 +1149,14 @@ where
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn preview(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        ids: &[AgentSessionId],
+    ) -> Result<Vec<AgentSessionPreview>> {
+        self.repo.preview(viewer, ids).await
     }
 
     async fn find_by_egress_token_hash(
@@ -1151,8 +1270,10 @@ where
     /// starts from where the session actually is rather than from nothing.
     ///
     /// Runs once per connection, on its first frame - by which point that
-    /// frame is already in the log, so replaying the log folds it too and the
-    /// caller must not push it again.
+    /// frame is already in the log. Everything before it is history: folded,
+    /// and whatever it signalled discarded, because a reconnect must not
+    /// announce past turns again. The frame itself is live, so its signals
+    /// are returned like any later frame's.
     ///
     /// This is what makes re-attaching correct.
     /// [`TurnId`](agent_fold::domain::model::TurnId)s are a counter over the
@@ -1163,16 +1284,20 @@ where
     async fn catch_up(
         &self,
         session: AgentSessionId,
-    ) -> std::result::Result<FoldMachineImpl, rootcause::Report> {
-        let log = AgentSessionLogRepo::list_by_session(&self.repo, session)
+    ) -> std::result::Result<(LifecycleFold, Vec<TurnSignal>), rootcause::Report> {
+        let mut log = AgentSessionLogRepo::list_by_session(&self.repo, session)
             .await
             .map_err(|error| rootcause::report!(error))?;
 
-        let mut fold = FoldMachineImpl::new();
+        let mut fold = LifecycleFold::new();
+        let just_appended = log.pop();
         for stored in log {
             let _ = fold.push(stored.entry);
         }
-        Ok(fold)
+        let signals = just_appended
+            .map(|stored| fold.push(stored.entry).signals)
+            .unwrap_or_default();
+        Ok((fold, signals))
     }
 }
 
@@ -1195,17 +1320,17 @@ async fn run_session<Connector, Logs, Ownership>(
     Logs: AgentSessionLogWriter + AgentSessionRepo,
     Ownership: SessionOwnership,
 {
-    loop {
+    let stop_reason = loop {
         let input = tokio::select! {
             biased;
             () = cancellation.cancelled() => Input::Closed(CloseReason::Abandoned),
             input = actor.next_input() => input,
         };
         let stepped = actor.dispatch(input).await;
-        if stepped == Stepped::Stopped {
-            break;
+        if let Stepped::Stopped(reason) = stepped {
+            break reason;
         }
-    }
+    };
 
     // Refuse late commands before releasing the registry entry, so a caller
     // cannot enqueue into an actor that will never step again.
@@ -1230,5 +1355,5 @@ async fn run_session<Connector, Logs, Ownership>(
     // Last, after the registry entry is gone: whatever the observer does with
     // the fact - clear a busy flag, dispatch nothing - it sees a session that
     // really has no actor anymore.
-    turn_observer.session_stopped(id);
+    turn_observer.session_stopped(id, stop_reason);
 }

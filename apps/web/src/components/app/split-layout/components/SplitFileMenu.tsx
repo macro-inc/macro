@@ -51,6 +51,7 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import {
   getSplitFileMenuActionSections,
   type SplitFileMenuAction,
@@ -106,6 +107,7 @@ export type SplitFileMenuViews = {
  * hook's callers.
  */
 const BLOCKS_WITH_ENTITY_HOTKEYS: ReadonlySet<BlockName> = new Set<BlockName>([
+  'agent',
   'canvas',
   'channel',
   'chat',
@@ -520,21 +522,23 @@ export function SplitFileMenu(props: {
     onCleanup(() => ctx.setTitleFileMenuTrigger(undefined));
   });
 
+  const ownsMenuEntity = () =>
+    match(props.entity)
+      .with(undefined, () => isOwner())
+      .otherwise((entity) => entity.ownerId === userId());
+
   const ops = createMemo<SplitFileMenuAction[]>(() => {
     const mapped = props.ops
       .map((op) => {
         if (isDefaultFileOperation(op)) {
-          switch (op.op) {
-            case 'delete':
-              if (!isOwner()) return null;
+          return match(op.op)
+            .returnType<SplitFileMenuAction | null>()
+            .with('delete', () => {
+              if (!ownsMenuEntity()) return null;
               return {
                 label: 'Delete',
                 action: () => {
-                  const entity = buildEntityData({
-                    id: props.id,
-                    name: props.name,
-                    blockName: aliasedBlockName,
-                  });
+                  const entity = menuEntity();
                   if (!entity) return;
                   setOpen(false);
                   openBulkEditModal({
@@ -550,17 +554,13 @@ export function SplitFileMenu(props: {
                 icon: Trash,
                 group: 'delete' as const,
               };
-
-            case 'rename':
-              if (!isOwner()) return null;
+            })
+            .with('rename', () => {
+              if (!ownsMenuEntity()) return null;
               return {
                 label: 'Rename',
                 action: () => {
-                  const entity = buildEntityData({
-                    id: props.id,
-                    name: props.name,
-                    blockName: aliasedBlockName,
-                  });
+                  const entity = menuEntity();
                   if (!entity) return;
                   setOpen(false);
                   openBulkEditModal({
@@ -574,8 +574,8 @@ export function SplitFileMenu(props: {
                 hotkeyToken: blockHotkeyToken(TOKENS.entity.action.rename),
                 group: 'file' as const,
               };
-
-            case 'copy':
+            })
+            .with('copy', () => {
               return {
                 label: 'Duplicate',
                 action: async () => {
@@ -603,8 +603,8 @@ export function SplitFileMenu(props: {
                 icon: Copy,
                 group: 'file' as const,
               };
-
-            case 'moveToProject':
+            })
+            .with('moveToProject', () => {
               if (!isOwner()) return null;
               return {
                 label: 'Move to Folder',
@@ -629,7 +629,8 @@ export function SplitFileMenu(props: {
                 ),
                 group: 'file' as const,
               };
-          }
+            })
+            .exhaustive();
         } else {
           return op;
         }

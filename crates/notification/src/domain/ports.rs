@@ -94,14 +94,17 @@ pub trait NotificationRepository: Send + Sync + 'static {
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report>> + Send;
 
-    /// Mark notifications as seen and return the updated user-owned rows.
+    /// Atomically apply `MarkSeen` from [`super::models::NotificationAction`].
+    /// Preserve done state and any recorded viewing timestamp; return user-owned rows.
     fn mark_notifications_seen(
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
 
-    /// Mark notifications as done or undone and return the updated user-owned rows.
+    /// Atomically mark done, or reopen done notifications as seen.
+    /// Reopening leaves active states unchanged. Preserve viewing timestamps and
+    /// return the updated user-owned rows, following [`super::models::NotificationState::apply`].
     fn mark_notifications_done(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -124,7 +127,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
 
     /// Return notification IDs that still exist for the user and are eligible for digest email.
     ///
-    /// Excludes notifications that are missing, soft-deleted, or already seen.
+    /// Includes only unseen notifications that exist and are not soft-deleted.
     fn get_digest_eligible_notification_ids(
         &self,
         user_id: MacroUserIdStr<'_>,
@@ -133,7 +136,7 @@ pub trait NotificationRepository: Send + Sync + 'static {
 
     /// Get a user's non-deleted notifications with cursor-based pagination.
     ///
-    /// The metadata JSON column is deserialized into `T`. `filters` controls done/seen status.
+    /// The metadata JSON column is deserialized into `T`. `filters` selects exact states.
     fn get_user_notifications<T: DeserializeOwned + Send>(
         &self,
         user_id: MacroUserIdStr<'_>,

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './agentSessionFilters';
 export * from './calendarEventFilters';
 export * from './calendarEventFiltersEndsAfter';
 export * from './calendarEventFiltersStartsBefore';
@@ -148,6 +149,7 @@ export * from './documentSubType';
 export * from './emailFilters';
 export * from './emailFiltersCalendarOnly';
 export * from './emailFiltersImportance';
+export * from './emailFiltersIsRead';
 export * from './emailSearchParticipant';
 export * from './emailSearchParticipantName';
 export * from './emailSearchRequest';
@@ -179,8 +181,7 @@ export * from './fileType';
 export * from './foreignEntityFilters';
 export * from './matchType';
 export * from './notificationFilters';
-export * from './notificationFiltersDone';
-export * from './notificationFiltersSeen';
+export * from './notificationState';
 export * from './projectFilters';
 export * from './projectFiltersImportance';
 export * from './projectMetadata';

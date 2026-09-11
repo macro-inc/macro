@@ -1,10 +1,14 @@
 import {
   clause,
+  EMPTY_TAG_FACET_CONTEXT,
   type Facet,
   type FacetClause,
   type FacetOption,
   type FacetSelection,
   resolveFacetOption,
+  TAG_FACET_ID,
+  type TagFacetContext,
+  tagFacetOption,
 } from '@app/features/soup';
 import type { TaskEntityWithProperties } from '@entity/types/entity';
 import {
@@ -14,13 +18,10 @@ import {
 } from '@entity/utils/task-properties';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 
-export type TaskFacetContext = {
-  tagPropertyDefinitionByOptionId: ReadonlyMap<string, string>;
-};
+export type TaskFacetContext = TagFacetContext;
 
-export const EMPTY_TASK_FACET_CONTEXT: TaskFacetContext = {
-  tagPropertyDefinitionByOptionId: new Map(),
-};
+export const EMPTY_TASK_FACET_CONTEXT: TaskFacetContext =
+  EMPTY_TAG_FACET_CONTEXT;
 
 export type TaskFacetOption = FacetOption<
   TaskEntityWithProperties,
@@ -98,31 +99,11 @@ const creatorOption = (id: string): TaskFacetOption => ({
   predicate: (task) => task.ownerId === id,
 });
 
-const taskHasSelectOption = (
-  task: TaskEntityWithProperties,
-  optionId: string
-) =>
-  task.properties?.some(
-    (property) =>
-      property.value?.type === 'SelectOption' &&
-      property.value.value.includes(optionId)
-  ) ?? false;
-
 const tagOption = (
   id: string,
   context: TaskFacetContext
-): TaskFacetOption | undefined => {
-  const propertyDefinitionId = context.tagPropertyDefinitionByOptionId.get(id);
-  if (!propertyDefinitionId) return undefined;
-
-  return {
-    id,
-    propertyDefinitionId,
-    propertyOptionId: id,
-    clause: propertyClause(propertyDefinitionId, 'select', id),
-    predicate: (task) => taskHasSelectOption(task, id),
-  };
-};
+): TaskFacetOption | undefined =>
+  tagFacetOption<TaskEntityWithProperties>(id, context);
 
 export const TASK_STATUS_OPTIONS = [
   statusOption(
@@ -156,7 +137,7 @@ export const TASK_FACETS: Facet<
   { id: 'priority', mode: 'or', options: TASK_PRIORITY_OPTIONS },
   { id: 'assignees', mode: 'or', options: assigneeOption },
   { id: 'created-by', mode: 'or', options: creatorOption },
-  { id: 'tags', mode: 'or', options: tagOption },
+  { id: TAG_FACET_ID, mode: 'or', options: tagOption },
 ];
 
 export const DEFAULT_TASK_FACET_SELECTION: FacetSelection = {

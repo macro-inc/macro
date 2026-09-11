@@ -1,4 +1,5 @@
 import {
+  $createAgentSessionMentionNode,
   $createDocumentMentionNode,
   type DocumentMentionInfo,
 } from '@macro-inc/lexical-core';
@@ -108,10 +109,16 @@ export function insertDocumentMentionAtDragInsertPosition(
   mentionInfo: DocumentMentionInfo
 ) {
   editor.update(() => {
-    const mention = $createDocumentMentionNode({
-      ...mentionInfo,
-      createdAt: mentionInfo.createdAt ?? Date.now(),
-    });
+    const mention =
+      mentionInfo.blockName === 'agent'
+        ? $createAgentSessionMentionNode({
+            id: mentionInfo.documentId,
+            label: mentionInfo.documentName,
+          })
+        : $createDocumentMentionNode({
+            ...mentionInfo,
+            createdAt: mentionInfo.createdAt ?? Date.now(),
+          });
 
     if (dragInsertPosition.position === 'before') {
       $insertWrappedBefore(dragInsertPosition.key, mention);

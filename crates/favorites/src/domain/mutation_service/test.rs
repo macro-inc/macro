@@ -13,7 +13,7 @@ enum ServiceCall {
     Add(EntityType, String),
     Remove(EntityType, String),
     Reorder(Vec<(EntityType, String)>),
-    List,
+    List(FavoriteFilter),
 }
 
 #[derive(Default)]
@@ -55,11 +55,12 @@ impl FavoritesService for FakeFavoritesService {
     async fn list_favorites(
         &self,
         _user_id: &MacroUserIdStr<'_>,
+        filter: &FavoriteFilter,
     ) -> Result<Vec<Favorite>, FavoritesError> {
         self.calls
             .lock()
             .expect("calls lock poisoned")
-            .push(ServiceCall::List);
+            .push(ServiceCall::List(filter.clone()));
         Ok(vec![favorite(EntityType::Document, "document-1", 0.0)])
     }
 
@@ -353,7 +354,7 @@ async fn reorder_delegates_and_returns_the_authoritative_collection() {
         favorites.calls(),
         vec![
             ServiceCall::Reorder(vec![(EntityType::Document, "document-1".to_string())]),
-            ServiceCall::List,
+            ServiceCall::List(FavoriteFilter::default()),
         ]
     );
 }

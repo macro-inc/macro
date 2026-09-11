@@ -76,6 +76,14 @@ describe('makeDeleteAction.execute', () => {
 });
 
 describe('makeDeleteAction.canExecute', () => {
+  it('only offers session deletion to its owner', () => {
+    expect(canExecute(entity('agent_session'))).toBe(true);
+    expect(
+      canExecute(
+        entity('agent_session', { ownerId: 'macro|other@example.com' })
+      )
+    ).toBe(false);
+  });
   it('allows deleting entities the caller owns', () => {
     expect(canExecute(entity('document'))).toBe(true);
     expect(canExecute(entity('chat'))).toBe(true);

@@ -3,13 +3,17 @@ import {
   buildFlatSoupRows,
   buildGroupedSoupRows,
   createSearchState,
+  createTagFacetContext,
   deduplicateSoupEntities,
   isSoupRowVisible,
   type SoupGroup,
   type SoupRow,
   sortItems,
+  tagFacetReady,
   useSearchContext,
 } from '@app/features/soup';
+import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   type EntityData,
   isTaskEntity,
@@ -37,6 +41,7 @@ export type TasksDataSourceInput = Pick<
 export type UseTasksDataSourceOptions = {
   userId: Accessor<string | undefined>;
   tagSets: Accessor<readonly TagSetResponse[]>;
+  tagSetsReady: Accessor<boolean>;
   isGroupExpanded: (groupId: string) => boolean;
 };
 
@@ -58,23 +63,16 @@ export function useTasksDataSource(
   state: TasksDataSourceInput,
   options: UseTasksDataSourceOptions
 ): TasksDataSource {
-  const facetContext = createMemo((): TaskFacetContext => {
-    const tagPropertyDefinitionByOptionId = new Map<string, string>();
-    for (const set of options.tagSets()) {
-      for (const option of set.options) {
-        tagPropertyDefinitionByOptionId.set(
-          option.id,
-          option.propertyDefinitionId
-        );
-      }
-    }
-    return { tagPropertyDefinitionByOptionId };
-  });
+  const notificationSource = useGlobalNotificationSource();
+  const attachNotifications = (entity: TaskEntityWithProperties) =>
+    withEntityNotifications(entity, notificationSource);
+
+  const facetContext = createMemo(
+    (): TaskFacetContext => createTagFacetContext(options.tagSets())
+  );
 
   const facetOptionsReady = () =>
-    (state.facets.tags ?? []).every((id) =>
-      facetContext().tagPropertyDefinitionByOptionId.has(id)
-    );
+    tagFacetReady(state.facets, options.tagSetsReady());
 
   const queryArgs = () =>
     buildTaskQuery({
@@ -104,7 +102,7 @@ export function useTasksDataSource(
       if (!isTaskEntity(entity)) continue;
       if (!taskMatchesView(entity, context)) continue;
 
-      selected.push(entity);
+      selected.push(attachNotifications(entity));
     }
     return selected;
   };
@@ -173,7 +171,7 @@ export function useTasksDataSource(
   const continuations: TaskGroupContinuationReader = {
     entities: (groupKey) =>
       (groupQueryFor(groupKey)?.data()?.entities ?? []).flatMap((entity) =>
-        isTaskEntity(entity) ? [entity] : []
+        isTaskEntity(entity) ? [attachNotifications(entity)] : []
       ),
     hasMore: (groupKey) => groupQueryFor(groupKey)?.hasNextPage() ?? false,
     isLoading: (groupKey) =>
@@ -255,7 +253,8 @@ export function useTasksDataSource(
 
   const isLoading = () => {
     if (!search.isSearching()) {
-      return query.isLoading && rows().length === 0;
+      // A query held back for the tag sets is loading, not empty.
+      return (query.isLoading || !facetOptionsReady()) && rows().length === 0;
     }
     if (tasks().length > 0) return false;
     if (usesServiceSearch()) return search.isLoading();

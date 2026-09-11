@@ -261,10 +261,7 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Skill
             | EntityType::ForeignEntity
             // Reminders are never channel-shared: they are private to one user.
-            | EntityType::Reminder
-            // Agent sessions grant their originating channel directly at
-            // creation; they carry no `SharePermission` to update.
-            | EntityType::AgentSession => {
+            | EntityType::Reminder => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "received unexpected entity type {entity_type:?}"
                 )));
@@ -298,7 +295,8 @@ pub async fn update_entity_access_channel_share_permissions(
                 .execute(transaction.as_mut())
                 .await?;
             }
-            EntityType::Chat
+            EntityType::AgentSession
+            | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
             | EntityType::Call => {
@@ -332,10 +330,7 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Skill
             | EntityType::ForeignEntity
             // Reminders are never channel-shared: they are private to one user.
-            | EntityType::Reminder
-            // Agent sessions grant their originating channel directly at
-            // creation; they carry no `SharePermission` to update.
-            | EntityType::AgentSession => {
+            | EntityType::Reminder => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "Received invalid EntityType {entity_type:?}"
                 )));
@@ -411,7 +406,8 @@ pub async fn update_entity_access_channel_share_permissions(
                     qb.build().execute(transaction.as_mut()).await?;
                 }
             }
-            EntityType::Chat
+            EntityType::AgentSession
+            | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
             | EntityType::Call => {

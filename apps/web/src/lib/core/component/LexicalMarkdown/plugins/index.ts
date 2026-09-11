@@ -23,6 +23,7 @@ export * from './katex';
 export * from './keyboard-focus';
 export * from './keyboard-shortcuts';
 export * from './links';
+export * from './list-swipe-indent';
 export * from './location';
 export * from './markdown-paste';
 export * from './media';

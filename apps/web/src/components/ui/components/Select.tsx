@@ -222,7 +222,18 @@ function SelectRoot<Option, OptGroup = never>(
   );
 }
 
-/** Composable, styled single- or multi-value select built on Kobalte. */
+/** Composable, styled single- or multi-value select built on Kobalte.
+ *
+ * @do Let `Select.Content` own the menu chrome; pass only sizing classes to
+ *   it.
+ * @do Include `Select.ItemIndicator` so the current selection is visible in
+ *   the list.
+ * @do Use `portalScope="local"` when the select lives inside a dialog or other
+ *   portal scope.
+ * @dont Do not wrap `Select.Content` in a Portal — it already portals itself.
+ * @dont Do not use Select for more than roughly a dozen options; use a command
+ *   menu with search.
+ */
 export const Select = Object.assign(SelectRoot, {
   Content: SelectContent,
   Icon: SelectIcon,

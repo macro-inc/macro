@@ -24,7 +24,7 @@ async fn test_bulk_patch_undone(pool: Pool<Postgres>) -> anyhow::Result<()> {
     for notif_id in &notification_ids {
         let rec = sqlx::query!(
             r#"
-            SELECT done as "done" FROM user_notification
+            SELECT (state = 'done') as "done!" FROM user_notification
             WHERE user_id = $1 AND notification_id = $2
             "#,
             user_id,
@@ -54,7 +54,7 @@ async fn test_patch_done(pool: Pool<Postgres>) -> anyhow::Result<()> {
 
     let notification: bool = sqlx::query!(
         r#"
-            SELECT done as "done" FROM user_notification WHERE notification_id = $1 AND user_id = $2
+            SELECT (state = 'done') as "done!" FROM user_notification WHERE notification_id = $1 AND user_id = $2
             "#,
         macro_uuid::string_to_uuid(notification_id)?,
         user_id,
@@ -83,7 +83,7 @@ async fn test_bulk_patch_done(pool: Pool<Postgres>) -> anyhow::Result<()> {
     for notif_id in &notification_ids {
         let rec = sqlx::query!(
             r#"
-            SELECT done as "done" FROM user_notification
+            SELECT (state = 'done') as "done!" FROM user_notification
             WHERE user_id = $1 AND notification_id = $2
             "#,
             user_id,
@@ -105,7 +105,7 @@ async fn test_bulk_patch_done(pool: Pool<Postgres>) -> anyhow::Result<()> {
     for notif_id in &notification_ids {
         let rec = sqlx::query!(
             r#"
-            SELECT done as "done" FROM user_notification
+            SELECT (state = 'done') as "done!" FROM user_notification
             WHERE user_id = $1 AND notification_id = $2
             "#,
             user_id,

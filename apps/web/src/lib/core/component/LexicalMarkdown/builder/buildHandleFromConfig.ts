@@ -17,6 +17,7 @@ import {
   filePastePlugin,
   horizontalRulePlugin,
   keyboardFocusPlugin,
+  listSwipeIndentPlugin,
   markdownPastePlugin,
   mediaPlugin,
   mentionsPlugin,
@@ -158,6 +159,11 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
   // Tab indentation (unless custom handler)
   if (!config.handlers.onTab) {
     plugins.use(tabIndentationPlugin());
+  }
+
+  // Touch swipe indent/outdent for list items (Apple Notes-style).
+  if (config.type !== 'plain-text' && !config.singleLine) {
+    plugins.use(listSwipeIndentPlugin(isInteractable));
   }
 
   // Horizontal rules & normalize-enter (full multi-line markdown only)

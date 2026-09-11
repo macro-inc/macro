@@ -138,7 +138,7 @@ pub const DEFAULT_AGENT_SESSION_NAME: &str = "Agent Session";
 /// Maximum number of Unicode scalar values in a session name.
 pub const MAX_AGENT_SESSION_NAME_CHARS: usize = 100;
 
-#[derive(Debug, Clone, Default, strum::AsRefStr)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum SessionStatus {
     /// No status updates received.
@@ -279,7 +279,8 @@ pub struct ExternalSession {
 }
 
 /// The agent behind a session, as much of it as rendering a message needs.
-#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SessionBot {
     /// The bot's id. A message it sent has `"bot|{id}"` as its sender.
@@ -296,7 +297,8 @@ pub struct SessionBot {
 /// Clients deserialize this, so both derives are used.
 // Domain-owned because the queue GET endpoint and the realtime snapshot
 // serialize this type byte-identically; that identity is the client contract.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct QueuedActionDto {
     /// The id the action was accepted under.
@@ -404,6 +406,64 @@ pub enum ChannelSession {
     None,
     /// The bot's session was created from the incoming thread.
     CreatedFromThread(AgentSession),
+}
+
+/// Maximum number of session ids one preview request may ask about.
+///
+/// Bounds the work and the response per call; a mention menu never renders
+/// anywhere near this many chips at once.
+pub const MAX_PREVIEW_SESSION_IDS: usize = 100;
+
+/// What one requested id resolved to in a batch preview.
+///
+/// Previews exist so a client can render a chip for a session it was handed a
+/// reference to - a mention, a link - without first knowing whether it can
+/// open it. Each id is therefore answered with one of three facts rather than
+/// an error: the viewer can see it (with the fields a chip renders), the
+/// session exists but the viewer holds no grant on it, or nothing by that id
+/// exists at all. Only the first carries data, so a viewer without access
+/// learns nothing beyond the session's existence - the same fact a `403`
+/// from `GET /agent-sessions/{id}` already gives away.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentSessionPreview {
+    /// The viewer holds at least view access; here is what a chip needs.
+    Access(Box<AgentSessionPreviewData>),
+    /// The session exists, but the viewer holds no grant on it.
+    NoAccess(AgentSessionId),
+    /// No session with this id exists.
+    DoesNotExist(AgentSessionId),
+}
+
+impl AgentSessionPreview {
+    /// The id this preview answers for, whichever way it resolved.
+    #[must_use]
+    pub fn id(&self) -> AgentSessionId {
+        match self {
+            Self::Access(data) => data.id,
+            Self::NoAccess(id) | Self::DoesNotExist(id) => *id,
+        }
+    }
+}
+
+/// The subset of an [`AgentSession`] a chip or mention renders.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSessionPreviewData {
+    /// The session id.
+    pub id: AgentSessionId,
+    /// User-facing session name.
+    pub name: String,
+    /// The user who owns the session.
+    pub owner_id: MacroUserIdStr<'static>,
+    /// The bot running the agent, for its avatar.
+    pub bot_id: BotId,
+    /// Minimal bot identity, hydrated by the service after checking session access.
+    pub bot: Option<SessionBot>,
+    /// The session's last known status, for a live status indicator.
+    pub status: SessionStatus,
+    /// When the session was created.
+    pub created_at: DateTime<Utc>,
+    /// When the session was last modified.
+    pub modified_at: DateTime<Utc>,
 }
 
 /// Initialization selected by a matching successful load in the session machine.

@@ -24,6 +24,7 @@ function isSoupEntityTag(
       'channel_message',
       'channel_thread',
       'automation',
+      'agent_session',
       'calendar_event',
       'foreign',
       'crm_company',
@@ -43,6 +44,7 @@ function isSoupEntityTag(
 function shouldTrackInUserHistory(itemType: ItemType): boolean {
   return (
     isCloudStorageItem(itemType) ||
+    itemType === 'agent_session' ||
     itemType === 'crm_company' ||
     itemType === 'crm_contact'
   );

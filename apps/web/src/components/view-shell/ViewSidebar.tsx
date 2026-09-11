@@ -7,10 +7,7 @@ function Root(props: JSX.HTMLAttributes<HTMLElement>) {
   return (
     <aside
       {...rest}
-      class={cn(
-        'flex size-full min-h-0 min-w-0 flex-col px-4 pb-5 pt-4',
-        local.class
-      )}
+      class={cn('flex size-full min-h-0 min-w-0 flex-col', local.class)}
       data-view-sidebar=""
     >
       {local.children}
@@ -24,7 +21,7 @@ function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex min-w-0 shrink-0 items-center justify-between gap-3',
+        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3',
         local.class
       )}
       data-view-sidebar-header=""
@@ -40,7 +37,7 @@ function Title(props: JSX.HTMLAttributes<HTMLHeadingElement>) {
     <h1
       {...rest}
       class={cn(
-        'min-w-0 truncate text-2xl font-semibold tracking-[-0.03em] text-ink',
+        'min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink',
         local.class
       )}
     >
@@ -54,7 +51,7 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       {...rest}
-      class={cn('min-h-0 min-w-0 flex-1 overflow-auto', local.class)}
+      class={cn('min-h-0 min-w-0 flex-1 overflow-auto px-4 pb-5', local.class)}
       data-view-sidebar-content=""
     >
       {local.children}
@@ -90,7 +87,7 @@ function Item(props: NavRowProps) {
       active={local.active}
       aria-current={ariaCurrent()}
       class={cn(
-        'h-9 gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink-muted not-disabled:hover:bg-hover not-disabled:hover:text-ink',
+        'h-9 gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink-muted transition-none not-disabled:hover:bg-hover not-disabled:hover:text-ink',
         local.active && 'bg-active text-ink not-disabled:hover:bg-active',
         local.class
       )}

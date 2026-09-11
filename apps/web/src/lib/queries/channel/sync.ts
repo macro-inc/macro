@@ -12,6 +12,7 @@ import {
   markTopLevelMessageDeletedInTargetCaches,
   removeMessageFromTargetCaches,
   replaceTargetAttachments,
+  replaceTargetCreatedAt,
   replaceTargetMessageState,
   replaceTargetReactions,
   resolveMessageTarget,
@@ -45,9 +46,9 @@ type CommsAttachmentPayload = {
 /**
  * Handle incoming message from websocket.
  *
- * If the nonce was registered by this client (optimistic update), we skip the cache
- * update since it was already applied. Otherwise, this is an external update
- * (other user, other tab, or server-initiated) and we apply it to the cache.
+ * If the nonce was registered by this client (optimistic update), we keep the
+ * cached row and only adopt the server `created_at`. Otherwise this is an
+ * external update and we apply it to the cache.
  *
  * We always call softInvalidateTargetCaches to ensure eventual consistency:
  * - Marks query as stale for background refetch when component remounts
@@ -60,7 +61,20 @@ export function handleCommsMessage(payload: CommsMessagePayload): void {
     payload.nonce
   );
 
-  if (isExternalUpdate) {
+  if (!isExternalUpdate) {
+    if (payload.created_at && !payload.deleted_at) {
+      replaceTargetCreatedAt(
+        payload.channel_id,
+        resolveMessageTarget({
+          channelId: payload.channel_id,
+          messageId: payload.id,
+          threadId: payload.thread_id ?? undefined,
+        }),
+        payload.created_at,
+        payload.nonce
+      );
+    }
+  } else {
     try {
       if (payload.deleted_at) {
         const target = resolveMessageTarget({

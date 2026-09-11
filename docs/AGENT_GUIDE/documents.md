@@ -21,7 +21,34 @@ Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote)
 text and inline mention chips (tasks, docs, channels, skills, …) by the title
 shown on the chip.
 
+On a touch device, swipe a list item right to indent one level (Apple Notes
+style) or left to outdent. Nested children move with the parent. The first
+item can indent too, even in a single-item list. Vertical scrolling and taps
+are unchanged.
+Items stay still during the swipe and change indentation only when a
+successful swipe is released; short or blocked swipes leave them in place.
+Swiping requires permission to edit the document; comment-only access does
+not allow indentation changes. Losing edit permission during a swipe cancels it.
+To verify nesting, give a list item a child and grandchild, then swipe the
+parent right and left: all three should shift one level together, preserving
+their relative depths and order.
+
 ## Reference hover previews
+
+The `@` menu includes `Recent agent sessions` after Channels and before
+Companies. Search by session or persona name within the 500 most recently
+updated accessible sessions. Menu rows show the
+session title followed by a muted persona name, including `@Cursor` and
+`@macro(new)` for built-in personas. Names from the session API take precedence;
+older responses use the shared built-in name resolver or cached custom bots.
+Selecting one inserts an
+inline reference showing the shared agent icon and an underlined session title.
+Chips omit persona avatars and status. Click it (or select the node and press
+Enter) to open `/app/agent/<id>`.
+It references an existing session; it does not invoke the persona, attach its
+transcript to AI context, or grant access. Private/deleted sessions show an
+unavailable label. Mounted references refresh every 30 seconds while the tab is
+active to update titles and check access.
 
 Hover a document reference chip to open its preview without navigating. With
 `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`

@@ -36,13 +36,16 @@ import {
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn, Surface } from '@ui';
+import { debounce } from '@solid-primitives/scheduled';
+import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   Match,
+  onCleanup,
   type Setter,
   Show,
   Suspense,
@@ -87,8 +90,10 @@ export function EmailList(props: EmailListProps) {
   const { state, setOpenThreadId } = useEmailView();
   const panel = useSplitPanelOrThrow();
 
+  const tagSets = useTagSets();
+  const tagSetsReady = useTagSetsReady();
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
-    useEmailDataSource(state)
+    useEmailDataSource(state, { tagSets, tagSetsReady })
   );
 
   function openEntity(
@@ -115,6 +120,12 @@ export function EmailList(props: EmailListProps) {
     }).finally(() => finishTouchHighlight?.());
   }
 
+  const previewAfterNavigation = debounce(
+    (entity: EntityData) => openEntity(entity, { mergeHistory: true }),
+    150
+  );
+  onCleanup(() => previewAfterNavigation.clear());
+
   function onActivate({
     item,
     metadata,
@@ -130,6 +141,8 @@ export function EmailList(props: EmailListProps) {
     const sourceRow = source.items().find((row) => row.id === item.id);
 
     if (sourceRow?.kind !== 'entity') return;
+
+    previewAfterNavigation.clear();
 
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
@@ -266,9 +279,11 @@ export function EmailList(props: EmailListProps) {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
+        previewAfterNavigation.clear();
+
         const row = event.result?.item;
         if (row?.kind === 'entity' && panel.handle.isControllerSplit()) {
-          openEntity(row.entity, { mergeHistory: true });
+          previewAfterNavigation(row.entity);
         }
 
         if (event.kind !== 'move' || event.direction !== 1) return;
@@ -367,6 +382,7 @@ export function EmailList(props: EmailListProps) {
     if (nextScope === activeScope) return;
 
     activeScope = nextScope;
+    previewAfterNavigation.clear();
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
     panel.handle.resetPreview();
@@ -410,9 +426,7 @@ export function EmailList(props: EmailListProps) {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      <Surface
-        depth={isTouchDevice() ? 0 : 2}
-        hideBorder
+      <div
         ref={(element: HTMLDivElement) => {
           setGrid(element);
           props.ref?.(element);
@@ -422,10 +436,7 @@ export function EmailList(props: EmailListProps) {
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class={cn(
-          'soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden rounded-none bg-transparent outline-none',
-          !isTouchDevice() && 'p-2'
-        )}
+        class="soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
       >
         <PullToRefresh
           scrollContainer={pullScrollContainer}
@@ -693,7 +704,7 @@ export function EmailList(props: EmailListProps) {
             analyticsSource="email_view_selection_toolbar"
           />
         </Show>
-      </Surface>
+      </div>
     </MaybeSoupEntityActionDrawerManager>
   );
 }

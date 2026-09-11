@@ -1,10 +1,10 @@
 use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
-    CreatedDraft, EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMetadata,
-    EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link, LinkLabel,
-    Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, ParsedMessage,
-    ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput, SenderPolicy,
-    SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
+    CreatedDraft, EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMailProjection,
+    EmailThreadMetadata, EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label,
+    Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
+    ParsedMessage, ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput,
+    SenderPolicy, SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
     UpsertEmailFilterInput, UpsertedContacts, UserEmailLink, UserProvider,
 };
 use chrono::{DateTime, Utc};
@@ -149,6 +149,13 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         thread_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<EmailThreadMetadata>, Self::Err>> + Send;
+
+    /// Fetch Mail-specific cache facts and previews for a batch of thread IDs.
+    fn thread_mail_projections_by_ids(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        thread_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<EmailThreadMailProjection>, Self::Err>> + Send;
 
     /// Fetch paginated messages for a thread, ordered by internal_date_ts descending.
     fn messages_by_thread_id_paginated(
@@ -409,6 +416,16 @@ pub trait EmailThreadMetadataService: Send + Sync + 'static {
         &self,
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr>> + Send;
+}
+
+/// Read-only domain service used to hydrate offline Mail projection data.
+pub trait EmailThreadMailProjectionService: Send + Sync + 'static {
+    /// Fetch cache facts and canonical previews for authorized threads in one batch.
+    fn get_email_thread_mail_projections(
+        &self,
+        viewer: MacroUserIdStr<'static>,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, EmailThreadMailProjection>, EmailErr>> + Send;
 }
 
 /// Read-only domain service used to hydrate lightweight email content edges.
@@ -864,6 +881,16 @@ impl EmailThreadMetadataService for NoOpEmailService {
         &self,
         _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
+        Err(no_op_email_err())
+    }
+}
+
+impl EmailThreadMailProjectionService for NoOpEmailService {
+    async fn get_email_thread_mail_projections(
+        &self,
+        _viewer: MacroUserIdStr<'static>,
+        _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, EmailThreadMailProjection>, EmailErr> {
         Err(no_op_email_err())
     }
 }

@@ -39,9 +39,12 @@ import {
   ToolStatusTitle,
 } from '../ui';
 
-/** A Cursor-shaped catalog: long enough to scroll, with one grouped tail. */
+/**
+ * A Cursor-shaped catalog: long enough to scroll, with one grouped tail. Auto
+ * arrives under a family of its own, as Cursor files it.
+ */
 const FIXTURE_MODELS: ModelOption[] = [
-  { id: 'auto', name: 'Auto', description: null, group: null },
+  { id: 'default', name: 'Auto', description: null, group: 'Auto' },
   {
     id: 'grok-4.6-high-fast',
     name: 'Cursor Grok 4.6 High Fast',

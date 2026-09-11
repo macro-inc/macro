@@ -182,6 +182,7 @@ export function fileTypeToBlockName(
   if (!blockOrFiletype) return 'unknown';
 
   if (blockOrFiletype === 'channel_message') return 'channel';
+  if (blockOrFiletype === 'agent_session') return 'agent';
   if (blockOrFiletype === 'calendar_event') return 'calendar';
 
   // CRM entity types map to their dedicated blocks (entity type !== block name).
@@ -268,6 +269,7 @@ export function itemToBlockName(
   if (item.fileType) {
     return fileTypeToBlockName(item.fileType, icon);
   }
+  if (item.type === 'agent_session') return 'agent';
   if (item.type === 'channel_thread') return 'channel';
   // A reminder has no block of its own; it points at one. A standalone
   // reminder falls through to 'unknown'. Same precedence as the referenced

@@ -7,7 +7,6 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { cn, Surface } from '@ui';
 import {
   createSignal,
   onMount,
@@ -16,7 +15,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { EmailFilterDrawer } from './components/EmailFilterDrawer';
-import { EmailHeader } from './components/EmailHeader';
+import { EmailHeader, EmailTopBar } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailSidebar } from './components/EmailSidebar';
 import { EMAIL_TABS } from './constants';
@@ -30,17 +29,9 @@ export type EmailViewProps = {
 
 function EmailListFallback() {
   return (
-    <Surface
-      depth={isTouchDevice() ? 0 : 2}
-      hideBorder
-      class={cn(
-        'grid size-full min-h-0 min-w-0 place-items-center rounded-none bg-transparent text-ink-muted',
-        isTouchDevice() &&
-          'pt-(--mobile-content-inset-top) pb-(--mobile-content-inset-bottom)'
-      )}
-    >
+    <div class="grid size-full min-h-0 min-w-0 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
       <SpinnerIcon aria-label="Loading email" class="size-5 animate-spin" />
-    </Surface>
+    </div>
   );
 }
 
@@ -57,6 +48,7 @@ function EmailDesktopLayout(
         <EmailSidebar />
       </ViewShell.Aside>
       <ViewShell.Main>
+        <EmailTopBar />
         <ViewShell.Header>
           <EmailHeader onSearchEscape={props.onSearchEscape} />
         </ViewShell.Header>

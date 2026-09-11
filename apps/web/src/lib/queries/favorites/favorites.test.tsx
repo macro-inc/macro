@@ -59,6 +59,7 @@ vi.mock('../client', () => ({
 }));
 
 import {
+  favoriteEntityType,
   useAddFavoriteMutation,
   useFavoritesData,
   useRemoveFavoriteMutation,
@@ -94,6 +95,10 @@ function renderHook<T>(factory: () => T): T {
 }
 
 describe('favorites transport', () => {
+  it('maps agent sessions to their canonical favorite entity type', () => {
+    expect(favoriteEntityType('agent_session')).toBe('agent_session');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.graphqlSoupEnabled.mockReturnValue(true);

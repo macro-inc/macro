@@ -127,6 +127,7 @@ import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupP
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
 import type { Item } from './generated/schemas/item';
+import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
@@ -1015,6 +1016,31 @@ export const storageServiceClient = {
     return (
       await dssFetch<ApiChannelMessagesPage>(
         `/channels/${channel_id}/messages?${params.toString()}`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async getChannelMessagesCatchUp(
+    args: WithChannelId & {
+      after: string;
+      limit: number;
+      next_cursor: string | null;
+      previous_cursor: string | null;
+    }
+  ) {
+    const { channel_id, after, limit, next_cursor, previous_cursor } = args;
+    const params = new URLSearchParams();
+    params.append('after', after);
+    params.append('limit', limit.toString());
+    if (next_cursor) {
+      params.append('cursor', next_cursor);
+    } else if (previous_cursor) {
+      params.append('previous_cursor', previous_cursor);
+    }
+    return (
+      await dssFetch<ApiChannelMessagesPage>(
+        `/channels/${channel_id}/messages/catch-up?${params.toString()}`,
         { method: 'GET' }
       )
     ).map((result) => result);
@@ -2498,8 +2524,17 @@ export const storageServiceClient = {
   },
 
   favorites: {
-    async getFavorites() {
-      return await dssFetch<FavoritesList>('/favorites');
+    async getFavorites(params?: ListFavoritesParams) {
+      const query = new URLSearchParams();
+      // Each dimension repeats its key once per value; the two combine with AND.
+      params?.entityType?.forEach((entityType) =>
+        query.append('entityType', entityType)
+      );
+      params?.entityId?.forEach((entityId) =>
+        query.append('entityId', entityId)
+      );
+      const qs = query.toString();
+      return await dssFetch<FavoritesList>(`/favorites${qs ? `?${qs}` : ''}`);
     },
     async addFavorite(params: AddFavoriteRequest) {
       return await dssFetch<Favorite>('/favorites', {
@@ -2532,8 +2567,12 @@ export const storageServiceClient = {
     },
     async listReminders(params?: ListRemindersParams) {
       const query = new URLSearchParams();
-      if (params?.entityType) query.set('entityType', params.entityType);
-      if (params?.entityId) query.set('entityId', params.entityId);
+      params?.entityType?.forEach((entityType) =>
+        query.append('entityType', entityType)
+      );
+      params?.entityId?.forEach((entityId) =>
+        query.append('entityId', entityId)
+      );
       if (params?.includeCompleted !== undefined) {
         query.set('includeCompleted', String(params.includeCompleted));
       }

@@ -639,15 +639,15 @@ async fn test_dynamic_filter_document_notification_done(pool: PgPool) {
     .await
     .unwrap();
 
-    sqlx::query(
+    sqlx::query!(
         r#"
-        INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, done)
-        VALUES ($1, $2, NOW(), NULL, false), ($1, $3, NOW(), NOW(), true)
+        INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, state)
+        VALUES ($1, $2, NOW(), NULL, 'unseen'), ($1, $3, NOW(), NOW(), 'done')
         "#,
+        test_user_id.as_ref(),
+        notification_id_1,
+        notification_id_2,
     )
-    .bind(test_user_id.as_ref())
-    .bind(notification_id_1)
-    .bind(notification_id_2)
     .execute(&pool)
     .await
     .unwrap();
@@ -655,8 +655,10 @@ async fn test_dynamic_filter_document_notification_done(pool: PgPool) {
     let filter = item_filters::ast::EntityFilterAst::new_from_filters(EntityFilters {
         document_filters: DocumentFilters {
             notification_filters: NotificationFilters {
-                done: Some(false),
-                seen: None,
+                states: vec![
+                    item_filters::NotificationState::Unseen,
+                    item_filters::NotificationState::Seen,
+                ],
             },
             ..Default::default()
         },
@@ -964,6 +966,7 @@ async fn test_dynamic_filter_document_date_created_at_gt(pool: PgPool) {
         crm_company_filter: None,
         foreign_entity_filter: None,
         reminder_filter: None,
+        agent_session_filter: None,
         properties_filter: None,
     };
 
@@ -1060,6 +1063,7 @@ async fn test_dynamic_filter_document_date_created_at_lt(pool: PgPool) {
         crm_company_filter: None,
         foreign_entity_filter: None,
         reminder_filter: None,
+        agent_session_filter: None,
         properties_filter: None,
     };
 
@@ -1152,6 +1156,7 @@ async fn test_dynamic_filter_document_date_updated_at_gt(pool: PgPool) {
         crm_company_filter: None,
         foreign_entity_filter: None,
         reminder_filter: None,
+        agent_session_filter: None,
         properties_filter: None,
     };
 
@@ -1249,6 +1254,7 @@ async fn test_dynamic_filter_document_date_updated_at_lt(pool: PgPool) {
         crm_company_filter: None,
         foreign_entity_filter: None,
         reminder_filter: None,
+        agent_session_filter: None,
         properties_filter: None,
     };
 

@@ -11,6 +11,7 @@ import type { EntityActionListState } from './entity-action-context';
  * Get the URL type/path segment for an entity
  */
 const getEntityUrlType = (entity: EntityData): string => {
+  if (entity.type === 'agent_session') return 'agent';
   if (entity.type === 'document') {
     const { fileType, subType } = entity;
     return fileTypeToBlockName(subType?.type ?? fileType);

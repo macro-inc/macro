@@ -4,8 +4,11 @@ use crate::domain::model::{
     DEFAULT_AGENT_SESSION_NAME, Message, ReplicaAddress, SessionBot, SessionManager,
 };
 use crate::domain::ports::NoOpRealtime;
+use crate::domain::ports::{NoOpTurnObserver, NoopLifecyclePublisher};
 use crate::domain::session::HandshakeStatus;
-use crate::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
+use crate::testing::{
+    InMemoryAgentSessionRepo, RecordingLifecyclePublisher, RecordingRealtime, test_agent_session,
+};
 use agent_fold::domain::fold::fold;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_fold::testing::{TURN, parse_log_as, test_session};
@@ -42,10 +45,39 @@ fn fixture() -> Fixture {
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
         ),
         repo,
         session,
     }
+}
+
+#[tokio::test]
+async fn previews_hydrate_bot_identity_only_for_accessible_sessions() {
+    let fx = fixture();
+    let session = fx.repo.get(fx.session).await.unwrap();
+    let previews = fx
+        .service
+        .preview_sessions(&session.owner_id, vec![fx.session, fx.session])
+        .await
+        .unwrap();
+    assert_eq!(previews.len(), 1);
+    let AgentSessionPreview::Access(data) = &previews[0] else {
+        panic!("expected access")
+    };
+    assert_eq!(data.bot.as_ref().unwrap().name, "Test Agent");
+    let other =
+        macro_user_id::user_id::MacroUserIdStr::try_from_email("other@example.com").unwrap();
+    assert_eq!(
+        fx.service
+            .preview_sessions(&other, vec![fx.session])
+            .await
+            .unwrap(),
+        vec![AgentSessionPreview::NoAccess(fx.session)]
+    );
 }
 
 #[tokio::test]
@@ -160,7 +192,7 @@ impl AgentSessionLogWriter for BlockingPromptLogs {
         &mut self,
         log: AgentSessionLog,
         _boundary: Option<crate::domain::model::HistoryBoundary>,
-    ) -> Result<macro_uuid::Uuid> {
+    ) -> Result<Appended> {
         let is_prompt = matches!(
             &log.content,
             Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(
@@ -171,7 +203,10 @@ impl AgentSessionLogWriter for BlockingPromptLogs {
             self.entered.notify_one();
             self.release.notified().await;
         }
-        Ok(AgentSessionLogRepo::create(&self.repo, log).await?.id)
+        Ok(Appended {
+            log_id: AgentSessionLogRepo::create(&self.repo, log).await?.id,
+            signals: Vec::new(),
+        })
     }
 }
 
@@ -207,6 +242,10 @@ async fn manual_rename_trims_persists_and_publishes() {
         repo.clone(),
         FoldedMessageService::new(repo.clone()),
         realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     service
@@ -238,6 +277,10 @@ async fn manual_rename_rejects_blank_and_overlong_names() {
         repo.clone(),
         FoldedMessageService::new(repo),
         RenameRealtime::default(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     assert!(matches!(
@@ -267,6 +310,10 @@ async fn manual_rename_rejects_access_for_another_entity_type() {
         repo.clone(),
         FoldedMessageService::new(repo),
         RenameRealtime::default(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
     let wrong_access = EntityAccessReceipt::<OwnerAccessLevel>::dangerously_assert_internal_user(
         &session.as_uuid().to_string(),
@@ -287,28 +334,32 @@ async fn background_naming_persists_then_publishes_the_generated_name() {
     let session = test_session();
     repo.insert_session(test_agent_session(session));
     let realtime = RenameRealtime::default();
+    let lifecycle = RecordingLifecyclePublisher::new();
 
     spawn_initial_agent_session_rename(
         repo.clone(),
         realtime.clone(),
+        Arc::new(lifecycle.clone()),
         FixedNameGenerator,
         session,
         "fix the flaky tests".to_owned(),
     );
-    for _ in 0..20 {
-        if !realtime
-            .0
-            .lock()
-            .expect("rename store is not poisoned")
-            .is_empty()
-        {
-            break;
-        }
-        tokio::task::yield_now().await;
-    }
+    // The lifecycle event is published last, so its arrival means the
+    // rename and its realtime push are done too.
+    lifecycle.wait_for_published(1).await;
 
     let stored = repo.get(session).await.expect("get session");
     assert_eq!(stored.name, "Fix Flaky Tests");
+    assert!(
+        matches!(
+            lifecycle.published().as_slice(),
+            [AgentSessionLifecycleEvent::Renamed(renamed)]
+                if renamed.identity.session_id == session
+                    && renamed.identity.session_name == "Fix Flaky Tests"
+        ),
+        "renamed is published with the new name: {:?}",
+        lifecycle.published()
+    );
     assert_eq!(
         realtime
             .0
@@ -334,6 +385,7 @@ async fn background_naming_does_not_overwrite_a_manual_name() {
     spawn_initial_agent_session_rename(
         repo.clone(),
         realtime.clone(),
+        Arc::new(NoopLifecyclePublisher),
         FixedNameGenerator,
         session,
         "fix the flaky tests".to_owned(),
@@ -362,6 +414,14 @@ impl AgentSessionRepo for BlockingPromptLogs {
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn preview(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        ids: &[AgentSessionId],
+    ) -> Result<Vec<AgentSessionPreview>> {
+        self.repo.preview(viewer, ids).await
     }
 
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
@@ -696,6 +756,10 @@ async fn a_second_replica_cannot_attach_a_session_with_a_live_manager() {
         fx.repo.clone(),
         FoldedMessageService::new(fx.repo.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
     let result = second_replica
         .attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
@@ -989,6 +1053,10 @@ async fn marking_disconnected_persists_and_publishes_the_event() {
         repo.clone(),
         FoldedMessageService::new(repo.clone()),
         realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     service
@@ -1026,8 +1094,15 @@ async fn marking_disconnected_is_bounded_when_persistence_hangs() {
         hang_disconnect: true,
         fail_restore_log: None,
     };
-    let service =
-        AgentSessionServiceImpl::new(hanging, FoldedMessageService::new(repo), NoOpRealtime);
+    let service = AgentSessionServiceImpl::new(
+        hanging,
+        FoldedMessageService::new(repo),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
     let disconnect = tokio::spawn(async move { service.mark_disconnected(session).await });
     tokio::task::yield_now().await;
     tokio::time::advance(SESSION_PERSIST_TIMEOUT).await;
@@ -1199,6 +1274,10 @@ async fn session_log_returns_the_sessions_frames_in_order() {
         store.clone(),
         FoldedMessageService::new(store.clone()),
         NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
     );
 
     let log = service
@@ -1508,18 +1587,17 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
         };
         assert_eq!(load.method.as_ref(), "session/load");
         failed_response_id = Some(load.id.clone());
-        assert_eq!(
+        assert!(matches!(
             actor
                 .dispatch(Input::Inbound(ToServerMessage::Acp(AcpMessage(
                     RawJsonRpcMessage::response(load.id, Ok(serde_json::json!({}))),
                 ))))
                 .await,
-            Stepped::Stopped
-        );
+            Stepped::Stopped(_)
+        ));
     } else {
-        assert_eq!(
-            step,
-            Stepped::Stopped,
+        assert!(
+            matches!(step, Stepped::Stopped(_)),
             "initialization failure stops before load"
         );
     }
@@ -1559,3 +1637,62 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
 }
 
 mod owner_binding;
+
+/// The live writer's fold says what each appended frame meant for the turn;
+/// history it catches up on says nothing.
+mod fold_signals {
+    use super::*;
+    use crate::domain::ports::AgentSessionLogWriter as _;
+    use agent_fold::domain::model::{StopReason as FoldStop, TurnSignal};
+    use agent_fold::testing::parse_log_as;
+    use agent_runtime_protocol::domain::schema::v0::SystemEvent;
+
+    #[tokio::test]
+    async fn appending_a_turn_signals_its_end_once_with_its_last_text() {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_session();
+        repo.insert_session(test_agent_session(session));
+        let mut logs = LiveSessionLogWriter::new(repo.clone(), NoOpRealtime);
+
+        let mut signals = Vec::new();
+        for frame in parse_log_as(session, TURN) {
+            signals.extend(logs.append(frame).await.expect("append succeeds").signals);
+        }
+
+        assert!(
+            matches!(
+                signals.as_slice(),
+                [TurnSignal::TurnEnded { stop: FoldStop::EndTurn, last_text: Some(text), .. }]
+                    if !text.is_empty()
+            ),
+            "{signals:#?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_writer_catching_up_on_a_stored_turn_signals_nothing_for_it() {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_session();
+        repo.insert_session(test_agent_session(session));
+        let mut first = LiveSessionLogWriter::new(repo.clone(), NoOpRealtime);
+        for frame in parse_log_as(session, TURN) {
+            first.append(frame).await.expect("append succeeds");
+        }
+
+        // A reconnect: a fresh writer over the same stored log. Its first
+        // frame is the runtime coming back, not a turn ending.
+        let mut second = LiveSessionLogWriter::new(repo.clone(), NoOpRealtime);
+        let appended = second
+            .append(AgentSessionLog {
+                agent_session_id: session,
+                user_id: None,
+                content: Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::AcpReady,
+                }),
+            })
+            .await
+            .expect("append succeeds");
+
+        assert!(appended.signals.is_empty(), "{:#?}", appended.signals);
+    }
+}

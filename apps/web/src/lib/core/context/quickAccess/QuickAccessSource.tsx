@@ -23,6 +23,7 @@ import {
 import { queryReadyGate } from '@queries/gate';
 import { materializeCachedGraphqlHistoryItems } from '@queries/history/graphql';
 import { type HistoryItem, useHistoryQuery } from '@queries/history/history';
+import { useQuickAccessAgentSessionsQuery } from '@queries/soup/quick-access-agent-sessions';
 import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
 import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
@@ -329,6 +330,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     useQuickAccessSnippetsQuery();
   const { query: skillsQuery, skills: skillsAccessor } =
     useQuickAccessSkillsQuery();
+
+  const { query: agentSessionsQuery, sessions: agentSessionsAccessor } =
+    useQuickAccessAgentSessionsQuery();
 
   // globally hidden ids
   const [hiddenIds, setHiddenIds] = createSignal<Set<string>>(new Set());
@@ -700,6 +704,41 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     return sortIndexEntries(allEntries);
   });
 
+  const agentSessionEntries = createLazyMemo(() => {
+    const viewedAtMap = soupViewedAtMap();
+    const hidden = hiddenIds();
+    const entries: IndexEntry[] = [];
+    for (const session of agentSessionsAccessor()) {
+      if (hidden.has(session.id)) continue;
+      const viewedAt = viewedAtMap.get(session.id) ?? session.viewedAt;
+      const sortTimestamp =
+        toTimestamp(viewedAt) || toTimestamp(session.updatedAt);
+      const entity = { ...session, viewedAt };
+      const version = JSON.stringify(entity);
+      const cached = itemCache.get(session.id);
+      if (!cached || cached.version !== version) {
+        itemCache.set(session.id, {
+          version,
+          item: {
+            kind: 'entity',
+            id: session.id,
+            bucket: 'agent_session',
+            searchText: `${session.name} ${session.bot?.name ?? ''}`,
+            sortTimestamp,
+            timestamps: {
+              viewedAt,
+              updatedAt: session.updatedAt,
+              createdAt: session.createdAt,
+            },
+            data: entity,
+          },
+        });
+      }
+      entries.push({ id: session.id, bucket: 'agent_session', sortTimestamp });
+    }
+    return sortIndexEntries(entries);
+  });
+
   const processedData = createLazyMemo(() => {
     const allEntries = mergeMultipleSortedIndices([
       historyEntries().entries,
@@ -708,6 +747,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       crmCompanyEntries(),
       snippetEntries(),
       skillEntries(),
+      agentSessionEntries(),
     ]);
     const seenIds = new Set(allEntries.map((entry) => entry.id));
 
@@ -982,6 +1022,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     crmCompaniesQuery.refetch();
     snippetsQuery.refetch();
     skillsQuery.refetch();
+    void agentSessionsQuery.refetch();
   };
 
   return {

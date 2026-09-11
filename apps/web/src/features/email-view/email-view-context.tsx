@@ -1,3 +1,4 @@
+import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { registerInboxFilterSplit } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { makePersistedState } from '@app/lib/persistence';
@@ -28,7 +29,14 @@ export type EmailViewContext = {
   setTab: (tab: EmailTab) => void;
   setInboxIds: (ids: string[] | undefined) => void;
   setFacets: (facets: EmailViewState['facets']) => void;
+  /**
+   * Shows the given tags across the whole mailbox: a non-empty selection
+   * lands on the All tab. Clearing keeps the current tab.
+   */
+  showTags: (tagIds: string[]) => void;
   setOpenThreadId: (threadId: string | undefined) => void;
+  isSidebarSectionOpen: (id: string) => boolean;
+  setSidebarSectionOpen: (id: string, open: boolean) => void;
   /**
    * Whether the view may open its preview pane on its own. Written by the
    * Preview toggle so an explicit close stays closed across visits; shares
@@ -58,12 +66,16 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         initial.inboxIds === undefined ? undefined : [...initial.inboxIds],
       facets: normalizeFacetSelection(initial.facets),
       openThreadId: initial.openThreadId,
+      collapsedSidebarSectionIds: [
+        ...(initial.collapsedSidebarSectionIds ?? []),
+      ],
     }),
     createEmailViewPersistence({
       handle: panel.handle,
       userId,
       restoreEntryState: props.initialState === undefined,
       restoreLocalState: props.initialState === undefined,
+      restorePreferences: initial.collapsedSidebarSectionIds === undefined,
     })
   );
 
@@ -87,8 +99,32 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setState('facets', reconcile(normalizeFacetSelection(facets)));
   };
 
+  // A tag reaches across every mailbox slice, so choosing one from a narrower
+  // tab moves to All; as with `setTab`, that move drops the tab's other filters.
+  const showTags = (tagIds: string[]) => {
+    setState(
+      produce((draft) => {
+        const movesToAll = tagIds.length > 0 && draft.tab !== 'all';
+        if (movesToAll) draft.tab = 'all';
+        draft.facets = normalizeFacetSelection({
+          ...(movesToAll ? {} : draft.facets),
+          tags: tagIds,
+        });
+      })
+    );
+  };
+
   const setOpenThreadId = (threadId: string | undefined) =>
     setState('openThreadId', threadId);
+
+  const isSidebarSectionOpen = (id: string) =>
+    !state.collapsedSidebarSectionIds.includes(id);
+
+  const setSidebarSectionOpen = (id: string, open: boolean) =>
+    setState(
+      'collapsedSidebarSectionIds',
+      setSidebarSectionCollapsed(id, open)
+    );
 
   // The classic sidebar's nested account rows scope the mail list by split id
   // (see `SidebarMailLink`); registering keeps them driving this view too, and
@@ -106,7 +142,10 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setTab,
     setInboxIds,
     setFacets,
+    showTags,
     setOpenThreadId,
+    isSidebarSectionOpen,
+    setSidebarSectionOpen,
     previewOpen,
     setPreviewOpen,
   };

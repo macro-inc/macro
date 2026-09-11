@@ -21,6 +21,7 @@ import {
 import { registerCacheHost } from '@graphql-cache/lifecycle';
 import { getBrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
+import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
 import type { ChannelType } from '@service-notification/generated/schemas/channelType';
@@ -1107,7 +1108,7 @@ export function mapGraphqlNotification(
     entity_type:
       record.entityType.toLowerCase() as ApiUserNotification['entity_type'],
     sent: record.sent,
-    done: record.done,
+    state: notificationStateFromGraphql(record.state),
     created_at: record.createdAt,
     viewed_at: record.viewedAt ?? undefined,
     updated_at: record.updatedAt,
@@ -1178,6 +1179,29 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             documentVersionId: 0,
             properties: mapGraphqlProperties(entity.properties),
             subType: mapDocumentSubType(entity.subType),
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupAgentSession' },
+      (entity) =>
+        ({
+          tag: 'agentSession',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            name: entity.sessionName,
+            ownerId: entity.ownerId,
+            botId: entity.botId,
+            bot: entity.bot,
+            threadId: entity.threadId,
+            status: entity.status,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+            viewedAt: entity.viewedAt,
+            properties: mapGraphqlProperties(entity.properties),
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
@@ -1551,6 +1575,8 @@ export function mapGraphqlGroupedSoupPage(
 
 export type GraphqlSoupHydrationPage = {
   nextCursor: string | null;
+  /** Explicit membership evidence returned by a complete-scope backfill query. */
+  entityIds?: string[];
 };
 
 /**
@@ -1586,7 +1612,15 @@ export async function hydrateGraphqlSoup<
   if (!result.data) {
     throw new Error('GraphQL Soup hydration returned no cursor projection');
   }
-  return { nextCursor: result.data.user.soup.nextCursor };
+  const soup = result.data.user.soup as typeof result.data.user.soup & {
+    scopeIds?: Array<{ id: string }>;
+  };
+  return {
+    nextCursor: soup.nextCursor,
+    ...(soup.scopeIds
+      ? { entityIds: soup.scopeIds.map((item) => item.id) }
+      : {}),
+  };
 }
 
 /** Executes any Soup-shaped query and maps its result to the shared page type. */

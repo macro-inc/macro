@@ -22,13 +22,12 @@ use graphql_channel::{
 };
 use graphql_common::{parse_id, require_authorized_user};
 use graphql_email::{
-    GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader,
-    SoupEmailContentEdgeReader,
+    GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader, SoupEmailEdgeReader,
 };
 use graphql_entity_mutation::EntityMutationRoot;
 use graphql_favorite::{
-    EntityFavoriteEdgeReader, FavoriteMutationRoot, FavoriteQueryReader, GraphqlFavorite,
-    NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
+    EntityFavoriteEdgeReader, FavoriteMutationRoot, FavoriteQueryReader, FavoritesFilterInput,
+    GraphqlFavorite, NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
 };
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
@@ -121,7 +120,7 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader;
@@ -318,7 +317,7 @@ where
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -375,7 +374,7 @@ where
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -431,7 +430,7 @@ where
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -464,7 +463,7 @@ where
     N: NotificationMutationService,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -487,7 +486,7 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -518,7 +517,7 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -552,7 +551,7 @@ where
     MacroAuthorizationState<Auth>: FromRef<St>,
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
-    ER: SoupEmailContentEdgeReader,
+    ER: SoupEmailEdgeReader,
     FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
@@ -562,9 +561,14 @@ where
         async_graphql::ID(self.user_id.to_string())
     }
 
-    /// The authenticated user's favorites in manual order.
-    async fn favorites(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlFavorite>> {
-        resolve_favorites::<FR>(ctx, &self.user_id).await
+    /// The authenticated user's favorites in manual order, optionally
+    /// restricted by entity type and entity id.
+    async fn favorites(
+        &self,
+        ctx: &Context<'_>,
+        filter: Option<FavoritesFilterInput>,
+    ) -> async_graphql::Result<Vec<GraphqlFavorite>> {
+        resolve_favorites::<FR>(ctx, &self.user_id, filter.unwrap_or_default().into_model()).await
     }
 
     /// A page of the authenticated user's own activity, newest first.

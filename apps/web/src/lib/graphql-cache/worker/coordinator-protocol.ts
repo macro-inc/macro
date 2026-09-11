@@ -559,6 +559,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'sortDirection',
           'limit',
           'baseline',
+          'mail',
         ]) &&
         isRecord(request.filters) &&
         ['CREATED_AT', 'UPDATED_AT', 'VIEWED_AT', 'VIEWED_UPDATED'].includes(
@@ -566,6 +567,17 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         ) &&
         (request.sortDirection === 'ASC' || request.sortDirection === 'DESC') &&
         isValidCacheSearchLimit(request.limit) &&
+        (request.mail === undefined ||
+          (isRecord(request.mail) &&
+            hasOnlyKeys(request.mail, ['view', 'cursor']) &&
+            ['ALL', 'INBOX', 'DRAFTS', 'SENT'].includes(
+              request.mail.view as string
+            ) &&
+            request.limit < 500 &&
+            request.baseline === undefined &&
+            (request.mail.cursor === undefined ||
+              (typeof request.mail.cursor === 'string' &&
+                request.mail.cursor.length <= 4096)))) &&
         (request.baseline === undefined ||
           (Array.isArray(request.baseline) &&
             request.baseline.length <= MAX_RECONCILIATION_BASELINE &&

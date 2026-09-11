@@ -38,7 +38,7 @@ function getPredicateNotifications(
  *
  * Entity-specific logic:
  * - Emails: Uses `isRead` boolean field
- * - Everything else: Has at least one notification with viewedAt === null
+ * - Everything else: Has at least one notification in the unseen state
  */
 export function unreadFilter(notificationSource: NotificationSource) {
   return function (entity: EntityData): boolean {
@@ -48,7 +48,7 @@ export function unreadFilter(notificationSource: NotificationSource) {
 
     const notifications = getPredicateNotifications(entity, notificationSource);
 
-    return notifications?.some((n) => !n.viewed_at) ?? false;
+    return notifications?.some((n) => n.state === 'unseen') ?? false;
   };
 }
 
@@ -57,7 +57,7 @@ export function unreadFilter(notificationSource: NotificationSource) {
  *
  * Entity-specific logic:
  * - Emails: Uses `done` field (derived from !inboxVisible - email is "not done" when in inbox)
- * - Everything else: Has at least one notification with done === false
+ * - Everything else: Has at least one notification in an active state
  */
 export function notDoneFilter(notificationSource: NotificationSource) {
   return function (entity: WithNotification<EntityData>) {
@@ -65,7 +65,7 @@ export function notDoneFilter(notificationSource: NotificationSource) {
 
     const notifications = getPredicateNotifications(entity, notificationSource);
 
-    return notifications?.some(({ done }) => !done);
+    return notifications?.some(({ state }) => state !== 'done');
   };
 }
 
@@ -104,7 +104,7 @@ export function teamsFilter(entity: EntityData): boolean {
 }
 
 export function agentFilter(entity: EntityData): boolean {
-  return entity.type === 'chat';
+  return entity.type === 'chat' || entity.type === 'agent_session';
 }
 
 export function automationFilter(entity: EntityData): boolean {
@@ -267,6 +267,12 @@ export function filesAndFolderFilter(entity: EntityData): boolean {
 }
 
 export function activeAgentFilter(entity: EntityData): boolean {
+  if (entity.type === 'agent_session')
+    return (
+      entity.status !== 'no_messages' &&
+      entity.status !== 'disconnected' &&
+      entity.status !== 'session/end'
+    );
   if (entity.type !== 'chat') return false;
 
   // [TODO] Check status of agent

@@ -104,6 +104,78 @@ describe('createMagicChipModel', () => {
     serviceClient.control.mockResolvedValue({ isErr: () => false });
   });
 
+  it('follows the latest turn and streaming updates without rewinding for late patches', async () => {
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const release = vi.fn();
+    sessionFold.acquireAgentSessionFold.mockResolvedValue({
+      messages: [prompt, response],
+      metadata: metadata(null),
+      release,
+    });
+    const dispose = createRoot((dispose) => {
+      model = createMagicChipModel({ ...props, promptedMessage: null });
+      return dispose;
+    });
+    await settle();
+    expect(model.presentation()).toEqual({ kind: 'settled', markdown: 'Hi!' });
+    const callbacks = sessionFold.acquireAgentSessionFold.mock.calls[0]![0];
+    callbacks.onChange([{ ...prompt, turn: 3 }]);
+    expect(model.presentation()).not.toMatchObject({ markdown: 'Hi!' });
+    callbacks.onChange([
+      {
+        ...openResponse,
+        turn: 3,
+        parts: [{ kind: 'text', text: 'Newest stream' }],
+      },
+    ]);
+    expect(model.presentation()).toMatchObject({
+      kind: 'answering',
+      markdown: 'Newest stream',
+    });
+    callbacks.onChange([
+      {
+        ...response,
+        turn: 1,
+        parts: [{ kind: 'text', text: 'Late old patch' }],
+      },
+    ]);
+    expect(model.presentation()).toMatchObject({ markdown: 'Newest stream' });
+    callbacks.onChange([
+      {
+        ...response,
+        turn: 3,
+        parts: [{ kind: 'text', text: 'Newest answer' }],
+      },
+    ]);
+    expect(model.presentation()).toEqual({
+      kind: 'settled',
+      markdown: 'Newest answer',
+    });
+    callbacks.onMetadata(metadata({ ...question, turn: 4 }));
+    expect(model.presentation()).toMatchObject({
+      kind: 'asking',
+      asking: { question: { turn: 4 } },
+    });
+    dispose();
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an explicit message lock when later turns arrive', async () => {
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const dispose = createRoot((dispose) => {
+      model = createMagicChipModel(props);
+      return dispose;
+    });
+    await settle();
+    const callbacks = sessionFold.acquireAgentSessionFold.mock.calls[0]![0];
+    callbacks.onChange([
+      { ...response, turn: 3, parts: [{ kind: 'text', text: 'New turn' }] },
+    ]);
+    callbacks.onMetadata(metadata({ ...question, turn: 3 }));
+    expect(model.presentation()).toEqual({ kind: 'settled', markdown: 'Hi!' });
+    dispose();
+  });
+
   it('settles after the attached turn completes despite stale acp_ready status', async () => {
     let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
     const dispose = createRoot((rootDispose) => {

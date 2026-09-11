@@ -10,7 +10,7 @@ import {
 import { useUserId } from '@core/context/user';
 import {
   MAGIC_CHIP_STATUSES,
-  type MagicChipDecoratorProps,
+  type MagicChipData,
   type MagicChipStatus,
 } from '@macro-inc/lexical-core';
 import {
@@ -86,7 +86,7 @@ function modelName(
  * row names its owner, and {@link ElicitationController} sends the answer.
  * The header names the persona and model from the session row and the fold.
  */
-export function createMagicChipModel(props: MagicChipDecoratorProps): {
+export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
   elicitation: ElicitationController;
@@ -176,11 +176,19 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
     release?.();
   });
 
-  // This chip is one turn's surface; only a question asked in that turn is
-  // its to offer.
+  // Fold patches can arrive out of order. Follow the highest turn, including
+  // a pending question whose metadata arrives before its message patch.
+  const turn = () =>
+    props.promptedMessage?.turn ??
+    messages().reduce(
+      (latest, message) => Math.max(latest, message.turn),
+      pendingElicitation()?.turn ?? 0
+    );
+
+  // A locked chip only offers questions from its anchored turn.
   const questionForTurn = () => {
     const question = pendingElicitation();
-    return question?.turn === props.promptedMessage.turn ? question : undefined;
+    return question?.turn === turn() ? question : undefined;
   };
   const elicitation = createElicitationController({
     sessionId: () => props.agentSessionId,
@@ -201,9 +209,9 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
   // Memoized: the view reads these from many places per flush, and a fold
   // pushes a frame per streamed chunk.
   const presentation = createMemo(() => {
-    const turn = props.promptedMessage.turn;
+    const currentTurn = turn();
     const messagesForTurn = messages().filter(
-      (message) => message.turn === turn
+      (message) => message.turn === currentTurn
     );
     return deriveMagicChipPresentation({
       persistedStatus: persistedStatus(),

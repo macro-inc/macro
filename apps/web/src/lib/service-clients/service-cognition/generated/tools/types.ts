@@ -31,6 +31,8 @@ export type CodeExecutionErrorCode =
   | 'string_not_found';
 /**
  * Canonical entity type accepted when an AI tool targets an entity's properties.
+ * Tasks are targeted as `document`; email threads (type `email` in ListEntities
+ * and search results) are targeted as `thread`.
  */
 export type ToolPropertyTargetEntityType =
   | 'document'
@@ -483,6 +485,10 @@ export type EntityItem =
       };
       type: 'foreignEntity';
     };
+/**
+ * The mutually exclusive lifecycle states of a user's notification.
+ */
+export type NotificationState = 'unseen' | 'seen' | 'done';
 /**
  * User-facing notification categories used for list filtering.
  */
@@ -3457,7 +3463,7 @@ export interface ToolLabel {
   type: string;
 }
 /**
- * List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `done` and `seen` to request done/not-done or seen/unseen notifications.
+ * List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `states` to select exact unseen, seen, or done states. Seen excludes done; an empty list includes all states.
  */
 export interface ListNotifications {
   /**
@@ -3465,13 +3471,9 @@ export interface ListNotifications {
    */
   limit?: number | null;
   /**
-   * Filter by done status. If omitted, only not-done notifications are returned. Set true for done notifications, false for not-done notifications.
+   * Exact states to include: unseen, seen, done. Defaults to [unseen, seen]. An empty list includes all states.
    */
-  done?: boolean | null;
-  /**
-   * Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications.
-   */
-  seen?: boolean | null;
+  states?: NotificationState[] | null;
   /**
    * Filter to specific notification item types. If omitted, returns all types. Example: ["email", "message"] returns only email and message notifications.
    */
@@ -3524,14 +3526,7 @@ export interface NotificationItem {
    * The ID of the entity this notification is about.
    */
   entityId: string;
-  /**
-   * Whether the notification has been seen.
-   */
-  seen: boolean;
-  /**
-   * Whether the notification is marked as done.
-   */
-  done: boolean;
+  state: NotificationState;
   /**
    * When the notification was created (ISO 8601).
    */

@@ -3637,6 +3637,115 @@
         }
       }
     },
+    "/channels/{channel_id}/messages/catch-up": {
+      "get": {
+        "tags": ["channels::inbound::axum_router"],
+        "summary": "Handler for `GET /channels/{channel_id}/messages/catch-up`.",
+        "operationId": "get_channel_messages_catch_up",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Exclusive RFC3339 lower bound. Messages at this instant are omitted.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for older messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "previous_cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value for newer messages",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChannelMessagesPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/messages/{message_id}/context": {
       "get": {
         "tags": ["channels::inbound::axum_router"],
@@ -8492,6 +8601,56 @@
         "tags": ["favorites"],
         "summary": "List the caller's favorites.",
         "operationId": "list_favorites",
+        "parameters": [
+          {
+            "name": "entityType",
+            "in": "query",
+            "description": "Restrict to favorites whose entity is one of these types.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill",
+                  "agent_session"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "description": "Restrict to favorites whose entity is one of these ids.",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -11067,40 +11226,50 @@
           {
             "name": "entityType",
             "in": "query",
-            "description": "Restrict to reminders attached to this entity type. Requires `entityId`.",
+            "description": "Restrict to reminders attached to an entity of these types.",
             "required": false,
             "schema": {
-              "type": "string",
-              "description": "The type of an entity in Macro",
-              "enum": [
-                "user",
-                "chat",
-                "channel",
-                "channel_message",
-                "document",
-                "project",
-                "email_thread",
-                "calendar_event",
-                "team",
-                "call",
-                "foreign_entity",
-                "static_file",
-                "crm_company",
-                "crm_contact",
-                "reminder",
-                "skill",
-                "agent_session"
-              ]
-            }
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "reminder",
+                  "skill",
+                  "agent_session"
+                ]
+              }
+            },
+            "style": "form",
+            "explode": true
           },
           {
             "name": "entityId",
             "in": "query",
-            "description": "Restrict to reminders attached to this entity id. Requires `entityType`.",
+            "description": "Restrict to reminders attached to these entity ids.",
             "required": false,
             "schema": {
-              "type": "string"
-            }
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true
           },
           {
             "name": "includeCompleted",
@@ -12814,6 +12983,11 @@
           }
         }
       },
+      "AgentActionId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nMinted only by the server at accept time, as a v7 uuid so ids sort by mint\ntime. On the wire and in JSON it is the bare uuid, and a uuid-shaped\nrequest id is the whole ownership test: the server is the only writer of\nruntime-bound frames. The machine's own handshake request ids\n(`agent_session:{session}:{n}`) are not uuids and stay `None`."
+      },
       "AgentChannelScope": {
         "type": "string",
         "description": "Whether an agent is available everywhere or only in selected channels.",
@@ -12867,6 +13041,170 @@
           }
         ],
         "description": "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      },
+      "AgentSessionFilters": {
+        "type": "object",
+        "description": "Filters for agent sessions.",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Agent session ids to filter by. Empty to include all accessible sessions."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into agent sessions at all. Agent sessions are off by\ndefault — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].\nAsking for specific `ids` or `owners` also opts in."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+          }
+        }
+      },
+      "AgentSessionLifecycleEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A session was created.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.opened"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionOpenedMetadata",
+                "description": "A session was created."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A prompt was delivered to the runtime.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.turn_started"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TurnStartedMetadata",
+                "description": "A prompt was delivered to the runtime."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The runtime answered a turn.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.turn_ended"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/TurnEndedMetadata",
+                "description": "The runtime answered a turn."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A turn ended with nothing queued behind it.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.settled"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionSettledMetadata",
+                "description": "A turn ended with nothing queued behind it."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The agent is blocked on a question to its owner.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.waiting_for_input"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/WaitingForInputMetadata",
+                "description": "The agent is blocked on a question to its owner."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The question was answered or withdrawn.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.input_received"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/InputReceivedMetadata",
+                "description": "The question was answered or withdrawn."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The session's live actor is gone.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.stopped"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionStoppedMetadata",
+                "description": "The session's live actor is gone."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The session was renamed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.renamed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionRenamedMetadata",
+                "description": "The session was renamed."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The session was deleted.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["agent_session.deleted"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SessionDeletedMetadata",
+                "description": "The session was deleted."
+              }
+            }
+          }
+        ],
+        "description": "Events publishable to [`MacroAgentSessionLifecycleTopic`].\n\nThe serde tag and [`AgentSessionLifecycleEventName`] spell the same wire\nnames: subscribers filter on them, so they are API. The\n`event_names_match_the_wire` test holds the two in step. Exhaustive on\npurpose: a consumer's match should break when a variant is added."
       },
       "Anchor": {
         "oneOf": [
@@ -13798,6 +14136,9 @@
         "type": "object",
         "description": "Wire-format entity filter AST accepted by soup AST endpoints.",
         "properties": {
+          "asf": {
+            "description": "Filters applied to agent sessions (wire key `asf`). Like reminders,\nempty/omitted returns **no** agent sessions: they are opt-in, so the\ncaller must send `inc`, an id, or an owner to get any."
+          },
           "calf": {
             "description": "filters applied to canonical calendar events"
           },
@@ -15834,6 +16175,11 @@
             "type": ["string", "null"],
             "format": "date-time",
             "description": "When set, only return top-level messages created at or after this timestamp."
+          },
+          "created_after_exclusive": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When set, only return top-level messages created strictly after this timestamp."
           },
           "created_before": {
             "type": ["string", "null"],
@@ -19793,6 +20139,10 @@
             },
             "description": "Only include emails that have at least one of these labels. Supports both Gmail system labels (e.g. \"INBOX\", \"CATEGORY_PROMOTIONS\") and user-created labels (e.g. \"github\"). Empty to not filter by included labels.\nNote: SPAM and TRASH emails are not indexed in OpenSearch, so they will never appear in results regardless of this filter."
           },
+          "is_read": {
+            "type": ["boolean", "null"],
+            "description": "Filter by the email thread's read flag, independently of notification state."
+          },
           "link_ids": {
             "type": "array",
             "items": {
@@ -19882,6 +20232,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "agent_session_filters": {
+            "$ref": "#/components/schemas/AgentSessionFilters",
+            "description": "the bundled [AgentSessionFilters]"
+          },
           "calendar_event_filters": {
             "$ref": "#/components/schemas/CalendarEventFilters",
             "description": "the bundled [CalendarEventFilters]"
@@ -22081,6 +22435,60 @@
         "type": "integer",
         "enum": [1, 2, 3]
       },
+      "InFlightTurnSummary": {
+        "type": "object",
+        "description": "A turn the runtime never answered: the session stopped underneath it.",
+        "required": ["turn", "action_id"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User who prompted it, absent when a bot acted on nobody's behalf."
+              }
+            ]
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message posted for this turn, when one was."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Position in the session's log.",
+            "minimum": 0
+          }
+        }
+      },
+      "InputReceivedMetadata": {
+        "type": "object",
+        "description": "The pending question was answered or withdrawn.",
+        "required": ["identity", "turn", "action_id"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The turn that was asking.",
+            "minimum": 0
+          }
+        }
+      },
       "InteractionReason": {
         "type": "string",
         "description": "Why a document interaction was reported.",
@@ -22324,17 +22732,22 @@
       },
       "NotificationFilters": {
         "type": "object",
-        "description": "Notification state filters for channel message queries.",
+        "description": "Notification-level filters that apply to an entity type.",
         "properties": {
-          "done": {
-            "type": ["boolean", "null"],
-            "description": "Filter by notification done state. `Some(true)` selects done\nnotifications; `Some(false)` selects not-done notifications."
-          },
-          "seen": {
-            "type": ["boolean", "null"],
-            "description": "Filter by notification seen state. `Some(true)` selects seen\nnotifications; `Some(false)` selects not-seen notifications."
+          "states": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationState"
+            },
+            "description": "Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`."
           }
-        }
+        },
+        "additionalProperties": false
+      },
+      "NotificationState": {
+        "type": "string",
+        "description": "The mutually exclusive lifecycle states of a user's notification.",
+        "enum": ["unseen", "seen", "done"]
       },
       "PairingDetails": {
         "type": "object",
@@ -24168,6 +24581,140 @@
           }
         }
       },
+      "SessionDeletedMetadata": {
+        "type": "object",
+        "description": "The session was deleted.",
+        "required": ["identity"],
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session as it was."
+          }
+        }
+      },
+      "SessionIdentity": {
+        "type": "object",
+        "description": "Who and what a session is; carried by every lifecycle event so a\nconsumer never has to look the session up.",
+        "required": [
+          "session_id",
+          "session_name",
+          "bot_id",
+          "bot_name",
+          "owner_id"
+        ],
+        "properties": {
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "Bot the session runs for."
+          },
+          "bot_name": {
+            "type": "string",
+            "description": "The bot's display name at the time of the event."
+          },
+          "origin": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ThreadOrigin",
+                "description": "Thread the session was opened from, when it was."
+              }
+            ]
+          },
+          "owner_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "User who owns the session."
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session."
+          },
+          "session_name": {
+            "type": "string",
+            "description": "User-facing session name at the time of the event."
+          }
+        }
+      },
+      "SessionOpenedMetadata": {
+        "type": "object",
+        "description": "A session was created.",
+        "required": ["identity", "model", "harness"],
+        "properties": {
+          "harness": {
+            "type": "string",
+            "description": "Harness slug the session runs on."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model slug the session runs with."
+          }
+        }
+      },
+      "SessionRenamedMetadata": {
+        "type": "object",
+        "description": "The session was renamed; `identity` carries the new name.",
+        "required": ["identity"],
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session, with its new name."
+          }
+        }
+      },
+      "SessionSettledMetadata": {
+        "type": "object",
+        "description": "A turn ended and nothing is queued: the agent has stopped working.",
+        "required": ["identity"],
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "last_turn": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TurnSummary",
+                "description": "The turn that just ended, when the emitter still had its record."
+              }
+            ]
+          }
+        }
+      },
+      "SessionStoppedMetadata": {
+        "type": "object",
+        "description": "The session's live actor is gone: idle teardown, transport loss, or crash.",
+        "required": ["identity", "reason"],
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why it stopped, as the session machine reported it."
+          },
+          "turn_in_flight": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InFlightTurnSummary",
+                "description": "The turn that was running when it stopped, if any."
+              }
+            ]
+          }
+        }
+      },
       "SetCompanyHiddenRequest": {
         "type": "object",
         "description": "Request body for `PUT /companies/{company_id}/hidden`.",
@@ -24465,6 +25012,81 @@
             "description": "Mentioned entity type."
           }
         }
+      },
+      "SoupAgentSession_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "ownerId",
+              "botId",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "botId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The bot running this session"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the session was created"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The agent session uuid"
+              },
+              "name": {
+                "type": "string",
+                "description": "The user-facing name of the session"
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "Who the session belongs to"
+              },
+              "status": {
+                "type": "string",
+                "description": "The session's last known status.\n\n`no_messages` until the first system event arrives, `disconnected` if\nthe connection dropped without a clean close, otherwise the wire name\nof the most recent system event (for example `session/end`)."
+              },
+              "threadId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The channel thread the session was opened from, when any"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the session was last modified"
+              },
+              "viewedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The time the session was last viewed by the requesting user"
+              }
+            }
+          }
+        ],
+        "description": "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
       },
       "SoupApiItem": {
         "allOf": [
@@ -25682,6 +26304,21 @@
                 "enum": ["reminder"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Agent session item.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupAgentSession_SoupPropertiesField",
+                "description": "Agent session item."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agentSession"]
+              }
+            }
           }
         ],
         "description": "A single item in the Soup feed."
@@ -26347,6 +26984,28 @@
           }
         }
       },
+      "ThreadOrigin": {
+        "type": "object",
+        "description": "The channel thread a session was opened from, when it was.",
+        "required": ["channel_id", "thread_id", "originating_message_id"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel the thread lives in."
+          },
+          "originating_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The message whose mention opened the session."
+          },
+          "thread_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Root message of the thread."
+          }
+        }
+      },
       "ThreadResponse": {
         "type": "object",
         "required": ["data"],
@@ -26412,6 +27071,136 @@
             "type": ["string", "null"],
             "format": "date-time",
             "description": "Wall-clock when the transcriber's STT stream first received audio\nfor this participant. The server takes the earliest non-null value\nacross all participants and uses it to overwrite the\n`egress_started`-derived `recording_started_at`, which is too early\n(it stamps egress bootstrap, not first audio frame)."
+          }
+        }
+      },
+      "TurnEndedMetadata": {
+        "type": "object",
+        "description": "The runtime answered a turn. Another prompt may follow at once; see\n[`SessionSettledMetadata`] for \"nothing left to do\".",
+        "required": [
+          "identity",
+          "turn",
+          "action_id",
+          "stop_reason",
+          "queued_remaining"
+        ],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User who prompted it, absent when a bot acted on nobody's behalf."
+              }
+            ]
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message posted for this turn, when one was."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "queued_remaining": {
+            "type": "integer",
+            "description": "Prompts still waiting behind this turn.",
+            "minimum": 0
+          },
+          "stop_reason": {
+            "type": "string",
+            "description": "The ACP stop reason, or `\"error\"` when the runtime refused the prompt."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Position in the session's log.",
+            "minimum": 0
+          }
+        }
+      },
+      "TurnStartedMetadata": {
+        "type": "object",
+        "description": "A prompt was delivered to the runtime.",
+        "required": ["identity", "turn", "action_id"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User who prompted it, absent when a bot acted on nobody's behalf."
+              }
+            ]
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message posted for this turn, when one was."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Position in the session's log.",
+            "minimum": 0
+          }
+        }
+      },
+      "TurnSummary": {
+        "type": "object",
+        "description": "A turn the runtime answered.",
+        "required": ["turn", "action_id", "stop_reason"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User who prompted it, absent when a bot acted on nobody's behalf."
+              }
+            ]
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message posted for this turn, when one was."
+          },
+          "excerpt": {
+            "type": ["string", "null"],
+            "description": "The agent's last text in the turn, whole; what the magic chip shows\nonce the turn ends. `None` when the turn produced no prose."
+          },
+          "stop_reason": {
+            "type": "string",
+            "description": "The ACP stop reason, or `\"error\"` when the runtime refused the prompt."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Position in the session's log.",
+            "minimum": 0
           }
         }
       },
@@ -26994,6 +27783,36 @@
           }
         }
       },
+      "WaitingForInputMetadata": {
+        "type": "object",
+        "description": "The agent asked its owner a question and is blocked on the answer.",
+        "required": ["identity", "turn", "action_id", "question"],
+        "properties": {
+          "action_id": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The action that opened the turn."
+          },
+          "announcement_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message posted for this turn, when one was."
+          },
+          "identity": {
+            "$ref": "#/components/schemas/SessionIdentity",
+            "description": "The session."
+          },
+          "question": {
+            "type": "string",
+            "description": "The question, as the agent phrased it."
+          },
+          "turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The turn asking.",
+            "minimum": 0
+          }
+        }
+      },
       "Webhook": {
         "type": "object",
         "description": "Webhook row returned by application APIs.\n\nClients deserialize this, so both derives are used.",
@@ -27078,6 +27897,10 @@
           {
             "$ref": "#/components/schemas/ChannelTopicEvent",
             "description": "Channel and message events from the `macro.channels` topic."
+          },
+          {
+            "$ref": "#/components/schemas/AgentSessionLifecycleEvent",
+            "description": "Agent session lifecycle events from the `macro.agent_session_lifecycle`\ntopic."
           }
         ],
         "description": "Any entity event deliverable to a webhook endpoint.\n\nSerialized bodies carry an `event_type` tag naming the event (for example\n`document.created` or `channel.message_posted`) and a `metadata` object\nwith the event payload. Endpoint validation additionally sends a\n`WebhookValidationTestEvent`, which is not part of this union."
