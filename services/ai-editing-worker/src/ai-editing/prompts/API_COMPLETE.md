@@ -397,11 +397,12 @@ Existing chips in the document XML look like `<user-mention>`, `<date-mention>`,
 - `mentionTag(blockId, at, { optionId, propertyDefinitionId, scope, name, color? })`
 
 ```ts
+// `at` is a plain-text offset; chips do not increase it. 6 appends after "Email ".
 editor.mentionUser('b1', 6, { userId: 'u1', email: 'a@example.com' });
-editor.mentionContact('b1', 7, { contactId: 'c1', name: 'Acme', emailOrDomain: 'acme.com', isCompany: true });
-editor.mentionDate('b1', 8, '2026-07-08T00:00:00.000Z', 'Today');
-editor.mentionAgentSession('b1', 9, { id: 'sess-1', label: 'Fix login' });
-editor.mentionDocument('b1', 10, { documentId: 'd1', documentName: 'Spec', blockName: 'md' });
+editor.mentionContact('b1', 6, { contactId: 'c1', name: 'Acme', emailOrDomain: 'acme.com', isCompany: true });
+editor.mentionDate('b1', 6, '2026-07-08T00:00:00.000Z', 'Today');
+editor.mentionAgentSession('b1', 6, { id: 'sess-1', label: 'Fix login' });
+editor.mentionDocument('b1', 6, { documentId: 'd1', documentName: 'Spec', blockName: 'md' });
 ```
 
 Before:
@@ -416,7 +417,7 @@ After:
 
 ```xml
 <doc>
-  <p id="b1"><t id="t1">Email </t><user-mention id="m1" userId="u1" email="a@example.com"/><contact-mention id="m2" contactId="c1" name="Acme" email="acme.com" isCompany="true"/></p>
+  <p id="b1"><t id="t1">Email </t><document-mention id="m5" documentId="d1" name="Spec" blockName="md"/><agent-session-mention id="m4" sessionId="sess-1" label="Fix login"/><date-mention id="m3" date="2026-07-08T00:00:00.000Z" displayFormat="Today"/><contact-mention id="m2" contactId="c1" name="Acme" email="acme.com" isCompany="true"/><user-mention id="m1" userId="u1" email="a@example.com"/></p>
 </doc>
 ```
 

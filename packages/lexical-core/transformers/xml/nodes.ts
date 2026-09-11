@@ -173,6 +173,8 @@ export type DocumentMentionNode = Id & {
   version: number;
   documentId: string;
   documentName: string;
+  blockName?: string;
+  blockParams?: Record<string, string>;
 };
 
 export type ContactMentionNode = Id & {

@@ -329,6 +329,11 @@ export function serializeNode(node: SerNode): FxpNode {
         nodeAttrs(n, {
           ...(n.documentId && { documentId: n.documentId }),
           ...(n.documentName && { name: n.documentName }),
+          ...(n.blockName && { blockName: n.blockName }),
+          ...(n.blockParams &&
+            Object.keys(n.blockParams).length > 0 && {
+              blockParams: JSON.stringify(n.blockParams),
+            }),
         })
       )
     )
