@@ -91,7 +91,8 @@ where
         }
     }
 
-    /// Publish `agent_session.mentioned` for the users a prompt names, if any.
+    /// Share the session with the users a prompt names and publish
+    /// `agent_session.mentioned` for them, if any.
     ///
     /// The author is never in the list: mentioning yourself is not news. Like
     /// every lifecycle publish, a failure to resolve the mentions is logged
@@ -106,7 +107,7 @@ where
     ) {
         let mentioned = match self
             .mentions
-            .mentioned_users(session_id, prompt_markdown)
+            .share_with_mentioned(session_id, actor.as_ref(), prompt_markdown)
             .await
         {
             Ok(mentioned) => mentioned,

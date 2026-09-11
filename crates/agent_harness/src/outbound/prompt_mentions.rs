@@ -1,24 +1,26 @@
-//! Resolve who a prompt mentions through the lexical service, narrowed to
-//! the people who can open the session.
+//! Resolve who a prompt mentions through the lexical service, and share the
+//! session with them.
 //!
 //! The lexical service is the one place that parses Macro markdown, so the
 //! `<m-user-mention>` tags come from its `/mentions` endpoint - the same call
-//! channel messages use to track theirs. Access comes from the session's
-//! `entity_access` grants: the owner, the origin channel's members, any team.
+//! channel messages use to track theirs. Access is the session's
+//! `entity_access` grants: the owner, the origin channel's members, any team,
+//! and - after this - whoever an editor has mentioned.
 
 #[cfg(test)]
 mod test;
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 
 use agent_session::domain::model::AgentSessionId;
-use entity_access::domain::models::EntityType;
+use entity_access::domain::models::{AccessLevel, EntityType};
 use entity_access::domain::ports::AccessRepository;
+use entity_access::outbound::PgAccessRepository;
 use lexical_client::LexicalClient;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use sqlx::PgPool;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::ports::PromptMentions;
@@ -48,34 +50,103 @@ impl MentionSource for LexicalClient {
     }
 }
 
-/// Lists who may open a session.
-pub(crate) trait SessionViewers: Send + Sync + 'static {
+/// Who may open a session, and the door to let more people in.
+pub(crate) trait SessionAccess: Send + Sync + 'static {
+    /// Everyone who can open `session_id`.
     fn viewers(
         &self,
         session_id: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send;
+
+    /// The highest access `user` has on `session_id`, if any.
+    fn access_of(
+        &self,
+        session_id: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>>> + Send;
+
+    /// Let each of `users` edit `session_id`. Never lowers anyone: a user who
+    /// already holds access keeps what they have.
+    fn grant_edit(
+        &self,
+        session_id: AgentSessionId,
+        users: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
-impl<Access> SessionViewers for Access
-where
-    Access: AccessRepository,
-{
-    async fn viewers(&self, session_id: AgentSessionId) -> Result<Vec<MacroUserIdStr<'static>>> {
-        self.get_entity_users(&session_id.as_uuid(), EntityType::AgentSession)
-            .await
-            .map_err(|error| HarnessError::Mentions(rootcause::report!(error).into()))
+/// [`SessionAccess`] over the `entity_access` table.
+pub struct PgSessionAccess {
+    access: PgAccessRepository,
+    pool: PgPool,
+}
+
+impl PgSessionAccess {
+    /// Read and write grants through `pool`.
+    #[must_use]
+    pub fn new(pool: PgPool) -> Self {
+        Self {
+            access: PgAccessRepository::new(pool.clone()),
+            pool,
+        }
     }
 }
 
-/// [`PromptMentions`] over the lexical service and the access repository.
+impl SessionAccess for PgSessionAccess {
+    async fn viewers(&self, session_id: AgentSessionId) -> Result<Vec<MacroUserIdStr<'static>>> {
+        self.access
+            .get_entity_users(&session_id.as_uuid(), EntityType::AgentSession)
+            .await
+            .map_err(|error| HarnessError::Mentions(rootcause::report!(error).into()))
+    }
+
+    async fn access_of(
+        &self,
+        session_id: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<Option<AccessLevel>> {
+        self.access
+            .get_agent_session_access(&session_id.as_uuid().to_string(), Some(&user.0))
+            .await
+            .map_err(|error| HarnessError::Mentions(rootcause::report!(error).into()))
+    }
+
+    async fn grant_edit(
+        &self,
+        session_id: AgentSessionId,
+        users: &[MacroUserIdStr<'static>],
+    ) -> Result<()> {
+        let user_ids: Vec<String> = users.iter().map(ToString::to_string).collect();
+        // The conflict target is the unique index over direct (non-project)
+        // grants; `DO NOTHING` is what keeps an existing owner or editor row
+        // intact.
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            SELECT $1, 'agent_session', u.user_id, 'user', 'edit'::"AccessLevel"
+            FROM UNNEST($2::text[]) AS u(user_id)
+            ON CONFLICT (entity_id, entity_type, source_id, source_type)
+            WHERE granted_from_project_id IS NULL
+            DO NOTHING
+            "#,
+            session_id.as_uuid(),
+            user_ids.as_slice(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|error| HarnessError::Mentions(rootcause::report!(error).into()))?;
+        Ok(())
+    }
+}
+
+/// [`PromptMentions`] over the lexical service and the session's grants.
 pub struct LexicalPromptMentions<Source, Access> {
     source: Source,
-    access: Arc<Access>,
+    access: Access,
 }
 
 impl<Source, Access> LexicalPromptMentions<Source, Access> {
-    /// Parse with `source`, gate on `access`.
-    pub fn new(source: Source, access: Arc<Access>) -> Self {
+    /// Parse with `source`, read and grant through `access`.
+    pub fn new(source: Source, access: Access) -> Self {
         Self { source, access }
     }
 }
@@ -83,19 +154,16 @@ impl<Source, Access> LexicalPromptMentions<Source, Access> {
 impl<Source, Access> PromptMentions for LexicalPromptMentions<Source, Access>
 where
     Source: MentionSource,
-    Access: SessionViewers,
+    Access: SessionAccess,
 {
-    fn mentioned_users<'a>(
+    fn share_with_mentioned<'a>(
         &'a self,
         session_id: AgentSessionId,
+        actor: Option<&'a MacroUserIdStr<'static>>,
         prompt_markdown: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
         Box::pin(async move {
             let mentioned = self.source.mentioned_user_ids(prompt_markdown).await?;
-            if mentioned.is_empty() {
-                return Ok(Vec::new());
-            }
-            let viewers = self.access.viewers(session_id).await?;
             let mut users: Vec<MacroUserIdStr<'static>> = Vec::new();
             for id in mentioned {
                 // An id the lexical service produced that is not a Macro user
@@ -105,10 +173,29 @@ where
                     continue;
                 };
                 let user = user.into_owned();
-                if viewers.contains(&user) && !users.contains(&user) {
+                if actor != Some(&user) && !users.contains(&user) {
                     users.push(user);
                 }
             }
+            if users.is_empty() {
+                return Ok(users);
+            }
+
+            // Only someone who can drive the session may let others in; a
+            // prompt with no user behind it, or from a viewer, amplifies
+            // nobody.
+            let actor_may_share = match actor {
+                Some(actor) => {
+                    self.access.access_of(session_id, actor).await? >= Some(AccessLevel::Edit)
+                }
+                None => false,
+            };
+            if actor_may_share {
+                self.access.grant_edit(session_id, &users).await?;
+                return Ok(users);
+            }
+            let viewers = self.access.viewers(session_id).await?;
+            users.retain(|user| viewers.contains(user));
             Ok(users)
         })
     }

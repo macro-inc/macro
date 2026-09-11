@@ -53,9 +53,10 @@ impl PromptMentionsMock {
 }
 
 impl PromptMentions for PromptMentionsMock {
-    fn mentioned_users<'a>(
+    fn share_with_mentioned<'a>(
         &'a self,
         _session_id: AgentSessionId,
+        _actor: Option<&'a MacroUserIdStr<'static>>,
         prompt_markdown: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
         self.prompts

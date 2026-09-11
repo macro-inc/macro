@@ -12,7 +12,7 @@
 //! | --- | --- | --- |
 //! | `settled` | [`AgentSessionSettledMetadata`] | the session's audience: owner plus everyone who has driven it |
 //! | `waiting_for_input` | [`AgentSessionWaitingForInputMetadata`] | the same audience - anyone with edit access may answer, and these are the people already driving it |
-//! | `mentioned` | [`AgentSessionMentionedMetadata`] | the users the prompt named (already narrowed to those with access) |
+//! | `mentioned` | [`AgentSessionMentionedMetadata`] | the users the prompt named, who can now open the session |
 //!
 //! Everything else is nobody's news. Retracting a notification once it is
 //! stale (the question answered, the next turn started) is deliberately not

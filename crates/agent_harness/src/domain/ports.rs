@@ -129,40 +129,45 @@ pub trait AgentPromptComposer: Send + Sync + 'static {
     ) -> impl Future<Output = Result<String>> + Send;
 }
 
-/// Who a prompt names, of the people who can open the session it is for.
+/// Who a prompt names, made able to open the session it is for.
 ///
-/// A mention of someone who cannot see the session is dropped here: no access
-/// is granted on mention, and a notification they cannot follow is worse
-/// than none. Object-safe so the harness holds it erased, as it does the
-/// lifecycle publisher.
+/// Mentioning someone in a prompt is an invitation: when the author can
+/// drive the session (edit access), everyone they name is granted edit
+/// access too, so the notification that follows leads somewhere they can
+/// act. An author who cannot drive the session amplifies nobody - only the
+/// people who could already open it are returned. The author is never in
+/// the answer.
 pub trait PromptMentions: Send + Sync + 'static {
-    /// The users `prompt_markdown` mentions who may open `session_id`.
-    fn mentioned_users<'a>(
+    /// The users `prompt_markdown` mentions who can now open `session_id`.
+    fn share_with_mentioned<'a>(
         &'a self,
         session_id: AgentSessionId,
+        actor: Option<&'a MacroUserIdStr<'static>>,
         prompt_markdown: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>>;
 }
 
 impl<Mentions: PromptMentions + ?Sized> PromptMentions for Arc<Mentions> {
-    fn mentioned_users<'a>(
+    fn share_with_mentioned<'a>(
         &'a self,
         session_id: AgentSessionId,
+        actor: Option<&'a MacroUserIdStr<'static>>,
         prompt_markdown: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
-        (**self).mentioned_users(session_id, prompt_markdown)
+        (**self).share_with_mentioned(session_id, actor, prompt_markdown)
     }
 }
 
-/// A [`PromptMentions`] that finds nobody: tests and tooling that never
-/// notify.
+/// A [`PromptMentions`] that finds nobody and shares with nobody: tests and
+/// tooling that never notify.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoPromptMentions;
 
 impl PromptMentions for NoPromptMentions {
-    fn mentioned_users<'a>(
+    fn share_with_mentioned<'a>(
         &'a self,
         _session_id: AgentSessionId,
+        _actor: Option<&'a MacroUserIdStr<'static>>,
         _prompt_markdown: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
         Box::pin(async { Ok(Vec::new()) })

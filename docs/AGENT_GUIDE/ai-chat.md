@@ -136,6 +136,9 @@ Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `@` to inse
 used in chat and channels; they serialize as `<m-document-mention>` tags in the prompt
 the agent sees. Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread).
+`@mention` a person in a prompt and, if you can edit the session, they are granted edit
+access and get an `agent_session_mentioned` notification that opens the session; a viewer's
+mention only notifies people who could already open it.
 
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
