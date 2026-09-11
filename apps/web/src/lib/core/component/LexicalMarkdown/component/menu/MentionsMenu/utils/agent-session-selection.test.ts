@@ -22,16 +22,19 @@ import { sortMobileMentions } from './mobileSort';
 
 const item: AgentSessionMentionItem = {
   kind: 'agentSession',
+  bucket: 'agent_session',
+  sortTimestamp: 0,
   id: 'session',
   searchText: 'Ada Fix mentions',
   timestamps: { createdAt: new Date(), updatedAt: new Date() },
   data: {
+    type: 'agent_session',
     id: 'session',
     name: 'Fix mentions',
     ownerId: 'owner',
     botId: 'bot',
     bot: { id: 'bot', name: 'Ada' },
-    status: { kind: 'no_messages' },
+    status: 'no_messages',
     createdAt: '',
     updatedAt: '',
   },

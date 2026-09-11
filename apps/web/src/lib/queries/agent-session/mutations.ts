@@ -5,12 +5,19 @@ import type {
   CreateAgentSessionRequest,
 } from '@service-agent-harness/generated/schemas';
 import { useMutation } from '@tanstack/solid-query';
+import { queryClient } from '../client';
+import { agentSessionKeys } from './keys';
 
 export function useCreateAgentSessionMutation() {
   return useMutation(() => ({
     retry: false,
     mutationFn: (request: CreateAgentSessionRequest) =>
       throwOnErr(() => agentHarnessServiceClient.create(request)),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: agentSessionKeys.recent._def,
+      });
+    },
   }));
 }
 

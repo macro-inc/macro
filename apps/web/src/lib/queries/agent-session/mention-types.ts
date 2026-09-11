@@ -25,15 +25,3 @@ export function normalizeAgentSessionStatus(
     return { kind: status };
   return { kind: 'event', event: status };
 }
-
-/** Menu discovery deliberately searches only the 500 most recently updated sessions. */
-export function searchAgentSessionMentions(
-  items: AgentSessionMentionData[],
-  search: string
-) {
-  const terms = search.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-  return items.filter((item) => {
-    const text = `${item.name} ${item.bot?.name ?? ''}`.toLocaleLowerCase();
-    return terms.every((term) => text.includes(term));
-  });
-}
