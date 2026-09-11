@@ -81,32 +81,25 @@ jobs:
           exit 1
         fi
 
-        DEVELOPER_DIR="$(xcode-select -p)"
-        export DEVELOPER_DIR
-
-        # cargo-mobile2's validate_sdk() reads SDKSettings.plist from a hardcoded
-        # *unversioned* path:
+        # cargo-mobile2 locates the SDK by shelling out to `xcode-select -p`, which
+        # returns $DEVELOPER_DIR whenever that is set — and nix's Darwin stdenv sets it
+        # to nix's own Apple SDK, which has no Platforms/iPhoneSimulator.platform. So
+        # the SDK is genuinely there for every command run out here, and genuinely
+        # absent for anything run inside `nix develop`, which is what made tauri report
+        # a bare NotFound for a file this script can see.
         #
-        #   $DEVELOPER_DIR/Platforms/iPhoneSimulator.platform/Developer/SDKs/
-        #     iPhoneSimulator.sdk/SDKSettings.plist
-        #
-        # Xcode usually ships that alias next to the versioned SDK, but this runner
-        # image has only iPhoneSimulator<version>.sdk — so `xcrun --show-sdk-path`
-        # resolves happily while tauri fails with a bare NotFound. Recreate the alias.
-        UNVERSIONED_SDK="$(dirname "$SIMULATOR_SDK")/iPhoneSimulator.sdk"
-        if [ ! -f "$UNVERSIONED_SDK/SDKSettings.plist" ]; then
-          echo "Aliasing $(basename "$SIMULATOR_SDK") -> iPhoneSimulator.sdk for tauri"
-          sudo ln -sfn "$SIMULATOR_SDK" "$UNVERSIONED_SDK"
-        fi
-        if [ ! -f "$UNVERSIONED_SDK/SDKSettings.plist" ]; then
-          echo "tauri reads $UNVERSIONED_SDK/SDKSettings.plist and it is still absent." >&2
-          ls -1 "$(dirname "$SIMULATOR_SDK")" >&2 || true
-          exit 1
-        fi
+        # Carry the real developer dir in under a name nix has no opinion about, and
+        # restore DEVELOPER_DIR once inside the shell.
+        MACRO_DEVELOPER_DIR="$(xcode-select -p)"
+        export MACRO_DEVELOPER_DIR
 
         # cargo-tauri, bun, just, wasm-pack and the pinned toolchain (which carries
         # aarch64-apple-ios-sim, see rust-toolchain.toml) all come from the dev shell.
         nix develop --command bash -euo pipefail -c '
+          echo "xcode-select -p inside nix, before: $(xcode-select -p 2>&1)"
+          export DEVELOPER_DIR="$MACRO_DEVELOPER_DIR"
+          echo "xcode-select -p inside nix, after:  $(xcode-select -p 2>&1)"
+
           bun install --frozen-lockfile
           cd apps/web
           just ios-build-sim
