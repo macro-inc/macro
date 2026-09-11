@@ -8,13 +8,11 @@ import {
   type RespondToElicitation,
   UserToolComposer,
 } from '@app/features/block-agent/component/parts/LiveElicitation';
-import { WorkingLine } from '@app/features/block-agent/ui/WorkingLine';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { PulsingStar } from '@entity/components/PulsingStar';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { Button, Layer } from '@ui';
@@ -240,45 +238,22 @@ const ChipHeader: Component<{
 );
 
 /**
- * Holds the answer's space while the agent is busy writing nothing yet.
- * The session's working row (dot + rotating verbs) fills generic waits —
- * booting, the gap before the first thought, the gap after a tool. A
- * thought keeps the chat's pulsing star, since the header already says
- * Thinking. Once the agent is done (or waiting on the user) with nothing
- * said, the space stays empty rather than showing a still glyph.
+ * Holds the answer's space while the agent is busy writing nothing yet: the
+ * session's pulsing working dot, without the "Working..." label — that line
+ * is the session's. Once the agent is done (or waiting on the user) with
+ * nothing said, the space stays empty rather than showing a still glyph.
  */
-const AnswerPending: Component<{
-  busy: boolean;
-  /** The chip is in its working kind — nothing to read yet. */
-  working: boolean;
-  label: string;
-}> = (props) => {
-  // Generic waits use the working row; Thinking keeps the star so verbs do
-  // not stack on a header that already says Thinking.
-  const verbs = () => props.working && props.label !== 'Thinking';
-  return (
-    <Show when={props.busy}>
-      <div
-        class="flex h-full"
-        classList={{
-          'items-center justify-center': !verbs(),
-          // Sit where the passage would start, not floating in the middle
-          // of the card with a transcript caret-width indent.
-          'items-start': verbs(),
-        }}
-        data-magic-chip-pending
-        aria-hidden="true"
-      >
-        <Show
-          when={verbs()}
-          fallback={<PulsingStar kind="streamIndicator" animate />}
-        >
-          <WorkingLine lead="dot" />
-        </Show>
-      </div>
-    </Show>
-  );
-};
+const AnswerPending: Component<{ busy: boolean }> = (props) => (
+  <Show when={props.busy}>
+    <div
+      class="flex h-full items-center justify-center text-ink-extra-muted"
+      data-magic-chip-pending
+      aria-hidden="true"
+    >
+      <span class="agent-working-dot size-[5px] rounded-full bg-current" />
+    </div>
+  </Show>
+);
 
 /** The agent's passage, inert so the area's click is the disclosure. */
 const Passage: Component<{ markdown: string }> = (props) => (
@@ -335,7 +310,7 @@ const Question: Component<ChipAsking> = (props) => (
 /**
  * One card for the whole turn, at one height: a header naming the persona,
  * its model, and what the turn is doing (clicking it opens the session),
- * over an area that holds the agent's latest passage - a pulsing star while
+ * over an area that holds the agent's latest passage - a pulsing dot while
  * the agent is busy before it writes, the passage as it streams, the final
  * passage once the turn ends - or, while the agent waits on a question, the
  * question itself with its decisions on the row beneath. The area is cropped
@@ -457,13 +432,7 @@ export const MagicChipView: Component<{
               fallback={
                 <Show
                   when={markdown()}
-                  fallback={
-                    <AnswerPending
-                      busy={status().busy}
-                      working={props.presentation.kind === 'working'}
-                      label={status().label}
-                    />
-                  }
+                  fallback={<AnswerPending busy={status().busy} />}
                 >
                   {(answer) => <Passage markdown={answer()} />}
                 </Show>

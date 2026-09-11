@@ -1,5 +1,5 @@
 /**
- * When an open turn should show the working row (dot + rotating verbs).
+ * When an open turn should show the working row (dot + "Working...").
  *
  * The fold does not mint an agent message until the first part lands, so the
  * wait after a send — and the wait after a tool finishes, before the next

@@ -106,8 +106,9 @@ export function Message(props: { message: FoldedMessage }) {
               />
             )}
           </For>
-          {/* Open turn, nothing else showing it is alive — a dot and a
-              rotating verb, so the wait reads as work rather than a stall. */}
+          {/* Open turn, nothing else showing it is alive — a pulsing
+              dot and "Working...", so the wait reads as work rather than
+              a stall. */}
           <Show when={inFlight() && showsWorkingLine(props.message)}>
             <WorkingLine />
           </Show>

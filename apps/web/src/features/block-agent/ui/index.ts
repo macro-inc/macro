@@ -56,5 +56,5 @@ export {
   type TodoItem,
   type ToolStatus,
 } from './types';
-export { WorkingLine, type WorkingLineProps } from './WorkingLine';
-export { createVerbDraw, WORKING_LABEL } from './working-verbs';
+export { WorkingLine } from './WorkingLine';
+export { WORKING_LABEL } from './working-verbs';

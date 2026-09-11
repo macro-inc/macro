@@ -132,40 +132,6 @@ describe('MagicChipView', () => {
     expect(onOpen).toHaveBeenCalledTimes(3);
   });
 
-  it('fills a generic wait with the working row, so the card is never still', () => {
-    const { container } = render(() => (
-      <MagicChipView
-        agentSessionId="session"
-        presentation={{
-          kind: 'working',
-          activity: { label: 'Waiting for agent', busy: true },
-        }}
-      />
-    ));
-    const line = container.querySelector('[data-agent-working-line]');
-    expect(line).toBeTruthy();
-    expect(line?.getAttribute('data-agent-working-lead')).toBe('dot');
-    expect(line?.querySelector('.size-4')).toBeNull();
-    expect(container.textContent).toContain('Working');
-    expect(
-      container.querySelector('[data-magic-chip-pending]')?.className
-    ).toContain('items-start');
-  });
-
-  it('keeps the star while thinking, so the verbs do not stack on Thinking', () => {
-    const { container } = render(() => (
-      <MagicChipView
-        agentSessionId="session"
-        presentation={{
-          kind: 'working',
-          activity: { label: 'Thinking', busy: true },
-        }}
-      />
-    ));
-    expect(container.querySelector('[data-agent-working-line]')).toBeNull();
-    expect(container.querySelector('[data-magic-chip-pending]')).toBeTruthy();
-  });
-
   it('names the persona and its model in the header', () => {
     const { container } = render(() => (
       <MagicChipView
