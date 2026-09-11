@@ -89,6 +89,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const markdownState = createMarkdownDocumentState(documentId);
   const { setRevisions, setRewriting } = markdownState.rewrite;
   createMethodRegistration(blockHandleSignal.get, {
+    goToLocationFromParams: markdownState.params.navigate,
     setPatches: ({
       patches,
     }: Parameters<MarkdownBlockSpec['setPatches']>[0]) => {
@@ -99,12 +100,6 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
       setRewriting(true);
     },
   });
-  createMethodRegistration(
-    () => (isInstructions() ? blockHandleSignal.get() : undefined),
-    {
-      goToLocationFromParams: (_params: Record<string, unknown>) => {},
-    }
-  );
   const notificationSource = useGlobalNotificationSource();
 
   const rawData = blockLoaderDataSignal.get;

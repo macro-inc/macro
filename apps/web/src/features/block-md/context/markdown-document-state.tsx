@@ -3,6 +3,7 @@ import type {
   Completion,
   GenerateMenuOpen,
 } from '@core/component/LexicalMarkdown/plugins';
+import { createParamsState } from '@core/component/ParamsProvider';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import { createResource, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -20,6 +21,7 @@ import type { MdData } from '../signal/markdownBlockData';
 import type { Diff } from '../signal/rewriteSignal';
 
 export function createMarkdownDocumentState(documentId: string) {
+  const params = createParamsState();
   const [md, setMd] = createStore<MdData>({});
   const [error, setError] = createSignal<MarkdownEditorErrors | null>(null);
   const [findAndReplace, setFindAndReplace] = createStore<FindAndReplaceState>(
@@ -57,6 +59,7 @@ export function createMarkdownDocumentState(documentId: string) {
   >(() => (md.editor ? documentId : undefined), fetchMarkdownComments);
 
   return {
+    params,
     editor: {
       md,
       setMd,

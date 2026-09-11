@@ -1,5 +1,3 @@
-import { createMethodRegistration } from '@core/orchestrator';
-import { blockHandleSignal } from '@core/signal/load';
 import { useSearchParams } from '@solidjs/router';
 import {
   type Accessor,
@@ -40,16 +38,17 @@ function flattenParamValue(
   return Array.isArray(val) ? val[0] : val;
 }
 
-export function ParamsProvider(props: ParentProps) {
-  const [searchParams] = useSearchParams();
+export function createParamsState() {
   const [blockParams, setBlockParams] = createStore<ParamMap>({});
   const [navigationVersions, setNavigationVersions] =
     createStore<ParamVersions>({});
 
-  const blockHandle = blockHandleSignal.get;
-
-  createMethodRegistration(blockHandle, {
-    goToLocationFromParams: (params: Record<string, string>) => {
+  return {
+    getParam: (param: string) => () => {
+      navigationVersions[param];
+      return blockParams[param];
+    },
+    navigate: (params: Record<string, string>) => {
       batch(() => {
         const paramNames = new Set([
           ...Object.keys(blockParams),
@@ -65,16 +64,22 @@ export function ParamsProvider(props: ParentProps) {
         }
       });
     },
-  });
+  };
+}
 
+export type ParamsState = ReturnType<typeof createParamsState>;
+
+export function ParamsProvider(
+  props: ParentProps<{
+    state?: ParamsState;
+  }>
+) {
+  const [searchParams] = useSearchParams();
+  const state = props.state ?? createParamsState();
   const context: ParamsContextValue = {
-    getParam: (param) => () => {
-      navigationVersions[param];
-
-      const blockValue = blockParams[param];
-      if (blockValue !== undefined) return blockValue;
-
-      return flattenParamValue(searchParams[param]);
+    getParam: (param) => {
+      const blockValue = state.getParam(param);
+      return () => blockValue() ?? flattenParamValue(searchParams[param]);
     },
   };
 

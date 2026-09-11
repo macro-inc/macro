@@ -389,7 +389,7 @@ export function Notebook(props: {
           <InlineTaskGithubPullRequests />
           <TaskDuplicateMatchPill />
         </div>
-        <ParamsProvider>
+        <ParamsProvider state={markdownDocument.state.params}>
           {/* Relative wrapper so the history overlay covers only the body region,
               leaving the title + properties above it untouched and aligned. */}
           <div class="relative">
