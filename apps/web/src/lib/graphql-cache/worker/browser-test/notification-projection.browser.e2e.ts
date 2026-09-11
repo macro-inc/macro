@@ -13,6 +13,11 @@ for (const entity of ['project', 'channel']) {
     await expect(page.locator('#result')).toContainText(
       'Secondary edges preserve local filtering: 1'
     );
+    if (entity === 'channel') {
+      await expect(page.locator('#result')).toContainText(
+        'Equivalent participant filters: local'
+      );
+    }
     for (const kind of ['DOCUMENT', 'PROJECT', 'CHAT', 'CHANNEL']) {
       for (const operation of ['inbox update', 'optimism', 'deletion']) {
         await expect(page.locator('#result')).toContainText(

@@ -136,6 +136,35 @@ const markDone = (id: string) =>
 try {
   await seed();
   await expectCount('Secondary edges preserve local filtering', 'UNSEEN', 1);
+  if (channel) {
+    for (const participation of [
+      { not: { literal: { isParticipant: false } } },
+      {
+        or: {
+          left: { literal: { isParticipant: true } },
+          right: { literal: { importance: false } },
+        },
+      },
+    ]) {
+      const input = filters('UNSEEN');
+      const result = await host.entityFilter({
+        filters: {
+          ...input,
+          channelFilter: {
+            and: { left: input.channelFilter, right: participation },
+          },
+        },
+        sortMethod: 'UPDATED_AT',
+        sortDirection: 'DESC',
+        limit: 20,
+      });
+      if (result.kind !== 'complete' || result.keys.length !== 1)
+        throw new Error(
+          `equivalent participation filter: ${JSON.stringify(result)}`
+        );
+    }
+    report.push('Equivalent participant filters: local');
+  }
   for (const row of unhydratedNotifications) {
     await host.writeQuery({
       query: updateQuery,
