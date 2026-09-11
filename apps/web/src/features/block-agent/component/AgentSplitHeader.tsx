@@ -10,14 +10,21 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
-import { openExternalUrl } from '@core/util/url';
+import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
+import ShareIcon from '@phosphor/share.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
-import { For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import {
+  AgentSessionShareDialog,
+  AgentSessionShareTrigger,
+} from './AgentSessionShare';
 import { harnessTitle } from './compose-agent-session-options';
 
 export { harnessTitle };
@@ -64,6 +71,38 @@ export function AgentSplitHeader(props: {
     };
   };
   useBlockEntityCommands(entity);
+  const userId = useUserId();
+  const isOwner = () =>
+    Boolean(userId()) && props.session?.ownerId === userId();
+  const [shareOpen, setShareOpen] = createSignal(false);
+
+  const copyLink = async () => {
+    const session = entity();
+    if (!session) return;
+    try {
+      await navigator.clipboard.writeText(
+        buildSimpleEntityUrl({ id: session.id, type: 'agent' })
+      );
+      toast.success('Link copied to clipboard');
+    } catch {
+      toast.failure('Could not copy link');
+    }
+  };
+
+  const shareTools: BlockTool[] = [
+    {
+      label: 'Share',
+      icon: ShareIcon,
+      action: () => setShareOpen(true),
+      condition: () => Boolean(entity()),
+      buttonComponent: () => (
+        <AgentSessionShareTrigger
+          onShare={() => setShareOpen(true)}
+          onCopyLink={() => void copyLink()}
+        />
+      ),
+    },
+  ];
 
   const tools: BlockTool[] = [
     {
@@ -118,8 +157,21 @@ export function AgentSplitHeader(props: {
         </SplitHeaderRight>
       </Show>
 
+      <Show when={entity()}>
+        {(session) => (
+          <AgentSessionShareDialog
+            sessionId={session().id}
+            name={title()}
+            isOwner={isOwner()}
+            open={shareOpen()}
+            onOpenChange={setShareOpen}
+            onCopyLink={() => void copyLink()}
+          />
+        )}
+      </Show>
+
       <ResponsiveBlockToolbar
-        tools={[]}
+        tools={shareTools}
         menuTools={tools}
         ops={entity() ? ops : []}
         id={sessionId() ?? ''}

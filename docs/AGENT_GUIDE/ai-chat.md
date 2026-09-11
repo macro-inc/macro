@@ -146,6 +146,19 @@ to open the title menu (caret), then **Rename** — that opens the same style of
 rename dialog automations use. Do not expect a tap on the name itself to start
 an inline edit.
 
+### Sharing a session
+
+Saved sessions have **Share** and **Copy Share Link** in the desktop header;
+on mobile, open the session title menu and choose **Share**. The owner can
+select people or channels and send the session with an optional message using
+the same sharing composer as documents. People receive it through a direct or
+group message. Recipients can view and control the session; there is no access
+level selector. Cancel closes the composer without sending.
+
+Other participants can copy a link for people who already have access, but
+cannot grant access. Copying a link alone never changes permissions. New,
+unsaved session drafts do not offer sharing.
+
 ### Transcript navigation
 
 Agent sessions reuse the channel's TanStack `ThreadList`. Opening a session lands
