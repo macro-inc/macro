@@ -1,11 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
-import {
-  activeCommentThreadSignal,
-  highlightedCommentThreadsSignal,
-} from '@block-md/comments/commentStore';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { useBlockId } from '@core/block';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
 import { PopupPositioner } from '@core/component/GeneralizedPopup/PopupPositioner';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
@@ -54,7 +49,6 @@ import {
   readNativePasteboardText,
   setNativeEditMenuSuppressed,
 } from '@core/mobile/nativeEditMenu';
-import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { debouncedDependent } from '@core/util/debounce';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
@@ -93,6 +87,7 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { FormatTools } from './FormatTools';
 import { TouchSelectionToolbar } from './TouchSelectionToolbar';
 
@@ -102,7 +97,10 @@ export function MarkdownPopup(props: {
   highlightLayerRef: HTMLDivElement;
   lexicalMapping: NodeIdMappings;
 }) {
-  const blockId = useBlockId();
+  const { documentId, permissions, state } = useMarkdownDocument();
+  const { canEdit, canComment } = permissions;
+  const { comments: commentState, setCommentState } = state;
+  const blockId = documentId();
 
   const { editor, plugins } = useContext(LexicalWrapperContext) ?? {};
   if (!editor || !plugins) {
@@ -188,13 +186,8 @@ export function MarkdownPopup(props: {
     setNativeEditMenuSuppressed(false);
   });
 
-  const canEdit = useCanEdit();
   const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
-  const canComment = useCanComment();
   const currentUserId = useUserId();
-
-  const highlightedCommentThreads = highlightedCommentThreadsSignal.get;
-  const setActiveCommentThread = activeCommentThreadSignal.set;
 
   const [locationCopied, setLocationCopied] = createSignal(false);
   const [isConverting, setIsConverting] = createSignal(false);
@@ -474,8 +467,10 @@ export function MarkdownPopup(props: {
     // clear the selection first.
     editor.update(() => $setSelection(null));
     editor.blur();
-    const [threadId] = highlightedCommentThreads();
-    if (threadId != null) setActiveCommentThread(threadId);
+    const [threadId] = commentState.highlightedCommentThreads;
+    if (threadId != null) {
+      setCommentState('activeCommentThread', threadId);
+    }
     setPopupVisible(false);
   };
 
@@ -729,7 +724,9 @@ export function MarkdownPopup(props: {
             showTasksOption={shouldShowCheckboxToTaskButton()}
             showTableOption={shouldShowTableButton()}
             showEditWithAiOption={shouldShowEditWithAiButton()}
-            showOpenCommentOption={highlightedCommentThreads().length > 0}
+            showOpenCommentOption={
+              commentState.highlightedCommentThreads.length > 0
+            }
             locationCopied={locationCopied()}
             setPopupVisible={setPopupVisible}
             onConvertToTasks={handleConvertToTasks}

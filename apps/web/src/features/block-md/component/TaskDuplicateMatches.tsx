@@ -1,6 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SidePanel } from '@components/app/side-panel';
-import { useBlockId } from '@core/block';
 import { DocumentMention } from '@core/component/LexicalMarkdown/component/decorator/DocumentMention';
 import { toast } from '@core/component/Toast/Toast';
 import { enableTaskDuplicates } from '@core/constant/featureFlags';
@@ -13,6 +12,7 @@ import {
 import type { TaskDuplicate } from '@service-storage/client';
 import { Button, cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export function TaskDuplicateMatchPill() {
   const flag = useFeatureFlag(enableTaskDuplicates);
@@ -77,7 +77,8 @@ export function TaskDuplicateMatchesSidePanelSection() {
 type TaskDuplicateMatchesState = ReturnType<typeof useTaskDuplicateMatches>;
 
 function useTaskDuplicateMatches() {
-  const blockId = useBlockId();
+  const { documentId } = useMarkdownDocument();
+  const blockId = documentId();
   const matchesQuery = useTaskDuplicatesQuery(() => blockId);
   const dismissMutation = useDismissTaskDuplicatesMutation(() => blockId);
 

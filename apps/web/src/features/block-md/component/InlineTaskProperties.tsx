@@ -1,12 +1,4 @@
-import {
-  type BlockAlias,
-  type BlockName,
-  useBlockAliasedName,
-  useBlockId,
-} from '@core/block';
 import { ProgressChip } from '@core/component/LexicalMarkdown/component/status/Progress';
-import { useCanEdit } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { Modals } from '@property/component/modal';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
@@ -17,25 +9,22 @@ import { useEntityProperties } from '@property/hooks';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
 import type { Property, PropertyApiValues } from '@property/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createMemo, For, Show, Suspense } from 'solid-js';
-import { match } from 'ts-pattern';
-import { mdStore } from '../signal/markdownBlockData';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { InlinePropertyValue } from './InlinePropertyValue';
+import { useMarkdownName } from './MarkdownNameProvider';
 
 /**
  * Inline task properties shown below the title when the side panel is closed.
  * Displays status, priority, and assignees in a single row, editable like in list view.
  */
 export function InlineTaskProperties() {
-  const md = mdStore.get;
-  const blockId = useBlockId();
-  const blockName = useBlockAliasedName();
-  const canEdit = useCanEdit();
-  const documentName = useBlockDocumentName();
-  const entityType = match<BlockName | BlockAlias, EntityType>(blockName)
-    .with('task', () => 'TASK')
-    .otherwise(() => 'DOCUMENT');
+  const { documentId, kind, permissions, state } = useMarkdownDocument();
+  const canEdit = permissions.canEdit;
+  const blockId = documentId();
+  const documentKind = kind();
+  const { displayName: documentName } = useMarkdownName();
+  const entityType = documentKind === 'task' ? 'TASK' : 'DOCUMENT';
 
   const { properties, refetch } = useEntityProperties(
     blockId,
@@ -56,8 +45,8 @@ export function InlineTaskProperties() {
   });
   const shouldShowRow = createMemo(
     () =>
-      blockName === 'task' ||
-      blockName === 'md' ||
+      documentKind === 'task' ||
+      documentKind === 'document' ||
       inlineProperties().length > 0
   );
 
@@ -91,6 +80,7 @@ export function InlineTaskProperties() {
             {(property) => (
               <InlinePropertyValue
                 property={property}
+                entityId={blockId}
                 class="bg-surface-2 border border-edge"
               />
             )}
@@ -100,7 +90,7 @@ export function InlineTaskProperties() {
             entityType={entityType}
             class="bg-surface-2"
           />
-          <Show when={blockName === 'task' && md.progressStats}>
+          <Show when={documentKind === 'task' && state.editor.md.progressStats}>
             {(progressStats) => (
               <Show when={progressStats().total > 0}>
                 <ProgressChip stats={progressStats()} />

@@ -1,3 +1,4 @@
+import { useBlockId } from '@core/block';
 import { ENABLE_LIVE_INDICATORS } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { AvatarGroup } from '@ui';
@@ -40,7 +41,8 @@ export function LiveIndicators(props: {
 }
 
 export function BlockLiveIndicators() {
-  const indicators = useUserIndicators();
+  const blockId = useBlockId();
+  const indicators = useUserIndicators(() => blockId);
   const userId = useUserId();
 
   return (

@@ -1,4 +1,3 @@
-import { mdStore } from '@block-md/signal/markdownBlockData';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { toast } from '@core/component/Toast/Toast';
@@ -8,6 +7,7 @@ import { AnimatedStarIcon } from '@icon/wide-star';
 import { cancelAiEdit, requestAiEdit } from '@service-ai-editing/client';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 false && clickOutside;
 
@@ -16,7 +16,7 @@ false && clickOutside;
  * into a prompt card matching the Discussion composer.
  */
 export function DocumentAiEditBar(props: { documentId: string }) {
-  const md = mdStore.get;
+  const { state } = useMarkdownDocument();
 
   const [expanded, setExpanded] = createSignal(false);
   const [editing, setEditing] = createSignal(false);
@@ -29,7 +29,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
   const collapse = () => {
     setExpanded(false);
     setPrompt('');
-    md.editor?.focus();
+    state.editor.md.editor?.focus();
   };
 
   const submit = () => {

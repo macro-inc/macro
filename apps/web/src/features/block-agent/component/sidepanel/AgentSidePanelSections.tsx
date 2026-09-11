@@ -10,14 +10,11 @@
  * folded transcript (`state/session-summary.ts`).
  */
 
-import { SidePanel, useSidePanel } from '@components/app/side-panel';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
+import { SidePanel } from '@components/app/side-panel';
 import { formatDate } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
 import GitBranch from '@phosphor/git-branch.svg';
-import { createMemo, For, onCleanup, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';
 import {
   activityCounts,
@@ -42,26 +39,6 @@ export function AgentSidePanelSections() {
     additions: files().reduce((sum, file) => sum + file.additions, 0),
     deletions: files().reduce((sum, file) => sum + file.deletions, 0),
   }));
-
-  // `]` toggles the panel, registered at the split scope so it works from
-  // anywhere in the split (the md block's TopBar registration, verbatim).
-  const sidePanel = useSidePanel();
-  const splitPanel = useSplitPanel();
-  if (splitPanel?.splitHotkeyScope) {
-    const reg = registerHotkey({
-      hotkey: ']',
-      scopeId: splitPanel.splitHotkeyScope,
-      hotkeyToken: TOKENS.block.toggleSidePanel,
-      description: 'Toggle Side Panel',
-      keyDownHandler: () => {
-        if (!sidePanel) return false;
-        if (!sidePanel.hasSections()) return false;
-        sidePanel.toggle();
-        return true;
-      },
-    });
-    onCleanup(() => reg.dispose());
-  }
 
   return (
     <>

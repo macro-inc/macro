@@ -10,13 +10,19 @@
  * pointer captured so the drag survives leaving the editor; Escape /
  * pointercancel restores the pre-drag width or height.
  */
-import { mdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $isTableCellNode, getDOMCellFromTarget } from '@lexical/table';
 import { calculateZoomLevel } from '@lexical/utils';
 import { $getNearestNodeFromDOMNode } from 'lexical';
-import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  onCleanup,
+  Show,
+  useContext,
+} from 'solid-js';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { registerEditorWidthObserver } from '../../plugins/shared/utils';
 import {
   $applyResizeDrag,
@@ -53,8 +59,8 @@ const [dragEdge, setDragEdge] = createSignal<ResizeEdge>();
 export const tableColumnResizeEdge = dragEdge;
 
 export function TableCellResizer() {
-  const mdData = mdStore.get;
-  const editor = () => mdData.editor;
+  const lexicalWrapper = useContext(LexicalWrapperContext);
+  const editor = () => lexicalWrapper?.editor;
 
   // Cell whose border carries the handle: the hovered cell on pointer
   // devices, the touched cell during a touch drag. `activeCellKey` is set

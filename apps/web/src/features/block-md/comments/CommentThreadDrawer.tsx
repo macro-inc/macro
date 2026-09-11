@@ -1,11 +1,4 @@
 import {
-  activeCommentThreadSignal,
-  highlightedCommentThreadsSignal,
-  markStore,
-  threadStore,
-} from '@block-md/comments/commentStore';
-import { mdStore } from '@block-md/signal/markdownBlockData';
-import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@components/app/mobile/MobileDrawer';
@@ -26,6 +19,7 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import { Button } from '@ui';
 import { $setSelection } from 'lexical';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 /**
  * `baseCommentTheme` minus its `select-text` on message text. The drawer is
@@ -104,13 +98,9 @@ function PinnedReplyComposer(props: {
  * Must be mounted inside the `CommentsContext` provider (see CommentMargin).
  */
 export function CommentThreadDrawer() {
-  const threads = threadStore.get;
-  const [marks] = markStore;
-  const md = mdStore.get;
-
-  const activeCommentThread = activeCommentThreadSignal.get;
-  const setActiveCommentThread = activeCommentThreadSignal.set;
-  const setHighlightedCommentThreads = highlightedCommentThreadsSignal.set;
+  const { state } = useMarkdownDocument();
+  const { comments: commentState, setCommentState } = state;
+  const md = state.editor.md;
 
   const parentCommentsContext = useContext(CommentsContext);
   // Messages report their inline-edit state; while any edit input is open,
@@ -132,18 +122,18 @@ export function CommentThreadDrawer() {
   };
 
   const activeRoot = createMemo<Root | undefined>(() => {
-    const active = activeCommentThread();
-    return active == null ? undefined : threads[active];
+    const active = commentState.activeCommentThread;
+    return active == null ? undefined : commentState.threads[active];
   });
 
   const firstMarkElement = (root: Root) =>
-    Object.values(marks[root.anchorId]?.markNodes ?? {})[0];
+    Object.values(commentState.marks[root.anchorId]?.markNodes ?? {})[0];
 
   // Server threads in document order, from their marks' positions (viewport
   // rects preserve relative document order; this works with the margin
   // hidden, since marks live in the editor itself).
   const orderedThreadIds = createMemo(() => {
-    return Object.values(threads)
+    return Object.values(commentState.threads)
       .filter((root): root is Root => !!root && root.threadId !== -1)
       .map((root) => {
         const rect = firstMarkElement(root)?.getBoundingClientRect();
@@ -158,7 +148,7 @@ export function CommentThreadDrawer() {
   });
 
   const pagerIndex = createMemo(() => {
-    const active = activeCommentThread();
+    const active = commentState.activeCommentThread;
     return active == null ? -1 : orderedThreadIds().indexOf(active);
   });
 
@@ -174,9 +164,9 @@ export function CommentThreadDrawer() {
     // editor update (see CommentsProvider) — and the old selection has
     // served its purpose anyway.
     md.editor?.update(() => $setSelection(null));
-    setActiveCommentThread(target);
-    setHighlightedCommentThreads([target]);
-    const root = threads[target];
+    setCommentState('activeCommentThread', target);
+    setCommentState('highlightedCommentThreads', [target]);
+    const root = commentState.threads[target];
     if (root) {
       firstMarkElement(root)?.scrollIntoView({
         behavior: 'smooth',
@@ -191,8 +181,8 @@ export function CommentThreadDrawer() {
     // selection still sits inside the comment mark. Clear it so tapping the
     // highlight again registers as a selection change and reopens the drawer.
     md.editor?.update(() => $setSelection(null));
-    setActiveCommentThread(null);
-    setHighlightedCommentThreads([]);
+    setCommentState('activeCommentThread', null);
+    setCommentState('highlightedCommentThreads', []);
   };
 
   return (

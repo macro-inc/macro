@@ -1,6 +1,4 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { mdStore } from '@block-md/signal/markdownBlockData';
-import { useBlockId } from '@core/block';
 import type { DeleteCommentInfo } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import {
@@ -10,7 +8,6 @@ import {
   SET_COMMENT_THREAD_ID_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { isMobile } from '@core/mobile/isMobile';
-import { blockElementSignal } from '@core/signal/blockElement';
 import type {
   CreateCommentRequest,
   EditCommentRequest,
@@ -19,12 +16,7 @@ import type { CreateCommentResponse } from '@service-storage/generated/schemas/c
 import { until } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { onCleanup } from 'solid-js';
-import {
-  activeCommentThreadSignal,
-  commentsStore,
-  markStore,
-  threadStore,
-} from './commentStore';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import {
   useCreateHighlightCommentResource,
   useCreateThreadReplyResource,
@@ -38,10 +30,9 @@ export function useCreateComment() {
   const deleteNewComments = useDeleteNewComments();
   const createHighlightComment = useCreateHighlightCommentResource();
   const createThreadReply = useCreateThreadReplyResource();
-  const threads = threadStore.get;
+  const { state } = useMarkdownDocument();
+  const { comments: commentState, setCommentState } = state;
   const updateNodeThreadId = useSetNodeCommentThreadId();
-  const setActiveThread = activeCommentThreadSignal.set;
-  const editor = mdStore.get.editor;
 
   return createCallback(
     async (info: CreateCommentRequest & { threadId: number }) => {
@@ -49,9 +40,9 @@ export function useCreateComment() {
       const { threadId, text, mentions } = info;
 
       if (threadId === -1) {
-        setActiveThread(threadId);
+        setCommentState('activeCommentThread', threadId);
 
-        const comment = threads[threadId];
+        const comment = commentState.threads[threadId];
         if (!comment) {
           console.error('Unable to comment');
           return null;
@@ -66,7 +57,7 @@ export function useCreateComment() {
         );
 
         if (response) {
-          editor?.dispatchCommand(CREATE_COMMENT_COMMAND, {
+          state.editor.md.editor?.dispatchCommand(CREATE_COMMENT_COMMAND, {
             threadId: response.thread.threadId,
           });
           updateNodeThreadId({
@@ -104,8 +95,8 @@ export function useDeleteComment() {
 
   const deleteComment = useDeleteCommentResource();
   const deleteNewComments = useDeleteNewComments();
-  const editor = mdStore.get.editor;
-  const comments = commentsStore.get;
+  const { state } = useMarkdownDocument();
+  const editor = state.editor.md.editor;
 
   return createCallback(async (info: DeleteCommentInfo) => {
     analytics.track('comment_delete', { blockType: 'md' });
@@ -117,7 +108,7 @@ export function useDeleteComment() {
       return true;
     }
 
-    const comment = comments[commentId];
+    const comment = state.comments.comments[commentId];
     // this can happen when deleting the thread ->
     // comment mark deleted -> comment server delete re-attempted
     if (!comment) return true;
@@ -135,14 +126,15 @@ export function useDeleteComment() {
 }
 
 export function useDeleteNewComments() {
-  const [marks, setMarks] = markStore;
-  const editor = mdStore.get.editor;
+  const { state } = useMarkdownDocument();
+  const { comments: commentState, setCommentState } = state;
+  const editor = state.editor.md.editor;
 
   return createCallback((discardPending = true) => {
     // console.trace('delete new comments');
-    for (const [markId, mark] of Object.entries(marks)) {
+    for (const [markId, mark] of Object.entries(commentState.marks)) {
       if (!mark || !mark.existsOnServer) {
-        setMarks(markId, undefined);
+        setCommentState('marks', markId, undefined);
         editor?.dispatchCommand(DELETE_COMMENT_COMMAND, [markId, false]);
       }
       if (discardPending) {
@@ -153,11 +145,11 @@ export function useDeleteNewComments() {
 }
 
 export const useSetNodeCommentThreadId = () => {
-  const editor = mdStore.get.editor;
+  const { state } = useMarkdownDocument();
 
   return createCallback(
     ({ markId, threadId }: { markId: string; threadId: number }) => {
-      editor?.dispatchCommand(SET_COMMENT_THREAD_ID_COMMAND, {
+      state.editor.md.editor?.dispatchCommand(SET_COMMENT_THREAD_ID_COMMAND, {
         markId,
         threadId,
       });
@@ -166,12 +158,15 @@ export const useSetNodeCommentThreadId = () => {
 };
 
 export function useScrollToCommentThread() {
-  const blockElement = blockElementSignal.get;
-  const documentId = useBlockId();
+  const {
+    documentId: getDocumentId,
+    element: blockElement,
+    state,
+  } = useMarkdownDocument();
+  const commentState = state.comments;
+  const documentId = getDocumentId();
   // Captured at setup: block stores resolve their block context at access
   // time, which the returned callback no longer has.
-  const threads = threadStore.get;
-  const [marks] = markStore;
   // At most one mobile wait-for-mark may be outstanding — a newer deep
   // link supersedes an older still-pending one, so a slow-syncing thread
   // can't later yank the scroll and the active thread away from the one
@@ -200,9 +195,9 @@ export function useScrollToCommentThread() {
     if (isMobile()) {
       disposePendingWait?.();
       const wait = until(() => {
-        const anchorId = threads[threadId]?.anchorId;
+        const anchorId = commentState.threads[threadId]?.anchorId;
         return anchorId != null
-          ? Object.values(marks[anchorId]?.markNodes ?? {})[0]
+          ? Object.values(commentState.marks[anchorId]?.markNodes ?? {})[0]
           : undefined;
       });
       disposePendingWait = wait.dispose;
