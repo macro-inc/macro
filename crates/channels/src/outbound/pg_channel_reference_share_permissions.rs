@@ -2,7 +2,8 @@
 
 use crate::domain::{
     models::{ReferencedShareItem, ReferencedShareItemType},
-    reference_sharing::{ReferenceShareRepository, ReferenceShareService},
+    ports::ChannelReferenceSharePermissions,
+    reference_sharing::grant_level,
 };
 use anyhow::Context;
 use entity_access::domain::{models::EntityType, ports::EntityAccessService};
@@ -18,50 +19,49 @@ use uuid::Uuid;
 
 /// Postgres-backed share-permission adapter for channel message references.
 #[derive(Clone)]
-pub struct PgReferenceShareRepository<E> {
+pub struct PgChannelReferenceSharePermissions<E> {
     pool: PgPool,
     entity_access_service: Arc<E>,
 }
 
-/// Postgres-backed domain reference-sharing service.
-pub type PgChannelReferenceSharePermissions<E> =
-    ReferenceShareService<PgReferenceShareRepository<E>>;
-
-impl<E> ReferenceShareService<PgReferenceShareRepository<E>> {
+impl<E> PgChannelReferenceSharePermissions<E> {
     /// Create a Postgres-backed reference share-permission adapter.
     pub fn new(pool: PgPool, entity_access_service: Arc<E>) -> Self {
-        Self::from_repository(PgReferenceShareRepository {
+        Self {
             pool,
             entity_access_service,
-        })
+        }
     }
 }
 
-impl<E> ReferenceShareRepository for PgReferenceShareRepository<E>
+impl<E> ChannelReferenceSharePermissions for PgChannelReferenceSharePermissions<E>
 where
     E: EntityAccessService,
 {
-    async fn access(
+    type Err = anyhow::Error;
+
+    async fn update_channel_share_permissions_for_referenced_items(
         &self,
-        actor: &MacroUserIdStr<'_>,
-        item: &ReferencedShareItem,
-    ) -> anyhow::Result<Option<AccessLevel>> {
-        self.entity_access_service
-            .get_access_level(
-                Some(actor),
-                item.entity_id(),
-                entity_access_type_for(item.entity_type()),
-            )
-            .await
-            .context("failed to get user access level")
-    }
-    async fn grant(
-        &self,
+        actor: MacroUserIdStr<'static>,
         channel_id: Uuid,
-        item: &ReferencedShareItem,
-        level: AccessLevel,
-    ) -> anyhow::Result<()> {
-        ensure_referenced_item_visible_to_channel(&self.pool, channel_id, item, level).await
+        items: Vec<ReferencedShareItem>,
+    ) -> Result<(), Self::Err> {
+        for item in items {
+            let access = self
+                .entity_access_service
+                .get_access_level(
+                    Some(&actor),
+                    item.entity_id(),
+                    entity_access_type_for(item.entity_type()),
+                )
+                .await
+                .context("failed to get user access level")?;
+            if let Some(level) = grant_level(item.entity_type(), access) {
+                ensure_referenced_item_visible_to_channel(&self.pool, channel_id, &item, level)
+                    .await?;
+            }
+        }
+        Ok(())
     }
 }
 
