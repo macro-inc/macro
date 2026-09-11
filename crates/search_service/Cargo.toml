@@ -13,7 +13,7 @@ name = "search_service_openapi"
 path = "src/openapi.rs"
 
 [dependencies]
-agent_session = { path = "../agent_session" }
+agent_session = { path = "../agent_session", default-features = false }
 rootcause = { workspace = true }
 anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }

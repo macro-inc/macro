@@ -5234,6 +5234,7 @@ name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_session",
  "ai_tools",
  "ai_usage",
  "analytics_client",

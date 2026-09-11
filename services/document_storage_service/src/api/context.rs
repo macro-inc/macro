@@ -63,6 +63,10 @@ use user_api_key::{
     outbound::pg_user_api_keys_repo::PgUserApiKeysRepo,
 };
 
+use agent_session::{
+    domain::search::{AgentSessionSearchMetadataService, AgentSessionSearchMetadataServiceImpl},
+    outbound::postgres::PgAgentSessionRepo,
+};
 use collab_surface::{
     domain::service::CollabSurfaceServiceImpl, inbound::axum_router::CollabSurfaceRouterState,
     outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
@@ -610,6 +614,10 @@ impl From<&ApiContext> for SearchHandlerState {
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),
+            agent_session_search_metadata: Arc::new(AgentSessionSearchMetadataServiceImpl::new(
+                PgAgentSessionRepo::new(ctx.db.clone()),
+            ))
+                as Arc<dyn AgentSessionSearchMetadataService>,
             calendar_search_enabled: ctx.config.calendar_search_enabled,
         }
     }

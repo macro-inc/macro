@@ -1,10 +1,16 @@
 //! Bounded-to-allowlist metadata lookup for search.
 
-use crate::domain::search::AgentSessionSearchMetadata;
+use crate::{
+    domain::{
+        error::Result,
+        search::{AgentSessionSearchMetadata, AgentSessionSearchMetadataRepo},
+    },
+    outbound::postgres::PgAgentSessionRepo,
+};
 
 /// Fetch current metadata for already authorized session IDs.
 #[tracing::instrument(err, skip(pool, ids))]
-pub async fn search_metadata(
+async fn search_metadata(
     pool: &sqlx::PgPool,
     ids: &[uuid::Uuid],
 ) -> Result<Vec<AgentSessionSearchMetadata>, sqlx::Error> {
@@ -31,4 +37,12 @@ pub async fn search_metadata(
         })
     })
     .collect()
+}
+
+impl AgentSessionSearchMetadataRepo for PgAgentSessionRepo {
+    async fn search_metadata(&self, ids: &[uuid::Uuid]) -> Result<Vec<AgentSessionSearchMetadata>> {
+        Ok(search_metadata(&self.pool, ids)
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
 }
