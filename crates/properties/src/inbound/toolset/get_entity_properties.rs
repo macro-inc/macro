@@ -25,8 +25,9 @@ pub enum ToolEntityType {
     Task,
     Project,
     Chat,
-    /// Email threads. Listing and search tools report them as `email`, so
-    /// that spelling is accepted too.
+    // Listing and search tools report email threads as `email`. A doc comment
+    // here would turn the schema enum into a named type, so this stays a plain
+    // comment.
     #[serde(alias = "email", alias = "email_thread")]
     Thread,
     Channel,
@@ -52,14 +53,17 @@ impl From<ToolEntityType> for EntityType {
 }
 
 /// Canonical entity type accepted when an AI tool targets an entity's properties.
+/// Tasks are targeted as `document`; email threads (type `email` in ListEntities
+/// and search results) are targeted as `thread`.
 #[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ToolPropertyTargetEntityType {
     Document,
     Project,
     Chat,
-    /// Email threads. Listing and search tools report them as `email`, so
-    /// that spelling is accepted too.
+    // Listing and search tools report email threads as `email`. A doc comment
+    // here would turn the schema enum into a named type, so this stays a plain
+    // comment.
     #[serde(alias = "email", alias = "email_thread")]
     Thread,
     Channel,
@@ -92,9 +96,7 @@ pub struct GetEntityProperties {
     #[schemars(description = "The ID of the entity to get properties for.")]
     pub entity_id: String,
 
-    #[schemars(
-        description = "The type of entity. Tasks are targeted as 'document'; email threads (type 'email' in ListEntities and search results) are targeted as 'thread'."
-    )]
+    #[schemars(description = "The type of entity.")]
     pub entity_type: ToolPropertyTargetEntityType,
 }
 

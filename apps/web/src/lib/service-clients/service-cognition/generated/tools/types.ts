@@ -31,6 +31,8 @@ export type CodeExecutionErrorCode =
   | 'string_not_found';
 /**
  * Canonical entity type accepted when an AI tool targets an entity's properties.
+ * Tasks are targeted as `document`; email threads (type `email` in ListEntities
+ * and search results) are targeted as `thread`.
  */
 export type ToolPropertyTargetEntityType =
   | 'document'
