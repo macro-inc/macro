@@ -4153,6 +4153,10 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
+	The last model selected for a sent message (`provider/model` id).
+	"""
+	model: String
+	"""
 	The identifier of the owner.
 	"""
 	ownerId: String!

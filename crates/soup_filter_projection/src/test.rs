@@ -227,6 +227,7 @@ fn entities_without_document_server_facts_do_not_emit_supplements() {
         item: SoupItem::Chat(SoupChat {
             id: Uuid::from_u128(3),
             name: "Chat".to_owned(),
+            model: None,
             owner_id: owner(),
             project_id: None,
             is_persistent: true,

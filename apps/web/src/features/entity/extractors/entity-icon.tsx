@@ -14,6 +14,7 @@ import { match } from 'ts-pattern';
 import { ChatProviderIcon } from '../components/ChatProviderIcon';
 import type {
   ChannelEntity,
+  ChatEntity,
   EntityData,
   GithubPullRequestEntity,
 } from '../types/entity';
@@ -177,6 +178,7 @@ export function EntityIcon(props: EntityIconProps) {
       <Match when={isChatEntity()}>
         <ChatProviderIcon
           id={props.entity.id}
+          model={(props.entity as ChatEntity).model}
           animate={props.streamState?.type === 'created'}
           class={`size-full ${props.class ?? ''}`}
         />

@@ -59,6 +59,7 @@ fragment SoupItemFields on GraphqlSoupEntity {
 					}
 					... on GraphqlSoupChat {
 						chatName: name
+						model
 						ownerId
 						projectId
 						isPersistent

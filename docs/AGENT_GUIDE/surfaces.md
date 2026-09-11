@@ -107,8 +107,8 @@ tags, updated time. Clicking a row opens the doc.
 
 ## Calendar — `/app/calendar/view`
 
-Phone calendars default to Day. Mobile and desktop remember their selected views
-separately, so a desktop Week or Month preference does not override the mobile default.
+Calendars default to Day on phones and Week on desktop. The selected view is
+remembered locally on each device.
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
@@ -262,7 +262,10 @@ Next email arrows beside the larger Mark done checkmark. The arrows follow the
 source list's filtered order, skip non-email items, and disable at its ends.
 They do not wrap; a thread opened without a source list has disabled arrows.
 Mark done archives the current thread and opens the next email in that same
-filtered list, loading the next page when needed. At the end it opens the previous
+filtered list, loading pages until another email is found or the list ends.
+On native mobile, stepping replaces the current email while preserving the
+filtered list behind it for swipe-back. Leaving the email cancels pending
+navigation and archiving while a page loads. At the end it opens the previous
 email; with no neighboring email it stays on the archived thread. Mark as not done
 does not advance. Undo restores the archived email and returns to it.
 

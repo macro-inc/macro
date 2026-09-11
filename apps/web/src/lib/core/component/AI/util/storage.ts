@@ -71,14 +71,14 @@ export function storeChatStateImmediate(
 /** Reactive read for list icons; does not touch the draft's LRU timestamp. */
 export function getChatInputStoredModel(id: string): Model | undefined {
   const stored = persistentChatState[id];
-  return stored ? (parseModel(stored.model) ?? DEFAULT_MODEL) : undefined;
+  return parseModel(stored?.model);
 }
 
 export function getChatInputStoredState(id: string): Partial<StoredStuff> {
   const storedStuff = untrack(() => persistentChatState[id]);
   if (!storedStuff) return {};
 
-  const model = untrack(() => getChatInputStoredModel(id));
+  const model = untrack(() => getChatInputStoredModel(id)) ?? DEFAULT_MODEL;
   setPersistentChatState(id, { ...storedStuff, used_at: Date.now() });
   return {
     ...storedStuff,

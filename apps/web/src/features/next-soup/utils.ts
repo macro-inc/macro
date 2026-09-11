@@ -1,5 +1,6 @@
 import { isListViewID } from '@app/constants/list-views';
 import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
+import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCalendarBlockRange } from '@block-calendar/calendar-range';
@@ -718,6 +719,9 @@ export const openEntityInSplitFromUnifiedList = async (
   const referredFrom = options.referredFrom ?? sourceListView;
 
   let splitContent: SplitContent = { ...content, params };
+  if (splitHandle && referredFrom && isListViewID(referredFrom)) {
+    splitContent = withListNavigationSource(splitContent, splitHandle);
+  }
   // Preview source metadata belongs on Viewer entries; a replacement takes the
   // Preview Pair's place, so its entry is ordinary split history.
   if (splitHandle?.isControllerSplit() && !replacePreview) {

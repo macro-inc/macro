@@ -24,7 +24,7 @@ import {
   type MobileTouchIconComponent,
   MobileTouchMenu,
 } from './MobileTouchMenu';
-import { MOBILE_DOCK_VIEWS, type MobileDockView } from './mobile-dock-views';
+import { type MobileDockView, useMobileDockViews } from './mobile-dock-views';
 import { mobilePageCreateAction } from './mobile-page-create-action';
 import { pressPulse } from './pressPulse';
 import {
@@ -164,6 +164,7 @@ function MoreViewsMenu(props: {
 function MobileNavigationDockRow() {
   const navigate = useMobileNavNavigate();
   const foregroundView = useForegroundMobileView();
+  const dockViews = useMobileDockViews();
 
   const [navRef, setNavRef] = createSignal<HTMLDivElement>();
   const navSize = createElementSize(navRef);
@@ -180,10 +181,10 @@ function MobileNavigationDockRow() {
         ref={setNavRef}
         class="h-(--mobile-chrome-button-size) min-w-0 flex-1 justify-between"
         style={{
-          'max-width': `calc(${MOBILE_DOCK_VIEWS.length + 1} * var(--mobile-chrome-button-size))`,
+          'max-width': `calc(${dockViews().length + 1} * var(--mobile-chrome-button-size))`,
         }}
       >
-        <For each={MOBILE_DOCK_VIEWS.slice(0, visibleCount())}>
+        <For each={dockViews().slice(0, visibleCount())}>
           {(button) => (
             <MobileDockButton
               icon={
@@ -198,7 +199,7 @@ function MobileNavigationDockRow() {
           )}
         </For>
         <MoreViewsMenu
-          views={MOBILE_DOCK_VIEWS.slice(visibleCount())}
+          views={dockViews().slice(visibleCount())}
           isActive={(id) => foregroundView() === id}
           onNavigate={navigate}
         />

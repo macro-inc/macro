@@ -2,10 +2,11 @@ import { Model } from '@core/component/AI/constant';
 import { resolveChatInputModel } from '@core/component/AI/util/parse';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { cleanup, render } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChatProviderIcon } from './ChatProviderIcon';
 
-const chats = vi.hoisted(() => {
+vi.hoisted(() => {
   const storage = new Map<string, string>();
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
@@ -15,40 +16,57 @@ const chats = vi.hoisted(() => {
       removeItem: (key: string) => storage.delete(key),
     },
   });
-  return new Map<string, { model?: string | null }>();
 });
-vi.mock('@queries/cognition/chat-data', () => ({
-  useChatDataQuery: (id: () => string) => ({
-    get isSuccess() {
-      return chats.has(id());
-    },
-    get data() {
-      return chats.get(id());
-    },
-  }),
+vi.mock('@core/component/EntityIcon', () => ({
+  EntityIcon: (props: { targetType: string }) => (
+    <svg data-entity-type={props.targetType} />
+  ),
 }));
-afterEach(() => {
-  cleanup();
-  chats.clear();
-});
+afterEach(cleanup);
 
 describe('soup chat provider selection', () => {
-  it('matches the composer default for retired server models', () => {
-    chats.set('retired-model', { model: 'gpt-4o' });
-    const { container } = render(() => <ChatProviderIcon id="retired-model" />);
-    expect(resolveChatInputModel('gpt-4o')).toBe(Model.sonnet5);
+  it('reacts to soup model updates without a query provider', () => {
+    const [model, setModel] = createSignal<string>();
+    const { container } = render(() => (
+      <ChatProviderIcon id="soup-updates" model={model()} />
+    ));
+    expect(container.querySelector('[data-entity-type="chat"]')).not.toBeNull();
+    setModel(Model.gpt56);
     expect(
-      container.querySelector('[data-ai-provider="anthropic"] svg')
+      container.querySelector('[data-ai-provider="openai"]')
+    ).not.toBeNull();
+    setModel(Model.sonnet5);
+    expect(
+      container.querySelector('[data-ai-provider="anthropic"]')
+    ).not.toBeNull();
+    expect(container.querySelector('[data-entity-type="chat"]')).toBeNull();
+  });
+
+  it('uses a saved selection without a saved soup model', async () => {
+    storeChatStateImmediate('draft-only', { model: Model.sonnet5 });
+    const { container } = render(() => <ChatProviderIcon id="draft-only" />);
+    expect(
+      container.querySelector('[data-ai-provider="anthropic"]')
     ).not.toBeNull();
   });
 
-  it('keeps supported OpenAI and Anthropic chats distinct', () => {
-    chats.set('openai-chat', { model: Model.gpt56 });
-    chats.set('anthropic-chat', { model: Model.opus5 });
+  it('matches the composer default for retired server models', async () => {
+    const { container } = render(() => (
+      <ChatProviderIcon id="retired-model" model="gpt-4o" />
+    ));
+    expect(resolveChatInputModel('gpt-4o')).toBe(Model.sonnet5);
+    await vi.waitFor(() =>
+      expect(
+        container.querySelector('[data-ai-provider="anthropic"] svg')
+      ).not.toBeNull()
+    );
+  });
+
+  it('keeps supported OpenAI and Anthropic chats distinct', async () => {
     const { container } = render(() => (
       <>
-        <ChatProviderIcon id="openai-chat" />
-        <ChatProviderIcon id="anthropic-chat" />
+        <ChatProviderIcon id="openai-chat" model={Model.gpt56} />
+        <ChatProviderIcon id="anthropic-chat" model={Model.opus5} />
       </>
     ));
     expect(
@@ -58,13 +76,27 @@ describe('soup chat provider selection', () => {
     ).toEqual(['openai', 'anthropic']);
   });
 
+  it.each([undefined, 'retired-model' as Model])(
+    'uses the soup model when a draft has no valid model (%s)',
+    async (model) => {
+      const id = `draft-with-${model}`;
+      storeChatStateImmediate(id, { input: 'draft', model });
+      const { container } = render(() => (
+        <ChatProviderIcon id={id} model={Model.gpt56} />
+      ));
+      await vi.waitFor(() =>
+        expect(
+          container.querySelector('[data-ai-provider="openai"]')
+        ).not.toBeNull()
+      );
+    }
+  );
+
   it('reacts to per-chat selections without changing another row', () => {
-    chats.set('selected-chat', { model: Model.gpt56 });
-    chats.set('other-chat', { model: Model.gpt56 });
     const { container } = render(() => (
       <>
-        <ChatProviderIcon id="selected-chat" />
-        <ChatProviderIcon id="other-chat" />
+        <ChatProviderIcon id="selected-chat" model={Model.gpt56} />
+        <ChatProviderIcon id="other-chat" model={Model.gpt56} />
       </>
     ));
     storeChatStateImmediate('selected-chat', { model: Model.sonnet5 });
@@ -82,8 +114,9 @@ describe('soup chat provider selection', () => {
     ).toBeNull();
   });
 
-  it('does not guess a provider for an unloaded chat', () => {
+  it('shows the standard chat icon when no model is available', async () => {
     const { container } = render(() => <ChatProviderIcon id="unloaded-chat" />);
-    expect(container.querySelector('svg')).toBeNull();
+    expect(container.querySelector('[data-ai-provider]')).toBeNull();
+    expect(container.querySelector('[data-entity-type="chat"]')).not.toBeNull();
   });
 });

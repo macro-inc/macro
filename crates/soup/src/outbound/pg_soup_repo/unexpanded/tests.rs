@@ -152,6 +152,7 @@ async fn test_unexpanded_generic_mixed_types_sorting(pool: Pool<Postgres>) -> an
         }
         if let Some(SoupItem::Chat(chat)) = items_map.get(&test_chat_uuid) {
             assert_eq!(chat.name, "Chat Bravo");
+            assert_eq!(chat.model.as_deref(), Some("gpt-4o"));
         } else {
             panic!("Missing test-chat");
         }
@@ -316,10 +317,14 @@ async fn test_unexpanded_soup_by_ids(pool: Pool<Postgres>) {
         .iter()
         .find(|x| matches!(x, SoupItem::Document(_)))
         .unwrap();
-    items
+    let chat = items
         .iter()
-        .find(|x| matches!(x, SoupItem::Chat(_)))
+        .find_map(|item| match item {
+            SoupItem::Chat(chat) => Some(chat),
+            _ => None,
+        })
         .unwrap();
+    assert_eq!(chat.model.as_deref(), Some("gpt-4o"));
     items
         .iter()
         .find(|x| matches!(x, SoupItem::Project(_)))

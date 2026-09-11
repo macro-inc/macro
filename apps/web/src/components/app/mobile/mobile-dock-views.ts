@@ -1,3 +1,4 @@
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import BellIcon from '@phosphor/bell.svg';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
@@ -11,6 +12,7 @@ import CalendarFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
 import ChatsFillIcon from '@phosphor-fill/chats-circle-fill.svg';
 import EmailFillIcon from '@phosphor-fill/envelope-fill.svg';
 import FilesFillIcon from '@phosphor-fill/folder-simple-fill.svg';
+import { createMemo } from 'solid-js';
 import type { MobileTouchIconComponent } from './MobileTouchMenu';
 import type { MobileNavViewId } from './mobile-nav-views';
 
@@ -26,11 +28,10 @@ export type MobileDockView = {
 
 /**
  * Shared navigation order for the dock and search scope pills. The dock shows
- * as many views as fit and puts the remainder in More. Calendar is always
- * included, independent of feature flags. All and Settings are added by their
- * respective surfaces.
+ * as many views as fit and puts the remainder in More. All and Settings are
+ * added by their respective surfaces.
  */
-export const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
+const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
   {
     id: 'inbox',
     label: 'Notifications',
@@ -67,3 +68,12 @@ export const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
   { id: 'tasks', label: 'Tasks', icon: TasksIcon },
   { id: 'calls', label: 'Calls', icon: CallsIcon },
 ];
+
+export function useMobileDockViews() {
+  const calendarEnabled = useCalendarUiFlag();
+  return createMemo(() =>
+    MOBILE_DOCK_VIEWS.filter(
+      (view) => view.id !== 'calendar' || calendarEnabled()
+    )
+  );
+}

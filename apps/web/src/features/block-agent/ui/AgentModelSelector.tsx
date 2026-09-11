@@ -200,7 +200,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                 {(option) => (
                   <Dropdown.Item
                     class={cn(
-                      'shrink-0 gap-2',
+                      'h-7 shrink-0 gap-2',
                       option.id === shown() && 'text-ink font-medium'
                     )}
                     title={option.description ?? undefined}

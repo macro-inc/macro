@@ -28,14 +28,18 @@ export type UseSoupListNavigationHotkeysOptions<TEntity extends EntityData> = {
 export function useSoupListNavigationHotkeys<TEntity extends EntityData>(
   options: UseSoupListNavigationHotkeysOptions<TEntity>
 ) {
-  registerListNavigationSource(options.handle.id, {
+  registerListNavigationSource(options.handle, {
     viewId: options.viewId,
     entities: () =>
       options.dataSource
         .items()
         .flatMap((row) => (row.kind === 'entity' ? [row.entity] : [])),
     hasMore: options.dataSource.hasMore,
-    loadMore: async () => options.dataSource.loadMore(),
+    loadMore: async () => {
+      await options.dataSource.loadMore();
+      const error = options.dataSource.error();
+      if (error) throw error;
+    },
   });
   const canNavigate = () => {
     const content = options.handle.content();

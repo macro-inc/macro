@@ -32,11 +32,8 @@ export const buttonVariants = createVariants(
     variant: {
       danger:
         'bg-failure-bg text-failure dark:bg-failure-bg not-disabled:hover:bg-failure/25 not-disabled:active:bg-failure/30',
-      // Tinted rather than transparent so the glass treatment has a substrate
-      // to blur: a backdrop-filter over a fully transparent button has nothing
-      // to separate the button from the surface behind it.
       outline:
-        'bg-lift/70 text-ink-muted border-edge-muted not-disabled:hover:overlay-hover not-disabled:hover:text-ink not-disabled:active:overlay-active',
+        'bg-surface/70 text-ink-muted border-edge-muted not-disabled:hover:overlay-hover not-disabled:hover:text-ink not-disabled:active:overlay-active',
       accent: 'bg-accent-bg not-disabled:hover:overlay-accent-bg text-accent',
       success:
         'bg-success-bg not-disabled:hover:overlay-success-bg text-success',

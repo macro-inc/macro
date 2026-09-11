@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Chat\" SET \"updatedAt\" = NOW(), model = COALESCE($2, model) WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "40b7e5a1720428f2ea84c3e14fd0accbd1ddf07067f95d70717d01c83df7c487"
+}

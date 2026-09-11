@@ -204,17 +204,18 @@ must stay hidden; subsequent live messages must still appear.
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
   entries, then stop.
 
-Locally sent user messages in both AI implementations enter with a short rise
-and soft expansion from the bottom right. History and remounted messages stay
+Locally sent user messages in both AI implementations enter with a short upward
+slide and fade. History and remounted messages stay
 still; reduced-motion preferences disable the transition.
 
 The compact model menus use the standard menu text size and a 240px width
 (capped to the viewport), consistently in production chat and the agent input.
 
 Chat title icons follow the selected model's provider, including the agent
-system's live model. Soup and recent-chat rows resolve the provider through the
-shared chat query cache. Anthropic, OpenAI, and Google use their provider logos;
-loading or unknown providers reserve the icon space without the Macro star.
+system's live model. Soup rows use the model included in the list data, with a
+saved local draft selection taking precedence. Icons do not query chat transcripts.
+Rows without model data show the standard chat icon. Anthropic, OpenAI, and Google use their
+provider logos; unknown providers in chat titles reserve the icon space.
 
 Both AI composers display their model trigger label at the input text size
 (15px), using the softer secondary text color. This includes the agent model

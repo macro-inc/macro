@@ -31,7 +31,7 @@ export type EmailViewProps = {
 function EmailListFallback() {
   return (
     <Surface
-      depth={0}
+      depth={isTouchDevice() ? 0 : 2}
       hideBorder
       class={cn(
         'grid size-full min-h-0 min-w-0 place-items-center rounded-none bg-transparent text-ink-muted',

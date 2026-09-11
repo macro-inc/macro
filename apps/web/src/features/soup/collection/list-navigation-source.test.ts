@@ -1,3 +1,4 @@
+import type { SplitId } from '@components/app/split-layout/layoutManager';
 import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import {
@@ -5,6 +6,12 @@ import {
   type ListNavigationSource,
   registerListNavigationSource,
 } from './list-navigation-source';
+
+const handle = (id: string) => ({
+  id: id as SplitId,
+  content: () => ({ type: 'component' as const, id: 'mail' }),
+  registerEntryStateCaptor: () => () => {},
+});
 
 const source = (): ListNavigationSource => ({
   viewId: 'mail',
@@ -17,11 +24,11 @@ describe('list navigation source lifetime', () => {
     const first = source(),
       second = source();
     const disposeFirst = createRoot((dispose) => {
-      registerListNavigationSource('first', first);
+      registerListNavigationSource(handle('first'), first);
       return dispose;
     });
     const disposeSecond = createRoot((dispose) => {
-      registerListNavigationSource('second', second);
+      registerListNavigationSource(handle('second'), second);
       return dispose;
     });
     expect(getListNavigationSource('first')).toBe(first);
@@ -35,11 +42,11 @@ describe('list navigation source lifetime', () => {
     const old = source(),
       replacement = source();
     const disposeOld = createRoot((dispose) => {
-      registerListNavigationSource('same', old);
+      registerListNavigationSource(handle('same'), old);
       return dispose;
     });
     const disposeNew = createRoot((dispose) => {
-      registerListNavigationSource('same', replacement);
+      registerListNavigationSource(handle('same'), replacement);
       return dispose;
     });
     disposeOld();

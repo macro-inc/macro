@@ -187,38 +187,6 @@ export function SplitPanel(props: SplitPanelProps) {
     );
   });
 
-  /**
-   * This split is a preview controller with its viewer tucked flush against
-   * its right edge: paint above the viewer so the controller's card and
-   * shadow read as being in front.
-   */
-  const hasTuckedViewer = createMemo(() => {
-    return (
-      !isTouchDevice() &&
-      !props.handle.isSpotLight() &&
-      props.handle.isControllerSplit()
-    );
-  });
-
-  /**
-   * When either member of a tucked Preview Pair is active, the active member
-   * stays solid and its partner is dashed. Both retain the standard edge color.
-   */
-  const previewPairFocusStyling = createMemo(() => {
-    const manager = globalSplitManager();
-    if (!manager || isTouchDevice() || props.handle.isSpotLight()) return false;
-
-    const peerId = props.handle.isControllerSplit()
-      ? manager.viewerOf(props.split.id)
-      : props.handle.isViewerSplit()
-        ? manager.controllerOf(props.split.id)
-        : undefined;
-    if (!peerId || manager.getSplit(peerId)?.isSpotLight()) return false;
-
-    const activeId = manager.activeSplitId();
-    return activeId === props.split.id || activeId === peerId;
-  });
-
   const usesComposableLayout = () =>
     props.split.mount.kind === 'component' &&
     props.split.mount.meta.splitPanelLayout === 'composable';

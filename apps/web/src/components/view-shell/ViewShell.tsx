@@ -4,7 +4,6 @@ import {
   createSizeBreakpoints,
 } from '@app/util/create-size-breakpoints';
 import { Resize } from '@core/component/Resize';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {

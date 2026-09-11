@@ -1192,6 +1192,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
           data: {
             id: entity.id,
             name: entity.chatName,
+            model: entity.model,
             ownerId: entity.ownerId,
             projectId: entity.projectId ?? undefined,
             isPersistent: entity.isPersistent,

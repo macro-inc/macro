@@ -1093,6 +1093,7 @@ export * from './soupChatSoupPropertiesField';
 export * from './soupChatSoupPropertiesFieldAllOf';
 export * from './soupChatSoupPropertiesFieldAllOfTwo';
 export * from './soupChatSoupPropertiesFieldAllOfTwoDeletedAt';
+export * from './soupChatSoupPropertiesFieldAllOfTwoModel';
 export * from './soupChatSoupPropertiesFieldAllOfTwoProjectId';
 export * from './soupChatSoupPropertiesFieldAllOfTwoViewedAt';
 export * from './soupContact';

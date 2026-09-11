@@ -1,6 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Surface } from '@ui';
@@ -10,7 +11,6 @@ import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
 import { TasksViewProvider } from './tasks-view-context';
 import type { TasksViewStateOptions } from './types';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 
 export type TasksViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */

@@ -1,20 +1,33 @@
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { resolveChatInputModel } from '@core/component/AI/util/parse';
 import { getChatInputStoredModel } from '@core/component/AI/util/storage';
-import { useChatDataQuery } from '@queries/cognition/chat-data';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { Show } from 'solid-js';
 
-/** Soup omits the model. Reuse the chat cache, fetching only mounted chat rows. */
+/** Soup supplies the saved model; a local draft selection takes precedence. */
 export function ChatProviderIcon(props: {
   id: string;
+  model?: string | null;
   class?: string;
   animate?: boolean;
 }) {
-  const chat = useChatDataQuery(() => props.id);
-  // An icon must never suspend the list or replace it with a query error screen.
   const model = () =>
     getChatInputStoredModel(props.id) ??
-    (chat.isSuccess ? resolveChatInputModel(chat.data?.model) : undefined);
+    (props.model ? resolveChatInputModel(props.model) : undefined);
   return (
-    <ProviderIcon model={model()} class={props.class} animate={props.animate} />
+    <Show
+      when={model()}
+      fallback={
+        <EntityIcon targetType="chat" size="fill" class={props.class} />
+      }
+    >
+      {(model) => (
+        <ProviderIcon
+          model={model()}
+          class={props.class}
+          animate={props.animate}
+        />
+      )}
+    </Show>
   );
 }

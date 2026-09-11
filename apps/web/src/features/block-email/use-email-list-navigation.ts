@@ -5,14 +5,16 @@ import type {
 import { adjacentEmail } from '@app/features/email-thread/core/adjacent-email';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
-import { getListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
+import {
+  getListNavigationSource,
+  listNavigationSourceId,
+} from '@app/features/soup/collection/list-navigation-source';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData } from '@entity';
-import { type Accessor, createSignal } from 'solid-js';
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
 
 /** Keep thread controls tied to the list and filters the user opened it from. */
 export function useEmailListNavigation(
@@ -22,11 +24,17 @@ export function useEmailListNavigation(
   const soup = useMaybeSoup();
   const notificationSource = useGlobalNotificationSource();
   const [navigating, setNavigating] = createSignal(false);
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   const source = () => {
     if (!panel) return undefined;
-    const id =
-      globalSplitManager()?.controllerOf(panel.handle.id) ?? panel.handle.id;
-    const list = getListNavigationSource(id);
+    const manager = globalSplitManager();
+    const controllerId = manager?.controllerOf(panel.handle.id);
+    const handle =
+      (controllerId && manager?.getSplit(controllerId)) || panel.handle;
+    const list = getListNavigationSource(listNavigationSourceId(handle));
     return list?.viewId === panel.handle.referredFrom() ? list : undefined;
   };
   const entities = () => {
@@ -58,8 +66,8 @@ export function useEmailListNavigation(
       await openEntityInSplitFromUnifiedList(entity, {
         splitHandle: panel.handle,
         referredFrom,
-        // Mobile's swipe layout requires ordinary navigation, not mergeHistory.
-        mergeHistory: !isTouchDevice(),
+        // Step within the current detail slot, preserving the list behind it.
+        mergeHistory: true,
         notificationSource,
       });
     } catch {
@@ -70,17 +78,27 @@ export function useEmailListNavigation(
     direction: -1 | 1,
     archiveThread?: EmailThreadCommands['archiveThread']
   ) => {
-    if (!panel || navigating()) return;
+    if (!panel || disposed || navigating()) return;
     setNavigating(true);
     const currentId = threadId();
     const current = entities().find(
       (entity) => entity.type === 'email' && entity.id === currentId
     );
     const referredFrom = panel.handle.referredFrom();
+    const list = source();
+    const wasActive = panel.isPanelActive();
+    const isCurrent = () =>
+      !disposed &&
+      threadId() === currentId &&
+      panel.handle.content().id === currentId &&
+      (!wasActive || panel.isPanelActive()) &&
+      source() === list;
     try {
-      if (direction === 1 && !target(direction) && canLoadNext())
-        await source()?.loadMore();
-      if (threadId() !== currentId) return;
+      while (direction === 1 && !target(direction) && canLoadNext()) {
+        await list?.loadMore();
+        if (!isCurrent()) return;
+      }
+      if (!isCurrent()) return;
       // Capture the destination before archiving removes the current list row.
       // At the end of the list, triage falls back to the previous email.
       const next =
@@ -99,7 +117,8 @@ export function useEmailListNavigation(
       if (!next) return;
       await open(next, referredFrom);
     } catch {
-      toast.failure('Unable to open the next or previous email');
+      if (isCurrent())
+        toast.failure('Unable to open the next or previous email');
     } finally {
       setNavigating(false);
     }

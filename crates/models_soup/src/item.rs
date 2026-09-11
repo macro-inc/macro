@@ -281,6 +281,7 @@ impl<T> SoupItem<T> {
             SoupItem::Chat(SoupChat {
                 id,
                 name,
+                model,
                 owner_id,
                 project_id,
                 is_persistent,
@@ -292,6 +293,7 @@ impl<T> SoupItem<T> {
             }) => SoupItem::Chat(SoupChat {
                 id,
                 name,
+                model,
                 owner_id,
                 project_id,
                 is_persistent,

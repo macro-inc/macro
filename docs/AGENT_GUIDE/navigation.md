@@ -54,8 +54,9 @@ changes roll back rather than becoming committed local favorites.
 ## Create menu
 
 On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
-Calendar, Email, Channels, Files, Agents, Tasks, Calls. Calendar is included
-independent of feature flags. Resizing the screen moves views between the dock
+Calendar, Email, Channels, Files, Agents, Tasks, Calls. Calendar appears in the
+dock and search scope pills only when the calendar UI flag is enabled.
+Resizing the screen moves views between the dock
 and More views, which always includes Settings and lists the overflow views in
 reverse order. More and the separate bottom-right Search button always retain
 their space. Search opens the search input and scope pills.
