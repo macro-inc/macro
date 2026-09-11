@@ -18,6 +18,34 @@ ios-build-no-update: ios-prepare
 ios-build: ios-prepare
     cd tauri/src-tauri && cargo tauri ios build --open
 
+# iOS: arm64 Simulator .app for the Appetize PR preview (the `ios_preview`
+# workflow). Simulator builds need no signing, and --no-default-features keeps
+# the bundle auto-updater off so a preview cannot quietly replace itself with
+# the production bundle.
+#
+# The frontend is built as a separate step rather than through Tauri's
+# beforeBuildCommand hook: the web and wasm builds want the nix toolchain,
+# while everything Xcode drives wants Apple's, and running both under one set
+# of compiler flags breaks whichever one loses. CI builds the frontend in a
+# clean nix shell and then calls this with prebuilt=true.
+#
+# Output: tauri/src-tauri/gen/apple/build/arm64-sim/macro.app
+ios-build-sim prebuilt="false": ios-prepare
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{prebuilt}}" != "true" ]; then just build-tauri-dev; fi
+    # frontendDist is restated because this override replaces the build table:
+    # dropping it silently produces an app with an empty assets/ and no
+    # index.html, which installs and launches to a black screen.
+    # Release, like every other iOS recipe here. A debug build links a ~240MB
+    # unoptimised binary, which a real Mac starts fine but Appetize's
+    # virtualised device does not — the preview launched to a black screen
+    # while the identical debug build rendered in CI's simulator.
+    cd tauri/src-tauri && cargo tauri ios build \
+      --target aarch64-sim --ci --no-sign -v \
+      --config '{"build":{"beforeBuildCommand":"","frontendDist":"../../dist"}}' \
+      -- --no-default-features
+
 # iOS generated project prep. Keep native bundle metadata in sync with
 # tauri.ios.conf.json, then prepare ignored local Swift dependencies.
 ios-prepare:
@@ -88,6 +116,15 @@ build-prod: build-cache-wasm build-agent-fold-wasm
 build-tauri: build-cache-wasm build-agent-fold-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
+    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+    bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
+
+# As build-tauri, but MODE=development so the bundle talks to dev.macro.com.
+# Used by `ios-build-sim`: a PR preview must never be wired to production.
+[private]
+build-tauri-dev: build-cache-wasm build-agent-fold-wasm
+    printf development > tauri/src-tauri/.macro-tauri-env
+    MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
     bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
 
