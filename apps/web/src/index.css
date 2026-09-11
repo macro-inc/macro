@@ -149,6 +149,7 @@
   --glass-shade-base: 40%;
   --glass-rim-strong-base: 13.5%;
   --glass-rim-soft-base: 9%;
+  --glass-rim-shade-base: 0%;
   /* Mobile chrome has a continuous rim with two diagonal reflections. */
   --island-rim-strong: 28%;
   --island-rim-soft: 12%;
@@ -177,6 +178,8 @@ html[data-theme-light='true'] {
   --glass-shade-base: 8%;
   --glass-rim-strong-base: 52.5%;
   --glass-rim-soft-base: 30%;
+  /* A faint ink rim keeps white reflections legible on pale surfaces. */
+  --glass-rim-shade-base: 8%;
   --island-rim-strong: 75%;
   --island-rim-soft: 40%;
   --island-rim-faint: 16%;
@@ -566,7 +569,7 @@ html[data-theme-light='false'] {
    hand-prefixing each part. */
 @utility island {
   /* Dark mode uses glass; light mode keeps its ring and cast shadow. */
-  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink dark-mode:glass light-mode:ring light-mode:ring-panel light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
+  @apply min-h-[40px] min-w-[40px] bg-chrome text-ink dark-mode:glass light-mode:ring light-mode:ring-edge/70 light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
 
   --glass-blur: 18px;
   --glass-saturate: 1.5;
@@ -625,6 +628,7 @@ html[data-theme-light='false'] {
     border-radius: inherit;
     padding: 1px;
     background: var(--glass-rim-background);
+    background-color: color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-rim-shade-base) * var(--glass-scale)), transparent);
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
