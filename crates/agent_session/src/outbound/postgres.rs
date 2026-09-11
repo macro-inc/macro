@@ -586,11 +586,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             Some(bot) => SessionBot {
                 id,
                 name: bot.name,
+                handle: bot.handle,
                 avatar_url: bot.avatar_url,
             },
             None => SessionBot {
                 id,
                 name: "Agent".to_owned(),
+                handle: "agent".to_owned(),
                 avatar_url: None,
             },
         })

@@ -12,6 +12,15 @@ use tokio_util::sync::CancellationToken;
 
 use super::user_input::SharedUserInputRequester;
 
+/// The agent's display name and `@` handle, for the turn's system prompt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentIdentity {
+    /// Display name, e.g. `Grunk`.
+    pub name: String,
+    /// Stable `@` handle without a leading `@`, e.g. `grunk`.
+    pub handle: String,
+}
+
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
     /// The user the turn acts on behalf of. Tools run with their identity and
@@ -20,6 +29,10 @@ pub struct TurnRequest {
     /// Model id the turn runs on. Unknown ids fall back to the loop's
     /// default model rather than failing the turn.
     pub model: String,
+    /// Who this agent is. Folded into every turn's system prompt so the
+    /// model can answer "who are you" even when the session has no
+    /// instructions. `None` leaves the standing prompt unnamed.
+    pub identity: Option<AgentIdentity>,
     /// The session's instructions, appended to the engine's own system
     /// prompt. `None` runs the engine's default prompt unchanged.
     pub instructions: Option<String>,

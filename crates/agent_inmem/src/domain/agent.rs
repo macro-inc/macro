@@ -39,7 +39,7 @@ use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 
-use crate::domain::engine::{TurnEngine, TurnRequest};
+use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
 use crate::domain::user_input::{
@@ -91,6 +91,8 @@ struct TurnInput {
     messages: Vec<ChatMessage>,
     /// Model the turn runs on.
     model: String,
+    /// Who this agent is, for the engine's system prompt.
+    identity: Option<AgentIdentity>,
     /// The session's instructions, for the engine's system prompt.
     instructions: Option<String>,
 }
@@ -198,11 +200,13 @@ impl AgentState {
             || TurnInput {
                 messages: messages_for_turn(&[], prompt),
                 model: String::new(),
+                identity: None,
                 instructions: None,
             },
             |state| TurnInput {
                 messages: messages_for_turn(&state.history, prompt),
                 model: state.model.clone(),
+                identity: state.identity.clone(),
                 instructions: state.instructions.clone(),
             },
         )
@@ -658,6 +662,7 @@ async fn run_turn(
     let TurnInput {
         messages,
         model,
+        identity,
         instructions,
     } = state.turn_input(&prompt);
     let awaiting = Arc::new(AwaitingUser::default());
@@ -665,6 +670,7 @@ async fn run_turn(
     let mut parts = state.engine.run_turn(TurnRequest {
         owner: state.owner.clone(),
         model,
+        identity,
         instructions,
         messages,
         mcp_tools: state.current_mcp_tools(),

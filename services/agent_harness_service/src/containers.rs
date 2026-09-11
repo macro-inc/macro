@@ -13,6 +13,7 @@ use agent_harness::domain::ports::ContainerManager;
 use agent_harness::domain::sandbox::SandboxResizeEffect;
 use agent_harness::outbound::containers::{HarnessContainer, HarnessContainers};
 use agent_harness::outbound::sidecar::SidecarSender;
+use agent_inmem::domain::engine::AgentIdentity;
 use agent_inmem::outbound::manager::{InMemAgentManager, SessionFacts};
 use agent_runtime_protocol::domain::connection::ServerChannel;
 use agent_runtime_protocol::domain::ports::{Transport, TransportError, TransportSender};
@@ -120,10 +121,19 @@ where
         if self.inmem.is_some()
             && AgentKind::for_session(row.bot_id, &row.harness) == AgentKind::InMemory
         {
+            let bot = self
+                .sessions
+                .session_bot(row.bot_id)
+                .await
+                .map_err(HarnessError::Session)?;
             return Ok(Route::InMem(SessionFacts {
                 id: session,
                 owner: row.owner_id,
                 model: row.model,
+                identity: Some(AgentIdentity {
+                    name: bot.name,
+                    handle: bot.handle,
+                }),
                 instructions: row.instructions,
                 acp_session_id: row.acp_session_id,
             }));
