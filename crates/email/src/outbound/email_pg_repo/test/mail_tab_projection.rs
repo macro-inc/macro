@@ -17,7 +17,7 @@ async fn canonical_tab_previews_and_share_facts(pool: Pool<Postgres>) -> anyhow:
     let left = uuid::uuid!("20000009-0000-0000-0000-000000000009");
     let repo = EmailPgRepo::new(pool.clone());
     let rows = repo
-        .mail_projections_by_ids(viewer.clone(), &[thread, direct, team, active, left])
+        .thread_mail_projections_by_ids(viewer.clone(), &[thread, direct, team, active, left])
         .await?;
     let get = |id| rows.iter().find(|row| row.thread_id == id).unwrap();
     let metadata = get(thread);
@@ -54,7 +54,7 @@ async fn canonical_tab_previews_and_share_facts(pool: Pool<Postgres>) -> anyhow:
         "trashed drafts do not qualify"
     );
     let other = repo
-        .mail_projections_by_ids(
+        .thread_mail_projections_by_ids(
             MacroUserIdStr::parse_from_str("macro|user2@test.com")?,
             &[direct],
         )

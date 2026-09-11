@@ -11,7 +11,7 @@ async fn mail_projection_excludes_trashed_messages(pool: Pool<Postgres>) -> anyh
     let draft = uuid::uuid!("20000008-0000-0000-0000-000000000008");
     let trash = uuid::uuid!("20000009-0000-0000-0000-000000000009");
     let rows = repo
-        .mail_projections_by_ids(
+        .thread_mail_projections_by_ids(
             macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user1@test.com")?,
             &[draft, trash],
         )
