@@ -110,13 +110,14 @@ fn snapshot_facts(
         "GraphqlSoupDocument" => "DOCUMENT",
         "GraphqlSoupProject" => "PROJECT",
         "GraphqlSoupChat" => "CHAT",
+        "GraphqlSoupChannel" => "CHANNEL",
         _ => return Err(()),
     };
     let mut states = std::collections::BTreeMap::new();
     for notification in notifications {
         let notification = notification.as_object().ok_or(())?;
         // The display edge also contains secondary-entity matches; Soup's SQL
-        // predicate for these three partitions only uses primary association.
+        // predicates for these partitions only use primary association.
         let primary_id = notification
             .get("entityId")
             .and_then(serde_json::Value::as_str)
@@ -185,6 +186,7 @@ fn association(record: &Record) -> Option<(RecordKey, Token)> {
         "DOCUMENT" => "GraphqlSoupDocument",
         "PROJECT" => "GraphqlSoupProject",
         "CHAT" => "GraphqlSoupChat",
+        "CHANNEL" => "GraphqlSoupChannel",
         _ => return None,
     };
     uuid::Uuid::parse_str(id).ok()?;
