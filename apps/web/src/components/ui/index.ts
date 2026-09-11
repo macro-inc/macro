@@ -160,7 +160,8 @@ export type {
   ToolbarProps,
 } from './components/Toolbar';
 export { Toolbar } from './components/Toolbar';
-export { Tooltip } from './components/Tooltip';
+export type { TooltipClassOptions } from './components/Tooltip';
+export { Tooltip, tooltipClasses } from './components/Tooltip';
 export { cn } from './utils/classname';
 export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';
 export {
