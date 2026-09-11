@@ -178,11 +178,17 @@ fn walk_authoritative_object(
     collect_applicable_fields(selections, concrete_type, &mut fields);
 
     if let Some(partition) = projection_partition(concrete_type) {
-        let mut projection_object = if partition == vocabulary::channel_partition() {
-            channels::selected_object(object, &fields)
-        } else {
-            object.clone()
-        };
+        let (mut projection_object, valid_selection) =
+            if partition == vocabulary::channel_partition() {
+                match channels::selected_object(object, &fields) {
+                    Ok(selected) => (selected, true),
+                    // Use the original ID only to invalidate a conflicting snapshot;
+                    // never interpret conflicting nullable aliases as absent facts.
+                    Err(()) => (object.clone(), false),
+                }
+            } else {
+                (object.clone(), true)
+            };
         projection_object.remove("notifications");
         if let Some(snapshot) = notifications::selected_snapshot(object, &fields) {
             projection_object.insert("notifications".into(), snapshot);
@@ -205,7 +211,14 @@ fn walk_authoritative_object(
                     .map(|key| (key_text, key))
             });
         if let Some((key_text, record_key)) = normalized_key {
-            let mutation = if projection_fields.is_empty() {
+            let mutation = if !valid_selection {
+                Some(ProjectionMutation::MarkIncomplete {
+                    record_key,
+                    profile: vocabulary::profile_v4(),
+                    partition,
+                    kind: ProjectionIncompleteKind::Dirty,
+                })
+            } else if projection_fields.is_empty() {
                 match authoritative_v4_patch_for_object(
                     record_key.clone(),
                     partition.clone(),

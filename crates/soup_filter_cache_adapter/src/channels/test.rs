@@ -102,6 +102,35 @@ fn canonical_channel_fields_and_aliased_team_id_form_v4_snapshots() {
 }
 
 #[test]
+fn channel_aliases_preserve_identity_and_reject_conflicting_nullable_facts() {
+    let query = QUERY.replace(
+        "__typename id cacheProjection",
+        "__typename identity: id capsule: cacheProjection",
+    );
+    let mut aliased = row(1);
+    aliased["identity"] = aliased["id"].take();
+    aliased.as_object_mut().unwrap().remove("id");
+    aliased["capsule"] = aliased["cacheProjection"].take();
+    aliased.as_object_mut().unwrap().remove("cacheProjection");
+    assert!(
+        matches!(authoritative_projection_mutations(&query, None, &data(vec![aliased])).unwrap().as_slice(), [ProjectionMutation::Replace(document)] if document.record_key == key(1))
+    );
+
+    let duplicate = QUERY.replace(
+        "channelTeamId: teamId",
+        "channelTeamId: teamId otherTeam: teamId",
+    );
+    let mut conflict = row(1);
+    conflict["otherTeam"] = json!(id(11));
+    assert!(matches!(
+        authoritative_projection_mutations(&duplicate, None, &data(vec![conflict]))
+            .unwrap()
+            .as_slice(),
+        [ProjectionMutation::MarkIncomplete { .. }]
+    ));
+}
+
+#[test]
 fn partial_and_invalid_channel_snapshots_do_not_invent_completeness() {
     for field in [
         "notifications",

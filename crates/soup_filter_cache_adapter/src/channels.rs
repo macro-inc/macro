@@ -6,20 +6,18 @@ use soup_filter_projection::channel::{ChannelProjectionInput, project_channel};
 
 type Object = serde_json::Map<String, serde_json::Value>;
 
-pub(super) fn selected_object(object: &Object, fields: &[&FieldNode]) -> Object {
+pub(super) fn selected_object(object: &Object, fields: &[&FieldNode]) -> Result<Object, ()> {
     let mut selected = Object::new();
     for field in fields {
         let Some(value) = object.get(&field.response_key) else {
             continue;
         };
-        let value = if selected.get(&field.name).is_some_and(|old| old != value) {
-            serde_json::Value::Null
-        } else {
-            value.clone()
-        };
-        selected.insert(field.name.clone(), value);
+        if selected.get(&field.name).is_some_and(|old| old != value) {
+            return Err(());
+        }
+        selected.insert(field.name.clone(), value.clone());
     }
-    selected
+    Ok(selected)
 }
 
 fn organization(value: &serde_json::Value) -> Result<Option<i64>, ()> {
