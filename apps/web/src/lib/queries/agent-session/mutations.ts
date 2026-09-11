@@ -5,8 +5,7 @@ import type {
   CreateAgentSessionRequest,
 } from '@service-agent-harness/generated/schemas';
 import { useMutation } from '@tanstack/solid-query';
-import { queryClient } from '../client';
-import { agentSessionKeys } from './keys';
+import { invalidateAllSoup } from '../soup/cache';
 
 export function useCreateAgentSessionMutation() {
   return useMutation(() => ({
@@ -14,9 +13,7 @@ export function useCreateAgentSessionMutation() {
     mutationFn: (request: CreateAgentSessionRequest) =>
       throwOnErr(() => agentHarnessServiceClient.create(request)),
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: agentSessionKeys.recent._def,
-      });
+      invalidateAllSoup();
     },
   }));
 }
