@@ -161,12 +161,23 @@ jobs:
         # The screenshot is uploaded either way — it is the single most useful artifact
         # when a preview misbehaves.
         mkdir -p artifacts
+
+        # Zip first, then smoke-test what comes *back out* of the zip. Appetize never
+        # sees the build directory — it installs the archive — so testing $APP directly
+        # would leave the round-trip itself unverified, which is precisely where a
+        # preview can differ from a build that looked fine in CI.
+        ditto -c -k --sequesterRsrc --keepParent "$APP" artifacts/macro-sim.zip
+        rm -rf artifacts/roundtrip
+        ditto -x -k artifacts/macro-sim.zip artifacts/roundtrip
+        ROUNDTRIP_APP="artifacts/roundtrip/$(basename "$APP")"
+        test -d "$ROUNDTRIP_APP" || { echo "zip round-trip produced no .app" >&2; exit 1; }
+
         DEVICE="$(xcrun simctl create ios-preview-smoke com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro)"
         trap 'xcrun simctl delete "$DEVICE" >/dev/null 2>&1 || true' EXIT
         xcrun simctl boot "$DEVICE"
         xcrun simctl bootstatus "$DEVICE" -b
 
-        xcrun simctl install "$DEVICE" "$APP"
+        xcrun simctl install "$DEVICE" "$ROUNDTRIP_APP"
         xcrun simctl launch "$DEVICE" com.macro.app.prod
 
         # The webview needs a moment to load and paint before the shot is worth taking.
@@ -197,10 +208,9 @@ jobs:
           exit 1
         fi
 
-        # `ditto`, not `zip`: the Apple-supported way to archive a bundle, preserving
-        # the symlinks and exec bits that Appetize (and anyone re-running this locally)
-        # needs. The same archive is both the CI artifact and the upload payload.
-        ditto -c -k --sequesterRsrc --keepParent "$APP" artifacts/macro-sim.zip
+        # The archive was built before the smoke test so the test could run against it;
+        # drop the unpacked copy so it does not bloat the artifact upload.
+        rm -rf artifacts/roundtrip
       shell: bash
     - name: Upload macro-ios-simulator-app artifact
       if: always()
