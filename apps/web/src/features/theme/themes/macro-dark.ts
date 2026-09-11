@@ -31,6 +31,9 @@ export const macroDarkTheme: typeof baseTheme = {
   ...baseTheme,
   colorTokens: {
     ...baseTheme.colorTokens,
+    // Match the black page on mobile as well as the flat desktop panes.
+    // Raised surfaces retain their ramp for glass controls, menus and dialogs.
+    panel: 'var(--color-surface-0)',
     edge: '#1c1c1c',
     'edge-muted': '#181818',
   },

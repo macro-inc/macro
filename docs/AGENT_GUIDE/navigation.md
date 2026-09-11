@@ -32,7 +32,8 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 - Top: buttons `Search` and `Create`. Clicking sidebar `Search` opens a menu
   with `Command Menu` (⌘K on Mac / Ctrl+K elsewhere) and `Search everything`
   (`/`). Choose the first to open commands, or the second to open and focus
-  global search. This works in both the compact rail and expanded sidebar.
+  global search. This left-click menu shares its surface and item styling with
+  the sidebar right-click menus, in both the compact rail and expanded sidebar.
 - Nav: `Go to Home`, `Go to Getting Started`, `Go to Notifications`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
   `Go to Calendar`, `Go to Agents`, `Go to Customers`.
@@ -61,6 +62,19 @@ Email, Channels, Files, and More views. More views contains Settings,
 Calls, Tasks, Agents, and CRM (when enabled). Search is the separate bottom-right button; it opens
 the search input and scope pills.
 
+Primary dock navigation buttons activate on touch-down, including Search;
+releasing the finger does not activate them a second time. More views opens on
+release so holding its trigger cannot drag or dismiss the opening sheet. Mouse
+and keyboard activation still use the normal click behavior.
+
+The dock's More views menu uses the same rounded glass bottom sheet as filters,
+with a blurred backdrop, drag handle, and an even 8px outer inset. The home
+indicator clearance sits inside the sheet. Tap a row or slide from the held
+More trigger to select; tap outside, swipe down, or press Escape to dismiss.
+Settings opens its own glass sheet with a grouped main page. Select a settings
+section, use **Back to settings** to return, or **Close settings** in the top
+right to dismiss without changing the underlying app view.
+
 Fresh mobile CRM visits default to list view, including when
 applying a default saved view; explicitly selected saved views and back/forward
 navigation retain their layout. The mobile **+ Company** button opens the
@@ -87,6 +101,9 @@ and actions reachable. Fullscreen takeovers retain their fullscreen layout.
 Filter sheets have a visible heading and Close filters button. Sort and filter
 options use rounded rows with trailing checkmarks; accordion sections retain
 their selection counts. Clear all resets selections without dismissing the sheet.
+Calendar settings and the month picker use the same translucent groups and
+rounded selection highlights. Calendar visibility and Show weekends are checkbox
+rows; period, week start, time format, and month choices show trailing checkmarks.
 
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
 Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
@@ -96,7 +113,9 @@ Mobile glass presses animate the enclosing surface over 300ms. Round buttons
 retain roughly 30% growth; wide pills and grouped controls extend their glass
 fill and rim by up to 3px per edge, with 8% icon growth around each icon's center.
 Labels and layout stay fixed. A subtle radial sheen spreads from the tap
-location and fades on release. Release, cancellation, or dragging outside
+location and fades on release. On touch devices, buttons omit the circular
+hover/press overlay and native tap highlight; the shimmer supplies feedback.
+Release, cancellation, or dragging outside
 restores the surface. Disabled controls stay still; reduced motion keeps only
 the static highlight.
 

@@ -195,15 +195,15 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
           aria-label={props.event.title}
           class="overflow-hidden"
         >
-          <MobileDrawer.Handle class="pointer-events-none absolute inset-x-0 top-0 z-1" />
-          <div class="flex shrink-0 items-center justify-between px-2 pb-3 pt-2">
+          <MobileDrawer.Handle class="pb-1" />
+          <div class="flex shrink-0 items-center justify-between gap-3 px-6 pb-4">
             <MobileDrawer.Close
               as={Button}
               aria-label="Close event details"
               variant="ghost"
               size="icon-md"
               depth={3}
-              class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+              class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
             >
               <CloseIcon />
             </MobileDrawer.Close>
@@ -213,7 +213,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                 variant="ghost"
                 size="icon-md"
                 depth={3}
-                class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+                class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
                 onClick={() => copyCalendarEventMention(props.event)}
               >
                 <LinkIcon />
@@ -224,7 +224,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   variant="ghost"
                   size="icon-md"
                   depth={3}
-                  class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+                  class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
                   onClick={openEditor}
                 >
                   <PencilSimpleIcon />
@@ -234,7 +234,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   variant="ghost"
                   size="icon-md"
                   depth={3}
-                  class="rounded-md text-ink-extra-muted [&_svg]:size-4"
+                  class="size-11 rounded-full bg-ink/6 text-ink-muted [&_svg]:size-5"
                   onClick={deleteDialog.open}
                 >
                   <TrashIcon />

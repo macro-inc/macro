@@ -36,6 +36,8 @@ the notification sidebar. With the `enable-inbox-notified-sort` flag on, both ta
 rows and date headers by when you were last notified about the item, so a fresh comment
 on an old task sits under "Today"; with it off they order by content recency. Keyboard:
 `j`/`k` move between rows and update the preview; alternate activation opens a new split.
+On mobile, the filters float above the full-height scrolling list. On iOS, rows
+fade underneath the filters and status bar using the shared top edge gradient.
 
 ## Email — `/app/component/mail`
 
@@ -115,6 +117,11 @@ Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
 Dismissing a changed event still asks before discarding the draft.
 
+On phones, event details use inset round action buttons and a transparent RSVP
+footer. Answering a recurring invitation opens a rounded glass sheet: choose
+`This event` or `All events`, then `Save response`. Cancel or Close returns to
+the event details without sending a response.
+
 Week view with `New event`, `Choose calendar view` menu, prev/next week, `Search events`,
 `Calendar settings`, and a mini month picker in the side panel. Events require connecting a
 Google account (`Connect calendar`). The `Calendar settings` (gear) menu has an `Accounts`
@@ -168,6 +175,8 @@ Google's out-of-office event type.
 Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
+On phones, recorded call headers omit the **Call Again** action.
+
 ## Customers (CRM) — `/app/component/companies`
 
 Board/List views, `Company` create button. Requires a team ("Join a team to enable CRM" →
@@ -209,6 +218,18 @@ Greeting, getting-started checklist, example prompt buttons (`Draft a document`,
 `Draft an email`, `Search & research`), and the ubiquitous `Ask AI` composer.
 
 ## Settings — `/app/settings/<section>`
+
+On phones, **More views → Settings** opens an inset glass sheet over the current
+page. The main page has a profile shortcut and grouped Account, Preferences,
+Workspace, and enabled agent/admin sections. Tap a row to open that settings
+page inside the sheet; **Back to settings** returns to the grouped list at its
+previous scroll position. **Close settings** at the top right, Escape, an
+outside tap, or a downward swipe dismisses the sheet. Opening Settings again
+starts at the main page; explicit links (for example Connections) open their
+section directly. Existing settings URLs open the requested section in the sheet
+and restore the underlying app route. The header stays visible while forms
+scroll, including with the keyboard open. Desktop settings retain their panel
+and split navigation.
 
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as

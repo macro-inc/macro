@@ -34,9 +34,6 @@ const CALENDAR_VIEWS = [
   hotkeyToken: HotkeyToken;
 }>;
 
-const DRAWER_ROW_CLASS =
-  "relative flex w-full items-center gap-3 bg-surface px-4 py-3 text-left text-sm text-ink not-last:after:absolute not-last:after:inset-x-2 not-last:after:bottom-0 not-last:after:h-px not-last:after:bg-edge-muted not-last:after:content-['']";
-
 function createCalendarPeriodControls(onSelect?: () => void) {
   const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
@@ -208,9 +205,7 @@ export function MobilePeriodControls(props: { onSelect: () => void }) {
       <MobileDrawer.Section class="flex shrink-0 flex-col">
         <For each={CALENDAR_VIEWS}>
           {(view) => (
-            <button
-              type="button"
-              class={DRAWER_ROW_CLASS}
+            <MobileDrawer.Item
               aria-pressed={controls.activeView() === view.value}
               onClick={() => controls.changeView(view.value)}
             >
@@ -221,7 +216,7 @@ export function MobilePeriodControls(props: { onSelect: () => void }) {
                   invisible: controls.activeView() !== view.value,
                 }}
               />
-            </button>
+            </MobileDrawer.Item>
           )}
         </For>
       </MobileDrawer.Section>

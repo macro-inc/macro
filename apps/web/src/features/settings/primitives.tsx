@@ -1,5 +1,8 @@
 import { cn, Layer } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { createContext, type JSX, Show, useContext } from 'solid-js';
+
+/** Detail pages inherit the mobile sheet's header and compact spacing. */
+export const SettingsSheetContext = createContext(false);
 
 /*
  * Shared building blocks for the settings panels. Every settings tab composes
@@ -29,18 +32,38 @@ export function SettingsPage(props: {
   actions?: JSX.Element;
   children: JSX.Element;
 }) {
+  const inSheet = useContext(SettingsSheetContext);
   return (
-    <div class="h-full min-h-0 overflow-y-auto [overflow-anchor:none]">
+    <div
+      data-drawer-scroll-body={inSheet ? true : undefined}
+      class="h-full min-h-0 overflow-y-auto [overflow-anchor:none]"
+    >
       {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
           scroll content (plus the usual breathing room) so pages scroll under
           the floating header and bottom rows like every other block. */}
-      <div class="mx-auto w-full max-w-[710px] px-10 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
+      <div
+        class={cn(
+          'mx-auto w-full max-w-[710px]',
+          inSheet
+            ? '@container px-3 pt-2 pb-[max(24px,var(--mobile-sheet-safe-padding))]'
+            : 'px-10 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]'
+        )}
+      >
         {/* Headers are inset by the card's inner padding so the title and
             section labels line up with the leftmost content inside the cards,
             while the cards themselves stay full-width. */}
-        <header class="flex items-start justify-between gap-4 px-6">
+        <header
+          class={cn(
+            'flex items-start justify-between gap-4',
+            inSheet ? 'px-4' : 'px-6'
+          )}
+        >
           <div class="flex flex-col gap-1.5 min-w-0">
-            <h1 class="text-2xl/tight font-semibold text-ink">{props.title}</h1>
+            <Show when={!inSheet}>
+              <h1 class="text-2xl/tight font-semibold text-ink">
+                {props.title}
+              </h1>
+            </Show>
             <Show when={props.description}>
               <p class="text-sm text-ink-muted">{props.description}</p>
             </Show>
@@ -49,7 +72,11 @@ export function SettingsPage(props: {
             <div class="shrink-0 pt-1">{props.actions}</div>
           </Show>
         </header>
-        <div class="mt-9 flex flex-col gap-10">{props.children}</div>
+        <div
+          class={cn('flex flex-col', inSheet ? 'gap-6 mt-3' : 'mt-9 gap-10')}
+        >
+          {props.children}
+        </div>
       </div>
     </div>
   );
@@ -95,6 +122,7 @@ export function SettingsSection(props: {
  * no divider, so it doubles as a plain container.
  */
 export function SettingsCard(props: { class?: string; children: JSX.Element }) {
+  const inSheet = useContext(SettingsSheetContext);
   // Raised a level above the content panel so the card reads as a subtly
   // lighter surface (theme-safe via the depth system) rather than just an
   // outline on the same fill.
@@ -102,7 +130,10 @@ export function SettingsCard(props: { class?: string; children: JSX.Element }) {
     <Layer depth={2}>
       <div
         class={cn(
-          'rounded-xl border border-ink/[0.05] bg-surface overflow-hidden settings-row-dividers',
+          'overflow-hidden settings-row-dividers',
+          inSheet
+            ? 'rounded-[26px] bg-ink/5'
+            : 'rounded-xl border border-ink/[0.05] bg-surface',
           props.class
         )}
       >
@@ -131,10 +162,12 @@ export function SettingsRow(props: {
   stackOnNarrow?: boolean;
   class?: string;
 }) {
+  const inSheet = useContext(SettingsSheetContext);
   return (
     <div
       class={cn(
-        'flex gap-4 px-6 py-3.5 min-h-[60px]',
+        'flex gap-4 py-3.5 min-h-[60px]',
+        inSheet ? 'px-4 flex-wrap' : 'px-6',
         props.stackOnNarrow
           ? 'flex-col gap-1.5 @[460px]:flex-row @[460px]:justify-between @[460px]:gap-4'
           : 'justify-between',
@@ -167,6 +200,7 @@ export function SettingsRow(props: {
         <div
           class={cn(
             'flex items-center gap-2',
+            inSheet && 'min-w-0 max-w-full break-words [&_input]:max-w-full',
             props.stackOnNarrow
               ? '@[460px]:shrink-0 @[460px]:justify-end @[460px]:text-right'
               : 'shrink-0 justify-end text-right'

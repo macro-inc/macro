@@ -1,5 +1,4 @@
-import { Billing } from '@app/features/settings/Billing';
-import { Bots } from '@app/features/settings/Bots';
+import { toBaseRelative } from '@app/constants/routerBase';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -14,6 +13,7 @@ import {
   settingsTabFromSplitPath,
   useSettingsState,
 } from '@core/constant/SettingsState';
+import { stripSettingsSplitFromUrl } from '@core/constant/settingsSplitUrl';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
@@ -24,7 +24,7 @@ import ArrowsIn from '@phosphor/arrows-in.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
-import { useLocation } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import { Button, cn, Layer, SideNav } from '@ui';
 import {
   createRenderEffect,
@@ -33,23 +33,9 @@ import {
   onCleanup,
   onMount,
   Show,
-  Suspense,
   untrack,
 } from 'solid-js';
-import { Account } from './Account';
-import { Admin } from './Admin';
-import { Agent } from './Agent';
-import { Agents } from './Agents';
-import { ApiKeys } from './ApiKeys';
-import { Appearance } from './Appearance';
-import { ConnectedAccounts } from './ConnectedAccounts';
-import { Crm } from './Crm';
-import { Harness } from './Harness';
-import { MobileApp } from './MobileApp';
-import { Notifications } from './Notifications';
-import { Shortcuts } from './Shortcuts';
-import { Tags } from './Tags';
-import { Team } from './Team';
+import { SettingsTabContent } from './SettingsTabContent';
 
 /** Where the settings panel is mounted, which determines its header chrome. */
 export type SettingsVariant = 'split' | 'fullscreen';
@@ -75,7 +61,29 @@ export function SettingsPanelComponentWrapper() {
     const tab = settingsTabFromSplitPath(location.pathname);
     if (tab && untrack(activeTabId) !== tab) setActiveTabId(tab);
   });
-  return <SettingsPanel variant={isSoloSettings() ? 'fullscreen' : 'split'} />;
+  return (
+    <Show when={!isMobile()} fallback={<MobileSettingsDeepLink />}>
+      <SettingsPanel variant={isSoloSettings() ? 'fullscreen' : 'split'} />
+    </Show>
+  );
+}
+
+/** Old settings URLs still open their section, over the restored app surface. */
+function MobileSettingsDeepLink() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { openSettings } = useSettingsState();
+  onMount(() => {
+    const tab = settingsTabFromSplitPath(location.pathname) ?? activeTabId();
+    openSettings(tab);
+    navigate(
+      stripSettingsSplitFromUrl(
+        `${toBaseRelative(location.pathname)}${location.search}${location.hash}`
+      ),
+      { replace: true }
+    );
+  });
+  return null;
 }
 
 type SettingsPanelProps = {
@@ -92,15 +100,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
     activeTabId,
     selectTab,
   } = useSettingsState();
-  const { groups, flatTabs, isAvailable } = useSettingsTabs();
+  const { groups, flatTabs } = useSettingsTabs();
   const logout = useLogout();
 
   const variant = () => props.variant ?? 'split';
-
-  // A tab's content renders only when it's both selected and still available
-  // (gating lives solely in the settings tab config).
-  const isCurrentTab = (tab: SettingsTab) =>
-    activeTabId() === tab && isAvailable(tab);
 
   // Responsive state, driven by the panel's own width (see breakpoints above).
   const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
@@ -388,70 +391,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   so content scrolls under the floating header/dock like every
                   other block instead of being boxed between them. */}
               <div class="relative min-h-0 flex-1 overflow-hidden">
-                <Show when={isCurrentTab('Account')}>
-                  <Suspense>
-                    <Account />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('API Keys')}>
-                  <Suspense>
-                    <ApiKeys />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Notifications')}>
-                  <Notifications />
-                </Show>
-                <Show when={isCurrentTab('Billing')}>
-                  <Suspense>
-                    <Billing />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Appearance')}>
-                  <Appearance />
-                </Show>
-                <Show when={isCurrentTab('Shortcuts')}>
-                  <Shortcuts />
-                </Show>
-                <Show when={isCurrentTab('Team')}>
-                  <Suspense>
-                    <Team />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Tags')}>
-                  <Suspense>
-                    <Tags />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('CRM')}>
-                  <Suspense>
-                    <Crm />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Connected')}>
-                  <Suspense>
-                    <ConnectedAccounts />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Mobile App')}>
-                  <MobileApp />
-                </Show>
-                <Show when={isCurrentTab('Agent')}>
-                  <Agent />
-                </Show>
-                <Show when={isCurrentTab('Agents')}>
-                  <Agents />
-                </Show>
-                <Show when={isCurrentTab('Harness')}>
-                  <Harness />
-                </Show>
-                <Show when={isCurrentTab('Bots')}>
-                  <Suspense>
-                    <Bots />
-                  </Suspense>
-                </Show>
-                <Show when={isCurrentTab('Admin')}>
-                  <Admin />
-                </Show>
+                <SettingsTabContent tab={activeTabId()} />
               </div>
             </div>
           </Layer>

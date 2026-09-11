@@ -564,12 +564,12 @@ export const enableOnboardingV4 = defineFlag({
 
 // Calendar UI: calendar surfaces and the elevated-permissions upgrade flow
 // that re-runs Google consent for inboxes connected before the calendar
-// scope existed. PostHog-gated with a dev-mode default; override with
-// VITE_ENABLE_CALENDAR_UI.
+// scope existed. Temporarily enabled in all builds without waiting for PostHog;
+// override with VITE_ENABLE_CALENDAR_UI.
 export const enableCalendarUi = defineFlag({
   key: 'enable-calendar-ui',
   env: 'ENABLE_CALENDAR_UI',
-  default: onInDev,
+  default: true,
 });
 
 // Calendar event search UI: the Search view's Calendar type (and calendar

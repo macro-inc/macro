@@ -91,6 +91,7 @@ export function installGlassPress() {
       `${Math.max(100, Math.min(260, height * 3))}px`
     );
     if (!element.hasAttribute('data-glass-press')) {
+      element.setAttribute('data-glass-initializing', '');
       const style = getComputedStyle(element);
       element.style.setProperty(
         '--press-radius',
@@ -110,9 +111,13 @@ export function installGlassPress() {
       shimmer.setAttribute('aria-hidden', 'true');
       element.append(shimmer);
     }
-    // Establish the unpressed pseudo-element before starting its transition.
+    // WebKit otherwise transitions a newly created ::before from its initial
+    // zero radius, briefly painting a rectangle behind the rounded surface.
+    // Flush the rounded, unpressed layers with transitions disabled first.
+    getComputedStyle(element, '::before').borderRadius;
     getComputedStyle(element, '::after').inset;
     getComputedStyle(shimmer, '::before').transform;
+    element.removeAttribute('data-glass-initializing');
     element.setAttribute('data-glass-pressed', '');
     pressed = { element, pointerId: event.pointerId, bounds };
   };

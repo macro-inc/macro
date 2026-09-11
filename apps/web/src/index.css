@@ -783,6 +783,15 @@ html[data-touch-device='true'] [data-glass-pressed] > [data-glass-shimmer] {
   opacity: 1;
 }
 
+/* Establish the material's rounded shape before its first animated frame.
+   WebKit otherwise interpolates a new pseudo-element from a square. */
+html[data-touch-device='true'] [data-glass-initializing]::before,
+html[data-touch-device='true'] [data-glass-initializing]::after,
+html[data-touch-device='true'] [data-glass-initializing] > [data-glass-shimmer],
+html[data-touch-device='true'] [data-glass-initializing] > [data-glass-shimmer]::before {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   html[data-touch-device='true'] [data-glass-press='round'][data-glass-pressed] {
     scale: var(--press-scale);

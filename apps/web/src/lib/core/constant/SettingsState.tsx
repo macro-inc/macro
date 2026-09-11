@@ -1,5 +1,6 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { toBaseRelative } from '@app/constants/routerBase';
+import { useMobileSettings } from '@app/features/settings/context/mobile-settings';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isMobile } from '@core/mobile/isMobile';
@@ -99,6 +100,7 @@ export const isSoloSettings = () => {
 };
 
 export const useSettingsState = () => {
+  const mobileSettings = useMobileSettings();
   const { openWithSplit, replaceAllSplits } = useSplitLayout();
   const navigate = useNavigate();
   const location = useLocation();
@@ -142,18 +144,16 @@ export const useSettingsState = () => {
     replaceAllSplits({ type: 'component', id: 'settings' });
   };
 
-  // Default activation. On mobile, dock settings into the split layout so it
-  // inherits the split navigation chrome (back button, swipe-back gesture) —
-  // the solo-settings chrome's exit affordances all live in desktop-only UI.
-  // On desktop, clobber down to a lone settings split, remembering where we
-  // came from so "Back to app" can return there. Opening without a specific
-  // tab always lands on Account rather than the last-viewed page — a fresh
-  // open shouldn't resume a prior session's tab. Re-invoking while settings
-  // is already showing (solo or docked alongside other splits) just switches
-  // the tab rather than re-clobbering the layout.
+  // Mobile opens an in-place settings sheet; a fresh open lands on its index.
+  // Desktop keeps the solo/split layout and defaults to Account.
   const openSettings = (tab?: SettingsTab) => {
-    if (isMobile()) {
-      openSettingsInSplit(tab ?? 'Account');
+    if (isMobile() && mobileSettings) {
+      setSettingsReturnTo(
+        stripSettingsSplitFromUrl(
+          `${toBaseRelative(location.pathname)}${location.search}${location.hash}`
+        )
+      );
+      mobileSettings.openSettings(tab);
       return;
     }
     if (splitOpen()) {
@@ -169,11 +169,19 @@ export const useSettingsState = () => {
   // explicit navigation needed, whether settings is solo or docked alongside
   // other splits.
   const selectTab = (tab: SettingsTab) => {
+    if (isMobile() && mobileSettings?.open()) {
+      mobileSettings.selectPage(tab);
+      return;
+    }
     setActiveTabId(tab);
   };
 
   // Opt-in: dock settings into the split layout (the pre-route behavior).
   const openSettingsInSplit = (activeTabId?: SettingsTab) => {
+    if (isMobile() && mobileSettings) {
+      openSettings(activeTabId);
+      return;
+    }
     if (activeTabId) setActiveTabId(activeTabId);
     openWithSplit(
       { type: 'component', id: 'settings' },
@@ -197,6 +205,10 @@ export const useSettingsState = () => {
   };
 
   const closeSettings = () => {
+    if (isMobile() && mobileSettings?.open()) {
+      mobileSettings.close();
+      return;
+    }
     if (isSoloSettings()) {
       navigate(settingsReturnTo() ?? DEFAULT_ROUTE, { replace: true });
       return;
@@ -234,6 +246,11 @@ export const useSettingsState = () => {
   // Focus-aware toggle: bring settings to the user rather than destroying it,
   // and only close when settings is what they're actually looking at.
   const toggleSettings = () => {
+    if (isMobile() && mobileSettings) {
+      if (mobileSettings.open()) mobileSettings.close();
+      else openSettings();
+      return;
+    }
     // Solo takes priority: if it's the only thing showing, leave it.
     if (isSoloSettings()) {
       closeSettings();
@@ -259,7 +276,7 @@ export const useSettingsState = () => {
   };
 
   return {
-    settingsOpen: splitOpen,
+    settingsOpen: () => mobileSettings?.open() || splitOpen(),
     openSettings,
     openSettingsInSplit,
     selectTab,

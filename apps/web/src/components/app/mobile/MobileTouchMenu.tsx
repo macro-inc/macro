@@ -14,6 +14,7 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic, Portal } from 'solid-js/web';
+import { MobileDrawer } from './MobileDrawer';
 import { pressPulse } from './pressPulse';
 
 // Keeps the directive import from being tree-shaken / lint-flagged.
@@ -31,6 +32,7 @@ type MobileTouchMenuContextValue = {
   mounted: () => boolean;
   hoveredId: () => string | null;
   triggerBottomOffset: () => number;
+  triggerRef: () => HTMLElement | undefined;
   toggle: () => void;
   /** Animated close: plays the hide animation, then Content unmounts. */
   close: () => void;
@@ -57,7 +59,8 @@ type MobileTouchMenuButtonProps = {
   ariaLabel?: string;
   icon: MobileTouchIconComponent;
   ref?: HTMLButtonElement | ((el: HTMLButtonElement) => void);
-  onPointerDown: () => void;
+  onActivate: () => void;
+  openOnRelease?: boolean;
   onTouchMove?: (e: TouchEvent) => void;
   onTouchEnd?: (e: TouchEvent) => void;
   class?: string;
@@ -75,13 +78,19 @@ function MobileTouchMenuButton(props: MobileTouchMenuButtonProps) {
       ref={props.ref}
       use:pressPulse
       onPointerDown={(e) => {
-        e.preventDefault();
+        if (!e.isPrimary || e.button !== 0) return;
+        if (!props.openOnRelease) e.preventDefault();
         hapticImpact('light');
         if (props.animateIcon !== false) {
           setAnimating(true);
           setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
         }
-        props.onPointerDown();
+        if (!props.openOnRelease) props.onActivate();
+      }}
+      onClick={(event) => {
+        // Sheets open after the gesture finishes, so the opening finger
+        // cannot also drag or dismiss the newly mounted drawer.
+        if (props.openOnRelease || event.detail === 0) props.onActivate();
       }}
       onTouchMove={props.onTouchMove}
       onTouchEnd={props.onTouchEnd}
@@ -195,6 +204,7 @@ function MobileTouchMenuRoot(props: ParentProps) {
         mounted,
         hoveredId,
         triggerBottomOffset,
+        triggerRef,
         toggle: () => (open() ? closeMenu() : openMenu()),
         close: closeMenu,
         unmount: () => setMounted(false),
@@ -212,6 +222,8 @@ function MobileTouchMenuRoot(props: ParentProps) {
 }
 
 function MobileTouchMenuTrigger(props: {
+  /** Finish the trigger tap before mounting a sheet under the finger. */
+  openOnRelease?: boolean;
   ariaLabel?: string;
   icon: MobileTouchIconComponent;
   class?: string;
@@ -225,9 +237,10 @@ function MobileTouchMenuTrigger(props: {
       ref={menu.setTriggerRef}
       icon={props.icon}
       animateIcon={false}
-      onPointerDown={menu.toggle}
-      onTouchMove={menu.onTriggerTouchMove}
-      onTouchEnd={menu.onTriggerTouchEnd}
+      onActivate={menu.toggle}
+      openOnRelease={props.openOnRelease}
+      onTouchMove={props.openOnRelease ? undefined : menu.onTriggerTouchMove}
+      onTouchEnd={props.openOnRelease ? undefined : menu.onTriggerTouchEnd}
       class={cn('size-10 rounded-full', props.class)}
       iconClass={props.iconClass}
     />
@@ -285,6 +298,43 @@ function MobileTouchMenuContent(props: ParentProps) {
   );
 }
 
+/** Bottom-dock menus share the inset glass sheet used by mobile filters. */
+function MobileTouchMenuSheetContent(
+  props: ParentProps<{ 'aria-label': string }>
+) {
+  const menu = useMenu('MobileTouchMenu.SheetContent');
+
+  return (
+    <MobileDrawer
+      open={menu.open()}
+      onOpenChange={(open) => {
+        if (!open) menu.close();
+      }}
+      closeOnOutsidePointerStrategy="pointerdown"
+      onOutsidePointer={(event) => {
+        // Keep the external trigger's opening press inside the interaction.
+        // Dismiss on a subsequent press, not the opening finger's release.
+        if (menu.triggerRef()?.contains(event.target as Node)) {
+          event.preventDefault();
+        }
+      }}
+      side="bottom"
+      preventScroll={false}
+      preventScrollbarShift={false}
+    >
+      <MobileDrawer.Portal>
+        <MobileDrawer.Overlay />
+        <MobileDrawer.Content aria-label={props['aria-label']}>
+          <MobileDrawer.Handle />
+          <MobileDrawer.ScrollBody>
+            <div class="mx-3 flex flex-col gap-1 px-1">{props.children}</div>
+          </MobileDrawer.ScrollBody>
+        </MobileDrawer.Content>
+      </MobileDrawer.Portal>
+    </MobileDrawer>
+  );
+}
+
 function MobileTouchMenuItem(
   props: ParentProps<{
     id: string;
@@ -304,13 +354,11 @@ function MobileTouchMenuItem(
   });
 
   return (
-    <button
-      type="button"
+    <MobileDrawer.Item
       data-mobile-touch-menu-item={props.id}
       class={cn(
-        'flex h-11 items-center gap-2 rounded-lg px-3 text-sm',
         props.active ? 'text-accent' : 'text-ink',
-        menu.hoveredId() === props.id ? 'bg-hover' : 'hover:bg-hover'
+        menu.hoveredId() === props.id && 'bg-ink/8'
       )}
       onClick={() => {
         hapticImpact('light');
@@ -333,7 +381,7 @@ function MobileTouchMenuItem(
         )}
       </Show>
       <span>{props.children}</span>
-    </button>
+    </MobileDrawer.Item>
   );
 }
 
@@ -362,6 +410,7 @@ function MobileTouchMenuFooter(props: ParentProps) {
 export const MobileTouchMenu = Object.assign(MobileTouchMenuRoot, {
   Trigger: MobileTouchMenuTrigger,
   Content: MobileTouchMenuContent,
+  SheetContent: MobileTouchMenuSheetContent,
   Item: MobileTouchMenuItem,
   Separator: MobileTouchMenuSeparator,
   Footer: MobileTouchMenuFooter,

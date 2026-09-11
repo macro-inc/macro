@@ -113,8 +113,7 @@ function GettingStartedContent() {
   const openSettingsTab = (tab: SettingsTab) => {
     setActiveTabId(tab);
     if (isMobile()) {
-      // Mobile has no Preview Pair; the docked settings split is the
-      // full-screen path there.
+      // The mobile entry point opens this section in the settings sheet.
       openSettingsInSplit(tab);
       return;
     }

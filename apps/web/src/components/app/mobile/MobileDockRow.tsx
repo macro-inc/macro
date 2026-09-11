@@ -5,81 +5,21 @@ import {
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { triggerFocusInput } from '@core/directive/focusInput';
-import { hapticImpact } from '@core/mobile/haptics';
-import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import IconGear from '@phosphor/gear.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { cn } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import { For, Show } from 'solid-js';
+import { MobileDockButton } from './MobileDockButton';
 import { MobileDockIsland } from './MobileDockIsland';
 import { MobileBottomEdgeFade } from './MobileEdgeFade';
-import {
-  type MobileTouchIconComponent,
-  MobileTouchMenu,
-} from './MobileTouchMenu';
+import { MobileTouchMenu } from './MobileTouchMenu';
 import { useMobileDockViews } from './mobile-dock-views';
-import { pressPulse } from './pressPulse';
 import {
   type MobileDockNavId,
   useForegroundMobileView,
   useMobileNavNavigate,
 } from './use-mobile-nav';
-
-// Keeps the directive import from being tree-shaken / lint-flagged.
-false && pressPulse;
-
-type MobileDockButtonProps = {
-  icon: MobileTouchIconComponent;
-  /** Accessible name for the icon-only button. */
-  ariaLabel: string;
-  onClick: () => void;
-  active?: boolean;
-  class?: string;
-  /** Plain svg icons (e.g. Bell) don't accept `triggerAnimation`. */
-  animateIcon?: boolean;
-};
-
-/**
- * Renders flat: hosts wrap it in a MobileDockIsland (alone or grouped with
- * other controls) to give it the floating chrome.
- */
-function MobileDockButton(props: MobileDockButtonProps) {
-  const [animating, setAnimating] = createSignal(false);
-
-  return (
-    <button
-      type="button"
-      aria-label={props.ariaLabel}
-      use:pressPulse
-      onPointerDown={() => {
-        hapticImpact('light');
-        if (props.animateIcon !== false) {
-          setAnimating(true);
-          setTimeout(() => setAnimating(false), ICON_ANIMATION_DURATION_MS);
-        }
-      }}
-      // Fires on release; the press pulse holds the on-state while touched.
-      onClick={() => {
-        props.onClick();
-      }}
-      class={cn(
-        'relative flex size-(--mobile-chrome-button-size) shrink-0 items-center justify-center rounded-full',
-        props.active && 'text-accent',
-        props.class
-      )}
-    >
-      <div class="size-(--mobile-chrome-icon-size) shrink-0 [&_svg]:size-(--mobile-chrome-icon-size)">
-        {props.animateIcon === false ? (
-          <Dynamic component={props.icon} />
-        ) : (
-          <Dynamic component={props.icon} triggerAnimation={animating()} />
-        )}
-      </div>
-    </button>
-  );
-}
 
 function MoreViewsMenu(props: {
   isActive: (id: MobileDockNavId) => boolean;
@@ -92,11 +32,12 @@ function MoreViewsMenu(props: {
     <MobileTouchMenu>
       <MobileTouchMenu.Trigger
         ariaLabel="More views"
+        openOnRelease
         icon={CaretUpIcon}
         class="h-(--mobile-chrome-button-size) w-0 min-w-0 flex-1"
         iconClass="size-(--mobile-chrome-icon-size) [&_svg]:size-(--mobile-chrome-icon-size)"
       />
-      <MobileTouchMenu.Content>
+      <MobileTouchMenu.SheetContent aria-label="More views">
         <MobileTouchMenu.Item
           id="settings"
           icon={IconGear}
@@ -127,7 +68,7 @@ function MoreViewsMenu(props: {
         </For>
         <MobileTouchMenu.Separator />
         <MobileTouchMenu.Footer>Views</MobileTouchMenu.Footer>
-      </MobileTouchMenu.Content>
+      </MobileTouchMenu.SheetContent>
     </MobileTouchMenu>
   );
 }

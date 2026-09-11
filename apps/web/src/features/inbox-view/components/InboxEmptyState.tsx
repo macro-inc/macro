@@ -45,6 +45,7 @@ export function InboxEmptyState() {
 
       <Match when={!emailActive()}>
         <EmptyStatePanel
+          class="touch:pt-(--mobile-content-inset-top)"
           graphic={EmptyStateInboxTrayGraphic}
           title="No notifications yet"
           description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
@@ -58,6 +59,7 @@ export function InboxEmptyState() {
 
       <Match when={state.tab === 'noise'}>
         <EmptyStatePanel
+          class="touch:pt-(--mobile-content-inset-top)"
           graphic={EmptyStateInboxTrayGraphic}
           title="No noise"
           description={
@@ -74,6 +76,7 @@ export function InboxEmptyState() {
 
       <Match when={true}>
         <EmptyStatePanel
+          class="touch:pt-(--mobile-content-inset-top)"
           graphic={EmptyStateInboxTrayGraphic}
           title="You're all caught up"
           description="Important items will appear here as they arrive."

@@ -116,7 +116,7 @@ function MobileDrawerItem(props: ComponentProps<'button'>) {
     <button
       type="button"
       class={cn(
-        'flex min-h-11 w-full items-center gap-3 rounded-[20px] px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-ink/6 active:bg-ink/10 aria-checked:bg-ink/8 focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40',
+        'flex min-h-11 w-full items-center gap-3 rounded-[20px] px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-ink/6 active:bg-ink/10 aria-checked:bg-ink/8 aria-pressed:bg-ink/8 aria-[checked=mixed]:bg-ink/8 focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40',
         local.class
       )}
       {...rest}

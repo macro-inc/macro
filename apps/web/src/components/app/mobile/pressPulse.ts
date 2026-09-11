@@ -9,7 +9,7 @@ declare module 'solid-js' {
 /**
  * Marks controls for the app's delegated glass press effect. The enclosing
  * island owns the surface expansion, icon growth, and tap-centered sheen.
- * Fire the button's action from `onClick` (release), not pointer-down.
+ * Action timing is owned by the control, independently of this visual effect.
  */
 export function pressPulse(el: HTMLElement) {
   el.setAttribute('data-press-pulse', '');
