@@ -1,5 +1,6 @@
 import { usePreference } from '@app/preferences/use-preference';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -29,6 +30,7 @@ import {
 } from 'solid-js';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
 import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
+import { useSplitPanel } from '../split-layout/layoutUtils';
 import {
   SidePanelContext,
   type SidePanelContextType,
@@ -130,6 +132,20 @@ function Layout(
   };
 
   const hasSections = createMemo(() => sections().length > 0);
+  const splitPanel = useSplitPanel();
+  if (splitPanel?.splitHotkeyScope) {
+    registerHotkey({
+      hotkey: ']',
+      scopeId: splitPanel.splitHotkeyScope,
+      hotkeyToken: TOKENS.block.toggleSidePanel,
+      description: 'Toggle Side Panel',
+      keyDownHandler: () => {
+        if (!hasSections()) return false;
+        toggle();
+        return true;
+      },
+    });
+  }
 
   const ctx: SidePanelContextType = {
     register,

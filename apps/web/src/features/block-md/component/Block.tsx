@@ -43,6 +43,7 @@ import { useMarkdownName } from './MarkdownNameProvider';
 import { ModalsProvider } from './ModalsProvider';
 import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
 import { InstructionsTopBar, TopBar } from './TopBar';
+import { useTaskBranchNameHotkey } from './useTaskBranchNameHotkey';
 
 export interface BlockMarkdownProps {
   /**
@@ -86,6 +87,11 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
     currentBlockName === 'skill'
       ? currentBlockName
       : 'document';
+  useTaskBranchNameHotkey({
+    documentId: () => documentId,
+    kind: () => kind,
+    scopeId: blockHotkeyScopeSignal.get,
+  });
   const persistedName = useBlockDocumentName('');
   const fallbackName = useBlockDocumentName();
   const instructionsMdId = useInstructionsMdIdQuery();
