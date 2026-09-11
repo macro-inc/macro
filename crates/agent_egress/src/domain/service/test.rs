@@ -50,7 +50,7 @@ impl StubSessions {
         Self(Ok(SessionGrant {
             session: AgentSessionId::new(),
             owner: owner(),
-            repo: session_repo(),
+            repo: Some(session_repo()),
             mcp_servers: servers,
         }))
     }
@@ -146,8 +146,9 @@ impl McpCredentials for SpyCredentials {
         owner: &MacroUserIdStr<'static>,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
-        let McpDestination::Connected(slug) = destination else {
-            unreachable!("these tests only dial connected servers");
+        let slug = match destination {
+            McpDestination::Connected(slug) => slug.clone(),
+            McpDestination::Macro => McpServerSlug::parse("macro").expect("slug"),
         };
         self.asked
             .lock()
@@ -677,7 +678,7 @@ async fn a_session_owned_outside_macro_gets_nothing() {
         StubSessions(Ok(SessionGrant {
             session: AgentSessionId::new(),
             owner: MacroUserIdStr::try_from_email("visitor@example.com").expect("a valid user id"),
-            repo: session_repo(),
+            repo: Some(session_repo()),
             mcp_servers: Vec::new(),
         })),
         SpyCredentials::knowing(),
@@ -976,4 +977,44 @@ async fn a_cleartext_git_base_is_refused_too() {
 
     assert!(matches!(error, EgressError::InsecureUpstream(_)));
     assert!(!service.forward.was_called());
+}
+
+#[tokio::test]
+async fn a_session_without_a_repository_can_use_mcp_but_cannot_mint_git_credentials() {
+    let service = EgressServiceImpl::new(
+        StubSessions(Ok(SessionGrant {
+            session: AgentSessionId::new(),
+            owner: owner(),
+            repo: None,
+            mcp_servers: Vec::new(),
+        })),
+        SpyCredentials::knowing(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+    for target in [EgressTarget::McpServer(McpDestination::Macro), datadog()] {
+        service
+            .proxy(
+                &SessionToken::new("token"),
+                target,
+                request(Method::POST, &[]),
+            )
+            .await
+            .expect("MCP does not require a repository");
+    }
+    let error = service
+        .proxy(
+            &SessionToken::new("token"),
+            git(GitEndpoint::InfoRefs {
+                service: GitService::UploadPack,
+            }),
+            request(Method::GET, &[]),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        EgressError::Unauthenticated("the session has no repository for git access")
+    ));
+    assert!(service.tokens.asked.lock().expect("lock").is_empty());
 }

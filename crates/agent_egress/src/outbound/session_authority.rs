@@ -78,26 +78,21 @@ where
             return Err(EgressError::SessionClosed);
         }
 
-        // Our own configuration, not sandbox input - but it is interpolated
-        // into a GitHub URL downstream, so it is parsed rather than trusted. A
-        // row that does not name a repository is a session that was created
-        // wrong, which is ours to fix and not something the sandbox can retry
-        // its way out of.
-        //
-        // `repo_url` is nullable because an external session names no
-        // repository, but such a session is never issued an egress token, so
-        // reaching here without one is that same "created wrong" - not a
-        // refusal the sandbox could act on.
+        // A repository is optional for MCP-only sessions. The domain service
+        // requires one only for git requests; a malformed stored URL still
+        // indicates a configuration error.
         let repo = session
             .repo_url
             .as_deref()
-            .and_then(RepoSlug::parse_github_url)
-            .ok_or_else(|| {
-                EgressError::Internal(rootcause::report!(
-                    "session {} has no repo_url naming a github repository",
-                    session.id
-                ))
-            })?;
+            .map(|url| {
+                RepoSlug::parse_github_url(url).ok_or_else(|| {
+                    EgressError::Internal(rootcause::report!(
+                        "session {} has an invalid github repository URL",
+                        session.id
+                    ))
+                })
+            })
+            .transpose()?;
 
         // The agent's own names for the apps it listed, off the row's
         // snapshot, so a refusal can say "Google Sheets" rather than

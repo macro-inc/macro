@@ -6,6 +6,8 @@ import type { Accessor } from 'solid-js';
 import { pullRequestMentionKeys } from './keys';
 
 const PR_MENTION_STALE_TIME = 60 * 1000;
+/** Keep mounted chips current after webhook updates, including late arrivals. */
+const PR_STATUS_POLL_INTERVAL_MS = 15_000;
 
 type EnabledInput = boolean | Accessor<boolean>;
 
@@ -33,13 +35,13 @@ const GITHUB_PULL_REQUEST_SOURCE = 'github_pull_request';
  * Resolve a pull request mention from its GitHub key (`owner/repo/pull/12`).
  *
  * A pull request that was just opened may not have been synced by the webhook
- * yet, so a `404` resolves to `undefined` data instead of an error and callers
+ * yet, so a `404` resolves to `null` data instead of an error and callers
  * can poll until the mapping appears.
  */
 function pullRequestByGithubKeyQueryOptions(githubKey: string) {
   return {
     queryKey: pullRequestMentionKeys.byGithubKey(githubKey).queryKey,
-    queryFn: async (): Promise<ForeignEntity | undefined> => {
+    queryFn: async (): Promise<ForeignEntity | null> => {
       const result = await storageServiceClient.getForeignEntityBySource({
         source: GITHUB_PULL_REQUEST_SOURCE,
         foreignEntityId: githubKey,
@@ -47,7 +49,7 @@ function pullRequestByGithubKeyQueryOptions(githubKey: string) {
 
       if (result.isErr()) {
         if (result.error.some((error) => error.code === 'NOT_FOUND')) {
-          return undefined;
+          return null;
         }
 
         throw new ThrownResultError(result.error);
@@ -69,6 +71,7 @@ export function usePullRequestByGithubKeyQuery(
 
     return {
       ...pullRequestByGithubKeyQueryOptions(key ?? ''),
+      refetchInterval: PR_STATUS_POLL_INTERVAL_MS,
       enabled: !!key && readEnabled(enabled),
     };
   });

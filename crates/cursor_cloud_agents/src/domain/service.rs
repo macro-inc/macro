@@ -76,6 +76,9 @@ const STREAM_QUIET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
 
+/// Recovery must yield the writer gate even if the provider keeps heartbeating.
+const BACKFILL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 #[derive(Clone, Copy)]
 struct IngestMode {
     emit: bool,
@@ -1360,6 +1363,35 @@ where
         agent: &CursorAgentId,
         current_run: Option<&CursorRunId>,
     ) -> Result<bool, SessionError> {
+        match tokio::time::timeout(
+            BACKFILL_TIMEOUT,
+            self.backfill_available_runs(session_id, session, agent, current_run),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => {
+                // A cancelled append may have committed. Reload durable state
+                // before the next attempt instead of trusting its local cursor.
+                session
+                    .state
+                    .lock()
+                    .expect("session state poisoned")
+                    .journal_loaded = false;
+                Err(SessionError::Rejected(
+                    "Cursor history synchronization timed out. Please retry your message.".into(),
+                ))
+            }
+        }
+    }
+
+    async fn backfill_available_runs(
+        &self,
+        session_id: &SessionId,
+        session: &Session,
+        agent: &CursorAgentId,
+        current_run: Option<&CursorRunId>,
+    ) -> Result<bool, SessionError> {
         self.ensure_journal(session_id, session).await?;
         let last = session
             .state
@@ -1403,6 +1435,15 @@ where
             if current_run != Some(&listing.id)
                 && (pending.contains(&listing.id) || newer.contains(&listing.id))
             {
+                if !reconciled.contains(&listing.id)
+                    && matches!(listing.status, RunStatus::Creating)
+                {
+                    tracing::warn!(%session_id, %agent, run = %listing.id, status = ?listing.status,
+                        "Cursor history blocked by an unfinished run");
+                    return Err(SessionError::Rejected(
+                        "Cursor is still starting or running an earlier request. Stop that run, then retry your message.".into(),
+                    ));
+                }
                 runs.push(listing.id);
             }
         }
