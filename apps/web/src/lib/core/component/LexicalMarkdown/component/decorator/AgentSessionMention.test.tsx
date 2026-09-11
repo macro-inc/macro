@@ -27,6 +27,9 @@ vi.mock('./MagicChip', () => ({
     return <span data-magic-chip>Latest session response</span>;
   },
 }));
+vi.mock('@core/component/DocumentPreview', () => ({
+  PopupPreview: () => null,
+}));
 vi.mock('@core/component/HoverCard', () => ({
   HoverCard: (props: { trigger: import('solid-js').JSX.Element }) =>
     props.trigger,

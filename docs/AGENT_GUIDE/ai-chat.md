@@ -163,7 +163,7 @@ unsaved session drafts do not offer sharing.
 ### Expanded session mentions
 
 Hover an accessible inline `@` session mention in an editable document or
-composer and choose **Expand to card**. The card is the same Magic Chip used
+composer and choose **Convert to Card View**. The card is the same Magic Chip used
 for agent responses and follows the session's latest turn as it streams. Use
 **Collapse to mention** in its header to restore the compact underlined title.
 The display choice survives reload and copying; expansion still references the

@@ -12,6 +12,7 @@ import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
   type AgentContextNode,
+  type AgentSessionMentionNode,
   type AwaitNode,
   type ClassedBlockNode,
   type ConnectAppNode,
@@ -77,6 +78,7 @@ import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
 import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
+import { AgentSessionMention as AgentSessionMentionDecorator } from '../decorator/AgentSessionMention';
 import { Await as AwaitDecorator } from '../decorator/Await';
 import { ConnectApp as ConnectAppDecorator } from '../decorator/ConnectApp';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
@@ -237,6 +239,7 @@ function getTextClassName(
     | TextNode
     | UserMentionNode
     | DocumentMentionNode
+    | AgentSessionMentionNode
     | ContactMentionNode
     | DateMentionNode
     | WatermarkNode,
@@ -395,6 +398,20 @@ const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
       </span>
     );
   },
+};
+
+const AgentSessionMention: TypedRenderableEntity<AgentSessionMentionNode> = {
+  guard: (node: LexicalNode): node is AgentSessionMentionNode =>
+    node.__type === 'agent-session-mention',
+  render: (props) => (
+    <span class={getTextClassName(props.node, props.theme)}>
+      {AgentSessionMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
 };
 
 const ThemeMention: TypedRenderableEntity<ThemeMentionNode> = {
@@ -902,6 +919,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(LineBreak),
   eraseRenderableEntity(UserMention),
   eraseRenderableEntity(DocumentMention),
+  eraseRenderableEntity(AgentSessionMention),
   eraseRenderableEntity(DocumentCard),
   eraseRenderableEntity(ContactMention),
   eraseRenderableEntity(DateMention),

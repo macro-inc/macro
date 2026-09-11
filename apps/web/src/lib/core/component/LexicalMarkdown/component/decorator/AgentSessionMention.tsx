@@ -1,4 +1,5 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { PopupPreview } from '@core/component/DocumentPreview';
 import { HoverCard } from '@core/component/HoverCard';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -7,7 +8,6 @@ import {
   type AgentSessionMentionDecoratorProps,
 } from '@macro-inc/lexical-core';
 import { useAgentSessionMentionPreview } from '@queries/agent-session/mentions';
-import { Button } from '@ui';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
@@ -84,7 +84,7 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
       when={props.expanded && session()}
       fallback={
         <HoverCard
-          disabled={!canExpand()}
+          disabled={!session()}
           trigger={
             <span
               data-agent-session-mention="true"
@@ -99,9 +99,23 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
             </span>
           }
           content={
-            <Button variant="ghost" onClick={() => setExpanded(true)}>
-              Expand to card
-            </Button>
+            <Suspense>
+              <PopupPreview
+                mouseEnter={() => {}}
+                mouseLeave={() => {}}
+                documentInfo={{
+                  id: props.id,
+                  type: 'agent',
+                  params: {},
+                  isOpenable: true,
+                }}
+                previewInfo={{
+                  isPreviewable: false,
+                  showPreview: canExpand(),
+                  handlePreviewToggle: () => setExpanded(true),
+                }}
+              />
+            </Suspense>
           }
         />
       }
