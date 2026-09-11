@@ -1,5 +1,5 @@
 import { Mirror } from "../../src/core/mirror";
-import { LoroDoc, LoroText } from "loro-crdt";
+import { LoroDoc, type LoroText } from "loro-crdt";
 import { schema } from "../../src/schema";
 import { describe, expect, it } from "vitest";
 import { valueIsContainer, valueIsContainerOfType } from "../../src/core/utils";

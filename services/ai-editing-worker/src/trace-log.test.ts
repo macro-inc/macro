@@ -32,7 +32,16 @@ function sessionWithSnippets(snippets: unknown): TraceSession {
       },
     ],
     usage: [{ model: 'claude-haiku-4-5', inputTokens: 10, outputTokens: 5 }],
-    coderCodeBlocks: [[[{ code: 'editor.setText("a", snippets.x)', snippets: snippets as never }]]],
+    coderCodeBlocks: [
+      [
+        [
+          {
+            code: 'editor.setText("a", snippets.x)',
+            snippets: snippets as never,
+          },
+        ],
+      ],
+    ],
   } as TraceSession;
 }
 

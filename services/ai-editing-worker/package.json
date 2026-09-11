@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"prebuild": "bun scripts/generate-sandbox.ts",
+		"lint": "biome check .",
 		"type-check": "tsc --noEmit --project tsconfig.json",
 		"traces": "bun scripts/traces.ts",
 		"deploy-dev": "bun run prebuild && wrangler deploy --env dev",

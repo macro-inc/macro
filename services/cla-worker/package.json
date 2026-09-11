@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler d1 migrations apply macro-cla --remote && wrangler deploy",
+    "lint": "biome check .",
     "check": "tsc --noEmit"
   },
   "devDependencies": {

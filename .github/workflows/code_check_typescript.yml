@@ -1,0 +1,130 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_typescript.rs
+name: typescript code check
+'on':
+  pull_request:
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - ready_for_review
+    branches:
+    - main
+jobs:
+  path-check:
+    runs-on: namespace-profile-linux-small
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - id: filter
+      name: Filter changed paths
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+      with:
+        filters: |
+          should_run:
+            - 'biome.base.jsonc'
+            - 'package.json'
+            - 'bun.lock'
+            - 'packages/lexical-core/**'
+            - 'packages/loro-mirror/**'
+            - 'packages/observability/**'
+            - 'packages/email-renderer/**'
+            - 'services/ai-editing-worker/**'
+            - 'services/lexical-service/**'
+            - 'services/cla-worker/**'
+            - 'services/analytics-proxy/**'
+            - 'services/websocket-service/**'
+            - 'services/coding-agent-worker/**'
+            - 'services/bots/**'
+            - 'tooling/scripts/check-typescript.sh'
+            - 'flake.nix'
+            - 'flake.lock'
+            - '.github/actions/setup-nix-dev-shell/**'
+            - '.github/actions/teardown-nix/**'
+            - '.github/actions/setup-reqs-web/**'
+            - '.github/workflows/code_check_typescript.yml'
+  biome-check:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    name: Biome Check
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Run TypeScript checks (--biome)
+      run: bash tooling/scripts/check-typescript.sh --biome
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  typescript:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    name: Typecheck
+    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+        path: /home/runner/.bun/install/cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Prereqs
+      uses: './.github/actions/setup-reqs-web'
+    - name: Install CLA worker dependencies
+      run: bun install --frozen-lockfile
+      working-directory: services/cla-worker
+    - name: Install analytics-proxy dependencies
+      run: bun install --frozen-lockfile
+      working-directory: services/analytics-proxy
+    - name: Install websocket-service dependencies
+      run: bun install --frozen-lockfile
+      working-directory: services/websocket-service
+    - name: Run TypeScript checks (--tsc)
+      run: bash tooling/scripts/check-typescript.sh --tsc
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  status-check:
+    needs:
+    - path-check
+    - biome-check
+    - typescript
+    if: always()
+    name: TypeScript Status Check
+    runs-on: namespace-profile-linux-small
+    steps:
+    - name: Check job results
+      run: |
+        echo "path-check: ${{ needs.path-check.result }}"
+        echo "biome-check: ${{ needs.biome-check.result }}"
+        echo "typescript: ${{ needs.typescript.result }}"
+
+        # Fail if any job failed (skipped and success are both OK)
+        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.typescript.result }}" == "failure" ]]; then
+          echo "One or more jobs failed"
+          exit 1
+        fi
+
+        echo "All jobs passed or were skipped"
+concurrency:
+  group: code-check-typescript-${{ github.ref }}
+  cancel-in-progress: true

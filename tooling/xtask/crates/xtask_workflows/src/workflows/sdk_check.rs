@@ -41,6 +41,7 @@ fn check_sdk() -> Job {
         .add_step(steps::show_sccache_stats())
         .add_step(verify_fresh())
         .add_step(typecheck())
+        .add_step(biome())
         .add_step(check_coverage())
         .add_step(steps::teardown_nix())
 }
@@ -73,5 +74,11 @@ fn check_coverage() -> Step<Run> {
 fn typecheck() -> Step<Run> {
     Step::new("Typecheck SDK")
         .run("bun run check")
+        .working_directory("packages/sdk")
+}
+
+fn biome() -> Step<Run> {
+    Step::new("Biome Check")
+        .run("biome ci --error-on-warnings")
         .working_directory("packages/sdk")
 }

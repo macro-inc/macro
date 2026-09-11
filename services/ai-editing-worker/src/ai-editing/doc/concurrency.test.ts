@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mockAwarenessSource } from '../awareness/awareness-source';
 import { createEditingSession, loadMarkdown } from '../ai-toolkit/session';
+import { mockAwarenessSource } from '../awareness/awareness-source';
 import { DocumentEditor } from '../editor/document-editor';
 import { type CodeRunner, runEditorCode } from '../runtime';
 import { serializeWithXml } from '../utils';

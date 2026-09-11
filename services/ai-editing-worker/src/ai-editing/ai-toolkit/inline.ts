@@ -253,7 +253,9 @@ export function $wrapInBlock(
   return mutateMatches(block, needle, scope, (matchNode) => {
     if (existing) {
       const parent = matchNode.getParent();
-      const enclosing = parent ? $findMatchingParent(parent, existing.is) : null;
+      const enclosing = parent
+        ? $findMatchingParent(parent, existing.is)
+        : null;
       if (enclosing && $isElementNode(enclosing)) {
         existing.update(enclosing);
         return;

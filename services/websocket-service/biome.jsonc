@@ -6,11 +6,6 @@
     "root": "../.."
   },
   "files": {
-    "includes": [
-      "**/*.ts",
-      "!test-results",
-      "!playwright-report",
-      "!**/node_modules"
-    ]
+    "includes": ["**/*.{ts,tsx,js,jsx}", "!**/*.d.ts", "!**/node_modules"]
   }
 }

@@ -13,7 +13,10 @@ function build(md: string) {
   loadMarkdown(session, md);
   const doc = new Doc(session);
   const xml = () => serializeWithXml(session);
-  const id = xml().match(/<p id="([^"]+)"/)?.[1]!;
+  const id = xml().match(/<p id="([^"]+)"/)?.[1];
+  if (!id) {
+    throw new Error('expected a paragraph id in serialized xml');
+  }
   return { session, doc, xml, id };
 }
 

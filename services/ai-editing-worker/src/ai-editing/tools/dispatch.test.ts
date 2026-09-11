@@ -2,10 +2,10 @@ import type { LanguageModel, LanguageModelUsage } from 'ai';
 import { describe, expect, it } from 'vitest';
 import type { coder } from '../agents';
 import { createEditingSession, loadMarkdown } from '../ai-toolkit/session';
-import { serializeWithXml } from '../utils';
 import { mockAwarenessSource } from '../awareness/awareness-source';
 import { Doc } from '../doc/doc';
 import { TokenTracker } from '../token-tracker';
+import { serializeWithXml } from '../utils';
 import {
   computeContextRange,
   createDispatchTool,

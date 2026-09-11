@@ -25,6 +25,7 @@ mod cleanup_preview;
 mod code_check_cloud_storage;
 mod code_check_conventions;
 mod code_check_infra;
+mod code_check_typescript;
 mod deploy_ai_editing_worker;
 mod deploy_all_services;
 mod deploy_cla_worker;
@@ -136,6 +137,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "code_check_infra",
         file_name: "code_check_infra.yml",
         render_yaml: || render_gh_workflow(code_check_infra::code_check_infra)(),
+    },
+    WorkflowFile {
+        slug: "code_check_typescript",
+        file_name: "code_check_typescript.yml",
+        render_yaml: || render_gh_workflow(code_check_typescript::code_check_typescript)(),
     },
     WorkflowFile {
         slug: "cancel_stuck_cloud_storage_deploys",

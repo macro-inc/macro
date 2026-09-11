@@ -461,9 +461,8 @@ export class Mirror<S extends SchemaType> {
 
     this.syncing = true;
     try {
-      // Build a complete new state from the document
-      let start = performance.now();
-      const currentDocState = this.doc.toJSON();
+            // Build a complete new state from the document
+            const currentDocState = this.doc.toJSON();
 
       // Update the app state to match
       const newState = produce<InferType<S>>((draft) => {

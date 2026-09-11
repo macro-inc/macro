@@ -39,7 +39,10 @@ export const I_AGENT_CONTEXT: ElementTransformer = {
     // The harness authors exactly one context node before the user's prompt.
     // A matching tag later in the prompt (or inside a quote) is user content
     // and must remain visible rather than becoming hidden metadata.
-    if (!$isRootNode(parent.getParent()) || parent.getPreviousSibling() !== null) {
+    if (
+      !$isRootNode(parent.getParent()) ||
+      parent.getPreviousSibling() !== null
+    ) {
       parent.clear().append($createTextNode(match[0] ?? ''));
       return;
     }

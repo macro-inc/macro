@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
-    "start": "bun run src/index.ts"
+    "start": "bun run src/index.ts",
+    "lint": "biome check .",
+    "check": "tsc --noEmit --project tsconfig.json"
   },
   "devDependencies": {
-    "@types/bun": "^1.2.19"
+    "@types/bun": "^1.2.19",
+    "typescript": "^5.7.3"
   }
 }

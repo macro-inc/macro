@@ -66,13 +66,15 @@ function readTextSpecs(editor: ReturnType<typeof createHeadlessEditor>) {
     $getRoot()
       .getAllTextNodes()
       .map((node) => ({
-        formats: [
-          'bold',
-          'italic',
-          'underline',
-          'superscript',
-          'subscript',
-        ].filter((format): format is TextFormatType => node.hasFormat(format)),
+        formats: (
+          [
+            'bold',
+            'italic',
+            'underline',
+            'superscript',
+            'subscript',
+          ] as const satisfies readonly TextFormatType[]
+        ).filter((format) => node.hasFormat(format)),
         text: node.getTextContent(),
       }))
   );

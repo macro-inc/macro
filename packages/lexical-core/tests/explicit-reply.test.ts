@@ -34,7 +34,9 @@ describe('extractExplicitReply', () => {
   });
 
   it('does not treat a blockquote followed by content as an explicit reply', () => {
-    expect(extractExplicitReply('> quoted text\n\nordinary response')).toBeNull();
+    expect(
+      extractExplicitReply('> quoted text\n\nordinary response')
+    ).toBeNull();
   });
 
   it('rejects a quote appearing after the reply', () => {

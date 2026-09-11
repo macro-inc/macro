@@ -81,7 +81,10 @@ describe('runCode snippets', () => {
   it('leaves string values untouched', async () => {
     const { tool, applied } = setup();
     await tool.execute!(
-      { code: 'editor.setText("a", snippets.body)', snippets: { body: 'x\ny' } },
+      {
+        code: 'editor.setText("a", snippets.body)',
+        snippets: { body: 'x\ny' },
+      },
       callOptions
     );
     expect(applied[0]).toEqual({ body: 'x\ny' });

@@ -8,8 +8,8 @@ import {
 } from '../nodes/MagicChipNode';
 import {
   $createReplyTargetNode,
-  stripLeadingReplyTargetMarkdown,
   type ReplyTargetData,
+  stripLeadingReplyTargetMarkdown,
 } from '../nodes/ReplyTargetNode';
 import { ALL_TRANSFORMERS } from '../transformers';
 

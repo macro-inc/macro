@@ -38,9 +38,7 @@ export async function runInSandbox(
   try {
     const refs = Array.from({ length: REF_POOL_SIZE }, () => nanoid());
     const init = ctx.unwrapResult(
-      ctx.evalCode(
-        `${SANDBOX_CODE}\n${sandboxInit(validIds, refs, snippets)}`
-      )
+      ctx.evalCode(`${SANDBOX_CODE}\n${sandboxInit(validIds, refs, snippets)}`)
     );
     init.dispose();
 

@@ -12,23 +12,23 @@
  * ours.
  */
 
-import { createHeadlessEditor } from "@lexical/headless";
-import { $generateHtmlFromNodes } from "@lexical/html";
-import { $convertFromMarkdownString } from "@lexical/markdown";
+import { createHeadlessEditor } from '@lexical/headless';
+import { $generateHtmlFromNodes } from '@lexical/html';
+import { $convertFromMarkdownString } from '@lexical/markdown';
 import {
-	NodeReplacements,
-	SupportedNodeTypes,
-} from "@macro-inc/lexical-core/node-list";
-import { ALL_TRANSFORMERS } from "@macro-inc/lexical-core/transformers";
-import { $getRoot } from "lexical";
-import { parseHTML } from "linkedom";
+  NodeReplacements,
+  SupportedNodeTypes,
+} from '@macro-inc/lexical-core/node-list';
+import { ALL_TRANSFORMERS } from '@macro-inc/lexical-core/transformers';
+import { $getRoot } from 'lexical';
+import { parseHTML } from 'linkedom';
 
 /** An email body in both parts a MIME message wants. */
 export type RenderedBody = {
-	/** The HTML body, as the composer would have exported it. */
-	html: string;
-	/** The plain-text alternative, for clients that ask for one. */
-	text: string;
+  /** The HTML body, as the composer would have exported it. */
+  html: string;
+  /** The plain-text alternative, for clients that ask for one. */
+  text: string;
 };
 
 /**
@@ -37,21 +37,21 @@ export type RenderedBody = {
  * inside.
  */
 function withDOM<T>(f: () => T): T {
-	const { window, document, DOMParser, MutationObserver } = parseHTML(
-		"<!doctype html><html><body></body></html>",
-	);
-	const previous = {
-		window: globalThis.window,
-		document: globalThis.document,
-		DOMParser: globalThis.DOMParser,
-		MutationObserver: globalThis.MutationObserver,
-	};
-	Object.assign(globalThis, { window, document, DOMParser, MutationObserver });
-	try {
-		return f();
-	} finally {
-		Object.assign(globalThis, previous);
-	}
+  const { window, document, DOMParser, MutationObserver } = parseHTML(
+    '<!doctype html><html><body></body></html>'
+  );
+  const previous = {
+    window: globalThis.window,
+    document: globalThis.document,
+    DOMParser: globalThis.DOMParser,
+    MutationObserver: globalThis.MutationObserver,
+  };
+  Object.assign(globalThis, { window, document, DOMParser, MutationObserver });
+  try {
+    return f();
+  } finally {
+    Object.assign(globalThis, previous);
+  }
 }
 
 /**
@@ -59,19 +59,19 @@ function withDOM<T>(f: () => T): T {
  * result as HTML and as plain text.
  */
 export function markdownToHtml(markdown: string): RenderedBody {
-	const editor = createHeadlessEditor({
-		nodes: [...SupportedNodeTypes, ...NodeReplacements],
-		onError: (error) => {
-			throw error;
-		},
-	});
+  const editor = createHeadlessEditor({
+    nodes: [...SupportedNodeTypes, ...NodeReplacements],
+    onError: (error) => {
+      throw error;
+    },
+  });
 
-	editor.update(() => $convertFromMarkdownString(markdown, ALL_TRANSFORMERS), {
-		discrete: true,
-	});
+  editor.update(() => $convertFromMarkdownString(markdown, ALL_TRANSFORMERS), {
+    discrete: true,
+  });
 
-	const html = withDOM(() => editor.read(() => $generateHtmlFromNodes(editor)));
-	const text = editor.read(() => $getRoot().getTextContent());
+  const html = withDOM(() => editor.read(() => $generateHtmlFromNodes(editor)));
+  const text = editor.read(() => $getRoot().getTextContent());
 
-	return { html, text };
+  return { html, text };
 }

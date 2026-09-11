@@ -3,7 +3,9 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"start": "bun run index.ts"
+		"start": "bun run index.ts",
+		"lint": "biome check .",
+		"type-check": "tsc --noEmit --project tsconfig.json"
 	},
 	"dependencies": {
 		"@agentclientprotocol/sdk": "^1.2.1",

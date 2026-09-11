@@ -81,6 +81,9 @@ jobs:
     - name: Typecheck SDK
       run: bun run check
       working-directory: packages/sdk
+    - name: Biome Check
+      run: biome ci --error-on-warnings
+      working-directory: packages/sdk
     - name: Check endpoint coverage
       run: bun run coverage
       working-directory: packages/sdk

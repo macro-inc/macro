@@ -28,7 +28,7 @@ check *ARGS:
     if [ -z "$changed" ]; then echo "no changed files — nothing to check"; exit 0; fi
 
     rs=$(grep -E '^(crates|services|tooling)/.*\.rs$' <<<"$changed" || true)
-    js=$(grep -E '^(apps/web|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service))/.*\.(ts|tsx)$' <<<"$changed" || true)
+    js=$(grep -E '^(apps/web|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service|cla-worker|coding-agent-worker|bots))/.*\.(ts|tsx|js|jsx)$' <<<"$changed" || true)
     sg=$(grep -E '^(apps|crates|packages|services|tooling)/.*\.(rs|ts|tsx)$' <<<"$changed" || true)
 
     fail=0
@@ -38,16 +38,45 @@ check *ARGS:
         || { echo "   fix: cargo fmt"; fail=1; }
     fi
     if [ -n "$js" ]; then
-      # Both tools run in apps/web. Absolute paths also reach package and
-      # service files; quoted arguments preserve literal path characters.
-      js_paths=()
-      while IFS= read -r f; do js_paths+=("$PWD/$f"); done <<<"$js"
-      echo "── biome (changed JS/TS format + lint, same flags as CI)"
-      (cd apps/web && bunx --bun @biomejs/biome ci --colors=off --no-errors-on-unmatched \
-          --error-on-warnings "${js_paths[@]}") \
-        || { echo "   fix: bun run fix, then re-check"; fail=1; }
-      echo "── oxlint (warn-only; docs/STYLE_GUIDE.md FE-12)"
-      (cd apps/web && bunx --yes oxlint@1.73.0 "${js_paths[@]}") || fail=1
+      # Group changed files by the nearest biome.jsonc so each package uses
+      # its own config (apps/web biome does not lint other workspace roots).
+      declare -A biome_groups=()
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        d=$(dirname "$f")
+        root=""
+        while [ "$d" != "." ]; do
+          if [ -f "$d/biome.jsonc" ] || [ -f "$d/biome.json" ]; then
+            root=$d
+            break
+          fi
+          d=$(dirname "$d")
+        done
+        if [ -n "$root" ]; then
+          biome_groups[$root]+="$f"$'\n'
+        fi
+      done <<<"$js"
+
+      for root in "${!biome_groups[@]}"; do
+        rels=()
+        while IFS= read -r f; do
+          [ -z "$f" ] && continue
+          rels+=("${f#"$root"/}")
+        done <<< "${biome_groups[$root]}"
+        echo "── biome ($root, changed JS/TS format + lint, same flags as CI)"
+        (cd "$root" && bunx --bun @biomejs/biome ci --colors=off --no-errors-on-unmatched \
+            --error-on-warnings "${rels[@]}") \
+          || { echo "   fix: (cd $root && bunx --bun @biomejs/biome check --write)"; fail=1; }
+        if [ "$root" = "apps/web" ]; then
+          echo "── oxlint (warn-only; docs/STYLE_GUIDE.md FE-12)"
+          web_paths=()
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            web_paths+=("$PWD/$f")
+          done <<< "${biome_groups[$root]}"
+          (cd apps/web && bunx --yes oxlint@1.73.0 "${web_paths[@]}") || fail=1
+        fi
+      done
     fi
     if [ -n "$sg" ]; then
       echo "── ast-grep code rules (rule ids map to docs/STYLE_GUIDE.md)"
@@ -55,8 +84,45 @@ check *ARGS:
     fi
     if [ "{{ ARGS }}" = "full" ]; then
       if [ -n "$js" ]; then
-        echo "── tsc (apps/web)"
-        bun run check || fail=1
+        ts_projects=""
+        while IFS= read -r f; do
+          [ -z "$f" ] && continue
+          case "$f" in
+            apps/web/*) ts_projects+=$'apps/web\n' ;;
+            packages/collaboration/*) ts_projects+=$'packages/collaboration\n' ;;
+            packages/sdk/*) ts_projects+=$'packages/sdk\n' ;;
+            packages/lexical-core/*) ts_projects+=$'packages/lexical-core\n' ;;
+            packages/loro-mirror/*) ts_projects+=$'packages/loro-mirror\n' ;;
+            packages/observability/*) ts_projects+=$'packages/observability\n' ;;
+            packages/email-renderer/*) ts_projects+=$'packages/email-renderer\n' ;;
+            services/ai-editing-worker/*) ts_projects+=$'services/ai-editing-worker\n' ;;
+            services/lexical-service/*) ts_projects+=$'services/lexical-service\n' ;;
+            services/cla-worker/*) ts_projects+=$'services/cla-worker\n' ;;
+            services/analytics-proxy/*) ts_projects+=$'services/analytics-proxy\n' ;;
+            services/websocket-service/*) ts_projects+=$'services/websocket-service\n' ;;
+            services/bots/stripe-payment-bot/*) ts_projects+=$'services/bots/stripe-payment-bot\n' ;;
+            services/bots/anthropic-status-bot/*) ts_projects+=$'services/bots/anthropic-status-bot\n' ;;
+          esac
+        done <<<"$js"
+        ts_projects=$(printf '%s' "$ts_projects" | sort -u)
+        if grep -qx 'apps/web' <<<"$ts_projects"; then
+          echo "── tsc (apps/web)"
+          bun run check || fail=1
+        fi
+        if grep -qx 'packages/collaboration' <<<"$ts_projects"; then
+          echo "── tsc (packages/collaboration)"
+          bun run --cwd packages/collaboration type-check || fail=1
+        fi
+        if grep -qx 'packages/sdk' <<<"$ts_projects"; then
+          echo "── tsc (packages/sdk)"
+          bun run --cwd packages/sdk check || fail=1
+        fi
+        gap=$(printf '%s\n' "$ts_projects" | grep -vE '^(apps/web|packages/collaboration|packages/sdk)$' || true)
+        if [ -n "$gap" ]; then
+          only=$(printf '%s' "$gap" | paste -sd, -)
+          echo "── tsc ($only)"
+          bash tooling/scripts/check-typescript.sh --tsc --only "$only" || fail=1
+        fi
       fi
       if [ -n "$rs" ]; then
         echo "── clippy (root workspace)"

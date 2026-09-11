@@ -1,4 +1,4 @@
-import { Mirror, SyncDirection, UpdateMetadata } from "../../src/core/mirror";
+import { Mirror, SyncDirection, type UpdateMetadata } from "../../src/core/mirror";
 import { schema } from "../../src/schema";
 import { LoroDoc } from "loro-crdt";
 import { describe, expect, it } from "vitest";
@@ -21,7 +21,7 @@ describe("Tagging", () => {
       },
     });
 
-    let capturedMetadata: UpdateMetadata | undefined = undefined;
+    let capturedMetadata: UpdateMetadata | undefined ;
     
     mirror.subscribe((_, metadata) => {
       capturedMetadata = metadata;

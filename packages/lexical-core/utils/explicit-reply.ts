@@ -16,9 +16,7 @@ import { ALL_TRANSFORMERS } from '../transformers';
  * of the author's own. Standard Markdown blockquotes carry no reply semantics.
  * Nested reply-target nodes do not count as authored content.
  */
-export function extractExplicitReply(
-  markdown: string
-): ReplyTargetData | null {
+export function extractExplicitReply(markdown: string): ReplyTargetData | null {
   const editor = createHeadlessEditor({
     nodes: [...SupportedNodeTypes, ...NodeReplacements],
   });
@@ -34,8 +32,7 @@ export function extractExplicitReply(
     const [first, ...rest] = $getRoot().getChildren();
     if (!$isReplyTargetNode(first)) return null;
     const hasAuthoredContent = rest.some(
-      (node) =>
-        !$isReplyTargetNode(node) && node.getTextContent().trim() !== ''
+      (node) => !$isReplyTargetNode(node) && node.getTextContent().trim() !== ''
     );
     return hasAuthoredContent ? first.exportComponentProps() : null;
   });

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "lint": "biome check .",
     "check": "tsc --noEmit --project tsconfig.json",
     "test": "bun test",
     "deploy": "wrangler deploy"

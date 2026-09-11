@@ -1,9 +1,9 @@
+import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
 import { OpenAPIRoute } from 'chanfana';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { ConversionError, handleEndpointError } from '../lib/error-handler';
 import { standardErrorResponses } from '../lib/schemas';
-import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
 
 const markdownSnapshotRequest = z.object({
   markdown: z.string(),

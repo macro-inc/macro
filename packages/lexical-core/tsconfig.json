@@ -13,5 +13,5 @@
     "baseUrl": "."
   },
   "include": ["./**/*"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "markdown-golden.ts", "markdown-golden.1.ts"]
 }

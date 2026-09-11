@@ -84,9 +84,9 @@ describe('id argument validation', () => {
   });
 
   it('names the type when handed an array', () => {
-    expect(() =>
-      editor().setText(['real'] as unknown as string, 'x')
-    ).toThrow(/an array of 1/);
+    expect(() => editor().setText(['real'] as unknown as string, 'x')).toThrow(
+      /an array of 1/
+    );
   });
 
   it('rejects undefined with a readable message', () => {

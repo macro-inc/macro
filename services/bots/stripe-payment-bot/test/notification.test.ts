@@ -95,7 +95,8 @@ function subscriptionEvent(
   | Stripe.CustomerSubscriptionDeletedEvent
   | Stripe.CustomerSubscriptionUpdatedEvent {
   return {
-    id: type === 'customer.subscription.deleted' ? 'evt_deleted' : 'evt_updated',
+    id:
+      type === 'customer.subscription.deleted' ? 'evt_deleted' : 'evt_updated',
     livemode: true,
     type,
     data: {

@@ -18,7 +18,7 @@
 
 // Bundled as a text module (see `rules` in wrangler.jsonc) so the served text
 // and CLA_VERSION deploy atomically and can never drift.
-import claMarkdown from "../CLA.md";
+import claMarkdown from '../CLA.md';
 
 export interface Env {
   DB: D1Database;
@@ -29,11 +29,11 @@ export interface Env {
   CLA_VERSION: string;
 }
 
-const STATE_COOKIE = "cla_oauth_state";
+const STATE_COOKIE = 'cla_oauth_state';
 /// Signing must complete within this window or the state cookie expires.
 const STATE_COOKIE_MAX_AGE_SECONDS = 600;
 
-const RECEIPT_COOKIE = "cla_receipt";
+const RECEIPT_COOKIE = 'cla_receipt';
 /// How long the confirmation page stays viewable after signing. Short: it is
 /// a receipt for the person who just signed, not a durable record — the D1
 /// row is the record.
@@ -41,19 +41,19 @@ const RECEIPT_COOKIE_MAX_AGE_SECONDS = 600;
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method !== "GET") {
-      return new Response("method not allowed", { status: 405 });
+    if (request.method !== 'GET') {
+      return new Response('method not allowed', { status: 405 });
     }
     const url = new URL(request.url);
     switch (url.pathname) {
-      case "/cla":
+      case '/cla':
         return claPage(request, url, env);
-      case "/cla/callback":
+      case '/cla/callback':
         return callback(request, url, env);
-      case "/cla/check":
+      case '/cla/check':
         return check(request, url, env);
       default:
-        return new Response("not found", { status: 404 });
+        return new Response('not found', { status: 404 });
     }
   },
 
@@ -65,12 +65,16 @@ export default {
 // ---------------------------------------------------------------------------
 // GET /cla
 
-async function claPage(request: Request, url: URL, env: Env): Promise<Response> {
+async function claPage(
+  request: Request,
+  url: URL,
+  env: Env
+): Promise<Response> {
   // Post-callback redirect target: refreshing this page never replays the
   // OAuth code exchange. The receipt cookie — not the query string — is what
   // authorizes the confirmation, so `?signed=1` alone renders nothing; an
   // absent or invalid receipt just falls through to the agreement.
-  if (url.searchParams.get("signed") === "1") {
+  if (url.searchParams.get('signed') === '1') {
     const receipt = await readReceipt(env, readCookie(request, RECEIPT_COOKIE));
     if (receipt) {
       return confirmationPage(receipt, env);
@@ -80,12 +84,12 @@ async function claPage(request: Request, url: URL, env: Env): Promise<Response> 
   const nonce = randomHex(16);
   const signature = await hmacHex(env.GITHUB_CLIENT_SECRET, nonce);
   const authorizeUrl =
-    "https://github.com/login/oauth/authorize" +
+    'https://github.com/login/oauth/authorize' +
     `?client_id=${encodeURIComponent(env.GITHUB_CLIENT_ID)}` +
     `&state=${nonce}`;
 
   const body = pageShell(
-    "Macro Contributor License Agreement",
+    'Macro Contributor License Agreement',
     `${renderMarkdown(claMarkdown)}
      <div class="sign">
        <a class="button" href="${escapeHtml(authorizeUrl)}" rel="nofollow">Sign with GitHub</a>
@@ -94,15 +98,15 @@ async function claPage(request: Request, url: URL, env: Env): Promise<Response> 
        account's numeric user ID, along with the time of signing and the IP
        address the signature was submitted from. We request no OAuth scopes —
        only your public GitHub identity.</p>
-     </div>`,
+     </div>`
   );
 
   return htmlResponse(body, 200, {
     // Standard CSRF handling: the nonce round-trips through GitHub as
     // `state` and must match this HMAC-signed, short-lived cookie.
-    "Set-Cookie":
+    'Set-Cookie':
       `${STATE_COOKIE}=${nonce}.${signature}; Max-Age=${STATE_COOKIE_MAX_AGE_SECONDS}; ` +
-      "Path=/cla; Secure; HttpOnly; SameSite=Lax",
+      'Path=/cla; Secure; HttpOnly; SameSite=Lax',
   });
 }
 
@@ -112,16 +116,16 @@ function confirmationPage(receipt: Receipt, env: Env): Response {
   const who = ` as <strong>@${escapeHtml(receipt.login)}</strong>`;
   const when = receipt.signed_at
     ? ` on <strong>${escapeHtml(receipt.signed_at)}</strong>`
-    : "";
+    : '';
   const body = pageShell(
-    "CLA signed",
+    'CLA signed',
     `<h1>Signed &#10003;</h1>
      <p>You signed version <strong>${escapeHtml(env.CLA_VERSION)}</strong> of the
      Macro Contributor License Agreement${who}${when}. This covers all your
      future contributions — no need to sign again.</p>
      <p>If a pull request of yours has a red <code>cla</code> check, comment
      <code>/macro-cla check</code> on it and the check will re-run.</p>
-     <p><a href="/cla">View the agreement</a></p>`,
+     <p><a href="/cla">View the agreement</a></p>`
   );
   return htmlResponse(body, 200);
 }
@@ -129,87 +133,101 @@ function confirmationPage(receipt: Receipt, env: Env): Response {
 // ---------------------------------------------------------------------------
 // GET /cla/callback
 
-async function callback(request: Request, url: URL, env: Env): Promise<Response> {
-  const code = url.searchParams.get("code");
-  const state = url.searchParams.get("state");
+async function callback(
+  request: Request,
+  url: URL,
+  env: Env
+): Promise<Response> {
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
   if (!code || !state) {
-    return errorPage("Missing OAuth parameters.", 400);
+    return errorPage('Missing OAuth parameters.', 400);
   }
 
   const cookie = readCookie(request, STATE_COOKIE);
   if (!cookie || !(await verifyState(env, cookie, state))) {
-    return errorPage("State verification failed. Your signing session may have expired.", 403);
+    return errorPage(
+      'State verification failed. Your signing session may have expired.',
+      403
+    );
   }
 
-  const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      client_id: env.GITHUB_CLIENT_ID,
-      client_secret: env.GITHUB_CLIENT_SECRET,
-      code,
-    }),
-  });
+  const tokenResponse = await fetch(
+    'https://github.com/login/oauth/access_token',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: env.GITHUB_CLIENT_ID,
+        client_secret: env.GITHUB_CLIENT_SECRET,
+        code,
+      }),
+    }
+  );
   if (!tokenResponse.ok) {
-    return errorPage("GitHub rejected the sign-in code exchange.", 502);
+    return errorPage('GitHub rejected the sign-in code exchange.', 502);
   }
-  const token = ((await tokenResponse.json()) as { access_token?: string }).access_token;
+  const token = ((await tokenResponse.json()) as { access_token?: string })
+    .access_token;
   if (!token) {
-    return errorPage("GitHub did not return an access token.", 502);
+    return errorPage('GitHub did not return an access token.', 502);
   }
 
   // The token's only use. It is never stored.
-  const userResponse = await fetch("https://api.github.com/user", {
+  const userResponse = await fetch('https://api.github.com/user', {
     headers: {
       Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "User-Agent": "macro-cla-worker",
-      "X-GitHub-Api-Version": "2022-11-28",
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'macro-cla-worker',
+      'X-GitHub-Api-Version': '2022-11-28',
     },
   });
   if (!userResponse.ok) {
-    return errorPage("Could not read your GitHub identity.", 502);
+    return errorPage('Could not read your GitHub identity.', 502);
   }
   const user = (await userResponse.json()) as { id: number; login: string };
-  if (typeof user.id !== "number" || typeof user.login !== "string") {
-    return errorPage("GitHub returned an unexpected identity payload.", 502);
+  if (typeof user.id !== 'number' || typeof user.login !== 'string') {
+    return errorPage('GitHub returned an unexpected identity payload.', 502);
   }
 
   // INSERT OR IGNORE makes re-signing the same version idempotent: the
   // original row (and its signed_at) stands.
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO signatures (github_id, github_login, cla_version, signed_at, ip) VALUES (?1, ?2, ?3, ?4, ?5)",
+    'INSERT OR IGNORE INTO signatures (github_id, github_login, cla_version, signed_at, ip) VALUES (?1, ?2, ?3, ?4, ?5)'
   )
     .bind(
       user.id,
       user.login,
       env.CLA_VERSION,
       new Date().toISOString(),
-      request.headers.get("CF-Connecting-IP"),
+      request.headers.get('CF-Connecting-IP')
     )
     .run();
 
   const row = await env.DB.prepare(
-    "SELECT signed_at FROM signatures WHERE github_id = ?1 AND cla_version = ?2",
+    'SELECT signed_at FROM signatures WHERE github_id = ?1 AND cla_version = ?2'
   )
     .bind(user.id, env.CLA_VERSION)
     .first<{ signed_at: string }>();
 
-  const confirmation = new URL("/cla", url.origin);
-  confirmation.searchParams.set("signed", "1");
+  const confirmation = new URL('/cla', url.origin);
+  confirmation.searchParams.set('signed', '1');
 
   const headers = new Headers({ Location: confirmation.toString() });
   headers.append(
-    "Set-Cookie",
-    `${STATE_COOKIE}=; Max-Age=0; Path=/cla; Secure; HttpOnly; SameSite=Lax`,
+    'Set-Cookie',
+    `${STATE_COOKIE}=; Max-Age=0; Path=/cla; Secure; HttpOnly; SameSite=Lax`
   );
   headers.append(
-    "Set-Cookie",
+    'Set-Cookie',
     `${RECEIPT_COOKIE}=${await issueReceipt(env, {
       login: user.login,
-      signed_at: row?.signed_at ?? "",
+      signed_at: row?.signed_at ?? '',
     })}; Max-Age=${RECEIPT_COOKIE_MAX_AGE_SECONDS}; ` +
-      "Path=/cla; Secure; HttpOnly; SameSite=Lax",
+      'Path=/cla; Secure; HttpOnly; SameSite=Lax'
   );
   return new Response(null, { status: 302, headers });
 }
@@ -231,11 +249,14 @@ async function issueReceipt(env: Env, receipt: Receipt): Promise<string> {
 
 /// Verify and decode a receipt cookie. Any tampering, truncation, or garbage
 /// resolves to `null`, which renders the agreement instead of a confirmation.
-async function readReceipt(env: Env, cookie: string | null): Promise<Receipt | null> {
+async function readReceipt(
+  env: Env,
+  cookie: string | null
+): Promise<Receipt | null> {
   if (!cookie) {
     return null;
   }
-  const separator = cookie.lastIndexOf(".");
+  const separator = cookie.lastIndexOf('.');
   if (separator <= 0) {
     return null;
   }
@@ -247,7 +268,10 @@ async function readReceipt(env: Env, cookie: string | null): Promise<Receipt | n
   }
   try {
     const parsed = JSON.parse(base64UrlDecode(payload)) as Partial<Receipt>;
-    if (typeof parsed.login !== "string" || typeof parsed.signed_at !== "string") {
+    if (
+      typeof parsed.login !== 'string' ||
+      typeof parsed.signed_at !== 'string'
+    ) {
       return null;
     }
     return { login: parsed.login, signed_at: parsed.signed_at };
@@ -256,30 +280,44 @@ async function readReceipt(env: Env, cookie: string | null): Promise<Receipt | n
   }
 }
 
-async function verifyState(env: Env, cookie: string, state: string): Promise<boolean> {
-  const separator = cookie.lastIndexOf(".");
+async function verifyState(
+  env: Env,
+  cookie: string,
+  state: string
+): Promise<boolean> {
+  const separator = cookie.lastIndexOf('.');
   if (separator <= 0) {
     return false;
   }
   const nonce = cookie.slice(0, separator);
   const signature = cookie.slice(separator + 1);
   const expected = await hmacHex(env.GITHUB_CLIENT_SECRET, nonce);
-  return (await timingSafeEqualStrings(signature, expected)) && (await timingSafeEqualStrings(state, nonce));
+  return (
+    (await timingSafeEqualStrings(signature, expected)) &&
+    (await timingSafeEqualStrings(state, nonce))
+  );
 }
 
 // ---------------------------------------------------------------------------
 // GET /cla/check
 
 async function check(request: Request, url: URL, env: Env): Promise<Response> {
-  const authorization = request.headers.get("Authorization") ?? "";
-  const presented = authorization.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : "";
-  if (!presented || !(await timingSafeEqualStrings(presented, env.CHECK_API_KEY))) {
-    return new Response("unauthorized", { status: 401 });
+  const authorization = request.headers.get('Authorization') ?? '';
+  const presented = authorization.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length)
+    : '';
+  if (
+    !presented ||
+    !(await timingSafeEqualStrings(presented, env.CHECK_API_KEY))
+  ) {
+    return new Response('unauthorized', { status: 401 });
   }
 
-  const githubId = url.searchParams.get("github_id") ?? "";
+  const githubId = url.searchParams.get('github_id') ?? '';
   if (!/^\d+$/.test(githubId)) {
-    return new Response("github_id must be a numeric GitHub user id", { status: 400 });
+    return new Response('github_id must be a numeric GitHub user id', {
+      status: 400,
+    });
   }
 
   // Strict versioning policy: only current-version rows pass. If a CLA bump
@@ -287,13 +325,15 @@ async function check(request: Request, url: URL, env: Env): Promise<Response> {
   // widen this to a `cla_version IN (...)` allowlist — that decision is made
   // at bump time, never implicitly.
   const row = await env.DB.prepare(
-    "SELECT cla_version FROM signatures WHERE github_id = ?1 AND cla_version = ?2",
+    'SELECT cla_version FROM signatures WHERE github_id = ?1 AND cla_version = ?2'
   )
     .bind(Number(githubId), env.CLA_VERSION)
     .first<{ cla_version: string }>();
 
   return Response.json(
-    row ? { signed: true, version: row.cla_version } : { signed: false, version: null },
+    row
+      ? { signed: true, version: row.cla_version }
+      : { signed: false, version: null }
   );
 }
 
@@ -302,12 +342,16 @@ async function check(request: Request, url: URL, env: Env): Promise<Response> {
 
 async function exportSignatures(env: Env): Promise<void> {
   const { results } = await env.DB.prepare(
-    "SELECT github_id, github_login, cla_version, signed_at, ip FROM signatures ORDER BY signed_at",
+    'SELECT github_id, github_login, cla_version, signed_at, ip FROM signatures ORDER BY signed_at'
   ).all();
   const day = new Date().toISOString().slice(0, 10);
-  await env.EXPORTS.put(`cla-signatures/${day}.json`, JSON.stringify(results, null, 2), {
-    httpMetadata: { contentType: "application/json" },
-  });
+  await env.EXPORTS.put(
+    `cla-signatures/${day}.json`,
+    JSON.stringify(results, null, 2),
+    {
+      httpMetadata: { contentType: 'application/json' },
+    }
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -321,13 +365,17 @@ function randomHex(bytes: number): string {
 
 async function hmacHex(secret: string, message: string): Promise<string> {
   const key = await crypto.subtle.importKey(
-    "raw",
+    'raw',
     new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
+    { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ["sign"],
+    ['sign']
   );
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(message)
+  );
   return hex(new Uint8Array(signature));
 }
 
@@ -336,8 +384,8 @@ async function hmacHex(secret: string, message: string): Promise<string> {
 async function timingSafeEqualStrings(a: string, b: string): Promise<boolean> {
   const encoder = new TextEncoder();
   const [digestA, digestB] = await Promise.all([
-    crypto.subtle.digest("SHA-256", encoder.encode(a)),
-    crypto.subtle.digest("SHA-256", encoder.encode(b)),
+    crypto.subtle.digest('SHA-256', encoder.encode(a)),
+    crypto.subtle.digest('SHA-256', encoder.encode(b)),
   ]);
   return crypto.subtle.timingSafeEqual(digestA, digestB);
 }
@@ -345,24 +393,29 @@ async function timingSafeEqualStrings(a: string, b: string): Promise<boolean> {
 // Receipt payloads are ASCII by construction (GitHub logins and ISO
 // timestamps), so btoa/atob are safe here.
 function base64UrlEncode(text: string): string {
-  return btoa(text).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+  return btoa(text)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '');
 }
 
 function base64UrlDecode(text: string): string {
-  const padded = text.replaceAll("-", "+").replaceAll("_", "/");
-  return atob(padded + "=".repeat((4 - (padded.length % 4)) % 4));
+  const padded = text.replaceAll('-', '+').replaceAll('_', '/');
+  return atob(padded + '='.repeat((4 - (padded.length % 4)) % 4));
 }
 
 function hex(buffer: Uint8Array): string {
-  return Array.from(buffer, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return Array.from(buffer, (byte) => byte.toString(16).padStart(2, '0')).join(
+    ''
+  );
 }
 
 function readCookie(request: Request, name: string): string | null {
-  const header = request.headers.get("Cookie") ?? "";
-  for (const part of header.split(";")) {
-    const [key, ...rest] = part.trim().split("=");
+  const header = request.headers.get('Cookie') ?? '';
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=');
     if (key === name) {
-      return rest.join("=");
+      return rest.join('=');
     }
   }
   return null;
@@ -375,7 +428,7 @@ function readCookie(request: Request, name: string): string | null {
 
 function renderMarkdown(markdown: string): string {
   const out: string[] = [];
-  let list: "ul" | "ol" | null = null;
+  let list: 'ul' | 'ol' | null = null;
   let paragraph: string[] = [];
 
   const closeList = () => {
@@ -386,24 +439,24 @@ function renderMarkdown(markdown: string): string {
   };
   const closeParagraph = () => {
     if (paragraph.length > 0) {
-      out.push(`<p>${inlineMarkdown(paragraph.join(" "))}</p>`);
+      out.push(`<p>${inlineMarkdown(paragraph.join(' '))}</p>`);
       paragraph = [];
     }
   };
 
-  for (const rawLine of markdown.split("\n")) {
+  for (const rawLine of markdown.split('\n')) {
     const line = rawLine.trimEnd();
     const heading = /^(#{1,6}) +(.*)$/.exec(line);
     const bullet = /^[-*] +(.*)$/.exec(line);
     const numbered = /^\d+\. +(.*)$/.exec(line);
 
-    if (line === "") {
+    if (line === '') {
       closeParagraph();
       closeList();
     } else if (/^-{3,}$/.test(line)) {
       closeParagraph();
       closeList();
-      out.push("<hr>");
+      out.push('<hr>');
     } else if (heading) {
       closeParagraph();
       closeList();
@@ -411,7 +464,7 @@ function renderMarkdown(markdown: string): string {
       out.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
     } else if (bullet || numbered) {
       closeParagraph();
-      const kind = bullet ? "ul" : "ol";
+      const kind = bullet ? 'ul' : 'ol';
       if (list !== kind) {
         closeList();
         out.push(`<${kind}>`);
@@ -428,26 +481,26 @@ function renderMarkdown(markdown: string): string {
   }
   closeParagraph();
   closeList();
-  return out.join("\n");
+  return out.join('\n');
 }
 
 function inlineMarkdown(text: string): string {
   return escapeHtml(text)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(
       /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
-      '<a href="$2" rel="noopener noreferrer">$1</a>',
+      '<a href="$2" rel="noopener noreferrer">$1</a>'
     );
 }
 
 function escapeHtml(text: string): string {
   return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 // The Macro M mark (apps/web/src/components/icon/macro-logo.svg), inlined so
@@ -461,10 +514,10 @@ const LOGO_SVG = `<svg width="34" height="34" fill="currentColor" viewBox="0 0 2
 // The app's favicon (apps/web/public/macro-favicon.svg) in white, inlined as
 // a data URI so the worker serves a single self-contained page.
 const FAVICON_DATA_URI =
-  "data:image/svg+xml," +
+  'data:image/svg+xml,' +
   "%3Csvg width='100%25' height='100%25' fill='%23ffffff' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E" +
   "%3Cpath d='m6.25 4.038-2.242 0.8792v5.8184l-1.756-1.6582-2.242 0.8792v6.6766c0 0.2568 0.106 0.502 0.292 0.6784l2.794 2.6422 2.244-0.879v-5.8184l7.084 6.6974 2.244-0.879v-5.8184l7.086 6.6976 2.24-0.8792v-6.6766c0-0.2568-0.104-0.5022-0.292-0.6784l-8.124-7.6816-2.244 0.879v5.8184z'/%3E" +
-  "%3C/svg%3E";
+  '%3C/svg%3E';
 
 function pageShell(title: string, content: string): string {
   return `<!doctype html>
@@ -504,21 +557,25 @@ ${content}
 </html>`;
 }
 
-function htmlResponse(body: string, status: number, headers: Record<string, string> = {}): Response {
+function htmlResponse(
+  body: string,
+  status: number,
+  headers: Record<string, string> = {}
+): Response {
   return new Response(body, {
     status,
-    headers: { "Content-Type": "text/html; charset=utf-8", ...headers },
+    headers: { 'Content-Type': 'text/html; charset=utf-8', ...headers },
   });
 }
 
 function errorPage(message: string, status: number): Response {
   return htmlResponse(
     pageShell(
-      "CLA signing failed",
+      'CLA signing failed',
       `<h1>Something went wrong</h1>
        <p>${escapeHtml(message)}</p>
-       <p><a href="/cla">Try again</a></p>`,
+       <p><a href="/cla">Try again</a></p>`
     ),
-    status,
+    status
   );
 }

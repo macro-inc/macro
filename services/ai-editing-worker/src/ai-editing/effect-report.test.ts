@@ -29,32 +29,36 @@ describe('diffNodes', () => {
   );
 
   it('reports no change for an identical document', () => {
-    const effect = diffNodes(base, snapshotNodes(
-      doc('  <p id="p1">', '    <t id="t1">before</t>', '  </p>')
-    ));
+    const effect = diffNodes(
+      base,
+      snapshotNodes(doc('  <p id="p1">', '    <t id="t1">before</t>', '  </p>'))
+    );
     expect(effect.changed).toBe(false);
   });
 
   it('reports a modified node', () => {
-    const effect = diffNodes(base, snapshotNodes(
-      doc('  <p id="p1">', '    <t id="t1">after</t>', '  </p>')
-    ));
+    const effect = diffNodes(
+      base,
+      snapshotNodes(doc('  <p id="p1">', '    <t id="t1">after</t>', '  </p>'))
+    );
     expect(effect.changed).toBe(true);
     expect(effect.modifiedIds).toContain('t1');
   });
 
   it('reports added and removed nodes', () => {
-    const effect = diffNodes(base, snapshotNodes(
-      doc('  <p id="p2">', '    <t id="t2">new</t>', '  </p>')
-    ));
+    const effect = diffNodes(
+      base,
+      snapshotNodes(doc('  <p id="p2">', '    <t id="t2">new</t>', '  </p>'))
+    );
     expect(effect.addedIds.sort()).toEqual(['p2', 't2']);
     expect(effect.removedIds.sort()).toEqual(['p1', 't1']);
   });
 
   it('marks a parent modified when a descendant changes', () => {
-    const effect = diffNodes(base, snapshotNodes(
-      doc('  <p id="p1">', '    <t id="t1">after</t>', '  </p>')
-    ));
+    const effect = diffNodes(
+      base,
+      snapshotNodes(doc('  <p id="p1">', '    <t id="t1">after</t>', '  </p>'))
+    );
     expect(effect.modifiedIds).toContain('p1');
   });
 });
@@ -116,8 +120,12 @@ describe('describeEffect', () => {
    * The point of this test is that such a call is now self-evidently futile.
    */
   it('makes an already-satisfied edit self-evidently futile', () => {
-    const before = snapshotNodes(doc('  <li id="a">', '    <t id="t">x</t>', '  </li>'));
-    const after = snapshotNodes(doc('  <li id="a">', '    <t id="t">x</t>', '  </li>'));
+    const before = snapshotNodes(
+      doc('  <li id="a">', '    <t id="t">x</t>', '  </li>')
+    );
+    const after = snapshotNodes(
+      doc('  <li id="a">', '    <t id="t">x</t>', '  </li>')
+    );
     const out = describeEffect('ok', diffNodes(before, after));
     expect(out).toContain('NO CHANGE');
     expect(out).not.toMatch(/^ok$/);
