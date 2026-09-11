@@ -81,6 +81,24 @@ jobs:
           exit 1
         fi
 
+        # The simulator SDK is present and parseable, yet tauri still failed reading
+        # "Xcode SDKSettings.plist" — so it is looking somewhere else. Runners install
+        # Xcode at a versioned path (/Applications/Xcode_26.3.app) and tools that
+        # hardcode /Applications/Xcode.app break on exactly that. Provide both the
+        # symlink and DEVELOPER_DIR; neither is harmful if tauri wanted something else.
+        echo "--- Xcode installs ---"
+        ls -1d /Applications/Xcode*.app 2>/dev/null || true
+        echo "--- platforms ---"
+        ls -1 "$(xcode-select -p)/Platforms" 2>/dev/null || true
+
+        DEVELOPER_DIR="$(xcode-select -p)"
+        export DEVELOPER_DIR
+        if [ ! -e /Applications/Xcode.app ]; then
+          echo "Linking /Applications/Xcode.app -> ${DEVELOPER_DIR%/Contents/Developer}"
+          sudo ln -sfn "${DEVELOPER_DIR%/Contents/Developer}" /Applications/Xcode.app ||
+            echo "Could not create the symlink; continuing." >&2
+        fi
+
         # cargo-tauri, bun, just, wasm-pack and the pinned toolchain (which carries
         # aarch64-apple-ios-sim, see rust-toolchain.toml) all come from the dev shell.
         nix develop --command bash -euo pipefail -c '
