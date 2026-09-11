@@ -18,6 +18,21 @@ use std::borrow::Cow;
 mod test;
 
 const TYPE: &str = "GraphqlSoupEmailThread";
+const EXACT_ATTRIBUTES: &[&str] = &[
+    "id",
+    "mail-link-id",
+    "mail-owner",
+    "mail-read",
+    "mail-inbox",
+    "mail-signal",
+    "mail-has-message",
+    "mail-calendar",
+    "mail-shared",
+    "mail-all-message",
+    "mail-draft-message",
+    "mail-sent-message",
+];
+const SORT_ATTRIBUTES: &[&str] = &["mail-all-ts", "mail-inbox-ts", "mail-sent-ts"];
 const FIELDS: &[&str] = &[
     "linkId",
     "ownerId",
@@ -156,6 +171,17 @@ fn project(key: RecordKey, record: &Record) -> Option<IndexDocument> {
     })
 }
 
+/// Mail projection extraction failures retain storage errors for host recovery.
+#[derive(Debug, thiserror::Error)]
+pub enum ProjectionError<S: std::error::Error + 'static> {
+    /// Storage failure, including errors that require a physical reset.
+    #[error(transparent)]
+    Storage(S),
+    /// Invalid GraphQL input or projection evidence.
+    #[error(transparent)]
+    Adapter(#[from] SoupFilterCacheAdapterError),
+}
+
 /// Compose full canonical snapshots, or bounded patches preserving completeness.
 /// Canonical preview edges are independent of the source query's view/filter.
 /// A missing v2 field cannot borrow completeness from an older projection.
@@ -165,7 +191,7 @@ pub async fn projection_updates<S: Storage>(
     operation: Option<&str>,
     variables: &Map<String, Value>,
     data: &Value,
-) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
+) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
     projection_updates_for_write(storage, query, operation, variables, data, true).await
 }
 
@@ -180,7 +206,7 @@ pub async fn projection_updates_for_write<S: Storage>(
     variables: &Map<String, Value>,
     data: &Value,
     reuse_stored_identity: bool,
-) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
+) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
     let parsed = Document::parse(query).map_err(error)?;
     let op = parsed.operation(operation).map_err(error)?;
     let updates = normalize(op, variables, data)
@@ -201,7 +227,10 @@ pub async fn projection_updates_for_write<S: Storage>(
         .map(|(key, _)| key.clone())
         .collect::<Vec<_>>();
     let bases = if reuse_stored_identity {
-        storage.get_batch(&keys).await.map_err(error)?
+        storage
+            .get_batch(&keys)
+            .await
+            .map_err(ProjectionError::Storage)?
     } else {
         vec![None; keys.len()]
     };
@@ -265,33 +294,23 @@ pub async fn projection_updates_for_write<S: Storage>(
                 }
                 _ => false,
             };
-            let exact = [
-                "mail-link-id",
-                "mail-owner",
-                "mail-read",
-                "mail-inbox",
-                "mail-signal",
-                "mail-has-message",
-                "mail-calendar",
-                "mail-shared",
-                "mail-all-message",
-                "mail-draft-message",
-                "mail-sent-message",
-            ]
-            .into_iter()
-            .filter(|attr| affected(attr))
-            .map(|attr| ExactAttributePatch {
-                attribute: vocabulary::token(attr),
-                values: document
-                    .exact_facts
-                    .iter()
-                    .filter(|fact| fact.attribute == vocabulary::token(attr))
-                    .map(|fact| fact.value.clone())
-                    .collect(),
-            })
-            .collect();
-            let integers = ["mail-all-ts", "mail-inbox-ts", "mail-sent-ts"]
-                .into_iter()
+            let exact = EXACT_ATTRIBUTES
+                .iter()
+                .copied()
+                .filter(|attr| affected(attr))
+                .map(|attr| ExactAttributePatch {
+                    attribute: vocabulary::token(attr),
+                    values: document
+                        .exact_facts
+                        .iter()
+                        .filter(|fact| fact.attribute == vocabulary::token(attr))
+                        .map(|fact| fact.value.clone())
+                        .collect(),
+                })
+                .collect();
+            let integers = SORT_ATTRIBUTES
+                .iter()
+                .copied()
                 .filter(|attr| affected(attr))
                 .map(|attr| predicate_index::IntegerAttributePatch {
                     attribute: vocabulary::token(attr),
@@ -340,28 +359,55 @@ pub fn optimistic_updates(updates: Vec<ProjectionMutation>) -> Vec<OptimisticPro
                 integers,
                 sorts,
             },
-            ProjectionMutation::Replace(document) => OptimisticProjectionMutation::Patch {
-                record_key: document.record_key,
-                profile: document.profile,
-                partition: document.partition,
-                exact: document
-                    .exact_facts
-                    .into_iter()
-                    .map(|f| ExactAttributePatch {
-                        attribute: f.attribute,
-                        values: vec![f.value],
-                    })
-                    .collect(),
-                integers: document
-                    .integer_facts
-                    .into_iter()
-                    .map(|f| predicate_index::IntegerAttributePatch {
-                        attribute: f.attribute,
-                        values: vec![f.value],
-                    })
-                    .collect(),
-                sorts: document.sort_facts,
-            },
+            ProjectionMutation::Replace(document) => {
+                // Patches cannot remove sort facts. A full replacement that
+                // omits one must hide the old base instead of retaining it.
+                if SORT_ATTRIBUTES.iter().any(|attribute| {
+                    !document
+                        .sort_facts
+                        .iter()
+                        .any(|fact| fact.attribute.as_str() == *attribute)
+                }) {
+                    return OptimisticProjectionMutation::Unknown {
+                        record_key: document.record_key,
+                        profile: document.profile,
+                        partition: document.partition,
+                        affected_attributes: vec![],
+                    };
+                }
+                OptimisticProjectionMutation::Patch {
+                    record_key: document.record_key,
+                    profile: document.profile,
+                    partition: document.partition,
+                    // Full replacements cover every attribute, including empty
+                    // sets for removed preview references and optional facts.
+                    exact: EXACT_ATTRIBUTES
+                        .iter()
+                        .map(|attribute| ExactAttributePatch {
+                            attribute: vocabulary::token(attribute),
+                            values: document
+                                .exact_facts
+                                .iter()
+                                .filter(|fact| fact.attribute.as_str() == *attribute)
+                                .map(|fact| fact.value.clone())
+                                .collect(),
+                        })
+                        .collect(),
+                    integers: SORT_ATTRIBUTES
+                        .iter()
+                        .map(|attribute| predicate_index::IntegerAttributePatch {
+                            attribute: vocabulary::token(attribute),
+                            values: document
+                                .integer_facts
+                                .iter()
+                                .filter(|fact| fact.attribute.as_str() == *attribute)
+                                .map(|fact| fact.value)
+                                .collect(),
+                        })
+                        .collect(),
+                    sorts: document.sort_facts,
+                }
+            }
             ProjectionMutation::MarkIncomplete {
                 record_key,
                 profile,

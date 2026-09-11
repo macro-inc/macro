@@ -25,7 +25,8 @@ use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
 use soup_filter_cache_adapter::{
     SoupFilterCompileOutcome, authoritative_projection_mutations, compile_filter_request,
-    dirty_projection_mutations, notification_deletion_updates, notification_projection_updates,
+    dirty_projection_mutations, mail::ProjectionError as MailProjectionError,
+    notification_deletion_updates, notification_projection_updates,
     optimistic_notification_updates, optimistic_projection_mutations,
 };
 use std::cell::RefCell;
@@ -464,6 +465,13 @@ impl CacheState {
         result: Result<T, EngineError<TursoStorageError>>,
     ) -> Result<T, JsValue> {
         result.map_err(|error| self.engine_error(error))
+    }
+
+    fn mail_projection_error(&mut self, error: MailProjectionError<TursoStorageError>) -> JsValue {
+        match error {
+            MailProjectionError::Storage(error) => self.engine_error(EngineError::Storage(error)),
+            MailProjectionError::Adapter(error) => err_js(error),
+        }
     }
 
     fn engine_error(&mut self, error: EngineError<TursoStorageError>) -> JsValue {
@@ -1171,7 +1179,7 @@ impl CacheEngine {
                     reuse_stored_identity,
                 )
                 .await
-                .map_err(err_js)?,
+                .map_err(|error| state.mail_projection_error(error))?,
             );
             let result = state
                 .engine_mut()?
@@ -1244,7 +1252,7 @@ impl CacheEngine {
                     reuse_stored_identity,
                 )
                 .await
-                .map_err(err_js)?,
+                .map_err(|error| state.mail_projection_error(error))?,
             );
             let result = state
                 .engine_mut()?
@@ -1329,7 +1337,7 @@ impl CacheEngine {
                     &data,
                 )
                 .await
-                .map_err(err_js)?,
+                .map_err(|error| state.mail_projection_error(error))?,
             ));
             let claim = MutationClaimRequest {
                 owner: lease_owner,
@@ -1547,7 +1555,7 @@ impl CacheEngine {
                     &data,
                 )
                 .await
-                .map_err(err_js)?,
+                .map_err(|error| state.mail_projection_error(error))?,
             );
             let result = state
                 .engine_mut()?

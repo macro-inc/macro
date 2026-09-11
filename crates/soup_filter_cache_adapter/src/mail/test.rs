@@ -9,6 +9,8 @@ use soup_filter_projection::{
     MailCacheProjectionFacts, SoupCacheProjectionSupplement, encode_cache_projection_supplement,
 };
 
+mod optimistic;
+
 const VIEWER: &str = "macro|mail@example.com";
 const QUERY: &str = r#"query MailSeed { user { id emailLinks { id } soup(input: {initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection ... on GraphqlSoupEmailThread { linkId ownerId inboxVisible isRead isSignal latestInboundMessageTs mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id } updatedAt } } } } }"#;
 const PARTIAL: &str = r#"query Partial { user { id soup(input:{initial:{limit:1}}) { items { __typename id ... on GraphqlSoupEmailThread { isRead inboxVisible } } } } }"#;

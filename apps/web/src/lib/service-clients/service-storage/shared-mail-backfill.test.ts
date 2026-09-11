@@ -13,14 +13,14 @@ function host() {
       kind: 'hit',
       data: { user: { id: 'viewer' } },
     })),
-    entityFilter: vi.fn(async () => ({
+    entityFilter: vi.fn<CacheHost['entityFilter']>().mockResolvedValue({
       kind: 'mail-page',
       keys: [key('old'), key('kept')],
       nextCursor: null,
       sortTimestamps: [],
       revision: '1',
       optimistic: false,
-    })),
+    }),
     invalidate: vi.fn(async () => ({ revision: '2', affectedOps: [] })),
     deleteRecords: vi.fn(),
   };
@@ -70,6 +70,50 @@ describe('Shared Mail scope refresh', () => {
       expect(cache.invalidate).not.toHaveBeenCalled();
     }
   });
+  it('hydrates to completion without revoking partial membership after a stale continuation', async () => {
+    const cache = host();
+    cache.entityFilter
+      .mockResolvedValueOnce({
+        kind: 'mail-page',
+        keys: [key('old')],
+        nextCursor: 'local-next',
+        sortTimestamps: [],
+        revision: '1',
+        optimistic: false,
+      })
+      .mockResolvedValueOnce({ kind: 'stale-cursor', revision: '2' });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({ nextCursor: 'network-next', entityIds: ['new'] })
+      .mockResolvedValueOnce({ nextCursor: null, entityIds: [] });
+    const scan = await createSharedMailBackfillFetcher(
+      'viewer',
+      cache as unknown as CacheHost,
+      fetch
+    );
+    expect(cache.entityFilter.mock.calls[1][0].mail).toEqual({
+      view: 'ALL',
+      cursor: 'local-next',
+    });
+    const controller = new AbortController();
+    const options = { signal: controller.signal };
+    await expect(scan(input, options)).resolves.toEqual({
+      nextCursor: 'network-next',
+      entityIds: ['new'],
+    });
+    const continuation = { continuation: { cursor: 'network-next' } };
+    await expect(scan(continuation, options)).resolves.toEqual({
+      nextCursor: null,
+      entityIds: [],
+    });
+    expect(fetch.mock.calls).toEqual([
+      [input, options],
+      [continuation, options],
+    ]);
+    expect(cache.invalidate).not.toHaveBeenCalled();
+    expect(cache.deleteRecords).not.toHaveBeenCalled();
+  });
+
   it('a proven empty scope invalidates all old Shared membership', async () => {
     const cache = host();
     const scan = await createSharedMailBackfillFetcher(

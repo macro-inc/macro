@@ -9,6 +9,8 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+mod mail_projection;
+
 const QUERY: &str = r#"query Soup($input: SoupInput!) {
     user {
         id

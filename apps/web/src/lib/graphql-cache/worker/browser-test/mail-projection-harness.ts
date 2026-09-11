@@ -106,6 +106,7 @@ async function refresh(append = false) {
     result.dataset.status = 'ready';
     result.textContent = `${rows.children.length} cached emails shown`;
   } catch (error) {
+    if (current !== requestId) return;
     result.dataset.status = 'failed';
     result.textContent = String(error);
   }

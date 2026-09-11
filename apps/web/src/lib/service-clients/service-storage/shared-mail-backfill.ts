@@ -48,8 +48,8 @@ async function previousMembership(
       limit: 499,
       mail: { view: 'ALL', cursor },
     });
-    if (page.kind === 'stale-cursor')
-      throw new Error('Shared Mail capture needs a stable cache revision');
+    // A stale continuation makes the whole snapshot unusable for revocations,
+    // but must not prevent the fresh network scan from hydrating shared mail.
     if (page.kind !== 'mail-page') return new Set();
     for (const key of page.keys) keys.add(key);
     cursor = page.nextCursor ?? undefined;
