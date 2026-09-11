@@ -60,7 +60,18 @@ impl<F: CommandForwarder> ErasedForwarder for F {
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
     AgentHarnessService<
         Sessions,
         Containers,
@@ -69,6 +80,9 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
@@ -78,6 +92,9 @@ where
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     pub(super) fn enqueue(
         &self,
@@ -140,7 +157,18 @@ where
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
     AgentHarnessInner<
         Sessions,
         Containers,
@@ -149,6 +177,9 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
@@ -158,6 +189,9 @@ where
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     /// Execute where the session's live actor is: locally when nobody (or
     /// this replica) manages it, on the managing peer otherwise.
@@ -682,6 +716,9 @@ pub(super) async fn run_session_worker<
     PromptContext,
     PromptComposer,
     Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
 >(
     session_id: AgentSessionId,
     inner: Arc<
@@ -693,6 +730,9 @@ pub(super) async fn run_session_worker<
             PromptContext,
             PromptComposer,
             Egress,
+            Lifecycle,
+            Mentions,
+            Notifier,
         >,
     >,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
@@ -704,6 +744,9 @@ pub(super) async fn run_session_worker<
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     while let Some(queued) = receiver.recv().await {
         let QueuedCommand {

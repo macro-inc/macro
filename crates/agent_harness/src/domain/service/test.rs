@@ -213,6 +213,9 @@ type TestHarness = AgentHarnessService<
     PromptContextMock,
     PromptComposerMock,
     EgressProvisionerMock,
+    RecordingLifecyclePublisher,
+    PromptMentionsMock,
+    NotifierMock,
 >;
 
 /// Bot-to-harness bindings for tests: every bot maps to the harness sharing

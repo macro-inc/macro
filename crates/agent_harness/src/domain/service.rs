@@ -68,6 +68,9 @@ struct AgentHarnessInner<
     PromptContext,
     PromptComposer,
     Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
 > {
     sessions: Sessions,
     containers: Containers,
@@ -94,12 +97,12 @@ struct AgentHarnessInner<
     /// command was handed to this session" and "the runtime has visibly
     /// started a turn", which a reaper watching only the latter cannot see.
     busy: PendingCommands,
-    /// Where lifecycle facts go. Erased so it is not an eighth type parameter.
-    lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
-    /// Who a prompt names; erased for the same reason.
-    mentions: Arc<dyn PromptMentions>,
-    /// Where the notifications a fact warrants go; erased for the same reason.
-    notifier: Arc<dyn AgentSessionNotifier>,
+    /// Where lifecycle facts go.
+    lifecycle_publisher: Lifecycle,
+    /// Who a prompt names.
+    mentions: Mentions,
+    /// Where the notifications a fact warrants go.
+    notifier: Notifier,
 }
 
 /// Turns trigger commands into running, announced agent sessions.
@@ -111,6 +114,9 @@ pub struct AgentHarnessService<
     PromptContext,
     PromptComposer,
     Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
 > {
     inner: Arc<
         AgentHarnessInner<
@@ -121,6 +127,9 @@ pub struct AgentHarnessService<
             PromptContext,
             PromptComposer,
             Egress,
+            Lifecycle,
+            Mentions,
+            Notifier,
         >,
     >,
     workers: Arc<SessionWorkers>,
@@ -130,7 +139,18 @@ pub struct AgentHarnessService<
 // are behind Arcs). A clone is another handle on the same workers and queues,
 // which is what lets the service be bound as its own session services' turn
 // observer.
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress> Clone
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> Clone
     for AgentHarnessService<
         Sessions,
         Containers,
@@ -139,6 +159,9 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 {
     fn clone(&self) -> Self {
@@ -149,7 +172,18 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
     AgentHarnessService<
         Sessions,
         Containers,
@@ -158,6 +192,9 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
@@ -167,6 +204,9 @@ where
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     /// Build the orchestrator from its ports.
     ///
@@ -183,10 +223,10 @@ where
         egress: Egress,
         forwarder: impl CommandForwarder,
         defaults: impl Into<HarnessDefaults>,
-        lifecycle_publisher: impl AgentSessionLifecyclePublisher,
+        lifecycle_publisher: Lifecycle,
         pending: PendingCommands,
-        mentions: impl PromptMentions,
-        notifier: impl AgentSessionNotifier,
+        mentions: Mentions,
+        notifier: Notifier,
     ) -> Self {
         Self {
             inner: Arc::new(AgentHarnessInner {
@@ -201,9 +241,9 @@ where
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 busy: pending,
-                lifecycle_publisher: Arc::new(lifecycle_publisher),
-                mentions: Arc::new(mentions),
-                notifier: Arc::new(notifier),
+                lifecycle_publisher,
+                mentions,
+                notifier,
             }),
             workers: Arc::new(DashMap::new()),
         }
@@ -299,8 +339,18 @@ pub trait ForwardedCommands: Send + Sync + 'static {
     ) -> impl Future<Output = Result<CommandOutcome>> + Send;
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
-    ForwardedCommands
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> ForwardedCommands
     for AgentHarnessService<
         Sessions,
         Containers,
@@ -309,6 +359,9 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
@@ -318,6 +371,9 @@ where
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     async fn execute_forwarded(
         &self,
