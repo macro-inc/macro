@@ -51,6 +51,7 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import {
   getSplitFileMenuActionSections,
   type SplitFileMenuAction,
@@ -521,14 +522,19 @@ export function SplitFileMenu(props: {
     onCleanup(() => ctx.setTitleFileMenuTrigger(undefined));
   });
 
+  const ownsMenuEntity = () =>
+    match(props.entity)
+      .with(undefined, () => isOwner())
+      .otherwise((entity) => entity.ownerId === userId());
+
   const ops = createMemo<SplitFileMenuAction[]>(() => {
     const mapped = props.ops
       .map((op) => {
         if (isDefaultFileOperation(op)) {
-          switch (op.op) {
-            case 'delete':
-              if (props.entity ? props.entity.ownerId !== userId() : !isOwner())
-                return null;
+          return match(op.op)
+            .returnType<SplitFileMenuAction | null>()
+            .with('delete', () => {
+              if (!ownsMenuEntity()) return null;
               return {
                 label: 'Delete',
                 action: () => {
@@ -548,10 +554,9 @@ export function SplitFileMenu(props: {
                 icon: Trash,
                 group: 'delete' as const,
               };
-
-            case 'rename':
-              if (props.entity ? props.entity.ownerId !== userId() : !isOwner())
-                return null;
+            })
+            .with('rename', () => {
+              if (!ownsMenuEntity()) return null;
               return {
                 label: 'Rename',
                 action: () => {
@@ -569,8 +574,8 @@ export function SplitFileMenu(props: {
                 hotkeyToken: blockHotkeyToken(TOKENS.entity.action.rename),
                 group: 'file' as const,
               };
-
-            case 'copy':
+            })
+            .with('copy', () => {
               return {
                 label: 'Duplicate',
                 action: async () => {
@@ -598,8 +603,8 @@ export function SplitFileMenu(props: {
                 icon: Copy,
                 group: 'file' as const,
               };
-
-            case 'moveToProject':
+            })
+            .with('moveToProject', () => {
               if (!isOwner()) return null;
               return {
                 label: 'Move to Folder',
@@ -624,7 +629,8 @@ export function SplitFileMenu(props: {
                 ),
                 group: 'file' as const,
               };
-          }
+            })
+            .exhaustive();
         } else {
           return op;
         }
