@@ -11,13 +11,56 @@ fn mentions_participation(expr: &Expr<ChannelLiteral>) -> bool {
     }
 }
 
-fn requires_participation(expr: &Expr<ChannelLiteral>) -> bool {
+/// Conservative evaluation with the viewer's participation fixed to false.
+/// Other facts are unknown; an omitted SQL clause is distinct from TRUE.
+#[derive(Clone, Copy)]
+enum NonParticipantMatch {
+    Omitted,
+    Always,
+    Never,
+    Possible,
+}
+
+fn non_participant_match(expr: &Expr<ChannelLiteral>) -> NonParticipantMatch {
+    use NonParticipantMatch::{Always, Never, Omitted, Possible};
     match expr {
-        Expr::Literal(ChannelLiteral::IsParticipant(true)) => true,
-        Expr::And(a, b) => requires_participation(a) || requires_participation(b),
-        Expr::Or(a, b) => requires_participation(a) && requires_participation(b),
-        _ => false,
+        Expr::Literal(ChannelLiteral::IsParticipant(true) | ChannelLiteral::Importance(false)) => {
+            Never
+        }
+        Expr::Literal(ChannelLiteral::IsParticipant(false)) => Always,
+        Expr::Literal(ChannelLiteral::Importance(true)) => Omitted,
+        Expr::Literal(_) => Possible,
+        Expr::Not(expr) => match non_participant_match(expr) {
+            Always => Never,
+            Never => Always,
+            value @ (Omitted | Possible) => value,
+        },
+        Expr::And(a, b) | Expr::Or(a, b) => {
+            let (a, b) = (non_participant_match(a), non_participant_match(b));
+            // Match the server folder: omitted clauses disappear from both
+            // AND and OR, and stay omitted under NOT.
+            if let (Omitted, value) | (value, Omitted) = (a, b) {
+                return value;
+            }
+            if matches!(expr, Expr::And(..)) {
+                match (a, b) {
+                    (Never, _) | (_, Never) => Never,
+                    (Always, Always) => Always,
+                    _ => Possible,
+                }
+            } else {
+                match (a, b) {
+                    (Always, _) | (_, Always) => Always,
+                    (Never, Never) => Never,
+                    _ => Possible,
+                }
+            }
+        }
     }
+}
+
+fn requires_participation(expr: &Expr<ChannelLiteral>) -> bool {
+    matches!(non_participant_match(expr), NonParticipantMatch::Never)
 }
 
 fn excluded(expr: Option<&Expr<ChannelLiteral>>) -> bool {

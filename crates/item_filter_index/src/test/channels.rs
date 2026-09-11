@@ -119,6 +119,58 @@ fn channel_importance_true_matches_the_servers_omitted_clause() {
 }
 
 #[test]
+fn equivalent_participant_scopes_compile_locally() {
+    let member = Expr::val(ChannelLiteral::IsParticipant(true));
+    let nonmember = Expr::val(ChannelLiteral::IsParticipant(false));
+    let omitted = Expr::val(ChannelLiteral::Importance(true));
+    let never = Expr::val(ChannelLiteral::Importance(false));
+    for expr in [
+        Expr::is_not(nonmember.clone()),
+        Expr::or(member.clone(), never.clone()),
+        Expr::or(never.clone(), member.clone()),
+        Expr::is_not(Expr::is_not(member.clone())),
+        Expr::is_not(Expr::and(nonmember.clone(), omitted.clone())),
+        Expr::is_not(Expr::or(nonmember, omitted.clone())),
+        Expr::or(member.clone(), omitted),
+        Expr::is_not(Expr::and(Expr::is_not(member), Expr::is_not(never))),
+    ] {
+        let predicate = predicate(Some(expr));
+        assert!(channel(true, None, None).matches(&predicate));
+        assert!(!channel(false, None, None).matches(&predicate));
+    }
+}
+
+#[test]
+fn participation_scope_constant_folding_never_widens_access() {
+    let member = Expr::val(ChannelLiteral::IsParticipant(true));
+    let nonmember = Expr::val(ChannelLiteral::IsParticipant(false));
+    let omitted = Expr::val(ChannelLiteral::Importance(true));
+    let never = Expr::val(ChannelLiteral::Importance(false));
+    for expr in [
+        Expr::is_not(Expr::and(member.clone(), omitted)),
+        Expr::or(member, Expr::is_not(never.clone())),
+        Expr::is_not(Expr::and(nonmember.clone(), never.clone())),
+        Expr::is_not(Expr::is_not(nonmember.clone())),
+        Expr::is_not(Expr::and(
+            nonmember.clone(),
+            Expr::val(ChannelLiteral::TeamId(Uuid::from_u128(10))),
+        )),
+    ] {
+        let mut ast = excluded_deferred_partitions();
+        ast.channel_filter = Some(Arc::new(expr));
+        assert!(matches!(
+            compile_soup_flat_v4(&ast, request()).unwrap(),
+            LocalCompileOutcome::Unsupported(UnsupportedReason::Literal(
+                "channel-participation-scope"
+            ))
+        ));
+    }
+    let empty = predicate(Some(Expr::and(nonmember, never)));
+    assert!(!channel(true, None, None).matches(&empty));
+    assert!(!channel(false, None, None).matches(&empty));
+}
+
+#[test]
 fn deferred_channel_predicates_and_widened_access_stay_network_only() {
     for expr in [
         Expr::val(ChannelLiteral::ThreadId(Uuid::from_u128(1))),

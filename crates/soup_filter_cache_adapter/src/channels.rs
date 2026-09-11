@@ -24,9 +24,9 @@ fn organization(value: &serde_json::Value) -> Result<Option<i64>, ()> {
     if value.is_null() {
         return Ok(None);
     }
-    Ok(Some(i64::from(
-        value.as_str().ok_or(())?.parse::<u32>().map_err(|_| ())?,
-    )))
+    Ok(Some(
+        value.as_str().ok_or(())?.parse::<i64>().map_err(|_| ())?,
+    ))
 }
 
 fn channel_type(value: &serde_json::Value) -> Result<&str, ()> {

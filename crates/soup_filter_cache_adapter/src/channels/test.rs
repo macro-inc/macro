@@ -131,6 +131,67 @@ fn channel_aliases_preserve_identity_and_reject_conflicting_nullable_facts() {
 }
 
 #[test]
+fn organization_ids_preserve_the_signed_64_bit_projection_domain() {
+    for organization_id in [
+        i64::MIN,
+        -1,
+        0,
+        i64::from(u32::MAX),
+        i64::from(u32::MAX) + 1,
+        i64::MAX,
+    ] {
+        let value = json!(organization_id.to_string());
+        assert_eq!(organization(&value), Ok(Some(organization_id)));
+        let mut channel = row(1);
+        channel["organizationId"] = value.clone();
+        let updates =
+            authoritative_projection_mutations(QUERY, None, &data(vec![channel])).unwrap();
+        let [ProjectionMutation::Replace(document)] = updates.as_slice() else {
+            panic!("complete i64 organization snapshot: {organization_id}")
+        };
+        let SoupFilterCompileOutcome::Supported(query) = compile_filter_request(
+            filters(json!({"literal":{"organizationId":organization_id}})),
+            "UPDATED_AT",
+            "DESC",
+            20,
+        )
+        .unwrap() else {
+            panic!("organization filter")
+        };
+        let predicate = &query
+            .as_query()
+            .partitions
+            .iter()
+            .find(|part| part.partition == vocabulary::channel_partition())
+            .unwrap()
+            .predicate;
+        assert!(document.matches(predicate));
+        let update = patch(
+            key(1),
+            json!({"organizationId":value}).as_object().unwrap(),
+            None,
+        )
+        .unwrap();
+        let OptimisticProjectionMutation::Patch { exact, .. } = update else {
+            panic!("organization patch")
+        };
+        assert_eq!(exact.len(), 1);
+        assert_eq!(exact[0].attribute, vocabulary::channel_organization());
+        assert_eq!(exact[0].values[0].as_bytes(), organization_id.to_be_bytes());
+    }
+    assert_eq!(organization(&Value::Null), Ok(None));
+    for invalid in [
+        json!("9223372036854775808"),
+        json!("-9223372036854775809"),
+        json!("invalid"),
+        json!(1),
+        json!("1.5"),
+    ] {
+        assert!(organization(&invalid).is_err());
+    }
+}
+
+#[test]
 fn partial_and_invalid_channel_snapshots_do_not_invent_completeness() {
     for field in [
         "notifications",
