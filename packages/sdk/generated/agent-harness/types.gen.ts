@@ -150,6 +150,7 @@ export type AgentSessionLogResponse = {
  * Clients deserialize this, so both derives are used.
  */
 export type AgentSessionPreviewData = {
+    bot?: null | SessionBot;
     /**
      * The bot running the agent.
      */

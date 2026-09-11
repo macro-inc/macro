@@ -876,7 +876,7 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
         .expect("owner preview");
     owner_view.sort_by_key(|preview| preview.id().as_uuid());
     let mut expected = vec![
-        AgentSessionPreview::Access(AgentSessionPreviewData {
+        AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
             id: from_channel.id,
             bot: None,
             name: DEFAULT_AGENT_SESSION_NAME.to_string(),
@@ -885,8 +885,8 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
             status: SessionStatus::NoMessages,
             created_at: from_channel.created_at,
             modified_at: from_channel.modified_at,
-        }),
-        AgentSessionPreview::Access(AgentSessionPreviewData {
+        })),
+        AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
             id: private.id,
             bot: None,
             name: DEFAULT_AGENT_SESSION_NAME.to_string(),
@@ -899,7 +899,7 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
                 .await
                 .expect("reload")
                 .modified_at,
-        }),
+        })),
         AgentSessionPreview::DoesNotExist(missing),
     ];
     expected.sort_by_key(|preview| preview.id().as_uuid());

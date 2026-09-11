@@ -606,7 +606,7 @@ pub struct PreviewAgentSessionsResponse {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AgentSessionPreviewDto {
     /// The caller may view the session.
-    Access(AgentSessionPreviewData),
+    Access(Box<AgentSessionPreviewData>),
     /// The session exists but the caller holds no grant on it.
     NoAccess(WithAgentSessionId),
     /// No session with this id exists.
@@ -651,7 +651,7 @@ pub struct AgentSessionPreviewData {
 impl From<AgentSessionPreview> for AgentSessionPreviewDto {
     fn from(preview: AgentSessionPreview) -> Self {
         match preview {
-            AgentSessionPreview::Access(data) => Self::Access(AgentSessionPreviewData {
+            AgentSessionPreview::Access(data) => Self::Access(Box::new(AgentSessionPreviewData {
                 id: data.id.as_uuid(),
                 name: data.name,
                 owner_id: data.owner_id.to_string(),
@@ -660,7 +660,7 @@ impl From<AgentSessionPreview> for AgentSessionPreviewDto {
                 status: data.status.into(),
                 created_at: data.created_at,
                 modified_at: data.modified_at,
-            }),
+            })),
             AgentSessionPreview::NoAccess(id) => {
                 Self::NoAccess(WithAgentSessionId { id: id.as_uuid() })
             }

@@ -440,17 +440,19 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 previews.push(AgentSessionPreview::NoAccess(id));
                 continue;
             }
-            previews.push(AgentSessionPreview::Access(AgentSessionPreviewData {
-                bot: None,
-                id,
-                name: row.name,
-                owner_id: MacroUserIdStr::try_from(row.owner_id)
-                    .context("agent session has an unparseable owner")?,
-                bot_id: BotId::new_from_uuid(row.bot_id),
-                status: parse_status(&row.status, row.status_event_name)?,
-                created_at: row.created_at,
-                modified_at: row.modified_at,
-            }));
+            previews.push(AgentSessionPreview::Access(Box::new(
+                AgentSessionPreviewData {
+                    bot: None,
+                    id,
+                    name: row.name,
+                    owner_id: MacroUserIdStr::try_from(row.owner_id)
+                        .context("agent session has an unparseable owner")?,
+                    bot_id: BotId::new_from_uuid(row.bot_id),
+                    status: parse_status(&row.status, row.status_event_name)?,
+                    created_at: row.created_at,
+                    modified_at: row.modified_at,
+                },
+            )));
         }
         previews.extend(
             ids.iter()

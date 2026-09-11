@@ -537,6 +537,37 @@ fn posted_message_mentions_update_referenced_documents_for_channel_members() {
 }
 
 #[test]
+fn posted_message_mentions_update_referenced_agent_sessions_for_channel_members() {
+    let channel_id = Uuid::now_v7();
+    let session_id = Uuid::now_v7().to_string();
+    let event = ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
+        channel_id,
+        message_id: Uuid::now_v7(),
+        thread_id: None,
+        sender: ChannelSender::new_from_user(user()),
+        triggered_by: None,
+        channel_type: ChannelType::Private,
+        content: "shared an agent session".to_string(),
+        mentions: vec![SimpleMention {
+            entity_type: "agent_session".to_string(),
+            entity_id: session_id.to_string(),
+        }],
+        attachments: Vec::new(),
+        created_at: Utc::now(),
+    });
+
+    let patches = patches_from_channel_event(&event);
+    assert_eq!(patches.len(), 3);
+    assert_eq!(
+        patch_entity(&patches[2]).entity_type,
+        EntityType::AgentSession
+    );
+    assert_eq!(patch_entity(&patches[2]).entity_id, session_id);
+    assert_eq!(patches[2].access_source.entity_type, EntityType::Channel);
+    assert_eq!(patches[2].access_source.entity_id, channel_id.to_string());
+}
+
+#[test]
 fn deleting_a_root_channel_message_deletes_its_thread_patch() {
     let channel_id = Uuid::now_v7();
     let message_id = Uuid::now_v7();

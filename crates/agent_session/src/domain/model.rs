@@ -427,7 +427,7 @@ pub const MAX_PREVIEW_SESSION_IDS: usize = 100;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentSessionPreview {
     /// The viewer holds at least view access; here is what a chip needs.
-    Access(AgentSessionPreviewData),
+    Access(Box<AgentSessionPreviewData>),
     /// The session exists, but the viewer holds no grant on it.
     NoAccess(AgentSessionId),
     /// No session with this id exists.

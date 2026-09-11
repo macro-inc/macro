@@ -1127,6 +1127,17 @@
           "modifiedAt"
         ],
         "properties": {
+          "bot": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionBot",
+                "description": "Minimal identity of the session's bot, when available."
+              }
+            ]
+          },
           "botId": {
             "type": "string",
             "format": "uuid",

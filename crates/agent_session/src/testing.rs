@@ -171,7 +171,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .map(|id| match sessions.get(id) {
                 None => AgentSessionPreview::DoesNotExist(*id),
                 Some(session) if session.owner_id != *viewer => AgentSessionPreview::NoAccess(*id),
-                Some(session) => AgentSessionPreview::Access(AgentSessionPreviewData {
+                Some(session) => AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
                     bot: None,
                     id: *id,
                     name: session.name.clone(),
@@ -180,7 +180,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
                     status: session.status.clone(),
                     created_at: session.created_at,
                     modified_at: session.modified_at,
-                }),
+                })),
             })
             .collect())
     }
