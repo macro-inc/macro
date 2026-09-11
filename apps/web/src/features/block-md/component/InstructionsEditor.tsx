@@ -1,5 +1,4 @@
 import { useMarkdownBlockError } from '@block-md/signal/error';
-import { useRewriteState } from '@block-md/signal/rewriteSignal';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
@@ -57,16 +56,11 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  type JSX,
   onCleanup,
   Show,
 } from 'solid-js';
-import {
-  type MarkdownDocumentMethods,
-  useMarkdownDocument,
-} from '../context/markdown-document-context';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownData, useMdStore } from '../signal/markdownBlockData';
-import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
@@ -75,8 +69,6 @@ const EDITOR_PADDING_BOTTOM = 120;
 
 export function InstructionsEditor(props: {
   loroManager: LoroManager;
-  renderCollaborationStatus?: () => JSX.Element;
-  registerMethods?: (methods: MarkdownDocumentMethods) => void;
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
 }) {
@@ -89,10 +81,6 @@ export function InstructionsEditor(props: {
   const canEdit = markdownDocument.permissions.canEdit;
   const blockElement = markdownDocument.element;
   const docSource = markdownDocument.source;
-
-  props.registerMethods?.({
-    goToLocationFromParams: (_params: Record<string, unknown>) => {},
-  });
 
   const IS_SYNC = () => {
     return docSource() && isSourceSyncService(docSource()!);
@@ -351,18 +339,6 @@ export function InstructionsEditor(props: {
     setEditorReady(true);
   });
 
-  const { setRewriting, setRevisions } = useRewriteState();
-
-  props.registerMethods?.({
-    setPatches: (args: { patches: MarkdownRewriteOutput['diffs'] }) => {
-      setRewriting(false);
-      setRevisions(args.patches);
-    },
-    setIsRewriting: () => {
-      setRewriting(true);
-    },
-  });
-
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <Show when={editorError()}>
@@ -398,7 +374,6 @@ export function InstructionsEditor(props: {
             setEditorReady={setEditorReady}
             setEditorError={setEditorError}
             loroManager={props.loroManager}
-            statusChrome={props.renderCollaborationStatus?.()}
           />
         </Show>
 

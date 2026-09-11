@@ -30,16 +30,12 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  type JSX,
   onCleanup,
   onMount,
   Show,
   untrack,
 } from 'solid-js';
-import {
-  type MarkdownDocumentMethods,
-  useMarkdownDocument,
-} from '../context/markdown-document-context';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useHistory } from '../history/HistoryContext';
 import { HistoryOverlay } from '../history/HistoryOverlay';
 import { DispatchAgentButton } from './DispatchAgentMenu';
@@ -114,9 +110,6 @@ export function Notebook(props: {
   documentId: string;
   hotkeyScope: string | undefined;
   autoFocus: boolean;
-  navigatedFromJK: boolean;
-  renderCollaborationStatus?: () => JSX.Element;
-  registerMethods?: (methods: MarkdownDocumentMethods) => void;
 }) {
   const markdownDocument = useMarkdownDocument();
   const blockElement = markdownDocument.element;
@@ -389,9 +382,7 @@ export function Notebook(props: {
             </Show>
           </div>
         </SidePanel.Section>
-        <TitleEditor
-          autoFocusOnMount={props.autoFocus && !props.navigatedFromJK}
-        />
+        <TitleEditor autoFocusOnMount={props.autoFocus} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
@@ -404,8 +395,6 @@ export function Notebook(props: {
           <div class="relative">
             <MarkdownEditor
               loroManager={props.loroManager}
-              renderCollaborationStatus={props.renderCollaborationStatus}
-              registerMethods={props.registerMethods}
               showLexicalStateDebugger={
                 canUseLexicalStateDebugger() && showLexicalStateDebugger()
               }
@@ -459,8 +448,6 @@ export function Notebook(props: {
 export function InstructionsNotebook(props: {
   loroManager: LoroManager;
   hotkeyScope: string | undefined;
-  renderCollaborationStatus?: () => JSX.Element;
-  registerMethods?: (methods: MarkdownDocumentMethods) => void;
 }) {
   const [, setMd] = useMdStore();
   const scopeId = () => props.hotkeyScope;
@@ -509,8 +496,6 @@ export function InstructionsNotebook(props: {
       <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
         <InstructionsEditor
           loroManager={props.loroManager}
-          renderCollaborationStatus={props.renderCollaborationStatus}
-          registerMethods={props.registerMethods}
           showLexicalStateDebugger={
             canUseLexicalStateDebugger() && showLexicalStateDebugger()
           }

@@ -28,6 +28,8 @@ import type {
   MarkdownDocumentData,
   MarkdownDocumentKind,
 } from '../context/markdown-document-context';
+import { createMarkdownDocumentState } from '../context/markdown-document-state';
+import type { MarkdownBlockSpec } from '../definition';
 import { OldOverlay } from '../history/OldOverlay';
 import {
   loadMarkdownCachedSnapshot,
@@ -88,6 +90,25 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const instructionsMdId = useInstructionsMdIdQuery();
   const isInstructions = () =>
     instructionsMdId.isSuccess && documentId === instructionsMdId.data;
+  const markdownState = createMarkdownDocumentState(documentId);
+  const { setRevisions, setRewriting } = markdownState.rewrite;
+  createMethodRegistration(blockHandleSignal.get, {
+    setPatches: ({
+      patches,
+    }: Parameters<MarkdownBlockSpec['setPatches']>[0]) => {
+      setRewriting(false);
+      setRevisions(patches);
+    },
+    setIsRewriting: () => {
+      setRewriting(true);
+    },
+  });
+  createMethodRegistration(
+    () => (isInstructions() ? blockHandleSignal.get() : undefined),
+    {
+      goToLocationFromParams: (_params: Record<string, unknown>) => {},
+    }
+  );
   const notificationSource = useGlobalNotificationSource();
 
   const rawData = blockLoaderDataSignal.get;
@@ -98,7 +119,6 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
     return value?.__block === 'md' ? value : undefined;
   };
 
-  const blockHandle = blockHandleSignal.get;
   const setLoadError = blockErrorSignal.set;
   const renameDocument = createRenameDssEntityMutation();
   const canComment = useCanComment();
@@ -109,8 +129,9 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
     <DocumentBlockContainer>
       <ManagedMarkdownProviders>
         <MarkdownDocument
-          documentId={() => documentId}
-          kind={() => kind}
+          documentId={documentId}
+          kind={kind}
+          state={markdownState}
           data={data()}
           source={blockSourceSignal.get()}
           permissions={{
@@ -139,6 +160,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
             </Show>
             <div class="flex flex-col size-full">
               <div class="relative shrink-0">
+                <CollabStatus />
                 <Suspense>
                   <Show when={isInstructions()} fallback={<ManagedTopBar />}>
                     <InstructionsTopBar />
@@ -161,12 +183,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
               <MarkdownDocumentContent
                 isInstructions={isInstructions()}
                 hotkeyScope={blockHotkeyScopeSignal.get()}
-                autoFocus={canAutofocus}
-                navigatedFromJK={navigatedFromJK()}
-                renderCollaborationStatus={() => <CollabStatus />}
-                registerMethods={(methods) =>
-                  createMethodRegistration(blockHandle, methods)
-                }
+                autoFocus={canAutofocus && !navigatedFromJK()}
                 optimisticSnapshot={props.optimisticSnapshot}
                 loadCachedSnapshot={() =>
                   loadMarkdownCachedSnapshot(documentId)

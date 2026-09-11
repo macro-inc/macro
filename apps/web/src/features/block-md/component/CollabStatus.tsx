@@ -11,7 +11,7 @@ export function CollabStatus() {
   const markdownDocument = useMarkdownDocument();
   const syncSource = () => markdownDocument.data()?.syncSource;
 
-  const status = () => syncSource()?.status() ?? SyncSourceStatus.Disconnected;
+  const status = () => syncSource()?.status();
   const showStatus = () =>
     status() === SyncSourceStatus.Disconnected ||
     status() === SyncSourceStatus.Connecting;

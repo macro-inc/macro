@@ -9,7 +9,6 @@ import type { DocumentMetadata } from '@service-storage/generated/schemas/docume
 import type { ResultAsync } from 'neverthrow';
 import type { Accessor, ParentComponent } from 'solid-js';
 import { createContext, useContext } from 'solid-js';
-import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import type { MarkdownDocumentState } from './markdown-document-state';
 
 export type MarkdownDocumentKind = 'document' | 'task' | 'snippet' | 'skill';
@@ -27,17 +26,10 @@ export type MarkdownDocumentData = {
   syncSource?: LiveSyncSource;
 };
 
-export type MarkdownDocumentMethods = Partial<{
-  setPatches: (args: {
-    patches: MarkdownRewriteOutput['diffs'];
-  }) => Promise<void> | void;
-  setIsRewriting: () => Promise<void> | void;
-  goToLocationFromParams: (params: Record<string, unknown>) => void;
-}>;
-
 export type MarkdownDocumentProps = {
-  documentId: Accessor<string>;
-  kind: Accessor<MarkdownDocumentKind>;
+  documentId: string;
+  kind: MarkdownDocumentKind;
+  state?: MarkdownDocumentState;
   data: MarkdownDocumentData | undefined;
   source: Source | undefined;
   permissions: MarkdownDocumentPermissions;

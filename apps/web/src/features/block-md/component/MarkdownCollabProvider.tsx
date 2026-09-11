@@ -6,7 +6,7 @@ import { isSourceSyncService } from '@core/util/source';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import type { LexicalEditor } from 'lexical';
-import type { Accessor, JSX, Setter } from 'solid-js';
+import type { Accessor, Setter } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { endDocumentSpan, resumeDocumentSpan } from '../observability';
 
@@ -28,7 +28,6 @@ export type MarkdownCollabProviderProps = {
   setEditorReady: Setter<boolean>;
   setEditorError: Setter<MarkdownEditorErrors | null>;
   loroManager: LoroManager;
-  statusChrome?: JSX.Element;
 };
 
 /**
@@ -67,7 +66,6 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
         resumeSpan: resumeDocumentSpan,
         endSpan: endDocumentSpan,
       }}
-      statusChrome={props.statusChrome}
     />
   );
 }

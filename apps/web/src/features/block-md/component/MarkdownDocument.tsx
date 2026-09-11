@@ -17,7 +17,6 @@ import { Scroll } from '@ui';
 import {
   createEffect,
   createSignal,
-  type JSX,
   on,
   type ParentProps,
   Show,
@@ -26,7 +25,6 @@ import {
 import {
   type MarkdownDocumentContextValue,
   type MarkdownDocumentData,
-  type MarkdownDocumentMethods,
   type MarkdownDocumentProps,
   MarkdownDocumentProvider,
   useMarkdownDocument,
@@ -171,10 +169,12 @@ async function ingestS3Snapshot(
 
 export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
   const [surfaceElement, setSurfaceElement] = createSignal<HTMLElement>();
-  const state = createMarkdownDocumentState(props.documentId());
+
+  const state = props.state ?? createMarkdownDocumentState(props.documentId);
+
   const context: MarkdownDocumentContextValue = {
-    documentId: props.documentId,
-    kind: props.kind,
+    documentId: () => props.documentId,
+    kind: () => props.kind,
     data: () => props.data,
     source: () => props.source,
     permissions: {
@@ -198,7 +198,7 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
           class="size-full select-none overscroll-none overflow-hidden flex flex-col relative"
           tabIndex={-1}
         >
-          <HistoryProvider documentId={props.documentId}>
+          <HistoryProvider documentId={() => props.documentId}>
             {props.children}
           </HistoryProvider>
         </div>
@@ -263,9 +263,6 @@ export type MarkdownDocumentContentProps = MarkdownSnapshotIngestOptions & {
   isInstructions?: boolean;
   hotkeyScope?: string;
   autoFocus?: boolean;
-  navigatedFromJK?: boolean;
-  renderCollaborationStatus?: () => JSX.Element;
-  registerMethods?: (methods: MarkdownDocumentMethods) => void;
 };
 
 export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
@@ -298,8 +295,6 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
                 <InstructionsNotebook
                   loroManager={loroManager}
                   hotkeyScope={props.hotkeyScope}
-                  renderCollaborationStatus={props.renderCollaborationStatus}
-                  registerMethods={props.registerMethods}
                 />
               }
             >
@@ -308,9 +303,6 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
                 documentId={documentId}
                 hotkeyScope={props.hotkeyScope}
                 autoFocus={props.autoFocus ?? false}
-                navigatedFromJK={props.navigatedFromJK ?? false}
-                renderCollaborationStatus={props.renderCollaborationStatus}
-                registerMethods={props.registerMethods}
               />
             </Show>
           </Suspense>

@@ -174,23 +174,18 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  type JSX,
   on,
   onCleanup,
   Show,
   Suspense,
   untrack,
 } from 'solid-js';
-import {
-  type MarkdownDocumentMethods,
-  useMarkdownDocument,
-} from '../context/markdown-document-context';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import {
   generateContentCallback,
   useGenerateState,
 } from '../signal/generateSignal';
 import { useMarkdownData, useMdStore } from '../signal/markdownBlockData';
-import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
@@ -218,8 +213,6 @@ function getBlankMarkdownPlaceholder(canEdit: boolean) {
 export function MarkdownEditor(props: {
   autoFocusOnMount?: boolean;
   loroManager: LoroManager;
-  renderCollaborationStatus?: () => JSX.Element;
-  registerMethods?: (methods: MarkdownDocumentMethods) => void;
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
 }) {
@@ -244,7 +237,7 @@ export function MarkdownEditor(props: {
   const canComment = markdownDocument.permissions.canComment;
   const [findAndReplaceStore, setFindAndReplaceStore] =
     useFindAndReplaceStore();
-  const { revisions, setRevisions, setRewriting } = useRewriteState();
+  const { revisions, setRevisions } = useRewriteState();
   const docSource = markdownDocument.source;
 
   const IS_SYNC = () => {
@@ -960,16 +953,6 @@ export function MarkdownEditor(props: {
     generateContentCallback(userRequest);
   });
 
-  props.registerMethods?.({
-    setPatches: (args: { patches: MarkdownRewriteOutput['diffs'] }) => {
-      setRewriting(false);
-      setRevisions(args.patches);
-    },
-    setIsRewriting: () => {
-      setRewriting(true);
-    },
-  });
-
   const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
   if (isFeatureEnabled(enableGitBlame)) {
     plugins.use(
@@ -1039,7 +1022,6 @@ export function MarkdownEditor(props: {
             setEditorReady={setEditorReady}
             setEditorError={setEditorError}
             loroManager={props.loroManager}
-            statusChrome={props.renderCollaborationStatus?.()}
           />
         </Show>
 
