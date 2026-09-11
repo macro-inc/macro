@@ -23,13 +23,6 @@ env_vars!(
     pub struct DocumentPermissionJwt;
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub struct KafkaBrokers;
-    /// Absolute URL Pipedream posts connect-flow outcomes to, minted into
-    /// every Connect token. Must carry the shared secret as a `secret` query
-    /// parameter, matching `PIPEDREAM_WEBHOOK_SECRET`.
-    pub struct PipedreamWebhookUri;
-    /// Shared secret guarding the public Pipedream webhook route, which is
-    /// unauthenticated because Pipedream is the caller.
-    pub struct PipedreamWebhookSecret;
 );
 
 maybe_env_vars!(
@@ -56,6 +49,15 @@ maybe_env_vars!(
     /// by deploy environment: the app origin (`https://macro.com` /
     /// `https://dev.macro.com`) plus localhost outside production.
     pub struct PipedreamAllowedOrigins;
+    /// Absolute URL Pipedream posts connect-flow outcomes to, minted into
+    /// every Connect token. Must carry the shared secret as a `secret` query
+    /// parameter, matching `PIPEDREAM_WEBHOOK_SECRET`. When unset (or when
+    /// the secret is unset), connect tokens are minted without a webhook.
+    pub struct PipedreamWebhookUri;
+    /// Shared secret guarding the public Pipedream webhook route, which is
+    /// unauthenticated because Pipedream is the caller. When unset, the
+    /// webhook route is not mounted.
+    pub struct PipedreamWebhookSecret;
 );
 
 /// The configuration parameters for the application.
@@ -174,8 +176,8 @@ impl Config {
             pipedream_api_url: PipedreamApiUrl::Unset,
             pipedream_mcp_url: PipedreamMcpUrl::Unset,
             pipedream_allowed_origins: PipedreamAllowedOrigins::Unset,
-            pipedream_webhook_uri: PipedreamWebhookUri::Comptime("PIPEDREAM_WEBHOOK_URI"),
-            pipedream_webhook_secret: PipedreamWebhookSecret::Comptime("PIPEDREAM_WEBHOOK_SECRET"),
+            pipedream_webhook_uri: PipedreamWebhookUri::Unset,
+            pipedream_webhook_secret: PipedreamWebhookSecret::Unset,
             internal_api_key: InternalApiKey::Comptime(""),
             ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
             document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),

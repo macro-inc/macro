@@ -21,6 +21,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 
+#[cfg(test)]
+mod test;
+
 /// Hook invoked after a connect flow completes and the record is saved.
 /// Hosts use this to react to a connection the moment it exists (e.g. start
 /// import gather jobs); implementations must be quick or spawn.

@@ -40,7 +40,7 @@ pub struct PipedreamConfig {
     /// Absolute URL Pipedream posts connect-flow outcomes to, minted into
     /// every Connect token. Without it a flow that dies inside the hosted
     /// Connect UI leaves no trace on our side at all.
-    pub webhook_uri: String,
+    pub webhook_uri: Option<String>,
     /// Base URL of the Pipedream API. [`DEFAULT_API_URL`] unless overridden.
     pub api_url: String,
     /// URL of Pipedream's remote MCP server. [`DEFAULT_MCP_URL`] unless
@@ -147,7 +147,9 @@ impl PipedreamConnect for PipedreamClient {
         if !self.config.allowed_origins.is_empty() {
             body["allowed_origins"] = serde_json::json!(self.config.allowed_origins);
         }
-        body["webhook_uri"] = serde_json::json!(self.config.webhook_uri);
+        if let Some(webhook_uri) = &self.config.webhook_uri {
+            body["webhook_uri"] = serde_json::json!(webhook_uri);
+        }
 
         let response = self
             .authed(self.http.post(self.connect_api("/tokens")))

@@ -459,56 +459,73 @@ async fn main() -> anyhow::Result<()> {
 
     // The Pipedream MCP stack, fully separate from the native one above
     // (own endpoints, own table, own toolset). Without credentials its
-    // endpoints answer 501 and its toolsets come up empty.
+    // endpoints answer 501 and its toolsets come up empty. Connect-flow
+    // webhooks need both URI and secret; a half-set pair is ignored so we
+    // never mint a callback we cannot serve.
     let pipedream_client: ai_tools::ToolPipedreamConnection = match (
         config.pipedream_client_id.value(),
         config.pipedream_client_secret.value(),
         config.pipedream_project_id.value(),
     ) {
-        (Some(client_id), Some(client_secret), Some(project_id)) => Some(Arc::new(
-            pipedream_mcp::outbound::api::PipedreamClient::new(
-                pipedream_mcp::outbound::api::PipedreamConfig {
-                    client_id: client_id.to_owned(),
-                    client_secret: client_secret.to_owned(),
-                    project_id: project_id.to_owned(),
-                    environment: config
-                        .pipedream_environment
-                        .value()
-                        .unwrap_or(match config.environment {
-                            Environment::Production => "production",
-                            _ => "development",
-                        })
-                        .to_owned(),
-                    api_url: config
-                        .pipedream_api_url
-                        .value()
-                        .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_API_URL)
-                        .to_owned(),
-                    mcp_url: config
-                        .pipedream_mcp_url
-                        .value()
-                        .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_MCP_URL)
-                        .to_owned(),
-                    allowed_origins: match config.pipedream_allowed_origins.value() {
-                        Some(origins) => origins
-                            .split(',')
-                            .map(|origin| origin.trim().to_owned())
-                            .filter(|origin| !origin.is_empty())
-                            .collect(),
-                        None => match config.environment {
-                            Environment::Production => vec!["https://macro.com".to_owned()],
-                            Environment::Develop => vec![
-                                "https://dev.macro.com".to_owned(),
-                                "http://localhost:3000".to_owned(),
-                            ],
-                            Environment::Local => vec!["http://localhost:3000".to_owned()],
+        (Some(client_id), Some(client_secret), Some(project_id)) => {
+            let webhook_uri = match (
+                config.pipedream_webhook_uri.value(),
+                config.pipedream_webhook_secret.value(),
+            ) {
+                (Some(uri), Some(_)) => Some(uri.to_owned()),
+                (None, None) => None,
+                _ => {
+                    tracing::warn!(
+                        "ignoring incomplete Pipedream webhook config; set both PIPEDREAM_WEBHOOK_URI and PIPEDREAM_WEBHOOK_SECRET"
+                    );
+                    None
+                }
+            };
+            Some(Arc::new(
+                pipedream_mcp::outbound::api::PipedreamClient::new(
+                    pipedream_mcp::outbound::api::PipedreamConfig {
+                        client_id: client_id.to_owned(),
+                        client_secret: client_secret.to_owned(),
+                        project_id: project_id.to_owned(),
+                        environment: config
+                            .pipedream_environment
+                            .value()
+                            .unwrap_or(match config.environment {
+                                Environment::Production => "production",
+                                _ => "development",
+                            })
+                            .to_owned(),
+                        api_url: config
+                            .pipedream_api_url
+                            .value()
+                            .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_API_URL)
+                            .to_owned(),
+                        mcp_url: config
+                            .pipedream_mcp_url
+                            .value()
+                            .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_MCP_URL)
+                            .to_owned(),
+                        allowed_origins: match config.pipedream_allowed_origins.value() {
+                            Some(origins) => origins
+                                .split(',')
+                                .map(|origin| origin.trim().to_owned())
+                                .filter(|origin| !origin.is_empty())
+                                .collect(),
+                            None => match config.environment {
+                                Environment::Production => vec!["https://macro.com".to_owned()],
+                                Environment::Develop => vec![
+                                    "https://dev.macro.com".to_owned(),
+                                    "http://localhost:3000".to_owned(),
+                                ],
+                                Environment::Local => vec!["http://localhost:3000".to_owned()],
+                            },
                         },
+                        webhook_uri,
                     },
-                    webhook_uri: config.pipedream_webhook_uri.as_ref().to_owned(),
-                },
-            )
-            .context("failed to build Pipedream client")?,
-        )),
+                )
+                .context("failed to build Pipedream client")?,
+            ))
+        }
         _ => {
             tracing::info!("Pipedream credentials not set; Pipedream MCP connectors disabled");
             None

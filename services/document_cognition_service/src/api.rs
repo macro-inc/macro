@@ -130,18 +130,16 @@ fn api_router(api_context: ApiContext) -> Router {
 
     // Pipedream calls this one itself, so it sits outside the authenticated
     // router and is guarded by the secret baked into the configured
-    // `webhook_uri`.
-    let pipedream_webhook = pipedream_mcp::inbound::pipedream_webhook_router(
-        api_context
-            .config
-            .pipedream_webhook_secret
-            .as_ref()
-            .to_owned(),
-    );
-
-    Router::new()
+    // `webhook_uri`. If the secret is unset, the route is not mounted.
+    let app = Router::new()
         .nest("/{version}", internal_router.clone())
         .merge(internal_router)
-        .merge(mcp_client::inbound::mcp_oauth_callback_router(mcp_state))
-        .merge(pipedream_webhook)
+        .merge(mcp_client::inbound::mcp_oauth_callback_router(mcp_state));
+
+    match api_context.config.pipedream_webhook_secret.value() {
+        Some(secret) => app.merge(pipedream_mcp::inbound::pipedream_webhook_router(
+            secret.to_owned(),
+        )),
+        None => app,
+    }
 }
