@@ -95,28 +95,44 @@ jobs:
 
         # cargo-tauri, bun, just, wasm-pack and the pinned toolchain (which carries
         # aarch64-apple-ios-sim, see rust-toolchain.toml) all come from the dev shell.
+        # Phase 1 — the web and wasm build, in the dev shell exactly as it comes. It
+        # needs nix's bun, wasm-pack and cc wrapper, and must not see Apple's.
         nix develop --command bash -euo pipefail -c '
-          # The dev shell brings its own Apple toolchain: DEVELOPER_DIR points at
-          # nix'"'"'s apple-sdk, and `xcodebuild` resolves to the xcbuild
-          # reimplementation, which rejects real flags like -allowProvisioningUpdates.
-          # Neither can build for a device SDK we did not get from Xcode, so put the
-          # system tools in front — a dedicated dir rather than /usr/bin wholesale, so
-          # nothing else the shell provides gets shadowed.
+          bun install --frozen-lockfile
+          cd apps/web
+          just build-tauri-dev
+        '
+
+        # Phase 2 — everything Xcode drives, with Apple's toolchain in front.
+        #
+        # The dev shell ships its own: DEVELOPER_DIR points at nix's apple-sdk and
+        # `xcodebuild` is the xcbuild reimplementation, which rejects real flags. But
+        # swapping only those two desyncs nix's cc wrapper from its SDK and host
+        # proc-macro links then fail on -liconv, so the compiler and linker have to
+        # come from Apple too. Hence one dir at the front of PATH rather than a couple
+        # of overrides — and hence phase 1 being a separate shell, since the wasm build
+        # wants the nix cc it was configured against.
+        nix develop --command bash -euo pipefail -c '
           echo "before: DEVELOPER_DIR=$(xcode-select -p 2>&1), xcodebuild=$(command -v xcodebuild || echo none)"
 
           export DEVELOPER_DIR="$MACRO_DEVELOPER_DIR"
           APPLE_TOOLS="$(mktemp -d)"
-          for tool in xcodebuild xcrun xcode-select simctl actool ibtool ditto plutil; do
+          for tool in xcodebuild xcrun xcode-select simctl actool ibtool plutil ditto \
+                      clang clang++ cc c++ ld ar ranlib libtool lipo strip nm \
+                      install_name_tool codesign dsymutil; do
             [ -x "/usr/bin/$tool" ] && ln -sf "/usr/bin/$tool" "$APPLE_TOOLS/$tool"
           done
           export PATH="$APPLE_TOOLS:$PATH"
 
-          echo "after:  DEVELOPER_DIR=$(xcode-select -p 2>&1), xcodebuild=$(command -v xcodebuild)"
+          # nix'"'"'s wrapper flags name its own sysroot; Apple'"'"'s clang would either
+          # ignore them or trip over them.
+          unset NIX_CFLAGS_COMPILE NIX_LDFLAGS SDKROOT || true
+
+          echo "after:  DEVELOPER_DIR=$(xcode-select -p 2>&1), xcodebuild=$(command -v xcodebuild), cc=$(command -v cc)"
           xcodebuild -version
 
-          bun install --frozen-lockfile
           cd apps/web
-          just ios-build-sim
+          just ios-build-sim prebuilt=true
         '
 
         APP="apps/web/tauri/src-tauri/gen/apple/build/arm64-sim/macro.app"

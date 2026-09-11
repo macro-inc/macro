@@ -22,11 +22,21 @@ ios-build: ios-prepare
 # workflow). Simulator builds need no signing, and --no-default-features keeps
 # the bundle auto-updater off so a preview cannot quietly replace itself with
 # the production bundle.
+#
+# The frontend is built as a separate step rather than through Tauri's
+# beforeBuildCommand hook: the web and wasm builds want the nix toolchain,
+# while everything Xcode drives wants Apple's, and running both under one set
+# of compiler flags breaks whichever one loses. CI builds the frontend in a
+# clean nix shell and then calls this with prebuilt=true.
+#
 # Output: tauri/src-tauri/gen/apple/build/arm64-sim/macro.app
-ios-build-sim: ios-prepare
+ios-build-sim prebuilt="false": ios-prepare
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{prebuilt}}" != "true" ]; then just build-tauri-dev; fi
     cd tauri/src-tauri && cargo tauri ios build \
       --target aarch64-sim --debug --ci --no-sign -v \
-      --config '{"build":{"beforeBuildCommand":{"script":"just build-tauri-dev","cwd":"../.."}}}' \
+      --config '{"build":{"beforeBuildCommand":""}}' \
       -- --no-default-features
 
 # iOS generated project prep. Keep native bundle metadata in sync with
