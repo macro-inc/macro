@@ -834,10 +834,12 @@ where
         let mut reminder_ids = Vec::new();
         for candidate in candidates {
             match candidate.entity.entity_type {
-                // Calendar events ride the main by-ids query in both soup types.
-                EntityType::Document | EntityType::Chat | EntityType::CalendarEvent => {
-                    main_entities.push(candidate.entity.copied())
-                }
+                // Calendar events and agent sessions ride the main by-ids
+                // query in both soup types.
+                EntityType::Document
+                | EntityType::Chat
+                | EntityType::CalendarEvent
+                | EntityType::AgentSession => main_entities.push(candidate.entity.copied()),
                 // Same split as the touched feed: the expanded by-ids query
                 // omits project rows, so they hydrate unexpanded separately.
                 EntityType::Project => match soup_type {
