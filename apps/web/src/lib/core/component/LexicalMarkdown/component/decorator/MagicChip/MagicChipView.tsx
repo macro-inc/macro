@@ -252,25 +252,33 @@ const AnswerPending: Component<{
   /** The chip is in its working kind — nothing to read yet. */
   working: boolean;
   label: string;
-}> = (props) => (
-  <Show when={props.busy}>
-    <div
-      class="flex h-full items-center justify-center"
-      classList={{
-        'justify-start': props.working && props.label !== 'Thinking',
-      }}
-      data-magic-chip-pending
-      aria-hidden="true"
-    >
-      <Show
-        when={props.working && props.label !== 'Thinking'}
-        fallback={<PulsingStar kind="streamIndicator" animate />}
+}> = (props) => {
+  // Generic waits use the working row; Thinking keeps the star so verbs do
+  // not stack on a header that already says Thinking.
+  const verbs = () => props.working && props.label !== 'Thinking';
+  return (
+    <Show when={props.busy}>
+      <div
+        class="flex h-full"
+        classList={{
+          'items-center justify-center': !verbs(),
+          // Sit where the passage would start, not floating in the middle
+          // of the card with a transcript caret-width indent.
+          'items-start': verbs(),
+        }}
+        data-magic-chip-pending
+        aria-hidden="true"
       >
-        <WorkingLine />
-      </Show>
-    </div>
-  </Show>
-);
+        <Show
+          when={verbs()}
+          fallback={<PulsingStar kind="streamIndicator" animate />}
+        >
+          <WorkingLine lead="dot" />
+        </Show>
+      </div>
+    </Show>
+  );
+};
 
 /** The agent's passage, inert so the area's click is the disclosure. */
 const Passage: Component<{ markdown: string }> = (props) => (

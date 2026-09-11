@@ -142,8 +142,14 @@ describe('MagicChipView', () => {
         }}
       />
     ));
-    expect(container.querySelector('[data-agent-working-line]')).toBeTruthy();
+    const line = container.querySelector('[data-agent-working-line]');
+    expect(line).toBeTruthy();
+    expect(line?.getAttribute('data-agent-working-lead')).toBe('dot');
+    expect(line?.querySelector('.size-4')).toBeNull();
     expect(container.textContent).toContain('Working');
+    expect(
+      container.querySelector('[data-magic-chip-pending]')?.className
+    ).toContain('items-start');
   });
 
   it('keeps the star while thinking, so the verbs do not stack on Thinking', () => {

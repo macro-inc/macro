@@ -26,4 +26,19 @@ describe('WorkingLine', () => {
 
     expect(queryByRole('button')).toBeNull();
   });
+
+  it('keeps a caret-width slot in the transcript so the label does not jump', () => {
+    const { container } = render(() => <WorkingLine />);
+    const line = container.querySelector('[data-agent-working-line]');
+    expect(line?.getAttribute('data-agent-working-lead')).toBe('caret');
+    expect(line?.querySelector('.size-4')).toBeTruthy();
+  });
+
+  it('sits the dot on the verbs when there is no caret to match', () => {
+    const { container } = render(() => <WorkingLine lead="dot" />);
+    const line = container.querySelector('[data-agent-working-line]');
+    expect(line?.getAttribute('data-agent-working-lead')).toBe('dot');
+    expect(line?.querySelector('.size-4')).toBeNull();
+    expect(line?.querySelector('.agent-working-dot')).toBeTruthy();
+  });
 });

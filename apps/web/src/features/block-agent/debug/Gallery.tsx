@@ -633,8 +633,9 @@ export default function AgentUiGallery() {
             </ToolCard>
           </Item>
 
-          <Item label="WorkingLine">
+          <Item label="WorkingLine (transcript caret / chip dot)">
             <WorkingLine />
+            <WorkingLine lead="dot" />
           </Item>
 
           <Item label="Thought (active / settled)">
