@@ -24,8 +24,8 @@ export type GetUnfurlQueryParams = {
 
 /**
  * Unfurl response for a single URL: the URL itself plus any metadata that
- * was extracted from the page's `<head>` (title, description, image,
- * favicon).
+ * was extracted from the page's `<head>` (title, description, image and
+ * optional intrinsic image size, favicon).
  */
 export type GetUnfurlResponse = {
     /**
@@ -37,9 +37,19 @@ export type GetUnfurlResponse = {
      */
     favicon_url?: string | null;
     /**
+     * Intrinsic height of the preview image (from `og:image:height`), if both
+     * width and height were present and parseable.
+     */
+    image_height?: number | null;
+    /**
      * The page's preview image URL (from `og:image`), if any.
      */
     image_url?: string | null;
+    /**
+     * Intrinsic width of the preview image (from `og:image:width`), if both
+     * width and height were present and parseable.
+     */
+    image_width?: number | null;
     /**
      * The page title (from custom URL parser, Open Graph, or `<title>`).
      */
@@ -64,9 +74,19 @@ export type Vec = Array<null | {
      */
     favicon_url?: string | null;
     /**
+     * Intrinsic height of the preview image (from `og:image:height`), if both
+     * width and height were present and parseable.
+     */
+    image_height?: number | null;
+    /**
      * The page's preview image URL (from `og:image`), if any.
      */
     image_url?: string | null;
+    /**
+     * Intrinsic width of the preview image (from `og:image:width`), if both
+     * width and height were present and parseable.
+     */
+    image_width?: number | null;
     /**
      * The page title (from custom URL parser, Open Graph, or `<title>`).
      */

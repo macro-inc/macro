@@ -9,6 +9,8 @@ pub mod dm;
 pub mod entity_mutation;
 /// Domain events emitted by channel workflows.
 pub mod events;
+/// Server-side "remove link preview" content transform.
+pub mod link_preview;
 /// Legacy channel list service implementation.
 #[cfg(feature = "list")]
 pub mod list_service;

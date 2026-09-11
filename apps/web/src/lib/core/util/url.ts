@@ -58,6 +58,15 @@ export function openExternalUrl(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')?.focus();
 }
 
+/** Display hostname for a URL (no `www.`); echoes unparseable input. */
+export function extractDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
 export function transformShortIdInUrlPathname(pathname: string) {
   const parts = pathname.split('/');
   const newParts = [];

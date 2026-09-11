@@ -3057,6 +3057,12 @@ export const patchMessageBody = zod
       .nullish()
       .describe('Optional replacement mentions.'),
     nonce: zod.string().nullish().describe('Optional optimistic-update nonce.'),
+    remove_preview_url: zod
+      .string()
+      .nullish()
+      .describe(
+        'Optionally removes the rich preview of one link for every participant\nby setting `preview: false` on the matching link node(s) in the\ncontent, server-side. Not a content edit: `edited_at` is untouched.'
+      ),
   })
   .describe('Request to patch a channel message.');
 

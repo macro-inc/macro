@@ -770,6 +770,7 @@ where
             mentions: replacement_mentions,
             attachment_ids_to_delete,
             attachments_to_add,
+            remove_preview_url,
             nonce,
             notification_policy,
         } = req;
@@ -811,6 +812,32 @@ where
                 nonce.clone(),
             )
             .await?;
+        }
+
+        // Applied before any content patch: a replacement body would clobber
+        // the rewrite anyway, and its own MessageChanged carries the result.
+        if let Some(url) = remove_preview_url.filter(|url| !url.is_empty()) {
+            let message = self
+                .repo
+                .remove_link_preview(channel_id, message_id, url)
+                .await
+                .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+            if content.is_none() {
+                let channel_participants = self
+                    .repo
+                    .get_participants(channel_id)
+                    .await
+                    .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+                self.events.dispatch(ChannelEvent::MessageChanged {
+                    channel_id,
+                    actor: actor.clone(),
+                    message,
+                    recipients: participant_ids(&channel_participants),
+                    nonce: nonce.clone(),
+                    posted_notification: None,
+                });
+            }
         }
 
         if let Some(content) = content.as_ref() {
