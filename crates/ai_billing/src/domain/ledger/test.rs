@@ -45,12 +45,31 @@ fn included_allowance_equals_plan_price_per_seat() {
 
     let mut team = Entitlement::personal(user("owner@x.com"), PlanTier::Premium);
     team.billed_users.push(user("a@x.com"));
+    team.seat_tiers.push(PlanTier::Premium);
     team.billed_users.push(user("b@x.com"));
+    team.seat_tiers.push(PlanTier::Premium);
     team.scope = PayerScope::TeamOwner {
         team_id: macro_uuid::generate_uuid_v7(),
     };
     assert_eq!(team.seats(), 3);
     assert_eq!(team.included_ai_cents(), 12_000);
+}
+
+#[test]
+fn mixed_seat_plans_pool_each_seats_allowance() {
+    // A Premium owner with one Max teammate and one Premium teammate: the
+    // pool is $40 + $200 + $40, whatever plan the requesting user is on.
+    let mut team = Entitlement::personal(user("owner@x.com"), PlanTier::Premium);
+    team.billed_users.push(user("a@x.com"));
+    team.seat_tiers.push(PlanTier::Max);
+    team.billed_users.push(user("b@x.com"));
+    team.seat_tiers.push(PlanTier::Premium);
+    team.scope = PayerScope::TeamOwner {
+        team_id: macro_uuid::generate_uuid_v7(),
+    };
+    assert_eq!(team.seats(), 3);
+    assert_eq!(team.included_ai_cents(), 28_000);
+    assert_eq!(team.tier, PlanTier::Premium);
 }
 
 #[test]
@@ -278,6 +297,7 @@ fn team_member_is_not_the_payer() {
     let member = user("member@x.com");
     let ent = Entitlement {
         tier: PlanTier::Max,
+        seat_tiers: vec![PlanTier::Max, PlanTier::Max],
         unlimited: false,
         payer: owner.clone(),
         billed_users: vec![owner, member.clone()],

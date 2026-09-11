@@ -38,8 +38,9 @@ use crate::domain::{
         CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
         PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
         RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
-        RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamWithMembers, ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
+        RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
+        TeamInvite, TeamInviteDetails, TeamMember, TeamWithMembers, ToggleAutoJoinDomainError,
+        TryJoinTeamByDomainError,
     },
     team_repo::TeamService,
 };
@@ -365,6 +366,15 @@ impl TeamService for FakeTeamService {
         _req: &PatchTeamRequest,
     ) -> Result<(), TeamError> {
         panic!("unexpected patch_team call")
+    }
+
+    async fn set_team_member_plan(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        _user_id: &MacroUserIdStr<'_>,
+        _plan: SeatPlan,
+    ) -> Result<TeamMember<'static>, SetTeamMemberPlanError> {
+        panic!("unexpected set_team_member_plan call")
     }
 
     async fn get_team_user_permissions(

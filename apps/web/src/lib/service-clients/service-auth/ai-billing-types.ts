@@ -54,3 +54,14 @@ export interface AiPlanCatalog {
 }
 
 export type PaidPlan = 'premium' | 'max';
+
+/**
+ * A team member with the plan their seat is billed at. Mirrors the auth
+ * service's `TeamMember` once `plan` lands in the generated schema.
+ */
+export interface TeamMemberPlan {
+  team_id: string;
+  user_id: string;
+  role: 'member' | 'admin' | 'owner';
+  plan: PaidPlan;
+}

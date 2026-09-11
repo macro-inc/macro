@@ -10,6 +10,7 @@ import EnvelopeIcon from '@phosphor/envelope.svg';
 import { useAiBillingSummaryQuery, useChangePlanMutation } from '@queries/auth';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
+import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer } from '@ui';
 import { createMemo, For, Match, Show, Switch } from 'solid-js';
@@ -46,6 +47,22 @@ const PlanFeatures = (props: { tier: PlanTier }) => (
     )}
   </For>
 );
+
+/** "3 Premium seats, 1 Max seat" for a team's members. */
+function describeSeatPlans(members: TeamMember[]): string {
+  const maxSeats = members.filter(
+    (member) => (member as TeamMember & { plan?: PaidPlan }).plan === 'max'
+  ).length;
+  const premiumSeats = members.length - maxSeats;
+  const parts: string[] = [];
+  if (premiumSeats > 0) {
+    parts.push(`${premiumSeats} Premium ${plural('seat', premiumSeats)}`);
+  }
+  if (maxSeats > 0) {
+    parts.push(`${maxSeats} Max ${plural('seat', maxSeats)}`);
+  }
+  return parts.join(', ');
+}
 
 const PlanPrice = (props: { tier: PaidPlan }) => (
   <p class="text-ink-extra-muted text-xs">
@@ -165,8 +182,15 @@ export const Billing = () => {
                 <Switch>
                   <Match when={teamRole() === 'member'}>
                     <p class="text-ink-extra-muted text-xs">
-                      Your subscription is managed by your team owner. Contact
-                      them to make changes.
+                      Your seat is billed through your team. Team admins choose
+                      each seat's plan in{' '}
+                      <a
+                        class="text-link hover:text-link-hover"
+                        href="/app/settings/team"
+                      >
+                        Team settings
+                      </a>
+                      .
                     </p>
                   </Match>
                   <Match
@@ -175,8 +199,15 @@ export const Billing = () => {
                     {(team) => (
                       <p class="text-ink-extra-muted text-xs">
                         {team().members.length}{' '}
-                        {plural('user', team().members.length)} • $
-                        {PLAN_BY_TIER[tier()].price} per seat/per month
+                        {plural('user', team().members.length)} •{' '}
+                        {describeSeatPlans(team().members)} • set each seat's
+                        plan in{' '}
+                        <a
+                          class="text-link hover:text-link-hover"
+                          href="/app/settings/team"
+                        >
+                          Team settings
+                        </a>
                       </p>
                     )}
                   </Match>
@@ -305,8 +336,12 @@ export const Billing = () => {
                     <PlanFeatures tier="max" />
                   </ul>
                   <p class="text-xs text-ink-extra-muted">
-                    Prorated for the rest of this period; every seat on your
-                    team moves together.
+                    Prorated for the rest of this period.
+                    <Show when={teamRole() === 'owner'}>
+                      {' '}
+                      This moves only your seat; teammates' plans are set per
+                      seat in Team settings.
+                    </Show>
                   </p>
                 </section>
               </SettingsCard>

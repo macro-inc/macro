@@ -1,6 +1,12 @@
 use axum::{Json, extract::State};
+use entity_access::domain::{
+    models::{AdminTeamRole, Entity, EntityAccessReceipt, EntityPermission, EntityType},
+    ports::EntityAccessService,
+};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_user_id::cowlike::CowLike;
 use serde::{Deserialize, Serialize};
+use teams::domain::{model::SetTeamMemberPlanError, team_repo::TeamService};
 use utoipa::ToSchema;
 
 use super::{PaidPlan, StripeOperationError};
@@ -23,12 +29,14 @@ pub struct ChangePlanResponse {
     pub plan: PaidPlan,
 }
 
-/// Moves the caller's active subscription between paid plans.
+/// Moves the caller's own seat between paid plans.
 ///
-/// Swaps the per-seat price on the subscription's seat item and invoices the
-/// proration immediately. Roles and the AI allowance follow from the
-/// `customer.subscription.updated` webhook. For a team subscription every
-/// seat moves together.
+/// On a paying team this moves only the caller's seat (team admins and the
+/// owner may do so; teammates' seats are managed from team settings). Solo
+/// subscribers get the price on their subscription's seat item swapped. The
+/// proration is invoiced immediately either way; roles and the AI allowance
+/// follow at once on a team and from the `customer.subscription.updated`
+/// webhook for a personal subscription.
 #[utoipa::path(
     post,
     path = "/user/stripe/plan",
@@ -37,6 +45,8 @@ pub struct ChangePlanResponse {
     responses(
         (status = 200, body = ChangePlanResponse),
         (status = 400, description = "Plan not available", body = ErrorResponse),
+        (status = 402, description = "The team has no active subscription", body = ErrorResponse),
+        (status = 403, description = "Only team admins change plans on a team", body = ErrorResponse),
         (status = 404, description = "No active subscription", body = ErrorResponse),
         (status = 409, description = "Already on this plan", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
@@ -49,6 +59,35 @@ pub async fn change_plan(
     Json(req): Json<ChangePlanRequest>,
 ) -> Result<Json<ChangePlanResponse>, StripeOperationError> {
     let target_price = ctx.stripe_prices.price_id(req.plan)?.to_string();
+    let user_id = &user.authorization.user.macro_user_id;
+
+    // A member of a paying team is billed through the team: move their seat.
+    if let Some(team) = ctx
+        .entity_access_service
+        .get_user_team(user_id)
+        .await
+        .map_err(|e| StripeOperationError::TeamsErr(e.into()))?
+    {
+        let receipt = EntityAccessReceipt::<AdminTeamRole>::try_new_authenticated_user(
+            user_id.clone().into_owned(),
+            Entity {
+                entity_id: team.team_id.to_string(),
+                entity_type: EntityType::Team,
+            },
+            EntityPermission::TeamRole { role: team.role },
+        )
+        .map_err(|_| StripeOperationError::NotTeamAdmin)?;
+        match ctx
+            .teams_service
+            .set_team_member_plan(receipt, user_id, req.plan)
+            .await
+        {
+            Ok(member) => return Ok(Json(ChangePlanResponse { plan: member.plan })),
+            // A free team bills nobody; fall through to the personal subscription.
+            Err(SetTeamMemberPlanError::TeamNotPaying) => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
 
     let stripe_customer_id = macro_db_client::user::get::get_stripe_customer_id_by_user_id(
         &ctx.db,

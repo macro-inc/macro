@@ -10,9 +10,10 @@ use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr
 use crate::domain::model::{
     AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
     PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromTeamError,
-    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, Team, TeamError,
-    TeamInvite, TeamInviteDetails, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
-    ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
+    RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
+    SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamMember,
+    TeamMembers, TeamPlan, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
+    TryJoinTeamByDomainError,
 };
 
 /// The TeamRepository defines a set of actions to perform on teams data
@@ -49,12 +50,14 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
 
     /// Creates a new team with the provided normalized slug. `subscription_id` is `None` for
     /// free teams (capped at [`crate::domain::model::FREE_TEAM_MAX_MEMBERS`] members).
+    /// `owner_plan` is the plan the owner's own seat is already billed at.
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
+        owner_plan: SeatPlan,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Moves any user-owned GitHub App installation rows to the given team.
@@ -237,6 +240,14 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_role: TeamRole,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
 
+    /// Records the plan the provided member's seat is billed at.
+    fn patch_team_member_plan(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+        plan: SeatPlan,
+    ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
     /// Get the teams current seat count
     fn get_team_seat_count(
         &self,
@@ -403,6 +414,18 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<(), RestorePermissionsForTeamMembersError>> + Send;
+
+    /// Moves a member's seat to `plan`: swaps the seat between the team
+    /// subscription's per-plan items (invoicing the proration now), records
+    /// the plan on the membership, and re-stamps the member's tier role.
+    /// Team admins and above only; the team must be paying or enterprise.
+    /// Returns the member as they now stand; a no-op when already on `plan`.
+    fn set_team_member_plan(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        user_id: &MacroUserIdStr<'_>,
+        plan: SeatPlan,
+    ) -> impl Future<Output = Result<TeamMember<'static>, SetTeamMemberPlanError>> + Send;
 
     /// Patches the team subscription id
     /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.

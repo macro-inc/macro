@@ -102,6 +102,15 @@ impl PlanTier {
     }
 }
 
+impl From<teams::domain::model::SeatPlan> for PlanTier {
+    fn from(plan: teams::domain::model::SeatPlan) -> Self {
+        match plan {
+            teams::domain::model::SeatPlan::Premium => PlanTier::Premium,
+            teams::domain::model::SeatPlan::Max => PlanTier::Max,
+        }
+    }
+}
+
 /// A half-open `[start, end)` window that usage is metered against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BillingPeriod {
@@ -192,8 +201,11 @@ pub enum PayerScope {
 /// A user's resolved plan and payer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entitlement {
-    /// The plan the user is on.
+    /// The plan the user's own seat is on.
     pub tier: PlanTier,
+    /// The plan of every billed seat, the user's included. A team may mix
+    /// Premium and Max seats; the pooled allowance is their sum.
+    pub seat_tiers: Vec<PlanTier>,
     /// Enterprise teams are billed out of band and never metered.
     pub unlimited: bool,
     /// The account that owns credits, overage settings, and the Stripe
@@ -211,6 +223,7 @@ impl Entitlement {
     pub fn personal(user: MacroUserIdStr<'static>, tier: PlanTier) -> Self {
         Self {
             tier,
+            seat_tiers: vec![tier],
             unlimited: false,
             payer: user.clone(),
             billed_users: vec![user],
@@ -223,9 +236,16 @@ impl Entitlement {
         self.billed_users.len().max(1) as u32
     }
 
-    /// Included AI per period across all seats, in list-rate cents.
+    /// Included AI per period across all seats, in list-rate cents: each
+    /// seat contributes its own plan's allowance.
     pub fn included_ai_cents(&self) -> i64 {
-        self.tier.included_ai_cents_per_seat() * i64::from(self.seats())
+        if self.seat_tiers.is_empty() {
+            return self.tier.included_ai_cents_per_seat() * i64::from(self.seats());
+        }
+        self.seat_tiers
+            .iter()
+            .map(|tier| tier.included_ai_cents_per_seat())
+            .sum()
     }
 
     /// Whether `user` is the payer (and may change billing settings).
