@@ -2555,3 +2555,67 @@ async fn an_unconnected_repository_reaches_the_client_as_an_instruction() {
         "a rejected prompt is journalled as aborted"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn creating_foreign_run_releases_gate_and_rejects_followup_without_starting_work() {
+    let (service, cursor, _) = service(None);
+    let id = service.new_session(vec![]);
+    let session = service.session(&id).unwrap();
+    session.state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("stalled"),
+        status: RunStatus::Creating,
+    }]);
+
+    service.sync_foreign_runs().await;
+    assert!(!service.has_active_turn());
+    let error = service.prompt(&id, "follow up").await.unwrap_err();
+    assert!(error.to_string().contains("earlier request"));
+    assert!(
+        !cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CreateRun(..)))
+    );
+    assert!(!service.has_active_turn());
+}
+
+#[tokio::test(start_paused = true)]
+async fn stalled_history_stream_times_out_and_can_be_recovered_on_next_sync() {
+    let (service, cursor, output) = service(None);
+    let id = service.new_session(vec![]);
+    let session = service.session(&id).unwrap();
+    session.state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("foreign"),
+        status: RunStatus::Finished,
+    }]);
+    let stream = cursor.script_stream();
+    let heartbeats = tokio::spawn(async move {
+        loop {
+            if stream.send(CursorEvent::Heartbeat).is_err() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+    });
+    let started = tokio::time::Instant::now();
+    service.sync_foreign_runs().await;
+    assert_eq!(started.elapsed(), BACKFILL_TIMEOUT);
+    assert!(!service.has_active_turn());
+    assert!(output.reloads().is_empty());
+    assert!(!session.state.lock().unwrap().journal_loaded);
+    heartbeats.abort();
+
+    let recovered = cursor.script_stream();
+    recovered
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "foreign question".into(),
+        }))
+        .unwrap();
+    recovered.send(finished("foreign")).unwrap();
+    recovered.send(CursorEvent::Done).unwrap();
+    service.sync_foreign_runs().await;
+    assert_eq!(output.reloads().len(), 1);
+    assert!(!service.has_active_turn());
+}

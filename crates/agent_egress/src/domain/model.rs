@@ -228,8 +228,8 @@ pub struct SessionGrant {
     pub session: AgentSessionId,
     /// Whose connected servers it may reach.
     pub owner: MacroUserIdStr<'static>,
-    /// The one repository this session works on. Git egress is pinned to it.
-    pub repo: RepoSlug,
+    /// The repository git egress is pinned to, if this session chose one.
+    pub repo: Option<RepoSlug>,
     /// The apps the agent listed for this session, for naming only.
     pub mcp_servers: Vec<McpServerListing>,
 }
