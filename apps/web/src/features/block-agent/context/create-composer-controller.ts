@@ -10,10 +10,27 @@
  */
 
 import { toast } from '@core/component/Toast/Toast';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
+import { controlAgentSession } from '@queries/agent-session/control';
+import type { AgentRequestId } from '@service-agent-fold/generated/types';
+import type { PermissionAnswer } from '@service-agent-harness/generated/schemas';
 import { type Accessor, batch, createEffect } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ControlOutcome } from '../state/control-message';
+
+/**
+ * The agent's request id as the fold exposes it: a string or a number. The
+ * control schema types it as `unknown` (any JSON-RPC id); the fold is the
+ * one source of ids the UI answers, so its type is the one used here.
+ */
+export type PermissionRequestId = AgentRequestId;
+
+/**
+ * Key for tracking an in-flight answer. The id's JSON shape is part of its
+ * identity (`7` and `"7"` are different requests), so the key keeps it.
+ */
+export function permissionRequestKey(requestId: PermissionRequestId): string {
+  return JSON.stringify(requestId);
+}
 
 export type ComposerController = {
   /** A prompt POST is on the wire. */
@@ -38,6 +55,16 @@ export type ComposerController = {
   stop: () => void;
   /** Ask the agent to run on a different model from here on. */
   setModel: (model: string) => void;
+  /**
+   * Answer a permission request the agent is holding open. Resolution is
+   * observed through the fold: the part's outcome leaves `pending`.
+   */
+  respondToPermission: (
+    requestId: PermissionRequestId,
+    answer: PermissionAnswer
+  ) => void;
+  /** An answer to this request is on the wire. */
+  answeringPermission: (requestId: PermissionRequestId) => boolean;
 };
 
 export function createComposerController(options: {
@@ -74,18 +101,26 @@ export function createComposerController(options: {
      * the fold renders as its own accepted Stopped line.
      */
     stopping: boolean;
+    /**
+     * Permission answers on the wire, by request key. Cleared when the POST
+     * settles either way: on success the fold's outcome takes over the
+     * part's state, on failure the options come back for another try.
+     */
+    answeringPermissions: Record<string, true | undefined>;
   }>({
     inflightPrompts: 0,
     requestedModel: undefined,
     requestedActionId: undefined,
     stopping: false,
+    answeringPermissions: {},
   });
 
   const postPrompt = async (sessionId: string, markdown: string) => {
     setState('inflightPrompts', (count) => count + 1);
-    const result = await agentHarnessServiceClient
-      .control(sessionId, { type: 'prompt', prompt: markdown })
-      .catch(() => undefined);
+    const result = await controlAgentSession(sessionId, {
+      type: 'prompt',
+      prompt: markdown,
+    }).catch(() => undefined);
     // Floored: a session switch resets the count while this POST is still
     // out, and its settle must not drive the new session's count negative.
     setState('inflightPrompts', (count) => Math.max(0, count - 1));
@@ -99,9 +134,10 @@ export function createComposerController(options: {
 
   const postSetModel = async (sessionId: string, model: string) => {
     setState('requestedModel', model);
-    const result = await agentHarnessServiceClient
-      .control(sessionId, { type: 'setModel', model })
-      .catch(() => undefined);
+    const result = await controlAgentSession(sessionId, {
+      type: 'setModel',
+      model,
+    }).catch(() => undefined);
     if (result === undefined || result.isErr()) {
       batch(() => {
         setState('requestedModel', undefined);
@@ -121,15 +157,38 @@ export function createComposerController(options: {
   };
 
   const postStop = async (sessionId: string) => {
-    const result = await agentHarnessServiceClient
-      .control(sessionId, { type: 'stop' })
-      .catch(() => undefined);
+    const result = await controlAgentSession(sessionId, { type: 'stop' }).catch(
+      () => undefined
+    );
     if (result === undefined || result.isErr()) {
       setState('stopping', false);
       toast.failure('The agent could not be stopped');
     }
     // Success is observed through the fold: the turn settles and `working`
     // flips false, which releases the latch.
+  };
+
+  const postPermissionAnswer = async (
+    sessionId: string,
+    requestId: PermissionRequestId,
+    answer: PermissionAnswer
+  ) => {
+    const key = permissionRequestKey(requestId);
+    setState('answeringPermissions', key, true);
+    try {
+      const result = await controlAgentSession(sessionId, {
+        type: 'respondToPermission',
+        requestId,
+        answer,
+      });
+      if (result.isErr())
+        toast.failure('The permission request could not be answered');
+    } catch {
+      toast.failure('The permission request could not be answered');
+    } finally {
+      if (options.sessionId() === sessionId)
+        setState('answeringPermissions', key, undefined);
+    }
   };
 
   const busy = () => options.working() || state.inflightPrompts > 0;
@@ -197,6 +256,7 @@ export function createComposerController(options: {
       requestedModel: undefined,
       requestedActionId: undefined,
       stopping: false,
+      answeringPermissions: {},
     });
   });
 
@@ -221,5 +281,13 @@ export function createComposerController(options: {
       if (!sessionId) return;
       void postSetModel(sessionId, model);
     },
+    respondToPermission: (requestId, answer) => {
+      const sessionId = options.sessionId();
+      if (!sessionId) return;
+      if (state.answeringPermissions[permissionRequestKey(requestId)]) return;
+      void postPermissionAnswer(sessionId, requestId, answer);
+    },
+    answeringPermission: (requestId) =>
+      state.answeringPermissions[permissionRequestKey(requestId)] === true,
   };
 }

@@ -36,6 +36,8 @@ pub struct NewPairing {
 /// A harness row to create at approval.
 #[derive(Debug, Clone)]
 pub struct NewHarness {
+    /// Whether personas may bypass ACP permission requests on this harness.
+    pub allow_permission_bypass: bool,
     /// Harness id.
     pub id: HarnessId,
     /// Display name.

@@ -300,6 +300,7 @@ export type HarnessOwner =
 
 /** A macrod harness registered with the workspace. */
 export type Harness = {
+  allow_permission_bypass: boolean;
   id: string;
   kind: 'macrod';
   name: string;
@@ -315,6 +316,7 @@ export type Harness = {
 export type HarnessPairing = PairingDetails;
 
 type ApproveHarnessPairingRequest = {
+  allow_permission_bypass?: boolean;
   name?: string;
   team_id?: string;
 };

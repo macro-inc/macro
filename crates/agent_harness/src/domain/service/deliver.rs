@@ -50,15 +50,26 @@ where
             // Nothing is attached, so get this session onto a transport and
             // retry against it. Same id: the first attempt never reached the
             // wire.
+            Err(error @ AgentSessionError::Disconnected(_))
+                if matches!(action, AgentAction::RespondToPermission(_)) =>
+            {
+                return Err(error.into());
+            }
             Err(AgentSessionError::Disconnected(_)) => {
                 let session = self.sessions.get_session(session_id).await?;
+                let permission_policy = self.permission_policy_for(session.bot_id).await;
                 if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     let mcp_servers = self
                         .resumed_mcp_servers(session_id, &session.owner_id, &session.mcp_servers)
                         .await?;
                     self.sessions
-                        .attach_session(session_id, container.mcp_servers(mcp_servers))
+                        .attach_session(
+                            session_id,
+                            container
+                                .mcp_servers(mcp_servers)
+                                .permission_policy(permission_policy),
+                        )
                         .await?;
                 } else {
                     // An external runtime is not ours to start - only its
@@ -75,7 +86,9 @@ where
                             session_id,
                         )));
                     };
-                    self.sessions.attach_session(session_id, attachment).await?;
+                    self.sessions
+                        .attach_session(session_id, attachment.permission_policy(permission_policy))
+                        .await?;
                 }
                 self.sessions
                     .send_action(session_id, actor, action, id)

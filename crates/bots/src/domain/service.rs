@@ -281,18 +281,23 @@ where
         caller: MacroUserIdStr<'static>,
         owner: &BotOwner,
         harness_id: Option<HarnessId>,
+        auto_accept_permissions: Option<bool>,
     ) -> Result<(), BotError> {
         let Some(harness_id) = harness_id else {
             return Ok(());
         };
         let harness_owner = self
             .repo
-            .get_harness_owner(harness_id)
+            .get_harness_facts(harness_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::BadRequest("unknown harness".to_string()))?;
 
-        let usable = match (owner, harness_owner) {
+        validate_permission_bypass(
+            harness_owner.allow_permission_bypass,
+            auto_accept_permissions,
+        )?;
+        let usable = match (owner, harness_owner.owner) {
             (
                 BotOwner::Team { team_id },
                 HarnessOwner::Team {
@@ -436,8 +441,13 @@ where
         let owner = self
             .agent_owner_for_request(caller.clone(), req.team_id)
             .await?;
-        self.ensure_harness_usable(caller.clone(), &owner, req.harness_id)
-            .await?;
+        self.ensure_harness_usable(
+            caller.clone(),
+            &owner,
+            req.harness_id,
+            req.auto_accept_permissions,
+        )
+        .await?;
         let created_by_user_id = caller.clone();
         let agent = self
             .repo
@@ -487,8 +497,13 @@ where
         let owner = self
             .owner_for_agent_update(caller.clone(), &current, req.team_id)
             .await?;
-        self.ensure_harness_usable(caller.clone(), &owner, req.harness_id)
-            .await?;
+        self.ensure_harness_usable(
+            caller.clone(),
+            &owner,
+            req.harness_id,
+            req.auto_accept_permissions,
+        )
+        .await?;
         let requested_name = req.name.clone();
         let requested_handle = req.handle.clone();
         let requested_description = req.description.clone();
@@ -848,3 +863,16 @@ where
         Ok(self.authenticate_candidate(candidate).await?.bot)
     }
 }
+
+/// A persona cannot override its harness operator's permission policy.
+fn validate_permission_bypass(allowed: bool, requested: Option<bool>) -> Result<(), BotError> {
+    if requested == Some(true) && !allowed {
+        return Err(BotError::BadRequest(
+            "this harness requires permission prompts".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod test;

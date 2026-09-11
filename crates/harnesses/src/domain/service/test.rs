@@ -20,6 +20,7 @@ fn caller(id: &str) -> MacroUserIdStr<'static> {
 
 fn harness(owner: HarnessOwner) -> Harness {
     Harness {
+        allow_permission_bypass: false,
         id: HarnessId::TEST_A,
         kind: "macrod".to_owned(),
         name: "erics-macbook".to_owned(),
@@ -315,6 +316,7 @@ async fn approval_registers_a_private_harness_for_the_caller() {
             caller(OWNER_ID),
             "kx7m4qhd",
             ApprovePairingRequest {
+                allow_permission_bypass: false,
                 name: None,
                 team_id: None,
             },
@@ -334,6 +336,7 @@ async fn approval_registers_a_private_harness_for_the_caller() {
         }
     );
     assert_eq!(new_harness.created_by.as_ref(), OWNER_ID);
+    assert!(!new_harness.allow_permission_bypass);
     assert!(calls.team_lookups.is_empty());
 }
 
@@ -350,6 +353,7 @@ async fn team_approval_requires_membership_and_honors_the_name_override() {
             caller(MEMBER_ID),
             CODE,
             ApprovePairingRequest {
+                allow_permission_bypass: false,
                 name: Some("team box".to_owned()),
                 team_id: Some(TEAM_ID),
             },
@@ -373,6 +377,7 @@ async fn team_approval_requires_membership_and_honors_the_name_override() {
             caller(MEMBER_ID),
             CODE,
             ApprovePairingRequest {
+                allow_permission_bypass: false,
                 name: None,
                 team_id: Some(TEAM_ID),
             },
@@ -393,6 +398,7 @@ async fn approval_race_reports_gone() {
             caller(OWNER_ID),
             CODE,
             ApprovePairingRequest {
+                allow_permission_bypass: false,
                 name: None,
                 team_id: None,
             },
@@ -580,4 +586,32 @@ async fn team_harnesses_are_deletable_by_their_registrant_or_the_team_owner() {
         .delete_harness(caller(OWNER_ID), HarnessId::TEST_A)
         .await;
     assert!(matches!(result, Err(HarnessError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn approval_records_explicit_permission_bypass_consent() {
+    let repo = FakeRepo {
+        pairing: Some(pending_pairing()),
+        approve_result: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    service(repo.clone())
+        .approve_pairing(
+            caller(OWNER_ID),
+            CODE,
+            ApprovePairingRequest {
+                name: None,
+                team_id: None,
+                allow_permission_bypass: true,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(
+        repo.calls.lock().unwrap().approved[0]
+            .1
+            .allow_permission_bypass
+    );
 }

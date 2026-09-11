@@ -17,6 +17,8 @@ export type AgentAction = (AgentPromptAction & {
     type: 'stop';
 } | (AgentRespondElicitationAction & {
     type: 'respondElicitation';
+}) | (AgentPermissionAction & {
+    type: 'respondToPermission';
 });
 
 /**
@@ -59,6 +61,26 @@ export type AgentModelDto = {
  * Model-selection availability returned over HTTP.
  */
 export type AgentModelsStatusDto = 'available' | 'unsupported';
+
+/**
+ * A user's answer to the agent's `session/request_permission`.
+ *
+ * Unlike every other action this is not a new request but the reply to one
+ * the agent made, so it carries the agent's own request id rather than
+ * receiving a server-minted one.
+ */
+export type AgentPermissionAction = {
+    /**
+     * What the user decided.
+     */
+    answer: PermissionAnswer;
+    /**
+     * The agent's JSON-RPC request id, echoed verbatim from the folded
+     * permission part. A string or a number on the wire; agents mint both,
+     * and `7` does not answer `"7"`.
+     */
+    requestId: unknown;
+};
 
 /**
  * Ask the agent to work on something.
@@ -563,6 +585,19 @@ export type LogFrameDto = {
  * Harness names accepted by the model discovery endpoint.
  */
 export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
+
+/**
+ * The decision carried by an [`AgentPermissionAction`].
+ */
+export type PermissionAnswer = {
+    kind: 'selected';
+    /**
+     * The chosen option's id, as the agent listed it.
+     */
+    optionId: string;
+} | {
+    kind: 'cancelled';
+};
 
 /**
  * Request body for `POST /agent-sessions/preview`.

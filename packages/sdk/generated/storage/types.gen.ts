@@ -91,6 +91,11 @@ export type AddPinRequest = {
  */
 export type Agent = {
     /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. `None` means always prompt. Bypass also requires the harness's opt-in.
+     */
+    auto_accept_permissions?: boolean | null;
+    /**
      * The bot identity used for mentions and channel participation.
      */
     bot: Bot;
@@ -1115,6 +1120,10 @@ export type ApiThreadReply = {
  * Request to approve a pairing and register the harness.
  */
 export type ApprovePairingRequest = {
+    /**
+     * Whether personas may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
     /**
      * Display name override. Defaults to the daemon's requested name.
      */
@@ -2965,6 +2974,11 @@ export type CopyDocumentResponse = {
  * Request to create a persisted AI agent.
  */
 export type CreateAgentRequest = {
+    /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
     /**
      * Optional avatar URL or data URL.
      */
@@ -6121,6 +6135,10 @@ export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewe
  */
 export type Harness = {
     /**
+     * Whether personas may bypass ACP permission requests on this harness.
+     */
+    allow_permission_bypass?: boolean;
+    /**
      * Whether the daemon currently holds a runtime connection.
      */
     connected: boolean;
@@ -9217,6 +9235,11 @@ export type UnthreadedPdfUuidRequest = {
  * Request to replace the editable configuration of a persisted AI agent.
  */
 export type UpdateAgentRequest = {
+    /**
+     * Whether the agent's sessions approve ACP permission requests without
+     * asking. Omit to always prompt.
+     */
+    auto_accept_permissions?: boolean | null;
     /**
      * Optional avatar URL or data URL.
      */

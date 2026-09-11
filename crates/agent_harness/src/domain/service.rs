@@ -36,6 +36,7 @@ use agent_session::domain::ports::{
     AgentSessionQueueChanged, ControlDisposition, ControlEvent, QueuedControl,
 };
 use agent_session::domain::service::AgentSessionService;
+use agent_session::domain::session::PermissionPolicy;
 use bot_id::BotId;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
@@ -52,12 +53,42 @@ use crate::domain::model::{
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
-    RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
+    PermissionPolicySource, RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
 
 use self::queue::{ErasedForwarder, SessionWorkers};
+
+/// [`PermissionPolicySource`], object-safe, erased for the same reason as
+/// [`ErasedForwarder`].
+trait ErasedPermissionPolicySource: Send + Sync + 'static {
+    fn permission_policy<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = anyhow::Result<crate::domain::model::PermissionPolicyConfig>>
+                + Send
+                + 'a,
+        >,
+    >;
+}
+
+impl<S: PermissionPolicySource> ErasedPermissionPolicySource for S {
+    fn permission_policy<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = anyhow::Result<crate::domain::model::PermissionPolicyConfig>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(PermissionPolicySource::permission_policy(self, bot))
+    }
+}
 
 struct AgentHarnessInner<
     Sessions,
@@ -76,6 +107,7 @@ struct AgentHarnessInner<
     prompt_composer: PromptComposer,
     egress: Egress,
     forwarder: Box<dyn ErasedForwarder>,
+    permission_policies: Box<dyn ErasedPermissionPolicySource>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory beside the live actors this replica manages.
@@ -177,6 +209,7 @@ where
         prompt_composer: PromptComposer,
         egress: Egress,
         forwarder: impl CommandForwarder,
+        permission_policies: impl PermissionPolicySource,
         defaults: impl Into<HarnessDefaults>,
         lifecycle_publisher: impl AgentSessionLifecyclePublisher,
         pending: PendingCommands,
@@ -191,6 +224,7 @@ where
                 prompt_composer,
                 egress,
                 forwarder: Box::new(forwarder),
+                permission_policies: Box::new(permission_policies),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 busy: pending,

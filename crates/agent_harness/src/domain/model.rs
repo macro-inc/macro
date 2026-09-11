@@ -6,6 +6,10 @@ use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
+use agent_session::domain::session::PermissionPolicy;
+
+#[cfg(test)]
+mod test;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -117,6 +121,67 @@ impl AgentKind {
     #[must_use]
     pub fn is_managed(self) -> bool {
         !matches!(self, Self::External)
+    }
+
+    /// How this kind's sessions answer permission requests when the agent's
+    /// owner has not said.
+    ///
+    /// Managed runtimes act inside sandboxes this deployment owns (or, for
+    /// Cursor, never ask), so approving on arrival costs nothing. An external
+    /// runtime is somebody's own machine, where a bot approving its own tool
+    /// calls is exactly what a person should be asked about.
+    #[must_use]
+    pub fn default_permission_policy(self) -> PermissionPolicy {
+        match self {
+            Self::SandboxedCoder | Self::Cursor | Self::InMemory => PermissionPolicy::AutoAccept,
+            Self::External => PermissionPolicy::Prompt,
+        }
+    }
+}
+
+/// Stored facts used by the domain to choose a session permission policy.
+pub enum PermissionPolicyConfig {
+    /// A fixed system bot with no editable persona configuration.
+    Fixed(AgentKind),
+    /// An editable persona and its harness operator's limit.
+    Persona {
+        /// The runtime serving this persona.
+        kind: AgentKind,
+        /// A registered harness's opt-in. `None` denotes a built-in runtime.
+        harness_allows_bypass: Option<bool>,
+        /// The persona owner's explicit choice; absent means prompt.
+        auto_accept_permissions: Option<bool>,
+    },
+}
+
+impl PermissionPolicyConfig {
+    /// Apply the harness ceiling and persona choice in the domain.
+    #[must_use]
+    pub fn resolve(self) -> PermissionPolicy {
+        match self {
+            Self::Fixed(kind) => kind.default_permission_policy(),
+            Self::Persona {
+                kind,
+                harness_allows_bypass,
+                auto_accept_permissions,
+            } => resolve_permission_policy(
+                harness_allows_bypass.unwrap_or(kind.is_managed()),
+                auto_accept_permissions,
+            ),
+        }
+    }
+}
+
+/// Resolve a persona's choice within the harness operator's permission limit.
+#[must_use]
+pub fn resolve_permission_policy(
+    allow_bypass: bool,
+    auto_accept: Option<bool>,
+) -> PermissionPolicy {
+    if allow_bypass && auto_accept == Some(true) {
+        PermissionPolicy::AutoAccept
+    } else {
+        PermissionPolicy::Prompt
     }
 }
 

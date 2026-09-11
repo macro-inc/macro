@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::model::{
-    Author, PermissionOutcome, ToolDetail, ToolName, ToolStatus, ToolUseId, TurnId, UserToolOutcome,
+    AgentRequestId, Author, PermissionOutcome, ToolDetail, ToolName, ToolStatus, ToolUseId, TurnId,
+    UserToolOutcome,
 };
 use non_empty::NonEmpty;
 use serde_json::json;
@@ -80,6 +81,7 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
 
     assert_eq!(
         serde_json::to_value(MessagePart::Permission {
+            request_id: AgentRequestId::Number(7),
             tool_call: ToolUseId("tool-1".to_owned()),
             options: Vec::new(),
             outcome: PermissionOutcome::Pending,
@@ -87,10 +89,15 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
         .unwrap(),
         json!({
             "kind": "permission",
+            "requestId": 7,
             "toolCall": "tool-1",
             "options": [],
             "outcome": { "kind": "pending" }
         })
+    );
+    assert_eq!(
+        serde_json::to_value(AgentRequestId::Str("req-1".to_owned())).unwrap(),
+        json!("req-1")
     );
 }
 

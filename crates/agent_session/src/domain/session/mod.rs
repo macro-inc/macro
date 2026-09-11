@@ -12,6 +12,6 @@ mod tests;
 
 pub use session::SessionMachine;
 pub use types::{
-    CloseReason, Effect, HandshakeStatus, InitializationContext, Input, RuntimeStatus,
-    SessionRestoreSupport, StopReason,
+    CloseReason, Effect, HandshakeStatus, InitializationContext, Input, PermissionPolicy,
+    RuntimeStatus, SessionRestoreSupport, StopReason,
 };

@@ -236,3 +236,14 @@ must stay hidden; subsequent live messages must still appear.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
   entries, then stop.
+- **Permission prompts.** Everyone with **Edit** access to a session may approve or
+  reject its ACP permission requests, even when they did not create the session.
+  A pending request shows the agent's choices in a `Permission needed` card and
+  above the composer. View access alone does not authorize an answer. Stopping a
+  turn cancels open requests; answered requests show the chosen outcome.
+- **Harness bypass consent.** Settings → Harnesses → Connect a harness offers
+  `Allow bypassing permission requests`, off by default. Enabling it warns that
+  personas may run commands and edit files on the machine without approval.
+- **Persona permission policy.** Settings → Agents → Runtime defaults to `Always
+  prompt`. `Always bypass` is available only on a harness that allows bypass.
+  Otherwise the persona must prompt. These limits are also enforced by the API.

@@ -213,7 +213,8 @@ impl SessionQueues {
             AgentAction::SetModel(_)
             | AgentAction::Compact
             | AgentAction::Stop
-            | AgentAction::RespondElicitation(_) => Err(QueueError::NotEditable),
+            | AgentAction::RespondElicitation(_)
+            | AgentAction::RespondToPermission(_) => Err(QueueError::NotEditable),
         }
     }
 

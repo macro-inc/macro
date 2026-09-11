@@ -1000,6 +1000,25 @@
               }
             ],
             "description": "Answer an `elicitation/create` the agent sent.\n\nThe one action whose wire form is a JSON-RPC *response* rather than a\nrequest or notification: the agent asked, we answer on its id. The\nminted [`AgentActionId`] therefore never reaches the wire for this\naction; the fold correlates on the agent's id instead."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentPermissionAction",
+                "description": "Answer a permission request the agent is waiting on."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["respondToPermission"]
+                  }
+                }
+              }
+            ],
+            "description": "Answer a permission request the agent is waiting on."
           }
         ],
         "description": "One thing a caller wants an agent to do."
@@ -1036,6 +1055,20 @@
         "type": "string",
         "description": "Model-selection availability returned over HTTP.",
         "enum": ["available", "unsupported"]
+      },
+      "AgentPermissionAction": {
+        "type": "object",
+        "description": "A user's answer to the agent's `session/request_permission`.\n\nUnlike every other action this is not a new request but the reply to one\nthe agent made, so it carries the agent's own request id rather than\nreceiving a server-minted one.",
+        "required": ["requestId", "answer"],
+        "properties": {
+          "answer": {
+            "$ref": "#/components/schemas/PermissionAnswer",
+            "description": "What the user decided."
+          },
+          "requestId": {
+            "description": "The agent's JSON-RPC request id, echoed verbatim from the folded\npermission part. A string or a number on the wire; agents mint both,\nand `7` does not answer `\"7\"`."
+          }
+        }
       },
       "AgentPromptAction": {
         "type": "object",
@@ -1660,6 +1693,37 @@
         "type": "string",
         "description": "Harness names accepted by the model discovery endpoint.",
         "enum": ["in-memory", "cursor", "macrod"]
+      },
+      "PermissionAnswer": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "One of the options the agent offered was chosen.",
+            "required": ["optionId", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["selected"]
+              },
+              "optionId": {
+                "type": "string",
+                "description": "The chosen option's id, as the agent listed it."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The request was dismissed without choosing.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["cancelled"]
+              }
+            }
+          }
+        ],
+        "description": "The decision carried by an [`AgentPermissionAction`]."
       },
       "PreviewAgentSessionsRequest": {
         "type": "object",

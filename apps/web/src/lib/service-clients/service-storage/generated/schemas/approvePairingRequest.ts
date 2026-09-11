@@ -11,6 +11,8 @@ import type { ApprovePairingRequestTeamId } from './approvePairingRequestTeamId'
  * Request to approve a pairing and register the harness.
  */
 export interface ApprovePairingRequest {
+  /** Whether personas may bypass ACP permission requests on this harness. */
+  allow_permission_bypass?: boolean;
   /** Display name override. Defaults to the daemon's requested name. */
   name?: ApprovePairingRequestName;
   /** Owning team. Omit for a private, user-owned harness. */

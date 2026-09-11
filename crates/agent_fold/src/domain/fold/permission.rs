@@ -37,6 +37,7 @@ impl FoldState {
             .insert(request_id.clone(), tool_call.clone());
 
         let (changed, position) = self.push_agent_part(MessagePart::Permission {
+            request_id: request_id.into(),
             tool_call: tool_call.clone(),
             options,
             outcome: PermissionOutcome::Pending,

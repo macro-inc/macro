@@ -2,8 +2,8 @@ use super::util::{CapturedFields, TURN, capturing_warnings, parse_log};
 use crate::domain::fold::fold;
 use crate::domain::log::{AgentSessionLog, Message};
 use crate::domain::model::{
-    Author, Control, ControlOutcome, FoldedMessage, MessagePart, PermissionOutcome, StopReason,
-    ToolDetail, ToolStatus, TurnId,
+    AgentRequestId, Author, Control, ControlOutcome, FoldedMessage, MessagePart, PermissionOutcome,
+    StopReason, ToolDetail, ToolStatus, TurnId,
 };
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -93,6 +93,7 @@ fn folds_a_complete_turn() {
     );
 
     let MessagePart::Permission {
+        request_id,
         tool_call,
         options,
         outcome,
@@ -100,6 +101,11 @@ fn folds_a_complete_turn() {
     else {
         panic!("third part is the permission prompt: {:?}", parts[2]);
     };
+    assert_eq!(
+        *request_id,
+        AgentRequestId::Str("perm-1".to_owned()),
+        "the agent's id is exposed for an answer to echo"
+    );
     assert_eq!(tool_call, run_id);
     assert_eq!(options.len(), 2);
     assert_eq!(
