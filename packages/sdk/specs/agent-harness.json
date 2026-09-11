@@ -1737,11 +1737,15 @@
       "SessionBot": {
         "type": "object",
         "description": "The agent behind a session, as much of it as rendering a message needs.",
-        "required": ["id", "name"],
+        "required": ["id", "name", "handle"],
         "properties": {
           "avatarUrl": {
             "type": ["string", "null"],
             "description": "Avatar, when it has one."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable `@` handle, without a leading `@`."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",

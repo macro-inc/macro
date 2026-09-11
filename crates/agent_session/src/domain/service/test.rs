@@ -1266,6 +1266,10 @@ async fn session_log_returns_the_sessions_frames_in_order() {
         "every frame is served, none folded away"
     );
     assert!(!log.bot.name.is_empty(), "the response names the agent");
+    assert!(
+        !log.bot.handle.is_empty(),
+        "the response includes the agent's handle"
+    );
 
     // The order is the contract: folding is a left fold from the first frame,
     // so a reordered log derives different turn numbering.

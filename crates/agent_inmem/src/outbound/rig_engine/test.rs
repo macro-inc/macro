@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::engine::AgentIdentity;
 
 /// A stand-in for the toolset prompt, short enough to assert on positionally.
 const TOOLS: &str = "TOOLS";
@@ -22,11 +23,11 @@ fn ask_user_is_only_advertised_when_the_client_supports_it() {
 
 #[test]
 fn instructions_are_a_delimited_section_after_the_standing_prompt() {
-    let prompt = system_prompt(&TOOLS, Some("be terse"), None);
+    let prompt = system_prompt(&TOOLS, None, Some("be terse"), None);
 
     assert!(
         prompt.starts_with(&prompt::agent_session::PROMPT.to_string()),
-        "the session preamble comes first"
+        "the session preamble comes first when the agent is unnamed"
     );
     assert!(
         prompt.contains(&format!(
@@ -37,12 +38,31 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
     assert!(prompt.ends_with("\n<session_instructions>\nbe terse\n</session_instructions>"));
 }
 
+/// A named agent is told who it is before anything else, even when it has
+/// no session instructions — otherwise "who are you" has nothing to go on.
+#[test]
+fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
+    let identity = AgentIdentity {
+        name: "Grunk".to_owned(),
+        handle: "grunk".to_owned(),
+    };
+    let prompt = system_prompt(&TOOLS, Some(&identity), None, None);
+    let identity_section = prompt::agent_identity::render("Grunk", "grunk");
+
+    assert!(
+        prompt.starts_with(&identity_section),
+        "identity is the first thing the model reads"
+    );
+    assert!(prompt.contains(&prompt::agent_session::PROMPT.to_string()));
+    assert!(!prompt.contains("session_instructions"));
+}
+
 /// The order is the contract, not an accident: instructions qualify the
 /// standing prompt, and memory comes last so a remembered fact is never read
 /// as an instruction.
 #[test]
 fn memory_follows_instructions_rather_than_preceding_them() {
-    let prompt = system_prompt(&TOOLS, Some("be terse"), Some("prefers Rust"));
+    let prompt = system_prompt(&TOOLS, None, Some("be terse"), Some("prefers Rust"));
 
     let instructions = prompt
         .find("<session_instructions>")
@@ -57,7 +77,7 @@ fn memory_follows_instructions_rather_than_preceding_them() {
 /// model would have to interpret.
 #[test]
 fn no_instructions_means_no_section() {
-    let prompt = system_prompt(&TOOLS, None, Some("prefers Rust"));
+    let prompt = system_prompt(&TOOLS, None, None, Some("prefers Rust"));
 
     assert!(!prompt.contains("session_instructions"));
     assert!(prompt.contains("<user_memory>\nprefers Rust\n</user_memory>"));
@@ -67,7 +87,7 @@ fn no_instructions_means_no_section() {
 /// not become a blank delimited section.
 #[test]
 fn empty_instructions_add_no_section() {
-    let prompt = system_prompt(&TOOLS, Some(""), None);
+    let prompt = system_prompt(&TOOLS, None, Some(""), None);
 
     assert!(!prompt.contains("session_instructions"));
 }

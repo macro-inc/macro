@@ -253,6 +253,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(SessionBot {
             id,
             name: "Test Agent".to_owned(),
+            handle: "test-agent".to_owned(),
             avatar_url: None,
         })
     }

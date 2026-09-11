@@ -657,6 +657,10 @@ export type SessionBot = {
      */
     avatarUrl?: string | null;
     /**
+     * Stable `@` handle, without a leading `@`.
+     */
+    handle: string;
+    /**
      * The bot's id. A message it sent has `"bot|{id}"` as its sender.
      */
     id: BotId;

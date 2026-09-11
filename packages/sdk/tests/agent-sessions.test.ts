@@ -111,7 +111,10 @@ describe('AgentSession', () => {
       }
       if (request.url.endsWith('/log')) {
         return Response.json(
-          { bot: { id: session.botId, name: 'Agent' }, entries: [] },
+          {
+            bot: { id: session.botId, name: 'Agent', handle: 'agent' },
+            entries: [],
+          },
           { status: 200 },
         );
       }
