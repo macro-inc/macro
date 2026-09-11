@@ -179,10 +179,7 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
   const context: MarkdownDocumentContextValue = {
     documentId: () => props.documentId,
     kind: () => props.kind,
-    isReady: () => props.isReady,
-    mode: () => props.mode,
-    dssFile: () => props.dssFile,
-    syncSource: () => props.syncSource,
+    documentSource: () => props.documentSource,
     permissions: {
       canComment: () => props.permissions.canComment,
       canEdit: () => props.permissions.canEdit,

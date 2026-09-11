@@ -5,7 +5,10 @@ import { createContext, useContext } from 'solid-js';
 import type { MarkdownDocumentState } from './markdown-document-state';
 
 export type MarkdownDocumentKind = 'document' | 'task' | 'snippet' | 'skill';
-export type MarkdownDocumentMode = 'dss' | 'sync';
+export type MarkdownDocumentSource =
+  | { type: 'loading' }
+  | { type: 'dss'; file: IDocumentStorageServiceFile }
+  | { type: 'sync'; source: LiveSyncSource };
 
 export type MarkdownDocumentPermissions = {
   canComment: boolean;
@@ -17,10 +20,7 @@ export type MarkdownDocumentProps = {
   documentId: string;
   kind: MarkdownDocumentKind;
   state?: MarkdownDocumentState;
-  isReady: boolean;
-  mode: MarkdownDocumentMode | undefined;
-  dssFile: IDocumentStorageServiceFile | undefined;
-  syncSource: LiveSyncSource | undefined;
+  documentSource: MarkdownDocumentSource;
   permissions: MarkdownDocumentPermissions;
   persistedName: string | undefined;
   fallbackName: string | undefined;
@@ -29,10 +29,7 @@ export type MarkdownDocumentProps = {
 export type MarkdownDocumentContextValue = {
   documentId: Accessor<string>;
   kind: Accessor<MarkdownDocumentKind>;
-  isReady: Accessor<boolean>;
-  mode: Accessor<MarkdownDocumentMode | undefined>;
-  dssFile: Accessor<IDocumentStorageServiceFile | undefined>;
-  syncSource: Accessor<LiveSyncSource | undefined>;
+  documentSource: Accessor<MarkdownDocumentSource>;
   permissions: {
     canComment: Accessor<boolean>;
     canEdit: Accessor<boolean>;

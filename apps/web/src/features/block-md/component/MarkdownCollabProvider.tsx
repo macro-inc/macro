@@ -36,7 +36,11 @@ export type MarkdownCollabProviderProps = {
  */
 export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
   const markdownDocument = useMarkdownDocument();
-  const syncSource = markdownDocument.syncSource;
+  const documentSource = markdownDocument.documentSource;
+  const syncSource = () => {
+    const source = documentSource();
+    return source.type === 'sync' ? source.source : undefined;
+  };
   const canEdit = markdownDocument.permissions.canEdit;
   const canComment = markdownDocument.permissions.canComment;
   const [editorError] = useMarkdownBlockError();
@@ -53,7 +57,7 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       setEditorError={props.setEditorError}
       loroManager={props.loroManager}
       syncSource={syncSource}
-      sourceReady={() => markdownDocument.mode() === 'sync'}
+      sourceReady={() => documentSource().type === 'sync'}
       canEdit={canEdit}
       canComment={canComment}
       editorError={editorError}

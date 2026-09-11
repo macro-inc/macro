@@ -80,8 +80,9 @@ export function InstructionsEditor(props: {
   const [, setMdStore] = useMdStore();
   const canEdit = markdownDocument.permissions.canEdit;
   const blockElement = markdownDocument.element;
+  const documentSource = markdownDocument.documentSource;
 
-  const IS_SYNC = () => markdownDocument.mode() === 'sync';
+  const IS_SYNC = () => documentSource().type === 'sync';
 
   const debouncedSaveState = debounce(() => {
     const state_ = state();
@@ -270,15 +271,14 @@ export function InstructionsEditor(props: {
 
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
   createEffect(() => {
-    const file = markdownDocument.dssFile();
-    if (!file) return;
+    const source = documentSource();
+    if (source.type !== 'dss') return;
 
-    file.arrayBuffer().then(setFileArrayBuffer);
+    source.file.arrayBuffer().then(setFileArrayBuffer);
   });
 
   createEffect(() => {
-    if (markdownDocument.mode() !== 'dss') return;
-    if (!markdownDocument.isReady()) return;
+    if (documentSource().type !== 'dss') return;
     if (editorReady()) return;
 
     const buf = fileArrayBuffer();

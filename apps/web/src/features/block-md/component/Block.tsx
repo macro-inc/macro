@@ -31,7 +31,7 @@ import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { type ParentProps, Show, Suspense } from 'solid-js';
 import type {
   MarkdownDocumentKind,
-  MarkdownDocumentMode,
+  MarkdownDocumentSource,
 } from '../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
 import type { MarkdownBlockSpec, MarkdownData } from '../definition';
@@ -114,11 +114,23 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
       | undefined;
     return value?.__block === 'md' ? value : undefined;
   };
-  const collaborationStatus = () => data()?.syncSource?.status();
-  const mode = (): MarkdownDocumentMode | undefined => {
+  const documentSource = (): MarkdownDocumentSource => {
+    const loaded = data();
+    if (!loaded) return { type: 'loading' };
+
     const source = blockSourceSignal.get();
-    if (source?.type === 'sync-service') return 'sync';
-    if (source?.type === 'dss') return 'dss';
+    if (source?.type === 'sync-service' && loaded.syncSource) {
+      return { type: 'sync', source: loaded.syncSource };
+    }
+    if (source?.type === 'dss' && loaded.dssFile) {
+      return { type: 'dss', file: loaded.dssFile };
+    }
+
+    return { type: 'loading' };
+  };
+  const collaborationStatus = () => {
+    const source = documentSource();
+    return source.type === 'sync' ? source.source.status() : undefined;
   };
 
   const setLoadError = blockErrorSignal.set;
@@ -133,10 +145,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
           documentId={documentId}
           kind={kind}
           state={markdownState}
-          isReady={data() !== undefined}
-          mode={mode()}
-          dssFile={data()?.dssFile}
-          syncSource={data()?.syncSource}
+          documentSource={documentSource()}
           permissions={{
             canComment: canComment(),
             canEdit: canEdit(),

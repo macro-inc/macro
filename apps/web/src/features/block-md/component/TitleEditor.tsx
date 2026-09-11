@@ -273,7 +273,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     editor.setEditable(canEdit() ?? false);
   });
 
-  const dataReady = markdownDocument.isReady;
+  const dataReady = () => markdownDocument.documentSource().type !== 'loading';
 
   const hasLocalTitleEdit = createMemo(() => {
     if (!titleFocused()) return false;
