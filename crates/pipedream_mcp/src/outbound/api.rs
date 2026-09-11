@@ -37,10 +37,6 @@ pub struct PipedreamConfig {
     /// framed by origins outside this list; localhost is only tolerated by
     /// default in the `development` project environment.
     pub allowed_origins: Vec<String>,
-    /// Absolute URL Pipedream posts connect-flow outcomes to, minted into
-    /// every Connect token. Without it a flow that dies inside the hosted
-    /// Connect UI leaves no trace on our side at all.
-    pub webhook_uri: Option<String>,
     /// Base URL of the Pipedream API. [`DEFAULT_API_URL`] unless overridden.
     pub api_url: String,
     /// URL of Pipedream's remote MCP server. [`DEFAULT_MCP_URL`] unless
@@ -58,6 +54,9 @@ pub struct PipedreamConfig {
 pub struct PipedreamClient {
     http: reqwest::Client,
     config: PipedreamConfig,
+    /// Absolute URL Pipedream posts connect-flow outcomes to, minted into
+    /// every Connect token. Unset when the host did not configure a webhook.
+    webhook_uri: Option<String>,
     access_token: Mutex<Option<CachedToken>>,
 }
 
@@ -78,8 +77,16 @@ impl PipedreamClient {
         Ok(Self {
             http,
             config,
+            webhook_uri: None,
             access_token: Mutex::new(None),
         })
+    }
+
+    /// Mint connect tokens with this webhook so Pipedream reports in-UI
+    /// connect-flow outcomes. Hosts that never mint tokens can skip this.
+    pub fn with_webhook_uri(mut self, webhook_uri: impl Into<String>) -> Self {
+        self.webhook_uri = Some(webhook_uri.into());
+        self
     }
 
     fn api(&self, path: &str) -> String {
@@ -147,7 +154,7 @@ impl PipedreamConnect for PipedreamClient {
         if !self.config.allowed_origins.is_empty() {
             body["allowed_origins"] = serde_json::json!(self.config.allowed_origins);
         }
-        if let Some(webhook_uri) = &self.config.webhook_uri {
+        if let Some(webhook_uri) = &self.webhook_uri {
             body["webhook_uri"] = serde_json::json!(webhook_uri);
         }
 

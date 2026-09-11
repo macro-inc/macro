@@ -481,50 +481,51 @@ async fn main() -> anyhow::Result<()> {
                     None
                 }
             };
-            Some(Arc::new(
-                pipedream_mcp::outbound::api::PipedreamClient::new(
-                    pipedream_mcp::outbound::api::PipedreamConfig {
-                        client_id: client_id.to_owned(),
-                        client_secret: client_secret.to_owned(),
-                        project_id: project_id.to_owned(),
-                        environment: config
-                            .pipedream_environment
-                            .value()
-                            .unwrap_or(match config.environment {
-                                Environment::Production => "production",
-                                _ => "development",
-                            })
-                            .to_owned(),
-                        api_url: config
-                            .pipedream_api_url
-                            .value()
-                            .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_API_URL)
-                            .to_owned(),
-                        mcp_url: config
-                            .pipedream_mcp_url
-                            .value()
-                            .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_MCP_URL)
-                            .to_owned(),
-                        allowed_origins: match config.pipedream_allowed_origins.value() {
-                            Some(origins) => origins
-                                .split(',')
-                                .map(|origin| origin.trim().to_owned())
-                                .filter(|origin| !origin.is_empty())
-                                .collect(),
-                            None => match config.environment {
-                                Environment::Production => vec!["https://macro.com".to_owned()],
-                                Environment::Develop => vec![
-                                    "https://dev.macro.com".to_owned(),
-                                    "http://localhost:3000".to_owned(),
-                                ],
-                                Environment::Local => vec!["http://localhost:3000".to_owned()],
-                            },
+            let client = pipedream_mcp::outbound::api::PipedreamClient::new(
+                pipedream_mcp::outbound::api::PipedreamConfig {
+                    client_id: client_id.to_owned(),
+                    client_secret: client_secret.to_owned(),
+                    project_id: project_id.to_owned(),
+                    environment: config
+                        .pipedream_environment
+                        .value()
+                        .unwrap_or(match config.environment {
+                            Environment::Production => "production",
+                            _ => "development",
+                        })
+                        .to_owned(),
+                    api_url: config
+                        .pipedream_api_url
+                        .value()
+                        .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_API_URL)
+                        .to_owned(),
+                    mcp_url: config
+                        .pipedream_mcp_url
+                        .value()
+                        .unwrap_or(pipedream_mcp::outbound::api::DEFAULT_MCP_URL)
+                        .to_owned(),
+                    allowed_origins: match config.pipedream_allowed_origins.value() {
+                        Some(origins) => origins
+                            .split(',')
+                            .map(|origin| origin.trim().to_owned())
+                            .filter(|origin| !origin.is_empty())
+                            .collect(),
+                        None => match config.environment {
+                            Environment::Production => vec!["https://macro.com".to_owned()],
+                            Environment::Develop => vec![
+                                "https://dev.macro.com".to_owned(),
+                                "http://localhost:3000".to_owned(),
+                            ],
+                            Environment::Local => vec!["http://localhost:3000".to_owned()],
                         },
-                        webhook_uri,
                     },
-                )
-                .context("failed to build Pipedream client")?,
-            ))
+                },
+            )
+            .context("failed to build Pipedream client")?;
+            Some(Arc::new(match webhook_uri {
+                Some(uri) => client.with_webhook_uri(uri),
+                None => client,
+            }))
         }
         _ => {
             tracing::info!("Pipedream credentials not set; Pipedream MCP connectors disabled");
