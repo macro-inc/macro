@@ -132,7 +132,9 @@ jobs:
           xcodebuild -version
 
           cd apps/web
-          just ios-build-sim prebuilt=true
+          # Positional: `prebuilt=true` would be passed as the literal argument
+          # "prebuilt=true", silently rebuilding the frontend a second time here.
+          just ios-build-sim true
         '
 
         APP="apps/web/tauri/src-tauri/gen/apple/build/arm64-sim/macro.app"
@@ -150,13 +152,35 @@ jobs:
           exit 1
         fi
 
-        # A bundle with no web assets builds, links, uploads and launches — to a black
-        # screen. Nothing upstream fails, so the first report comes from whoever opened
-        # the preview. Prove the frontend is actually in there.
-        if [ ! -f "$APP/index.html" ] || [ -z "$(ls -A "$APP/assets" 2>/dev/null)" ]; then
-          echo "The app bundle carries no frontend: index.html or assets/ is missing." >&2
-          echo "frontendDist is most likely absent from the tauri --config override." >&2
-          ls -la "$APP" >&2 || true
+        # Everything above can pass on an app that launches to a black screen: the
+        # frontend is embedded in the binary by generate_context!(), so there is no
+        # file whose absence gives it away, and build/link/zip/upload all succeed
+        # regardless. The only honest check is to run it.
+        #
+        # Boot the same simulator Appetize would, launch the app, and photograph it.
+        # The screenshot is uploaded either way — it is the single most useful artifact
+        # when a preview misbehaves.
+        DEVICE="$(xcrun simctl create ios-preview-smoke com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro)"
+        trap 'xcrun simctl delete "$DEVICE" >/dev/null 2>&1 || true' EXIT
+        xcrun simctl boot "$DEVICE"
+        xcrun simctl bootstatus "$DEVICE" -b
+
+        xcrun simctl install "$DEVICE" "$APP"
+        xcrun simctl launch "$DEVICE" com.macro.app.prod
+
+        # The webview needs a moment to load and paint before the shot is worth taking.
+        sleep 25
+        xcrun simctl io "$DEVICE" screenshot artifacts/launch.png
+        xcrun simctl spawn "$DEVICE" log collect --output artifacts/launch.logarchive 2>/dev/null || true
+
+        # A blank screen compresses to almost nothing, while any real UI carries
+        # detail. This is a coarse signal deliberately: it cannot say the app is
+        # correct, only that it painted something other than a void.
+        SHOT_BYTES="$(stat -f%z artifacts/launch.png)"
+        echo "Launch screenshot: ${SHOT_BYTES} bytes"
+        if [ "$SHOT_BYTES" -lt 40000 ]; then
+          echo "The app launched to a blank screen (${SHOT_BYTES}-byte screenshot)." >&2
+          echo "See the launch.png artifact; the log archive is beside it." >&2
           exit 1
         fi
 
@@ -167,11 +191,12 @@ jobs:
         ditto -c -k --sequesterRsrc --keepParent "$APP" artifacts/macro-sim.zip
       shell: bash
     - name: Upload macro-ios-simulator-app artifact
+      if: always()
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: macro-ios-simulator-app
-        path: artifacts/macro-sim.zip
-        if-no-files-found: error
+        path: artifacts/*
+        if-no-files-found: warn
         retention-days: '30'
     - id: appetize
       name: Publish to Appetize

@@ -85,7 +85,7 @@ fn preview() -> Job {
         // comment steps run outside the shell and need it on PATH themselves.
         .add_step(steps::setup_bun())
         .add_step(build_simulator_app())
-        .add_step(upload_app_artifact())
+        .add_step(upload_app_artifact().if_condition(Expression::new("always()")))
         .add_step(upload_to_appetize())
         .add_step(comment_on_pr())
 }
@@ -99,12 +99,15 @@ fn build_simulator_app() -> Step<Run> {
 
 /// Kept for every run, including `workflow_dispatch`: when a preview misbehaves
 /// the first question is whether the bundle or the streaming is at fault, and
-/// this lets you drop the same archive into a local simulator.
+/// this lets you drop the same archive into a local simulator. The launch
+/// screenshot and log archive come along on failures too — `if: always()` —
+/// since a build that dies at the smoke test is exactly when they are wanted.
 fn upload_app_artifact() -> Step<Use> {
     steps::upload_artifact(
         "macro-ios-simulator-app",
-        xtask_paths::runtime_path!("artifacts/macro-sim.zip"),
+        xtask_paths::runtime_path!("artifacts/*"),
     )
+    .add_with(("if-no-files-found", "warn"))
 }
 
 /// The PR number, branch and SHA are attacker-controlled, so they reach the
