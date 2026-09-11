@@ -179,7 +179,7 @@ html[data-theme-light='true'] {
   --glass-rim-strong-base: 52.5%;
   --glass-rim-soft-base: 30%;
   /* A faint ink rim keeps white reflections legible on pale surfaces. */
-  --glass-rim-shade-base: 8%;
+  --glass-rim-shade-base: 7%;
   --island-rim-strong: 75%;
   --island-rim-soft: 40%;
   --island-rim-faint: 16%;
