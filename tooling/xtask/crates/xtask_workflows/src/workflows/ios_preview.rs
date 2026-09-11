@@ -70,9 +70,10 @@ fn preview() -> Job {
         .name("Build iOS simulator app and publish to Appetize")
         .runs_on(runners::Runner::MacOsArm.to_string())
         .cond(Expression::new(labelled_and_open()))
-        // The iOS build has never run in CI, so this is a guess sized to fail
-        // rather than hang. Tighten it once real timings exist.
-        .timeout_minutes(90u32)
+        // A cold run — fresh nix store, no cached aarch64-apple-ios-sim
+        // artifacts — measured 11m15s. This leaves room for a slower runner
+        // without letting a genuinely hung xcodebuild sit for an hour.
+        .timeout_minutes(40u32)
         .permissions(
             Permissions::default()
                 .contents(Level::Read)
