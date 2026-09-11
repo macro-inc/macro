@@ -52,13 +52,32 @@ jobs:
         # this produces an unsigned arm64 simulator .app rather than anything
         # installable on hardware.
 
-        # Probe the two things most likely to be missing on a fresh macOS runner. Both
-        # fail deep inside xcodebuild otherwise, tens of minutes in.
+        # Probe before the ~6 minutes of frontend build, so a runner missing its iOS
+        # bits fails in seconds instead of at the very last step.
+        #
+        # The SDK is the check that matters, and it is not implied by the others: since
+        # Xcode 16 platforms are downloaded separately, so `xcodebuild -version` and
+        # even `simctl` can look healthy on a runner with no iPhoneSimulator SDK. Tauri
+        # then dies reading SDKSettings.plist out of it.
         xcodebuild -version
+        echo "Developer dir: $(xcode-select -p)"
+
+        SIMULATOR_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path 2>/dev/null || true)"
+        if [ -z "$SIMULATOR_SDK" ] || [ ! -f "$SIMULATOR_SDK/SDKSettings.plist" ]; then
+          echo "No iPhoneSimulator SDK on this runner." >&2
+          echo "Install it with: xcodebuild -downloadPlatform iOS" >&2
+          echo "--- installed SDKs ---" >&2
+          xcodebuild -showsdks >&2 || true
+          echo "--- platforms ---" >&2
+          ls -1 "$(xcode-select -p)/Platforms" >&2 || true
+          exit 1
+        fi
+        echo "iPhoneSimulator SDK: $SIMULATOR_SDK"
+
         if ! xcrun simctl list runtimes --json | grep -q '"isAvailable" : true'; then
           echo "No available iOS simulator runtime on this runner." >&2
           echo "Install one with: xcodebuild -downloadPlatform iOS" >&2
-          xcrun simctl list runtimes
+          xcrun simctl list runtimes >&2
           exit 1
         fi
 
