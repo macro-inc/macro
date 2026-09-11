@@ -105,10 +105,17 @@ export function MarkdownPopup(props: {
   highlightLayerRef: HTMLDivElement;
   lexicalMapping: NodeIdMappings;
 }) {
-  const markdownDocument = useMarkdownDocument();
-  const blockId = markdownDocument.documentId();
-  const name = () =>
-    markdownDocument.persistedName() || markdownDocument.fallbackName();
+  const {
+    documentId,
+    persistedName,
+    fallbackName,
+    permissions,
+    state,
+  } = useMarkdownDocument();
+  const { canEdit, canComment } = permissions;
+  const { comments: commentState, setCommentState } = state;
+  const blockId = documentId();
+  const name = () => persistedName() || fallbackName();
 
   const { editor, plugins } = useContext(LexicalWrapperContext) ?? {};
   if (!editor || !plugins) {
@@ -194,13 +201,8 @@ export function MarkdownPopup(props: {
     setNativeEditMenuSuppressed(false);
   });
 
-  const canEdit = markdownDocument.permissions.canEdit;
   const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
-  const canComment = markdownDocument.permissions.canComment;
   const currentUserId = useUserId();
-
-  const commentState = markdownDocument.state.comments;
-  const setCommentState = markdownDocument.state.setCommentState;
 
   const [copied, setCopied] = createSignal(false);
   const [locationCopied, setLocationCopied] = createSignal(false);

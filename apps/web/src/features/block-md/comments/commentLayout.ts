@@ -34,9 +34,9 @@ export const MIN_THREAD_GAP = 10;
 const LAYOUT_THROTTLE = 60;
 
 export function createCommentLayout() {
-  const markdownDocument = useMarkdownDocument();
-  const { md } = markdownDocument.state.editor;
-  const commentState = markdownDocument.state.comments;
+  const { state } = useMarkdownDocument();
+  const commentState = state.comments;
+  const md = state.editor.md;
 
   const notebookSize = createElementSize(() => md.notebook);
   const notebookHeight = createMemo(() => notebookSize.height);

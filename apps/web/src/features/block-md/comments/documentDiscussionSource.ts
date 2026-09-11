@@ -59,12 +59,17 @@ function toViewThread(ct: CommentThread): DiscussionThread {
  * Markdown surface owner (it wires the surface-scoped resources).
  */
 export function createDocumentDiscussionSource(): DiscussionSource {
-  const markdownDocument = useMarkdownDocument();
-  const documentId = markdownDocument.documentId();
+  const {
+    documentId: getDocumentId,
+    kind,
+    permissions,
+    state,
+  } = useMarkdownDocument();
+  const documentId = getDocumentId();
+  const documentKind = kind();
   const entityBlockName =
-    markdownDocument.kind() === 'document' ? 'md' : markdownDocument.kind();
+    documentKind === 'document' ? 'md' : documentKind;
   // Comment affordances gate on can-comment (main switched tasks off can-edit).
-  const canComment = markdownDocument.permissions.canComment;
   const userId = useUserId();
   const urlParams = useUrlParams(URL_PARAMS);
 
@@ -72,7 +77,6 @@ export function createDocumentDiscussionSource(): DiscussionSource {
   const createReplyFn = useCreateDiscussionReply();
   const editFn = useEditDiscussionComment();
   const deleteFn = useDeleteDiscussionComment();
-  const md = markdownDocument.state.editor.md;
   const discussionThreads = useDiscussionThreads();
 
   const threads = createMemo(() =>
@@ -91,7 +95,7 @@ export function createDocumentDiscussionSource(): DiscussionSource {
     const request = targetRequest();
     if (!request) return null;
     const { commentId } = request;
-    if (!md.locationReady) return null;
+    if (!state.editor.md.locationReady) return null;
 
     const currentThreads = threads();
     const hasDiscussionComment = currentThreads.some((thread) =>
@@ -103,7 +107,7 @@ export function createDocumentDiscussionSource(): DiscussionSource {
 
   return {
     threads,
-    canEdit: canComment,
+    canEdit: permissions.canComment,
     currentUserId: userId,
     targetCommentId,
     targetRevision,

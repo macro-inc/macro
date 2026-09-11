@@ -6,8 +6,7 @@ import {
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export const useGoToTempRedirect = () => {
-  const markdownDocument = useMarkdownDocument();
-  const setCommentState = markdownDocument.state.setCommentState;
+  const { state } = useMarkdownDocument();
   const scrollToCommentThread = useScrollToCommentThread();
 
   return (documentId: string, state: TempRedirectLocation) => {
@@ -27,7 +26,7 @@ export const useGoToTempRedirect = () => {
       // NOTE: in commentStore.ts, we unset the active thread id
       // if there are no active mark ids. By setting it after
       // scroll we ensure that the active thread id is not unset
-      setCommentState('activeCommentThread', threadId);
+      state.setCommentState('activeCommentThread', threadId);
     });
   };
 };

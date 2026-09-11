@@ -82,15 +82,12 @@ export const CommentsProvider: VoidComponent<{
     return null;
   }
   const { plugins, editor } = wrapper;
-  const markdownDocument = useMarkdownDocument();
+  const { documentId, state } = useMarkdownDocument();
+  const { comments: commentState, setCommentState } = state;
 
   const currentPeerId = () => props.loroManager.peerIdStr;
 
-  const commentState = markdownDocument.state.comments;
-  const setCommentState = markdownDocument.state.setCommentState;
-  const commentThreadsQuery = useMarkdownCommentsQuery(
-    markdownDocument.documentId
-  );
+  const commentThreadsQuery = useMarkdownCommentsQuery(documentId);
   useCommentRealtime();
 
   /** Communicates comment ready to block. */

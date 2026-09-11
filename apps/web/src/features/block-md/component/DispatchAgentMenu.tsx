@@ -163,10 +163,10 @@ const [lastUsedKey, setLastUsedKey] = makePersisted(
 );
 
 export function useDispatchAgentAction() {
-  const markdownDocument = useMarkdownDocument();
-  const blockId = markdownDocument.documentId();
+  const { documentId, state } = useMarkdownDocument();
+  const blockId = documentId();
   const { displayName: name } = useMarkdownName();
-  const store = markdownDocument.state.editor.md;
+  const editor = state.editor.md.editor;
   const discussionThreads = useDiscussionThreads();
 
   const lastUsed = () =>
@@ -174,8 +174,8 @@ export function useDispatchAgentAction() {
 
   const buildPrompt = createCallback(() => {
     const docName = name() ?? '';
-    const content = store.editor
-      ? editorStateAsMarkdown(store.editor, 'external')
+    const content = editor
+      ? editorStateAsMarkdown(editor, 'external')
       : '';
     const threads = discussionThreads() ?? [];
     return generateTaskPrompt(blockId, docName, content, threads);

@@ -77,7 +77,8 @@ export function TaskDuplicateMatchesSidePanelSection() {
 type TaskDuplicateMatchesState = ReturnType<typeof useTaskDuplicateMatches>;
 
 function useTaskDuplicateMatches() {
-  const blockId = useMarkdownDocument().documentId();
+  const { documentId } = useMarkdownDocument();
+  const blockId = documentId();
   const matchesQuery = useTaskDuplicatesQuery(() => blockId);
   const dismissMutation = useDismissTaskDuplicatesMutation(() => blockId);
 

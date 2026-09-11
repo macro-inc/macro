@@ -20,8 +20,8 @@ function isDiscussionThread(ct: CommentThread): boolean {
 }
 
 export function useDiscussionThreads() {
-  const markdownDocument = useMarkdownDocument();
-  const commentsQuery = useMarkdownCommentsQuery(markdownDocument.documentId);
+  const { documentId } = useMarkdownDocument();
+  const commentsQuery = useMarkdownCommentsQuery(documentId);
   return () => {
     const threads = commentsQuery.isSuccess ? commentsQuery.data : [];
     return threads

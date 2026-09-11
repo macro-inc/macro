@@ -219,8 +219,8 @@ function useMarkdownSnapshotIngest(
   loroManager: MarkdownLoroManager,
   options: MarkdownSnapshotIngestOptions
 ) {
-  const markdownDocument = useMarkdownDocument();
-  const documentId = markdownDocument.documentId();
+  const { documentId: getDocumentId } = useMarkdownDocument();
+  const documentId = getDocumentId();
   const snapshotStore = new IDBSnapshotStore<RawUpdate>(
     LORO_SNAPSHOT_DB_NAME,
     documentId
@@ -271,8 +271,8 @@ export type MarkdownDocumentContentProps = MarkdownSnapshotIngestOptions & {
 };
 
 export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
-  const markdownDocument = useMarkdownDocument();
-  const documentId = markdownDocument.documentId();
+  const { documentId: getDocumentId, state } = useMarkdownDocument();
+  const documentId = getDocumentId();
 
   const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
     documentId,
@@ -287,7 +287,7 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
       <Scroll
         class="relative"
         scrollRef={(element) => {
-          markdownDocument.state.editor.setMd({
+          state.editor.setMd({
             scrollContainer: element,
           });
         }}

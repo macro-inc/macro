@@ -342,14 +342,12 @@ const ElementFormatMenuItem = (
 };
 
 export function FormatTools(props: { withinPopup?: boolean }) {
-  const markdownDocument = useMarkdownDocument();
-  const mdData = markdownDocument.state.editor.md;
+  const { permissions, state } = useMarkdownDocument();
+  const { md: mdData, error: editorError } = state.editor;
   const editor = () => mdData.editor;
   const titleEditor = () => mdData.titleEditor;
   const selection = () => mdData.selection;
-  const editorError = markdownDocument.state.editor.error;
-  const { isGenerating, generatedAndWaiting } =
-    markdownDocument.state.generation;
+  const { isGenerating, generatedAndWaiting } = state.generation;
 
   const [editorHasFocus, setEditorHasFocus] = createSignal(false);
   const [, setTitleEditorHasFocus] = createSignal(false);
@@ -359,7 +357,6 @@ export function FormatTools(props: { withinPopup?: boolean }) {
   const [lastFocusedEditor, setLastFocusedEditor] =
     createSignal<LexicalEditor>();
 
-  const permissions = markdownDocument.permissions;
   const editAccess = permissions.canEdit;
   const canEdit = () => editAccess();
 

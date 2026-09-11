@@ -69,17 +69,21 @@ export function InstructionsEditor(props: {
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
 }) {
-  const markdownDocument = useMarkdownDocument();
-  const blockId = markdownDocument.documentId();
+  const {
+    documentId,
+    documentSource,
+    element: blockElement,
+    permissions,
+    state: documentState,
+  } = useMarkdownDocument();
+  const canEdit = permissions.canEdit;
+  const blockId = documentId();
 
   const saveDocumentMutation = createSaveMarkdownDocumentMutation();
   const { setMd: setMdStore, error: editorError, setError: setEditorError } =
-    markdownDocument.state.editor;
+    documentState.editor;
   const saveBlocked = () =>
-    markdownDocument.state.comments.activeCommentThread === -1;
-  const canEdit = markdownDocument.permissions.canEdit;
-  const blockElement = markdownDocument.element;
-  const documentSource = markdownDocument.documentSource;
+    documentState.comments.activeCommentThread === -1;
 
   const IS_SYNC = () => documentSource().type === 'sync';
 

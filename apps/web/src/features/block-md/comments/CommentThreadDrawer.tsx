@@ -98,10 +98,9 @@ function PinnedReplyComposer(props: {
  * Must be mounted inside the `CommentsContext` provider (see CommentMargin).
  */
 export function CommentThreadDrawer() {
-  const markdownDocument = useMarkdownDocument();
-  const commentState = markdownDocument.state.comments;
-  const setCommentState = markdownDocument.state.setCommentState;
-  const { md } = markdownDocument.state.editor;
+  const { state } = useMarkdownDocument();
+  const { comments: commentState, setCommentState } = state;
+  const md = state.editor.md;
 
   const parentCommentsContext = useContext(CommentsContext);
   // Messages report their inline-edit state; while any edit input is open,

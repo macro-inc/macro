@@ -208,10 +208,18 @@ export function MarkdownEditor(props: {
   showLexicalStateDebugger?: boolean;
   onLexicalStateDebuggerClose?: () => void;
 }) {
-  const markdownDocument = useMarkdownDocument();
-  const blockId = markdownDocument.documentId();
+  const {
+    documentId,
+    kind,
+    documentSource,
+    persistedName: mdDocumentName,
+    permissions,
+    state: documentState,
+  } = useMarkdownDocument();
+  const { canEdit, canComment } = permissions;
+  const blockId = documentId();
   const userId = useUserId();
-  const documentKind = markdownDocument.kind();
+  const documentKind = kind();
   const sourceBlockName = documentKind === 'document' ? 'md' : documentKind;
   const documentTags = useDocTags(
     blockId,
@@ -219,8 +227,6 @@ export function MarkdownEditor(props: {
   );
   const tagApplyTargetLabel = () =>
     documentKind === 'task' ? 'Task' : 'Document';
-
-  const mdDocumentName = markdownDocument.persistedName;
 
   const saveDocumentMutation = createSaveMarkdownDocumentMutation();
   const {
@@ -230,13 +236,10 @@ export function MarkdownEditor(props: {
     setError: setEditorError,
     findAndReplace: findAndReplaceStore,
     setFindAndReplace: setFindAndReplaceStore,
-  } = markdownDocument.state.editor;
-  const { revisions, setRevisions } = markdownDocument.state.rewrite;
+  } = documentState.editor;
+  const { revisions, setRevisions } = documentState.rewrite;
   const saveBlocked = () =>
-    markdownDocument.state.comments.activeCommentThread === -1;
-  const canEdit = markdownDocument.permissions.canEdit;
-  const canComment = markdownDocument.permissions.canComment;
-  const documentSource = markdownDocument.documentSource;
+    documentState.comments.activeCommentThread === -1;
 
   const IS_SYNC = () => documentSource().type === 'sync';
 
@@ -264,17 +267,17 @@ export function MarkdownEditor(props: {
   let editorContainerRef!: HTMLDivElement;
 
   const [clickTargetHeight, setClickTargetHeight] = createSignal(0);
-  const generation = markdownDocument.state.generation;
   const {
     isGenerating,
     setIsGenerating,
     generatedAndWaiting,
+    setGeneratedAndWaiting,
     completion,
     setCompletion,
     generateMenuOpen,
     setGenerateMenuOpen,
     setGenerateContext,
-  } = generation;
+  } = documentState.generation;
   const completionSignal = [completion, setCompletion] as [
     typeof completion,
     typeof setCompletion,
@@ -285,8 +288,8 @@ export function MarkdownEditor(props: {
   ];
   const generatedAndWaitingSignal = [
     generatedAndWaiting,
-    generation.setGeneratedAndWaiting,
-  ] as [typeof generatedAndWaiting, typeof generation.setGeneratedAndWaiting];
+    setGeneratedAndWaiting,
+  ] as [typeof generatedAndWaiting, typeof setGeneratedAndWaiting];
   const generateMenuSignal = [generateMenuOpen, setGenerateMenuOpen] as [
     typeof generateMenuOpen,
     typeof setGenerateMenuOpen,

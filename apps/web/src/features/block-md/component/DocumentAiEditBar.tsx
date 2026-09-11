@@ -16,7 +16,7 @@ false && clickOutside;
  * into a prompt card matching the Discussion composer.
  */
 export function DocumentAiEditBar(props: { documentId: string }) {
-  const md = useMarkdownDocument().state.editor.md;
+  const { state } = useMarkdownDocument();
 
   const [expanded, setExpanded] = createSignal(false);
   const [editing, setEditing] = createSignal(false);
@@ -29,7 +29,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
   const collapse = () => {
     setExpanded(false);
     setPrompt('');
-    md.editor?.focus();
+    state.editor.md.editor?.focus();
   };
 
   const submit = () => {

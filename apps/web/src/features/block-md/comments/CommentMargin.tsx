@@ -27,9 +27,8 @@ import {
 const useCommentsContext = (
   setThreadHeight: CommentsContextType['setThreadHeight']
 ): CommentsContextType => {
-  const markdownDocument = useMarkdownDocument();
-  const commentState = markdownDocument.state.comments;
-  const setCommentState = markdownDocument.state.setCommentState;
+  const { documentId, permissions, state } = useMarkdownDocument();
+  const { comments: commentState, setCommentState } = state;
   const ownedCommentIds = createMemo(() => {
     const userId = useUserId()();
     if (!userId) {
@@ -51,20 +50,16 @@ const useCommentsContext = (
   const updateComment = useUpdateComment();
   const deleteComment = useDeleteComment();
 
-  const documentId = markdownDocument.documentId();
-  const isDocumentOwner = markdownDocument.permissions.isOwner;
-  const canComment = markdownDocument.permissions.canComment;
-
   const getCommentById = (id: number) => commentState.comments[id];
 
   const commentsContext: CommentsContextType = {
     setActiveThread: (threadId) =>
       setCommentState('activeCommentThread', threadId),
     setThreadHeight,
-    canComment,
-    isDocumentOwner,
+    canComment: permissions.canComment,
+    isDocumentOwner: permissions.isOwner,
     getCommentById,
-    documentId,
+    documentId: documentId(),
     ownedComment: ownedCommentSelector,
     commentOperations: {
       createComment,
@@ -78,7 +73,8 @@ const useCommentsContext = (
 };
 
 export const CommentMargin = (props: { wideEnough: boolean }) => {
-  const commentState = useMarkdownDocument().state.comments;
+  const { state } = useMarkdownDocument();
+  const commentState = state.comments;
   const { notebookHeight, setThreadHeights, threadPositions } =
     createCommentLayout();
   const maxHeight = createMemo(() => notebookHeight() ?? undefined);

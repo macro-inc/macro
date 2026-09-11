@@ -19,13 +19,13 @@ import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
-  const markdownDocument = useMarkdownDocument();
+  const { permissions, state } = useMarkdownDocument();
+  const canEdit = permissions.canEdit;
   const {
     md: mdData,
     findAndReplace: findAndReplaceStore,
     setFindAndReplace: setFindAndReplaceStore,
-  } = markdownDocument.state.editor;
-  const canEdit = markdownDocument.permissions.canEdit;
+  } = state.editor;
   const editor = () => mdData.editor;
   const scopeId = () => props.hotkeyScope;
 

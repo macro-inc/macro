@@ -102,15 +102,14 @@ export function Notebook(props: {
   hotkeyScope: string | undefined;
   autoFocus: boolean;
 }) {
-  const markdownDocument = useMarkdownDocument();
-  const blockElement = markdownDocument.element;
-  const { md, setMd } = markdownDocument.state.editor;
-  const commentState = markdownDocument.state.comments;
+  const { element: blockElement, permissions, state } = useMarkdownDocument();
+  const canEdit = permissions.canEdit;
+  const { comments: commentState, params } = state;
+  const { md, setMd } = state.editor;
   const { displayName: documentName } = useMarkdownName();
   const scopeId = () => props.hotkeyScope;
   const history = useHistory();
   const documentId = props.documentId;
-  const canEdit = markdownDocument.permissions.canEdit;
   const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
 
   let notebookRef!: HTMLDivElement;
@@ -348,7 +347,7 @@ export function Notebook(props: {
           <InlineTaskGithubPullRequests />
           <TaskDuplicateMatchPill />
         </div>
-        <ParamsProvider state={markdownDocument.state.params}>
+        <ParamsProvider state={params}>
           {/* Relative wrapper so the history overlay covers only the body region,
               leaving the title + properties above it untouched and aligned. */}
           <div class="relative">
@@ -410,7 +409,8 @@ export function InstructionsNotebook(props: {
   loroManager: LoroManager;
   hotkeyScope: string | undefined;
 }) {
-  const { setMd } = useMarkdownDocument().state.editor;
+  const { state } = useMarkdownDocument();
+  const setMd = state.editor.setMd;
   const scopeId = () => props.hotkeyScope;
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
 

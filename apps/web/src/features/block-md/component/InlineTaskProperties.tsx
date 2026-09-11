@@ -19,11 +19,10 @@ import { useMarkdownName } from './MarkdownNameProvider';
  * Displays status, priority, and assignees in a single row, editable like in list view.
  */
 export function InlineTaskProperties() {
-  const markdownDocument = useMarkdownDocument();
-  const md = markdownDocument.state.editor.md;
-  const blockId = markdownDocument.documentId();
-  const documentKind = markdownDocument.kind();
-  const canEdit = markdownDocument.permissions.canEdit;
+  const { documentId, kind, permissions, state } = useMarkdownDocument();
+  const canEdit = permissions.canEdit;
+  const blockId = documentId();
+  const documentKind = kind();
   const { displayName: documentName } = useMarkdownName();
   const entityType = documentKind === 'task' ? 'TASK' : 'DOCUMENT';
 
@@ -91,7 +90,9 @@ export function InlineTaskProperties() {
             entityType={entityType}
             class="bg-surface-2"
           />
-          <Show when={documentKind === 'task' && md.progressStats}>
+          <Show
+            when={documentKind === 'task' && state.editor.md.progressStats}
+          >
             {(progressStats) => (
               <Show when={progressStats().total > 0}>
                 <ProgressChip stats={progressStats()} />

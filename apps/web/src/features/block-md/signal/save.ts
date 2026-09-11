@@ -6,13 +6,11 @@ import { createCallback } from '@solid-primitives/rootless';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 export function useDownloadDocumentAsMarkdownText() {
-  const markdownDocument = useMarkdownDocument();
-  const store = markdownDocument.state.editor.md;
-  const { persistedName, fallbackName } = markdownDocument;
+  const { persistedName, fallbackName, state } = useMarkdownDocument();
   const fileName = () => persistedName() || fallbackName();
 
   return createCallback(() => {
-    const editor = store.editor;
+    const editor = state.editor.md.editor;
     if (editor === undefined) return;
 
     const fileNameWithExtension = `${fileName()}.md`;
@@ -29,13 +27,11 @@ export function useDownloadDocumentAsMarkdownText() {
 }
 
 export function useDownloadDocumentAsJson() {
-  const markdownDocument = useMarkdownDocument();
-  const store = markdownDocument.state.editor.md;
-  const { persistedName, fallbackName } = markdownDocument;
+  const { persistedName, fallbackName, state } = useMarkdownDocument();
   const fileName = () => persistedName() || fallbackName();
 
   return createCallback(() => {
-    const editor = store.editor;
+    const editor = state.editor.md.editor;
     if (!editor) {
       return;
     }

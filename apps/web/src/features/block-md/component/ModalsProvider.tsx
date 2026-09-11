@@ -13,20 +13,21 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownName } from './MarkdownNameProvider';
 
 export function ModalsProvider(props: ParentProps) {
-  const markdownDocument = useMarkdownDocument();
+  const { documentId, kind, permissions: documentPermissions } =
+    useMarkdownDocument();
   const { displayName } = useMarkdownName();
   const notificationSource = useGlobalNotificationSource();
-  const metadataQuery = useDocumentMetadataQuery(markdownDocument.documentId);
+  const metadataQuery = useDocumentMetadataQuery(documentId);
   const [shareOpen, setShareOpen] = createSignal(false);
 
   const blockAlias = (): 'md' | 'task' | 'snippet' | 'skill' => {
-    const kind = markdownDocument.kind();
-    return kind === 'document' ? 'md' : kind;
+    const documentKind = kind();
+    return documentKind === 'document' ? 'md' : documentKind;
   };
   const permissions = () => {
-    if (markdownDocument.permissions.isOwner()) return Permissions.OWNER;
-    if (markdownDocument.permissions.canEdit()) return Permissions.CAN_EDIT;
-    if (markdownDocument.permissions.canComment()) {
+    if (documentPermissions.isOwner()) return Permissions.OWNER;
+    if (documentPermissions.canEdit()) return Permissions.CAN_EDIT;
+    if (documentPermissions.canComment()) {
       return Permissions.CAN_COMMENT;
     }
     return Permissions.CAN_VIEW;
@@ -42,19 +43,19 @@ export function ModalsProvider(props: ParentProps) {
     >
       {props.children}
       <NotificationsDrawer
-        entity={{ id: markdownDocument.documentId(), type: 'document' }}
+        entity={{ id: documentId(), type: 'document' }}
         notificationSource={notificationSource}
       />
       <ReferencesDrawer
-        documentId={markdownDocument.documentId()}
+        documentId={documentId()}
         documentName={displayName()}
       />
-      <DetailsDrawer documentId={markdownDocument.documentId()} />
+      <DetailsDrawer documentId={documentId()} />
       <Suspense>
         <ShareModal
           isSharePermOpen={shareOpen()}
           setIsSharePermOpen={setShareOpen}
-          id={markdownDocument.documentId()}
+          id={documentId()}
           blockAlias={blockAlias()}
           itemType="document"
           name={displayName() ?? ''}

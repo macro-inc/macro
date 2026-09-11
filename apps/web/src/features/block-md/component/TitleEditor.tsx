@@ -131,10 +131,10 @@ function titleNavigationPlugin(
 }
 
 export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
-  const markdownDocument = useMarkdownDocument();
-  const { md: mdData, setMd: setMdData } = markdownDocument.state.editor;
-
-  const canEdit = markdownDocument.permissions.canEdit;
+  const { documentId, kind, documentSource, permissions, state } =
+    useMarkdownDocument();
+  const canEdit = permissions.canEdit;
+  const { md: mdData, setMd: setMdData } = state.editor;
   const renameDocumentMutation = createRenameDssEntityMutation();
   const {
     persistedName: persistedDocumentName,
@@ -146,8 +146,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const [titlePlaceholder] = createSignal<string>();
   const [titleFocused, setTitleFocused] = createSignal(false);
 
-  const blockId = markdownDocument.documentId();
-  const documentKind = markdownDocument.kind();
+  const blockId = documentId();
+  const documentKind = kind();
   const entityBlockName = documentKind === 'document' ? 'md' : documentKind;
   const documentTags = useDocTags(
     blockId,
@@ -272,7 +272,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     editor.setEditable(canEdit() ?? false);
   });
 
-  const dataReady = () => markdownDocument.documentSource().type !== 'loading';
+  const dataReady = () => documentSource().type !== 'loading';
 
   const hasLocalTitleEdit = createMemo(() => {
     if (!titleFocused()) return false;

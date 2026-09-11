@@ -58,8 +58,8 @@ type MediaSelectorProps = {
 
 export function MediaSelector(props: MediaSelectorProps) {
   const { mediaTypes = ['image', 'video'] } = props;
-  const mdData = useMarkdownDocument().state.editor.md;
-  const editor = () => mdData.editor;
+  const { state } = useMarkdownDocument();
+  const editor = () => state.editor.md.editor;
 
   const historyQuery = useHistoryQuery();
   const [menuOpen, setMenuOpen] = createSignal(false);

@@ -34,15 +34,11 @@ export type MarkdownCollabProviderProps = {
  * the block's document tracing spans, with the CollabStatus chrome.
  */
 export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
-  const markdownDocument = useMarkdownDocument();
-  const documentSource = markdownDocument.documentSource;
+  const { documentSource, permissions, state } = useMarkdownDocument();
   const syncSource = () => {
     const source = documentSource();
     return source.type === 'sync' ? source.source : undefined;
   };
-  const canEdit = markdownDocument.permissions.canEdit;
-  const canComment = markdownDocument.permissions.canComment;
-  const editorError = markdownDocument.state.editor.error;
 
   return (
     <CollabProvider
@@ -57,9 +53,9 @@ export function MarkdownCollabProvider(props: MarkdownCollabProviderProps) {
       loroManager={props.loroManager}
       syncSource={syncSource}
       sourceReady={() => documentSource().type === 'sync'}
-      canEdit={canEdit}
-      canComment={canComment}
-      editorError={editorError}
+      canEdit={permissions.canEdit}
+      canComment={permissions.canComment}
+      editorError={state.editor.error}
       observability={{
         resumeSpan: resumeDocumentSpan,
         endSpan: endDocumentSpan,

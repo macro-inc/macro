@@ -29,7 +29,7 @@ export const sortComments = (a: Comment, b: Comment) => {
 };
 
 function useHandleCreateComment() {
-  const documentId = useMarkdownDocument().documentId();
+  const { documentId } = useMarkdownDocument();
   const queryClient = useQueryClient();
 
   return (response: CreateCommentResponse) => {
@@ -38,7 +38,7 @@ function useHandleCreateComment() {
       comments: response.comments,
     };
     queryClient.setQueryData<CommentThread[]>(
-      markdownCommentKeys.document(documentId).queryKey,
+      markdownCommentKeys.document(documentId()).queryKey,
       (prev = []) => {
         let mutatedExistingThread = false;
         const out: CommentThread[] = [];
@@ -60,12 +60,12 @@ function useHandleCreateComment() {
 }
 
 function useCreateComment() {
-  const documentId = useMarkdownDocument().documentId();
+  const { documentId } = useMarkdownDocument();
   const handleCreateComment = useHandleCreateComment();
 
   return async (body: CreateCommentRequest) => {
     const result = await storageServiceClient.annotations.createComment({
-      documentId,
+      documentId: documentId(),
       body,
     });
 
@@ -83,12 +83,12 @@ function useCreateComment() {
 }
 
 function useHandleEditComment() {
-  const documentId = useMarkdownDocument().documentId();
+  const { documentId } = useMarkdownDocument();
   const queryClient = useQueryClient();
 
   return (response: EditCommentResponse) => {
     queryClient.setQueryData<CommentThread[]>(
-      markdownCommentKeys.document(documentId).queryKey,
+      markdownCommentKeys.document(documentId()).queryKey,
       (prev = []) => {
         const out: CommentThread[] = [];
         for (const thread of prev) {
@@ -137,13 +137,13 @@ export function useEditCommentResource() {
 }
 
 function useHandleDeleteComment() {
-  const documentId = useMarkdownDocument().documentId();
+  const { documentId } = useMarkdownDocument();
   const queryClient = useQueryClient();
 
   return (response: DeleteCommentResponse) => {
     const threadDeleted = response.thread.deleted;
     queryClient.setQueryData<CommentThread[]>(
-      markdownCommentKeys.document(documentId).queryKey,
+      markdownCommentKeys.document(documentId()).queryKey,
       (prev = []) => {
         if (threadDeleted) {
           return prev.filter(
@@ -226,7 +226,7 @@ export function useCreateThreadReplyResource() {
 
 // TODO: enable for live updates when live collab is a thing
 export function useCommentRealtime() {
-  const documentId = useMarkdownDocument().documentId();
+  const { documentId } = useMarkdownDocument();
   const handleCommentUpdate = useHandleCreateComment();
   const handleEditComment = useHandleEditComment();
   const handleDeleteComment = useHandleDeleteComment();
@@ -236,7 +236,7 @@ export function useCommentRealtime() {
       let incrementalUpdate: AnnotationIncrementalUpdate;
       try {
         incrementalUpdate = JSON.parse(msg.data) as AnnotationIncrementalUpdate;
-        if (incrementalUpdate.payload.documentId !== documentId) {
+        if (incrementalUpdate.payload.documentId !== documentId()) {
           return;
         }
       } catch (error) {

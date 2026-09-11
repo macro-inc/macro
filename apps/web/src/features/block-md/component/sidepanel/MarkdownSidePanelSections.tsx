@@ -78,12 +78,13 @@ import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
  * - Stats (hidden for tasks)
  */
 export function MarkdownSidePanelSections() {
-  const markdownDocument = useMarkdownDocument();
+  const { documentId, kind, permissions } = useMarkdownDocument();
+  const canEdit = permissions.canEdit;
   const { displayName } = useMarkdownName();
-  const isTask = () => markdownDocument.kind() === 'task';
-  const isSnippet = () => markdownDocument.kind() === 'snippet';
+  const isTask = () => kind() === 'task';
+  const isSnippet = () => kind() === 'snippet';
   const entity = (): Entity => ({
-    id: markdownDocument.documentId(),
+    id: documentId(),
     type: 'document',
   });
   const propertiesEntityType = (): PropertiesEntityType =>
@@ -101,7 +102,7 @@ export function MarkdownSidePanelSections() {
           <AskMacroButton
             entity={{
               type: 'document',
-              id: markdownDocument.documentId(),
+              id: documentId(),
               name: displayName() ?? '',
               fileType: 'md',
             }}
@@ -112,17 +113,15 @@ export function MarkdownSidePanelSections() {
         </div>
       </SidePanel.Section>
       <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
-        <DetailsSectionContent documentId={markdownDocument.documentId()} />
+        <DetailsSectionContent documentId={documentId()} />
       </SidePanel.Section>
       <Show when={isSnippet()}>
-        <SnippetSharingOwnerSectionConditional
-          documentId={markdownDocument.documentId()}
-        />
+        <SnippetSharingOwnerSectionConditional documentId={documentId()} />
       </Show>
       <EntityTagsSection
-        entityId={markdownDocument.documentId()}
+        entityId={documentId()}
         entityType={propertiesEntityType()}
-        canEdit={markdownDocument.permissions.canEdit()}
+        canEdit={canEdit()}
         order={20}
       />
       <SidePanel.Section
@@ -132,9 +131,9 @@ export function MarkdownSidePanelSections() {
         order={25}
       >
         <PropertiesSectionContent
-          documentId={markdownDocument.documentId()}
+          documentId={documentId()}
           isTask={isTask()}
-          canEdit={markdownDocument.permissions.canEdit()}
+          canEdit={canEdit()}
           documentName={displayName() ?? ''}
         />
       </SidePanel.Section>
@@ -149,18 +148,16 @@ export function MarkdownSidePanelSections() {
         </SidePanel.Section>
       </Show>
       <EntityActivitySectionConditional
-        entityId={markdownDocument.documentId()}
+        entityId={documentId()}
         entityType={propertiesEntityType()}
         order={40}
       />
       <GithubSectionConditional
-        documentId={markdownDocument.documentId()}
+        documentId={documentId()}
         isTask={isTask()}
       />
       <NotificationsSectionConditional entity={entity()} />
-      <ReferencesSectionConditional
-        documentId={markdownDocument.documentId()}
-      />
+      <ReferencesSectionConditional documentId={documentId()} />
       <Show when={isTask()}>
         <TaskDuplicateMatchesSidePanelSection />
       </Show>
@@ -460,7 +457,8 @@ function PropertiesSectionContent(props: {
   canEdit: boolean;
   documentName: string;
 }) {
-  const mdData = useMarkdownDocument().state.editor.md;
+  const { state } = useMarkdownDocument();
+  const mdData = state.editor.md;
 
   const entityType: PropertiesEntityType = props.isTask ? 'TASK' : 'DOCUMENT';
 
@@ -531,7 +529,8 @@ const PINNED_ORDER: readonly string[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StatsSectionContent() {
-  const md = useMarkdownDocument().state.editor.md;
+  const { state } = useMarkdownDocument();
+  const md = state.editor.md;
 
   return (
     <Show
