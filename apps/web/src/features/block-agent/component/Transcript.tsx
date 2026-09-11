@@ -11,7 +11,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { needsTrailingWorkingLine } from '../state/shows-working-line';
-import { WorkingLine } from '../ui';
+import { WorkingLine } from '../ui/WorkingLine';
 import { Message } from './AgentMessage';
 import { ReplyToSelection } from './ReplyToSelection';
 
