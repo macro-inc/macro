@@ -3,7 +3,6 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
-import { useDownloadDocumentAsMarkdownText } from '@block-md/signal/save';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -23,6 +22,7 @@ import {
   useDispatchAgentSplitFileActions,
 } from './DispatchAgentMenu';
 import { useMarkdownName } from './MarkdownNameProvider';
+import { useDownloadDocumentAsMarkdownText } from './useMarkdownDocumentDownload';
 
 export function useMarkdownDocumentTools() {
   const { documentId, kind } = useMarkdownDocument();

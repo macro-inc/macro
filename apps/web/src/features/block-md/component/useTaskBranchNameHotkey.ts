@@ -3,7 +3,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import type { Accessor } from 'solid-js';
 import { createEffect, on, onCleanup } from 'solid-js';
-import type { MarkdownDocumentKind } from '../context/markdown-document-context';
+import type { MarkdownDocumentKind } from '../types';
 
 export function useTaskBranchNameHotkey(options: {
   documentId: Accessor<string>;

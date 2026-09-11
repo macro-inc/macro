@@ -178,7 +178,6 @@ import {
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
-import { generateContentCallback } from '../signal/generateSignal';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
@@ -947,9 +946,9 @@ export function MarkdownEditor(props: {
     }
   });
 
-  const _generateContentCallback = createCallback((userRequest: string) => {
+  // Temporarily disabled pending port to connection-gateway.
+  const _generateContentCallback = createCallback((_userRequest: string) => {
     setIsGenerating(true);
-    generateContentCallback(userRequest);
   });
 
   const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();

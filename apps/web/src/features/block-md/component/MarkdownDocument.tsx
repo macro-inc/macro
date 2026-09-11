@@ -29,13 +29,16 @@ import {
 } from 'solid-js';
 import {
   type MarkdownDocumentContextValue,
-  type MarkdownDocumentProps,
   MarkdownDocumentProvider,
   useMarkdownDocument,
 } from '../context/markdown-document-context';
-import { createMarkdownDocumentState } from '../context/markdown-document-state';
+import {
+  createMarkdownDocumentState,
+  type MarkdownDocumentState,
+} from '../context/markdown-document-state';
 import { HistoryProvider } from '../history/HistoryContext';
 import { resumeDocumentSpan, stampLoroSnapshotState } from '../observability';
+import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
 import { MarkdownNameProvider } from './MarkdownNameProvider';
 import { InstructionsNotebook, Notebook } from './Notebook';
 
@@ -170,6 +173,20 @@ async function ingestS3Snapshot(
     bytes: snapshot.length,
   };
 }
+
+type MarkdownDocumentProps = {
+  documentId: string;
+  kind: MarkdownDocumentKind;
+  state?: MarkdownDocumentState;
+  documentSource: MarkdownDocumentSource;
+  permissions: {
+    canComment: boolean;
+    canEdit: boolean;
+    isOwner: boolean;
+  };
+  persistedName: string | undefined;
+  fallbackName: string | undefined;
+};
 
 export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
   const [surfaceElement, setSurfaceElement] = createSignal<HTMLElement>();

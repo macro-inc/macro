@@ -29,14 +29,11 @@ import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { Show, Suspense } from 'solid-js';
-import type {
-  MarkdownDocumentKind,
-  MarkdownDocumentSource,
-} from '../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
 import type { MarkdownBlockSpec, MarkdownData } from '../definition';
 import { OldOverlay } from '../history/OldOverlay';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
+import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
 import { useMarkdownName } from './MarkdownNameProvider';
