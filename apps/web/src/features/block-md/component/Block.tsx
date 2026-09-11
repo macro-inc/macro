@@ -57,19 +57,6 @@ function ManagedTopBar() {
   return <TopBar name={displayName} />;
 }
 
-function ManagedSidePanel() {
-  const canEdit = useCanEdit();
-  const { displayName } = useMarkdownName();
-  return (
-    <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
-      <MarkdownSidePanelSections
-        canEdit={canEdit()}
-        documentName={displayName() ?? ''}
-      />
-    </Show>
-  );
-}
-
 function ManagedMarkdownProviders(props: ParentProps) {
   return <ModalsProvider>{props.children}</ModalsProvider>;
 }
@@ -162,8 +149,8 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
         >
           <OldOverlay />
           <SidePanel.Layout>
-            <Show when={!isInstructions()}>
-              <ManagedSidePanel />
+            <Show when={ENABLE_MARKDOWN_SIDE_PANEL && !isInstructions()}>
+              <MarkdownSidePanelSections />
             </Show>
             <div class="flex flex-col size-full">
               <div class="relative shrink-0">

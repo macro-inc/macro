@@ -1,10 +1,8 @@
-import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import { useCommentState } from '@block-md/comments/commentStore';
 import { useGoToTempRedirect } from '@block-md/signal/location';
 import { useMdStore } from '@block-md/signal/markdownBlockData';
-import { SidePanel } from '@components/app/side-panel';
 import {
   editorFocusSignal,
   getSaveState,
@@ -38,7 +36,6 @@ import {
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useHistory } from '../history/HistoryContext';
 import { HistoryOverlay } from '../history/HistoryOverlay';
-import { DispatchAgentButton } from './DispatchAgentMenu';
 import { DocumentAiEditBar } from './DocumentAiEditBar';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
@@ -113,8 +110,6 @@ export function Notebook(props: {
 }) {
   const markdownDocument = useMarkdownDocument();
   const blockElement = markdownDocument.element;
-  const blockId = markdownDocument.documentId();
-  const documentKind = markdownDocument.kind();
   const [md, setMd] = useMdStore();
   const { comments, setWideEnoughForComments } = useCommentState();
   const { displayName: documentName } = useMarkdownName();
@@ -362,26 +357,6 @@ export function Notebook(props: {
         ref={contentRef}
         classList={{ relative: true }}
       >
-        <SidePanel.Section
-          id="document-ai-actions"
-          title="Actions"
-          defaultOpen
-          order={0}
-        >
-          <div class="m-px flex items-center justify-start gap-2">
-            <AskMacroButton
-              entity={{
-                type: 'document',
-                id: blockId,
-                name: documentName() ?? '',
-                fileType: 'md',
-              }}
-            />
-            <Show when={documentKind === 'task' && !isMobile()}>
-              <DispatchAgentButton showPrimaryLabel />
-            </Show>
-          </div>
-        </SidePanel.Section>
         <TitleEditor autoFocusOnMount={props.autoFocus} />
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
