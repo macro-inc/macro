@@ -33,22 +33,27 @@ if ! xcrun simctl list runtimes --json | grep -q '"isAvailable" : true'; then
   exit 1
 fi
 
-# The simulator SDK is present and parseable, yet tauri still failed reading
-# "Xcode SDKSettings.plist" — so it is looking somewhere else. Runners install
-# Xcode at a versioned path (/Applications/Xcode_26.3.app) and tools that
-# hardcode /Applications/Xcode.app break on exactly that. Provide both the
-# symlink and DEVELOPER_DIR; neither is harmful if tauri wanted something else.
-echo "--- Xcode installs ---"
-ls -1d /Applications/Xcode*.app 2>/dev/null || true
-echo "--- platforms ---"
-ls -1 "$(xcode-select -p)/Platforms" 2>/dev/null || true
-
 DEVELOPER_DIR="$(xcode-select -p)"
 export DEVELOPER_DIR
-if [ ! -e /Applications/Xcode.app ]; then
-  echo "Linking /Applications/Xcode.app -> ${DEVELOPER_DIR%/Contents/Developer}"
-  sudo ln -sfn "${DEVELOPER_DIR%/Contents/Developer}" /Applications/Xcode.app ||
-    echo "Could not create the symlink; continuing." >&2
+
+# cargo-mobile2's validate_sdk() reads SDKSettings.plist from a hardcoded
+# *unversioned* path:
+#
+#   $DEVELOPER_DIR/Platforms/iPhoneSimulator.platform/Developer/SDKs/
+#     iPhoneSimulator.sdk/SDKSettings.plist
+#
+# Xcode usually ships that alias next to the versioned SDK, but this runner
+# image has only iPhoneSimulator<version>.sdk — so `xcrun --show-sdk-path`
+# resolves happily while tauri fails with a bare NotFound. Recreate the alias.
+UNVERSIONED_SDK="$(dirname "$SIMULATOR_SDK")/iPhoneSimulator.sdk"
+if [ ! -f "$UNVERSIONED_SDK/SDKSettings.plist" ]; then
+  echo "Aliasing $(basename "$SIMULATOR_SDK") -> iPhoneSimulator.sdk for tauri"
+  sudo ln -sfn "$SIMULATOR_SDK" "$UNVERSIONED_SDK"
+fi
+if [ ! -f "$UNVERSIONED_SDK/SDKSettings.plist" ]; then
+  echo "tauri reads $UNVERSIONED_SDK/SDKSettings.plist and it is still absent." >&2
+  ls -1 "$(dirname "$SIMULATOR_SDK")" >&2 || true
+  exit 1
 fi
 
 # cargo-tauri, bun, just, wasm-pack and the pinned toolchain (which carries
