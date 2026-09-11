@@ -16,6 +16,7 @@ import {
   trimWhitespace,
 } from '@core/component/LexicalMarkdown/utils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
+import { createRenameDssEntityMutation } from '@entity';
 import { mergeRegister } from '@lexical/utils';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -46,7 +47,6 @@ import {
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownData, useMdStore } from '../signal/markdownBlockData';
-import { useRenameMarkdownDocument } from '../signal/save';
 import { useMarkdownName } from './MarkdownNameProvider';
 
 /**
@@ -137,7 +137,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const markdownData = useMarkdownData();
 
   const canEdit = markdownDocument.permissions.canEdit;
-  const renameMarkdownDocument = useRenameMarkdownDocument();
+  const renameDocumentMutation = createRenameDssEntityMutation();
   const {
     persistedName: persistedDocumentName,
     editorName: mdDocumentName,
@@ -168,7 +168,14 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     const next = pendingRename;
     pendingRename = undefined;
     if (!next || !canEdit()) return;
-    void renameMarkdownDocument(next.newName, next.oldName);
+    renameDocumentMutation.mutate({
+      entity: {
+        type: 'document',
+        id: blockId,
+        name: next.oldName,
+      },
+      newName: next.newName,
+    });
   };
 
   const scheduleRename = (newName: string, oldName: string) => {

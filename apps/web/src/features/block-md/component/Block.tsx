@@ -20,7 +20,6 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { createRenameDssEntityMutation } from '@entity';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { type ParentProps, Show, Suspense } from 'solid-js';
@@ -31,10 +30,7 @@ import type {
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
 import type { MarkdownBlockSpec } from '../definition';
 import { OldOverlay } from '../history/OldOverlay';
-import {
-  loadMarkdownCachedSnapshot,
-  saveMarkdownDocument,
-} from '../queries/markdown-document-operations';
+import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
 import { CollabStatus } from './CollabStatus';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
@@ -120,7 +116,6 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   };
 
   const setLoadError = blockErrorSignal.set;
-  const renameDocument = createRenameDssEntityMutation();
   const canComment = useCanComment();
   const canEdit = useCanEdit();
   const isOwner = useIsDocumentOwner();
@@ -141,17 +136,6 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
           }}
           persistedName={persistedName()}
           fallbackName={fallbackName()}
-          saveDocument={(text) => saveMarkdownDocument(documentId, text)}
-          renameDocument={(newName, oldName) => {
-            renameDocument.mutate({
-              entity: {
-                type: 'document',
-                name: oldName,
-                id: documentId,
-              },
-              newName,
-            });
-          }}
         >
           <OldOverlay />
           <SidePanel.Layout>

@@ -15,20 +15,6 @@ export const useBlockSave = () => {
   return pendingComment;
 };
 
-export function useSaveMarkdownDocument() {
-  const blockSave = useBlockSave();
-  const saveDocument = useMarkdownDocument().saveDocument;
-
-  return createCallback(async (text: string) => {
-    if (blockSave()) return;
-    await saveDocument(text);
-  });
-}
-
-export function useRenameMarkdownDocument() {
-  return useMarkdownDocument().renameDocument;
-}
-
 export function useDownloadDocumentAsMarkdownText() {
   const [store] = useMdStore();
   const { persistedName, fallbackName } = useMarkdownDocument();

@@ -35,8 +35,6 @@ export type MarkdownDocumentProps = {
   permissions: MarkdownDocumentPermissions;
   persistedName: string | undefined;
   fallbackName: string | undefined;
-  saveDocument: (text: string) => Promise<void>;
-  renameDocument: (newName: string, oldName: string) => void;
 };
 
 export type MarkdownDocumentContextValue = {
@@ -51,8 +49,6 @@ export type MarkdownDocumentContextValue = {
   };
   persistedName: Accessor<string | undefined>;
   fallbackName: Accessor<string | undefined>;
-  saveDocument: MarkdownDocumentProps['saveDocument'];
-  renameDocument: MarkdownDocumentProps['renameDocument'];
   state: MarkdownDocumentState;
   element: Accessor<HTMLElement | undefined>;
 };

@@ -184,8 +184,6 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
     },
     persistedName: () => props.persistedName,
     fallbackName: () => props.fallbackName,
-    saveDocument: props.saveDocument,
-    renameDocument: props.renameDocument,
     state,
     element: surfaceElement,
   };

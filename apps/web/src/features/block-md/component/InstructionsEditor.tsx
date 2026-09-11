@@ -60,8 +60,9 @@ import {
   Show,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
 import { useMarkdownData, useMdStore } from '../signal/markdownBlockData';
-import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
+import { useBlockSave } from '../signal/save';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 
@@ -76,7 +77,8 @@ export function InstructionsEditor(props: {
   const markdownData = useMarkdownData();
   const blockId = markdownDocument.documentId();
 
-  const saveMarkdownDocument = useSaveMarkdownDocument();
+  const saveDocumentMutation = createSaveMarkdownDocumentMutation();
+  const blockSave = useBlockSave();
   const [, setMdStore] = useMdStore();
   const canEdit = markdownDocument.permissions.canEdit;
   const blockElement = markdownDocument.element;
@@ -88,13 +90,15 @@ export function InstructionsEditor(props: {
 
   const debouncedSaveState = debounce(() => {
     const state_ = state();
-    if (!state_ || !canEdit()) return;
+    if (!state_ || !canEdit() || blockSave()) return;
     const savableState = getSaveState(editor.getEditorState());
-    saveMarkdownDocument(JSON.stringify(savableState));
+    saveDocumentMutation.mutate({
+      documentId: blockId,
+      text: JSON.stringify(savableState),
+    });
   }, 500);
 
   // flush save state after unblocking
-  const blockSave = useBlockSave();
   createEffect((prev) => {
     const blockSave_ = blockSave();
     // no save on load

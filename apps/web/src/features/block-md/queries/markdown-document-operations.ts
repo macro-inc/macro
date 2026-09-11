@@ -1,6 +1,7 @@
 import { utf8Encode } from '@core/util/string';
 import { refetchHistory } from '@queries/history/history';
 import { storageServiceClient } from '@service-storage/client';
+import { useMutation } from '@tanstack/solid-query';
 
 export async function loadMarkdownCachedSnapshot(
   documentId: string
@@ -9,7 +10,7 @@ export async function loadMarkdownCachedSnapshot(
   return result.isOk() ? result.value : undefined;
 }
 
-export async function saveMarkdownDocument(
+async function saveMarkdownDocument(
   documentId: string,
   text: string
 ): Promise<void> {
@@ -22,4 +23,11 @@ export async function saveMarkdownDocument(
     return;
   }
   await refetchHistory();
+}
+
+export function createSaveMarkdownDocumentMutation() {
+  return useMutation(() => ({
+    mutationFn: ({ documentId, text }: { documentId: string; text: string }) =>
+      saveMarkdownDocument(documentId, text),
+  }));
 }
