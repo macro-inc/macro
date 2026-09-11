@@ -293,13 +293,28 @@ function turnInFlightActivity(
   // The fold never derives a message with no parts, so an existing response
   // always has a latest part to describe.
   const latest = response.parts.at(-1);
-  return partActivity((blocked ?? runningTool ?? latest)!);
+  const part = (blocked ?? runningTool ?? latest)!;
+  const activity = partActivity(part);
+  if (blocked || runningTool) return activity;
+  if (
+    part.kind === 'tool_use' &&
+    part.detail.kind === 'user_tool' &&
+    part.detail.outcome.kind === 'pending'
+  ) {
+    return activity;
+  }
+  if (part.kind === 'thought' && part.text.trim()) return activity;
+  if (part.kind === 'text' && part.text.trim()) return activity;
+  // Open turn, nothing visibly in flight — a finished tool, an empty
+  // thought, a granted permission. Keep the chip working rather than
+  // settling on a still "Finished reading".
+  return { label: 'Working', busy: true };
 }
 
 /** The session's persisted lifecycle, when the fold has nothing livelier. */
 function statusActivity(status: MagicChipStatus): MagicChipActivity {
   return match(status)
-    .with('no_messages', () => ({ label: 'Starting session', busy: false }))
+    .with('no_messages', () => ({ label: 'Starting session', busy: true }))
     .with('booting', () => ({
       label: 'Booting agent',
       detail: 'Preparing workspace',

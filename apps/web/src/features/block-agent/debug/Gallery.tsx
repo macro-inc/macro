@@ -37,6 +37,7 @@ import {
   ToolCard,
   ToolErrorCard,
   ToolStatusTitle,
+  WorkingLine,
 } from '../ui';
 
 /**
@@ -632,6 +633,10 @@ export default function AgentUiGallery() {
             >
               <PierreDiff diffs={[FIXTURE_DIFF]} />
             </ToolCard>
+          </Item>
+
+          <Item label="WorkingLine">
+            <WorkingLine />
           </Item>
 
           <Item label="Thought (active / settled)">

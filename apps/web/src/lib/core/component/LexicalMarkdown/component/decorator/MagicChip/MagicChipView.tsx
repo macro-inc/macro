@@ -13,7 +13,6 @@ import {
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { PulsingStar } from '@entity/components/PulsingStar';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
 import ArrowsIn from '@phosphor/arrows-in.svg';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
@@ -258,17 +257,18 @@ const ChipHeader: Component<{
 
 /**
  * Holds the answer's space while the agent is busy writing nothing yet: the
- * chat's own waiting glyph. Once the agent is done (or waiting on the user)
- * with nothing said, the space stays empty rather than showing a still star.
+ * session's pulsing working dot, without the "Working..." label — that line
+ * is the session's. Once the agent is done (or waiting on the user) with
+ * nothing said, the space stays empty rather than showing a still glyph.
  */
 const AnswerPending: Component<{ busy: boolean }> = (props) => (
   <Show when={props.busy}>
     <div
-      class="flex h-full items-center justify-center"
+      class="flex h-full items-center justify-center text-ink-extra-muted"
       data-magic-chip-pending
       aria-hidden="true"
     >
-      <PulsingStar kind="streamIndicator" animate />
+      <span class="agent-working-dot size-[5px] rounded-full bg-current" />
     </div>
   </Show>
 );
@@ -327,7 +327,7 @@ const Question: Component<ChipAsking> = (props) => (
 /**
  * One card for the whole turn, at one height: a header naming the persona,
  * its model, and what the turn is doing (clicking it opens the session),
- * over an area that holds the agent's latest passage - a pulsing star while
+ * over an area that holds the agent's latest passage - a pulsing dot while
  * the agent is busy before it writes, the passage as it streams, the final
  * passage once the turn ends - or, while the agent waits on a question, the
  * question itself with its decisions on the row beneath. The area is cropped

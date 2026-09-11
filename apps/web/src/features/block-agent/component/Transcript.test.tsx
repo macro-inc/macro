@@ -8,6 +8,9 @@ import { Transcript } from './Transcript';
 const session = vi.hoisted(() => ({
   messages: () => [] as FoldedMessage[],
   quoteSelection: vi.fn(),
+  working: (): boolean => false,
+  blockedOnUser: (): boolean => false,
+  composer: { sending: (): boolean => false },
   touch: false,
   top: () => 40,
   bottom: (): number => 80,
@@ -89,6 +92,9 @@ beforeEach(() => {
   rowHeight = 96;
   session.touch = false;
   session.bottom = () => 80;
+  session.working = () => false;
+  session.blockedOnUser = () => false;
+  session.composer = { sending: () => false };
   vi.stubGlobal(
     'ResizeObserver',
     class {
