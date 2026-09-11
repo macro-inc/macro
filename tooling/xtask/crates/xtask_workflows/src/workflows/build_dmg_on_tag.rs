@@ -33,7 +33,7 @@ pub fn build_dmg_job(ref_expr: &str) -> Job {
         .runs_on("macos-15")
         .add_step(steps::checkout_ref(ref_expr))
         .add_step(assert_arm64())
-        .add_step(install_nix_macos())
+        .add_step(steps::install_nix_macos())
         .add_step(configure_signing_identity())
         .add_step(steps::derive_artifact_metadata(ref_expr))
         .add_step(nix_build_dmg())
@@ -58,12 +58,6 @@ fn assert_arm64() -> Step<Run> {
               exit 1
             fi
         "#})
-        .shell("bash")
-}
-
-fn install_nix_macos() -> Step<Run> {
-    Step::new("Install Nix")
-        .run(include_str!("scripts/install_nix_macos.sh"))
         .shell("bash")
 }
 

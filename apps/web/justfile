@@ -18,6 +18,17 @@ ios-build-no-update: ios-prepare
 ios-build: ios-prepare
     cd tauri/src-tauri && cargo tauri ios build --open
 
+# iOS: arm64 Simulator .app for the Appetize PR preview (the `ios_preview`
+# workflow). Simulator builds need no signing, and --no-default-features keeps
+# the bundle auto-updater off so a preview cannot quietly replace itself with
+# the production bundle.
+# Output: tauri/src-tauri/gen/apple/build/arm64-sim/macro.app
+ios-build-sim: ios-prepare
+    cd tauri/src-tauri && cargo tauri ios build \
+      --target aarch64-sim --debug --ci --no-sign -v \
+      --config '{"build":{"beforeBuildCommand":{"script":"just build-tauri-dev","cwd":"../.."}}}' \
+      -- --no-default-features
+
 # iOS generated project prep. Keep native bundle metadata in sync with
 # tauri.ios.conf.json, then prepare ignored local Swift dependencies.
 ios-prepare:
@@ -88,6 +99,15 @@ build-prod: build-cache-wasm build-agent-fold-wasm
 build-tauri: build-cache-wasm build-agent-fold-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
+    bun scripts/cache-wasm/cli.ts package-dist --dist dist
+    bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
+
+# As build-tauri, but MODE=development so the bundle talks to dev.macro.com.
+# Used by `ios-build-sim`: a PR preview must never be wired to production.
+[private]
+build-tauri-dev: build-cache-wasm build-agent-fold-wasm
+    printf development > tauri/src-tauri/.macro-tauri-env
+    MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
     bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
 

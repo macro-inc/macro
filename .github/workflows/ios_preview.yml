@@ -1,0 +1,172 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/ios_preview.rs
+name: iOS Preview
+'on':
+  pull_request:
+    types:
+    - labeled
+    - synchronize
+    - reopened
+    - closed
+  workflow_dispatch: {}
+jobs:
+  preview:
+    if: github.event_name == 'workflow_dispatch' || (github.event.action != 'closed' && contains(github.event.pull_request.labels.*.name, 'ios-preview') && github.event.pull_request.draft == false)
+    name: Build iOS simulator app and publish to Appetize
+    runs-on: nscloud-macos-sequoia-arm64-6x14
+    permissions:
+      contents: read
+      pull-requests: write
+    timeout-minutes: 90
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Install Nix
+      run: |
+        set -euo pipefail
+        if ! command -v nix >/dev/null 2>&1; then
+          curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+            --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+            sh -s -- install macos --no-confirm \
+            --extra-conf "experimental-features = nix-command flakes" \
+            --extra-conf "sandbox = false" \
+            --extra-conf "trusted-users = root runner"
+        fi
+        echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+        echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
+        export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+        export NIX_REMOTE=daemon
+        nix --version
+      shell: bash
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+    - id: build
+      name: Build iOS simulator app
+      run: |
+        set -euo pipefail
+
+        # Appetize streams iOS *Simulator* builds only (a device .ipa cannot be run), so
+        # this produces an unsigned arm64 simulator .app rather than anything
+        # installable on hardware.
+
+        # Probe the two things most likely to be missing on a fresh macOS runner. Both
+        # fail deep inside xcodebuild otherwise, tens of minutes in.
+        xcodebuild -version
+        if ! xcrun simctl list runtimes --json | grep -q '"isAvailable" : true'; then
+          echo "No available iOS simulator runtime on this runner." >&2
+          echo "Install one with: xcodebuild -downloadPlatform iOS" >&2
+          xcrun simctl list runtimes
+          exit 1
+        fi
+
+        # cargo-tauri, bun, just, wasm-pack and the pinned toolchain (which carries
+        # aarch64-apple-ios-sim, see rust-toolchain.toml) all come from the dev shell.
+        nix develop --command bash -euo pipefail -c '
+          bun install --frozen-lockfile
+          cd apps/web
+          just ios-build-sim
+        '
+
+        APP="apps/web/tauri/src-tauri/gen/apple/build/arm64-sim/macro.app"
+        if [ ! -d "$APP" ]; then
+          echo "Expected a simulator .app at $APP" >&2
+          find apps/web/tauri/src-tauri/gen/apple/build -maxdepth 3 -name '*.app' >&2 || true
+          exit 1
+        fi
+
+        # An iPhoneOS build would upload fine and then refuse to boot, so prove the SDK
+        # before handing it to Appetize.
+        if ! plutil -extract DTPlatformName raw "$APP/Info.plist" | grep -q iphonesimulator; then
+          echo "Built against the device SDK, not the simulator SDK:" >&2
+          plutil -extract DTPlatformName raw "$APP/Info.plist" >&2
+          exit 1
+        fi
+
+        # `ditto`, not `zip`: the Apple-supported way to archive a bundle, preserving
+        # the symlinks and exec bits that Appetize (and anyone re-running this locally)
+        # needs. The same archive is both the CI artifact and the upload payload.
+        mkdir -p artifacts
+        ditto -c -k --sequesterRsrc --keepParent "$APP" artifacts/macro-sim.zip
+      shell: bash
+    - name: Upload macro-ios-simulator-app artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: macro-ios-simulator-app
+        path: artifacts/macro-sim.zip
+        if-no-files-found: error
+        retention-days: '30'
+    - id: appetize
+      name: Publish to Appetize
+      if: github.event_name == 'pull_request'
+      run: |
+        PUBLIC_KEY=$(bun scripts/ios-preview/upload-appetize.ts \
+          --archive "../../$ARCHIVE_PATH" \
+          --pr "$PR_NUMBER" \
+          --repo "$REPO" \
+          --token "$GITHUB_TOKEN" \
+          --note "PR #$PR_NUMBER $SHA $BRANCH")
+        echo "public-key=$PUBLIC_KEY" >> $GITHUB_OUTPUT
+      shell: bash
+      env:
+        APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+        ARCHIVE_PATH: artifacts/macro-sim.zip
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        BRANCH: ${{ github.head_ref }}
+        SHA: ${{ github.event.pull_request.head.sha }}
+      working-directory: apps/web
+    - name: Comment on PR
+      if: github.event_name == 'pull_request'
+      run: |
+        bun scripts/ios-preview/post-ios-comment.ts \
+          --pr "$PR_NUMBER" \
+          --repo "$REPO" \
+          --token "$GITHUB_TOKEN" \
+          --public-key "$PUBLIC_KEY" \
+          --branch "$BRANCH" \
+          --sha "$SHA"
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PUBLIC_KEY: ${{ steps.appetize.outputs.public-key }}
+        BRANCH: ${{ github.head_ref }}
+        SHA: ${{ github.event.pull_request.head.sha }}
+      working-directory: apps/web
+  cleanup:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    name: Delete the PR's Appetize app
+    runs-on: namespace-profile-linux-tiny-no-cache
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+    - name: Delete Appetize app
+      run: |
+        bun scripts/ios-preview/upload-appetize.ts \
+          --pr "$PR_NUMBER" \
+          --repo "$REPO" \
+          --token "$GITHUB_TOKEN" \
+          --cleanup
+      shell: bash
+      env:
+        APPETIZE_API_TOKEN: ${{ secrets.APPETIZE_API_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      working-directory: apps/web
+concurrency:
+  group: ios-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
