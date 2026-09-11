@@ -223,7 +223,10 @@ export function createMagicChipModel(props: MagicChipData): {
   const header = createMemo((): MagicChipHeader | undefined => {
     const agent = agentName(session()?.harness);
     const model = modelName(metadata(), session());
-    return agent || model ? { agent, model } : undefined;
+    const pullRequestUrl = metadata()?.pullRequestUrl ?? undefined;
+    return agent || model || pullRequestUrl
+      ? { agent, model, pullRequestUrl }
+      : undefined;
   });
 
   return { presentation, header, elicitation };

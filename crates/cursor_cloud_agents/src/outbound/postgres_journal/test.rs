@@ -143,3 +143,109 @@ async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
     .await
     .unwrap();
 }
+
+/// A normal session-log writer must not invalidate the native journal.
+/// After contention, the journal must still check the committed generation.
+#[sqlx::test(migrations = false)]
+async fn contention_waits_then_checks_the_claim(pool: PgPool) {
+    sqlx::raw_sql(
+        "CREATE TABLE agent_session(id uuid PRIMARY KEY, manager_replica_id uuid, manager_fence bigint NOT NULL)",
+    ).execute(&pool).await.unwrap();
+    let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
+    let replica = ReplicaId::from_uuid(Uuid::from_u128(2));
+    sqlx::query!(
+        "INSERT INTO agent_session (id, manager_replica_id, manager_fence) VALUES ($1, $2, 1)",
+        session.as_uuid(),
+        replica.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let journal = PgCursorJournal::new(pool.clone(), session, replica);
+    journal.activate(session, replica, ManagerFence(1)).unwrap();
+
+    // A writer retaining the same claim can hold this lock legitimately.
+    let mut writer = pool.begin().await.unwrap();
+    sqlx::query!(
+        "UPDATE agent_session SET manager_fence = 1 WHERE id = $1",
+        session.as_uuid()
+    )
+    .execute(&mut *writer)
+    .await
+    .unwrap();
+    let acquiring = journal.begin_owned();
+    tokio::pin!(acquiring);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(100), &mut acquiring)
+            .await
+            .is_err()
+    );
+    writer.commit().await.unwrap();
+    acquiring
+        .await
+        .expect("same owner can continue after contention")
+        .commit()
+        .await
+        .unwrap();
+
+    // A takeover must be checked after it commits, not inferred from the lock.
+    let mut takeover = pool.begin().await.unwrap();
+    sqlx::query!(
+        "UPDATE agent_session SET manager_fence = 2 WHERE id = $1",
+        session.as_uuid()
+    )
+    .execute(&mut *takeover)
+    .await
+    .unwrap();
+    let acquiring = journal.begin_owned();
+    tokio::pin!(acquiring);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(100), &mut acquiring)
+            .await
+            .is_err()
+    );
+    takeover.commit().await.unwrap();
+    let error = acquiring.await.unwrap_err();
+    assert!(error.to_string().contains("writer fenced out"));
+}
+
+#[sqlx::test(migrations = false)]
+async fn persistent_contention_is_bounded_and_not_reported_as_a_takeover(pool: PgPool) {
+    sqlx::raw_sql(
+        "CREATE TABLE agent_session(id uuid PRIMARY KEY, manager_replica_id uuid, manager_fence bigint NOT NULL)",
+    ).execute(&pool).await.unwrap();
+    let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
+    let replica = ReplicaId::from_uuid(Uuid::from_u128(2));
+    sqlx::query!(
+        "INSERT INTO agent_session (id, manager_replica_id, manager_fence) VALUES ($1, $2, 1)",
+        session.as_uuid(),
+        replica.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let journal = PgCursorJournal::new(pool.clone(), session, replica);
+    journal.activate(session, replica, ManagerFence(1)).unwrap();
+    let mut writer = pool.begin().await.unwrap();
+    sqlx::query!(
+        "UPDATE agent_session SET manager_fence = 1 WHERE id = $1",
+        session.as_uuid()
+    )
+    .execute(&mut *writer)
+    .await
+    .unwrap();
+    let error = tokio::time::timeout(
+        OWNER_LOCK_TIMEOUT + Duration::from_secs(1),
+        journal.begin_owned(),
+    )
+    .await
+    .expect("contention must have a deadline")
+    .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("timed out waiting for the session lock")
+    );
+    writer.rollback().await.unwrap();
+    journal.begin_owned().await.unwrap().commit().await.unwrap();
+}

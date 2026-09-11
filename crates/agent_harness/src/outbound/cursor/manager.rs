@@ -19,7 +19,6 @@
 //! every entry point resolves the owner's key and mints a client for that one
 //! session. The manager holds only what a client is built from.
 
-use std::path::Path;
 use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::SessionId;
@@ -30,17 +29,18 @@ use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use cursor_cloud_agents::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice,
 };
-use cursor_cloud_agents::domain::ports::{CursorAgents, RepoResolver, RunStream};
+use cursor_cloud_agents::domain::ports::{CursorAgents, RunStream};
 use cursor_cloud_agents::domain::service::CursorSessionService;
 use cursor_cloud_agents::inbound::acp::{AcpNotifier, serve};
 use futures::Stream;
 
 use super::keys::CursorApiKeys;
 use super::pipe::PipeTransport;
+use super::repository_chooser::HaikuRepositoryChooser;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
 use crate::domain::pending::PendingCommands;
-use crate::domain::ports::ContainerManager;
+use crate::domain::ports::{ContainerManager, ReachableRepositories};
 use crate::domain::sandbox::SandboxResizeEffect;
 use agent_session::domain::model::SandboxSize;
 
@@ -108,30 +108,35 @@ fn interval_from_now(every: std::time::Duration) -> tokio::time::Interval {
     ticker
 }
 
-/// Every session this deployment opens works on the one configured
-/// repository, resolved without looking at the workspace path — the path
-/// names a directory inside a sandbox that does not exist here.
-#[derive(Clone, Debug)]
-struct FixedRepo(CursorRepoUrl);
-
-impl RepoResolver for FixedRepo {
-    fn resolve(&self, _cwd: &Path) -> Option<CursorRepoUrl> {
-        Some(self.0.clone())
-    }
-}
-
 /// Hands out Cursor cloud agents.
+///
+/// There is no deployment repository here either: a session's repository is
+/// chosen from its first prompt, per session and per owner, which is what the
+/// [`HaikuRepositoryChooser`] built in [`Self::serve_session`] answers. The
+/// manager holds only what building one takes.
 #[derive(Clone)]
-pub struct CursorContainerManager<Sessions, Keys> {
+pub struct CursorContainerManager<Sessions, Keys, Repositories> {
     keys: Keys,
     base_url: String,
-    repo: CursorRepoUrl,
     sessions: Sessions,
+    repositories: Arc<Repositories>,
+    usage: Arc<dyn ai_usage::UsageRecorder>,
     journal_storage: JournalStorage,
     /// Sessions the harness has a command in flight for right now, shared
     /// with `AgentHarnessService` so the idle reaper below never closes a
     /// pipe a command is already on its way to.
     pending: PendingCommands,
+}
+
+/// Where a hosted session's journal lives: the pool it is written to and the
+/// replica claiming its rows. Passed as one value so the manager's constructor
+/// takes a journal rather than its two halves.
+#[derive(Clone)]
+pub struct PostgresJournal {
+    /// The pool session-log rows are written to.
+    pub pool: sqlx::PgPool,
+    /// The replica claiming those rows.
+    pub replica: ReplicaId,
 }
 
 /// Hosted sessions always use durable storage; tests select memory explicitly.
@@ -161,27 +166,32 @@ struct RestoredCursorSession {
     last_run: Option<CursorRunId>,
 }
 
-impl<Sessions, Keys> CursorContainerManager<Sessions, Keys>
+impl<Sessions, Keys, Repositories> CursorContainerManager<Sessions, Keys, Repositories>
 where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
     Keys: CursorApiKeys,
+    Repositories: ReachableRepositories,
 {
     /// Build a manager with required durable journal storage and replica identity.
     pub fn new(
         keys: Keys,
         base_url: String,
-        repo: CursorRepoUrl,
         sessions: Sessions,
-        pool: sqlx::PgPool,
-        replica: ReplicaId,
+        repositories: Arc<Repositories>,
+        usage: Arc<dyn ai_usage::UsageRecorder>,
+        journal: PostgresJournal,
         pending: PendingCommands,
     ) -> Self {
         Self {
             keys,
             base_url,
-            repo,
             sessions,
-            journal_storage: JournalStorage::Postgres { pool, replica },
+            repositories,
+            usage,
+            journal_storage: JournalStorage::Postgres {
+                pool: journal.pool,
+                replica: journal.replica,
+            },
             pending,
         }
     }
@@ -190,14 +200,15 @@ where
     fn with_memory_journal(
         keys: Keys,
         base_url: String,
-        repo: CursorRepoUrl,
         sessions: Sessions,
+        repositories: Arc<Repositories>,
     ) -> Self {
         Self {
             keys,
             base_url,
-            repo,
             sessions,
+            repositories,
+            usage: Arc::new(ai_usage::NoOpUsageRecorder),
             journal_storage: JournalStorage::Memory,
             pending: PendingCommands::new(),
         }
@@ -238,9 +249,10 @@ where
         &self,
         client: CursorClient,
         default_model_id: Option<String>,
-        session_id: AgentSessionId,
+        session: &AgentSession,
         restore: Option<RestoredCursorSession>,
     ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
+        let session_id = session.id;
         let owner_binding: Option<agent_session::domain::connection::AttachmentActivation>;
         let journal: Arc<dyn cursor_cloud_agents::domain::journal::CursorJournal> = match &self
             .journal_storage
@@ -284,20 +296,26 @@ where
         // The user's chosen model seeds the session as its default: a fresh
         // session starts on it, and a resumed one still prefers whatever it
         // was actually last using (carried in `restore.model_id`) over this.
+        let chooser = HaikuRepositoryChooser::new(
+            Arc::clone(&self.repositories),
+            self.sessions.clone(),
+            Arc::clone(&self.usage),
+            session.owner_id.clone(),
+            session_id,
+        );
         let service = Arc::new(
-            CursorSessionService::new(
-                cursor,
-                notifier.clone(),
-                FixedRepo(self.repo.clone()),
-                journal,
-            )
-            .with_default_model(default_model_id),
+            CursorSessionService::new(cursor, notifier.clone(), chooser, journal)
+                .with_default_model(default_model_id),
         );
         if let Some(restored) = restore {
             service.restore_session_with_watermark(
                 restored.acp_session,
                 restored.agent,
-                Some(self.repo.clone()),
+                // The repository this session's first prompt chose, read back
+                // from the row the chooser wrote it to. There is no
+                // deployment default to fall back on, and a restored session
+                // must land on the repository its agent was minted against.
+                session.repo_url.as_deref().and_then(CursorRepoUrl::parse),
                 restored.model_id,
                 restored.last_run,
             );
@@ -412,10 +430,12 @@ where
     }
 }
 
-impl<Sessions, Keys> ContainerManager for CursorContainerManager<Sessions, Keys>
+impl<Sessions, Keys, Repositories> ContainerManager
+    for CursorContainerManager<Sessions, Keys, Repositories>
 where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
     Keys: CursorApiKeys,
+    Repositories: ReachableRepositories,
 {
     type Transport = PipeTransport;
 
@@ -433,7 +453,7 @@ where
         // itself. The harness's session actor names them in `session/new`,
         // and the in-process adapter forwards them to Cursor's API - the same
         // rail every other transport uses.
-        self.serve_session(client, default_model_id, command.session_id, None)
+        self.serve_session(client, default_model_id, &session, None)
             .await
     }
 
@@ -480,7 +500,7 @@ where
         // died with the process (only its hash is persisted). The one session
         // this loses servers for is one restored before its first prompt ever
         // landed, which then creates its agent bare rather than not at all.
-        self.serve_session(client, default_model_id, session, restore)
+        self.serve_session(client, default_model_id, &stored, restore)
             .await
     }
 
@@ -572,12 +592,13 @@ where
         &self,
         prompt: &str,
         repo: Option<&CursorRepoUrl>,
+        open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
     ) -> std::result::Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         let (agent, run) = self
             .client
-            .create_agent(prompt, repo, mcp_servers, model)
+            .create_agent(prompt, repo, open_pull_request, mcp_servers, model)
             .await?;
         let summary = self
             .client

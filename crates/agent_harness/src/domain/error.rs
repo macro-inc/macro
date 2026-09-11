@@ -66,6 +66,11 @@ pub enum HarnessError {
     /// Forwarding a command to the session's managing replica failed.
     #[error("failed to forward an agent session command: {0}")]
     Forward(rootcause::Report),
+    /// The repositories a user reaches through the GitHub App could not be
+    /// listed. Its own variant because the failure is GitHub's, not ours: the
+    /// App's credentials, an installation record, or a call to github.com.
+    #[error("failed to list reachable repositories: {0}")]
+    Repositories(rootcause::Report),
     /// A bot's persisted agent runtime configuration could not be loaded.
     #[error("failed to resolve agent runtime configuration: {0}")]
     RuntimeDirectory(rootcause::Report),

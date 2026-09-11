@@ -23,8 +23,16 @@ fn documented_events_decode() {
             status: RunStatus::Finished,
             text: Some("done".to_owned()),
             duration_ms: Some(12),
+            git: None,
         }
     );
+
+    // A result without `git` still decodes; degrading to Unknown here would
+    // lose the run's terminal status.
+    assert!(matches!(
+        CursorEvent::from_wire("result", json!({"runId": "run-1", "status": "FINISHED"})),
+        CursorEvent::Result { git: None, .. }
+    ));
 
     assert_eq!(
         CursorEvent::from_wire("heartbeat", json!({})),
@@ -129,4 +137,46 @@ fn an_unexpected_truncation_shape_costs_only_the_flag() {
         assert!(!call.truncated.result);
         assert!(!call.truncated.args);
     }
+}
+
+/// The terminal result carries the branch Cursor pushed and, when the agent
+/// was created with `autoCreatePR`, the pull request it opened.
+#[test]
+fn a_result_carries_its_git_branches() {
+    let result = CursorEvent::from_wire(
+        "result",
+        json!({
+            "runId": "run-1",
+            "status": "FINISHED",
+            "text": "done",
+            "durationMs": 3667,
+            "git": {"branches": [
+                {
+                    "repoUrl": "github.com/macro-inc/macro",
+                    "branch": "cursor/single-word-output-70ef",
+                    "prUrl": "https://github.com/macro-inc/macro/pull/123",
+                },
+                { "repoUrl": "github.com/macro-inc/other" },
+            ]},
+        }),
+    );
+
+    let CursorEvent::Result { git: Some(git), .. } = result else {
+        panic!("expected a result with git state, got {result:?}");
+    };
+    assert_eq!(
+        git.branches,
+        vec![
+            GitBranch {
+                repo_url: "github.com/macro-inc/macro".to_owned(),
+                branch: Some("cursor/single-word-output-70ef".to_owned()),
+                pr_url: Some("https://github.com/macro-inc/macro/pull/123".to_owned()),
+            },
+            GitBranch {
+                repo_url: "github.com/macro-inc/other".to_owned(),
+                branch: None,
+                pr_url: None,
+            },
+        ]
+    );
 }

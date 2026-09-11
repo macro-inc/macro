@@ -6,10 +6,11 @@ use crate::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunListing,
     RunOutcome,
 };
-use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
+use crate::domain::ports::{
+    CursorAgents, RepositoryChooser, RunStream, SessionIntent, SessionNotifier,
+};
 use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
@@ -82,9 +83,10 @@ pub fn raw_record(event: CursorEvent) -> NativeRecord {
             status,
             text,
             duration_ms,
+            git,
         } => (
             "result".into(),
-            json!({"runId": run_id, "status": status, "text": text, "durationMs": duration_ms}),
+            json!({"runId": run_id, "status": status, "text": text, "durationMs": duration_ms, "git": git}),
         ),
         CursorEvent::Heartbeat => ("heartbeat".into(), json!({})),
         CursorEvent::Error { code, message } => {
@@ -118,8 +120,14 @@ impl ScriptSender {
 /// What a [`FakeCursor`] was asked to do.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CursorCall {
-    /// `create_agent(prompt, repo, mcp_servers, model)`.
-    CreateAgent(String, Option<RepoUrl>, Vec<McpServer>, Option<ModelChoice>),
+    /// `create_agent(prompt, repo, open_pull_request, mcp_servers, model)`.
+    CreateAgent(
+        String,
+        Option<RepoUrl>,
+        bool,
+        Vec<McpServer>,
+        Option<ModelChoice>,
+    ),
     /// `create_run(agent, prompt, model)`.
     CreateRun(CursorAgentId, String, Option<ModelChoice>),
     /// `cancel_run(agent, run)`.
@@ -154,6 +162,7 @@ struct FakeCursorState {
     models: Vec<CursorModel>,
     model_gate: Option<tokio::sync::oneshot::Receiver<()>>,
     reject_create: bool,
+    reject_create_for_repository: bool,
 }
 
 impl FakeCursor {
@@ -223,6 +232,12 @@ impl FakeCursor {
     /// Reject the next create with a definite provider rejection.
     pub fn script_rejection(&self) {
         self.inner.lock().unwrap().reject_create = true;
+    }
+
+    /// Reject the next `create_agent` the way Cursor rejects a repository the
+    /// account has never connected.
+    pub fn script_repository_rejection(&self) {
+        self.inner.lock().unwrap().reject_create_for_repository = true;
     }
 
     /// Set the models `list_models` answers with.
@@ -296,17 +311,31 @@ impl CursorAgents for FakeCursor {
         &self,
         prompt: &str,
         repo: Option<&RepoUrl>,
+        open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
     ) -> Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         self.record(CursorCall::CreateAgent(
             prompt.to_owned(),
             repo.cloned(),
+            open_pull_request,
             mcp_servers.to_vec(),
             model.cloned(),
         ));
         self.await_create_gate().await;
         let mut state = self.inner.lock().expect("fake cursor poisoned");
+        if std::mem::take(&mut state.reject_create_for_repository)
+            && let Some(repo) = repo
+        {
+            return Err(rootcause::report!(
+                crate::domain::error::RepositoryUnavailable {
+                    repo: repo.clone(),
+                    detail: r#"{"error":{"code":"repository_access","message":"Repository not accessible"}}"#
+                        .into(),
+                }
+            )
+            .into_dynamic());
+        }
         if std::mem::take(&mut state.reject_create) {
             return Err(rootcause::report!(crate::domain::error::PromptRejected(
                 "rejected".into()
@@ -507,13 +536,17 @@ impl SessionNotifier for RecordingNotifier {
     }
 }
 
-/// Resolves every session to the same repository — or none.
+/// Answers every prompt with the same repository — or none — and the same
+/// pull-request decision.
 #[derive(Debug, Clone, Default)]
-pub struct FixedRepos(pub Option<RepoUrl>);
+pub struct FixedChooser(pub Option<RepoUrl>, pub bool);
 
-impl RepoResolver for FixedRepos {
-    fn resolve(&self, _cwd: &Path) -> Option<RepoUrl> {
-        self.0.clone()
+impl RepositoryChooser for FixedChooser {
+    async fn choose(&self, _prompt: &str) -> Result<SessionIntent, rootcause::Report> {
+        Ok(SessionIntent {
+            repository: self.0.clone(),
+            open_pull_request: self.1,
+        })
     }
 }
 
@@ -535,6 +568,7 @@ pub fn script_legacy_history(cursor: &FakeCursor) {
         status: RunStatus::Finished,
         text: None,
         duration_ms: None,
+        git: None,
     })
     .unwrap();
     tx.send(CursorEvent::Done).unwrap();

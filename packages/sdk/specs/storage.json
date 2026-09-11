@@ -8900,6 +8900,86 @@
         }
       }
     },
+    "/foreign_entity/by_source/{source}/{foreign_entity_id}": {
+      "get": {
+        "tags": ["foreign_entity"],
+        "summary": "Get a visible foreign entity by the identifier its source system assigned.",
+        "description": "`foreign_entity_id` is a wildcard path segment: sources store slashes inside\nthe identifier, for example `owner/repo/pull/12`.\n\nAuthorization matches the by-id route. Internal service callers see every\nrecord; an authenticated user sees a record only when they have view access\nto it, and records they cannot view are reported as `404` so the route never\nreveals that a mapping exists. Bot tokens are not accepted here — they use\nthe by-id route, which mints a bot-scoped receipt.",
+        "operationId": "get_foreign_entity_by_source",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "description": "Foreign entity source, e.g. github_pull_request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "foreign_entity_id",
+            "in": "path",
+            "description": "Identifier assigned by the source system; may contain slashes",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForeignEntity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/foreign_entity/{id}": {
       "get": {
         "tags": ["foreign_entity"],

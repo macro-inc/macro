@@ -29,6 +29,20 @@ pub enum CommandTarget {
     Harness(HarnessId),
 }
 
+/// The repositories a user can reach through Macro's GitHub App.
+///
+/// A port rather than the `github` crate's service directly, so the harness
+/// states what it needs - a list of repository urls for one user - without the
+/// installation records, App credentials and HTTP client that answering it
+/// takes. Reaching nothing is an empty list, not an error.
+pub trait ReachableRepositories: Send + Sync + 'static {
+    /// Every repository `user` reaches, as `https://github.com/owner/name`.
+    fn for_user(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<String>>> + Send;
+}
+
 /// Forwards commands to the replica currently responsible for execution.
 pub trait CommandForwarder: Send + Sync + 'static {
     /// Run `command` at `target`.

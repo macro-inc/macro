@@ -10,8 +10,8 @@ use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
     AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    ExternalSession, ManagerFence, Message, ReplicaAddress, ReplicaId, SandboxSize, SessionBot,
-    SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    ExternalSession, ManagerFence, Message, RecentAgentSession, ReplicaAddress, ReplicaId,
+    SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -32,6 +32,7 @@ use entity_access_db_utils::{
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use sqlx::PgPool;
+use std::num::NonZeroUsize;
 
 /// Postgres implementation of [`AgentSessionRepo`] and [`AgentSessionLogRepo`].
 #[derive(Debug, Clone)]
@@ -573,6 +574,38 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             .collect::<anyhow::Result<Vec<_>>>()?)
     }
 
+    async fn recent_for_owner(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        limit: NonZeroUsize,
+    ) -> Result<Vec<RecentAgentSession>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, name, harness, repo_url, created_at
+            FROM agent_session
+            WHERE owner_id = $1
+            ORDER BY created_at DESC, id DESC
+            LIMIT $2
+            "#,
+            owner.as_ref(),
+            i64::try_from(limit.get()).unwrap_or(i64::MAX),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list the owner's recent agent sessions")?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| RecentAgentSession {
+                id: AgentSessionId::new_from_uuid(row.id),
+                name: row.name,
+                harness: row.harness,
+                repo_url: row.repo_url,
+                created_at: row.created_at,
+            })
+            .collect())
+    }
+
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
         // Delegated to the bots hex rather than a bespoke query: this is
         // exactly bot id -> bot, and `get_bot` already excludes deleted bots -
@@ -623,6 +656,25 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         if result.rows_affected() == 0 {
             return Err(anyhow::anyhow!("agent session not found").into());
         }
+        Ok(())
+    }
+
+    async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET repo_url = $2,
+                modified_at = NOW()
+            WHERE id = $1
+              AND repo_url IS DISTINCT FROM $2
+            "#,
+            id.as_uuid(),
+            repo_url,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist agent session repository")?;
+        tracing::debug!(%id, changed = result.rows_affected() > 0, "agent session repository set");
         Ok(())
     }
 

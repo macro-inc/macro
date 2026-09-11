@@ -44,14 +44,13 @@ use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMa
 use crate::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunStatus,
 };
-use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
+use crate::domain::ports::{CursorAgents, RepositoryChooser, RunStream, SessionNotifier};
 use agent_client_protocol::schema::v1::{
     ContentBlock, SessionId, SessionUpdate, StopReason, TextContent,
 };
 use futures::StreamExt as _;
 use futures::pin_mut;
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 /// How often the fallback poll asks after a run's outcome.
@@ -76,6 +75,9 @@ const STREAM_QUIET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs
 /// How long a prompt waits behind a run something else started (the same
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
+
+/// Recovery must yield the writer gate even if the provider keeps heartbeating.
+const BACKFILL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 #[derive(Clone, Copy)]
 struct IngestMode {
@@ -112,10 +114,54 @@ async fn sleep_unless_cancelled(
     }
 }
 
+/// Restate a repository rejection as something the person who prompted can
+/// act on, leaving every other failure exactly as it arrived.
+///
+/// The result is a [`SessionError::Rejected`], so it takes the same path a
+/// [`PromptRejected`](crate::domain::error::PromptRejected) already takes:
+/// the prompt is journalled as aborted and the message travels to the client
+/// as the `session/prompt` error. Cursor's own body stays in the tracing event —
+/// it names codes and ids that mean nothing to a reader of the chip.
+fn explain_repository_rejection(error: SessionError) -> SessionError {
+    let SessionError::Cursor(report) = &error else {
+        return error;
+    };
+    let Some(unavailable) =
+        report.downcast_current_context::<crate::domain::error::RepositoryUnavailable>()
+    else {
+        return error;
+    };
+    tracing::warn!(
+        repo = %unavailable.repo,
+        detail = %unavailable.detail,
+        "cursor rejected the prompt: the repository is not connected to this cursor account"
+    );
+    SessionError::Rejected(unavailable.user_message())
+}
+
+/// Whether a failed create is a definite refusal — the prompt never ran, so
+/// it is journalled as aborted rather than left as an accepted turn.
+fn is_prompt_rejection(error: &SessionError) -> bool {
+    match error {
+        SessionError::Rejected(_) => true,
+        SessionError::Cursor(report) => report
+            .downcast_current_context::<crate::domain::error::PromptRejected>()
+            .is_some(),
+        _ => false,
+    }
+}
+
 /// One session's mutable state. Guarded by a std mutex: every critical
 /// section is a handful of field reads/writes, never an await.
 #[derive(Debug, Default)]
 struct SessionState {
+    /// The repository this session works on, once the first prompt chose one.
+    ///
+    /// Mutable, and that is the point: a fresh session has no repository until
+    /// its first prompt is read, and a restored one carries back whatever that
+    /// prompt chose. Still needed after the agent exists - Cursor fixed the
+    /// repository at creation, and a restore has to hand the same one back.
+    repo: Option<RepoUrl>,
     /// The Cursor agent, once the first prompt has minted it.
     agent: Option<CursorAgentId>,
     /// The run currently streaming, so cancel knows what to cancel.
@@ -168,9 +214,6 @@ struct SessionState {
 /// A session shared between a streaming turn and a concurrent cancel.
 #[derive(Debug)]
 struct Session {
-    /// Resolved when the session opened; used when the first prompt creates
-    /// the agent.
-    repo: Option<RepoUrl>,
     /// The model id this session was using before the process restarted, when
     /// it was restored and had one. An id rather than a [`ModelChoice`]: only
     /// the id is persisted, and its params must be re-resolved against the
@@ -190,11 +233,11 @@ struct Session {
 
 /// The service behind the ACP handlers.
 #[derive(Debug)]
-pub struct CursorSessionService<Cursor, Notifier, Repos> {
+pub struct CursorSessionService<Cursor, Notifier, Chooser> {
     journal: Arc<dyn CursorJournal>,
     cursor: Cursor,
     notifier: Notifier,
-    repos: Repos,
+    chooser: Chooser,
     sessions: Mutex<HashMap<SessionId, Arc<Session>>>,
     /// Monotonic counter for minting session ids without a clock or RNG.
     next_session: Mutex<u64>,
@@ -206,24 +249,24 @@ pub struct CursorSessionService<Cursor, Notifier, Repos> {
     models: tokio::sync::Mutex<Option<Vec<CursorModel>>>,
 }
 
-impl<Cursor, Notifier, Repos> CursorSessionService<Cursor, Notifier, Repos>
+impl<Cursor, Notifier, Chooser> CursorSessionService<Cursor, Notifier, Chooser>
 where
     Cursor: CursorAgents + RunStream,
     Notifier: SessionNotifier,
-    Repos: RepoResolver,
+    Chooser: RepositoryChooser,
 {
     /// Wire the service to its ports.
     pub fn new(
         cursor: Cursor,
         notifier: Notifier,
-        repos: Repos,
+        chooser: Chooser,
         journal: Arc<dyn CursorJournal>,
     ) -> Self {
         Self {
             journal,
             cursor,
             notifier,
-            repos,
+            chooser,
             sessions: Mutex::new(HashMap::new()),
             next_session: Mutex::new(0),
             default_model_id: None,
@@ -242,21 +285,14 @@ where
         self
     }
 
-    /// Open a session for a client working at `cwd`.
+    /// Open a session.
     ///
-    /// The repository is resolved now rather than at first prompt so the
-    /// warning about an unlisted (repo-less) session surfaces at `session/new`
-    /// time, when the user can still do something about it.
-    pub fn new_session(&self, cwd: &Path, mcp_servers: Vec<McpServer>) -> SessionId {
-        let repo = self.repos.resolve(cwd);
-        if repo.is_none() {
-            tracing::warn!(
-                cwd = %cwd.display(),
-                "no repository resolved - this session will not appear in the Cursor sessions list"
-            );
-        }
+    /// No repository is chosen here: a session's repository follows from what
+    /// its first prompt asks for, and there is no prompt yet. `session/new`
+    /// carries a `cwd`, but for a hosted session that path names a directory
+    /// inside a sandbox that does not exist.
+    pub fn new_session(&self, mcp_servers: Vec<McpServer>) -> SessionId {
         let session = Arc::new(Session {
-            repo,
             restored_model_id: None,
             turn_gate: Arc::new(tokio::sync::Mutex::new(())),
             state: Mutex::new(SessionState {
@@ -612,17 +648,48 @@ where
                     .expect("session state poisoned")
                     .mcp_servers
                     .clone();
-                self.cursor
-                    .create_agent(prompt, session.repo.as_ref(), &mcp_servers, model.as_ref())
-                    .await
-                    .map_err(SessionError::from)
+                // The first prompt is the only evidence there is for which
+                // repository this session belongs to, and Cursor fixes an
+                // agent's repository at creation - so the decision is made
+                // here, before the agent exists, and never revisited.
+                match self.chooser.choose(prompt).await {
+                    Ok(intent) => {
+                        session.state.lock().expect("session state poisoned").repo =
+                            intent.repository.clone();
+                        if intent.repository.is_none() {
+                            tracing::warn!(
+                                "no repository chosen - this session will not appear in the Cursor sessions list"
+                            );
+                        }
+                        self.cursor
+                            .create_agent(
+                                prompt,
+                                intent.repository.as_ref(),
+                                intent.open_pull_request,
+                                &mcp_servers,
+                                model.as_ref(),
+                            )
+                            .await
+                            .map_err(SessionError::from)
+                    }
+                    // A chooser that cannot answer fails the prompt rather
+                    // than falling back to some default repository: an agent
+                    // minted against the wrong repository would open its pull
+                    // request there, which no later correction undoes.
+                    Err(error) => {
+                        tracing::warn!(error = ?error, "could not choose a repository for this session");
+                        Err(SessionError::Rejected(
+                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection."
+                                .to_owned(),
+                        ))
+                    }
+                }
             }
         };
-        let (agent, run) = match created {
+        let (agent, run) = match created.map_err(explain_repository_rejection) {
             Ok(created) => created,
             Err(error) => {
-                if matches!(&error, SessionError::Cursor(report) if report.downcast_current_context::<crate::domain::error::PromptRejected>().is_some())
-                {
+                if is_prompt_rejection(&error) {
                     self.capture(
                         session_id,
                         &session,
@@ -861,10 +928,10 @@ where
         // hand over — the list belongs to the ACP client, and the client
         // restates it on `session/load`, which is where it re-enters.
         let session = Arc::new(Session {
-            repo,
             restored_model_id: model_id,
             turn_gate: Arc::new(tokio::sync::Mutex::new(())),
             state: Mutex::new(SessionState {
+                repo,
                 agent,
                 last_run,
                 ..SessionState::default()
@@ -1296,6 +1363,35 @@ where
         agent: &CursorAgentId,
         current_run: Option<&CursorRunId>,
     ) -> Result<bool, SessionError> {
+        match tokio::time::timeout(
+            BACKFILL_TIMEOUT,
+            self.backfill_available_runs(session_id, session, agent, current_run),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => {
+                // A cancelled append may have committed. Reload durable state
+                // before the next attempt instead of trusting its local cursor.
+                session
+                    .state
+                    .lock()
+                    .expect("session state poisoned")
+                    .journal_loaded = false;
+                Err(SessionError::Rejected(
+                    "Cursor history synchronization timed out. Please retry your message.".into(),
+                ))
+            }
+        }
+    }
+
+    async fn backfill_available_runs(
+        &self,
+        session_id: &SessionId,
+        session: &Session,
+        agent: &CursorAgentId,
+        current_run: Option<&CursorRunId>,
+    ) -> Result<bool, SessionError> {
         self.ensure_journal(session_id, session).await?;
         let last = session
             .state
@@ -1339,6 +1435,15 @@ where
             if current_run != Some(&listing.id)
                 && (pending.contains(&listing.id) || newer.contains(&listing.id))
             {
+                if !reconciled.contains(&listing.id)
+                    && matches!(listing.status, RunStatus::Creating)
+                {
+                    tracing::warn!(%session_id, %agent, run = %listing.id, status = ?listing.status,
+                        "Cursor history blocked by an unfinished run");
+                    return Err(SessionError::Rejected(
+                        "Cursor is still starting or running an earlier request. Stop that run, then retry your message.".into(),
+                    ));
+                }
                 runs.push(listing.id);
             }
         }

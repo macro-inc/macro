@@ -428,6 +428,14 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.session_bot(id).await
     }
 
+    async fn recent_for_owner(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        limit: std::num::NonZeroUsize,
+    ) -> Result<Vec<crate::domain::model::RecentAgentSession>> {
+        self.repo.recent_for_owner(owner, limit).await
+    }
+
     async fn find_by_egress_token_hash(
         &self,
         egress_token_hash: &str,
@@ -453,6 +461,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         acp_session_id: SessionId,
     ) -> Result<()> {
         self.repo.set_acp_session_id(id, acp_session_id).await
+    }
+
+    async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
+        self.repo.set_repo_url(id, repo_url).await
     }
 
     async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {

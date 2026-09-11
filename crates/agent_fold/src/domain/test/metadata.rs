@@ -238,6 +238,38 @@ fn session_info_updates_set_and_clear_the_title() {
     assert_eq!(machine.metadata().title, None);
 }
 
+#[test]
+fn a_session_info_update_carrying_cursors_pull_request_sets_it() {
+    let update = |body: &str| {
+        format!(
+            r#"{{"direction":"to_server","content":{{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{{"sessionId":"s1","update":{{"sessionUpdate":"session_info_update"{body}}}}}}}}}"#
+        )
+    };
+    let mut machine = FoldMachineImpl::new();
+    let url = "https://github.com/macro-inc/macro/pull/6303";
+    let announced = format!(r#","_meta":{{"cursor":{{"pullRequestUrl":"{url}"}}}}"#);
+
+    assert_eq!(drive(&mut machine, &update(&announced)), 1);
+    assert_eq!(machine.metadata().pull_request_url.as_deref(), Some(url));
+
+    // Restated: nothing to report. A title alone leaves it standing.
+    assert_eq!(drive(&mut machine, &update(&announced)), 0);
+    assert_eq!(
+        drive(&mut machine, &update(r#","title":"Fix the tests""#)),
+        1
+    );
+    assert_eq!(machine.metadata().pull_request_url.as_deref(), Some(url));
+
+    // Someone else's namespace is no information.
+    assert_eq!(
+        drive(
+            &mut machine,
+            &update(r#","_meta":{"claude":{"pullRequestUrl":"x"}}"#)
+        ),
+        0
+    );
+}
+
 /// Request ids restart per connection. A set-config left unanswered by a dead
 /// connection must not swallow a new connection's response that reuses its id.
 #[test]

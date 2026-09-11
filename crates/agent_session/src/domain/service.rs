@@ -1188,6 +1188,14 @@ where
         self.repo.session_bot(id).await
     }
 
+    async fn recent_for_owner(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        limit: std::num::NonZeroUsize,
+    ) -> Result<Vec<super::model::RecentAgentSession>> {
+        self.repo.recent_for_owner(owner, limit).await
+    }
+
     async fn find_for_channel(
         &self,
         thread_id: Option<Uuid>,
@@ -1206,6 +1214,10 @@ where
         acp_session_id: SessionId,
     ) -> Result<()> {
         self.repo.set_acp_session_id(id, acp_session_id).await
+    }
+
+    async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
+        self.repo.set_repo_url(id, repo_url).await
     }
 
     async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {

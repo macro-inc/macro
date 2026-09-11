@@ -8786,6 +8786,59 @@ export const removeFavoriteByEntityResponseDefault = null;
 export const removeFavoriteByEntityResponse = zod.unknown();
 
 /**
+ * `foreign_entity_id` is a wildcard path segment: sources store slashes inside
+the identifier, for example `owner/repo/pull/12`.
+
+Authorization matches the by-id route. Internal service callers see every
+record; an authenticated user sees a record only when they have view access
+to it, and records they cannot view are reported as `404` so the route never
+reveals that a mapping exists. Bot tokens are not accepted here — they use
+the by-id route, which mints a bot-scoped receipt.
+ * @summary Get a visible foreign entity by the identifier its source system assigned.
+ */
+export const getForeignEntityBySourceParams = zod.object({
+  source: zod
+    .string()
+    .describe('Foreign entity source, e.g. github_pull_request'),
+  foreign_entity_id: zod
+    .string()
+    .describe('Identifier assigned by the source system; may contain slashes'),
+});
+
+export const getForeignEntityBySourceResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was created.'),
+    foreignEntityId: zod
+      .string()
+      .describe('Identifier assigned by the external system.'),
+    foreignEntitySource: zod
+      .string()
+      .describe('Source system that owns the external identifier.'),
+    id: zod
+      .uuid()
+      .describe('Internal primary key for this foreign entity record.'),
+    metadata: zod
+      .unknown()
+      .describe('Arbitrary metadata stored with the mapping.'),
+    storedForAuthEntity: zod
+      .string()
+      .describe(
+        'Internal auth entity namespace this foreign entity is stored for.'
+      ),
+    storedForId: zod
+      .string()
+      .describe(
+        'Internal entity identifier this foreign entity is stored for.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was last updated.'),
+  })
+  .describe('A persisted mapping to an entity owned by an external system.');
+
+/**
  * @summary Get a visible foreign entity by its internal ID.
  */
 export const getForeignEntityParams = zod.object({

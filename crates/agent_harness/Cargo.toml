@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+agent = { path = "../agent" }
 agent-client-protocol = { workspace = true }
 # The session-token claim shape and its signing, so the harness and the proxy
 # cannot disagree about what a token says.
@@ -13,6 +14,7 @@ agent_fold = { path = "../agent_fold" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 agent_trigger = { path = "../agent_trigger" }
+ai_usage = { path = "../ai_usage" }
 cursor_api_key = { path = "../cursor_api_key" }
 cursor_cloud_agents = { path = "../cursor_cloud_agents" }
 entity_access = { path = "../entity_access" }
@@ -28,6 +30,13 @@ channels = { path = "../channels", features = ["ports"] }
 lexical_client = { path = "../lexical_client" }
 dashmap = { workspace = true }
 futures = { workspace = true }
+# The installation records that say which repositories a user can reach, so a
+# Cursor session's first prompt has a list to choose from.
+github = { path = "../github", default-features = false, features = [
+  "outbound",
+  "ports",
+  "sync",
+] }
 kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
 pipedream_mcp = { path = "../pipedream_mcp" }

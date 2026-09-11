@@ -152,6 +152,14 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never routes channel events")
     }
 
+    async fn recent_for_owner(
+        &self,
+        _owner: &MacroUserIdStr<'_>,
+        _limit: std::num::NonZeroUsize,
+    ) -> SessionResult<Vec<agent_session::domain::model::RecentAgentSession>> {
+        unimplemented!("the router never summarizes an owner's recent sessions")
+    }
+
     async fn find_all_for_thread(
         &self,
         _thread_id: macro_uuid::Uuid,
@@ -173,6 +181,14 @@ impl AgentSessionRepo for FixedBotSessions {
 
     async fn set_model(&self, _id: AgentSessionId, _model: &str) -> SessionResult<()> {
         unimplemented!("the router never sets models")
+    }
+
+    async fn set_repo_url(
+        &self,
+        _id: AgentSessionId,
+        _repo_url: Option<String>,
+    ) -> SessionResult<()> {
+        unimplemented!("the router never sets repositories")
     }
 
     async fn delete(&self, _id: AgentSessionId) -> SessionResult<()> {

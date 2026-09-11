@@ -7,6 +7,7 @@ mod app_jwt;
 mod installation_state;
 mod link;
 mod pull_request;
+mod repository;
 mod sync;
 
 pub use app_jwt::AppJwt;
@@ -21,6 +22,7 @@ pub use pull_request::{
     GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
     GithubPullRequestRef, GithubPullRequestStatus,
 };
+pub use repository::GithubRepository;
 pub use sync::{
     GithubAppInstallationSource, GithubAuthenticatedUser, GithubInstallationAccessToken,
     GithubInstallationSetupAction, GithubKey, GithubSetupAccessToken, GithubUserInstallation,

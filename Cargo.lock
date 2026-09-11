@@ -236,12 +236,14 @@ dependencies = [
 name = "agent_harness"
 version = "0.1.0"
 dependencies = [
+ "agent",
  "agent-client-protocol",
  "agent_egress",
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
+ "ai_usage",
  "anyhow",
  "axum",
  "base64 0.22.1",
@@ -255,6 +257,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "futures",
+ "github",
  "harness_id",
  "kafka_util",
  "lexical_client",
@@ -7075,6 +7078,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "chrono",
+ "cowlike",
  "document_sub_type",
  "documents",
  "entity_access",
@@ -7084,6 +7088,7 @@ dependencies = [
  "hmac 0.12.1",
  "http-body-util",
  "jsonwebtoken 10.3.0",
+ "lru 0.16.4",
  "macro_authorization",
  "macro_db_migrator",
  "macro_env",

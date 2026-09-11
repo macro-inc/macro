@@ -13312,6 +13312,37 @@ export type RemoveFavoriteByEntityResponses = {
     200: unknown;
 };
 
+export type GetForeignEntityBySourceData = {
+    body?: never;
+    path: {
+        /**
+         * Foreign entity source, e.g. github_pull_request
+         */
+        source: string;
+        /**
+         * Identifier assigned by the source system; may contain slashes
+         */
+        foreign_entity_id: string;
+    };
+    query?: never;
+    url: '/foreign_entity/by_source/{source}/{foreign_entity_id}';
+};
+
+export type GetForeignEntityBySourceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetForeignEntityBySourceError = GetForeignEntityBySourceErrors[keyof GetForeignEntityBySourceErrors];
+
+export type GetForeignEntityBySourceResponses = {
+    200: ForeignEntity;
+};
+
+export type GetForeignEntityBySourceResponse = GetForeignEntityBySourceResponses[keyof GetForeignEntityBySourceResponses];
+
 export type GetForeignEntityData = {
     body?: never;
     path: {

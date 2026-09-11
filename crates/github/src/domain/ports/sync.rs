@@ -7,8 +7,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use crate::domain::models::{
     AppJwt, EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser,
     GithubError, GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails,
-    GithubSetupAccessToken, GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference,
-    TeamTaskReference, ValidatedGithubWebhookEvent,
+    GithubRepository, GithubSetupAccessToken, GithubUserInstallation, MacroTaskId,
+    ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
 };
 
 /// Repository for accessing github sync data from the database.
@@ -87,6 +87,19 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         &self,
         installation_id: &str,
     ) -> impl Future<Output = Result<Vec<GithubAppInstallationSource>, Self::Err>> + Send;
+
+    /// Returns the installations whose sources include the given Macro user or
+    /// any of the given teams.
+    ///
+    /// The inverse of [`GithubSyncRepo::get_installation_sources`]: that
+    /// answers "who installed this?", this answers "what did they install?".
+    /// Ids are returned once each even when several of the user's sources
+    /// point at the same installation.
+    fn get_installation_ids_for_sources(
+        &self,
+        macro_id: &str,
+        team_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 
     /// Returns all Macro user IDs that belong to the given team.
     fn get_team_member_ids(
@@ -190,6 +203,26 @@ pub trait GithubSyncClient: Send + Sync + 'static {
         repository: &str,
         permissions: &[(&str, &str)],
     ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
+
+    /// Generates an installation access token carrying only `permissions`,
+    /// across every repository the installation covers.
+    ///
+    /// The installation-wide counterpart to
+    /// [`GithubSyncClient::generate_scoped_installation_access_token`]: use it
+    /// when the caller's question is about the installation itself rather than
+    /// one repository, and keep `permissions` as small as that question needs.
+    fn generate_installation_wide_access_token(
+        &self,
+        jwt: &AppJwt,
+        installation_id: u64,
+        permissions: &[(&str, &str)],
+    ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
+
+    /// Lists every repository an installation access token can reach.
+    fn list_installation_repositories(
+        &self,
+        access_token: &str,
+    ) -> impl Future<Output = Result<Vec<GithubRepository>, GithubError>> + Send;
 
     /// Posts a comment on a GitHub pull request (via the issues API).
     fn create_pr_comment(
