@@ -141,3 +141,41 @@ fn the_schema_allows_only_the_candidates_and_null() {
         ]
     );
 }
+
+#[tokio::test]
+async fn history_excludes_the_current_session_without_crowding_out_prior_work() {
+    let current = AgentSessionId::new();
+    let mut sessions = MockAgentSessionRepo::new();
+    let prior: Vec<_> = (0..5).map(|_| AgentSessionId::new()).collect();
+    let expected = prior.clone();
+    sessions
+        .expect_recent_for_owner()
+        .once()
+        .withf(|_, limit| limit.get() == 6)
+        .return_once(move |_, _| {
+            Box::pin(async move {
+                Ok(std::iter::once(current)
+                    .chain(prior)
+                    .map(|id| RecentAgentSession {
+                        id,
+                        name: "session".into(),
+                        harness: "cursor".into(),
+                        repo_url: None,
+                        created_at: chrono::Utc::now(),
+                    })
+                    .collect())
+            })
+        });
+    let chooser = HaikuRepositoryChooser::new(
+        StubRepositories::with(&[]),
+        sessions,
+        Arc::new(ai_usage::NoOpUsageRecorder),
+        owner(),
+        current,
+    );
+    let recent = chooser.recent_sessions().await.unwrap();
+    assert_eq!(
+        recent.iter().map(|session| session.id).collect::<Vec<_>>(),
+        expected
+    );
+}

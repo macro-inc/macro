@@ -99,6 +99,25 @@ where
         }
     }
 
+    /// The five prior sessions, excluding the placeholder being initialized.
+    async fn recent_sessions(&self) -> Result<Vec<RecentAgentSession>, rootcause::Report> {
+        let recent = self
+            .sessions
+            .recent_for_owner(
+                &self.owner,
+                NonZeroUsize::new(RECENT_SESSIONS + 1).expect("a nonzero count"),
+            )
+            .await
+            .map_err(|error| {
+                rootcause::report!("could not read the owner's recent sessions: {error}")
+            })?;
+        Ok(recent
+            .into_iter()
+            .filter(|session| session.id != self.session_id)
+            .take(RECENT_SESSIONS)
+            .collect())
+    }
+
     /// Ask the model, and hold it to the candidate list.
     async fn decide(
         &self,
@@ -159,16 +178,7 @@ where
             );
             SessionIntent::default()
         } else {
-            let recent = self
-                .sessions
-                .recent_for_owner(
-                    &self.owner,
-                    NonZeroUsize::new(RECENT_SESSIONS).expect("a nonzero count"),
-                )
-                .await
-                .map_err(|error| {
-                    rootcause::report!("could not read the owner's recent sessions: {error}")
-                })?;
+            let recent = self.recent_sessions().await?;
             self.decide(prompt, &candidates, &recent).await?
         };
 
