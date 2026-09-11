@@ -80,6 +80,34 @@ function IconOnlyDemo() {
 }
 // #endregion
 
+// #region demo:size-compositions
+function SizeCompositionsDemo() {
+  return (
+    <div class="flex w-full flex-col gap-3">
+      <For each={['xs', 'sm', 'md', 'lg', 'xl'] as const}>
+        {(size) => (
+          <div class="flex items-center gap-3">
+            <span class="w-8 shrink-0 font-mono text-xs text-ink-subtle">
+              {size}
+            </span>
+            <Button variant="outline" size={size} square label="Add item">
+              <PlusIcon />
+            </Button>
+            <Button variant="outline" size={size}>
+              Button
+            </Button>
+            <Button variant="outline" size={size}>
+              <PlusIcon />
+              With icon
+            </Button>
+          </div>
+        )}
+      </For>
+    </div>
+  );
+}
+// #endregion
+
 // #region demo:group
 function GroupDemo() {
   return (
@@ -152,6 +180,14 @@ export default defineDoc({
       description:
         'Use an `icon-*` size for square buttons. `label` is required — it names the button for screen readers and becomes its tooltip.',
       render: IconOnlyDemo,
+    },
+    {
+      id: 'size-compositions',
+      title: 'Compositions by size',
+      description:
+        'Square icon-only, text-only, and text-with-icon buttons shown together at every size.',
+      render: SizeCompositionsDemo,
+      fill: true,
     },
     {
       id: 'group',

@@ -131,7 +131,7 @@
   --layer-inset: var(--color-surface-0);
 
   ::selection {
-    background-color: oklch(from var(--color-accent) l c h / 0.5);
+    background-color: oklch(from var(--color-ink) l c h / 0.1);
   }
 
 }

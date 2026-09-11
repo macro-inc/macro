@@ -1,10 +1,8 @@
 import type { BlockName } from '@core/block';
-import type { Component, Ref } from 'solid-js';
+import type { ParentProps, Ref } from 'solid-js';
 import { PopupPositioner } from './PopupPositioner';
-import { PopupSurface } from './PopupSurface';
 
-type GeneralizedPopupProps = {
-  PopupComponents: Component;
+type GeneralizedPopupProps = ParentProps<{
   anchor: {
     ref: HTMLElement;
     blockId: string;
@@ -12,12 +10,12 @@ type GeneralizedPopupProps = {
   };
   useBlockBoundary?: boolean;
   ref?: Ref<HTMLDivElement>;
-};
+}>;
 
 /**
- * Anchored popup with the standard surface chrome. A thin composition of
- * `PopupPositioner` (placement) and `PopupSurface` (styling); reach for those
- * directly when you need to position or style content independently.
+ * Anchored popup with the legacy surface chrome. Positioning lives in
+ * `PopupPositioner`; new surfaces should prefer the opinionated `Toolbar`
+ * component instead of this container.
  */
 export function GeneralizedPopup(props: GeneralizedPopupProps) {
   return (
@@ -25,9 +23,13 @@ export function GeneralizedPopup(props: GeneralizedPopupProps) {
       anchor={props.anchor.ref}
       useBlockBoundary={props.useBlockBoundary}
     >
-      <PopupSurface ref={props.ref}>
-        <props.PopupComponents />
-      </PopupSurface>
+      <div
+        ref={props.ref}
+        id="generalized-popup"
+        class="border border-edge bg-surface shadow-xl rounded-lg z-highlight-menu inline-flex items-start flex-col p-1"
+      >
+        {props.children}
+      </div>
     </PopupPositioner>
   );
 }

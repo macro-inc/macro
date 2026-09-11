@@ -378,6 +378,10 @@ export const MarkdownShell: Component<
               <FloatingFormatMenu
                 portalScope={props.portalScope}
                 showLinkButton={!!builderConfig.links?.floatingMenu}
+                extendedInlineFormats={
+                  typeof builderConfig.floatingFormatMenu === 'object' &&
+                  builderConfig.floatingFormatMenu.extendedInlineFormats
+                }
               />
             </Show>
           </FloatingMenuGroup>

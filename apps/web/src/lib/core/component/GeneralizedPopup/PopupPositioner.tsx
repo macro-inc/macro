@@ -43,7 +43,7 @@ type PopupPositionerProps = {
 /**
  * Headless positioning wrapper. Anchors its children to a reference element
  * using floating-ui and keeps them positioned on scroll/resize. It renders no
- * visual chrome of its own — wrap the children in `PopupSurface` (or any other
+ * visual chrome of its own — wrap the children in `Toolbar` (or any other
  * component) for styling.
  */
 export function PopupPositioner(props: PopupPositionerProps) {
