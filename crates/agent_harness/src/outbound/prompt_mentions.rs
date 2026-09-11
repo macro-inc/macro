@@ -74,7 +74,8 @@ pub(crate) trait SessionAccess: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
-/// [`SessionAccess`] over the `entity_access` table.
+/// [`SessionAccess`] over the `entity_access` table, read through the access
+/// repository and written through the shared `entity_access_db_utils`.
 pub struct PgSessionAccess {
     access: PgAccessRepository,
     pool: PgPool,
@@ -115,26 +116,18 @@ impl SessionAccess for PgSessionAccess {
         session_id: AgentSessionId,
         users: &[MacroUserIdStr<'static>],
     ) -> Result<()> {
-        let user_ids: Vec<String> = users.iter().map(ToString::to_string).collect();
-        // The conflict target is the unique index over direct (non-project)
-        // grants; `DO NOTHING` is what keeps an existing owner or editor row
-        // intact.
-        sqlx::query!(
-            r#"
-            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-            SELECT $1, 'agent_session', u.user_id, 'user', 'edit'::"AccessLevel"
-            FROM UNNEST($2::text[]) AS u(user_id)
-            ON CONFLICT (entity_id, entity_type, source_id, source_type)
-            WHERE granted_from_project_id IS NULL
-            DO NOTHING
-            "#,
-            session_id.as_uuid(),
-            user_ids.as_slice(),
+        // The shared writer for direct user grants: it never touches an
+        // owner row, and edit is the most anyone else can hold, so nobody is
+        // lowered.
+        entity_access_db_utils::upsert_user_entity_access_bulk(
+            &self.pool,
+            users,
+            &session_id.as_uuid(),
+            EntityType::AgentSession,
+            AccessLevel::Edit,
         )
-        .execute(&self.pool)
         .await
-        .map_err(|error| HarnessError::Mentions(rootcause::report!(error).into()))?;
-        Ok(())
+        .map_err(|error| HarnessError::Mentions(rootcause::report!(error).into()))
     }
 }
 
