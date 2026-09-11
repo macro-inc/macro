@@ -12,6 +12,7 @@ import type {
 import { For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
+import { showsWorkingLine } from '../state/working-line';
 import { ActionLine, Thought, WorkingLine } from '../ui';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
@@ -56,27 +57,6 @@ function AgentMessagePart(props: {
 }
 
 /**
- * Whether an open turn should show the working row at its tail.
- *
- * Skipped wherever the transcript already shows the turn is alive — prose
- * streaming in, a thought shimmering — and wherever it is not: a permission
- * or elicitation prompt is waiting on the reader, not working.
- */
-function showsWorkingLine(message: FoldedMessage): boolean {
-  const last = message.parts[message.parts.length - 1];
-  if (last === undefined) return true;
-  return match(last)
-    .with(
-      { kind: 'text' },
-      { kind: 'thought' },
-      { kind: 'permission' },
-      { kind: 'elicitation' },
-      () => false
-    )
-    .otherwise(() => true);
-}
-
-/**
  * A prompt, in the chat block's user-bubble treatment
  * (`@core/component/AI/component/message/UserMessage.tsx`): right-aligned,
  * rounded gray surface with a hairline border.
@@ -101,7 +81,14 @@ function UserMessage(props: { message: FoldedMessage }) {
   );
 }
 
-export function Message(props: { message: FoldedMessage }) {
+export function Message(props: {
+  message: FoldedMessage;
+  /**
+   * This user prompt is the open turn's tail — the agent has not started
+   * thinking yet, so the working row hangs off the bubble.
+   */
+  awaitingReply?: boolean;
+}) {
   const inFlight = () =>
     props.message.author.kind === 'agent' && props.message.stop == null;
   const failure = () =>
@@ -126,8 +113,8 @@ export function Message(props: { message: FoldedMessage }) {
               />
             )}
           </For>
-          {/* The turn is open with nothing to read yet — a dot and a rotating
-              verb, so the wait reads as work rather than as a stall. */}
+          {/* The turn is open with nothing else narrating it — a dot and a
+              rotating verb, so the wait reads as work rather than as a stall. */}
           <Show when={inFlight() && showsWorkingLine(props.message)}>
             <WorkingLine />
           </Show>
@@ -146,7 +133,12 @@ export function Message(props: { message: FoldedMessage }) {
         </div>
       }
     >
-      <UserMessage message={props.message} />
+      <div class="flex flex-col gap-1 min-w-0">
+        <UserMessage message={props.message} />
+        <Show when={props.awaitingReply}>
+          <WorkingLine />
+        </Show>
+      </div>
     </Show>
   );
 }

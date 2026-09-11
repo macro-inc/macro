@@ -8,6 +8,10 @@ import { Transcript } from './Transcript';
 const session = vi.hoisted(() => ({
   messages: () => [] as FoldedMessage[],
   quoteSelection: vi.fn(),
+  working: () => false,
+  resuming: () => false,
+  blockedOnUser: () => false,
+  composer: { sending: () => false },
   touch: false,
   top: () => 40,
   bottom: (): number => 80,
@@ -26,8 +30,11 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 }));
 vi.mock('@ui', () => ({ cn: (...classes: string[]) => classes.join(' ') }));
 vi.mock('./AgentMessage', () => ({
-  Message: (props: { message: FoldedMessage }) => (
-    <span data-message={`${props.message.turn}:${props.message.author.kind}`}>
+  Message: (props: { message: FoldedMessage; awaitingReply?: boolean }) => (
+    <span
+      data-message={`${props.message.turn}:${props.message.author.kind}`}
+      data-awaiting-reply={props.awaitingReply ? 'true' : 'false'}
+    >
       {JSON.stringify(props.message.parts)}
     </span>
   ),
@@ -89,6 +96,10 @@ beforeEach(() => {
   rowHeight = 96;
   session.touch = false;
   session.bottom = () => 80;
+  session.working = () => false;
+  session.resuming = () => false;
+  session.blockedOnUser = () => false;
+  session.composer = { sending: () => false };
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -381,5 +392,27 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     view.setMessages((list) => [...list, message(50)]);
     await settle();
     expect(view.scroller.scrollTop).toBe(view.scroller.scrollHeight - viewport);
+  });
+
+  it('shows the working row after send before any reply exists', async () => {
+    session.composer = { sending: () => true };
+    const empty = mount([]);
+    await settle();
+    expect(empty.container.querySelector('[data-working-line]')).not.toBeNull();
+
+    session.working = () => true;
+    session.composer = { sending: () => false };
+    const prompt: FoldedMessage = {
+      ...message(0, 'please look'),
+      author: { kind: 'user', userId: null },
+    };
+    const waiting = mount([prompt]);
+    await settle();
+    expect(
+      waiting.container
+        .querySelector('[data-message="0:user"]')
+        ?.getAttribute('data-awaiting-reply')
+    ).toBe('true');
+    expect(waiting.container.querySelector('[data-working-line]')).toBeNull();
   });
 });

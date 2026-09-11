@@ -10,11 +10,27 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { lastTurnMessage } from '../state/control-message';
+import {
+  needsTrailingWorkingLine,
+  showsAwaitingReply,
+} from '../state/working-line';
+import { WorkingLine } from '../ui/WorkingLine';
 import { Message } from './AgentMessage';
 import { ReplyToSelection } from './ReplyToSelection';
 
+/** Sentinel key for the working row that does not belong to any message. */
+const TRAILING_WORKING_KEY = '__working__';
+
 export function Transcript() {
-  const { messages, quoteSelection } = useAgentSession();
+  const {
+    messages,
+    quoteSelection,
+    working,
+    resuming,
+    blockedOnUser,
+    composer,
+  } = useAgentSession();
   const splitPanel = useSplitPanel();
   const [transcriptEl, setTranscriptEl] = createSignal<HTMLDivElement>();
   const [scrollState, setScrollState] = createSignal<ThreadListScrollState>();
@@ -30,7 +46,21 @@ export function Transcript() {
         ])
       )
   );
-  const keys = createMemo(() => [...messageById().keys()]);
+  const lastTurn = createMemo(() => lastTurnMessage(messages()));
+  const trailingWorking = createMemo(() =>
+    needsTrailingWorkingLine({
+      messages: messages(),
+      working: working(),
+      sending: composer.sending(),
+      resuming: resuming(),
+      blockedOnUser: blockedOnUser(),
+    })
+  );
+  const keys = createMemo(() => {
+    const ids = [...messageById().keys()];
+    if (trailingWorking()) ids.push(TRAILING_WORKING_KEY);
+    return ids;
+  });
   // Insets belong in virtual measurements, not CSS padding outside the sizer.
   // ThreadList preserves the end pin across keyboard/viewport and inset resizes.
   const insets = () =>
@@ -56,12 +86,29 @@ export function Transcript() {
         onScroll={(state) => setScrollState(state)}
       >
         {({ id }) => (
-          <Show when={messageById().get(id)}>
-            {(message) => (
+          <Show
+            when={id !== TRAILING_WORKING_KEY}
+            fallback={
               <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
-                <Message message={message()} />
+                <WorkingLine />
               </div>
-            )}
+            }
+          >
+            <Show when={messageById().get(id)}>
+              {(message) => (
+                <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
+                  <Message
+                    message={message()}
+                    awaitingReply={showsAwaitingReply({
+                      message: message(),
+                      lastTurn: lastTurn(),
+                      working: working(),
+                      blockedOnUser: blockedOnUser(),
+                    })}
+                  />
+                </div>
+              )}
+            </Show>
           </Show>
         )}
       </ThreadList>

@@ -128,7 +128,13 @@ transcript at `/app/agent/<uuid>` whose replies also stream back into the thread
 An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused — on mobile that is the same
-Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `@` to insert the same mention chips
+Create-menu `triggerFocusInput` as chat, so the keyboard opens. While a turn is
+open and nothing else is narrating it — after send, before the first thought,
+between finished tools, under prose that has not closed the turn — a
+**Working** row with a breathing dot and rotating verbs (`[data-working-line]`,
+`aria-label="Working"`) sits at the tail so the transcript is never dead
+silent. It yields to a shimmering **Thinking** row, a running tool card, or a
+question waiting on you. Type `@` to insert the same mention chips
 used in chat and channels; they serialize as `<m-document-mention>` tags in the prompt
 the agent sees. Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread).
