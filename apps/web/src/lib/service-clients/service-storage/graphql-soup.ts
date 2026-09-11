@@ -634,6 +634,27 @@ function toNotificationDocumentSubType(
     : null;
 }
 
+/** The flattened session block every agent-session kind carries. */
+function agentSessionContent(session: {
+  sessionId: string;
+  sessionName: string;
+  botId: string;
+  botName: string;
+  channelId?: string | null;
+  threadId?: string | null;
+  announcementMessageId?: string | null;
+}) {
+  return {
+    sessionId: session.sessionId,
+    sessionName: session.sessionName,
+    botId: session.botId,
+    botName: session.botName,
+    channelId: session.channelId ?? undefined,
+    threadId: session.threadId ?? undefined,
+    announcementMessageId: session.announcementMessageId ?? undefined,
+  };
+}
+
 type NotifEventMember<Tag extends NotifEvent['tag']> = Extract<
   NotifEvent,
   { tag: Tag }
@@ -1086,6 +1107,44 @@ function mapGraphqlNotificationMetadata(
           },
         }) satisfies NotifEventMember<'github_pr_review'>
     )
+    .with(
+      { __typename: 'GraphqlAgentSessionSettledMetadata' },
+      (metadata) =>
+        ({
+          tag: 'agent_session_settled',
+          content: {
+            ...agentSessionContent(metadata.agentSessionSettledSession),
+            turn: metadata.agentSessionSettledTurn,
+            actor: metadata.agentSessionSettledActor ?? undefined,
+            stopReason: metadata.agentSessionSettledStopReason,
+            excerpt: metadata.agentSessionSettledExcerpt ?? undefined,
+          },
+        }) satisfies NotifEventMember<'agent_session_settled'>
+    )
+    .with(
+      { __typename: 'GraphqlAgentSessionWaitingForInputMetadata' },
+      (metadata) =>
+        ({
+          tag: 'agent_session_waiting_for_input',
+          content: {
+            ...agentSessionContent(metadata.agentSessionWaitingForInputSession),
+            turn: metadata.agentSessionWaitingForInputTurn,
+            question: metadata.agentSessionWaitingForInputQuestion,
+          },
+        }) satisfies NotifEventMember<'agent_session_waiting_for_input'>
+    )
+    .with(
+      { __typename: 'GraphqlAgentSessionMentionedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'agent_session_mentioned',
+          content: {
+            ...agentSessionContent(metadata.agentSessionMentionedSession),
+            mentionedBy: metadata.agentSessionMentionedMentionedBy ?? undefined,
+            actionId: metadata.agentSessionMentionedActionId,
+          },
+        }) satisfies NotifEventMember<'agent_session_mentioned'>
+    )
     .exhaustive();
 }
 
@@ -1179,6 +1238,29 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             documentVersionId: 0,
             properties: mapGraphqlProperties(entity.properties),
             subType: mapDocumentSubType(entity.subType),
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupAgentSession' },
+      (entity) =>
+        ({
+          tag: 'agentSession',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            name: entity.sessionName,
+            ownerId: entity.ownerId,
+            botId: entity.botId,
+            bot: entity.bot,
+            threadId: entity.threadId,
+            status: entity.status,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
+            viewedAt: entity.viewedAt,
+            properties: mapGraphqlProperties(entity.properties),
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
@@ -1551,6 +1633,8 @@ export function mapGraphqlGroupedSoupPage(
 
 export type GraphqlSoupHydrationPage = {
   nextCursor: string | null;
+  /** Explicit membership evidence returned by a complete-scope backfill query. */
+  entityIds?: string[];
 };
 
 /**
@@ -1586,7 +1670,15 @@ export async function hydrateGraphqlSoup<
   if (!result.data) {
     throw new Error('GraphQL Soup hydration returned no cursor projection');
   }
-  return { nextCursor: result.data.user.soup.nextCursor };
+  const soup = result.data.user.soup as typeof result.data.user.soup & {
+    scopeIds?: Array<{ id: string }>;
+  };
+  return {
+    nextCursor: soup.nextCursor,
+    ...(soup.scopeIds
+      ? { entityIds: soup.scopeIds.map((item) => item.id) }
+      : {}),
+  };
 }
 
 /** Executes any Soup-shaped query and maps its result to the shared page type. */

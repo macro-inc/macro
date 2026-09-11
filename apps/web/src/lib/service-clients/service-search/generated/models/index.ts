@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './agentSessionFilters';
 export * from './calendarEventFilters';
 export * from './calendarEventFiltersEndsAfter';
 export * from './calendarEventFiltersStartsBefore';

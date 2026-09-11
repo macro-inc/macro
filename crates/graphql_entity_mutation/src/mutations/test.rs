@@ -26,11 +26,19 @@ struct TestEmailThreadEdges {
     available: bool,
 }
 
+/// Minimal agent-session-specific edge object used by the isolated schema.
+#[derive(Clone, SimpleObject)]
+struct TestAgentSessionEdges {
+    /// Keeps the GraphQL object non-empty.
+    available: bool,
+}
+
 impl SoupEntityEdges for TestSoupEdges {
     type Property = String;
     type Notification = String;
     type ActivityEvent = String;
     type EmailThreadEdges = TestEmailThreadEdges;
+    type AgentSessionEdges = TestAgentSessionEdges;
 
     fn from_entity(_entity: Entity<'static>) -> Self {
         Self { available: true }
@@ -38,6 +46,18 @@ impl SoupEntityEdges for TestSoupEdges {
 
     fn email_thread_edges(_email_thread_id: uuid::Uuid) -> Self::EmailThreadEdges {
         TestEmailThreadEdges { available: true }
+    }
+
+    async fn resolve_email_cache_projection(
+        &self,
+        _ctx: &Context<'_>,
+        _email_thread_id: uuid::Uuid,
+    ) -> async_graphql::Result<Option<String>> {
+        Ok(None)
+    }
+
+    fn agent_session_edges(_bot_id: uuid::Uuid) -> Self::AgentSessionEdges {
+        TestAgentSessionEdges { available: true }
     }
 
     async fn resolve_properties(

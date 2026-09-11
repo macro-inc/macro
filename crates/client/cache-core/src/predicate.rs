@@ -2,6 +2,9 @@
 
 pub mod reconciliation;
 
+#[cfg(test)]
+mod test;
+
 use crate::{
     queue::{MutationId, MutationQueueSnapshot},
     store::Storage,
@@ -10,9 +13,10 @@ use crate::{
 use maybe_send::MaybeSend;
 pub use predicate_index::ProjectionIncompleteKind;
 use predicate_index::{
-    EffectiveOptimisticProjection, ExactAttributePatch, IndexDocument, IntegerAttributePatch,
-    IntegerFact, OptimisticProjectionMutation, OptimisticProjectionState, OptimisticUncertainty,
-    PendingOptimisticProjection, Profile, RecordKey, Token, ValidatedIndexQuery, ValidationError,
+    EffectiveOptimisticProjection, ExactAttributePatch, ExactFact, IndexDocument,
+    IntegerAttributePatch, IntegerFact, OptimisticProjectionMutation, OptimisticProjectionState,
+    OptimisticUncertainty, PendingOptimisticProjection, Profile, RecordKey, Token,
+    ValidatedIndexQuery, ValidationError,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
@@ -370,6 +374,41 @@ fn apply_projection_mutation(
                     .chain(sorts.iter().map(|fact| fact.attribute.clone())),
             );
         }
+        OptimisticProjectionMutation::PatchExact {
+            record_key,
+            profile,
+            partition,
+            remove,
+            insert,
+        } => {
+            let Some(OptimisticProjectionState::Complete(document)) = state else {
+                *state = Some(OptimisticProjectionState::Incomplete {
+                    record_key: record_key.clone(),
+                    profile: profile.clone(),
+                    partition: partition.clone(),
+                    kind: ProjectionIncompleteKind::Missing,
+                });
+                return Ok(());
+            };
+            if document.profile != *profile || document.partition != *partition {
+                *state = Some(OptimisticProjectionState::Incomplete {
+                    record_key: record_key.clone(),
+                    profile: profile.clone(),
+                    partition: partition.clone(),
+                    kind: ProjectionIncompleteKind::Missing,
+                });
+                return Ok(());
+            }
+            // A member edit cannot establish completeness for an uncertain set.
+            if patch_exact_members(document, remove, insert).is_err() {
+                *state = Some(OptimisticProjectionState::Incomplete {
+                    record_key: record_key.clone(),
+                    profile: profile.clone(),
+                    partition: partition.clone(),
+                    kind: ProjectionIncompleteKind::Dirty,
+                });
+            }
+        }
         OptimisticProjectionMutation::Delete {
             record_key,
             profile,
@@ -526,6 +565,48 @@ pub fn apply_authoritative_projection_patch(
     }
 }
 
+fn patch_exact_members(
+    document: &mut IndexDocument,
+    remove: &[ExactFact],
+    insert: &[ExactFact],
+) -> Result<(), ValidationError> {
+    document.exact_facts.retain(|fact| !remove.contains(fact));
+    document.exact_facts.extend_from_slice(insert);
+    document.canonicalize();
+    document.validate()
+}
+
+/// Apply individual set-member edits without claiming a missing base is complete.
+pub fn apply_authoritative_exact_members(
+    current: Option<&ProjectionState>,
+    record_key: &RecordKey,
+    profile: &Profile,
+    partition: &Token,
+    remove: &[ExactFact],
+    insert: &[ExactFact],
+) -> ProjectionState {
+    let mut state = apply_authoritative_projection_patch(
+        current,
+        record_key,
+        profile,
+        partition,
+        &[],
+        &[],
+        &[],
+    );
+    if let ProjectionState::Complete(document) = &mut state
+        && patch_exact_members(document, remove, insert).is_err()
+    {
+        state = ProjectionState::Incomplete {
+            record_key: record_key.clone(),
+            profile: profile.clone(),
+            partition: partition.clone(),
+            kind: ProjectionIncompleteKind::Dirty,
+        };
+    }
+    state
+}
+
 /// Atomic change to one normalized record's generic projection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProjectionMutation {
@@ -559,6 +640,19 @@ pub enum ProjectionMutation {
     },
     /// Delete projection state for a deleted normalized record.
     Delete(RecordKey),
+    /// Edit individual exact-set members while preserving other contributors.
+    PatchExact {
+        /// Normalized record key.
+        record_key: RecordKey,
+        /// Projection profile.
+        profile: Profile,
+        /// Entity partition.
+        partition: Token,
+        /// Members to remove before inserting replacements.
+        remove: Vec<ExactFact>,
+        /// Members to insert idempotently.
+        insert: Vec<ExactFact>,
+    },
 }
 
 impl ProjectionMutation {
@@ -568,6 +662,7 @@ impl ProjectionMutation {
             Self::Replace(document) => &document.record_key,
             Self::Patch { record_key, .. }
             | Self::MarkIncomplete { record_key, .. }
+            | Self::PatchExact { record_key, .. }
             | Self::Delete(record_key) => record_key,
         }
     }
@@ -618,6 +713,20 @@ pub fn apply_authoritative_projection_mutations(
                 kind: *kind,
             }),
             ProjectionMutation::Delete(_) => None,
+            ProjectionMutation::PatchExact {
+                record_key,
+                profile,
+                partition,
+                remove,
+                insert,
+            } => Some(apply_authoritative_exact_members(
+                states.get(record_key),
+                record_key,
+                profile,
+                partition,
+                remove,
+                insert,
+            )),
         };
         if let Some(state) = state {
             states.insert(key, state);
@@ -645,6 +754,13 @@ pub trait PredicateIndexStorage: Storage {
         &mut self,
         keys: &[EntityKey<'static>],
         projection_keys: &[RecordKey],
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Atomically delete records and apply dependent projection changes.
+    fn delete_batch_with_projection_changes(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projections: Vec<ProjectionMutation>,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
     /// Reconcile bounded server membership with complete local candidates.

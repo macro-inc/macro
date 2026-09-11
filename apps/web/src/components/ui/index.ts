@@ -153,7 +153,15 @@ export type {
 export { TextField } from './components/TextField';
 export type { ToggleSwitchProps } from './components/ToggleSwitch';
 export { ToggleSwitch } from './components/ToggleSwitch';
-export { Tooltip } from './components/Tooltip';
+export type {
+  ToolbarButtonProps,
+  ToolbarDividerProps,
+  ToolbarGroupProps,
+  ToolbarProps,
+} from './components/Toolbar';
+export { Toolbar } from './components/Toolbar';
+export type { TooltipClassOptions } from './components/Tooltip';
+export { Tooltip, tooltipClasses } from './components/Tooltip';
 export { cn } from './utils/classname';
 export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';
 export {

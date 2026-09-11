@@ -228,6 +228,33 @@ ol.static-md.depth-6 > li:not(.list-none)::before {
   text-decoration-thickness: max(0.1em, 1px);
 }
 
+.md-subscript,
+.md-superscript {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+.md-subscript {
+  bottom: -0.25em;
+}
+
+.md-superscript {
+  top: -0.5em;
+}
+
+/* Active editors already get semantic sub/sup wrappers from Lexical. */
+sub > .md-subscript,
+sup > .md-superscript {
+  bottom: auto;
+  font-size: inherit;
+  line-height: inherit;
+  position: static;
+  top: auto;
+  vertical-align: inherit;
+}
+
 .md-inline-mention > div {
   display: contents;
 }

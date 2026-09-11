@@ -28,6 +28,7 @@ function buildRecentlyViewedArgs(): SoupItemsQueryArgs {
       ...QUERY_FILTERS_BASE,
       channel_filters: undefined,
       chat_filters: undefined,
+      agent_session_filters: { include: true },
       document_filters: undefined,
       email_filters: undefined,
       project_filters: undefined,

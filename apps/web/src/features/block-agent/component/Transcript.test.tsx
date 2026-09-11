@@ -243,7 +243,9 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     const view = mount([message(0)]);
     await settle();
     const row = view.container.querySelector<HTMLElement>('[data-index="0"]')!;
-    expect(row.style.transform).toBe('translateY(224px)');
+    expect(row.style.transform).toBe(
+      'translateY(calc(224px - var(--channel-scroll-adjustment, 0px)))'
+    );
     expect(view.scroller.scrollTop).toBe(0);
     const reply = view.getByText('Reply to selection');
     expect(reply.getAttribute('data-selection-connected')).toBe('true');
@@ -259,7 +261,9 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     resize();
     await settle();
     const row = view.container.querySelector<HTMLElement>('[data-index="0"]')!;
-    expect(row.style.transform).toBe('translateY(40px)');
+    expect(row.style.transform).toBe(
+      'translateY(calc(40px - var(--channel-scroll-adjustment, 0px)))'
+    );
     expect(view.scroller.scrollHeight).toBe(40 + 500 + 80);
   });
 

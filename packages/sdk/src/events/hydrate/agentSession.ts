@@ -118,6 +118,13 @@ export function hydrateAgentSessionEvent(
       metadata,
       ...sessionHandles(client, metadata.identity),
     }))
+    .with({ event_type: 'agent_session.mentioned' }, ({ metadata }) => ({
+      event_type: 'agent_session.mentioned' as const,
+      metadata,
+      ...sessionHandles(client, metadata.identity),
+      mentionedBy: actorHandle(client, metadata.mentioned_by),
+      mentioned: metadata.mentioned.map((user) => User.byId(client, user)),
+    }))
     .with({ event_type: 'agent_session.stopped' }, ({ metadata }) => ({
       event_type: 'agent_session.stopped' as const,
       metadata,

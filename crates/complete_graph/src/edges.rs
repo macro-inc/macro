@@ -1,14 +1,18 @@
-use std::marker::PhantomData;
+use std::{collections::HashMap, future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 
-use async_graphql::{Context, ID, Object};
+use async_graphql::{Context, ID, Object, SimpleObject, dataloader::DataLoader};
+use bots::domain::{
+    models::{BotId, BotProfile},
+    ports::BotRepo,
+};
 use graphql_activity::{
     ActivityEdgeKey, GraphqlActivityEvent, SoupActivityEdgeReader, load_entity_activity,
     parse_activity_edge_limit,
 };
 use graphql_email::{
     EmailContentKey, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
-    email_message_selection_requires_full_payload, load_email_messages, load_email_thread_metadata,
-    load_latest_email_message,
+    email_message_selection_requires_full_payload, load_email_messages,
+    load_email_thread_mail_projection, load_email_thread_metadata, load_latest_email_message,
 };
 use graphql_favorite::{EntityFavoriteEdgeReader, load_entity_favorite};
 use graphql_notification::{
@@ -19,6 +23,10 @@ use graphql_permission::{
 };
 use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
 use graphql_soup::SoupEntityEdges;
+use predicate_index::{RecordKey, utc_timestamp_micros};
+use soup_filter_projection::{
+    MailCacheProjectionFacts, SoupCacheProjectionSupplement, encode_cache_projection_supplement,
+};
 use uuid::Uuid;
 
 /// The types of the edge readers for soup
@@ -61,6 +69,7 @@ where
     type Notification = GraphqlNotification;
     type ActivityEvent = GraphqlActivityEvent;
     type EmailThreadEdges = SoupEmailThreadEdges<ER>;
+    type AgentSessionEdges = SoupAgentSessionEdges;
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
         Self {
@@ -84,6 +93,32 @@ where
         SoupEmailThreadEdges {
             thread_id,
             _reader: PhantomData,
+        }
+    }
+
+    async fn resolve_email_cache_projection(
+        &self,
+        ctx: &Context<'_>,
+        thread_id: Uuid,
+    ) -> async_graphql::Result<Option<String>> {
+        let projection = load_email_thread_mail_projection::<ER>(ctx, thread_id).await?;
+        let facts = &projection.cache_facts;
+        let record_key = RecordKey::new(format!("GraphqlSoupEmailThread:{thread_id}"))?;
+        let supplement = SoupCacheProjectionSupplement::mail(
+            record_key,
+            MailCacheProjectionFacts::new(
+                facts.latest_non_spam_message_ts.map(utc_timestamp_micros),
+                facts.latest_outbound_message_ts.map(utc_timestamp_micros),
+                facts.has_calendar_attachment,
+                facts.has_thread_share,
+            ),
+        );
+        Ok(Some(encode_cache_projection_supplement(&supplement)?))
+    }
+
+    fn agent_session_edges(bot_id: Uuid) -> Self::AgentSessionEdges {
+        SoupAgentSessionEdges {
+            bot_id: BotId::new_from_uuid(bot_id),
         }
     }
 
@@ -126,6 +161,99 @@ where
             },
         )
         .await
+    }
+}
+
+/// Bot fields presented through an agent-session edge.
+#[derive(Clone, SimpleObject)]
+pub struct GraphqlSessionBot {
+    /// Stable global bot identity.
+    id: ID,
+    /// Bot display name.
+    name: String,
+    /// Optional bot avatar URL.
+    avatar_url: Option<String>,
+}
+
+impl From<BotProfile> for GraphqlSessionBot {
+    fn from(profile: BotProfile) -> Self {
+        Self {
+            id: ID(profile.id.to_string()),
+            name: profile.name,
+            avatar_url: profile.avatar_url,
+        }
+    }
+}
+
+/// Owned future returned by the erased bot-profile batch reader.
+type BotProfileBatchFuture = Pin<
+    Box<
+        dyn Future<Output = Result<HashMap<BotId, BotProfile>, Arc<anyhow::Error>>>
+            + Send
+            + 'static,
+    >,
+>;
+
+/// Type-erased batch reader kept in the concrete GraphQL DataLoader.
+type BotProfileBatchReader = dyn Fn(Vec<BotId>) -> BotProfileBatchFuture + Send + Sync + 'static;
+
+/// DataLoader implementation for bot profiles referenced by agent sessions.
+pub struct AgentSessionBotLoader {
+    /// Erased bots-domain repository call.
+    load_batch: Arc<BotProfileBatchReader>,
+}
+
+impl async_graphql::dataloader::Loader<BotId> for AgentSessionBotLoader {
+    type Value = BotProfile;
+    type Error = Arc<anyhow::Error>;
+
+    async fn load(&self, keys: &[BotId]) -> Result<HashMap<BotId, Self::Value>, Self::Error> {
+        (self.load_batch)(keys.to_vec()).await
+    }
+}
+
+/// Concrete request-scoped DataLoader for agent-session bot edges.
+pub type AgentSessionBotDataLoader = DataLoader<AgentSessionBotLoader>;
+
+/// Build a request-scoped DataLoader backed by the bots domain repository.
+pub fn agent_session_bot_loader<R>(repo: R) -> AgentSessionBotDataLoader
+where
+    R: BotRepo + Clone,
+{
+    let load_batch = move |bot_ids: Vec<BotId>| {
+        let repo = repo.clone();
+        Box::pin(async move {
+            repo.get_bot_profiles(&bot_ids)
+                .await
+                .map_err(|error| Arc::new(error.into()))
+        }) as BotProfileBatchFuture
+    };
+    DataLoader::new(
+        AgentSessionBotLoader {
+            load_batch: Arc::new(load_batch),
+        },
+        tokio::spawn,
+    )
+}
+
+/// Agent-session-specific fields composed from the bots domain.
+#[derive(Clone)]
+pub struct SoupAgentSessionEdges {
+    /// Bot referenced by the session.
+    bot_id: BotId,
+}
+
+/// Bot fields attached only to a Soup agent session.
+#[Object]
+impl SoupAgentSessionEdges {
+    /// The bot running this session, when its profile still exists.
+    async fn bot(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<GraphqlSessionBot>> {
+        let loader = ctx.data::<AgentSessionBotDataLoader>()?;
+        let profile = loader
+            .load_one(self.bot_id)
+            .await
+            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        Ok(profile.map(Into::into))
     }
 }
 
@@ -236,6 +364,45 @@ where
         Ok(metadata
             .latest_inbound_message_ts
             .map(|timestamp| timestamp.to_rfc3339()))
+    }
+
+    /// Latest eligible message for ALL, INBOX, Calendar and Shared, without bodies.
+    async fn mail_all_preview(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
+        Ok(load_email_thread_mail_projection::<ER>(ctx, self.thread_id)
+            .await?
+            .previews
+            .all
+            .clone()
+            .map(Into::into))
+    }
+
+    /// Latest eligible draft, even when a newer non-draft exists in the thread.
+    async fn mail_draft_preview(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
+        Ok(load_email_thread_mail_projection::<ER>(ctx, self.thread_id)
+            .await?
+            .previews
+            .draft
+            .clone()
+            .map(Into::into))
+    }
+
+    /// Latest eligible sent message, without bodies.
+    async fn mail_sent_preview(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
+        Ok(load_email_thread_mail_projection::<ER>(ctx, self.thread_id)
+            .await?
+            .previews
+            .sent
+            .clone()
+            .map(Into::into))
     }
 
     /// A page of messages in this thread, newest first.

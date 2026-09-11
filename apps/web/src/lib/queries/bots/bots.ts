@@ -2,7 +2,7 @@ import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { Bot } from '@service-storage/generated/schemas/bot';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { channelKeys } from '../channel/keys';
 import { botKeys } from './keys';
 
@@ -31,12 +31,16 @@ type DeleteBotParams = {
   channelIds: string[];
 };
 
-export function useBotsQuery() {
-  return useQuery(() => ({
+export function botsQueryOptions() {
+  return queryOptions({
     queryKey: botKeys.list.queryKey,
     queryFn: async (): Promise<Bot[]> =>
       await throwOnErr(() => storageServiceClient.getBots()),
-  }));
+  });
+}
+
+export function useBotsQuery() {
+  return useQuery(botsQueryOptions);
 }
 
 export function useBotQuery(botId: () => string) {

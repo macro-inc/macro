@@ -35,6 +35,7 @@ import { floatWithSelection } from '../../../directive/floatWithSelection';
 import { CLOSE_INLINE_SEARCH_COMMAND } from '../../../plugins';
 import type { MenuOperations } from '../../../shared/inlineMenu';
 import type {
+  AgentSessionMentionItem,
   DateMentionItem,
   MentionItem,
   UserMentionRecord,
@@ -95,8 +96,22 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
   const hasCustomEntities = () => !!props.entities;
-
+  const sessionsEnabled = () =>
+    !hasCustomEntities() &&
+    (!props.sources || props.sources.includes('agentSessions'));
   const quickAccess = hasCustomEntities() ? undefined : useQuickAccess();
+  const sessionList = quickAccess?.useList({
+    buckets: ['agent_session'],
+    searchTerm: activeSearchTerm,
+    enabled: sessionsEnabled,
+  });
+  const agentSessions = createLazyMemo((): AgentSessionMentionItem[] =>
+    (sessionList?.items() ?? []).map((item) => ({
+      ...item,
+      kind: 'agentSession',
+    }))
+  );
+
   const allItems = props.entities ?? quickAccess!.useList().items;
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -243,6 +258,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ...users,
       ...(docs() ?? []),
       ...(channels() ?? []),
+      ...agentSessions(),
       ...(companies() ?? []),
       ...(emails() ?? []),
       ...(dates() ?? []),
@@ -260,6 +276,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           getFullCount: () =>
             (usersAndGroups()?.length ?? 0) +
             docsMention.totalCount() +
+            agentSessions().length +
             channelsMention.totalCount() +
             (companyMention?.totalCount() ?? 0) +
             totalEmailCount() +
@@ -312,6 +329,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         loadMore: channelsMention.loadMore,
       },
       {
+        id: 'agentSessions',
+        label: 'Recent agent sessions',
+        getData: agentSessions,
+        getFullCount: () => agentSessions().length,
+      },
+      {
         id: 'companies',
         label: 'Companies',
         getData: () => companies() ?? [],
@@ -348,7 +371,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     const sourcesFilter = props.sources;
     const filtered = sourcesFilter
-      ? buckets.filter((bucket) => sourcesFilter.includes(bucket.id as any))
+      ? buckets.filter((bucket) => sourcesFilter.includes(bucket.id))
       : buckets;
 
     return filtered.filter((bucket) => bucket.getFullCount() > 0);

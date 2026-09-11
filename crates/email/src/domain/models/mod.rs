@@ -5,6 +5,7 @@ pub mod email_filter;
 pub mod error;
 pub mod label;
 pub mod link;
+pub mod mail_projection;
 pub mod message;
 pub mod parsed_message;
 pub mod preview;
@@ -29,6 +30,9 @@ pub use label::{
 pub use link::{
     EmailBackfillStatus, EmailInboxDetails, EmailSyncStatus, Link, UserEmailLink,
     UserEmailLinkSettings, UserProvider,
+};
+pub use mail_projection::{
+    EmailPreview, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
 };
 pub use message::{Message, MessageRow, SimpleMessage};
 pub use parsed_message::{ParsedLabel, ParsedMessage, ParsedThread};

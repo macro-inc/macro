@@ -4,6 +4,11 @@ name = "entity_access"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "explain_access"
+path = "src/bin/explain_access.rs"
+required-features = ["explain_binary"]
+
 [features]
 axum = [
   "dep:axum",
@@ -12,6 +17,13 @@ axum = [
   "dep:model-error-response",
 ]
 default = ["axum", "inbound", "outbound", "ports"]
+explain_binary = [
+  "dep:clap",
+  "dep:database_env_vars",
+  "dep:macro_entrypoint",
+  "outbound",
+  "ports",
+]
 inbound = ["axum", "ports"]
 outbound = ["dep:cached", "ports"]
 ports = ["dep:tokio"]
@@ -32,7 +44,12 @@ bot_id = { path = "../bot_id" }
 rootcause = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
+models_entity_access_management = { path = "../models_entity_access_management" }
 models_permissions = { path = "../models_permissions" }
+
+clap = { workspace = true, optional = true }
+database_env_vars = { path = "../database_env_vars", optional = true }
+macro_entrypoint = { path = "../macro_entrypoint", optional = true }
 
 # Async runtime (for ports)
 tokio = { workspace = true, optional = true }

@@ -372,12 +372,13 @@ export function PDFPopup(props: PDFPopupProps) {
 
   return (
     <GeneralizedPopup
-      PopupComponents={PDFPopupToolbar}
       anchor={{
         ref: props.anchorRef,
         blockId: `${blockId}`,
         blockType: 'pdf',
       }}
-    />
+    >
+      <PDFPopupToolbar />
+    </GeneralizedPopup>
   );
 }

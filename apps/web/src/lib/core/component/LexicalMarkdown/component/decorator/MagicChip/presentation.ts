@@ -28,14 +28,12 @@ export type MagicChipHeader = {
 
 /**
  * A question the agent is waiting on, as the chip offers it: the live slot
- * from the session's metadata, and whether this viewer is the one who may
- * answer (the session's owner) or is watching someone else be asked.
+ * from the session's metadata, and whether this viewer may answer (edit
+ * access on the session) or is watching someone else be asked.
  */
 export type MagicChipQuestion = {
   question: PendingElicitation;
   canAnswer: boolean;
-  /** Who the chip is waiting on when it is not the viewer. */
-  ownerName: string;
 };
 
 /**
@@ -352,9 +350,7 @@ export function presentationStatus(
   return match(presentation)
     .with({ kind: 'working' }, { kind: 'answering' }, (p) => p.activity)
     .with({ kind: 'asking' }, ({ asking }) => ({
-      label: asking.canAnswer
-        ? 'Waiting for you'
-        : `Waiting for ${asking.ownerName}`,
+      label: asking.canAnswer ? 'Waiting for you' : 'Waiting for an editor',
       busy: false,
     }))
     .with({ kind: 'settled' }, () => ({ label: 'Done', busy: false }))

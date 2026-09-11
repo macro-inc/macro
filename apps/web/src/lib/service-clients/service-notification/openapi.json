@@ -1031,6 +1031,124 @@
   },
   "components": {
     "schemas": {
+      "AgentSessionMentionedMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AgentSessionNotificationRef"
+          },
+          {
+            "type": "object",
+            "required": ["actionId"],
+            "properties": {
+              "actionId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The action carrying the prompt."
+              },
+              "mentionedBy": {
+                "type": ["string", "null"],
+                "description": "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+              }
+            }
+          }
+        ],
+        "description": "Someone named the recipient in a prompt to an agent session."
+      },
+      "AgentSessionNotificationRef": {
+        "type": "object",
+        "description": "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.",
+        "required": ["sessionId", "sessionName", "botId", "botName"],
+        "properties": {
+          "announcementMessageId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message for the turn in question, when one was posted."
+          },
+          "botId": {
+            "type": "string",
+            "description": "The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client."
+          },
+          "botName": {
+            "type": "string",
+            "description": "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+          },
+          "channelId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The channel the session was opened from, when it was."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session; what a click opens."
+          },
+          "sessionName": {
+            "type": "string",
+            "description": "The session's name at the time of the event."
+          },
+          "threadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The thread the session was opened from, when it was."
+          }
+        }
+      },
+      "AgentSessionSettledMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AgentSessionNotificationRef"
+          },
+          {
+            "type": "object",
+            "required": ["turn", "stopReason"],
+            "properties": {
+              "actor": {
+                "type": ["string", "null"],
+                "description": "Who prompted the turn, absent when a bot acted on nobody's behalf."
+              },
+              "excerpt": {
+                "type": ["string", "null"],
+                "description": "The agent's last prose in the turn, whole; `None` when it wrote none."
+              },
+              "stopReason": {
+                "type": "string",
+                "description": "The ACP stop reason, or `error`."
+              },
+              "turn": {
+                "type": "integer",
+                "format": "int32",
+                "description": "The turn that ended.",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "An agent finished a turn with nothing queued behind it."
+      },
+      "AgentSessionWaitingForInputMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AgentSessionNotificationRef"
+          },
+          {
+            "type": "object",
+            "required": ["turn", "question"],
+            "properties": {
+              "question": {
+                "type": "string",
+                "description": "The question, as the agent phrased it."
+              },
+              "turn": {
+                "type": "integer",
+                "format": "int32",
+                "description": "The turn asking.",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "An agent is blocked on a question only the session's owner can answer."
+      },
       "AiResponseMetadata": {
         "type": "object",
         "required": ["summary", "messageId"],
@@ -2352,6 +2470,51 @@
               "tag": {
                 "type": "string",
                 "enum": ["github_pr_review"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An agent finished a turn with nothing queued behind it.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/AgentSessionSettledMetadata",
+                "description": "An agent finished a turn with nothing queued behind it."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agent_session_settled"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An agent is blocked on a question for the session's owner.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/AgentSessionWaitingForInputMetadata",
+                "description": "An agent is blocked on a question for the session's owner."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agent_session_waiting_for_input"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user was named in a prompt to an agent session.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/AgentSessionMentionedMetadata",
+                "description": "The user was named in a prompt to an agent session."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agent_session_mentioned"]
               }
             }
           }

@@ -1,6 +1,9 @@
 //! This module exposes a expanded dynamic query builder which is able to build specific soup queries
 //! which filter out content basd on some input ast
 
+#[cfg(test)]
+mod test;
+
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
@@ -65,81 +68,83 @@ static DOCUMENT_TASK_PROPERTY_JOINS: &str = r#"
                     AND ep_status.property_definition_id = $7
 "#;
 
-static DOCUMENT_TOP_WHERE_CLAUSE: &str = r#"
-                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
-                WHERE d."deletedAt" IS NULL
-"#;
-
 // -- Grouped top clauses: include project_id for grouping support --
 
-static GROUPED_DOCUMENT_TOP_CLAUSE: &str = r#"
+fn grouped_document_top_clause(sort_method: SimpleSortMethod) -> String {
+    let sort_ts = top_sort_expr("d", sort_method);
+    format!(
+        r#"
                 SELECT
                     'document'::text as item_type,
                     d.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN d."createdAt"
-                        ELSE d."updatedAt"
-                    END::timestamptz as sort_ts,
+                    {sort_ts}::timestamptz as sort_ts,
                     d."projectId"::text as project_id,
                     CASE
                         WHEN dt.sub_type = 'task' THEN 'TASK'::property_entity_type
                         ELSE 'DOCUMENT'::property_entity_type
                     END as property_entity_type
-                FROM AccessibleItems ai
-                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
+                FROM "Document" d
                 LEFT JOIN document_sub_type dt ON dt.document_id = d.id
-"#;
+"#
+    )
+}
 
-static GROUPED_CHAT_TOP_CLAUSE: &str = r#"
+fn grouped_chat_top_clause(sort_method: SimpleSortMethod) -> String {
+    let sort_ts = top_sort_expr("c", sort_method);
+    let user_history_join = if top_needs_user_history(sort_method) {
+        r#"LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1"#
+    } else {
+        ""
+    };
+    format!(
+        r#"
                 SELECT
                     'chat'::text as item_type,
                     c.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN c."createdAt"
-                        ELSE c."updatedAt"
-                    END::timestamptz as sort_ts,
+                    {sort_ts}::timestamptz as sort_ts,
                     c."projectId"::text as project_id,
                     'CHAT'::property_entity_type as property_entity_type
-                FROM AccessibleItems ai
-                INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
-                LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
-                WHERE c."deletedAt" IS NULL
-"#;
+                FROM "Chat" c
+                {user_history_join}
+"#
+    )
+}
 
-static GROUPED_PROJECT_TOP_CLAUSE: &str = r#"
+fn grouped_project_top_clause(sort_method: SimpleSortMethod) -> String {
+    let sort_ts = top_sort_expr("p", sort_method);
+    let user_history_join = if top_needs_user_history(sort_method) {
+        r#"LEFT JOIN "UserHistory" uh ON uh."itemId" = p.id AND uh."itemType" = 'project' AND uh."userId" = $1"#
+    } else {
+        ""
+    };
+    format!(
+        r#"
                 SELECT
                     'project'::text as item_type,
                     p.id,
-                    CASE $2
-                        WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")
-                        WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
-                        WHEN 'created_at' THEN p."createdAt"
-                        ELSE p."updatedAt"
-                    END::timestamptz as sort_ts,
+                    {sort_ts}::timestamptz as sort_ts,
                     p."parentId"::text as project_id,
                     'PROJECT'::property_entity_type as property_entity_type
-                FROM AccessibleItems ai
-                INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
-                LEFT JOIN "UserHistory" uh
-                    ON uh."itemId" = p.id
-                    AND uh."itemType" = 'project'
-                    AND uh."userId" = $1
-                WHERE p."deletedAt" IS NULL
-"#;
+                FROM "Project" p
+                {user_history_join}
+"#
+    )
+}
 
-static GROUPED_CALENDAR_EVENT_TOP_CLAUSE: &str = r#"
+fn grouped_calendar_event_top_clause(sort_method: SimpleSortMethod) -> String {
+    let sort_ts = match sort_method {
+        SimpleSortMethod::CreatedAt => "event.created_at",
+        SimpleSortMethod::ViewedAt => "'1970-01-01 00:00:00+00'",
+        SimpleSortMethod::UpdatedAt | SimpleSortMethod::ViewedUpdated => {
+            "GREATEST(event.updated_at, event.last_reminder_fired_at)"
+        }
+    };
+    format!(
+        r#"
                 SELECT
                     'calendar_event'::text as item_type,
                     event.id::text as id,
-                    CASE $2
-                        WHEN 'created_at' THEN event.created_at
-                        WHEN 'viewed_at' THEN '1970-01-01 00:00:00+00'::timestamptz
-                        ELSE GREATEST(event.updated_at, event.last_reminder_fired_at)
-                    END::timestamptz as sort_ts,
+                    {sort_ts}::timestamptz as sort_ts,
                     NULL::text as project_id,
                     'CALENDAR_EVENT'::property_entity_type as property_entity_type
                 FROM calendar_events event
@@ -152,7 +157,9 @@ static GROUPED_CALENDAR_EVENT_TOP_CLAUSE: &str = r#"
                             AND link.primary_macro_id = $1
                       )
                   )
-"#;
+"#
+    )
+}
 
 // -- Detail clauses: full columns, joined back from TopItems --
 
@@ -1297,75 +1304,6 @@ fn project_top_where_clause() -> String {
     )
 }
 
-fn push_accessible_items_cte(
-    builder: &mut QueryBuilder<'_, Postgres>,
-    include_documents: bool,
-    include_chats: bool,
-    include_projects: bool,
-) {
-    let mut entity_types = Vec::with_capacity(3);
-    if include_documents {
-        entity_types.push("'document'");
-    }
-    if include_chats {
-        entity_types.push("'chat'");
-    }
-    if include_projects {
-        entity_types.push("'project'");
-    }
-
-    if entity_types.is_empty() {
-        return;
-    }
-
-    let entity_types = entity_types.join(", ");
-    builder.push(format!(
-        r#"AccessibleItems AS MATERIALIZED (
-        SELECT DISTINCT item_id, item_type
-        FROM (
-            SELECT
-                ea.entity_id::text as item_id,
-                ea.entity_type as item_type
-            FROM entity_access ea
-            WHERE ea.source_id = $1
-              AND ea.entity_type IN ({entity_types})
-
-            UNION ALL
-
-            SELECT
-                ea.entity_id::text as item_id,
-                ea.entity_type as item_type
-            FROM comms_channel_participants cp
-            CROSS JOIN LATERAL (
-                SELECT ea.entity_id, ea.entity_type
-                FROM entity_access ea
-                WHERE ea.source_id = cp.channel_id::text
-                  AND ea.entity_type IN ({entity_types})
-                OFFSET 0
-            ) ea
-            WHERE cp.user_id = $1
-              AND cp.left_at IS NULL
-
-            UNION ALL
-
-            SELECT
-                ea.entity_id::text as item_id,
-                ea.entity_type as item_type
-            FROM team_user t
-            CROSS JOIN LATERAL (
-                SELECT ea.entity_id, ea.entity_type
-                FROM entity_access ea
-                WHERE ea.source_id = t.team_id::text
-                  AND ea.entity_type IN ({entity_types})
-                OFFSET 0
-            ) ea
-            WHERE t.user_id = $1
-        ) accessible
-    ),
-"#
-    ));
-}
-
 fn build_query(
     filter_ast: &EntityFilterAst,
     exclude_frecency: bool,
@@ -1991,6 +1929,7 @@ fn build_grouped_query<'a>(
     filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
     grouping: &'a GroupingConfig,
+    sort_method: SimpleSortMethod,
 ) -> (QueryBuilder<'a, Postgres>, Option<String>) {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
 
@@ -2020,14 +1959,7 @@ fn build_grouped_query<'a>(
                 &[PropertyEntityType::CalendarEvent],
             );
 
-    push_accessible_items_cte(
-        &mut builder,
-        include_documents,
-        include_chats,
-        include_projects,
-    );
-
-    // TopItems CTE: lightweight id + sort_ts + project_id with filters, cursor, and limit
+    // All matching candidates are needed for exact counts; limits apply after grouping.
     builder.push("TopItems AS (");
     builder.push(
         "SELECT all_items.item_type, all_items.id, all_items.sort_ts, all_items.project_id, all_items.property_entity_type FROM (",
@@ -2037,11 +1969,11 @@ fn build_grouped_query<'a>(
 
     if include_documents {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(GROUPED_DOCUMENT_TOP_CLAUSE);
+        builder.push(grouped_document_top_clause(sort_method));
         if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(DOCUMENT_TOP_WHERE_CLAUSE);
+        builder.push(document_top_where_clause(sort_method));
         builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2051,7 +1983,8 @@ fn build_grouped_query<'a>(
 
     if include_chats {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(GROUPED_CHAT_TOP_CLAUSE);
+        builder.push(grouped_chat_top_clause(sort_method));
+        builder.push(chat_top_where_clause());
         builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2061,7 +1994,8 @@ fn build_grouped_query<'a>(
 
     if include_projects {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(GROUPED_PROJECT_TOP_CLAUSE);
+        builder.push(grouped_project_top_clause(sort_method));
+        builder.push(project_top_where_clause());
         builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2071,7 +2005,7 @@ fn build_grouped_query<'a>(
 
     if include_calendar_events {
         push_union_separator(&mut builder, &mut needs_separator);
-        builder.push(GROUPED_CALENDAR_EVENT_TOP_CLAUSE);
+        builder.push(grouped_calendar_event_top_clause(sort_method));
         builder.push(build_calendar_event_filter(
             filter_ast.calendar_event_filter.as_deref(),
         ));
@@ -2114,8 +2048,7 @@ fn build_grouped_query<'a>(
         builder.push(")");
     }
 
-    // Note: we don't limit TopItems here for grouped queries - limit is applied at the end
-    builder.push(" ORDER BY all_items.sort_ts DESC, all_items.id DESC");
+    // Ranking windows and the final SELECT provide their own ordering.
     builder.push("), ");
 
     // GroupedItems CTE: adds group metadata (and FilteredGroupedItems if not single-group mode)
@@ -2210,9 +2143,14 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let (mut query_builder, entity_type_bind) =
-        build_grouped_query(cursor.filter(), exclude_frecency, &grouping);
+    let (mut query_builder, entity_type_bind) = build_grouped_query(
+        cursor.filter(),
+        exclude_frecency,
+        &grouping,
+        *cursor.sort_method(),
+    );
 
+    // Keep the reserved $2 sort slot even though candidates now specialize it away.
     // $9 is bound unconditionally (NULL when not in single-group mode) so $10 stays aligned.
     let mut query = query_builder
         .build_query_as::<'_, GroupedSoupRow>()

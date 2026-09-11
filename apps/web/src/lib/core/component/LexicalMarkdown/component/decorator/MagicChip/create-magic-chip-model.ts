@@ -7,10 +7,9 @@ import {
   createElicitationController,
   type ElicitationController,
 } from '@app/features/block-agent/context/create-elicitation-controller';
-import { useUserId } from '@core/context/user';
 import {
   MAGIC_CHIP_STATUSES,
-  type MagicChipDecoratorProps,
+  type MagicChipData,
   type MagicChipStatus,
 } from '@macro-inc/lexical-core';
 import {
@@ -86,7 +85,7 @@ function modelName(
  * row names its owner, and {@link ElicitationController} sends the answer.
  * The header names the persona and model from the session row and the fold.
  */
-export function createMagicChipModel(props: MagicChipDecoratorProps): {
+export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
   elicitation: ElicitationController;
@@ -94,11 +93,10 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
   const [latestEvent, setLatestEvent] = createSignal<string>();
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
   const [persistedStatus, setPersistedStatus] = createSignal(props.status);
-  const [ownerId, setOwnerId] = createSignal<string>();
+  const [canEdit, setCanEdit] = createSignal<boolean>();
   const [session, setSession] = createSignal<SessionIdentity>();
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
   const pendingElicitation = () => metadata()?.pendingElicitation ?? undefined;
-  const viewerId = useUserId();
   let active = true;
   let release: (() => void) | undefined;
   let statusTimer: ReturnType<typeof setTimeout> | undefined;
@@ -118,7 +116,7 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
       .catch(() => undefined);
     if (!active) return;
     if (result?.isOk()) {
-      setOwnerId(result.value.ownerId);
+      setCanEdit(result.value.canEdit);
       setSession({
         harness: result.value.harness,
         model: result.value.model,
@@ -176,17 +174,24 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
     release?.();
   });
 
-  // This chip is one turn's surface; only a question asked in that turn is
-  // its to offer.
+  // Fold patches can arrive out of order. Follow the highest turn, including
+  // a pending question whose metadata arrives before its message patch.
+  const turn = () =>
+    props.promptedMessage?.turn ??
+    messages().reduce(
+      (latest, message) => Math.max(latest, message.turn),
+      pendingElicitation()?.turn ?? 0
+    );
+
+  // A locked chip only offers questions from its anchored turn.
   const questionForTurn = () => {
     const question = pendingElicitation();
-    return question?.turn === props.promptedMessage.turn ? question : undefined;
+    return question?.turn === turn() ? question : undefined;
   };
   const elicitation = createElicitationController({
     sessionId: () => props.agentSessionId,
     pending: questionForTurn,
-    ownerId,
-    viewerId,
+    canEdit,
   });
   const asking = (): MagicChipQuestion | undefined => {
     const question = questionForTurn();
@@ -194,16 +199,15 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
     return {
       question,
       canAnswer: elicitation.canAnswer(),
-      ownerName: elicitation.ownerName(),
     };
   };
 
   // Memoized: the view reads these from many places per flush, and a fold
   // pushes a frame per streamed chunk.
   const presentation = createMemo(() => {
-    const turn = props.promptedMessage.turn;
+    const currentTurn = turn();
     const messagesForTurn = messages().filter(
-      (message) => message.turn === turn
+      (message) => message.turn === currentTurn
     );
     return deriveMagicChipPresentation({
       persistedStatus: persistedStatus(),

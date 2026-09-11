@@ -59,6 +59,24 @@ export function parseDocumentMentions(text: string): string {
   );
 }
 
+export function parseAgentSessionMentions(text: string): string {
+  return text.replace(
+    /<m-agent-session-mention>(.*?)<\/m-agent-session-mention>/g,
+    (_, json) => {
+      try {
+        const data = JSON.parse(json);
+        return typeof data.label === 'string'
+          ? data.label
+          : typeof data.id === 'string'
+            ? data.id
+            : '';
+      } catch {
+        return '';
+      }
+    }
+  );
+}
+
 export function parsePullRequestMentions(text: string): string {
   return text.replace(/<m-pr-mention>(.*?)<\/m-pr-mention>/g, (_, json) => {
     try {
@@ -207,6 +225,7 @@ export function markdownToPlainText(markdown: string): string {
     parseGroupMentions,
     parseDocumentMentions,
     parsePullRequestMentions,
+    parseAgentSessionMentions,
     parseTagMentions,
     parseConnectApps,
     parseSnapshots,
@@ -353,6 +372,11 @@ export function markdownToEmbeddingText(markdown: string): string {
   text = flattenEmailThreadEmbeds(text);
 
   // Leaf tags.
+  text = replaceJsonTag(text, 'm-agent-session-mention', (data) =>
+    data.id
+      ? `[${data.label || 'Agent session'}](agent_session:${data.id})`
+      : data.label || ''
+  );
   text = replaceJsonTag(text, 'm-document-mention', documentRefToEmbeddingText);
   text = replaceJsonTag(text, 'm-document-card', documentRefToEmbeddingText);
   text = replaceJsonTag(text, 'm-pr-mention', (data) =>

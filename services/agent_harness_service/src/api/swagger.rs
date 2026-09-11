@@ -7,11 +7,12 @@ use agent_harness::inbound::model_load::{
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::inbound::axum_router::{
-    self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionQueueResponse,
-    AgentSessionResponse, ControlRequest, ControlResponse, ControlStatusDto,
-    CreateAgentSessionRequest, CreateAgentSessionResponse, CreateSessionThread,
-    EditQueuedActionRequest, LogDirectionDto, LogFrameDto, QueuedActionDto,
-    RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto,
+    self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionPreviewData,
+    AgentSessionPreviewDto, AgentSessionQueueResponse, AgentSessionResponse, ControlRequest,
+    ControlResponse, ControlStatusDto, CreateAgentSessionRequest, CreateAgentSessionResponse,
+    CreateSessionThread, EditQueuedActionRequest, LogDirectionDto, LogFrameDto,
+    PreviewAgentSessionsRequest, PreviewAgentSessionsResponse, QueuedActionDto,
+    RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto, WithAgentSessionId,
 };
 use utoipa::{
     Modify, OpenApi,
@@ -38,6 +39,7 @@ impl Modify for SecurityAddon {
     paths(
         axum_router::create_agent_session_handler,
         axum_router::get_agent_session_handler,
+        axum_router::preview_agent_sessions_handler,
         axum_router::rename_agent_session_handler,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
@@ -63,6 +65,11 @@ impl Modify for SecurityAddon {
         AgentAction,
         AgentActionId,
         AgentSessionResponse,
+        PreviewAgentSessionsRequest,
+        PreviewAgentSessionsResponse,
+        AgentSessionPreviewDto,
+        AgentSessionPreviewData,
+        WithAgentSessionId,
         RenameAgentSessionRequest,
         SessionStatusDto,
         AgentSessionLogResponse,

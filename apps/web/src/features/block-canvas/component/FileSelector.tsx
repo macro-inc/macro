@@ -93,7 +93,7 @@ export function FileSelector() {
     <Dropdown open={fileSelectorOpen()} onOpenChange={setFileSelectorOpen}>
       <Dropdown.Trigger
         variant="ghost"
-        size="icon-md"
+        size="icon-sm"
         label="File"
         tabIndex={-1}
       >

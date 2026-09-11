@@ -2,6 +2,8 @@
 
 #![deny(missing_docs)]
 
+/// Agent session models for Soup responses.
+pub mod agent_session;
 /// Calendar event models for Soup responses.
 pub mod calendar_event;
 /// Call record models for Soup responses.

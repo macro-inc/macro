@@ -253,6 +253,7 @@ dependencies = [
  "cursor_cloud_agents",
  "dashmap",
  "entity_access",
+ "entity_access_db_utils",
  "futures",
  "harness_id",
  "kafka_util",
@@ -264,7 +265,10 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mockall",
+ "model-entity",
+ "model_notifications",
  "model_user",
+ "notification",
  "opentelemetry",
  "pipedream_mcp",
  "redis",
@@ -2493,6 +2497,7 @@ dependencies = [
  "axum-core",
  "bytes",
  "cookie",
+ "form_urlencoded",
  "futures-util",
  "headers",
  "http 1.4.0",
@@ -2502,6 +2507,8 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde_core",
+ "serde_html_form",
+ "serde_path_to_error",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -3004,7 +3011,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.7"
+version = "0.6.10"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3762,6 +3769,7 @@ dependencies = [
  "apollo-compiler",
  "async-graphql",
  "axum",
+ "bots",
  "chrono",
  "email",
  "entity_access",
@@ -3786,9 +3794,11 @@ dependencies = [
  "models_properties",
  "models_soup",
  "notification",
+ "predicate-index",
  "rootcause",
  "serde",
  "soup",
+ "soup-filter-projection",
  "soup_realtime",
  "tokio",
  "tracing",
@@ -6189,16 +6199,20 @@ dependencies = [
  "axum",
  "bot_id",
  "cached",
+ "clap",
  "cool_asserts",
+ "database_env_vars",
  "futures",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_entrypoint",
  "macro_user_id",
  "mockall",
  "model",
  "model-entity",
  "model-error-response",
  "model_user",
+ "models_entity_access_management",
  "models_permissions",
  "rootcause",
  "serde",
@@ -6471,20 +6485,25 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "axum-extra",
  "chrono",
  "cowlike",
  "entity_access",
+ "http-body-util",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
  "mockall",
  "model-entity",
  "model-error-response",
+ "model_user",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
@@ -10699,6 +10718,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "model_owner"
+version = "0.1.0"
+dependencies = [
+ "bot_id",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "model_user"
 version = "0.1.0"
 dependencies = [
@@ -13598,6 +13631,7 @@ dependencies = [
  "async-trait",
  "aws-sdk-sqs",
  "axum",
+ "axum-extra",
  "chrono",
  "chrono-tz",
  "cron",
@@ -14798,6 +14832,19 @@ dependencies = [
  "aws-sdk-dynamodb",
  "base64 0.21.7",
  "serde",
+ "serde_core",
+]
+
+[[package]]
+name = "serde_html_form"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2f2d7ff8a2140333718bb329f5c40fc5f0865b84c426183ce14c97d2ab8154f"
+dependencies = [
+ "form_urlencoded",
+ "indexmap 2.14.0",
+ "itoa",
+ "ryu",
  "serde_core",
 ]
 

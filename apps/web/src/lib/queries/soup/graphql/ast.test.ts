@@ -19,6 +19,31 @@ function makeInput(query: Parameters<typeof queryStateFrom>[0]) {
 }
 
 describe('makeGraphqlSoupInput', () => {
+  it('preserves agent session opt-in and owner exclusions', () => {
+    const input = makeInput({
+      include: { includeAgentSessions: true },
+      exclude: { agentSessionOwnerId: ['macro|me@example.com'] },
+    });
+    expect(input).toMatchObject({
+      initial: {
+        filters: {
+          agentSessionFilter: {
+            and: {
+              left: { not: { literal: { owner: 'macro|me@example.com' } } },
+              right: { literal: { include: true } },
+            },
+          },
+        },
+      },
+    });
+    expect(
+      makeInput({ include: { agentSessionId: ['session'] } })
+    ).toMatchObject({
+      initial: {
+        filters: { agentSessionFilter: { literal: { id: 'session' } } },
+      },
+    });
+  });
   it('maps exact states and keeps email read independent', () => {
     for (const state of ['unseen', 'seen', 'done'] as const) {
       const input = makeGraphqlSoupInput({

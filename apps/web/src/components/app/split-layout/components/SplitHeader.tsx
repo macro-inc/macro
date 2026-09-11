@@ -43,6 +43,7 @@ import {
   useContext,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { match, P } from 'ts-pattern';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
@@ -60,35 +61,56 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
       id: string;
     }
   | undefined {
-  if (data.type === 'document') {
-    return {
-      type: fileTypeToBlockName(data.subType?.type ?? data.fileType) as
-        | BlockName
-        | 'unknown',
-      id: data.id,
-    };
-  }
-
-  if (data.type === 'channel_message' || data.type === 'channel_thread') {
-    return { type: 'channel', id: data.channelId };
-  }
-
-  if (data.type === 'foreign') return undefined;
-
-  // A reminder has no block of its own — it is opened through the entity it
-  // references, which the caller navigates to instead.
-  if (data.type === 'reminder') return undefined;
-
-  // Calendar events open the singleton calendar block; the full opening path
-  // supplies the event range used to focus the requested occurrence.
-  if (data.type === 'calendar_event')
-    return { type: 'calendar', id: CALENDAR_BLOCK_ID };
-
-  // CRM entity types map to their dedicated blocks (entity type !== block name).
-  if (data.type === 'crm_company') return { type: 'company', id: data.id };
-  if (data.type === 'crm_contact') return { type: 'contact', id: data.id };
-
-  return { type: data.type, id: data.id };
+  return (
+    match(data)
+      .returnType<{ type: SplitContent['type']; id: string } | undefined>()
+      .with({ type: 'document' }, (entity) => ({
+        type: fileTypeToBlockName(entity.subType?.type ?? entity.fileType) as
+          | BlockName
+          | 'unknown',
+        id: entity.id,
+      }))
+      .with(
+        { type: P.union('channel_message', 'channel_thread') },
+        (entity) => ({
+          type: 'channel',
+          id: entity.channelId,
+        })
+      )
+      .with({ type: 'agent_session' }, (entity) => ({
+        type: 'agent',
+        id: entity.id,
+      }))
+      // Reminders open their referenced entity rather than a block of their own.
+      .with({ type: P.union('foreign', 'reminder') }, () => undefined)
+      // The full calendar opening path supplies the event range to focus.
+      .with({ type: 'calendar_event' }, () => ({
+        type: 'calendar',
+        id: CALENDAR_BLOCK_ID,
+      }))
+      .with({ type: 'crm_company' }, (entity) => ({
+        type: 'company',
+        id: entity.id,
+      }))
+      .with({ type: 'crm_contact' }, (entity) => ({
+        type: 'contact',
+        id: entity.id,
+      }))
+      .with(
+        {
+          type: P.union(
+            'channel',
+            'chat',
+            'email',
+            'project',
+            'call',
+            'automation'
+          ),
+        },
+        (entity) => ({ type: entity.type, id: entity.id })
+      )
+      .exhaustive()
+  );
 }
 
 function SplitBackButton() {

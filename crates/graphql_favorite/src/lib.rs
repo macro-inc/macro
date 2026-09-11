@@ -19,4 +19,4 @@ pub use loaders::{
 };
 pub use mutations::{FavoriteMutationRoot, NoOpFavoriteMutationService, ReorderFavoritesInput};
 pub use objects::GraphqlFavorite;
-pub use queries::{FavoriteQueryReader, resolve_favorites};
+pub use queries::{FavoriteQueryReader, FavoritesFilterInput, resolve_favorites};

@@ -154,10 +154,20 @@ export function AgentInput(props: AgentInputProps) {
   // (channel EditorShell / chat surface) so the whole box is tappable,
   // including on touch — pointerdown stays inside the user gesture that
   // iOS needs to raise the keyboard.
+  //
+  // The tap's own default must not run afterwards: a mousedown on a target
+  // with nothing focusable above it blurs the active element — the editor
+  // just focused — and the keyboard drops again. Cancel pointerdown, and
+  // mousedown too because a real iPhone still synthesises it after a
+  // cancelled pointerdown (see `keepEditorFocus` in TouchSelectionToolbar).
+  // Taps inside the contenteditable keep their defaults so the caret lands
+  // under the finger.
   const focusEditor = (event: Event) => {
     const target = event.target as HTMLElement | null;
-    if (target?.closest('button')) return;
-    editor.controls.focus();
+    if (!target || target.closest('button')) return;
+    if (editor.lexical.getRootElement()?.contains(target)) return;
+    event.preventDefault();
+    if (event.type === 'pointerdown') editor.controls.focus();
   };
 
   return (
@@ -175,6 +185,7 @@ export function AgentInput(props: AgentInputProps) {
         <div
           class="flex items-end gap-1 px-2 py-1.5 touch:flex-col touch:items-stretch touch:gap-1.5 touch:px-3 touch:pt-2.5 touch:pb-2"
           onPointerDown={focusEditor}
+          onMouseDown={focusEditor}
         >
           {/* No vertical padding of its own: the shell is min-h-8 and editor
             paragraphs carry my-1.5, so the row's py-1.5 is the whole frame —

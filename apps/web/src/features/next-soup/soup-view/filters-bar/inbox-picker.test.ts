@@ -2,8 +2,8 @@ import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { useInboxPicker } from './inbox-picker';
 
-vi.mock('@queries/email/link', () => ({
-  useEmailLinksQuery: () => ({
+vi.mock('@queries/email/mail-accounts', () => ({
+  useMailAccountsQuery: () => ({
     data: {
       links: [
         { id: 'a', email_address: 'a@example.com', photo_url: null },

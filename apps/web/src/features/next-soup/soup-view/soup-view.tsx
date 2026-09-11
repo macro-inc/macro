@@ -741,6 +741,11 @@ export const SoupView = (props: SoupViewProps) => {
             setPreviewOpenPreference(open);
         }}
       />
+      <Show when={soupView.source.cachedMail?.()}>
+        <p role="status" class="px-4 py-1 text-xs text-ink-muted">
+          Showing cached mail. Only synchronized messages are available.
+        </p>
+      </Show>
       <Show when={applyDefaultCrmView}>
         <CrmDefaultViewLoader />
       </Show>

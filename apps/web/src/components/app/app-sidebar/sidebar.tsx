@@ -97,7 +97,7 @@ import UsersThreeIcon from '@phosphor/users-three.svg';
 import XIcon from '@phosphor/x.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { useActiveCallsQuery } from '@queries/call/call';
-import { useEmailLinksQuery } from '@queries/email/link';
+import { useMailAccountsQuery } from '@queries/email/mail-accounts';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -2082,7 +2082,7 @@ const SidebarLink = (props: SidebarLinkProps) => {
  */
 const SidebarMailLink = (props: SidebarLinkProps) => {
   const layout = useSplitLayout();
-  const linksQuery = useEmailLinksQuery();
+  const linksQuery = useMailAccountsQuery();
   const [expanded, setExpanded] = makePersisted(createSignal(false), {
     name: 'sidebar-mail-accounts-expanded',
   });

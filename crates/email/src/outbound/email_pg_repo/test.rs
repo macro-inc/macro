@@ -4,6 +4,7 @@ mod dynamic_query;
 mod importance_pagination;
 mod labels;
 mod link;
+mod mail_tab_projection;
 mod message;
 mod preview;
 mod project;

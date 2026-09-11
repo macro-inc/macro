@@ -1,6 +1,9 @@
-use crate::domain::models::{EmailThreadMetadata, MessageRow, ThreadRow};
+use crate::domain::models::{
+    EmailPreview, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
+    EmailThreadMetadata, MessageRow, ThreadRow,
+};
 use chrono::Utc;
-use sqlx::PgPool;
+use sqlx::{PgPool, types::Json};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -52,6 +55,92 @@ pub(super) async fn thread_metadata_by_ids(
     )
     .fetch_all(pool)
     .await
+}
+
+#[tracing::instrument(err, skip(pool, thread_ids))]
+pub(super) async fn thread_mail_projections_by_ids(
+    pool: &PgPool,
+    viewer: macro_user_id::user_id::MacroUserIdStr<'_>,
+    thread_ids: &[Uuid],
+) -> Result<Vec<EmailThreadMailProjection>, sqlx::Error> {
+    if thread_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    // Called only for receipt-authorized IDs. Each lateral is an indexed,
+    // per-thread top-one probe; bodies and whole message histories are not read.
+    let rows = sqlx::query!(
+        r#"
+        WITH user_source_ids AS (
+            SELECT cp.channel_id::text AS source_id FROM comms_channel_participants cp
+            WHERE cp.user_id = $2 AND cp.left_at IS NULL
+            UNION ALL SELECT team_id::text FROM team_user WHERE user_id = $2
+            UNION ALL SELECT $2::text
+        )
+        SELECT t.id AS "thread_id!",
+            t.latest_non_spam_message_ts, t.latest_outbound_message_ts,
+            t.has_calendar_attachment,
+            EXISTS (SELECT 1 FROM entity_access ea
+                WHERE ea.entity_id = t.id AND ea.entity_type = 'email_thread'
+                  AND ea.source_id = ANY(SELECT source_id FROM user_source_ids)
+            ) AS "has_thread_share!",
+            CASE WHEN am.id IS NOT NULL THEN jsonb_build_object(
+                'id', am.id, 'subject', am.subject, 'snippet', am.snippet, 'is_draft', am.is_draft,
+                'sender_email', ac.email_address, 'sender_name', ac.name, 'sender_photo_url', ac.sfs_photo_url
+            ) END AS "all_preview?: Json<EmailPreview>",
+            CASE WHEN dm.id IS NOT NULL THEN jsonb_build_object(
+                'id', dm.id, 'subject', dm.subject, 'snippet', dm.snippet, 'is_draft', dm.is_draft,
+                'sender_email', dc.email_address, 'sender_name', dc.name, 'sender_photo_url', dc.sfs_photo_url
+            ) END AS "draft_preview?: Json<EmailPreview>",
+            CASE WHEN sm.id IS NOT NULL THEN jsonb_build_object(
+                'id', sm.id, 'subject', sm.subject, 'snippet', sm.snippet, 'is_draft', sm.is_draft,
+                'sender_email', sc.email_address, 'sender_name', sc.name, 'sender_photo_url', sc.sfs_photo_url
+            ) END AS "sent_preview?: Json<EmailPreview>"
+        FROM email_threads t
+        LEFT JOIN LATERAL (
+            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id
+            FROM email_messages m WHERE m.thread_id = t.id AND NOT EXISTS (
+                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
+                WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'
+            ) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
+        ) am ON TRUE
+        LEFT JOIN email_contacts ac ON ac.id = am.from_contact_id
+        LEFT JOIN LATERAL (
+            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id
+            FROM email_messages m WHERE m.thread_id = t.id AND m.is_draft AND NOT EXISTS (
+                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
+                WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'
+            ) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
+        ) dm ON TRUE
+        LEFT JOIN email_contacts dc ON dc.id = dm.from_contact_id
+        LEFT JOIN LATERAL (
+            SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id
+            FROM email_messages m WHERE m.thread_id = t.id AND m.is_sent AND NOT EXISTS (
+                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
+                WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'
+            ) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
+        ) sm ON TRUE
+        LEFT JOIN email_contacts sc ON sc.id = sm.from_contact_id
+        WHERE t.id = ANY($1)
+        "#,
+        thread_ids, viewer.as_ref(),
+    ).fetch_all(pool).await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| EmailThreadMailProjection {
+            thread_id: row.thread_id,
+            cache_facts: EmailThreadMailCacheFacts {
+                latest_non_spam_message_ts: row.latest_non_spam_message_ts,
+                latest_outbound_message_ts: row.latest_outbound_message_ts,
+                has_calendar_attachment: row.has_calendar_attachment,
+                has_thread_share: row.has_thread_share,
+            },
+            previews: EmailThreadMailPreviews {
+                all: row.all_preview.map(|Json(preview)| preview),
+                draft: row.draft_preview.map(|Json(preview)| preview),
+                sent: row.sent_preview.map(|Json(preview)| preview),
+            },
+        })
+        .collect())
 }
 
 #[tracing::instrument(err, skip(pool))]

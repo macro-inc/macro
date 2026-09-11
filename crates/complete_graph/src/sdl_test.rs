@@ -15,7 +15,10 @@ fn soup_response_schema_exposes_frontend_fields() {
         "threadId: ID!",
         "emailLabels: [GraphqlSoupEmailLabel!]!",
         "emailLinks: [GraphqlEmailLink!]!",
-        "favorites: [GraphqlFavorite!]!",
+        "favorites(filter: FavoritesFilterInput): [GraphqlFavorite!]!",
+        "input FavoritesFilterInput {",
+        "entityTypes: [GraphqlEntityType!]! = []",
+        "entityIds: [ID!]! = []",
         "emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread",
         "type GraphqlSoupEmailThread implements GraphqlSoupEntity {",
         "providerId: String",
@@ -57,6 +60,10 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlSoupEmailDraftAttachment {",
         "type GraphqlSoupEmailForwardedAttachment {",
         "type GraphqlSoupCall implements GraphqlSoupEntity {",
+        "type GraphqlSoupAgentSession implements GraphqlSoupEntity {",
+        "bot: GraphqlSessionBot",
+        "type GraphqlSessionBot {",
+        "avatarUrl: String",
         "channelName: String",
         "customName: String",
         "status: String!",
@@ -265,6 +272,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "GraphqlSoupCrmCompany",
         "GraphqlSoupForeignEntity",
         "GraphqlSoupReminder",
+        "GraphqlSoupAgentSession",
     ] {
         let ExtendedType::Object(object) = schema.types.get(name).expect("Soup object exists")
         else {

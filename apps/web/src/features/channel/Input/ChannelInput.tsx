@@ -29,7 +29,6 @@ import {
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
-import { isIOS } from '@solid-primitives/platform';
 import { CollapsedInput, cn, Surface } from '@ui';
 import { $getRoot } from 'lexical';
 import {
@@ -70,6 +69,7 @@ import type {
 } from './types';
 import { isReplyInput } from './types';
 import { uploadInputAttachments } from './upload-attachments';
+import { clearComposer as clearComposerPreservingFocus } from './utils/clear-composer';
 import { entityToDocumentMentionInfo } from './utils/entity-mention';
 import { applyInlineFormat, applyNodeFormat } from './utils/formatting';
 import { $selectTrailingParagraph } from './utils/select-trailing-paragraph';
@@ -356,21 +356,15 @@ export function ChannelInput(props: ChannelInputProps) {
       coordinates.clientY <= rect.bottom
     );
   };
-  // On iOS, blur before clearing so dictation finalizes and discards its buffer
-  // (otherwise it re-injects the sent text into the cleared editor). Re-focus
-  // via rAF so the keyboard stays up: rAF fires after Lexical's update commits,
-  // avoiding a conflict where clear()'s $setSelection(null) undoes the focus.
   clearComposer = () => {
-    if (isIOS) {
-      isInternalRefocus = true;
-      markdownEditor.controls.blur();
-      markdownEditor.controls.clear();
-      requestAnimationFrame(() => {
-        markdownEditor.controls.focus();
-        isInternalRefocus = false;
-      });
-    } else {
-      markdownEditor.controls.clear();
+    isInternalRefocus = true;
+    try {
+      clearComposerPreservingFocus(
+        lexicalEditor(),
+        markdownEditor.controls.clear
+      );
+    } finally {
+      isInternalRefocus = false;
     }
   };
 

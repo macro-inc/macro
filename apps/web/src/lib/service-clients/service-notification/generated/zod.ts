@@ -125,6 +125,10 @@ export const listTypedNotificationsResponseItemsItemNotificationMetadataContentN
 
 export const listTypedNotificationsResponseItemsItemNotificationMetadataContentReviewGithubIdMin = 0;
 
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentTurnMin = 0;
+
+export const listTypedNotificationsResponseItemsItemNotificationMetadataContentTurnMinOne = 0;
+
 export const listTypedNotificationsResponse = zod
   .object({
     items: zod
@@ -1399,6 +1403,215 @@ export const listTypedNotificationsResponse = zod
                     .describe(
                       "A review was submitted on the user's GitHub pull request."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          announcementMessageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The magic-chip message for the turn in question, when one was posted.'
+                            ),
+                          botId: zod
+                            .string()
+                            .describe(
+                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                            ),
+                          botName: zod
+                            .string()
+                            .describe(
+                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                            ),
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The channel the session was opened from, when it was.'
+                            ),
+                          sessionId: zod
+                            .uuid()
+                            .describe('The session; what a click opens.'),
+                          sessionName: zod
+                            .string()
+                            .describe(
+                              "The session's name at the time of the event."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The thread the session was opened from, when it was.'
+                            ),
+                        })
+                        .describe(
+                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                        )
+                        .and(
+                          zod.object({
+                            actor: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "Who prompted the turn, absent when a bot acted on nobody's behalf."
+                              ),
+                            excerpt: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "The agent's last prose in the turn, whole; `None` when it wrote none."
+                              ),
+                            stopReason: zod
+                              .string()
+                              .describe('The ACP stop reason, or `error`.'),
+                            turn: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentTurnMin
+                              )
+                              .describe('The turn that ended.'),
+                          })
+                        )
+                        .describe(
+                          'An agent finished a turn with nothing queued behind it.'
+                        ),
+                      tag: zod.enum(['agent_session_settled']),
+                    })
+                    .describe(
+                      'An agent finished a turn with nothing queued behind it.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          announcementMessageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The magic-chip message for the turn in question, when one was posted.'
+                            ),
+                          botId: zod
+                            .string()
+                            .describe(
+                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                            ),
+                          botName: zod
+                            .string()
+                            .describe(
+                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                            ),
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The channel the session was opened from, when it was.'
+                            ),
+                          sessionId: zod
+                            .uuid()
+                            .describe('The session; what a click opens.'),
+                          sessionName: zod
+                            .string()
+                            .describe(
+                              "The session's name at the time of the event."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The thread the session was opened from, when it was.'
+                            ),
+                        })
+                        .describe(
+                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                        )
+                        .and(
+                          zod.object({
+                            question: zod
+                              .string()
+                              .describe(
+                                'The question, as the agent phrased it.'
+                              ),
+                            turn: zod
+                              .number()
+                              .min(
+                                listTypedNotificationsResponseItemsItemNotificationMetadataContentTurnMinOne
+                              )
+                              .describe('The turn asking.'),
+                          })
+                        )
+                        .describe(
+                          "An agent is blocked on a question only the session's owner can answer."
+                        ),
+                      tag: zod.enum(['agent_session_waiting_for_input']),
+                    })
+                    .describe(
+                      "An agent is blocked on a question for the session's owner."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          announcementMessageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The magic-chip message for the turn in question, when one was posted.'
+                            ),
+                          botId: zod
+                            .string()
+                            .describe(
+                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                            ),
+                          botName: zod
+                            .string()
+                            .describe(
+                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                            ),
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The channel the session was opened from, when it was.'
+                            ),
+                          sessionId: zod
+                            .uuid()
+                            .describe('The session; what a click opens.'),
+                          sessionName: zod
+                            .string()
+                            .describe(
+                              "The session's name at the time of the event."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The thread the session was opened from, when it was.'
+                            ),
+                        })
+                        .describe(
+                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                        )
+                        .and(
+                          zod.object({
+                            actionId: zod
+                              .uuid()
+                              .describe('The action carrying the prompt.'),
+                            mentionedBy: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Someone named the recipient in a prompt to an agent session.'
+                        ),
+                      tag: zod.enum(['agent_session_mentioned']),
+                    })
+                    .describe(
+                      'The user was named in a prompt to an agent session.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -1488,6 +1701,10 @@ export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificatio
 export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentNumberMinFive = 0;
 
 export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentReviewGithubIdMin = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentTurnMin = 0;
+
+export const bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentTurnMinOne = 0;
 
 export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
   .object({
@@ -2763,6 +2980,215 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe(
                       "A review was submitted on the user's GitHub pull request."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          announcementMessageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The magic-chip message for the turn in question, when one was posted.'
+                            ),
+                          botId: zod
+                            .string()
+                            .describe(
+                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                            ),
+                          botName: zod
+                            .string()
+                            .describe(
+                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                            ),
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The channel the session was opened from, when it was.'
+                            ),
+                          sessionId: zod
+                            .uuid()
+                            .describe('The session; what a click opens.'),
+                          sessionName: zod
+                            .string()
+                            .describe(
+                              "The session's name at the time of the event."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The thread the session was opened from, when it was.'
+                            ),
+                        })
+                        .describe(
+                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                        )
+                        .and(
+                          zod.object({
+                            actor: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "Who prompted the turn, absent when a bot acted on nobody's behalf."
+                              ),
+                            excerpt: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "The agent's last prose in the turn, whole; `None` when it wrote none."
+                              ),
+                            stopReason: zod
+                              .string()
+                              .describe('The ACP stop reason, or `error`.'),
+                            turn: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentTurnMin
+                              )
+                              .describe('The turn that ended.'),
+                          })
+                        )
+                        .describe(
+                          'An agent finished a turn with nothing queued behind it.'
+                        ),
+                      tag: zod.enum(['agent_session_settled']),
+                    })
+                    .describe(
+                      'An agent finished a turn with nothing queued behind it.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          announcementMessageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The magic-chip message for the turn in question, when one was posted.'
+                            ),
+                          botId: zod
+                            .string()
+                            .describe(
+                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                            ),
+                          botName: zod
+                            .string()
+                            .describe(
+                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                            ),
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The channel the session was opened from, when it was.'
+                            ),
+                          sessionId: zod
+                            .uuid()
+                            .describe('The session; what a click opens.'),
+                          sessionName: zod
+                            .string()
+                            .describe(
+                              "The session's name at the time of the event."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The thread the session was opened from, when it was.'
+                            ),
+                        })
+                        .describe(
+                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                        )
+                        .and(
+                          zod.object({
+                            question: zod
+                              .string()
+                              .describe(
+                                'The question, as the agent phrased it.'
+                              ),
+                            turn: zod
+                              .number()
+                              .min(
+                                bulkGetTypedNotificationsByEventItemIdsResponseItemsItemNotificationMetadataContentTurnMinOne
+                              )
+                              .describe('The turn asking.'),
+                          })
+                        )
+                        .describe(
+                          "An agent is blocked on a question only the session's owner can answer."
+                        ),
+                      tag: zod.enum(['agent_session_waiting_for_input']),
+                    })
+                    .describe(
+                      "An agent is blocked on a question for the session's owner."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          announcementMessageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The magic-chip message for the turn in question, when one was posted.'
+                            ),
+                          botId: zod
+                            .string()
+                            .describe(
+                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                            ),
+                          botName: zod
+                            .string()
+                            .describe(
+                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                            ),
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The channel the session was opened from, when it was.'
+                            ),
+                          sessionId: zod
+                            .uuid()
+                            .describe('The session; what a click opens.'),
+                          sessionName: zod
+                            .string()
+                            .describe(
+                              "The session's name at the time of the event."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The thread the session was opened from, when it was.'
+                            ),
+                        })
+                        .describe(
+                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                        )
+                        .and(
+                          zod.object({
+                            actionId: zod
+                              .uuid()
+                              .describe('The action carrying the prompt.'),
+                            mentionedBy: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Someone named the recipient in a prompt to an agent session.'
+                        ),
+                      tag: zod.enum(['agent_session_mentioned']),
+                    })
+                    .describe(
+                      'The user was named in a prompt to an agent session.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -2846,6 +3272,10 @@ export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMeta
 export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentNumberMinFive = 0;
 
 export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentReviewGithubIdMin = 0;
+
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentTurnMin = 0;
+
+export const getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentTurnMinOne = 0;
 
 export const getTypedNotificationsByEventItemIdResponse = zod
   .object({
@@ -4121,6 +4551,215 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe(
                       "A review was submitted on the user's GitHub pull request."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          announcementMessageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The magic-chip message for the turn in question, when one was posted.'
+                            ),
+                          botId: zod
+                            .string()
+                            .describe(
+                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                            ),
+                          botName: zod
+                            .string()
+                            .describe(
+                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                            ),
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The channel the session was opened from, when it was.'
+                            ),
+                          sessionId: zod
+                            .uuid()
+                            .describe('The session; what a click opens.'),
+                          sessionName: zod
+                            .string()
+                            .describe(
+                              "The session's name at the time of the event."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The thread the session was opened from, when it was.'
+                            ),
+                        })
+                        .describe(
+                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                        )
+                        .and(
+                          zod.object({
+                            actor: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "Who prompted the turn, absent when a bot acted on nobody's behalf."
+                              ),
+                            excerpt: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "The agent's last prose in the turn, whole; `None` when it wrote none."
+                              ),
+                            stopReason: zod
+                              .string()
+                              .describe('The ACP stop reason, or `error`.'),
+                            turn: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentTurnMin
+                              )
+                              .describe('The turn that ended.'),
+                          })
+                        )
+                        .describe(
+                          'An agent finished a turn with nothing queued behind it.'
+                        ),
+                      tag: zod.enum(['agent_session_settled']),
+                    })
+                    .describe(
+                      'An agent finished a turn with nothing queued behind it.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          announcementMessageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The magic-chip message for the turn in question, when one was posted.'
+                            ),
+                          botId: zod
+                            .string()
+                            .describe(
+                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                            ),
+                          botName: zod
+                            .string()
+                            .describe(
+                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                            ),
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The channel the session was opened from, when it was.'
+                            ),
+                          sessionId: zod
+                            .uuid()
+                            .describe('The session; what a click opens.'),
+                          sessionName: zod
+                            .string()
+                            .describe(
+                              "The session's name at the time of the event."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The thread the session was opened from, when it was.'
+                            ),
+                        })
+                        .describe(
+                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                        )
+                        .and(
+                          zod.object({
+                            question: zod
+                              .string()
+                              .describe(
+                                'The question, as the agent phrased it.'
+                              ),
+                            turn: zod
+                              .number()
+                              .min(
+                                getTypedNotificationsByEventItemIdResponseItemsItemNotificationMetadataContentTurnMinOne
+                              )
+                              .describe('The turn asking.'),
+                          })
+                        )
+                        .describe(
+                          "An agent is blocked on a question only the session's owner can answer."
+                        ),
+                      tag: zod.enum(['agent_session_waiting_for_input']),
+                    })
+                    .describe(
+                      "An agent is blocked on a question for the session's owner."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          announcementMessageId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The magic-chip message for the turn in question, when one was posted.'
+                            ),
+                          botId: zod
+                            .string()
+                            .describe(
+                              'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                            ),
+                          botName: zod
+                            .string()
+                            .describe(
+                              "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                            ),
+                          channelId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The channel the session was opened from, when it was.'
+                            ),
+                          sessionId: zod
+                            .uuid()
+                            .describe('The session; what a click opens.'),
+                          sessionName: zod
+                            .string()
+                            .describe(
+                              "The session's name at the time of the event."
+                            ),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The thread the session was opened from, when it was.'
+                            ),
+                        })
+                        .describe(
+                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                        )
+                        .and(
+                          zod.object({
+                            actionId: zod
+                              .uuid()
+                              .describe('The action carrying the prompt.'),
+                            mentionedBy: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+                              ),
+                          })
+                        )
+                        .describe(
+                          'Someone named the recipient in a prompt to an agent session.'
+                        ),
+                      tag: zod.enum(['agent_session_mentioned']),
+                    })
+                    .describe(
+                      'The user was named in a prompt to an agent session.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -4213,6 +4852,10 @@ export const getTypedNotificationByIdResponseNotificationMetadataContentCommentG
 export const getTypedNotificationByIdResponseNotificationMetadataContentNumberMinFive = 0;
 
 export const getTypedNotificationByIdResponseNotificationMetadataContentReviewGithubIdMin = 0;
+
+export const getTypedNotificationByIdResponseNotificationMetadataContentTurnMin = 0;
+
+export const getTypedNotificationByIdResponseNotificationMetadataContentTurnMinOne = 0;
 
 export const getTypedNotificationByIdResponse = zod
   .object({
@@ -5389,6 +6032,205 @@ export const getTypedNotificationByIdResponse = zod
             .describe(
               "A review was submitted on the user's GitHub pull request."
             ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  announcementMessageId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'The magic-chip message for the turn in question, when one was posted.'
+                    ),
+                  botId: zod
+                    .string()
+                    .describe(
+                      'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                    ),
+                  botName: zod
+                    .string()
+                    .describe(
+                      "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                    ),
+                  channelId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'The channel the session was opened from, when it was.'
+                    ),
+                  sessionId: zod
+                    .uuid()
+                    .describe('The session; what a click opens.'),
+                  sessionName: zod
+                    .string()
+                    .describe("The session's name at the time of the event."),
+                  threadId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'The thread the session was opened from, when it was.'
+                    ),
+                })
+                .describe(
+                  'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                )
+                .and(
+                  zod.object({
+                    actor: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Who prompted the turn, absent when a bot acted on nobody's behalf."
+                      ),
+                    excerpt: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The agent's last prose in the turn, whole; `None` when it wrote none."
+                      ),
+                    stopReason: zod
+                      .string()
+                      .describe('The ACP stop reason, or `error`.'),
+                    turn: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentTurnMin
+                      )
+                      .describe('The turn that ended.'),
+                  })
+                )
+                .describe(
+                  'An agent finished a turn with nothing queued behind it.'
+                ),
+              tag: zod.enum(['agent_session_settled']),
+            })
+            .describe(
+              'An agent finished a turn with nothing queued behind it.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  announcementMessageId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'The magic-chip message for the turn in question, when one was posted.'
+                    ),
+                  botId: zod
+                    .string()
+                    .describe(
+                      'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                    ),
+                  botName: zod
+                    .string()
+                    .describe(
+                      "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                    ),
+                  channelId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'The channel the session was opened from, when it was.'
+                    ),
+                  sessionId: zod
+                    .uuid()
+                    .describe('The session; what a click opens.'),
+                  sessionName: zod
+                    .string()
+                    .describe("The session's name at the time of the event."),
+                  threadId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'The thread the session was opened from, when it was.'
+                    ),
+                })
+                .describe(
+                  'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                )
+                .and(
+                  zod.object({
+                    question: zod
+                      .string()
+                      .describe('The question, as the agent phrased it.'),
+                    turn: zod
+                      .number()
+                      .min(
+                        getTypedNotificationByIdResponseNotificationMetadataContentTurnMinOne
+                      )
+                      .describe('The turn asking.'),
+                  })
+                )
+                .describe(
+                  "An agent is blocked on a question only the session's owner can answer."
+                ),
+              tag: zod.enum(['agent_session_waiting_for_input']),
+            })
+            .describe(
+              "An agent is blocked on a question for the session's owner."
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  announcementMessageId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'The magic-chip message for the turn in question, when one was posted.'
+                    ),
+                  botId: zod
+                    .string()
+                    .describe(
+                      'The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client.'
+                    ),
+                  botName: zod
+                    .string()
+                    .describe(
+                      "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+                    ),
+                  channelId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'The channel the session was opened from, when it was.'
+                    ),
+                  sessionId: zod
+                    .uuid()
+                    .describe('The session; what a click opens.'),
+                  sessionName: zod
+                    .string()
+                    .describe("The session's name at the time of the event."),
+                  threadId: zod
+                    .uuid()
+                    .nullish()
+                    .describe(
+                      'The thread the session was opened from, when it was.'
+                    ),
+                })
+                .describe(
+                  'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                )
+                .and(
+                  zod.object({
+                    actionId: zod
+                      .uuid()
+                      .describe('The action carrying the prompt.'),
+                    mentionedBy: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+                      ),
+                  })
+                )
+                .describe(
+                  'Someone named the recipient in a prompt to an agent session.'
+                ),
+              tag: zod.enum(['agent_session_mentioned']),
+            })
+            .describe('The user was named in a prompt to an agent session.'),
         ])
         .describe(
           'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'

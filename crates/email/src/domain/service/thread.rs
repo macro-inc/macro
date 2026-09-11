@@ -1,8 +1,8 @@
 use crate::domain::{
     assembler::{message_from_row, split_recipients, thread_from_row},
     models::{
-        ContactInfo, EmailErr, EmailThreadMetadata, Message, MessageLabel, MessageRow, ParsedLabel,
-        ParsedMessage, ParsedThread, Thread, ThreadRow,
+        ContactInfo, EmailErr, EmailThreadMailProjection, EmailThreadMetadata, Message,
+        MessageLabel, MessageRow, ParsedLabel, ParsedMessage, ParsedThread, Thread, ThreadRow,
     },
     ports::{EmailRepo, RecipientsByMessageId},
 };
@@ -319,6 +319,28 @@ where
             .map_err(anyhow::Error::from)?
             .into_iter()
             .map(|metadata| (metadata.thread_id, metadata))
+            .collect())
+    }
+
+    /// Fetch Mail projection data for authorized threads in one repository batch.
+    pub(crate) async fn get_email_thread_mail_projections_impl(
+        &self,
+        viewer: macro_user_id::user_id::MacroUserIdStr<'static>,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, EmailThreadMailProjection>, EmailErr> {
+        let thread_ids = email_thread_ids_from_receipts(receipts)?;
+
+        if thread_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        Ok(self
+            .email_repo
+            .thread_mail_projections_by_ids(viewer, &thread_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .into_iter()
+            .map(|projection| (projection.thread_id, projection))
             .collect())
     }
 

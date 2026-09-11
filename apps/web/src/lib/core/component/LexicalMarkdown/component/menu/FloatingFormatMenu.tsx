@@ -8,6 +8,8 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { isMobile } from '@core/mobile/isMobile';
 import { debouncedDependent } from '@core/util/debounce';
+import DotsThreeLarge from '@icon/dots-three-large.svg';
+import CaretDown from '@phosphor/caret-down.svg';
 import TextCode from '@phosphor/code.svg';
 import CodeBlock from '@phosphor/code-block.svg';
 import BrokenLinkIcon from '@phosphor/link-break.svg';
@@ -17,9 +19,7 @@ import ListChecks from '@phosphor/list-checks.svg';
 import ListNumbers from '@phosphor/list-numbers.svg';
 import TextHighlight from '@phosphor/paint-roller.svg';
 import Quote from '@phosphor/quotes.svg';
-import TextAA from '@phosphor/text-aa.svg';
 import TextBold from '@phosphor/text-b.svg';
-import TextH from '@phosphor/text-h.svg';
 import TextH1 from '@phosphor/text-h-one.svg';
 import TextH3 from '@phosphor/text-h-three.svg';
 import TextH2 from '@phosphor/text-h-two.svg';
@@ -29,7 +29,7 @@ import TextSub from '@phosphor/text-subscript.svg';
 import TextSuper from '@phosphor/text-superscript.svg';
 import TextT from '@phosphor/text-t.svg';
 import TextUnderline from '@phosphor/text-underline.svg';
-import { Button, Dropdown, Layer, SingleSelectCheck } from '@ui';
+import { Button, Dropdown, SingleSelectCheck, Toolbar } from '@ui';
 import {
   COMMAND_PRIORITY_HIGH,
   FORMAT_TEXT_COMMAND,
@@ -79,25 +79,46 @@ type InlineFormat =
   | 'superscript'
   | 'subscript';
 
-// Only cmd+b/i/u are registered by Lexical's rich text in MarkdownTextarea,
-// so only those shortcuts are advertised here.
-const InlineFormatOptions: Array<{
+type InlineOption = {
   format: InlineFormat;
   icon: SvgIcon;
   label: string;
   shortcut?: string;
-}> = [
+};
+
+// Bold/italic always get their own buttons (cmd+b/i via Lexical rich text).
+const PrimaryInlineOptions: InlineOption[] = [
   { format: 'bold', icon: TextBold, label: 'Bold', shortcut: 'cmd+b' },
   { format: 'italic', icon: TextItalic, label: 'Italic', shortcut: 'cmd+i' },
+];
+
+// Markdown-safe inline formats, shown in the "..." menu. Shortcuts mirror the
+// DefaultShortcuts registered by these editors' keyboardShortcutsPlugin.
+const MoreInlineOptions: InlineOption[] = [
+  {
+    format: 'strikethrough',
+    icon: TextStriketrough,
+    label: 'Strikethrough',
+    shortcut: 'shift+cmd+x',
+  },
+  { format: 'code', icon: TextCode, label: 'Inline code', shortcut: 'cmd+e' },
+  {
+    format: 'highlight',
+    icon: TextHighlight,
+    label: 'Highlight',
+    shortcut: 'shift+cmd+h',
+  },
+];
+
+// Not representable in Markdown; appended to the "..." menu only when the host
+// opts in via `extendedInlineFormats` (e.g. non-Markdown-backed editors).
+const ExtendedInlineOptions: InlineOption[] = [
   {
     format: 'underline',
     icon: TextUnderline,
     label: 'Underline',
     shortcut: 'cmd+u',
   },
-  { format: 'strikethrough', icon: TextStriketrough, label: 'Strikethrough' },
-  { format: 'code', icon: TextCode, label: 'Inline code' },
-  { format: 'highlight', icon: TextHighlight, label: 'Highlight' },
   { format: 'superscript', icon: TextSuper, label: 'Superscript' },
   { format: 'subscript', icon: TextSub, label: 'Subscript' },
 ];
@@ -120,6 +141,15 @@ const ListOptions: ElementOption[] = [
   { format: 'list-check', icon: ListChecks, label: 'Checklist' },
 ];
 
+// The full block-style list, surfaced through the single "Text" dropdown.
+const BlockOptions: ElementOption[] = [
+  { format: 'paragraph', icon: TextT, label: 'Body' },
+  ...HeadingOptions,
+  ...ListOptions,
+  { format: 'code', icon: CodeBlock, label: 'Code' },
+  { format: 'quote', icon: Quote, label: 'Quote' },
+];
+
 export function FloatingFormatMenu(props: {
   portalScope?: PortalScope;
   /**
@@ -128,6 +158,11 @@ export function FloatingFormatMenu(props: {
    * mounted alongside this menu. Defaults to true.
    */
   showLinkButton?: boolean;
+  /**
+   * Include underline / super / subscript in the "..." menu. These can't be
+   * represented in Markdown, so leave off for Markdown-backed editors.
+   */
+  extendedInlineFormats?: boolean;
 }) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   if (!lexicalWrapper) {
@@ -224,64 +259,129 @@ export function FloatingFormatMenu(props: {
     return info?.type === 'range' ? info.domSelection : undefined;
   };
 
+  const moreInlineOptions = () =>
+    props.extendedInlineFormats
+      ? [...MoreInlineOptions, ...ExtendedInlineOptions]
+      : MoreInlineOptions;
+
+  const InlineButton = (buttonProps: { item: InlineOption }) => (
+    <Button
+      label={buttonProps.item.label}
+      shortcut={buttonProps.item.shortcut}
+      size="icon-sm"
+      class="rounded-md"
+      depth={3}
+      variant={selection()?.[buttonProps.item.format] ? 'accent' : 'ghost'}
+      onPointerDown={(e: PointerEvent) => e.preventDefault()}
+      onClick={(e: MouseEvent | KeyboardEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        inlineFormat(buttonProps.item.format);
+      }}
+    >
+      <Dynamic component={buttonProps.item.icon} />
+    </Button>
+  );
+
+  // The remaining inline formats, opened as a horizontal row of buttons.
+  const MoreInlineDropdown = () => {
+    const [open, setOpen] = createSignal(false);
+    return (
+      <Dropdown open={open()} onOpenChange={setOpen}>
+        <Dropdown.Trigger
+          variant="ghost"
+          size="icon-sm"
+          class="rounded-md"
+          depth={3}
+          tooltip="More formatting"
+          tabIndex={-1}
+        >
+          <DotsThreeLarge />
+        </Dropdown.Trigger>
+        <Dropdown.Content onCloseAutoFocus={refocusEditor}>
+          <Dropdown.Group>
+            <div class="flex items-center gap-1">
+              <For each={moreInlineOptions()}>
+                {(item) => <InlineButton item={item} />}
+              </For>
+            </div>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+    );
+  };
+
+  // A single "Text" trigger that reflects the selected block and opens the
+  // block-style menu.
+  const TextBlockDropdown = () => {
+    const [open, setOpen] = createSignal(false);
+    const currentLabel = () => {
+      const active = BlockOptions.filter((option) =>
+        selection()?.elementsInRange?.has(option.format)
+      );
+      return active.length === 1 ? active[0].label : 'Text';
+    };
+    return (
+      <Dropdown open={open()} onOpenChange={setOpen}>
+        <Dropdown.Trigger
+          variant="ghost"
+          size="sm"
+          class="gap-1 rounded-md"
+          depth={3}
+          tooltip="Text style"
+          tabIndex={-1}
+        >
+          {currentLabel()}
+          <CaretDown class="size-3" />
+        </Dropdown.Trigger>
+        <Dropdown.Content class="text-xs" onCloseAutoFocus={refocusEditor}>
+          <Dropdown.Group>
+            <For each={BlockOptions}>
+              {(item) => {
+                const isActive = () =>
+                  !!selection()?.elementsInRange?.has(item.format);
+                return (
+                  <Dropdown.Item
+                    onSelect={() => {
+                      nodeFormat(item.format);
+                      setOpen(false);
+                    }}
+                    class={isActive() ? 'text-ink' : ''}
+                    role="menuitemradio"
+                    aria-checked={isActive()}
+                  >
+                    <Dynamic component={item.icon} class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">{item.label}</span>
+                    <SingleSelectCheck active={isActive()} />
+                  </Dropdown.Item>
+                );
+              }}
+            </For>
+          </Dropdown.Group>
+        </Dropdown.Content>
+      </Dropdown>
+    );
+  };
+
   return (
     <Show
       when={showMenu() && lexicalWrapper.isInteractable() && domSelection()}
     >
       <ScopedPortal scope={props.portalScope}>
-        <Layer depth={2}>
-          <div
-            ref={setMenuRef}
-            class="fixed top-0 left-0 z-highlight-menu border border-edge bg-surface shadow-xl rounded-lg p-1 flex flex-row items-center gap-1"
-            use:floatWithSelection={{
-              selection: domSelection(),
-              reactiveOnContainer: editor.getRootElement(),
-              useBlockBoundary: true,
-              moveWithSelection: true,
-            }}
-          >
-            <ElementFormatButton
-              format="paragraph"
-              icon={TextT}
-              label="Body"
-              selection={selection}
-              onFormat={nodeFormat}
-            />
-            <ElementFormatMenu
-              items={HeadingOptions}
-              icon={TextH}
-              label="Headings"
-              selection={selection}
-              onFormat={nodeFormat}
-              onCloseAutoFocus={refocusEditor}
-            />
-            <ElementFormatMenu
-              items={ListOptions}
-              icon={ListBullets}
-              label="Lists"
-              selection={selection}
-              onFormat={nodeFormat}
-              onCloseAutoFocus={refocusEditor}
-            />
-            <ElementFormatButton
-              format="code"
-              icon={CodeBlock}
-              label="Code"
-              selection={selection}
-              onFormat={nodeFormat}
-            />
-            <ElementFormatButton
-              format="quote"
-              icon={Quote}
-              label="Quote"
-              selection={selection}
-              onFormat={nodeFormat}
-            />
-            <InlineFormatMenu
-              selection={selection}
-              onFormat={inlineFormat}
-              onCloseAutoFocus={refocusEditor}
-            />
+        <div
+          ref={setMenuRef}
+          class="fixed top-0 left-0 z-highlight-menu w-fit"
+          use:floatWithSelection={{
+            selection: domSelection(),
+            reactiveOnContainer: editor.getRootElement(),
+            useBlockBoundary: true,
+            moveWithSelection: true,
+          }}
+        >
+          <Toolbar>
+            <For each={PrimaryInlineOptions}>
+              {(item) => <InlineButton item={item} />}
+            </For>
             <Show when={props.showLinkButton ?? true}>
               <Button
                 variant="ghost"
@@ -297,139 +397,12 @@ export function FloatingFormatMenu(props: {
                 />
               </Button>
             </Show>
-          </div>
-        </Layer>
+            <MoreInlineDropdown />
+            <Toolbar.Divider />
+            <TextBlockDropdown />
+          </Toolbar>
+        </div>
       </ScopedPortal>
     </Show>
-  );
-}
-
-function ElementFormatButton(props: {
-  format: NodeTransformType;
-  icon: SvgIcon;
-  label: string;
-  selection: () => SelectionData | undefined;
-  onFormat: (format: NodeTransformType) => void;
-}) {
-  const isActive = () =>
-    !!props.selection()?.elementsInRange?.has(props.format);
-  return (
-    <Button
-      tooltip={props.label}
-      size="icon-sm"
-      class="rounded-md"
-      depth={3}
-      variant={isActive() ? 'accent' : 'ghost'}
-      onPointerDown={(e: PointerEvent) => e.preventDefault()}
-      onClick={(e: MouseEvent | KeyboardEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        props.onFormat(props.format);
-      }}
-    >
-      <Dynamic component={props.icon} />
-    </Button>
-  );
-}
-
-function ElementFormatMenu(props: {
-  items: ElementOption[];
-  icon: SvgIcon;
-  label: string;
-  selection: () => SelectionData | undefined;
-  onFormat: (format: NodeTransformType) => void;
-  onCloseAutoFocus: () => void;
-}) {
-  const isAnyActive = () =>
-    props.items.some((item) =>
-      props.selection()?.elementsInRange?.has(item.format)
-    );
-  return (
-    <Dropdown>
-      <Dropdown.Trigger
-        variant={isAnyActive() ? 'accent' : 'ghost'}
-        size="icon-sm"
-        class="rounded-md"
-        depth={3}
-        tooltip={props.label}
-        tabIndex={-1}
-      >
-        <Dynamic component={props.icon} />
-      </Dropdown.Trigger>
-      <Dropdown.Content onCloseAutoFocus={props.onCloseAutoFocus}>
-        <Dropdown.Group>
-          <For each={props.items}>
-            {(item) => {
-              const isActive = () =>
-                !!props.selection()?.elementsInRange?.has(item.format);
-              return (
-                <Dropdown.Item
-                  onSelect={() => props.onFormat(item.format)}
-                  class={isActive() ? 'text-ink' : ''}
-                  role="menuitemradio"
-                  aria-checked={isActive()}
-                >
-                  <Dynamic component={item.icon} class="size-4 shrink-0" />
-                  <span class="flex-1 truncate">{item.label}</span>
-                  <SingleSelectCheck active={isActive()} />
-                </Dropdown.Item>
-              );
-            }}
-          </For>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
-  );
-}
-
-function InlineFormatMenu(props: {
-  selection: () => SelectionData | undefined;
-  onFormat: (format: InlineFormat) => void;
-  onCloseAutoFocus: () => void;
-}) {
-  const [open, setOpen] = createSignal(false);
-  const isAnyActive = () =>
-    InlineFormatOptions.some((item) => props.selection()?.[item.format]);
-  return (
-    <Dropdown open={open()} onOpenChange={setOpen}>
-      <Dropdown.Trigger
-        variant={isAnyActive() ? 'accent' : 'ghost'}
-        size="icon-sm"
-        class="rounded-md"
-        depth={3}
-        tooltip="Text Styles"
-        tabIndex={-1}
-      >
-        <TextAA />
-      </Dropdown.Trigger>
-      <Dropdown.Content onCloseAutoFocus={props.onCloseAutoFocus}>
-        <Dropdown.Group>
-          <div class="w-full flex gap-1 justify-center items-center">
-            <For each={InlineFormatOptions}>
-              {(item) => (
-                <Button
-                  label={item.label}
-                  shortcut={item.shortcut}
-                  size="icon-sm"
-                  variant={
-                    props.selection()?.[item.format] ? 'accent' : 'ghost'
-                  }
-                  class="rounded-md"
-                  depth={3}
-                  onClick={(e: MouseEvent | KeyboardEvent) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    props.onFormat(item.format);
-                    setOpen(false);
-                  }}
-                >
-                  <Dynamic component={item.icon} />
-                </Button>
-              )}
-            </For>
-          </div>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
   );
 }

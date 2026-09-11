@@ -799,6 +799,8 @@ impl SimpleMention {
 /// Shareable entity type referenced by a channel message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReferencedShareItemType {
+    /// Agent session entity.
+    AgentSession,
     /// Document entity.
     Document,
     /// Chat entity.
@@ -815,6 +817,7 @@ impl ReferencedShareItemType {
     /// Parse a raw entity type from the transport/storage representation.
     pub fn from_raw(raw: &str) -> Option<Self> {
         match raw {
+            "agent_session" => Some(Self::AgentSession),
             "document" => Some(Self::Document),
             "chat" => Some(Self::Chat),
             "project" => Some(Self::Project),
@@ -827,6 +830,7 @@ impl ReferencedShareItemType {
     /// Return the storage representation of this item type.
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::AgentSession => "agent_session",
             Self::Document => "document",
             Self::Chat => "chat",
             Self::Project => "project",

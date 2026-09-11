@@ -83,7 +83,10 @@ import type {
 import type { SoupParams } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { soupKeys } from '@queries/soup/keys';
-import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
+import {
+  isDisplayableSoupItem,
+  mapApiSoupItemToEntity,
+} from '@queries/soup/transform-utils';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
@@ -106,6 +109,8 @@ import { unwrap } from 'solid-js/store';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
+  /** Results are limited to synchronized email metadata. */
+  cachedMail?: Accessor<boolean>;
   error: Accessor<Error | null>;
   /** True when the active request has local or network data, including an
    * intentionally empty result. */
@@ -976,6 +981,7 @@ export const SoupViewContextProvider: FlowComponent<
     const membershipFilter = config().itemMembershipFilter;
     if (membershipFilter && !membershipFilter(item)) return false;
 
+    if (!isDisplayableSoupItem(item)) return false;
     const entity = mapApiSoupItemToEntity(item) as SoupEntity;
     return (
       soup.predicates.test(entity, getFilterContext()) &&
@@ -1509,6 +1515,8 @@ export const SoupViewContextProvider: FlowComponent<
     initialize,
     source: {
       data: entities,
+      cachedMail: () =>
+        !search.isSearching() && itemsQueryData()?.cachedMail === true,
       error: () =>
         search.isSearching() ? searchSourceError() : itemsSource.error(),
       hasData: () =>

@@ -31,7 +31,7 @@ aws-smithy-runtime-api = { version = "1", features = ["client", "http-02x", "htt
 aws-smithy-types = { version = "1", default-features = false, features = ["byte-stream-poll-next", "http-body-0-4-x", "http-body-1-x", "rt-tokio", "test-util"] }
 aws_lambda_events = { version = "0.16", default-features = false, features = ["eventbridge", "s3", "sns", "sqs"] }
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
-axum-extra = { version = "0.10", features = ["cookie", "typed-header"] }
+axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
 bstr = { version = "1" }
 byteorder = { version = "1" }
@@ -163,7 +163,7 @@ aws-smithy-runtime-api = { version = "1", features = ["client", "http-02x", "htt
 aws-smithy-types = { version = "1", default-features = false, features = ["byte-stream-poll-next", "http-body-0-4-x", "http-body-1-x", "rt-tokio", "test-util"] }
 aws_lambda_events = { version = "0.16", default-features = false, features = ["eventbridge", "s3", "sns", "sqs"] }
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
-axum-extra = { version = "0.10", features = ["cookie", "typed-header"] }
+axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
 bstr = { version = "1" }
 byteorder = { version = "1" }
