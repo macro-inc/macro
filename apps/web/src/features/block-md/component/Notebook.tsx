@@ -1,7 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
-import { useGoToTempRedirect } from '@block-md/signal/location';
 import {
   editorFocusSignal,
   getSaveState,
@@ -19,7 +18,6 @@ import { useIsMacroTeam } from '@core/context/team';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { tempRedirectLocation } from '@core/signal/location';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
@@ -109,7 +107,6 @@ export function Notebook(props: {
   const { displayName: documentName } = useMarkdownName();
   const scopeId = () => props.hotkeyScope;
   const history = useHistory();
-  const documentId = props.documentId;
   const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
 
   let notebookRef!: HTMLDivElement;
@@ -173,21 +170,6 @@ export function Notebook(props: {
     const { observe } = makeResizeObserver(observeCallback);
     observeCallback();
     observe(notebookRef);
-  });
-
-  // Component scope on purpose: the hook registers an onCleanup that ends
-  // its pending wait-for-mark. Called inside the createEffect below, that
-  // cleanup would belong to the effect's computation and run on every
-  // re-run — tying the deep-link scroll's lifetime to re-run ordering.
-  const goToTempRedirect = useGoToTempRedirect();
-
-  createEffect(() => {
-    const recentState = tempRedirectLocation();
-    if (!recentState) return;
-
-    setTimeout(() => {
-      goToTempRedirect(documentId, recentState);
-    }, 0);
   });
 
   createEffect(() => {
