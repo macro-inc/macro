@@ -33,3 +33,16 @@ pub struct SearchHandlerState {
     /// search tools included.
     pub calendar_search_enabled: bool,
 }
+
+impl SearchHandlerState {
+    /// Assemble the agent-session search use case from read-only adapters.
+    pub(crate) fn agent_session_search(
+        &self,
+    ) -> crate::domain::agent_session::AgentSessionSearchService<
+        crate::outbound::agent_session::PgAgentSessionSearchSource,
+    > {
+        crate::domain::agent_session::AgentSessionSearchService(
+            crate::outbound::agent_session::PgAgentSessionSearchSource(self.db.clone()),
+        )
+    }
+}

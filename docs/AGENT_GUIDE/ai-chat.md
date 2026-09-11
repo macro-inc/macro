@@ -179,6 +179,12 @@ at the latest message, including when history arrives after the empty view. Shor
 transcripts sit at the bottom, above the composer. Only the visible rows and an
 overscan buffer are mounted: scroll to older turns before searching their DOM text.
 
+Search links add `agent_message_turn=<zero-based turn>&agent_message_author=user|agent`.
+They wait for history to load, then scroll to and highlight the matching folded
+message instead of staying at latest. Clicking another hit (including in an already
+open session) repeats the jump. Manual navigation or **Scroll to bottom** clears the
+message highlight; incoming output does not repeat the search jump.
+
 - New messages and growing streamed replies follow while within 50px of the end.
   Scroll up to read history without being pulled back by subsequent output.
 - Far above the end, scroll downward to reveal **Scroll to bottom**. Clicking it

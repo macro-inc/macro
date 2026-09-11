@@ -54,6 +54,9 @@ pub enum SearchError {
     /// A CRM company filter id was not a valid UUID
     #[error("invalid crm company id: {0}")]
     InvalidCrmCompanyId(String),
+    /// An agent-session filter is not a UUID.
+    #[error("invalid agent session id: {0}")]
+    InvalidAgentSessionId(String),
     /// Opensearch error occurred
     #[error("unable to search")]
     Search(#[from] OpensearchClientError),
@@ -76,6 +79,7 @@ impl IntoResponse for SearchError {
             | SearchError::TooManyTerms
             | SearchError::InvalidCursor
             | SearchError::InvalidCrmCompanyId(_)
+            | SearchError::InvalidAgentSessionId(_)
             | SearchError::NoQueryOrTermsProvided
             | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
             SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,

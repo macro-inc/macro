@@ -65,6 +65,7 @@ pub struct SearchGotoCallRecord {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema, JsonSchema)]
 #[serde(untagged)]
 pub enum SearchGotoContent {
+    AgentSessions(crate::agent_session::SearchGotoAgentSession),
     Documents(SearchGotoDocument),
     Chats(SearchGotoChat),
     Emails(SearchGotoEmail),
@@ -75,6 +76,9 @@ pub enum SearchGotoContent {
 impl From<opensearch_client::search::model::SearchGotoContent> for SearchGotoContent {
     fn from(goto: opensearch_client::search::model::SearchGotoContent) -> Self {
         match goto {
+            opensearch_client::search::model::SearchGotoContent::AgentSessions(a) => {
+                Self::AgentSessions(a.into())
+            }
             opensearch_client::search::model::SearchGotoContent::Documents(a) => {
                 SearchGotoContent::Documents(SearchGotoDocument {
                     node_id: a.node_id,

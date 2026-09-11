@@ -449,6 +449,29 @@ describe('removeSoupEntitiesFromDoneFilteredQueries', () => {
 });
 
 describe('removeSearchEntities', () => {
+  it('handles agent-session results without treating them as legacy chats', () => {
+    const session = {
+      type: 'agentSession',
+      id: 'session-1',
+      name: 'Search verification',
+      owner_id: 'macro|owner@example.com',
+      bot_id: 'bot-1',
+      created_at: '2026-09-11T00:00:00Z',
+      updated_at: '2026-09-11T00:00:00Z',
+      agent_session_search_results: [],
+    } satisfies UnifiedSearchResponseItem;
+    seedSearchQuery(
+      mockSearchCache([[session, mockSearchResult('chat', 'chat-1')]])
+    );
+
+    const tx = removeSearchEntities(new Set(['session-1']));
+    expect(getSearchQuery()!.pages[0].results).toEqual([
+      mockSearchResult('chat', 'chat-1'),
+    ]);
+    tx.rollback();
+    expect(getSearchQuery()!.pages[0].results[0]).toEqual(session);
+  });
+
   it('filters matching IDs from search results', () => {
     seedSearchQuery(
       mockSearchCache([

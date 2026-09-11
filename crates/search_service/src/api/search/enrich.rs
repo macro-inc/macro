@@ -23,6 +23,13 @@ pub async fn enrich_search_response(
     search_term: Option<&str>,
 ) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
     match entity_type {
+        SearchEntityType::AgentSessions => Ok(super::agent_session::enrich_agent_sessions(
+            ctx, user_id, results,
+        )
+        .await?
+        .into_iter()
+        .map(UnifiedSearchResponseItem::AgentSession)
+        .collect()),
         SearchEntityType::Documents => {
             let response = enrich_documents(ctx, user_id, results, search_term).await?;
             Ok(response

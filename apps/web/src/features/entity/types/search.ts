@@ -33,11 +33,24 @@ type CallRecordSegmentHighlightLocation = {
 };
 
 export type SearchLocation =
+  | AgentMessageHighlightLocation
   | MarkdownHighlightLocation
   | PdfHighlightLocation
   | ChannelMessageHighlightLocation
   | EmailMessageHighlightLocation
   | CallRecordSegmentHighlightLocation;
+
+type AgentMessageHighlightLocation = {
+  type: 'agent';
+  messageTurn: number;
+  author: 'user' | 'agent';
+};
+
+type AgentContentHitData = {
+  type: 'agent';
+  content: string;
+  location: AgentMessageHighlightLocation;
+};
 
 export type ChannelContentHitData = {
   type: 'channel';
@@ -91,6 +104,7 @@ export type DocumentContentHitData =
   | GenericContentHitData;
 
 export type ContentHitData =
+  | AgentContentHitData
   | DocumentContentHitData
   | ChannelContentHitData
   | EmailContentHitData

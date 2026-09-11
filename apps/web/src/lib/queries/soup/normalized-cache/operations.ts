@@ -1012,6 +1012,7 @@ function getSearchResultId(result: UnifiedSearchResponseItem): string {
     .with({ type: 'call' }, (r) => r.call_id)
     .with({ type: 'company' }, (r) => r.id)
     .with({ type: 'calendarEvent' }, (r) => r.id)
+    .with({ type: 'agentSession' }, (r) => r.id)
     .exhaustive();
 }
 

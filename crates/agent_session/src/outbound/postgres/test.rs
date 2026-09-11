@@ -1,4 +1,5 @@
 use super::*;
+mod search;
 use crate::domain::model::{AgentMcpServer, DEFAULT_AGENT_SESSION_NAME};
 use crate::domain::ports::AgentSessionRepo;
 use agent_client_protocol::RawJsonRpcMessage;

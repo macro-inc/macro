@@ -7,6 +7,7 @@
 /// from the (HTTP 200, partial) response.
 pub(crate) const HIGHLIGHT_MAX_ANALYZER_OFFSET: u32 = 999_999;
 
+pub mod agent_sessions;
 mod builder;
 pub mod calendar_events;
 pub mod call_records;

@@ -10,6 +10,32 @@ use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
 
+#[cfg(test)]
+mod test;
+
+/// List agent sessions granted to the caller's current user/channel/team sources.
+/// Optional requested IDs narrow the allowlist before it reaches OpenSearch.
+#[tracing::instrument(err, skip(pool, source_ids, requested_ids))]
+pub async fn accessible_session_ids(
+    pool: &PgPool,
+    source_ids: &SourceIds,
+    requested_ids: &[uuid::Uuid],
+) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT entity_id
+        FROM entity_access
+        WHERE entity_type = 'agent_session'
+          AND source_id = ANY($1)
+          AND (cardinality($2::uuid[]) = 0 OR entity_id = ANY($2))
+        "#,
+        &source_ids.0,
+        requested_ids,
+    )
+    .fetch_all(pool)
+    .await
+}
+
 /// Get the highest access level a user has for an agent session.
 ///
 /// A session's grants are written when it is created: the owner with

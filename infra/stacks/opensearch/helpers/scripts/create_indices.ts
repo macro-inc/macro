@@ -1,6 +1,8 @@
 import type { Client } from '@opensearch-project/opensearch';
 import { client } from '../client';
 import {
+  AGENT_SESSIONS_ALIAS,
+  AGENT_SESSIONS_INDEX,
   CALENDAR_EVENTS_ALIAS,
   CALENDAR_EVENTS_INDEX,
   CALL_RECORDS_ALIAS,
@@ -905,6 +907,63 @@ const EMAIL_BODY = {
 const CHATS_RELATION_PARENT = 'chat';
 const CHATS_RELATION_CHILD = 'message';
 
+const AGENT_SESSIONS_RELATION_PARENT = 'agent_session';
+const AGENT_SESSIONS_RELATION_CHILD = 'message';
+
+const AGENT_SESSIONS_V1_BODY = {
+  settings: {
+    ...SHARD_SETTINGS,
+    ...SLOWLOG_SETTINGS,
+    refresh_interval: '1s',
+  },
+  mappings: {
+    dynamic: 'false',
+    properties: {
+      // Present on both the parent and every child so a session can always be
+      // reconciled or removed with one reliable query.
+      agent_session_id: { type: 'keyword' },
+      // Unified search sorts/collapses by entity_id; preserve existing projections.
+      entity_id: { type: 'alias', path: 'agent_session_id' },
+      projection_generation: { type: 'keyword' },
+      // Parent-only metadata.
+      name: {
+        type: 'text',
+        fields: { keyword: { type: 'keyword', ignore_above: 128 } },
+      },
+      owner_id: { type: 'keyword', index: true, doc_values: true },
+      bot_id: { type: 'keyword', index: true, doc_values: true },
+      thread_id: { type: 'keyword', index: true, doc_values: true },
+      originating_message_id: {
+        type: 'keyword',
+        index: true,
+        doc_values: true,
+      },
+      created_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: false,
+        doc_values: true,
+      },
+      updated_at_millis: {
+        type: 'date',
+        format: 'epoch_millis',
+        index: false,
+        doc_values: true,
+      },
+      // Child-only folded-message fields.
+      message_turn: { type: 'integer', index: false, doc_values: true },
+      author: { type: 'keyword', index: false, doc_values: true },
+      author_user_id: { type: 'keyword', index: false, doc_values: true },
+      content: { type: 'text', analyzer: 'standard' },
+      agent_session_relation: {
+        type: 'join',
+        relations: {
+          [AGENT_SESSIONS_RELATION_PARENT]: AGENT_SESSIONS_RELATION_CHILD,
+        },
+      },
+    },
+  },
+};
 const CHATS_V2_BODY = {
   settings: {
     ...SHARD_SETTINGS,
@@ -1063,6 +1122,11 @@ const CALL_RECORDS_V2_BODY = {
  * as CHATS_V2_BODY / CALL_RECORDS_V2_BODY).
  */
 export const INDEX_SPECS: CreateIndexArgs[] = [
+  {
+    indexName: AGENT_SESSIONS_INDEX,
+    aliasName: AGENT_SESSIONS_ALIAS,
+    body: AGENT_SESSIONS_V1_BODY,
+  },
   {
     indexName: DOCUMENTS_INDEX,
     aliasName: DOCUMENTS_ALIAS,

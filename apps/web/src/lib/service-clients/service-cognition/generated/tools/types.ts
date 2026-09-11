@@ -68,6 +68,7 @@ export type BotOwnerSummary =
  */
 export type SearchMatchType = 'partial' | 'exact';
 export type UnifiedSearchIndex =
+  | 'agent_sessions'
   | 'documents'
   | 'chats'
   | 'emails'
@@ -119,6 +120,9 @@ export type TaggedSearchResult1 =
     })
   | (CalendarEventSearchResponseItemWithMetadata & {
       type: 'calendarEvent';
+    })
+  | (AgentSessionSearchResponseItem & {
+      type: 'agentSession';
     });
 /**
  * The document sub type enum represents all values of document sub types.
@@ -169,6 +173,10 @@ export type CalendarEventSearchTime =
       endDate: string;
       kind: 'allDay';
     };
+/**
+ * Side of a folded conversation.
+ */
+export type AgentSessionAuthor = 'user' | 'agent';
 /**
  * The mutually exclusive time shape supplied to calendar tools.
  */
@@ -1709,6 +1717,63 @@ export interface CalendarEventSearchResult {
    * The score of the result
    */
   score?: number | null;
+}
+/**
+ * One accessible agent session, grouped with its matching folded messages.
+ */
+export interface AgentSessionSearchResponseItem {
+  /**
+   * Session ID.
+   */
+  id: string;
+  /**
+   * Current persisted name.
+   */
+  name: string;
+  /**
+   * Session owner.
+   */
+  owner_id: string;
+  /**
+   * Agent persona ID.
+   */
+  bot_id: string;
+  /**
+   * Session creation time.
+   */
+  created_at: string;
+  /**
+   * Current persisted modification time.
+   */
+  updated_at: string;
+  /**
+   * Name and folded-message matches.
+   */
+  agent_session_search_results: AgentSessionSearchResult[];
+}
+/**
+ * A name match or one matching folded message.
+ */
+export interface AgentSessionSearchResult {
+  /**
+   * Absent for a name-only match.
+   */
+  goto?: SearchGotoAgentSession | null;
+  highlight: SearchHighlight;
+  /**
+   * Search score.
+   */
+  score?: number | null;
+}
+/**
+ * Stable navigation target from the fold, independent of raw ACP log IDs.
+ */
+export interface SearchGotoAgentSession {
+  /**
+   * Fold-assigned turn.
+   */
+  message_turn: number;
+  author: AgentSessionAuthor;
 }
 /**
  * Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes that channel's webhook URL and a credential proposal. The user mints the bearer token from the chat card or bot settings; the secret is never returned in this tool result. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup.

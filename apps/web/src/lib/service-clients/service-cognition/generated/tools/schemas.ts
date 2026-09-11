@@ -174,6 +174,7 @@ export const ContentSearch = z.object({
   entityTypes: z
     .array(
       z.enum([
+        'agent_sessions',
         'documents',
         'chats',
         'emails',
@@ -791,6 +792,62 @@ export const SearchToolResponse = z.object({
                 ),
               }),
               z.object({ type: z.literal('calendarEvent') })
+            ),
+            z.intersection(
+              z.object({
+                id: z.string().uuid(),
+                name: z.string(),
+                owner_id: z.string(),
+                bot_id: z.string().uuid(),
+                created_at: z.string().datetime({ offset: true }),
+                updated_at: z.string().datetime({ offset: true }),
+                agent_session_search_results: z.array(
+                  z.object({
+                    goto: z
+                      .union([
+                        z.object({
+                          message_turn: z.number().int().gte(0),
+                          author: z.any().superRefine((x, ctx) => {
+                            const schemas = [
+                              z.literal('user'),
+                              z.literal('agent'),
+                            ];
+                            const errors = schemas.reduce<z.ZodError[]>(
+                              (errors, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? [...errors, result.error]
+                                    : errors)(schema.safeParse(x)),
+                              []
+                            );
+                            if (schemas.length - errors.length !== 1) {
+                              ctx.addIssue({
+                                path: ctx.path,
+                                code: 'invalid_union',
+                                unionErrors: errors,
+                                message:
+                                  'Invalid input: Should pass single schema',
+                              });
+                            }
+                          }),
+                        }),
+                        z.null(),
+                      ])
+                      .optional(),
+                    highlight: z.object({
+                      name: z.union([z.string(), z.null()]).optional(),
+                      content: z.array(z.string()).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      bcc: z.array(z.string()).optional(),
+                    }),
+                    score: z.union([z.number(), z.null()]).optional(),
+                  })
+                ),
+              }),
+              z.object({ type: z.literal('agentSession') })
             ),
           ];
           const errors = schemas.reduce<z.ZodError[]>(
@@ -2838,6 +2895,7 @@ export const NameSearch = z.object({
   entityTypes: z
     .array(
       z.enum([
+        'agent_sessions',
         'documents',
         'chats',
         'emails',

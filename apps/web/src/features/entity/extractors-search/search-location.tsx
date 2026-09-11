@@ -12,6 +12,11 @@ interface SearchLocationProps {
 function getLocationDescription(hit: ContentHitData): string | undefined {
   return match(hit)
     .with({ type: 'pdf' }, (h) => `Page ${h.location.searchPage}`)
+    .with(
+      { type: 'agent' },
+      (h) =>
+        `${h.location.author === 'user' ? 'User' : 'Agent'} · Turn ${h.location.messageTurn + 1}`
+    )
     .otherwise(() => undefined);
 }
 

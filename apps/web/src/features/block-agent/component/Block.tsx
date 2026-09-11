@@ -8,8 +8,10 @@ import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LinkedConversationDrawer } from '@core/linked-conversation';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
-import { Show, useContext } from 'solid-js';
-
+import { createMethodRegistration } from '@core/orchestrator';
+import { blockHandleSignal } from '@core/signal/load';
+import { useSearchParams } from '@solidjs/router';
+import { createSignal, Show, useContext } from 'solid-js';
 import {
   AgentSessionProvider,
   useAgentSession,
@@ -19,12 +21,23 @@ import {
   sessionOriginThread,
 } from '../context/origin-thread';
 import { forgetPendingSession } from '../context/pending-session';
+import { parseAgentMessageTarget } from '../core/search-location';
 import { AgentComposer } from './AgentComposer';
 import { AgentSplitHeader } from './AgentSplitHeader';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
 
 function AgentBlockContent() {
+  const [params] = useSearchParams();
+  const [searchTarget, setSearchTarget] = createSignal(
+    parseAgentMessageTarget(params)
+  );
+  createMethodRegistration(blockHandleSignal.get, {
+    goToLocationFromParams: (params: Record<string, unknown>) => {
+      const target = parseAgentMessageTarget(params);
+      if (target) setSearchTarget(target);
+    },
+  });
   const { session, metadata, loadFailed, loadRetryable, pending, retryLoad } =
     useAgentSession();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
@@ -63,7 +76,7 @@ function AgentBlockContent() {
               title={metadata()?.title ?? undefined}
             />
             <div class="size-full min-w-0 flex flex-col">
-              <Transcript />
+              <Transcript searchTarget={searchTarget()} />
               {/* Full-frame mobile: composer + queue float in the bottom
                   accessory region above the dock; desktop stays inline. */}
               <FloatRegionOrInline region="accessory">
@@ -72,7 +85,11 @@ function AgentBlockContent() {
                 <div class="flex w-full justify-center shrink-0 px-4 pb-4 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
                   <div class="macro-message-width mx-auto">
                     <AgentComposer
-                      autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                      autofocus={
+                        canAutofocusSplitContent &&
+                        !navigatedFromJK() &&
+                        !searchTarget()
+                      }
                     />
                   </div>
                 </div>

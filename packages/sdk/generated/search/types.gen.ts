@@ -5,6 +5,11 @@ export type ClientOptions = {
 };
 
 /**
+ * Side of a folded conversation.
+ */
+export type AgentSessionAuthor = 'user' | 'agent';
+
+/**
  * Filters for agent sessions.
  */
 export type AgentSessionFilters = {
@@ -23,6 +28,55 @@ export type AgentSessionFilters = {
      * include every owner.
      */
     owners?: Array<string>;
+};
+
+/**
+ * One accessible agent session, grouped with its matching folded messages.
+ */
+export type AgentSessionSearchResponseItem = {
+    /**
+     * Name and folded-message matches.
+     */
+    agent_session_search_results: Array<AgentSessionSearchResult>;
+    /**
+     * Agent persona ID.
+     */
+    bot_id: string;
+    /**
+     * Session creation time.
+     */
+    created_at: string;
+    /**
+     * Session ID.
+     */
+    id: string;
+    /**
+     * Current persisted name.
+     */
+    name: string;
+    /**
+     * Session owner.
+     */
+    owner_id: string;
+    /**
+     * Current persisted modification time.
+     */
+    updated_at: string;
+};
+
+/**
+ * A name match or one matching folded message.
+ */
+export type AgentSessionSearchResult = {
+    goto?: null | SearchGotoAgentSession;
+    /**
+     * Matched name/content fragments.
+     */
+    highlight: SearchHighlight;
+    /**
+     * Search score.
+     */
+    score?: number | null;
 };
 
 /**
@@ -1361,6 +1415,21 @@ export type ForeignEntityFilters = {
     notification_filters?: NotificationFilters;
 };
 
+/**
+ * The search service version of a highlight
+ */
+export type Highlight = {
+    /**
+     * If the match was on the entity content, this will provide a list of highlights
+     * for each content match
+     */
+    content?: Array<string>;
+    /**
+     * If the match was on the entity name, this will be present with that highlight
+     */
+    name?: string | null;
+};
+
 export type MatchType = 'exact' | 'partial' | 'regexp' | 'query';
 
 /**
@@ -1646,6 +1715,79 @@ export type ReminderFilters = {
      * specific `ids` or `entities` also opts in.
      */
     include?: boolean;
+};
+
+/**
+ * Stable navigation target from the fold, independent of raw ACP log IDs.
+ */
+export type SearchGotoAgentSession = {
+    /**
+     * Author within the turn.
+     */
+    author: AgentSessionAuthor;
+    /**
+     * Fold-assigned turn.
+     */
+    message_turn: number;
+};
+
+export type SearchGotoCallRecord = {
+    channel_id: string;
+    ended_at?: string | null;
+    participant_ids: Array<string>;
+    sequence_num: number;
+    speaker_id: string;
+    started_at: string;
+    transcript_id: string;
+};
+
+export type SearchGotoChannel = {
+    /**
+     * The channel message id
+     */
+    channel_message_id: string;
+};
+
+export type SearchGotoChat = {
+    /**
+     * The chat message id
+     */
+    chat_message_id: string;
+    /**
+     * The role of the chat message
+     */
+    role: string;
+};
+
+/**
+ * The search service version of a goto
+ */
+export type SearchGotoContent = SearchGotoAgentSession | SearchGotoDocument | SearchGotoChat | SearchGotoEmail | SearchGotoChannel | SearchGotoCallRecord;
+
+export type SearchGotoDocument = {
+    /**
+     * The node id of the document
+     * This can be a stringified page number 0-indexed for pdf/docx files,
+     * or it can be a unique id that is used in lexical for markdown files.
+     */
+    node_id: string;
+    /**
+     * The raw content of the document
+     */
+    raw_content?: string | null;
+};
+
+export type SearchGotoEmail = {
+    bcc: Array<string>;
+    cc: Array<string>;
+    /**
+     * The email message id
+     */
+    email_message_id: string;
+    labels: Array<string>;
+    recipients: Array<string>;
+    sender: string;
+    sent_at?: string | null;
 };
 
 export type SearchHighlight = {
@@ -2168,6 +2310,27 @@ export type SimpleProjectSearchResponseBaseItemHumanReadableTimestamp = {
     user_id: string;
 };
 
+/**
+ * The response for simple search
+ */
+export type SimpleSearchResponse = {
+    results: Array<SimpleSearchResponseItem>;
+};
+
+/**
+ * Simple response item to mimic what we get back from opensearch
+ */
+export type SimpleSearchResponseItem = {
+    /**
+     * ID of the chat, channel, email, or document
+     */
+    entity_id: string;
+    entity_type: string;
+    goto?: null | SearchGotoContent;
+    highlight: Highlight;
+    score?: number | null;
+};
+
 export type SimpleUnifiedSearchBaseResponse = {
     results: Array<SimpleUnifiedSearchResponseBaseItemHumanReadableTimestamp>;
 };
@@ -2294,6 +2457,8 @@ export type UnifiedSearchResponseItem = (DocumentSearchResponseItemWithMetadata 
     type: 'company';
 }) | (CalendarEventSearchResponseItemWithMetadata & {
     type: 'calendarEvent';
+}) | (AgentSessionSearchResponseItem & {
+    type: 'agentSession';
 });
 
 export type UnifiedSearchData = {
@@ -2351,7 +2516,7 @@ export type SimpleUnifiedSearchErrors = {
 export type SimpleUnifiedSearchError = SimpleUnifiedSearchErrors[keyof SimpleUnifiedSearchErrors];
 
 export type SimpleUnifiedSearchResponses = {
-    200: SimpleUnifiedSearchBaseResponse;
+    200: SimpleSearchResponse;
 };
 
 export type SimpleUnifiedSearchResponse = SimpleUnifiedSearchResponses[keyof SimpleUnifiedSearchResponses];

@@ -119,6 +119,73 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe('agent session search navigation', () => {
+  const entity = {
+    type: 'agent_session' as const,
+    id: 'session',
+    name: 'Investigation',
+    ownerId: 'owner',
+    botId: 'bot',
+    status: 'event',
+    search: {
+      nameHighlight: null,
+      senderHighlightTerms: null,
+      source: 'service' as const,
+      contentHitData: [
+        {
+          type: 'agent' as const,
+          content: 'match',
+          location: {
+            type: 'agent' as const,
+            messageTurn: 0,
+            author: 'user' as const,
+          },
+        },
+      ],
+    },
+  };
+  it('uses the first folded hit for row clicks, but not title-only hits', () => {
+    expect(getRowClickFallbackLocation(entity)).toEqual({
+      type: 'agent',
+      messageTurn: 0,
+      author: 'user',
+    });
+    const titleOnly = {
+      ...entity,
+      search: { ...entity.search, contentHitData: null },
+    };
+    expect(getRowClickFallbackLocation(titleOnly)).toBeUndefined();
+  });
+  it('opens the agent block with durable params and retargets it on each snippet click', async () => {
+    const openWithSplit = vi.fn();
+    const goToLocationFromParams = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+    setGlobalSplitManager({
+      activeSplit: () => undefined,
+      getOrchestrator: () => ({ getBlockHandle }),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+    await openEntityInSplitFromUnifiedList(entity, {});
+    expect(openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'agent',
+        id: 'session',
+        params: { agent_message_turn: '0', agent_message_author: 'user' },
+      },
+      expect.any(Object)
+    );
+    await openEntityInSplitFromUnifiedList(entity, {
+      location: { type: 'agent', messageTurn: 4, author: 'agent' },
+    });
+    expect(getBlockHandle).toHaveBeenCalledWith('session');
+    expect(goToLocationFromParams).toHaveBeenLastCalledWith({
+      agent_message_turn: '4',
+      agent_message_author: 'agent',
+    });
+  });
+});
+
 const sendNotification = (id: string, messageId: string): UnifiedNotification =>
   ({
     id,

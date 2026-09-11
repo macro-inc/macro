@@ -132,7 +132,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SimpleUnifiedSearchBaseResponse"
+                  "$ref": "#/components/schemas/SimpleSearchResponse"
                 }
               }
             }
@@ -173,6 +173,11 @@
   },
   "components": {
     "schemas": {
+      "AgentSessionAuthor": {
+        "type": "string",
+        "description": "Side of a folded conversation.",
+        "enum": ["user", "agent"]
+      },
       "AgentSessionFilters": {
         "type": "object",
         "description": "Filters for agent sessions.",
@@ -194,6 +199,83 @@
               "type": "string"
             },
             "description": "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+          }
+        }
+      },
+      "AgentSessionSearchResponseItem": {
+        "type": "object",
+        "description": "One accessible agent session, grouped with its matching folded messages.",
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "bot_id",
+          "created_at",
+          "updated_at",
+          "agent_session_search_results"
+        ],
+        "properties": {
+          "agent_session_search_results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentSessionSearchResult"
+            },
+            "description": "Name and folded-message matches."
+          },
+          "bot_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Agent persona ID."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Session creation time."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Session ID."
+          },
+          "name": {
+            "type": "string",
+            "description": "Current persisted name."
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "Session owner."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Current persisted modification time."
+          }
+        }
+      },
+      "AgentSessionSearchResult": {
+        "type": "object",
+        "description": "A name match or one matching folded message.",
+        "required": ["highlight"],
+        "properties": {
+          "goto": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SearchGotoAgentSession",
+                "description": "Absent for a name-only match."
+              }
+            ]
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "Matched name/content fragments."
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "Search score."
           }
         }
       },
@@ -2622,6 +2704,23 @@
           }
         }
       },
+      "Highlight": {
+        "type": "object",
+        "description": "The search service version of a highlight",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "If the match was on the entity content, this will provide a list of highlights\nfor each content match"
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "If the match was on the entity name, this will be present with that highlight"
+          }
+        }
+      },
       "MatchType": {
         "type": "string",
         "enum": ["exact", "partial", "regexp", "query"]
@@ -3146,6 +3245,177 @@
           "include": {
             "type": "boolean",
             "description": "Opt this query into reminders at all. Reminders are off by default —\nsee [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for\nspecific `ids` or `entities` also opts in."
+          }
+        }
+      },
+      "SearchGotoAgentSession": {
+        "type": "object",
+        "description": "Stable navigation target from the fold, independent of raw ACP log IDs.",
+        "required": ["message_turn", "author"],
+        "properties": {
+          "author": {
+            "$ref": "#/components/schemas/AgentSessionAuthor",
+            "description": "Author within the turn."
+          },
+          "message_turn": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Fold-assigned turn.",
+            "minimum": 0
+          }
+        }
+      },
+      "SearchGotoCallRecord": {
+        "type": "object",
+        "required": [
+          "channel_id",
+          "transcript_id",
+          "speaker_id",
+          "sequence_num",
+          "started_at",
+          "participant_ids"
+        ],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ended_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "participant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sequence_num": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "speaker_id": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "transcript_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "SearchGotoChannel": {
+        "type": "object",
+        "required": ["channel_message_id"],
+        "properties": {
+          "channel_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The channel message id"
+          }
+        }
+      },
+      "SearchGotoChat": {
+        "type": "object",
+        "required": ["chat_message_id", "role"],
+        "properties": {
+          "chat_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The chat message id"
+          },
+          "role": {
+            "type": "string",
+            "description": "The role of the chat message"
+          }
+        }
+      },
+      "SearchGotoContent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SearchGotoAgentSession"
+          },
+          {
+            "$ref": "#/components/schemas/SearchGotoDocument"
+          },
+          {
+            "$ref": "#/components/schemas/SearchGotoChat"
+          },
+          {
+            "$ref": "#/components/schemas/SearchGotoEmail"
+          },
+          {
+            "$ref": "#/components/schemas/SearchGotoChannel"
+          },
+          {
+            "$ref": "#/components/schemas/SearchGotoCallRecord"
+          }
+        ],
+        "description": "The search service version of a goto"
+      },
+      "SearchGotoDocument": {
+        "type": "object",
+        "required": ["node_id"],
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "description": "The node id of the document\nThis can be a stringified page number 0-indexed for pdf/docx files,\nor it can be a unique id that is used in lexical for markdown files."
+          },
+          "raw_content": {
+            "type": ["string", "null"],
+            "description": "The raw content of the document"
+          }
+        }
+      },
+      "SearchGotoEmail": {
+        "type": "object",
+        "required": [
+          "email_message_id",
+          "bcc",
+          "cc",
+          "labels",
+          "sender",
+          "recipients"
+        ],
+        "properties": {
+          "bcc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "email_message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The email message id"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sender": {
+            "type": "string"
+          },
+          "sent_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         }
       },
@@ -4023,6 +4293,51 @@
           }
         }
       },
+      "SimpleSearchResponse": {
+        "type": "object",
+        "description": "The response for simple search",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleSearchResponseItem"
+            }
+          }
+        }
+      },
+      "SimpleSearchResponseItem": {
+        "type": "object",
+        "description": "Simple response item to mimic what we get back from opensearch",
+        "required": ["entity_id", "entity_type", "highlight"],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the chat, channel, email, or document"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "goto": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SearchGotoContent"
+              }
+            ]
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/Highlight"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double"
+          }
+        }
+      },
       "SimpleUnifiedSearchBaseResponse": {
         "type": "object",
         "required": ["results"],
@@ -4519,6 +4834,23 @@
                   "type": {
                     "type": "string",
                     "enum": ["calendarEvent"]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentSessionSearchResponseItem"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["agentSession"]
                   }
                 }
               }

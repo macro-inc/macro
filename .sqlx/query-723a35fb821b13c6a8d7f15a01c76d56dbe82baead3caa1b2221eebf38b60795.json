@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM entity_access WHERE entity_id = $1 AND source_id = 'channel'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "723a35fb821b13c6a8d7f15a01c76d56dbe82baead3caa1b2221eebf38b60795"
+}

@@ -460,6 +460,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -14501,6 +14502,7 @@ dependencies = [
 name = "search_service"
 version = "0.1.0"
 dependencies = [
+ "agent_session",
  "anyhow",
  "aws-sdk-secretsmanager",
  "axum",
@@ -14533,6 +14535,7 @@ dependencies = [
  "opensearch_client",
  "properties",
  "readonly_pool",
+ "rootcause",
  "secretsmanager_client",
  "serde",
  "serde_json",

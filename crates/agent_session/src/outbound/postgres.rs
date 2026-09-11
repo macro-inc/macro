@@ -2,6 +2,7 @@
 //! repositories, the fold's log source, and the audience a streamed frame is
 //! addressed to.
 
+pub mod search;
 #[cfg(test)]
 mod test;
 
