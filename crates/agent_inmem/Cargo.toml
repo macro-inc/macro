@@ -22,6 +22,7 @@ axum = { workspace = true }
 chat = { path = "../chat", default-features = false }
 dashmap = { workspace = true }
 futures = { workspace = true }
+genai_telemetry = { path = "../genai_telemetry" }
 macro_user_id = { path = "../macro_user_id" }
 http = { workspace = true }
 http-body-util = { workspace = true }
@@ -48,4 +49,8 @@ agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 futures = { workspace = true }
 rig-agent = "0.41.0"
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

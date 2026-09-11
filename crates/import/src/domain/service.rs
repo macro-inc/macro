@@ -2732,7 +2732,7 @@ impl<Context> ToolSet<Context> for NativePlusMcp<Context>
 where
     Context: Clone + Send + Sync + 'static,
 {
-    fn try_tool_call<'a>(
+    fn dispatch_tool_call<'a>(
         &'a self,
         context: Context,
         request_context: RequestContext,
@@ -2747,10 +2747,10 @@ where
     > {
         if self.native_names.contains(tool_name) {
             self.native
-                .try_tool_call(context, request_context, tool_name, json)
+                .dispatch_tool_call(context, request_context, tool_name, json)
         } else {
             self.mcp
-                .try_tool_call(context, request_context, tool_name, json)
+                .dispatch_tool_call(context, request_context, tool_name, json)
         }
     }
 

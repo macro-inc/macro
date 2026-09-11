@@ -38,6 +38,7 @@ use ai_tools::user_tool_review::{
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
@@ -548,6 +549,13 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     if let Err(error) = state.expect_session(&request.session_id) {
                         return responder.respond_with_error(error);
                     }
+                    let span = tracing::info_span!(
+                        parent: None,
+                        "agent.acp.prompt",
+                        agent.session.id = %state.session_id,
+                        gen_ai.conversation.id = %state.session_id,
+                    );
+                    genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
                     let prompt = prompt_text(&request);
                     if prompt.trim() == COMPACT_COMMAND {
                         state.clear_history();
@@ -581,6 +589,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                                 let _ = responder.respond(PromptResponse::new(stop));
                                 Ok(())
                             }
+                            .instrument(span)
                         })?;
                         return Ok(());
                     }
@@ -598,6 +607,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             let _ = responder.respond(PromptResponse::new(stop));
                             Ok(())
                         }
+                        .instrument(span)
                     })?;
                     Ok(())
                 }

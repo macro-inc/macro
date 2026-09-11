@@ -61,6 +61,7 @@ use agent_inmem::outbound::acp_mcp::AcpMcpConnector;
 use agent_inmem::outbound::egress_mcp::EgressMcpClient;
 use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
+use agent_inmem::outbound::tool_catalog::McpToolCatalog;
 use agent_inmem::rig_engine::RigTurnEngine;
 use agent_runtime_directory::PgAgentRuntimeDirectory;
 use agent_session::domain::model::{AgentMcpServers, ReplicaId};
@@ -369,6 +370,14 @@ async fn run() -> anyhow::Result<()> {
     // against it, so the two must be the same string.
     let egress_base_url = AgentHarnessEgressUrl::new()?.to_string();
 
+    // Every session's MCP tools, listed for its telemetry the way the harness
+    // itself lists them: through the egress proxy, in process.
+    let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
+        Arc::new(McpToolCatalog::new(Arc::new(AcpMcpConnector::new(
+            EgressMcpClient::new(Arc::clone(&egress), &egress_base_url),
+        ))));
+    let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
+
     let tool_context =
         ai_tools::build_tool_service_context_from_env(pool.clone(), event_broker_tracker.clone())
             .await
@@ -399,7 +408,8 @@ async fn run() -> anyhow::Result<()> {
         turn_observer.clone(),
         lifecycle_publisher.clone(),
         replica,
-    );
+    )
+    .with_tool_catalog(tool_catalog);
     let sandbox_and_inmem = RoutedContainers::new(sandbox, Some(inmem), inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no

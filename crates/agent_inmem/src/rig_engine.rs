@@ -34,6 +34,7 @@ use memory::domain::service::MemoryServiceImpl;
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use sqlx::PgPool;
 use tokio::sync::mpsc;
+use tracing::Instrument as _;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
@@ -101,11 +102,14 @@ impl TurnEngine for RigTurnEngine {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
         let db = self.db.clone();
         let tool_context = self.tool_context.clone();
-        tokio::spawn(async move {
-            if let Err(error) = drive_turn(db, tool_context, request, &parts).await {
-                let _ = parts.send(Err(error)).await;
+        tokio::spawn(
+            async move {
+                if let Err(error) = drive_turn(db, tool_context, request, &parts).await {
+                    let _ = parts.send(Err(error)).await;
+                }
             }
-        });
+            .in_current_span(),
+        );
         receiver
     }
 }
@@ -155,7 +159,13 @@ async fn drive_turn(
         },
     };
 
-    let mut agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
+    // GenAI telemetry stays off here: this runtime's turns and tool calls
+    // reach the session actor as ACP frames, and the actor projects those onto
+    // `invoke_agent` / `execute_tool` spans for every harness alike. Enriching
+    // rig's spans too would report each turn twice.
+    let mut agent_loop = AgentLoop::new(base_context.recorder.clone())
+        .with_model(&model)
+        .with_genai_telemetry(false);
     if let Some(reviewer) = reviewer {
         agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(
             Arc::clone(&toolset),

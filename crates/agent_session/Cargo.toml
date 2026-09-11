@@ -56,6 +56,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "ports",
 ] }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+genai_telemetry = { path = "../genai_telemetry" }
 model-entity = { path = "../model-entity", optional = true }
 clap = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, optional = true }
@@ -88,6 +89,10 @@ non_empty = { path = "../non_empty" }
 agent_fold = { path = "../agent_fold", features = ["test-utils"] }
 axum = { workspace = true, features = ["ws"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "net", "rt-multi-thread", "time"] }
 tokio-tungstenite = { workspace = true }
 tower = { workspace = true, features = ["util"] }

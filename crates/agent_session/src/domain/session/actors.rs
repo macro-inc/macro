@@ -12,7 +12,7 @@
 //! loop (see [`super::super::service`]), while tests exercise its input and
 //! dispatch halves directly.
 
-use std::{collections::VecDeque, time::Duration};
+use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{McpServer, SessionId};
@@ -30,10 +30,12 @@ use crate::domain::model::{AgentSessionId, AgentSessionLog, Message};
 use agent_runtime_protocol::domain::ports::{TransportReceiver, TransportSender};
 
 use crate::domain::ports::{
-    AgentConnector, AgentSessionLogWriter, AgentSessionRepo, SessionTurnObserver,
+    AgentConnector, AgentSessionLogWriter, AgentSessionRepo, SessionToolCatalog,
+    SessionTurnObserver,
 };
 use agent_fold::domain::model::TurnSignal;
 
+use super::telemetry::GenAiProjector;
 use super::{
     CloseReason, Effect, HandshakeStatus, Input, RuntimeStatus, SessionMachine, StopReason,
 };
@@ -42,6 +44,9 @@ use super::{
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(60);
 /// How long one caller's action has to reach the runtime.
 const COMMAND_DELIVERY_TIMEOUT: Duration = Duration::from_secs(60);
+/// How long the session's MCP servers have to list their tools for telemetry
+/// before the listing is given up on. Off the actor's own path, so generous.
+const TOOL_LISTING_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// A caller's request to deliver one action, and the wire back to them.
 pub(crate) struct SessionCommand {
@@ -90,7 +95,17 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     handshake_deadline: Instant,
     /// Told when the machine reports a turn over, so the harness can dispatch
     /// its next queued prompt.
-    turn_observer: std::sync::Arc<dyn SessionTurnObserver>,
+    turn_observer: Arc<dyn SessionTurnObserver>,
+    /// GenAI spans for the turns and tool calls this connection carries, fed
+    /// every frame the effects below send or log. See [`super::telemetry`].
+    telemetry: GenAiProjector,
+    /// Lists the session's MCP tools once the connection is live, for the
+    /// projector's `gen_ai.tool.definitions`.
+    tool_catalog: Arc<dyn SessionToolCatalog>,
+    /// The servers to list, as the machine sends them on `session/new`.
+    mcp_servers: Vec<McpServer>,
+    /// Whether the listing has been started; it runs once per connection.
+    tools_listed: bool,
 }
 
 impl<Connector, Logs> SessionActor<Connector, Logs>
@@ -110,7 +125,8 @@ where
         logs: Logs,
         commands: mpsc::Receiver<SessionCommand>,
         handshake: watch::Sender<HandshakeStatus>,
-        turn_observer: std::sync::Arc<dyn SessionTurnObserver>,
+        turn_observer: Arc<dyn SessionTurnObserver>,
+        tool_catalog: Arc<dyn SessionToolCatalog>,
     ) -> Self {
         // Marked unseen so the first wait reports the *current* state rather
         // than only later changes: a session binding after the handshake
@@ -134,8 +150,10 @@ where
             handshake_seen,
             handshake,
             machine: match acp_session_id {
-                None => SessionMachine::new(id, workspace, mcp_servers),
-                Some(session_id) => SessionMachine::resume(id, session_id, workspace, mcp_servers),
+                None => SessionMachine::new(id, workspace, mcp_servers.clone()),
+                Some(session_id) => {
+                    SessionMachine::resume(id, session_id, workspace, mcp_servers.clone())
+                }
             }
             .with_connection_context(macro_uuid::generate_uuid_v7()),
             logs,
@@ -143,6 +161,14 @@ where
             handshake_span: Some(handshake_span),
             handshake_deadline: Instant::now() + HANDSHAKE_TIMEOUT,
             turn_observer,
+            telemetry: GenAiProjector::new(
+                id,
+                genai_telemetry::ContentPolicy::from_env(),
+                Default::default(),
+            ),
+            tool_catalog,
+            mcp_servers,
+            tools_listed: false,
         }
     }
 
@@ -240,11 +266,16 @@ where
 
         while let Some(effect) = effects.pop_front() {
             match effect {
-                Effect::Send { from, message } => {
+                Effect::Send { from, mut message } => {
                     let command_span = effects.front().and_then(|effect| match effect {
                         Effect::Complete { token, .. } => Some(token.span.clone()),
                         _ => None,
                     });
+                    // Before delivery, so the turn's span starts when the
+                    // prompt leaves. A delivery that fails closes the
+                    // connection, which ends the turn in error below.
+                    self.telemetry
+                        .on_outbound(&mut message, command_span.as_ref());
                     let delivery = self.deliver(from, message);
                     let (result, close_reason) =
                         match (command_span.as_ref(), handshake_span.as_ref()) {
@@ -302,6 +333,7 @@ where
                     }
                 }
                 Effect::Log { message, boundary } => {
+                    self.telemetry.on_inbound(&message);
                     if let Some(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(
                         request,
                     )))) = &self.initialization_request
@@ -424,6 +456,7 @@ where
                     let _ = token.completed.send(result);
                 }
                 Effect::Stop { reason } => {
+                    self.telemetry.on_stopped(&reason);
                     // The one place a session's `disconnected` event is
                     // written. The frame itself carries no cause, so a
                     // routine idle teardown and a runtime lost mid-turn are
@@ -585,6 +618,7 @@ where
         match self.machine.status() {
             RuntimeStatus::Live { .. } => {
                 self.handshake_span.take();
+                self.list_tools_once();
             }
             RuntimeStatus::Dead => {
                 if let Some(span) = self.handshake_span.take() {
@@ -594,6 +628,40 @@ where
             }
             RuntimeStatus::Booting | RuntimeStatus::Handshaking => {}
         }
+    }
+
+    /// List the session's MCP tools for its telemetry, once, off this actor's
+    /// path: the listing dials the same servers the agent was just handed and
+    /// must never hold up a prompt. Whatever it finds is published for the
+    /// projector to pick up on the next turn it records.
+    fn list_tools_once(&mut self) {
+        if self.tools_listed {
+            return;
+        }
+        self.tools_listed = true;
+        if self.mcp_servers.is_empty() {
+            return;
+        }
+        let catalog = Arc::clone(&self.tool_catalog);
+        let servers = self.mcp_servers.clone();
+        let definitions = self.telemetry.tool_definitions();
+        let id = self.machine.id();
+        tokio::spawn(
+            async move {
+                match tokio::time::timeout(TOOL_LISTING_TIMEOUT, catalog.tool_definitions(servers))
+                    .await
+                {
+                    Ok(listed) => {
+                        tracing::debug!(%id, tools = listed.len(), "listed an agent session's tools");
+                        definitions.publish(listed);
+                    }
+                    Err(_) => {
+                        tracing::warn!(%id, "timed out listing an agent session's tools");
+                    }
+                }
+            }
+            .in_current_span(),
+        );
     }
 
     /// The failing effect's own caller gets `cause` itself; anything still

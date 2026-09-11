@@ -12,6 +12,7 @@ mod model;
 mod stream;
 /// Structured output via prompted JSON generation.
 pub mod structured_output;
+mod telemetry;
 mod tool_adapter;
 
 #[cfg(test)]

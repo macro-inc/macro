@@ -200,11 +200,16 @@ deny = [
     "workspace-hack",          # cargo-hakari generated crate
   ], reason = "Use macro_aws_config for AWS configuration in workspace crates" },
   { crate = "tracing-subscriber", wrappers = [
+    "agent",                     # GenAI span tests
+    "agent_inmem",               # GenAI trace propagation tests
+    "agent_session",             # GenAI span tests
+    "ai_toolset",                # GenAI span tests
     "channels",                  # Dev logging only
     "coding_agent_worker",       # Standalone daemon logging setup
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
+    "genai_telemetry",           # GenAI span tests
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
     "loom",                      # External concurrency testing dependency
     "macro_entrypoint",

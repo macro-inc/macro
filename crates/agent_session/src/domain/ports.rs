@@ -4,7 +4,7 @@ use super::error::{AgentSessionError, Result};
 use super::model::*;
 use super::session::StopReason;
 use crate::domain::events::AgentSessionLifecycleEvent;
-use agent_client_protocol::schema::v1::SessionId;
+use agent_client_protocol::schema::v1::{McpServer, SessionId};
 use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::ports::Transport;
@@ -507,6 +507,57 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
         &self,
         agent_session_id: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send;
+}
+
+/// One tool a session's agent may call, as the MCP server offering it
+/// describes it - the same name, description and parameter schema the agent
+/// itself is shown.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionToolDefinition {
+    /// The name the agent calls the tool by, exactly as the server registers
+    /// it for this session (an MCP tool arrives as `mcp__<server>__<tool>`).
+    pub name: String,
+    /// The description the agent chooses the tool on.
+    pub description: String,
+    /// The JSON schema of the tool's arguments.
+    pub parameters: serde_json::Value,
+}
+
+/// Lists the tools a session's MCP servers advertise, so the session's
+/// telemetry can say what the agent had to choose from
+/// (`gen_ai.tool.definitions`).
+///
+/// Best-effort by contract: a listing that fails, or takes too long, costs
+/// a span its tool definitions and nothing else. The one production
+/// implementation dials the same egress-proxy URLs the agent is handed, in
+/// process, so what it lists is what the agent sees - Macro's own tools and
+/// the owner's connected apps alike. A harness's built-in tools (its shell,
+/// its file editor) are not on any server and are not listed; the
+/// convention does not require them.
+///
+/// Object-safe on purpose: the session service stores it erased so wiring it
+/// is not another type parameter.
+pub trait SessionToolCatalog: Send + Sync + 'static {
+    /// Every tool the given servers offer. Empty when none do, or when the
+    /// listing failed.
+    fn tool_definitions(
+        &self,
+        servers: Vec<McpServer>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Vec<SessionToolDefinition>> + Send + '_>>;
+}
+
+/// A [`SessionToolCatalog`] that lists nothing: tests, offline tooling, and
+/// deployments with no in-process MCP client.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoOpToolCatalog;
+
+impl SessionToolCatalog for NoOpToolCatalog {
+    fn tool_definitions(
+        &self,
+        _servers: Vec<McpServer>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Vec<SessionToolDefinition>> + Send + '_>> {
+        Box::pin(async { Vec::new() })
+    }
 }
 
 /// One frame appended: its durable identity, and what the fold made of it.

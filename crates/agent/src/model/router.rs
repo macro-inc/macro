@@ -29,6 +29,7 @@ use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::message::Message;
 use rig_core::providers::{anthropic, openai};
 use rig_core::streaming::StreamedAssistantContent;
+use tracing::Instrument as _;
 
 use super::PredefinedModel;
 use super::anthropic::AnthropicModel;
@@ -37,6 +38,7 @@ use super::types::Model;
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, StreamBridge};
 use crate::stream::{ChatCompletionStream, StreamPart};
+use crate::telemetry::{ChatSpanHook, GenAiContext, TracedModel};
 
 env_var! {
     struct ApiKeys {
@@ -67,6 +69,24 @@ pub(crate) enum RoutedModel<'a> {
 }
 
 impl<'a> RoutedModel<'a> {
+    /// The provider segment of the routed id (`anthropic`, `openai`, …).
+    pub(crate) fn provider(&self) -> &str {
+        match self {
+            RoutedModel::Anthropic(m) => m.model().provider(),
+            RoutedModel::OpenAiChatCompletions(m) => m.model().provider(),
+            RoutedModel::OpenAiResponses(m) => m.model().provider(),
+        }
+    }
+
+    /// The bare model name sent to the provider.
+    pub(crate) fn model_name(&self) -> &str {
+        match self {
+            RoutedModel::Anthropic(m) => m.model().name(),
+            RoutedModel::OpenAiChatCompletions(m) => m.model().name(),
+            RoutedModel::OpenAiResponses(m) => m.model().name(),
+        }
+    }
+
     /// Build the rig agent for this model, applying provider-specific thinking
     /// config. Pure construction — no model call is made here.
     pub(crate) fn into_agent(
@@ -75,6 +95,7 @@ impl<'a> RoutedModel<'a> {
         system_prompt: &str,
         max_turns: usize,
         max_tokens: u64,
+        telemetry: &GenAiContext,
     ) -> ProviderAgent {
         match self {
             RoutedModel::Anthropic(m) => {
@@ -86,6 +107,7 @@ impl<'a> RoutedModel<'a> {
                     system_prompt,
                     max_turns,
                     max_tokens,
+                    telemetry,
                 ))
             }
             RoutedModel::OpenAiChatCompletions(m) => {
@@ -97,6 +119,7 @@ impl<'a> RoutedModel<'a> {
                     system_prompt,
                     max_turns,
                     max_tokens,
+                    telemetry,
                 ))
             }
             RoutedModel::OpenAiResponses(m) => {
@@ -108,6 +131,7 @@ impl<'a> RoutedModel<'a> {
                     system_prompt,
                     max_turns,
                     max_tokens,
+                    telemetry,
                 ))
             }
         }
@@ -122,11 +146,11 @@ impl<'a> RoutedModel<'a> {
 /// [`run_stream`]: ProviderAgent::run_stream
 pub(crate) enum ProviderAgent {
     /// An agent over Anthropic's native completion model.
-    Anthropic(Agent<anthropic::completion::CompletionModel>),
+    Anthropic(Agent<TracedModel<anthropic::completion::CompletionModel>>),
     /// An agent over the OpenAI Chat Completions model.
-    OpenAiChatCompletions(Agent<openai::completion::CompletionModel>),
+    OpenAiChatCompletions(Agent<TracedModel<openai::completion::CompletionModel>>),
     /// An agent over the OpenAI Responses model.
-    OpenAiResponses(Agent<openai::responses_api::ResponsesCompletionModel>),
+    OpenAiResponses(Agent<TracedModel<openai::responses_api::ResponsesCompletionModel>>),
     /// A test-only agent over an arbitrary completion model (e.g. a scripted
     /// fake), type-erased so the enum itself stays non-generic.
     #[cfg(test)]
@@ -147,6 +171,7 @@ impl ProviderAgent {
         usage_ctx: UsageContext,
         model: String,
         request_context: RequestContext,
+        telemetry: GenAiContext,
     ) -> ChatCompletionStream<'static> {
         match self {
             ProviderAgent::Anthropic(agent) => {
@@ -160,6 +185,7 @@ impl ProviderAgent {
                     usage_ctx,
                     model,
                     request_context.clone(),
+                    telemetry,
                 )
                 .await
             }
@@ -174,6 +200,7 @@ impl ProviderAgent {
                     usage_ctx,
                     model,
                     request_context.clone(),
+                    telemetry,
                 )
                 .await
             }
@@ -188,6 +215,7 @@ impl ProviderAgent {
                     usage_ctx,
                     model,
                     request_context.clone(),
+                    telemetry,
                 )
                 .await
             }
@@ -203,6 +231,7 @@ impl ProviderAgent {
                         usage_ctx,
                         model,
                         request_context.clone(),
+                        telemetry,
                     )
                     .await
             }
@@ -306,7 +335,9 @@ impl ModelRouter {
     }
 
     /// Route + build the agent in one step, falling back to the default model on
-    /// an unroutable id.
+    /// an unroutable id. Tells `telemetry` which provider and model the session
+    /// actually runs on, so its spans report the routed model, not the
+    /// requested id.
     pub(crate) fn agent(
         &self,
         model: &str,
@@ -314,9 +345,11 @@ impl ModelRouter {
         system_prompt: &str,
         max_turns: usize,
         max_tokens: u64,
+        telemetry: GenAiContext,
     ) -> ProviderAgent {
-        self.route_or_default(model)
-            .into_agent(handle, system_prompt, max_turns, max_tokens)
+        let routed = self.route_or_default(model);
+        telemetry.set_model(routed.provider(), routed.model_name());
+        routed.into_agent(handle, system_prompt, max_turns, max_tokens, &telemetry)
     }
 
     /// Route a `provider/model` id to the provider that serves it.
@@ -366,6 +399,10 @@ impl ModelRouter {
 }
 
 /// Build a rig agent from a completion model and per-session config.
+///
+/// The model is wrapped in [`TracedModel`] so every model call records its
+/// request on the `chat` span. rig's own content recording stays off — it is
+/// unbounded; `crate::telemetry` records bounded content instead.
 fn build_agent<M: CompletionModel>(
     model: M,
     thinking: Option<serde_json::Value>,
@@ -373,8 +410,11 @@ fn build_agent<M: CompletionModel>(
     system_prompt: &str,
     max_turns: usize,
     max_tokens: u64,
-) -> Agent<M> {
-    let mut builder = AgentBuilder::new(model)
+    telemetry: &GenAiContext,
+) -> Agent<TracedModel<M>> {
+    let mut builder = AgentBuilder::new(TracedModel::new(model, telemetry.clone()))
+        .name(telemetry.agent_name())
+        .record_content_telemetry(false)
         .tool_server_handle(handle)
         .default_max_turns(max_turns)
         .max_tokens(max_tokens)
@@ -398,11 +438,18 @@ async fn drive_stream<M>(
     usage_ctx: UsageContext,
     model: String,
     request_context: RequestContext,
+    telemetry: GenAiContext,
 ) -> ChatCompletionStream<'static>
 where
     M: CompletionModel + 'static,
     M::StreamingResponse: GetTokenUsage + Send + Sync,
 {
+    // The caller's `invoke_agent` span (see `Session::send_message`): rig adopts
+    // it as the run's agent span but never records onto a span it did not
+    // open, so the run's input, output and usage are recorded here.
+    let agent_span = tracing::Span::current();
+    telemetry.record_agent_input(&agent_span, &prompt);
+
     let (bridge, mut rx) = StreamBridge::channel(
         inputs,
         request_context.searchable_tools.clone(),
@@ -419,6 +466,7 @@ where
         .max_turns(max_turns)
         .max_invalid_tool_call_retries(crate::hook::MAX_INVALID_TOOL_CALL_RETRIES)
         .add_hook(bridge)
+        .add_hook(ChatSpanHook(telemetry.clone()))
         .await;
 
     // Drive the rig stream on its own task. The hook emits a tool call the
@@ -430,49 +478,113 @@ where
     // to the client as soon as it is produced — so a tool call renders in its
     // pending state immediately and its response renders when execution
     // finishes.
-    let driver = tokio::spawn(async move {
-        let mut thinking_buf = String::new();
+    // Whatever ends the driver - the stream running dry, a provider error, an
+    // abort when the consumer drops the stream - the model call's parked
+    // `chat` span is released with it (see `GenAiContext::finish_run`), and a
+    // run that never reached its final response or an error is recorded as
+    // cancelled: the consumer went away, and the run went with it.
+    struct FinishRun {
+        telemetry: GenAiContext,
+        agent_span: tracing::Span,
+        concluded: bool,
+    }
+    impl Drop for FinishRun {
+        fn drop(&mut self) {
+            if !self.concluded {
+                self.telemetry.record_agent_failure(
+                    &self.agent_span,
+                    "cancelled",
+                    genai_telemetry::attr::finish_reason::CANCELLED,
+                    "the run was cancelled before the agent answered",
+                );
+            }
+            self.telemetry.finish_run();
+        }
+    }
+    let mut finish_run = FinishRun {
+        telemetry: telemetry.clone(),
+        agent_span: agent_span.clone(),
+        concluded: false,
+    };
+    let driver_span = agent_span.clone();
+    let driver = tokio::spawn(
+        async move {
+            let mut thinking_buf = String::new();
 
-        while let Some(item) = rig_stream.next().await {
-            match item {
-                Ok(MultiTurnStreamItem::StreamAssistantItem(
-                    StreamedAssistantContent::ReasoningDelta { reasoning, .. },
-                )) => {
-                    thinking_buf.push_str(&reasoning);
-                }
-                other => {
-                    if !thinking_buf.is_empty() {
-                        let _ = driver_tx
-                            .send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
+            while let Some(item) = rig_stream.next().await {
+                match item {
+                    Ok(MultiTurnStreamItem::StreamAssistantItem(
+                        StreamedAssistantContent::ReasoningDelta { reasoning, .. },
+                    )) => {
+                        thinking_buf.push_str(&reasoning);
                     }
-                    match other {
-                        Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
-                            let usage = final_resp.usage;
-                            // Best-effort cost logging; never fails the stream.
-                            recorder.record(usage_ctx.clone().into_event(
-                                model.clone(),
-                                usage.input_tokens,
-                                usage.output_tokens,
-                            ));
-                            let _ = driver_tx.send(Ok(StreamPart::Usage(crate::stream::Usage {
-                                input_tokens: usage.input_tokens,
-                                output_tokens: usage.output_tokens,
-                            })));
+                    other => {
+                        if !thinking_buf.is_empty() {
+                            let _ = driver_tx
+                                .send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
                         }
-                        Err(e) => {
-                            let _ = driver_tx.send(Err(AgentError::Streaming(e)));
+                        match other {
+                            Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
+                                let usage = final_resp.usage;
+                                finish_run.concluded = true;
+                                telemetry.record_agent_output(
+                                    &agent_span,
+                                    &final_resp.output,
+                                    &usage,
+                                );
+                                // Best-effort cost logging; never fails the stream.
+                                recorder.record(usage_ctx.clone().into_event(
+                                    model.clone(),
+                                    usage.input_tokens,
+                                    usage.output_tokens,
+                                ));
+                                let _ =
+                                    driver_tx.send(Ok(StreamPart::Usage(crate::stream::Usage {
+                                        input_tokens: usage.input_tokens,
+                                        output_tokens: usage.output_tokens,
+                                    })));
+                            }
+                            Err(e) => {
+                                finish_run.concluded = true;
+                                let error = AgentError::Streaming(e);
+                                if error.was_cancelled() {
+                                    // The caller stopped the run through its
+                                    // cancellation token: a stop, not a fault.
+                                    telemetry.record_agent_failure(
+                                        &agent_span,
+                                        "cancelled",
+                                        genai_telemetry::attr::finish_reason::CANCELLED,
+                                        "the run was cancelled",
+                                    );
+                                } else {
+                                    // A provider error, or the runtime giving
+                                    // up (retries exhausted): the run failed.
+                                    telemetry.record_agent_failure(
+                                        &agent_span,
+                                        "streaming_error",
+                                        genai_telemetry::attr::finish_reason::ERROR,
+                                        &error.to_string(),
+                                    );
+                                }
+                                let _ = driver_tx.send(Err(error));
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
             }
+            if !thinking_buf.is_empty() {
+                let _ = driver_tx.send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
+            }
+            // Dropping `rig_stream` (and with it the hook's sender) plus `driver_tx`
+            // here closes the channel, ending the consumer stream below.
+            drop(finish_run);
         }
-        if !thinking_buf.is_empty() {
-            let _ = driver_tx.send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
-        }
-        // Dropping `rig_stream` (and with it the hook's sender) plus `driver_tx`
-        // here closes the channel, ending the consumer stream below.
-    });
+        // Entered into the agent span: the runtime opens its `chat` and
+        // `execute_tool` spans from inside this task, and they belong under
+        // the run, not at the root of a trace of their own.
+        .instrument(driver_span),
+    );
 
     // Abort the driver when the consumer drops the returned stream (e.g. on
     // cancellation), which drops `rig_stream` and cancels any in-flight tool —
@@ -511,6 +623,7 @@ pub(crate) trait DynStreamAgent: Send + Sync {
         usage_ctx: UsageContext,
         model: String,
         request_context: RequestContext,
+        telemetry: GenAiContext,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
     >;
@@ -532,6 +645,7 @@ where
         usage_ctx: UsageContext,
         model: String,
         request_context: RequestContext,
+        telemetry: GenAiContext,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
     > {
@@ -545,6 +659,7 @@ where
             usage_ctx,
             model,
             request_context,
+            telemetry,
         ))
     }
 }
@@ -559,11 +674,13 @@ impl ProviderAgent {
         max_turns: usize,
         max_tokens: u64,
         handle: ToolServerHandle,
+        telemetry: GenAiContext,
     ) -> Self
     where
         M: CompletionModel + 'static,
         M::StreamingResponse: GetTokenUsage + Send + Sync,
     {
+        telemetry.set_model("test", "fake-model");
         ProviderAgent::Test(Box::new(build_agent(
             model,
             None,
@@ -571,6 +688,7 @@ impl ProviderAgent {
             system_prompt,
             max_turns,
             max_tokens,
+            &telemetry,
         )))
     }
 }
