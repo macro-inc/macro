@@ -33,19 +33,8 @@ export function useAgentSessionMentionPreview(
   const flag = useFeatureFlag(enableGraphqlSoup);
   return useQuery(() => ({
     queryKey: agentSessionKeys.preview(id(), flag().enabled).queryKey,
-    queryFn: async () => {
-      const requestedAt = Date.now();
-      const preview = await (flag().enabled ? graphqlPreview : restPreview)(
-        id()
-      );
-      return { preview, requestedAt };
-    },
+    queryFn: () => (flag().enabled ? graphqlPreview : restPreview)(id()),
     enabled: enabled() && !!id(),
     staleTime: 15_000,
-    // Active observers only, paused in background tabs. Refresh access and
-    // shared-viewer status without loading transcripts or subscribing viewers.
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: false,
-    retry: 1,
   }));
 }

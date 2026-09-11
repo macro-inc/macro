@@ -17,7 +17,7 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
     () => !wrapper?.skipPreviewFetch
   );
   // Guard resource reads: a pending chip must never suspend its editor.
-  const preview = () => (query.isSuccess ? query.data.preview : undefined);
+  const preview = () => (query.isSuccess ? query.data : undefined);
   const session = () => {
     const current = preview();
     return current?.access === 'access' ? current.data : undefined;

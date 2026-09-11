@@ -29,16 +29,13 @@ beforeEach(() => {
   mocks.query.isSuccess = true;
   mocks.query.isError = false;
   mocks.query.data = {
-    preview: {
-      access: 'access',
-      data: {
-        id: 'session',
-        name: 'Fix mentions',
-        bot: { name: 'Ada', avatarUrl: 'https://example.com/avatar.png' },
-        status: { kind: 'disconnected' },
-      },
+    access: 'access',
+    data: {
+      id: 'session',
+      name: 'Fix mentions',
+      bot: { name: 'Ada', avatarUrl: 'https://example.com/avatar.png' },
+      status: { kind: 'disconnected' },
     },
-    requestedAt: 100,
   };
 });
 
@@ -70,7 +67,7 @@ describe('agent session mention rendering', () => {
   it.each(['no_access', 'does_not_exist'])(
     'hides saved metadata and disables opening for %s',
     (access) => {
-      mocks.query.data = { preview: { access }, requestedAt: 100 };
+      mocks.query.data = { access };
       const view = render(() => (
         <AgentSessionMention
           id="session"
