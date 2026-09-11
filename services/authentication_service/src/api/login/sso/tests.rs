@@ -7,6 +7,44 @@ use cool_asserts::assert_matches;
 use super::*;
 
 #[test]
+fn configured_public_origin_is_exact_and_local_only() {
+    use macro_env::Environment;
+    let configured = Url::parse("https://forge.tail66c63e.ts.net:3000").unwrap();
+    let app = Url::parse("https://forge.tail66c63e.ts.net:3000/app?state=x#fragment").unwrap();
+    assert!(is_allowed_original_url_for_environment(
+        &app,
+        Environment::Local,
+        Some(&configured)
+    ));
+    for environment in [Environment::Production, Environment::Develop] {
+        assert!(!is_allowed_original_url_for_environment(
+            &app,
+            environment,
+            Some(&configured)
+        ));
+    }
+    assert!(!is_allowed_original_url_for_environment(
+        &app,
+        Environment::Local,
+        None
+    ));
+    for raw in [
+        "http://forge.tail66c63e.ts.net:3000/app",
+        "https://forge.tail66c63e.ts.net:3001/app",
+        "https://forge.tail66c63e.ts.net/app",
+        "https://forge.tail66c63e.ts.net.evil:3000/app",
+        "https://user@forge.tail66c63e.ts.net:3000/app",
+        "https://user:pass@macro.com/app",
+    ] {
+        let url = Url::parse(raw).unwrap();
+        assert!(
+            !is_allowed_original_url_for_environment(&url, Environment::Local, Some(&configured)),
+            "{raw}"
+        );
+    }
+}
+
+#[test]
 fn allowed_original_urls_are_accepted() {
     for original_url in [
         "macro://login",

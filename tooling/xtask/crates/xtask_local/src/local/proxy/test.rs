@@ -1,6 +1,10 @@
 use super::*;
 use crate::local::{inventory, repo_root};
 
+fn caddyfile(mode: Mode, static_frontend: bool) -> String {
+    render_caddyfile(mode, static_frontend, false)
+}
+
 #[test]
 fn vite_routes_cover_every_backend_prefix_and_no_frontend_routes() {
     let prefixes = frontend_path_prefixes();
@@ -16,6 +20,8 @@ fn vite_routes_cover_every_backend_prefix_and_no_frontend_routes() {
         "/lexical",
         "/ai-editing",
         "/static-file",
+        "/s3",
+        "/oauth2",
     ] {
         assert!(prefixes.contains(&prefix));
     }
@@ -23,6 +29,19 @@ fn vite_routes_cover_every_backend_prefix_and_no_frontend_routes() {
     assert!(!prefixes.contains(&"/"));
     let unique: std::collections::HashSet<_> = prefixes.iter().collect();
     assert_eq!(unique.len(), prefixes.len());
+}
+
+#[test]
+fn public_routes_restore_s3_signing_authority_and_exclude_admin() {
+    let rendered = render_caddyfile(Mode::Local, false, true);
+    assert!(rendered.contains("handle_path /s3/*"));
+    assert!(rendered.contains("header_up Host localstack:4566"));
+    assert!(rendered.contains("handle /oauth2/*"));
+    assert!(!rendered.contains("handle /api/*"));
+    assert!(!rendered.contains("header_up Origin"));
+    assert!(!rendered.contains("/srv/frontend"));
+    assert!(!render_caddyfile(Mode::Dev, false, true).contains("handle_path /s3/*"));
+    assert!(render_caddyfile(Mode::Local, true, true).contains("/srv/frontend"));
 }
 
 /// Every inventoried service that declares a path prefix must get a route in the

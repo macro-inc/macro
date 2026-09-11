@@ -20,11 +20,14 @@ fn app_dir() -> std::path::PathBuf {
 
 /// Host-facing frontend URL.
 pub fn url(instance: &Instance) -> String {
-    format!("http://localhost:{}/app", instance.port(Port::Frontend))
+    format!("{}/app", instance.app_origin(false))
 }
 
 /// Browser-facing origin for development redirects and integration callbacks.
 pub fn https_origin(instance: &Instance) -> Result<String> {
+    if let Some(origin) = instance.public_origin() {
+        return Ok(origin.as_str().to_string());
+    }
     Ok(format!(
         "https://{}:{}",
         super::tls::hostname()?,
@@ -40,7 +43,7 @@ pub fn https_url(instance: &Instance) -> Result<String> {
 /// Frontend URL when the proxy serves the static bundle (headless stacks): the
 /// app lives on the single proxy origin, not a dev-server port.
 pub fn static_url(instance: &Instance) -> String {
-    format!("{}/app/", proxy::url(instance))
+    format!("{}/app/", instance.app_origin(true))
 }
 
 /// Where the instance's static frontend build is staged. Mounted read-only into
@@ -145,6 +148,9 @@ fn dev_env(
             proxy::frontend_path_prefixes().join(","),
         ),
     ];
+    if let Some(origin) = instance.public_origin() {
+        env.push(("LOCAL_PUBLIC_ORIGIN".into(), origin.as_str().into()));
+    }
     if mode.spec().runs_local_infra {
         env.push((
             "VITE_AI_EDITING_WORKER_URL".to_string(),

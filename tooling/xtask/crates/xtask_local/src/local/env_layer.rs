@@ -56,6 +56,9 @@ pub fn resolve(
     // plumbing + the fixed FusionAuth identity (it wins over whatever Doppler
     // has — unlike the old defaults.env, which Doppler overrode). Dev keeps
     // Doppler as-is.
+    if mode != Mode::Local && instance.public_origin().is_some() {
+        anyhow::bail!("--public-origin is only supported for a fully local stack");
+    }
     let spec = mode.spec();
     let local = spec
         .overlay_local_env
@@ -145,6 +148,9 @@ pub fn resolve(
         pull_aws_credentials(&mut env);
     }
 
+    if let Some(local) = &local {
+        env.extend(local.public_env());
+    }
     let generated_path = instance.ensure_artifact_dir()?.join("local.generated.env");
     write_dotenv(&generated_path, &env)
         .with_context(|| format!("writing {}", generated_path.display()))?;
