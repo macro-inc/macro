@@ -123,11 +123,8 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
           'agent_session_mentioned'
         ),
       },
-      ({ content }) => {
-        // Filed under the origin thread when the session has one; a
-        // session without a thread is filed under itself, which soup does
-        // not hydrate yet.
-        if (content.channelId) refreshChannel(notification, content.threadId);
+      () => {
+        refreshSoupEntity(notification, 'agentSession');
       }
     )
     .otherwise(() => {

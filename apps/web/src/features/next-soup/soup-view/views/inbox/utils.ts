@@ -4,7 +4,7 @@ import {
   soupPropertyToProperty,
 } from '@entity/extractors-property/property-helpers';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 
 /**
  * Soup attaches notifications per `toNotificationEntity`, which maps a
@@ -36,16 +36,6 @@ export function scopeThreadNotifications(
           )
           .with(
             { tag: 'channel_message_reply' },
-            (m) => m.content.threadId === messageId
-          )
-          .with(
-            {
-              tag: P.union(
-                'agent_session_settled',
-                'agent_session_waiting_for_input',
-                'agent_session_mentioned'
-              ),
-            },
             (m) => m.content.threadId === messageId
           )
           .otherwise(() => false)
@@ -107,18 +97,6 @@ export function itemContent(
 
   if (meta?.tag === 'call_started') {
     return;
-  }
-
-  // An agent notification is about what the agent said, not the message
-  // that opened the thread: lead with the excerpt or the question.
-  if (
-    notification &&
-    (meta?.tag === 'agent_session_settled' ||
-      meta?.tag === 'agent_session_waiting_for_input' ||
-      meta?.tag === 'agent_session_mentioned')
-  ) {
-    const agent = notificationContent(notification);
-    if (agent) return agent;
   }
 
   const channel = channelMessageContent(entity);

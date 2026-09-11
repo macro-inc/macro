@@ -829,35 +829,8 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   const senderName = createSenderDisplayName(senderId);
   const currentUserId = useUserId();
 
-  // An agent notification reads as being from the bot (or, for a mention,
-  // from whoever wrote the prompt) - not from whoever opened the thread.
-  const agentMeta = () => {
-    const meta = props.item.notification?.notification_metadata;
-    return meta?.tag === 'agent_session_settled' ||
-      meta?.tag === 'agent_session_waiting_for_input' ||
-      meta?.tag === 'agent_session_mentioned'
-      ? meta
-      : undefined;
-  };
-  const mentionedBy = () => {
-    const meta = agentMeta();
-    return meta?.tag === 'agent_session_mentioned'
-      ? (meta.content.mentionedBy ?? undefined)
-      : undefined;
-  };
-  const mentionedByName = createSenderDisplayName(mentionedBy);
-  const agentSenderLabel = () => {
-    const meta = agentMeta();
-    if (!meta) return undefined;
-    if (mentionedBy()) {
-      return mentionedBy() === currentUserId() ? 'You' : mentionedByName();
-    }
-    return meta.content.botName;
-  };
-
   const senderLabel = () =>
-    agentSenderLabel() ??
-    (senderId() === currentUserId() ? 'You' : senderName());
+    senderId() === currentUserId() ? 'You' : senderName();
 
   // The root/original thread message sender (who a reply is replying to).
   const originalSenderId = () =>
@@ -1195,6 +1168,76 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
       title={text().title}
     >
       <CardClampedMarkdown text={text().content} />
+    </BaseCard>
+  );
+}
+
+/**
+ * An agent session the user was notified about: it finished, it is asking
+ * them something, or a prompt named them. The row is the session - title,
+ * agent icon, click opens it - and the body is what the agent said or
+ * asked, attributed to the bot (or to whoever wrote the mentioning prompt).
+ */
+export function AgentSessionCardLayout(props: InboxCardLayoutProps) {
+  const meta = () => {
+    const meta = props.item.notification?.notification_metadata;
+    return meta?.tag === 'agent_session_settled' ||
+      meta?.tag === 'agent_session_waiting_for_input' ||
+      meta?.tag === 'agent_session_mentioned'
+      ? meta
+      : undefined;
+  };
+  const mentionedBy = () => {
+    const current = meta();
+    return current?.tag === 'agent_session_mentioned'
+      ? (current.content.mentionedBy ?? undefined)
+      : undefined;
+  };
+  const mentionedByName = createSenderDisplayName(mentionedBy);
+  const currentUserId = useUserId();
+  const senderLabel = () => {
+    const current = meta();
+    if (!current) return undefined;
+    if (mentionedBy()) {
+      return mentionedBy() === currentUserId() ? 'You' : mentionedByName();
+    }
+    return current.content.botName;
+  };
+  const content = () => itemContent(props.item.entity, props.item.notification);
+
+  return (
+    <BaseCard
+      {...props}
+      icon={
+        <Show
+          when={props.item.notification}
+          fallback={
+            <EntityIcon
+              class={AVATAR_GLYPH_CLASS}
+              targetType={getEntityIconType(props.item.entity)}
+              size="fill"
+            />
+          }
+        >
+          <ActionBubble tag={getNotificationTag(props.item.notification)} />
+        </Show>
+      }
+      title={props.item.entity.name}
+    >
+      <InboxCard.Content class="text-sm text-ink/60 line-clamp-2">
+        <Show when={senderLabel()}>
+          {(label) => <span class="mr-1 whitespace-nowrap">{label()}:</span>}
+        </Show>
+        <Show when={content()?.trim()}>
+          {(text) => (
+            <StaticMarkdown
+              markdown={text()}
+              singleLine
+              theme={unifiedListMarkdownTheme}
+            />
+          )}
+        </Show>
+      </InboxCard.Content>
     </BaseCard>
   );
 }
@@ -1663,6 +1706,9 @@ export function InboxCardLayout(props: InboxCardLayoutProps) {
       </Match>
       <Match when={props.item.entity.type === 'channel_thread'}>
         <ChannelThreadCardLayout {...props} />
+      </Match>
+      <Match when={props.item.entity.type === 'agent_session'}>
+        <AgentSessionCardLayout {...props} />
       </Match>
       <Match when={props.item.entity.type === 'reminder'}>
         <ReminderCardLayout {...props} />

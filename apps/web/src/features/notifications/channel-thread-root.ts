@@ -1,4 +1,4 @@
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 import type { UnifiedNotification } from './types';
 
 /**
@@ -12,28 +12,14 @@ import type { UnifiedNotification } from './types';
 export function channelThreadRootId(
   notification: UnifiedNotification
 ): string | undefined {
-  return (
-    match(notification.notification_metadata)
-      .with(
-        { tag: 'channel_mention' },
-        (metadata) => metadata.content.threadId ?? metadata.content.messageId
-      )
-      .with(
-        { tag: 'channel_message_reply' },
-        (metadata) => metadata.content.threadId
-      )
-      // Agent-session notifications file under the thread the session was
-      // opened from, when it was; the chip lives there.
-      .with(
-        {
-          tag: P.union(
-            'agent_session_settled',
-            'agent_session_waiting_for_input',
-            'agent_session_mentioned'
-          ),
-        },
-        (metadata) => metadata.content.threadId ?? undefined
-      )
-      .otherwise(() => undefined)
-  );
+  return match(notification.notification_metadata)
+    .with(
+      { tag: 'channel_mention' },
+      (metadata) => metadata.content.threadId ?? metadata.content.messageId
+    )
+    .with(
+      { tag: 'channel_message_reply' },
+      (metadata) => metadata.content.threadId
+    )
+    .otherwise(() => undefined);
 }

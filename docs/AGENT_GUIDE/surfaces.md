@@ -64,11 +64,12 @@ Agent sessions notify through the same inbox. `<bot> finished <session>` goes to
 owner and everyone who has prompted or answered in that session when a turn ends with
 nothing queued; `<bot> needs your answer in <session>` goes to the owner alone when the
 agent stops to ask; `<user> mentioned you in <session>` goes to users @-mentioned in a
-prompt who can already open the session. All three open the agent session (not the
-thread) when clicked, and are filed under the origin thread when the session was opened
-from one. Answering the question marks its notification done; the next turn marks the
-previous "finished" done. The chip announcement post itself no longer notifies the
-thread. Settings → notifications lists them under `AI`.
+prompt who can already open the session. All three are filed under the session itself:
+the inbox shows an agent-session row (agent icon, session name, the bot or mentioner as
+sender, the excerpt or question as the body) and clicking it opens the session. Answering
+the question marks its notification done; the next turn marks the previous "finished"
+done. The chip announcement post itself no longer notifies the thread. Settings →
+notifications lists them under `AI`.
 
 ## Tasks — `/app/component/tasks`
 

@@ -67,17 +67,14 @@ fn one_settled(actions: Vec<Action>) -> Notify<AgentSessionSettledMetadata> {
 }
 
 #[test]
-fn settled_notifies_the_whole_audience_under_the_thread() {
+fn settled_notifies_the_whole_audience_under_the_session() {
     let notify = one_settled(plan(&settled(identity(), 2)));
 
     assert_eq!(
         notify.entity,
-        EntityType::Channel.with_entity_string(Uuid::from_u128(1).to_string())
+        EntityType::AgentSession.with_entity_string(SESSION.to_string())
     );
-    assert_eq!(
-        notify.secondary_entity,
-        Some(EntityType::ChannelMessage.with_entity_string(Uuid::from_u128(2).to_string()))
-    );
+    assert_eq!(notify.secondary_entity, None);
     assert_eq!(
         notify.recipients,
         vec![owner(), user("alice@macro.com"), user("bob@macro.com")]
@@ -89,18 +86,19 @@ fn settled_notifies_the_whole_audience_under_the_thread() {
         notify.metadata.session.announcement_message_id,
         Some(Uuid::from_u128(4))
     );
+    // The thread the chip lives in still rides along for surfaces that
+    // want to offer it.
     assert_eq!(notify.metadata.session.thread_id, Some(Uuid::from_u128(2)));
 }
 
 #[test]
-fn a_session_with_no_thread_files_as_itself() {
+fn a_session_with_no_thread_files_the_same_way() {
     let notify = one_settled(plan(&settled(detached_identity(), 0)));
 
     assert_eq!(
         notify.entity,
         EntityType::AgentSession.with_entity_string(SESSION.to_string())
     );
-    assert_eq!(notify.secondary_entity, None);
     assert_eq!(notify.metadata.session.channel_id, None);
 }
 

@@ -57,9 +57,10 @@ const NOTIFICATION_ID_NAMESPACE: Uuid = Uuid::from_u128(0x6d61_6372_6f2d_6167_65
 pub struct Notify<Metadata> {
     /// The notification's id; see the module docs.
     pub notification_id: Uuid,
-    /// What the notification is about, for the inbox and for unsubscribes.
+    /// What the notification is about, for the inbox and for unsubscribes:
+    /// always the session.
     pub entity: Entity<'static>,
-    /// The thread the chip lives in, when the session has one.
+    /// Unused for agent sessions; kept so the request shape stays uniform.
     pub secondary_entity: Option<Entity<'static>>,
     /// Who is told.
     pub recipients: Vec<MacroUserIdStr<'static>>,
@@ -214,23 +215,15 @@ fn plan_mentioned(mentioned: &SessionMentionedMetadata) -> Vec<Action> {
     })]
 }
 
-/// What the notification is filed under.
-///
-/// A session opened from a thread files as that thread, the way channel
-/// mentions and replies do: primary the channel, secondary the thread root.
-/// That is the shape the inbox knows how to show as a thread row. A session
-/// with no thread files as itself.
+/// What the notification is filed under: the session itself. That is what a
+/// click opens, what the inbox hydrates as a row, and what a user mutes to
+/// stop hearing about one run. The thread the chip lives in, when there is
+/// one, rides in the metadata for surfaces that want it.
 fn entities(identity: &SessionIdentity) -> (Entity<'static>, Option<Entity<'static>>) {
-    match &identity.origin {
-        Some(origin) => (
-            EntityType::Channel.with_entity_string(origin.channel_id.to_string()),
-            Some(EntityType::ChannelMessage.with_entity_string(origin.thread_id.to_string())),
-        ),
-        None => (
-            EntityType::AgentSession.with_entity_string(identity.session_id.to_string()),
-            None,
-        ),
-    }
+    (
+        EntityType::AgentSession.with_entity_string(identity.session_id.to_string()),
+        None,
+    )
 }
 
 fn session_ref(
