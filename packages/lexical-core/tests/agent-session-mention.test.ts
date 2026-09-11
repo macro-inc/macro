@@ -19,6 +19,25 @@ const info = { id: 'session-1', label: 'Fix the menu' };
 const markdown = buildAgentSessionMentionMarkdown(info);
 
 describe('AgentSessionMentionNode', () => {
+  it('preserves expansion and session-reference semantics through Markdown', () => {
+    const expanded = buildAgentSessionMentionMarkdown({
+      ...info,
+      expanded: true,
+    });
+    const state = markdownToSerializedEditorStateWithIds(expanded);
+    expect(state.root.children[0]).toMatchObject({
+      children: [{ type: 'agent-session-mention', expanded: true }],
+    });
+    expect(serializedEditorStateToMarkdown(state)).toBe(expanded);
+    expect(extractChannelMentionsFromMarkdown(expanded)).toEqual([
+      { entityType: 'agent_session', entityId: info.id },
+    ]);
+    expect(markdownToPlainText(expanded)).toBe(info.label);
+    expect(markdownToEmbeddingText(expanded)).toBe(
+      '[Fix the menu](agent_session:session-1)'
+    );
+  });
+
   it('round-trips Markdown and serialized state', () => {
     const state = markdownToSerializedEditorStateWithIds(markdown);
     expect(state.root.children[0]).toMatchObject({
@@ -54,36 +73,48 @@ describe('AgentSessionMentionNode', () => {
     ]);
   });
 
-  it('preserves identity when copied as HTML and pasted', () => {
-    const editor = createHeadlessEditor({
-      nodes: [...SupportedNodeTypes, ...NodeReplacements],
-    });
-    editor.setEditorState(
-      editor.parseEditorState(markdownToSerializedEditorStateWithIds(markdown))
-    );
-    const html = editor
-      .getEditorState()
-      .read(() => $generateHtmlFromNodes(editor));
-    expect(html).toContain('data-agent-session-id="session-1"');
-    editor.update(
-      () => {
-        const nodes = $generateNodesFromDOM(
-          editor,
-          new DOMParser().parseFromString(html, 'text/html')
-        );
-        $getRoot()
-          .clear()
-          .append(...nodes);
-        const paragraph = $getRoot().getFirstChild();
-        expect($isParagraphNode(paragraph)).toBe(true);
-        const node = $isParagraphNode(paragraph)
-          ? paragraph.getFirstChild()
-          : null;
-        expect($isAgentSessionMentionNode(node)).toBe(true);
-        if ($isAgentSessionMentionNode(node))
-          expect(node.getId()).toBe(info.id);
-      },
-      { discrete: true }
-    );
-  });
+  it.each([false, true])(
+    'preserves identity and expansion through HTML (expanded: %s)',
+    (expanded) => {
+      const editor = createHeadlessEditor({
+        nodes: [...SupportedNodeTypes, ...NodeReplacements],
+      });
+      editor.setEditorState(
+        editor.parseEditorState(
+          markdownToSerializedEditorStateWithIds(
+            buildAgentSessionMentionMarkdown({
+              ...info,
+              ...(expanded ? { expanded: true } : {}),
+            })
+          )
+        )
+      );
+      const html = editor
+        .getEditorState()
+        .read(() => $generateHtmlFromNodes(editor));
+      expect(html).toContain('data-agent-session-id="session-1"');
+      editor.update(
+        () => {
+          const nodes = $generateNodesFromDOM(
+            editor,
+            new DOMParser().parseFromString(html, 'text/html')
+          );
+          $getRoot()
+            .clear()
+            .append(...nodes);
+          const paragraph = $getRoot().getFirstChild();
+          expect($isParagraphNode(paragraph)).toBe(true);
+          const node = $isParagraphNode(paragraph)
+            ? paragraph.getFirstChild()
+            : null;
+          expect($isAgentSessionMentionNode(node)).toBe(true);
+          if ($isAgentSessionMentionNode(node)) {
+            expect(node.getId()).toBe(info.id);
+            expect(node.isExpanded()).toBe(expanded);
+          }
+        },
+        { discrete: true }
+      );
+    }
+  );
 });

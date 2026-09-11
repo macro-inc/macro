@@ -15,6 +15,7 @@ import {
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
+import ArrowsIn from '@phosphor/arrows-in.svg';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { Button, Layer } from '@ui';
 import {
@@ -187,6 +188,7 @@ const ChipHeader: Component<{
   /** The reply preview, while the answer area has nothing to offer. */
   preview?: string;
   onOpen?: () => void;
+  onCollapse?: () => void;
 }> = (props) => (
   <div
     class="flex min-h-9 items-center gap-1.5 border-b border-edge-muted py-1 pr-1.5 pl-3 text-xs leading-5"
@@ -226,6 +228,22 @@ const ChipHeader: Component<{
       </Show>
       <ActivityText activity={props.status} />
     </button>
+    <Show when={props.onCollapse}>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Collapse to mention"
+        tooltip="Collapse to mention"
+        on:click={(event) => {
+          // Lexical intercepts delegated clicks inside editable decorators.
+          event.preventDefault();
+          event.stopPropagation();
+          props.onCollapse?.();
+        }}
+      >
+        <ArrowsIn />
+      </Button>
+    </Show>
     <Button
       variant="ghost"
       size="icon-xs"
@@ -324,6 +342,7 @@ export const MagicChipView: Component<{
   /** How the chip answers a question; absent renders it read-only. */
   answer?: MagicChipAnswer;
   onOpen?: () => void;
+  onCollapse?: () => void;
 }> = (props) => {
   // Memoized: read from many places per flush, once per streamed chunk.
   const asking = createMemo(() =>
@@ -393,7 +412,9 @@ export const MagicChipView: Component<{
         class="my-2 flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-lg border border-edge-muted bg-surface"
         data-magic-chip={props.agentSessionId}
         data-magic-chip-preview
-        onMouseDown={(event) => {
+        data-lexical-interactive
+        onClick={(event) => event.stopPropagation()}
+        on:mousedown={(event) => {
           // The chip sits in a Lexical message; a press must not move the
           // editor's selection, unless it is landing in one of its own inputs.
           if (!isTextEntry(event.target)) event.preventDefault();
@@ -404,6 +425,7 @@ export const MagicChipView: Component<{
           status={status()}
           preview={preview()}
           onOpen={props.onOpen}
+          onCollapse={props.onCollapse}
         />
         <div
           role="button"
@@ -413,10 +435,11 @@ export const MagicChipView: Component<{
           classList={{ 'h-41': !expanded() }}
           data-magic-chip-answer
           onClick={onAreaClick}
-          onKeyDown={(event) => {
+          on:keydown={(event) => {
             if (event.target !== event.currentTarget) return;
             if (event.key !== 'Enter' && event.key !== ' ') return;
             event.preventDefault();
+            event.stopPropagation();
             if (expandable()) setExpanded((open) => !open);
             else props.onOpen?.();
           }}

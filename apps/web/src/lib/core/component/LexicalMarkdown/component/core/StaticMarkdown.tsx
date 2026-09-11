@@ -549,11 +549,7 @@ const MagicChip: TypedRenderableEntity<MagicChipNode> = {
     node.__type === 'magic-chip',
   render: (props) => (
     <div class="min-w-0 max-w-full overflow-x-hidden">
-      <MagicChipDecorator
-        {...props.node.exportComponentProps()}
-        key={props.node.getKey()}
-        theme={props.theme}
-      />
+      <MagicChipDecorator {...props.node.exportComponentProps()} />
     </div>
   ),
 };

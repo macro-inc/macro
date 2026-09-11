@@ -201,6 +201,12 @@ export const MarkdownShell: Component<
         )}
         on:keydown={(e) => e.stopPropagation()}
         on:click={(e) => {
+          // Embedded controls own focus and need Solid's delegated clicks.
+          if (
+            e.target instanceof Element &&
+            e.target.closest('[data-lexical-interactive]')
+          )
+            return;
           e.stopPropagation();
           if (!isMobile()) editor.focus();
         }}

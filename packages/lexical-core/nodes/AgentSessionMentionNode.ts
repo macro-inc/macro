@@ -14,12 +14,13 @@ import {
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
-const VERSION = 1;
+const VERSION = 2;
 
 export type AgentSessionMentionInfo = {
   id: string;
   label?: string;
   mentionUuid?: string;
+  expanded?: boolean;
 };
 
 export type SerializedAgentSessionMentionNode = Spread<
@@ -38,6 +39,7 @@ export class AgentSessionMentionNode extends DecoratorNode<
   __id: string;
   __label: string | undefined;
   __mentionUuid: string | undefined;
+  __expanded: boolean;
 
   static getType() {
     return 'agent-session-mention';
@@ -56,15 +58,23 @@ export class AgentSessionMentionNode extends DecoratorNode<
       node.__id,
       node.__label,
       node.__mentionUuid,
-      node.__key
+      node.__key,
+      node.__expanded
     );
   }
 
-  constructor(id: string, label?: string, mentionUuid?: string, key?: NodeKey) {
+  constructor(
+    id: string,
+    label?: string,
+    mentionUuid?: string,
+    key?: NodeKey,
+    expanded = false
+  ) {
     super(key);
     this.__id = id;
     this.__label = label;
     this.__mentionUuid = mentionUuid;
+    this.__expanded = expanded;
   }
 
   static importJSON(serializedNode: SerializedAgentSessionMentionNode) {
@@ -72,6 +82,7 @@ export class AgentSessionMentionNode extends DecoratorNode<
       id: serializedNode.id,
       label: serializedNode.label,
       mentionUuid: serializedNode.mentionUuid,
+      expanded: serializedNode.expanded,
     });
     $applyIdFromSerialized(node, serializedNode);
     return node;
@@ -83,6 +94,7 @@ export class AgentSessionMentionNode extends DecoratorNode<
       id: this.__id,
       label: this.__label,
       mentionUuid: this.__mentionUuid,
+      ...(this.__expanded ? { expanded: true } : {}),
       type: AgentSessionMentionNode.getType(),
       version: VERSION,
     };
@@ -93,6 +105,7 @@ export class AgentSessionMentionNode extends DecoratorNode<
       id: this.__id,
       label: this.__label,
       mentionUuid: this.__mentionUuid,
+      ...(this.__expanded ? { expanded: true } : {}),
     };
   }
 
@@ -116,7 +129,13 @@ export class AgentSessionMentionNode extends DecoratorNode<
 
       if (id) {
         return {
-          node: $createAgentSessionMentionNode({ id, label, mentionUuid }),
+          node: $createAgentSessionMentionNode({
+            id,
+            label,
+            mentionUuid,
+            expanded:
+              domNode.getAttribute('data-agent-session-expanded') === 'true',
+          }),
         };
       }
 
@@ -140,6 +159,7 @@ export class AgentSessionMentionNode extends DecoratorNode<
       'data-agent-session-id': this.__id,
       'data-agent-session-label': this.__label || '',
       'data-mention-uuid': this.__mentionUuid || '',
+      ...(this.__expanded ? { 'data-agent-session-expanded': 'true' } : {}),
     };
   }
 
@@ -174,6 +194,14 @@ export class AgentSessionMentionNode extends DecoratorNode<
   setLabel(label: string | undefined) {
     const self = this.getWritable();
     self.__label = label;
+  }
+
+  isExpanded(): boolean {
+    return this.__expanded;
+  }
+
+  setExpanded(expanded: boolean) {
+    this.getWritable().__expanded = expanded;
   }
 
   getMentionUuid(): string | undefined {
@@ -214,7 +242,9 @@ export function $createAgentSessionMentionNode(
   const node = new AgentSessionMentionNode(
     params.id,
     params.label,
-    params.mentionUuid
+    params.mentionUuid,
+    undefined,
+    params.expanded
   );
   return $applyNodeReplacement(node);
 }
