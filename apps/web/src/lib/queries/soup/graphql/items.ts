@@ -583,7 +583,7 @@ export function createGraphqlSoupAstItemsQuery(
     // mobile tab-loading bar or make the view report that it has no data.
     isPlaceholderData: () => false,
     hasNextPage: () =>
-      displayLocalProjection()?.mail
+      !networkIsAuthoritative() && displayLocalProjection()?.mail
         ? displayLocalProjection()?.mail?.nextCursor != null
         : query.hasNextPage,
     fetchNextPage: async () => {

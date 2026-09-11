@@ -86,8 +86,9 @@ retain their Inbox scope, so archived mail is found using All + Done.
 A `Showing cached mail` notice identifies results over synchronized metadata, not a
 claim of complete mailbox coverage. These lists paginate locally beyond the first
 page without a server cursor. Filter, revision, or engine-generation changes restart
-the local page chain; online server results take over again when available. Account
-choices are cached in the viewer-scoped GraphQL catalog. Timestamp ordering and date
+the local page chain; online server results take over again when available. After
+reconnecting, `Load more` follows the same server page chain as the displayed rows,
+not a leftover local cursor. Account choices are cached in the viewer-scoped GraphQL catalog. Timestamp ordering and date
 headers use the selected Mail view's indexed timestamps, not a preview cached from
 another view. Drafts and Sent display their latest eligible message snapshot, even
 when a newer normal message is the ALL preview; no message bodies are needed.
@@ -99,7 +100,9 @@ channel, plus the existing Mail UI rule excluding viewer-owned threads. Merely
 having a different owner or a delegated inbox does not qualify. Shared metadata has
 its own full-scan backfill before body hydration. A successful complete scan marks
 old entries it did not return incomplete (not deleted); a failed or cancelled scan
-preserves last-known evidence. Interrupted Shared scans restart at the beginning so
+preserves last-known evidence. If concurrent cache changes invalidate the prior
+membership snapshot, hydration continues but that scan cannot revoke old evidence.
+Interrupted Shared scans restart at the beginning so
 scope reconciliation never mistakes a suffix for a full scan. Offline access is
 necessarily evaluated from the last synchronized grants.
 
