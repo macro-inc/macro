@@ -1,6 +1,9 @@
 //! This module exposes a expanded dynamic query builder which is able to build specific soup queries
 //! which filter out content basd on some input ast
 
+#[cfg(test)]
+mod test;
+
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
@@ -87,8 +90,7 @@ static GROUPED_DOCUMENT_TOP_CLAUSE: &str = r#"
                         WHEN dt.sub_type = 'task' THEN 'TASK'::property_entity_type
                         ELSE 'DOCUMENT'::property_entity_type
                     END as property_entity_type
-                FROM AccessibleItems ai
-                INNER JOIN "Document" d ON d.id = ai.item_id AND ai.item_type = 'document'
+                FROM "Document" d
                 LEFT JOIN document_sub_type dt ON dt.document_id = d.id
 "#;
 
@@ -104,8 +106,7 @@ static GROUPED_CHAT_TOP_CLAUSE: &str = r#"
                     END::timestamptz as sort_ts,
                     c."projectId"::text as project_id,
                     'CHAT'::property_entity_type as property_entity_type
-                FROM AccessibleItems ai
-                INNER JOIN "Chat" c ON c.id = ai.item_id AND ai.item_type = 'chat'
+                FROM "Chat" c
                 LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
                 WHERE c."deletedAt" IS NULL
 "#;
@@ -122,8 +123,7 @@ static GROUPED_PROJECT_TOP_CLAUSE: &str = r#"
                     END::timestamptz as sort_ts,
                     p."parentId"::text as project_id,
                     'PROJECT'::property_entity_type as property_entity_type
-                FROM AccessibleItems ai
-                INNER JOIN "Project" p ON p.id = ai.item_id AND ai.item_type = 'project'
+                FROM "Project" p
                 LEFT JOIN "UserHistory" uh
                     ON uh."itemId" = p.id
                     AND uh."itemType" = 'project'
@@ -1297,75 +1297,6 @@ fn project_top_where_clause() -> String {
     )
 }
 
-fn push_accessible_items_cte(
-    builder: &mut QueryBuilder<'_, Postgres>,
-    include_documents: bool,
-    include_chats: bool,
-    include_projects: bool,
-) {
-    let mut entity_types = Vec::with_capacity(3);
-    if include_documents {
-        entity_types.push("'document'");
-    }
-    if include_chats {
-        entity_types.push("'chat'");
-    }
-    if include_projects {
-        entity_types.push("'project'");
-    }
-
-    if entity_types.is_empty() {
-        return;
-    }
-
-    let entity_types = entity_types.join(", ");
-    builder.push(format!(
-        r#"AccessibleItems AS MATERIALIZED (
-        SELECT DISTINCT item_id, item_type
-        FROM (
-            SELECT
-                ea.entity_id::text as item_id,
-                ea.entity_type as item_type
-            FROM entity_access ea
-            WHERE ea.source_id = $1
-              AND ea.entity_type IN ({entity_types})
-
-            UNION ALL
-
-            SELECT
-                ea.entity_id::text as item_id,
-                ea.entity_type as item_type
-            FROM comms_channel_participants cp
-            CROSS JOIN LATERAL (
-                SELECT ea.entity_id, ea.entity_type
-                FROM entity_access ea
-                WHERE ea.source_id = cp.channel_id::text
-                  AND ea.entity_type IN ({entity_types})
-                OFFSET 0
-            ) ea
-            WHERE cp.user_id = $1
-              AND cp.left_at IS NULL
-
-            UNION ALL
-
-            SELECT
-                ea.entity_id::text as item_id,
-                ea.entity_type as item_type
-            FROM team_user t
-            CROSS JOIN LATERAL (
-                SELECT ea.entity_id, ea.entity_type
-                FROM entity_access ea
-                WHERE ea.source_id = t.team_id::text
-                  AND ea.entity_type IN ({entity_types})
-                OFFSET 0
-            ) ea
-            WHERE t.user_id = $1
-        ) accessible
-    ),
-"#
-    ));
-}
-
 fn build_query(
     filter_ast: &EntityFilterAst,
     exclude_frecency: bool,
@@ -2020,13 +1951,6 @@ fn build_grouped_query<'a>(
                 &[PropertyEntityType::CalendarEvent],
             );
 
-    push_accessible_items_cte(
-        &mut builder,
-        include_documents,
-        include_chats,
-        include_projects,
-    );
-
     // TopItems CTE: lightweight id + sort_ts + project_id with filters, cursor, and limit
     builder.push("TopItems AS (");
     builder.push(
@@ -2042,6 +1966,8 @@ fn build_grouped_query<'a>(
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
         builder.push(DOCUMENT_TOP_WHERE_CLAUSE);
+        builder.push(" AND ");
+        builder.push(access_semi_join("d.id", "document"));
         builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2052,6 +1978,8 @@ fn build_grouped_query<'a>(
     if include_chats {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(GROUPED_CHAT_TOP_CLAUSE);
+        builder.push(" AND ");
+        builder.push(access_semi_join("c.id", "chat"));
         builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2062,6 +1990,8 @@ fn build_grouped_query<'a>(
     if include_projects {
         push_union_separator(&mut builder, &mut needs_separator);
         builder.push(GROUPED_PROJECT_TOP_CLAUSE);
+        builder.push(" AND ");
+        builder.push(access_semi_join("p.id", "project"));
         builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
