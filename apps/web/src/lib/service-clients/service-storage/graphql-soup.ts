@@ -634,6 +634,27 @@ function toNotificationDocumentSubType(
     : null;
 }
 
+/** The flattened session block every agent-session kind carries. */
+function agentSessionContent(session: {
+  sessionId: string;
+  sessionName: string;
+  botId: string;
+  botName: string;
+  channelId?: string | null;
+  threadId?: string | null;
+  announcementMessageId?: string | null;
+}) {
+  return {
+    sessionId: session.sessionId,
+    sessionName: session.sessionName,
+    botId: session.botId,
+    botName: session.botName,
+    channelId: session.channelId ?? undefined,
+    threadId: session.threadId ?? undefined,
+    announcementMessageId: session.announcementMessageId ?? undefined,
+  };
+}
+
 type NotifEventMember<Tag extends NotifEvent['tag']> = Extract<
   NotifEvent,
   { tag: Tag }
@@ -1085,6 +1106,44 @@ function mapGraphqlNotificationMetadata(
             reviewSnippet: metadata.githubPrReviewReviewSnippet,
           },
         }) satisfies NotifEventMember<'github_pr_review'>
+    )
+    .with(
+      { __typename: 'GraphqlAgentSessionSettledMetadata' },
+      (metadata) =>
+        ({
+          tag: 'agent_session_settled',
+          content: {
+            ...agentSessionContent(metadata.agentSessionSettledSession),
+            turn: metadata.agentSessionSettledTurn,
+            actor: metadata.agentSessionSettledActor ?? undefined,
+            stopReason: metadata.agentSessionSettledStopReason,
+            excerpt: metadata.agentSessionSettledExcerpt ?? undefined,
+          },
+        }) satisfies NotifEventMember<'agent_session_settled'>
+    )
+    .with(
+      { __typename: 'GraphqlAgentSessionWaitingForInputMetadata' },
+      (metadata) =>
+        ({
+          tag: 'agent_session_waiting_for_input',
+          content: {
+            ...agentSessionContent(metadata.agentSessionWaitingForInputSession),
+            turn: metadata.agentSessionWaitingForInputTurn,
+            question: metadata.agentSessionWaitingForInputQuestion,
+          },
+        }) satisfies NotifEventMember<'agent_session_waiting_for_input'>
+    )
+    .with(
+      { __typename: 'GraphqlAgentSessionMentionedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'agent_session_mentioned',
+          content: {
+            ...agentSessionContent(metadata.agentSessionMentionedSession),
+            mentionedBy: metadata.agentSessionMentionedMentionedBy ?? undefined,
+            actionId: metadata.agentSessionMentionedActionId,
+          },
+        }) satisfies NotifEventMember<'agent_session_mentioned'>
     )
     .exhaustive();
 }

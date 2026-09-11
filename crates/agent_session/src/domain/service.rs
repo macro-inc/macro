@@ -213,6 +213,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// The bot a session runs for, as viewers see it.
     fn session_bot(&self, id: BotId) -> impl Future<Output = Result<SessionBot>> + Send;
 
+    /// Every user who has driven the session; see
+    /// [`AgentSessionLogRepo::participants`].
+    fn session_participants(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send;
+
     /// The user-message id the next prompt appended to this session will fold to.
     fn next_prompt_message_id(
         &self,
@@ -795,6 +802,13 @@ where
         self.repo.session_bot(id).await
     }
 
+    async fn session_participants(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<Vec<MacroUserIdStr<'static>>> {
+        self.repo.participants(id).await
+    }
+
     async fn next_prompt_message_id(&self, id: AgentSessionId) -> Result<MessageId> {
         Ok(MessageId {
             turn: self.folds.next_turn_id(id).await?,
@@ -867,7 +881,7 @@ fn spawn_initial_agent_session_rename<R, Rt, Namer>(
     id: AgentSessionId,
     initial_prompt: String,
 ) where
-    R: AgentSessionRepo + Clone,
+    R: AgentSessionRepo + AgentSessionLogRepo + Clone,
     Rt: AgentSessionRealtime + Send + Sync + 'static,
     Namer: AgentSessionNameGenerator + Send + Sync + 'static,
 {
@@ -938,12 +952,13 @@ async fn publish_renamed_lifecycle<R>(
     lifecycle_publisher: &Arc<dyn AgentSessionLifecyclePublisher>,
     id: AgentSessionId,
 ) where
-    R: AgentSessionRepo,
+    R: AgentSessionRepo + AgentSessionLogRepo,
 {
     let identity = async {
         let session = repo.get(id).await?;
-        let bot = repo.session_bot(session.bot_id).await?;
-        Ok::<_, AgentSessionError>(session_identity(&session, &bot))
+        let (bot, participants) =
+            tokio::try_join!(repo.session_bot(session.bot_id), repo.participants(id))?;
+        Ok::<_, AgentSessionError>(session_identity(&session, &bot, participants))
     }
     .await;
     match identity {

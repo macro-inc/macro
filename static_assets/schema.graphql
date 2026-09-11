@@ -563,6 +563,102 @@ input GraphqlAgentSessionLiteral @oneOf {
 }
 
 """
+Metadata for being named in a prompt to an agent session.
+"""
+type GraphqlAgentSessionMentionedMetadata {
+	"""
+	The session this is about.
+	"""
+	session: GraphqlAgentSessionRef!
+	"""
+	Who wrote the prompt.
+	"""
+	mentionedBy: String
+	"""
+	The action carrying the prompt.
+	"""
+	actionId: ID!
+}
+
+"""
+The session an agent-session notification points at.
+"""
+type GraphqlAgentSessionRef {
+	"""
+	Agent session identifier; what a click opens.
+	"""
+	sessionId: ID!
+	"""
+	Session name at the time of the event.
+	"""
+	sessionName: String!
+	"""
+	Bot identifier.
+	"""
+	botId: ID!
+	"""
+	Bot display name; agent notifications read as being from the bot.
+	"""
+	botName: String!
+	"""
+	Channel the session was opened from, when it was.
+	"""
+	channelId: ID
+	"""
+	Thread the session was opened from, when it was.
+	"""
+	threadId: ID
+	"""
+	The magic-chip message for the turn, when one was posted.
+	"""
+	announcementMessageId: ID
+}
+
+"""
+Metadata for an agent session that finished with nothing queued.
+"""
+type GraphqlAgentSessionSettledMetadata {
+	"""
+	The session this is about.
+	"""
+	session: GraphqlAgentSessionRef!
+	"""
+	The turn that ended.
+	"""
+	turn: Int!
+	"""
+	Who prompted the turn.
+	"""
+	actor: String
+	"""
+	ACP stop reason, or `error`.
+	"""
+	stopReason: String!
+	"""
+	The agent's last prose in the turn.
+	"""
+	excerpt: String
+}
+
+"""
+Metadata for an agent session blocked on a question.
+"""
+type GraphqlAgentSessionWaitingForInputMetadata {
+	"""
+	The session this is about.
+	"""
+	session: GraphqlAgentSessionRef!
+	"""
+	The turn asking.
+	"""
+	turn: Int!
+	"""
+	The question, as the agent phrased it.
+	"""
+	question: String!
+}
+
+"""
 Metadata for an AI response.
 """
 type GraphqlAiResponseMetadata {
@@ -3047,7 +3143,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata
+union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata
 
 """
 A notification associated with a Soup entity.

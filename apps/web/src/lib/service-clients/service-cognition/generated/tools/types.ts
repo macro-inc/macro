@@ -503,7 +503,8 @@ export type NotificationCategory =
   | 'task'
   | 'github'
   | 'reminder'
-  | 'calendar';
+  | 'calendar'
+  | 'agent';
 /**
  * Canonical entity types accepted by the notification-listing tool.
  *

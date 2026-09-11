@@ -53,6 +53,11 @@ pub struct SessionIdentity {
     pub owner_id: MacroUserIdStr<'static>,
     /// Thread the session was opened from, when it was.
     pub origin: Option<ThreadOrigin>,
+    /// Everyone with a stake in what happens next: the owner plus every user
+    /// who has prompted or answered this session. Resolved by the emitter so
+    /// a consumer fanning out never has to read the session's log.
+    #[serde(default)]
+    pub audience: Vec<MacroUserIdStr<'static>>,
 }
 
 /// A turn the runtime answered.
@@ -181,6 +186,23 @@ pub struct InputReceivedMetadata {
     pub action_id: AgentActionId,
 }
 
+/// A prompt named other users who can open the session. Published when the
+/// prompt is accepted, not when it is answered: "come look at this" should
+/// not wait for the turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct SessionMentionedMetadata {
+    /// The session.
+    pub identity: SessionIdentity,
+    /// The action carrying the prompt.
+    pub action_id: AgentActionId,
+    /// Who wrote the prompt, absent when a bot acted on nobody's behalf.
+    pub mentioned_by: Option<MacroUserIdStr<'static>>,
+    /// The users named, already narrowed to those who can open the session
+    /// and never including the author.
+    pub mentioned: Vec<MacroUserIdStr<'static>>,
+}
+
 /// The session's live actor is gone: idle teardown, transport loss, or crash.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -248,6 +270,10 @@ pub enum AgentSessionLifecycleEvent {
     #[serde(rename = "agent_session.input_received")]
     #[strum_discriminants(strum(serialize = "agent_session.input_received"))]
     InputReceived(InputReceivedMetadata),
+    /// A prompt named other users who can open the session.
+    #[serde(rename = "agent_session.mentioned")]
+    #[strum_discriminants(strum(serialize = "agent_session.mentioned"))]
+    Mentioned(SessionMentionedMetadata),
     /// The session's live actor is gone.
     #[serde(rename = "agent_session.stopped")]
     #[strum_discriminants(strum(serialize = "agent_session.stopped"))]
@@ -273,6 +299,7 @@ impl AgentSessionLifecycleEvent {
             Self::Settled(metadata) => &metadata.identity,
             Self::WaitingForInput(metadata) => &metadata.identity,
             Self::InputReceived(metadata) => &metadata.identity,
+            Self::Mentioned(metadata) => &metadata.identity,
             Self::Stopped(metadata) => &metadata.identity,
             Self::Renamed(metadata) => &metadata.identity,
             Self::Deleted(metadata) => &metadata.identity,

@@ -1134,6 +1134,25 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .map(TryInto::try_into)
             .collect::<anyhow::Result<Vec<_>>>()?)
     }
+
+    async fn participants(
+        &self,
+        agent_session_id: AgentSessionId,
+    ) -> Result<Vec<MacroUserIdStr<'static>>> {
+        let users = sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT log.user_id AS "user_id!: MacroUserIdStr"
+            FROM agent_session_log AS log
+            WHERE log.agent_session_id = $1
+              AND log.user_id IS NOT NULL
+            "#,
+            agent_session_id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list agent session participants")?;
+        Ok(users)
+    }
 }
 
 impl SessionOwnership for PgAgentSessionRepo {

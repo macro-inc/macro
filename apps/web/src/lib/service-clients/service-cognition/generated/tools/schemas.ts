@@ -2446,6 +2446,7 @@ export const ListNotifications = z.object({
           'github',
           'reminder',
           'calendar',
+          'agent',
         ])
       ),
       z.null(),

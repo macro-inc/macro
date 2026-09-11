@@ -23,4 +23,7 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   reminder: 'REMINDER',
   calendar_event_reminder: 'EVENT',
   inbox_reauth_required: 'EMAIL',
+  agent_session_settled: 'AGENT',
+  agent_session_waiting_for_input: 'ASKING',
+  agent_session_mentioned: 'MENTION',
 } as const;

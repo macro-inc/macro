@@ -8,7 +8,7 @@ import {
 } from '@queries/soup/normalized-cache';
 import { teamKeys } from '@queries/team/keys';
 import { onCleanup } from 'solid-js';
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import type { NotificationSource } from './notification-source';
 import type { UnifiedNotification } from './types';
 
@@ -115,6 +115,18 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     .with({ tag: 'github_pr_review' }, () => {
       refreshSoupEntity(notification, 'foreignEntity');
     })
+    .with(
+      {
+        tag: P.union(
+          'agent_session_settled',
+          'agent_session_waiting_for_input',
+          'agent_session_mentioned'
+        ),
+      },
+      () => {
+        refreshSoupEntity(notification, 'agentSession');
+      }
+    )
     .otherwise(() => {
       // Ignore notification types introduced by a newer backend.
     });

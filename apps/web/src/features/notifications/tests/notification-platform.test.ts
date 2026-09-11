@@ -117,6 +117,27 @@ function createGithubPrCheckRunNotification(): UnifiedNotification {
   });
 }
 
+function createAgentSettledNotification(): UnifiedNotification {
+  return baseNotification({
+    entity_type: 'channel',
+    notification_event_type: 'agent_session_settled',
+    notification_metadata: {
+      tag: 'agent_session_settled',
+      content: {
+        sessionId: '01a00000-0000-7000-8000-00000000000a',
+        sessionName: 'Fix the flaky test',
+        botId: '01a00000-0000-7000-8000-0000000000b7',
+        botName: 'Macro Coder',
+        channelId: 'entity-1',
+        threadId: '01a00000-0000-7000-8000-000000000002',
+        turn: 3,
+        stopReason: 'end_turn',
+        excerpt: 'Done.',
+      },
+    },
+  });
+}
+
 function createNotificationInterface(
   showNotification: PlatformNotificationState['showNotification']
 ): PlatformNotificationState {
@@ -190,5 +211,26 @@ describe('maybeHandlePlatformNotification', () => {
       })
     );
     expect(handle.onClick).toHaveBeenCalledOnce();
+  });
+
+  it('names the bot, not "Someone", for an agent notification with no sender', async () => {
+    const handle = createNotificationHandle();
+    const showNotification = vi.fn<
+      PlatformNotificationState['showNotification']
+    >(async () => handle);
+    const notificationInterface = createNotificationInterface(showNotification);
+
+    await maybeHandlePlatformNotification(
+      createAgentSettledNotification(),
+      notificationInterface,
+      {} as SplitManager
+    );
+
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Macro Coder <Fix the flaky test>',
+        options: expect.objectContaining({ body: 'Done.' }),
+      })
+    );
   });
 });

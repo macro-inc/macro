@@ -308,7 +308,6 @@ const Question: Component<ChipAsking> = (props) => (
               toolCall={review().toolCall}
               review={{
                 canAnswer: () => props.asking.canAnswer,
-                ownerName: () => props.asking.ownerName,
                 answering: () => props.locked && props.asking.canAnswer,
                 respond: props.respond,
               }}

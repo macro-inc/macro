@@ -7,7 +7,6 @@ import {
   createElicitationController,
   type ElicitationController,
 } from '@app/features/block-agent/context/create-elicitation-controller';
-import { useUserId } from '@core/context/user';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
@@ -94,11 +93,10 @@ export function createMagicChipModel(props: MagicChipData): {
   const [latestEvent, setLatestEvent] = createSignal<string>();
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
   const [persistedStatus, setPersistedStatus] = createSignal(props.status);
-  const [ownerId, setOwnerId] = createSignal<string>();
+  const [canEdit, setCanEdit] = createSignal<boolean>();
   const [session, setSession] = createSignal<SessionIdentity>();
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
   const pendingElicitation = () => metadata()?.pendingElicitation ?? undefined;
-  const viewerId = useUserId();
   let active = true;
   let release: (() => void) | undefined;
   let statusTimer: ReturnType<typeof setTimeout> | undefined;
@@ -118,7 +116,7 @@ export function createMagicChipModel(props: MagicChipData): {
       .catch(() => undefined);
     if (!active) return;
     if (result?.isOk()) {
-      setOwnerId(result.value.ownerId);
+      setCanEdit(result.value.canEdit);
       setSession({
         harness: result.value.harness,
         model: result.value.model,
@@ -193,8 +191,7 @@ export function createMagicChipModel(props: MagicChipData): {
   const elicitation = createElicitationController({
     sessionId: () => props.agentSessionId,
     pending: questionForTurn,
-    ownerId,
-    viewerId,
+    canEdit,
   });
   const asking = (): MagicChipQuestion | undefined => {
     const question = questionForTurn();
@@ -202,7 +199,6 @@ export function createMagicChipModel(props: MagicChipData): {
     return {
       question,
       canAnswer: elicitation.canAnswer(),
-      ownerName: elicitation.ownerName(),
     };
   };
 

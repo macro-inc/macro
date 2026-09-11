@@ -17,6 +17,7 @@ use super::model::{
     AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, HarnessCommand, PriorChannelMessage,
     ProvisionedEgress, SandboxEgress, SessionAnnouncement, SpawnContainer,
 };
+use super::notifications::PlannedNotification;
 use super::sandbox::SandboxResizeEffect;
 
 /// The distributed destination for a forwarded command.
@@ -126,6 +127,84 @@ pub trait AgentPromptComposer: Send + Sync + 'static {
         prompt_markdown: &str,
         messages: Option<&[PriorChannelMessage]>,
     ) -> impl Future<Output = Result<String>> + Send;
+}
+
+/// Who a prompt names, made able to open the session it is for.
+///
+/// Mentioning someone in a prompt is an invitation: when the author can
+/// drive the session (edit access), everyone they name is granted edit
+/// access too, so the notification that follows leads somewhere they can
+/// act. An author who cannot drive the session amplifies nobody - only the
+/// people who could already open it are returned. The author is never in
+/// the answer.
+pub trait PromptMentions: Send + Sync + 'static {
+    /// The users `prompt_markdown` mentions who can now open `session_id`.
+    fn share_with_mentioned<'a>(
+        &'a self,
+        session_id: AgentSessionId,
+        actor: Option<&'a MacroUserIdStr<'static>>,
+        prompt_markdown: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>>;
+}
+
+impl<Mentions: PromptMentions + ?Sized> PromptMentions for Arc<Mentions> {
+    fn share_with_mentioned<'a>(
+        &'a self,
+        session_id: AgentSessionId,
+        actor: Option<&'a MacroUserIdStr<'static>>,
+        prompt_markdown: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
+        (**self).share_with_mentioned(session_id, actor, prompt_markdown)
+    }
+}
+
+/// A [`PromptMentions`] that finds nobody and shares with nobody: tests and
+/// tooling that never notify.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoPromptMentions;
+
+impl PromptMentions for NoPromptMentions {
+    fn share_with_mentioned<'a>(
+        &'a self,
+        _session_id: AgentSessionId,
+        _actor: Option<&'a MacroUserIdStr<'static>>,
+        _prompt_markdown: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send + 'a>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+}
+
+/// Delivers the notifications a lifecycle fact warrants to whoever sends
+/// them on. Object-safe and held erased, like the lifecycle publisher.
+pub trait AgentSessionNotifier: Send + Sync + 'static {
+    /// Send one notification. Resolves once the send has been attempted; a
+    /// failure is the adapter's to log, never the fact's to fail on.
+    fn notify(
+        &self,
+        notification: PlannedNotification,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+}
+
+impl<Notifier: AgentSessionNotifier + ?Sized> AgentSessionNotifier for Arc<Notifier> {
+    fn notify(
+        &self,
+        notification: PlannedNotification,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        (**self).notify(notification)
+    }
+}
+
+/// An [`AgentSessionNotifier`] that tells nobody: tests and tooling.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopAgentSessionNotifier;
+
+impl AgentSessionNotifier for NoopAgentSessionNotifier {
+    fn notify(
+        &self,
+        _notification: PlannedNotification,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async {})
+    }
 }
 
 /// Posts a pointer to a new agent session into its originating thread.

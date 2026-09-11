@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { BotId } from './botId';
 import type { MacroUserIdStr } from './macroUserIdStr';
 import type { SessionIdentityOrigin } from './sessionIdentityOrigin';
@@ -13,6 +14,10 @@ import type { SessionIdentityOrigin } from './sessionIdentityOrigin';
 consumer never has to look the session up.
  */
 export interface SessionIdentity {
+  /** Everyone with a stake in what happens next: the owner plus every user
+who has prompted or answered this session. Resolved by the emitter so
+a consumer fanning out never has to read the session's log. */
+  audience?: MacroUserIdStr[];
   /** Bot the session runs for. */
   bot_id: BotId;
   /** The bot's display name at the time of the event. */
