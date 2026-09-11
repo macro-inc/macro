@@ -13,7 +13,7 @@ export function ChatProviderIcon(props: {
 }) {
   const model = () =>
     getChatInputStoredModel(props.id) ??
-    (props.model ? resolveChatInputModel(props.model) : undefined);
+    (props.model != null ? resolveChatInputModel(props.model) : undefined);
   return (
     <Show
       when={model()}

@@ -50,17 +50,20 @@ describe('soup chat provider selection', () => {
     ).not.toBeNull();
   });
 
-  it('matches the composer default for retired server models', async () => {
-    const { container } = render(() => (
-      <ChatProviderIcon id="retired-model" model="gpt-4o" />
-    ));
-    expect(resolveChatInputModel('gpt-4o')).toBe(Model.sonnet5);
-    await vi.waitFor(() =>
-      expect(
-        container.querySelector('[data-ai-provider="anthropic"] svg')
-      ).not.toBeNull()
-    );
-  });
+  it.each(['gpt-4o', ''])(
+    'matches the composer default for unsupported server model %j',
+    async (model) => {
+      const { container } = render(() => (
+        <ChatProviderIcon id={`unsupported-model-${model}`} model={model} />
+      ));
+      expect(resolveChatInputModel(model)).toBe(Model.sonnet5);
+      await vi.waitFor(() =>
+        expect(
+          container.querySelector('[data-ai-provider="anthropic"] svg')
+        ).not.toBeNull()
+      );
+    }
+  );
 
   it('keeps supported OpenAI and Anthropic chats distinct', async () => {
     const { container } = render(() => (
@@ -114,9 +117,16 @@ describe('soup chat provider selection', () => {
     ).toBeNull();
   });
 
-  it('shows the standard chat icon when no model is available', async () => {
-    const { container } = render(() => <ChatProviderIcon id="unloaded-chat" />);
-    expect(container.querySelector('[data-ai-provider]')).toBeNull();
-    expect(container.querySelector('[data-entity-type="chat"]')).not.toBeNull();
-  });
+  it.each([undefined, null])(
+    'shows the standard chat icon when the model is %s',
+    async (model) => {
+      const { container } = render(() => (
+        <ChatProviderIcon id="unloaded-chat" model={model} />
+      ));
+      expect(container.querySelector('[data-ai-provider]')).toBeNull();
+      expect(
+        container.querySelector('[data-entity-type="chat"]')
+      ).not.toBeNull();
+    }
+  );
 });
