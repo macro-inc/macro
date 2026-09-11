@@ -9,8 +9,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+mod access_explanation;
+
+pub use access_explanation::{AccessExplanation, AccessGrant};
 pub use bot_id::{BotId, BotIdStr};
 pub use model_entity::EntityType;
+pub use models_entity_access_management::EntityAccessSourceType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
 pub use models_permissions::share_permission::access_level::{
     CommentAccessLevel, EditAccessLevel, OwnerAccessLevel, ViewAccessLevel,
@@ -208,7 +212,7 @@ pub trait RequiredPermission: std::fmt::Debug + Send + Sync + 'static {
 ///
 /// Items (documents, chats, projects, threads) use access levels.
 /// Channels use view-only permission or participant roles.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum EntityPermission {
@@ -378,7 +382,7 @@ pub enum ChannelRoleResult {
 }
 
 /// A given entity
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Entity {
     /// The id of the entity
     pub entity_id: String,

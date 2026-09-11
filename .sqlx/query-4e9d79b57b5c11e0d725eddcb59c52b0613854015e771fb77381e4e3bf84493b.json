@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT pea.entity_id::text AS \"project_id!\"\n        FROM email_threads t\n        JOIN entity_access pea\n          ON pea.entity_id::text = t.project_id\n         AND pea.entity_type = 'project'\n         AND pea.source_id = ANY($2)\n        WHERE t.id = $1::uuid\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4e9d79b57b5c11e0d725eddcb59c52b0613854015e771fb77381e4e3bf84493b"
+}

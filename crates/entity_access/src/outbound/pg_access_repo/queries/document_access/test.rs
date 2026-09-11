@@ -522,3 +522,80 @@ async fn email_direct_document_grant_wins_over_inherited_view(pool: PgPool) -> a
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn explain_lists_public_and_entity_access_and_matches_effective(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    const REQUESTER: &str = "macro|requester@team.test";
+
+    insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
+    let document_id =
+        insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), Some("comment"))
+            .await?;
+    insert_document_entity_access(&pool, document_id, REQUESTER, AccessLevel::Edit).await?;
+    let source_ids = SourceIds(vec![REQUESTER.to_string()]);
+    let requester = user(REQUESTER);
+
+    let access = get_document_access(&pool, &document_id, &source_ids, Some(&*requester)).await?;
+    let grants =
+        explain_document_access(&pool, &document_id, &source_ids, Some(&*requester)).await?;
+    let explanation = crate::domain::models::AccessExplanation::from_grants(
+        requester,
+        crate::domain::models::Entity {
+            entity_id: document_id.to_string(),
+            entity_type: crate::domain::models::EntityType::Document,
+        },
+        grants.clone(),
+    );
+
+    assert_eq!(explanation.effective_access_level(), access);
+    assert!(grants.iter().any(|grant| matches!(
+        grant,
+        crate::domain::models::AccessGrant::PublicLink {
+            access_level: AccessLevel::Comment
+        }
+    )));
+    assert!(grants.iter().any(|grant| matches!(
+        grant,
+        crate::domain::models::AccessGrant::EntityAccess {
+            access_level: AccessLevel::Edit,
+            ..
+        }
+    )));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn explain_team_link_matches_access_level(pool: PgPool) -> anyhow::Result<()> {
+    let owner_team_id = Uuid::new_v4();
+    insert_user(&pool, OWNER_WITH_TEAM).await?;
+    add_owner_to_team(&pool, OWNER_WITH_TEAM, owner_team_id).await?;
+    let document_id =
+        insert_link_shared_document(&pool, OWNER_WITH_TEAM, Some("TEAM"), Some("comment")).await?;
+    let requester = user("macro|teammate@team.test");
+    let source_ids = SourceIds(vec![owner_team_id.to_string()]);
+
+    let access = get_document_access(&pool, &document_id, &source_ids, Some(&*requester)).await?;
+    let grants =
+        explain_document_access(&pool, &document_id, &source_ids, Some(&*requester)).await?;
+    let explanation = crate::domain::models::AccessExplanation::from_grants(
+        requester,
+        crate::domain::models::Entity {
+            entity_id: document_id.to_string(),
+            entity_type: crate::domain::models::EntityType::Document,
+        },
+        grants.clone(),
+    );
+
+    assert_eq!(access, Some(AccessLevel::Comment));
+    assert_eq!(explanation.effective_access_level(), access);
+    assert!(grants.iter().any(|grant| matches!(
+        grant,
+        crate::domain::models::AccessGrant::TeamLink {
+            access_level: AccessLevel::Comment,
+            owner_team_id: id
+        } if *id == owner_team_id
+    )));
+    Ok(())
+}

@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::models::{ChannelRoleResult, ParticipantRole};
+use crate::domain::models::{AccessGrant, ChannelRoleResult, ParticipantRole};
 use bot_id::BotIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -20,6 +20,15 @@ struct ChannelRoleRow {
 struct TeamChannelRoleRow {
     role: Option<String>,
     is_matching_team_channel: bool,
+}
+
+/// Row returned from the channel explain query.
+struct ChannelExplainRow {
+    role: Option<String>,
+    channel_type: String,
+    org_id: Option<i64>,
+    team_id: Option<Uuid>,
+    is_team_member: bool,
 }
 
 /// Parse a participant role string from the database.
@@ -112,6 +121,80 @@ pub async fn get_channel_role(
     }
 
     Ok(ChannelRoleResult::NoAccess)
+}
+
+/// Explain channel access using the role path (extractors / GraphQL).
+#[tracing::instrument(err, skip(pool))]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "same query shape as get_channel_role"
+)]
+pub async fn explain_channel_access(
+    pool: &PgPool,
+    channel_id: &Uuid,
+    user_id: &str,
+    user_org_id: Option<i64>,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let row = sqlx::query_as!(
+        ChannelExplainRow,
+        r#"
+        SELECT
+            cp.role::text as "role?",
+            c.channel_type::text as "channel_type!",
+            c.org_id as "org_id?",
+            c.team_id as "team_id?",
+            EXISTS (
+                SELECT 1
+                FROM team_user tu
+                WHERE tu.user_id = $2 AND tu.team_id = c.team_id
+            ) as "is_team_member!"
+        FROM comms_channels c
+        LEFT JOIN comms_channel_participants cp
+            ON cp.channel_id = c.id AND cp.user_id = $2 AND cp.left_at IS NULL
+        WHERE c.id = $1
+        "#,
+        channel_id,
+        user_id,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(row) = row else {
+        return Ok(vec![]);
+    };
+
+    if let Some(stored_role) = row.role.as_deref() {
+        return Ok(vec![AccessGrant::ChannelParticipant {
+            role: parse_role(stored_role),
+        }]);
+    }
+
+    match row.channel_type.as_str() {
+        "public" => Ok(vec![AccessGrant::ChannelPublicDefault {
+            role: ParticipantRole::Member,
+        }]),
+        "organization" => {
+            let org_match = user_org_id
+                .zip(row.org_id)
+                .is_some_and(|(user_org, ch_org)| user_org == ch_org);
+            if let (true, Some(org_id)) = (org_match, row.org_id) {
+                Ok(vec![AccessGrant::ChannelOrganization {
+                    org_id,
+                    role: ParticipantRole::Member,
+                }])
+            } else {
+                Ok(vec![])
+            }
+        }
+        "team" if row.is_team_member => {
+            if let Some(team_id) = row.team_id {
+                Ok(vec![AccessGrant::ChannelTeamViewOnly { team_id }])
+            } else {
+                Ok(vec![])
+            }
+        }
+        _ => Ok(vec![]),
+    }
 }
 
 /// Get a bot's channel role while operating in its owning team's scope.

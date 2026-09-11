@@ -1,6 +1,6 @@
 //! PostgreSQL implementation of the AccessRepository trait.
 
-mod queries;
+pub(crate) mod queries;
 
 pub use queries::{SourceIds, get_team_scope_source_ids, get_user_source_ids};
 

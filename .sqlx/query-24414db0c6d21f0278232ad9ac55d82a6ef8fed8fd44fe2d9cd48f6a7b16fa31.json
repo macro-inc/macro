@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH source_pairs AS (\n            SELECT DISTINCT stored_for_id, stored_for_auth_entity\n            FROM UNNEST($2::text[], $3::text[])\n                AS source_rows(stored_for_id, stored_for_auth_entity)\n        )\n        SELECT\n            fe.stored_for_id AS \"stored_for_id!\",\n            fe.stored_for_auth_entity AS \"stored_for_auth_entity!\"\n        FROM foreign_entity fe\n        JOIN source_pairs s\n          ON s.stored_for_id = fe.stored_for_id\n         AND s.stored_for_auth_entity = fe.stored_for_auth_entity\n        WHERE fe.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stored_for_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "stored_for_auth_entity!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "24414db0c6d21f0278232ad9ac55d82a6ef8fed8fd44fe2d9cd48f6a7b16fa31"
+}
