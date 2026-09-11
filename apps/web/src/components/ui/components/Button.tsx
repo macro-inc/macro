@@ -24,7 +24,7 @@ const BUTTON_TOUCH_STYLES =
 export const buttonVariants = createVariants(
   cn(
     'relative inline-flex shrink-0 items-center justify-center whitespace-nowrap text-sm',
-    'rounded-md border-1 border-transparent font-medium outline-none select-none transition-colors',
+    'rounded-md border-1 border-transparent font-medium outline-none select-none transition-colors [&_*]:select-none',
     'data-disabled:cursor-not-allowed data-disabled:opacity-30',
     '[&_svg]:pointer-events-none [&_svg]:shrink-0'
   ),

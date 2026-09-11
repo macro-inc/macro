@@ -1,6 +1,42 @@
 import { describe, expect, it } from 'vitest';
 
-import { findNextAutoLinkMatch } from './linksPlugin';
+import { findNextAutoLinkMatch, normalizeLinkUrl } from './linksPlugin';
+
+describe('normalizeLinkUrl', () => {
+  it('normalizes bare hosts to HTTPS', () => {
+    expect(normalizeLinkUrl(' example.com/path with spaces ')).toBe(
+      'https://example.com/path%20with%20spaces'
+    );
+  });
+
+  it('allows HTTP, HTTPS, and mailto links', () => {
+    expect(normalizeLinkUrl('http://example.com/path')).toBe(
+      'http://example.com/path'
+    );
+    expect(normalizeLinkUrl('https://example.com/path')).toBe(
+      'https://example.com/path'
+    );
+    expect(normalizeLinkUrl('mailto:user@example.com')).toBe(
+      'mailto:user@example.com'
+    );
+  });
+
+  it.each([
+    'javascript://alert(1)',
+    'javascript:alert(1)',
+    'java\nscript:alert(1)',
+    'data:text/html,unsafe',
+    'file:///tmp/secret',
+    'ftp://example.com',
+  ])('rejects a disallowed URL scheme: %s', (url) => {
+    expect(normalizeLinkUrl(url)).toBeNull();
+  });
+
+  it('rejects empty and malformed URLs', () => {
+    expect(normalizeLinkUrl('')).toBeNull();
+    expect(normalizeLinkUrl('https://')).toBeNull();
+  });
+});
 
 describe('findNextAutoLinkMatch', () => {
   it('requires a protocol in protocol mode', () => {

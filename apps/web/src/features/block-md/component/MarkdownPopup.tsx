@@ -21,6 +21,7 @@ import {
   INSERT_LINK_COMMAND,
   LIST_TO_TABLE_COMMAND,
   NODE_TRANSFORM,
+  normalizeLinkUrl,
   registerRootEventListener,
 } from '@core/component/LexicalMarkdown/plugins';
 import {
@@ -516,9 +517,10 @@ export function MarkdownPopup(props: {
     };
 
     const handleInsertLink = () => {
-      const url = linkInput().trim();
+      const input = linkInput().trim();
+      const url = normalizeLinkUrl(input);
       if (!url) return;
-      const linkText = selection()?.text ?? url;
+      const linkText = selection()?.text ?? input;
       editor.update(() => {
         if (savedLinkSelection) $setSelection(savedLinkSelection);
       });
