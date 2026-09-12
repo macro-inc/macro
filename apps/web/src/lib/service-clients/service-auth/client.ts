@@ -13,6 +13,11 @@ import { Telemetry } from '@macro-inc/observability';
 import { makePersisted } from '@solid-primitives/storage';
 import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
+import type {
+  AiPlanCatalog,
+  AiUsageSnapshot,
+  PaidPlan,
+} from './ai-billing-types';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
   CursorApiKeyStatus,
@@ -521,6 +526,8 @@ export const authServiceClient = {
       fbp?: string | null;
       fbc?: string | null;
     };
+    /** The plan to subscribe to. The backend defaults to Premium. */
+    plan?: PaidPlan;
   }) {
     return (
       await fetchWithAuth<{ url: string }>(
@@ -532,6 +539,67 @@ export const authServiceClient = {
             cancelUrl: args.cancelUrl,
             discount: args.discount ?? undefined,
             metadata: args.metadata,
+            plan: args.plan,
+          }),
+        }
+      )
+    ).map((result) => result.url);
+  },
+
+  /**
+   * Moves the active subscription to another paid plan. Proration is invoiced
+   * immediately; roles and the AI allowance follow from the Stripe webhook.
+   */
+  async changePlan(args: { plan: PaidPlan }) {
+    return (
+      await fetchWithAuth<{ plan: PaidPlan }>(`${authHost}/user/stripe/plan`, {
+        method: 'POST',
+        body: JSON.stringify({ plan: args.plan }),
+      })
+    ).map((result) => result.plan);
+  },
+
+  // AI billing: allowance, credits, overage.
+  async getAiBillingSummary() {
+    return await fetchWithAuth<AiUsageSnapshot>(
+      `${authHost}/ai-billing/summary`,
+      { method: 'GET' }
+    );
+  },
+
+  async getAiBillingPlans() {
+    return await fetchWithAuth<AiPlanCatalog>(`${authHost}/ai-billing/plans`, {
+      method: 'GET',
+    });
+  },
+
+  async updateAiOverage(args: { enabled: boolean; limitCents: number }) {
+    return await fetchWithAuth<AiUsageSnapshot>(
+      `${authHost}/ai-billing/overage`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          enabled: args.enabled,
+          limitCents: args.limitCents,
+        }),
+      }
+    );
+  },
+
+  async createAiCreditCheckout(args: {
+    amountCents: number;
+    successUrl: string;
+    cancelUrl: string;
+  }) {
+    return (
+      await fetchWithAuth<{ url: string }>(
+        `${authHost}/ai-billing/credits/checkout`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            amountCents: args.amountCents,
+            successUrl: args.successUrl,
+            cancelUrl: args.cancelUrl,
           }),
         }
       )
@@ -925,6 +993,17 @@ export const authServiceClient = {
         method: 'DELETE',
       })
     ).map(() => undefined);
+  },
+
+  /** Move one team member's seat between paid plans (team admins only). */
+  async setTeamMemberPlan(userId: string, plan: PaidPlan) {
+    return await fetchWithAuth<TeamMemberPlan>(
+      `${authHost}/team/members/${encodeURIComponent(userId)}/plan`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ plan }),
+      }
+    );
   },
 
   async removeUserFromTeam(userId: string) {

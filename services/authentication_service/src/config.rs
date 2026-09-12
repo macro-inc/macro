@@ -63,6 +63,10 @@ maybe_env_vars! {
     pub struct LoopsApiKey;
     /// JSON array of exact email addresses allowed to sign up in Develop.
     pub struct DevelopmentSignupAllowlistJson;
+    /// Stripe price id for the Max plan seat. Optional so the service can
+    /// deploy before the price exists in Stripe; until it is set, Max checkout
+    /// and plan changes answer 400 and every subscription maps to Premium.
+    pub struct StripeMaxPriceId;
 }
 
 /// The configuration parameters for the application.
@@ -147,8 +151,11 @@ pub struct Config {
     ///
     /// All `@macro.com` email addresses are allowed by the Develop policy automatically.
     pub development_signup_allowlist_json: DevelopmentSignupAllowlistJson,
-    /// The stripe price id
+    /// The stripe price id for the Premium plan seat
     pub stripe_price_id: StripePriceId,
+    /// The stripe price id for the Max plan seat (optional, see
+    /// [`StripeMaxPriceId`])
+    pub stripe_max_price_id: StripeMaxPriceId,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.

@@ -1,11 +1,13 @@
 //! Contains the models for teams
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
-use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
+use macro_user_id::{
+    cowlike::CowLike, email::Email, lowercased::Lowercase, user_id::MacroUserIdStr,
+};
 use models_permissions::share_permission::LinkShare;
-use roles_and_permissions::domain::model::UserRolesAndPermissionsError;
+use roles_and_permissions::domain::model::{ProductTier, RoleId, UserRolesAndPermissionsError};
 
 /// Team plans
 #[derive(
@@ -150,6 +152,119 @@ impl std::fmt::Display for TeamRole {
     }
 }
 
+/// The paid plan a seat is billed at. Every member of a paying team has one;
+/// a team may mix them, and its Stripe subscription carries one seat item per
+/// plan in use.
+#[derive(Eq, PartialEq, Debug, Clone, Copy, Hash, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "\"seat_plan\"", rename_all = "snake_case")
+)]
+#[serde(rename_all = "snake_case")]
+pub enum SeatPlan {
+    /// The $40/seat/month plan.
+    Premium,
+    /// The $200/seat/month plan with a 5x AI allowance.
+    Max,
+}
+
+impl SeatPlan {
+    /// Every plan.
+    pub const ALL: [SeatPlan; 2] = [SeatPlan::Premium, SeatPlan::Max];
+
+    /// The role tier recorded on a user holding this seat.
+    pub fn product_tier(self) -> ProductTier {
+        match self {
+            SeatPlan::Premium => ProductTier::Opus,
+            SeatPlan::Max => ProductTier::Max,
+        }
+    }
+
+    /// The subscription role that records this seat's tier on a user.
+    pub fn role(self) -> RoleId {
+        self.product_tier().role()
+    }
+
+    /// The tier roles of every other plan, to drop when a seat moves here.
+    pub fn other_tier_roles(self) -> Vec<RoleId> {
+        let keep = self.role();
+        ProductTier::ALL
+            .iter()
+            .map(ProductTier::role)
+            .filter(|role| *role != keep)
+            .collect()
+    }
+
+    /// The plan a user's roles say they are on. `sub_max` wins; any other
+    /// (or no) paid role is Premium, the plan every seat starts on.
+    pub fn from_roles(roles: &HashSet<RoleId>) -> Self {
+        if roles.contains(&RoleId::SubMax) {
+            SeatPlan::Max
+        } else {
+            SeatPlan::Premium
+        }
+    }
+}
+
+impl std::fmt::Display for SeatPlan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SeatPlan::Premium => write!(f, "premium"),
+            SeatPlan::Max => write!(f, "max"),
+        }
+    }
+}
+
+/// The Stripe price ids behind each plan's per-seat subscription item.
+#[derive(Debug, Clone)]
+pub struct SeatPrices {
+    /// Premium seat price.
+    pub premium: String,
+    /// Max seat price, when the plan is sold.
+    pub max: Option<String>,
+}
+
+impl SeatPrices {
+    /// The price a seat on `plan` is billed at.
+    pub fn price_id(&self, plan: SeatPlan) -> Result<&str, CustomerError> {
+        match plan {
+            SeatPlan::Premium => Ok(&self.premium),
+            SeatPlan::Max => self
+                .max
+                .as_deref()
+                .ok_or(CustomerError::PlanUnavailable(plan)),
+        }
+    }
+
+    /// Which plan a subscription item's price belongs to, if any.
+    pub fn plan_for_price(&self, price_id: &str) -> Option<SeatPlan> {
+        if price_id == self.premium {
+            Some(SeatPlan::Premium)
+        } else if self.max.as_deref() == Some(price_id) {
+            Some(SeatPlan::Max)
+        } else {
+            None
+        }
+    }
+
+    /// Every price that carries a seat item.
+    pub fn all(&self) -> Vec<String> {
+        std::iter::once(self.premium.clone())
+            .chain(self.max.clone())
+            .collect()
+    }
+}
+
+/// Request body for `PATCH /team/members/{member_user_id}/plan`.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct PatchTeamMemberPlanRequest {
+    /// The plan to bill the member's seat at from now on.
+    pub plan: SeatPlan,
+}
+
 /// The team member struct
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -161,6 +276,21 @@ pub struct TeamMember<'a> {
     pub user_id: MacroUserIdStr<'a>,
     /// The role of the team member
     pub role: TeamRole,
+    /// The paid plan the member's seat is billed at. Meaningful on paying
+    /// and enterprise teams; free-team members carry the default.
+    pub plan: SeatPlan,
+}
+
+impl TeamMember<'_> {
+    /// Detach the member from any borrowed user id.
+    pub fn into_owned(self) -> TeamMember<'static> {
+        TeamMember {
+            team_id: self.team_id,
+            user_id: self.user_id.into_owned(),
+            role: self.role,
+            plan: self.plan,
+        }
+    }
 }
 
 /// A team with its members
@@ -607,9 +737,29 @@ pub enum CustomerError {
     /// No subscription line item matched the configured Stripe price id.
     #[error("No matching line item")]
     NoMatchingLineItem,
+    /// The plan has no Stripe price configured.
+    #[error("The {0} plan is not available")]
+    PlanUnavailable(SeatPlan),
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),
+}
+
+/// Errors for moving a team member between seat plans.
+#[derive(Debug, thiserror::Error)]
+pub enum SetTeamMemberPlanError {
+    /// Seat plans only apply to paying (or enterprise) teams.
+    #[error("The team has no active subscription")]
+    TeamNotPaying,
+    /// Underlying team error
+    #[error("{0}")]
+    TeamError(#[from] TeamError),
+    /// Underlying customer error
+    #[error("{0}")]
+    CustomerError(#[from] CustomerError),
+    /// Roles could not be updated
+    #[error("Roles error: {0}")]
+    RolesError(#[from] UserRolesAndPermissionsError),
 }
 
 /// Errors for removing a team invite
