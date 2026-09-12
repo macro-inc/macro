@@ -50,4 +50,11 @@ export const PLAN_FEATURES: PlanFeature[] = [
       premium: '1 TB',
     },
   },
+  {
+    label: 'Teams',
+    values: {
+      free: 'Up to 5 people',
+      premium: 'Paid seat per member',
+    },
+  },
 ];
