@@ -3,6 +3,7 @@ import {
   MODEL_PRETTYNAME,
   MODEL_PROVIDER_ICON,
   Model,
+  modelUsageHint,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
@@ -73,6 +74,13 @@ export function ModelSelector(props: ModelSelectorProps) {
                 <span class="flex-1 truncate text-xs">
                   {MODEL_PRETTYNAME[option.id]}
                 </span>
+                <Show when={modelUsageHint(option.id)}>
+                  {(hint) => (
+                    <span class="shrink-0 text-[10px] text-ink-extra-muted">
+                      {hint()}
+                    </span>
+                  )}
+                </Show>
                 <Show when={!option.available}>
                   <LockIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
                 </Show>

@@ -59,7 +59,10 @@ notified when the AI responds).
 ## Composer anatomy (a11y)
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
-- Model picker button showing the current model (e.g. `Haiku 4.5`).
+- Model picker button showing the current model (e.g. `Haiku 4.5`). Paid plans list
+  `Sonnet 5`, `Opus 5`, `Fable 5.1`, `Haiku 4.5`, `GPT-5.6`, `GPT-5.6 mini`; heavy models
+  carry a `2.5× usage` / `5× usage` hint. On the free plan everything but `Haiku 4.5` is
+  dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
 
 ## Waiting for a response
