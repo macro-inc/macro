@@ -13,6 +13,7 @@ export const Model = {
   opus5: 'anthropic/claude-opus-5',
   fable51: 'anthropic/claude-fable-5-1',
   haiku45: 'anthropic/claude-haiku-4-5',
+  gpt6Astra: 'openai/gpt-6-astra',
   gpt56: 'openai/gpt-5.6',
   gpt56Mini: 'openai/gpt-5.6-mini',
 } as const;
@@ -31,6 +32,7 @@ export const MODEL_PRETTYNAME: ExhaustiveMap = {
   'anthropic/claude-opus-5': 'Opus 5',
   'anthropic/claude-fable-5-1': 'Fable 5.1',
   'anthropic/claude-haiku-4-5': 'Haiku 4.5',
+  'openai/gpt-6-astra': 'GPT-6 Astra',
   'openai/gpt-5.6': 'GPT-5.6',
   'openai/gpt-5.6-mini': 'GPT-5.6 mini',
 } as const;
@@ -40,6 +42,7 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
   'anthropic/claude-opus-5': AnthropicIcon,
   'anthropic/claude-fable-5-1': AnthropicIcon,
   'anthropic/claude-haiku-4-5': AnthropicIcon,
+  'openai/gpt-6-astra': OpenAiIcon,
   'openai/gpt-5.6': OpenAiIcon,
   'openai/gpt-5.6-mini': OpenAiIcon,
 };
@@ -48,14 +51,15 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
  * How fast each model draws down a paid plan's included AI, relative to the
  * default model (Sonnet 5 = 1). Mirrors the per-token rates in `ai_pricing`
  * (output price, which dominates chat cost): Haiku $5, Sonnet $10, Opus $25,
- * Fable $50, GPT-5.6 $30, GPT-5.6 mini $4.50 per million tokens. Shown in the
- * picker so choosing a heavy model is a deliberate trade.
+ * Fable $50, GPT-6 Astra $50, GPT-5.6 $30, GPT-5.6 mini $4.50 per million
+ * tokens. Shown in the picker so choosing a heavy model is a deliberate trade.
  */
 export const MODEL_USAGE_MULTIPLIER: { [K in TModel]: number } = {
   'anthropic/claude-sonnet-5': 1,
   'anthropic/claude-opus-5': 2.5,
   'anthropic/claude-fable-5-1': 5,
   'anthropic/claude-haiku-4-5': 0.5,
+  'openai/gpt-6-astra': 5,
   'openai/gpt-5.6': 3,
   'openai/gpt-5.6-mini': 0.45,
 };
@@ -87,8 +91,8 @@ export const PAID_MODELS: readonly TModel[] = Object.values(Model);
  * Models a free user may select. Free users only get the fast model
  * (`FREE_DEFAULT_MODEL`); every other model is paid-only and shows locked in
  * the selector, where selecting one opens the paywall instead of being sent
- * and rejected by the backend. The heavy models (Opus, Fable) are on every
- * paid plan; they just draw the included AI down faster, see
+ * and rejected by the backend. The heavy models (Opus, Fable, GPT-6 Astra)
+ * are on every paid plan; they just draw the included AI down faster, see
  * `MODEL_USAGE_MULTIPLIER`.
  */
 export const FREE_MODELS: readonly TModel[] = [FREE_DEFAULT_MODEL];
@@ -109,6 +113,7 @@ export const MODEL_PROVIDER: ExhaustiveMap = {
   'anthropic/claude-opus-5': 'anthropic',
   'anthropic/claude-fable-5-1': 'anthropic',
   'anthropic/claude-haiku-4-5': 'anthropic',
+  'openai/gpt-6-astra': 'openai',
   'openai/gpt-5.6': 'openai',
   'openai/gpt-5.6-mini': 'openai',
 } as const;

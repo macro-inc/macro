@@ -7,9 +7,13 @@
 pub const CHAT_MODELS: &[&str] = &[
     "anthropic/claude-sonnet-5",
     "anthropic/claude-opus-5",
+    "anthropic/claude-fable-5-1",
     "anthropic/claude-haiku-4-5",
     "anthropic/claude-opus-4-7",
     "anthropic/claude-sonnet-4-6",
+    "openai/gpt-6-astra",
+    "openai/gpt-5.6",
+    "openai/gpt-5.6-mini",
     "openai/gpt-5.5",
     "openai/gpt-5-mini",
 ];
