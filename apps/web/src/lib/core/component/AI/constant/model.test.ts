@@ -36,14 +36,17 @@ describe('modelsForPlan / defaultModelForPlan', () => {
 describe('modelUsageHint', () => {
   it('flags the heavy paid models and stays quiet for the default and cheaper', () => {
     expect(modelUsageHint(Model.fable51)).toBe('5× usage');
+    expect(modelUsageHint(Model.gpt6Astra)).toBe('5× usage');
     expect(modelUsageHint(Model.opus5)).toBe('2.5× usage');
     expect(modelUsageHint(Model.sonnet5)).toBeUndefined();
     expect(modelUsageHint(Model.haiku45)).toBeUndefined();
   });
 
-  it('keeps Fable paid-only: free users see it locked, paid users select it', () => {
+  it('keeps Fable and Astra paid-only: free users see them locked, paid users select them', () => {
     expect(modelsForPlan(false)).not.toContain(Model.fable51);
+    expect(modelsForPlan(false)).not.toContain(Model.gpt6Astra);
     expect(modelsForPlan(true)).toContain(Model.fable51);
+    expect(modelsForPlan(true)).toContain(Model.gpt6Astra);
   });
 });
 
