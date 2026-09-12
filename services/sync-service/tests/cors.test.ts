@@ -59,7 +59,8 @@ describe('CORS middleware tests', async () => {
         headers: {
           Origin: 'https://dev.macro.com',
           'Access-Control-Request-Method': 'GET',
-          'Access-Control-Request-Headers': 'authorization, content-type',
+          'Access-Control-Request-Headers':
+            'authorization, content-type, x-request-id',
         },
       }
     );
@@ -87,6 +88,9 @@ describe('CORS middleware tests', async () => {
     );
     expect(response.headers.get('Access-Control-Allow-Headers')).toContain(
       'content-type'
+    );
+    expect(response.headers.get('Access-Control-Allow-Headers')).toContain(
+      'x-request-id'
     );
   });
 
@@ -121,7 +125,7 @@ describe('CORS middleware tests', async () => {
   });
 
   test('should allow all HTTP methods for whitelisted origins', async () => {
-    const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+    const methods = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'];
     const origin = 'https://dev.macro.com';
 
     for (const method of methods) {
@@ -152,7 +156,7 @@ describe('CORS middleware tests', async () => {
         headers: {
           Origin: 'https://dev.macro.com',
           'Access-Control-Request-Method': 'GET',
-          'Access-Control-Request-Headers': 'authorization',
+          'Access-Control-Request-Headers': 'authorization,x-request-id',
         },
       }
     );
@@ -161,6 +165,7 @@ describe('CORS middleware tests', async () => {
     const allowedHeaders = response.headers.get('Access-Control-Allow-Headers');
     expect(allowedHeaders).toContain('authorization');
     expect(allowedHeaders).toContain('content-type');
+    expect(allowedHeaders).toContain('x-request-id');
   });
 
   // The web client's traced fetch wrapper injects W3C trace context on every
@@ -175,7 +180,8 @@ describe('CORS middleware tests', async () => {
         headers: {
           Origin: 'https://dev.macro.com',
           'Access-Control-Request-Method': 'GET',
-          'Access-Control-Request-Headers': 'authorization,traceparent',
+          'Access-Control-Request-Headers':
+            'authorization,traceparent,x-request-id',
         },
       }
     );
@@ -184,6 +190,7 @@ describe('CORS middleware tests', async () => {
     const allowedHeaders = response.headers.get('Access-Control-Allow-Headers');
     expect(allowedHeaders).toContain('traceparent');
     expect(allowedHeaders).toContain('tracestate');
+    expect(allowedHeaders).toContain('x-request-id');
   });
 
   test('should work with actual API requests after CORS validation', async () => {
