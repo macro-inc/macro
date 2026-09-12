@@ -112,7 +112,7 @@ function getAliasOrType(content: SplitContent): string {
  * is claimed by the split layout like any other split — so there's no reason
  * to keep the tab out of the URL.
  */
-function contentUrlSegments(content: SplitContent): string[] {
+export function contentUrlSegments(content: SplitContent): string[] {
   if (content.type === 'component' && content.id === 'settings') {
     return ['settings', settingsTabToSlug(activeTabId())];
   }

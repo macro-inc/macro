@@ -15,6 +15,7 @@ import {
   useGlobalNotificationSource,
 } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { openSplitContentInNewTab } from '@components/app/split-layout/layoutUtils';
 import {
   ContextMenuContent,
   MenuGroup,
@@ -420,6 +421,7 @@ const FavoriteRow = (props: {
     globalSplitManager()?.returnFocus();
     return split;
   };
+  const openInNewTab = () => openSplitContentInNewTab(content());
   const markAllAsRead = () => {
     void notificationSource.bulkMarkAsRead(props.notifications());
   };
@@ -513,6 +515,7 @@ const FavoriteRow = (props: {
                 text="Open in current split"
                 onClick={openInCurrentSplit}
               />
+              <MenuItem text="Open in new tab" onClick={openInNewTab} />
             </MenuGroup>
             <Show when={props.notifications().length > 0}>
               <MenuSeparator />

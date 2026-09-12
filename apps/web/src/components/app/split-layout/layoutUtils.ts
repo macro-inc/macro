@@ -2,6 +2,8 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import { openExternalUrl } from '@core/util/url';
+import { getWebOrigin } from '@core/util/webOrigin';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   type Accessor,
@@ -11,11 +13,12 @@ import {
   useContext,
 } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
-import type {
-  SplitContent,
-  SplitContentType,
-  SplitHandle,
-  SplitManager,
+import {
+  contentUrlSegments,
+  type SplitContent,
+  type SplitContentType,
+  type SplitHandle,
+  type SplitManager,
 } from './layoutManager';
 import type { CollapsibleItemInput } from './utils/createPriorityCollapser';
 
@@ -54,6 +57,32 @@ export function decodePairs(segments: string[]): SplitContent[] {
     }
   }
   return pairs.length ? pairs : [{ type: 'component', id: LIST_VIEW_ID.inbox }];
+}
+
+/**
+ * The absolute `/app/<type>/<id>` web link for a piece of split content. A URL
+ * carries no layout beyond the pairs it lists, so opening this one lands the
+ * content as the only split — i.e. fullscreen.
+ *
+ * The `/app` prefix is hardcoded (as in `buildSimpleEntityUrl`) rather than
+ * taken from `ROUTER_BASE`: native builds route on `/` but still address the
+ * web app by its real origin, and `parseInternalAppLink` strips the prefix back
+ * off when such a link is handled in-app.
+ */
+export function splitContentUrl(content: SplitContent): string {
+  return `${getWebOrigin()}/app/${contentUrlSegments(content).join('/')}`;
+}
+
+/**
+ * Open split content in a new, focused browser tab, showing it fullscreen.
+ *
+ * Content params (a prefiltered list, say) are not part of the URL, so the new
+ * tab opens the view in its default state. Inside the native shell there are no
+ * tabs: `openExternalUrl`'s Macro-link interceptor routes the link into the
+ * current window instead of handing it to the system browser.
+ */
+export function openSplitContentInNewTab(content: SplitContent) {
+  openExternalUrl(splitContentUrl(content));
 }
 
 function _encodePairs(splits: ReadonlyArray<SplitContent>): string[] {
