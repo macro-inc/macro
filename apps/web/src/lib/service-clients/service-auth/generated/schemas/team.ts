@@ -6,6 +6,8 @@
  */
 import type { TeamAutoJoinDomain } from './teamAutoJoinDomain';
 import type { TeamDefaultLinkShare } from './teamDefaultLinkShare';
+import type { TeamLogoUrl } from './teamLogoUrl';
+import type { TeamStartupType } from './teamStartupType';
 
 /**
  * The Team struct
@@ -26,7 +28,10 @@ billed out-of-band; membership changes skip all Stripe subscription
 bookkeeping (no seat counts, no subscription backfill, no paying check). */
   enterprise: boolean;
   id: string;
+  /** Absolute URL of the team's logo image, when set. */
+  logo_url?: TeamLogoUrl;
   name: string;
   owner_id: string;
   slug: string;
+  startup_type?: TeamStartupType;
 }

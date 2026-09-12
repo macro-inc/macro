@@ -206,6 +206,12 @@ impl IntoResponse for CreateTeamError {
                     message: "invalid team name".into(),
                 }),
             ),
+            CreateTeamError::InvalidTeamProfile(message) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: message.into(),
+                }),
+            ),
             CreateTeamError::StorageLayerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {

@@ -174,6 +174,10 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
             &user_id,
             "Product Team",
             "PRODUCT_TEAM",
+            &TeamProfile {
+                startup_type: Some(StartupType::B2bSaas),
+                logo_url: Some("https://static.example.com/file/logo".to_string()),
+            },
             Some(&"sub_test".parse().unwrap()),
         )
         .await?;
@@ -183,10 +187,26 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert_eq!(result.slug, "PRODUCT_TEAM");
     assert_eq!(result.owner_id.0.as_ref(), "macro|user3@user.com");
     assert!(!result.enterprise());
+    assert_eq!(result.startup_type(), Some(StartupType::B2bSaas));
+    assert_eq!(
+        result.logo_url(),
+        Some("https://static.example.com/file/logo")
+    );
+
+    // The profile round-trips through the read queries too.
+    let fetched = team_repo.get_team_by_id(result.id()).await?;
+    assert_eq!(fetched.team.startup_type(), Some(StartupType::B2bSaas));
+    assert_eq!(
+        fetched.team.logo_url(),
+        Some("https://static.example.com/file/logo")
+    );
+    let listed = team_repo.get_user_teams(&user_id).await?;
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].startup_type(), Some(StartupType::B2bSaas));
 
     // Create team with too large a name
     let err = team_repo
-        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", "MACRO", Some(&"sub_test".parse().unwrap()))
+        .create_team(&user_id, "12345678901234567890123456789012345678901234567890123456789000000000000000000000000000000000000000000000", "MACRO", &TeamProfile::default(), Some(&"sub_test".parse().unwrap()))
         .await
         .err()
         .unwrap();
@@ -229,6 +249,7 @@ async fn test_move_github_app_installation_to_team_moves_existing_user_rows(
             &user_id,
             "GitHub Owner Team",
             "GITHUB_OWNER_TEAM",
+            &TeamProfile::default(),
             Some(&"sub_test".parse().unwrap()),
         )
         .await?;
@@ -351,6 +372,7 @@ async fn test_move_github_app_installation_to_team_noops_when_user_has_no_rows(
             &user_id,
             "GitHub Owner Team",
             "GITHUB_OWNER_TEAM",
+            &TeamProfile::default(),
             Some(&"sub_test".parse().unwrap()),
         )
         .await?;
@@ -1395,6 +1417,8 @@ async fn test_patch_team_normalizes_slug_to_screaming_snake_case(
         slug: Some("my-team  slug".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
 
     team_repo.patch_team(&team_id, &req).await?;
@@ -1424,6 +1448,8 @@ async fn test_patch_team_rejects_invalid_slug_without_updating_name(
         slug: Some("bad.slug".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1452,6 +1478,8 @@ async fn test_patch_team_rejects_too_long_slug(pool: Pool<Postgres>) -> anyhow::
         slug: Some("THIS_SLUG_IS_WAY_TOO_LONG".to_string()),
         user_role_updates: None,
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
 
     let err = team_repo.patch_team(&team_id, &req).await.err().unwrap();
@@ -1479,6 +1507,8 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: Some(Some(LinkShare::Public)),
+        startup_type: None,
+        logo_url: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1490,6 +1520,8 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1501,6 +1533,8 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
         slug: None,
         user_role_updates: None,
         default_link_share: Some(None),
+        startup_type: None,
+        logo_url: None,
     };
     team_repo.patch_team(&team_id, &req).await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
@@ -1805,6 +1839,76 @@ async fn test_allow_non_admin_invites_defaults_true_and_toggles(
         team_repo.toggle_allow_non_admin_invites(&missing).await,
         Err(TeamError::TeamDoesNotExist)
     ));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn test_patch_team_sets_and_clears_profile_fields(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+
+    // Fixture teams predate the columns: no profile.
+    let before = team_repo.get_team_by_id(&team_id).await?;
+    assert_eq!(before.team.startup_type(), None);
+    assert_eq!(before.team.logo_url(), None);
+
+    // Set both; the name is untouched.
+    team_repo
+        .patch_team(
+            &team_id,
+            &PatchTeamRequest {
+                name: None,
+                slug: None,
+                user_role_updates: None,
+                default_link_share: None,
+                startup_type: Some(Some(StartupType::ClimateEnergy)),
+                logo_url: Some(Some("https://static.example.com/file/logo".to_string())),
+            },
+        )
+        .await?;
+    let set = team_repo.get_team_by_id(&team_id).await?;
+    assert_eq!(set.team.name(), "team1");
+    assert_eq!(set.team.startup_type(), Some(StartupType::ClimateEnergy));
+    assert_eq!(
+        set.team.logo_url(),
+        Some("https://static.example.com/file/logo")
+    );
+
+    // Omitting a field keeps it; `null` clears it.
+    team_repo
+        .patch_team(
+            &team_id,
+            &PatchTeamRequest {
+                name: None,
+                slug: None,
+                user_role_updates: None,
+                default_link_share: None,
+                startup_type: None,
+                logo_url: Some(None),
+            },
+        )
+        .await?;
+    let cleared = team_repo.get_team_by_id(&team_id).await?;
+    assert_eq!(
+        cleared.team.startup_type(),
+        Some(StartupType::ClimateEnergy)
+    );
+    assert_eq!(cleared.team.logo_url(), None);
+
+    // The CHECK constraint rejects values the enum doesn't know.
+    let err = sqlx::query("UPDATE team SET startup_type = 'saas' WHERE id = $1")
+        .bind(team_id)
+        .execute(&pool)
+        .await
+        .err()
+        .expect("unknown startup type must violate the check constraint");
+    assert!(err.to_string().contains("team_startup_type_check"));
 
     Ok(())
 }
