@@ -4,6 +4,7 @@ import {
   MODEL_PRETTYNAME,
   MODEL_PROVIDER_ICON,
   Model,
+  modelUsageHint,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
 import { isMobile } from '@core/mobile/isMobile';
@@ -37,6 +38,7 @@ const ALL_AVAILABLE: ModelOption[] = (Object.values(Model) as TModel[]).map(
 const MODEL_DESCRIPTION: Record<TModel, string> = {
   [Model.sonnet5]: 'Everyday writing, coding, and questions',
   [Model.opus5]: 'Complex tasks and deeper analysis',
+  [Model.fable51]: 'The most capable model for the hardest work',
   [Model.haiku45]: 'Quick answers and lighter tasks',
   [Model.gpt56]: 'Reasoning, writing, and problem solving',
   [Model.gpt56Mini]: 'Fast help with everyday tasks',
@@ -95,6 +97,13 @@ export function ModelSelector(props: ModelSelectorProps) {
                     <span class="flex-1 truncate">
                       {MODEL_PRETTYNAME[option.id]}
                     </span>
+                    <Show when={modelUsageHint(option.id)}>
+                      {(hint) => (
+                        <span class="shrink-0 text-[10px] text-ink-extra-muted">
+                          {hint()}
+                        </span>
+                      )}
+                    </Show>
                     <Show when={!option.available}>
                       <LockIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
                     </Show>
@@ -171,8 +180,17 @@ export function ModelSelector(props: ModelSelectorProps) {
                         class="size-6 shrink-0 text-ink-muted"
                       />
                       <span class="flex min-w-0 flex-1 flex-col gap-1">
-                        <span class="text-base font-medium leading-5">
-                          {MODEL_PRETTYNAME[option.id]}
+                        <span class="flex items-baseline gap-2">
+                          <span class="text-base font-medium leading-5">
+                            {MODEL_PRETTYNAME[option.id]}
+                          </span>
+                          <Show when={modelUsageHint(option.id)}>
+                            {(hint) => (
+                              <span class="text-xs text-ink-extra-muted">
+                                {hint()}
+                              </span>
+                            )}
+                          </Show>
                         </span>
                         <span class="text-[13px] leading-[18px] text-ink-muted">
                           {MODEL_DESCRIPTION[option.id]}
