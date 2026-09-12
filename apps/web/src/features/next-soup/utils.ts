@@ -67,6 +67,7 @@ import {
 } from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import { fetchAndCacheThread } from '@queries/email/thread';
 import {
   type NotificationEntityRef,
   updateNotificationsForEntities,
@@ -1067,13 +1068,22 @@ type TrashEmailsHandle = {
   undo: () => Promise<void>;
 };
 
+export type TrashEmailTarget = string | { id: string; linkId?: string };
+
 /**
- * Optimistically removes one or more email threads from soup + email caches,
- * then fires the TRASH label API calls in the background. Takes a single
- * snapshot before all removals so undo restores the complete pre-trash state.
+ * Trash one or more email threads.
+ *
+ * Optimistically removes them from the soup and from all email queries,
+ * then resolves the TRASH label and calls the API. If anything fails, rolls
+ * back the optimistic update.
+ *
  * Returns synchronously so the caller can show the undo toast immediately.
  */
-export function trashEmails(ids: string[]): TrashEmailsHandle {
+export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
+  const normalizedTargets = targets.map((t) =>
+    typeof t === 'string' ? { id: t, linkId: undefined } : t
+  );
+  const ids = normalizedTargets.map((t) => t.id);
   queryClient.cancelQueries({ queryKey: queryKeys.all.email });
 
   const previousEmail = queryClient.getQueriesData<{
@@ -1104,8 +1114,29 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
     }
   };
 
-  // Resolved lazily by the API calls; used by undo
-  let trashLabelId: string | undefined;
+  // Map each thread ID to its assigned TRASH label ID (resolved lazily by API calls; used by undo)
+  const threadTrashLabelIds = new Map<string, string>();
+
+  // Map thread IDs to their linkId if available from explicit targets or cached email queries
+  const threadLinkIds = new Map<string, string>();
+  for (const target of normalizedTargets) {
+    if (target.linkId) {
+      threadLinkIds.set(target.id, target.linkId);
+    }
+  }
+  for (const [, data] of previousEmail) {
+    if (!data?.pages) continue;
+    for (const page of data.pages) {
+      if (!page?.items) continue;
+      for (const item of page.items) {
+        if (item?.id && 'linkId' in item && item.linkId && idSet.has(item.id)) {
+          if (!threadLinkIds.has(item.id)) {
+            threadLinkIds.set(item.id, item.linkId);
+          }
+        }
+      }
+    }
+  }
 
   const done = (async () => {
     try {
@@ -1115,23 +1146,52 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
           throwOnErr(async () => await emailClient.getUserLabels()),
         staleTime: 5 * 60 * 1000,
       });
-      const trashLabel = labelsData?.labels.find(
-        (l) => l.providerLabelId === 'TRASH'
-      );
-      const labelId = trashLabel?.id;
-      if (!labelId) {
+      const trashLabels =
+        labelsData?.labels.filter((l) => l.providerLabelId === 'TRASH') ?? [];
+      const fallbackTrashLabelId = trashLabels[0]?.id;
+      if (trashLabels.length === 0 || !fallbackTrashLabelId) {
         throw new Error('TRASH label not found');
       }
-      trashLabelId = labelId;
 
       await Promise.all(
-        ids.map((id) =>
-          emailClient.updateThreadLabel({
+        ids.map(async (id) => {
+          let linkId = threadLinkIds.get(id);
+          if (!linkId) {
+            const threadData = queryClient.getQueryData<{
+              link_id?: string;
+              pages?: Array<{ link_id?: string }>;
+            }>(emailKeys.threadMessages(id).queryKey);
+            if (threadData?.link_id) {
+              linkId = threadData.link_id;
+            } else if (threadData?.pages?.[0]?.link_id) {
+              linkId = threadData.pages[0].link_id;
+            }
+          }
+          if (!linkId && trashLabels.length > 1) {
+            const fetched = await fetchAndCacheThread(id);
+            if (!fetched.isErr()) {
+              linkId = fetched.value.thread.link_id;
+            }
+          }
+
+          const matchedLabelId = linkId
+            ? trashLabels.find((label) => label.linkId === linkId)?.id
+            : undefined;
+          const labelId =
+            matchedLabelId ??
+            (trashLabels.length === 1 ? fallbackTrashLabelId : undefined);
+
+          if (!labelId) {
+            throw new Error('TRASH label not found');
+          }
+          threadTrashLabelIds.set(id, labelId);
+
+          return emailClient.updateThreadLabel({
             thread_id: id,
             label_id: labelId,
             value: true,
-          })
-        )
+          });
+        })
       );
     } catch (err) {
       rollback();
@@ -1147,7 +1207,7 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
   return {
     done,
     undo: async () => {
-      // Wait for the trash calls to finish so we know the label ID.
+      // Wait for the trash calls to finish so we know the label IDs.
       // If the trash call itself failed, rollback already happened — nothing to undo.
       try {
         await done;
@@ -1159,13 +1219,15 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
 
       try {
         await Promise.all(
-          ids.map((id) =>
-            emailClient.updateThreadLabel({
+          ids.map((id) => {
+            const labelId = threadTrashLabelIds.get(id);
+            if (!labelId) return Promise.resolve();
+            return emailClient.updateThreadLabel({
               thread_id: id,
-              label_id: trashLabelId!,
+              label_id: labelId,
               value: false,
-            })
-          )
+            });
+          })
         );
       } finally {
         // Only invalidate email queries — skip soup invalidation since

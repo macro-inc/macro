@@ -154,7 +154,7 @@ export function TopBar(props: {
       return soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
     })();
 
-    const handle = trashEmails([thread.db_id]);
+    const handle = trashEmails([{ id: thread.db_id, linkId: thread.link_id }]);
 
     if (soup && nextRow) {
       soup.selection.clear();

@@ -2,7 +2,11 @@ import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntity
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { globalRemoveFromSplitHistory } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import { createBulkDeleteDssItemsMutation, type EntityData } from '@entity';
+import {
+  createBulkDeleteDssItemsMutation,
+  type EntityData,
+  isEmailEntity,
+} from '@entity';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { restoreSoupFocus, trashEmails } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
@@ -103,7 +107,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
 
     // Three lanes: emails trash immediately (with Undo), reminders delete
     // immediately (no Undo to give), everything else confirms first.
-    const emailEntities = entities.filter((e) => e.type === 'email');
+    const emailEntities = entities.filter(isEmailEntity);
     const reminderEntities = entities.filter((e) => e.type === 'reminder');
     const nonEmailEntities = entities.filter(
       (e) => e.type !== 'email' && e.type !== 'reminder'
@@ -116,7 +120,9 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     };
 
     const trashEmailEntities = () => {
-      const handle = trashEmails(emailEntities.map((e) => e.id));
+      const handle = trashEmails(
+        emailEntities.map((e) => ({ id: e.id, linkId: e.linkId }))
+      );
 
       const splitManager = globalSplitManager();
       if (splitManager) {
