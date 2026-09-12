@@ -96,6 +96,7 @@ pub async fn create_document_handler<
         file_type,
         project_id: req.project_id,
         team_id,
+        share_with_team: false,
         created_at: req.created_at,
         sub_type: req
             .is_task

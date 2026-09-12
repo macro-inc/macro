@@ -2,8 +2,10 @@ use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{DocumentMetadata, FileType, VersionIDWithTimeStamps};
 use models_permissions::share_permission::SharePermissionV2;
+use models_permissions::share_permission::team_share::TeamShareCreation;
+use share_permission_db_utils::team_share::{self, TeamShareError};
 
-use crate::domain::models::CreateDocumentRepoArgs;
+use crate::domain::models::{CreateDocumentRepoArgs, DocumentError};
 
 /// Inserts a record into the document table
 /// Returns the document id
@@ -16,7 +18,7 @@ pub async fn insert_document_row<'a>(
     file_type: Option<FileType>,
     project_id: Option<&uuid::Uuid>,
     created_at: &chrono::DateTime<chrono::Utc>,
-) -> Result<uuid::Uuid, sqlx::Error> {
+) -> Result<uuid::Uuid, DocumentError> {
     // Generate id if one is not provided
     let id = macro_uuid::generate_uuid_v7();
     let document_id: uuid::Uuid = if let Some(id) = document_id { *id } else { id };
@@ -38,16 +40,12 @@ pub async fn insert_document_row<'a>(
             .await;
 
     match result {
-        Ok(_) => id.to_string().clone(),
-        Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
-            return Err(sqlx::Error::Protocol(format!(
-                "document with ID already exists: {id}"
-            )));
-        }
-        Err(e) => return Err(e),
-    };
-
-    Ok(document_id)
+        Ok(_) => Ok(document_id),
+        Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => Err(
+            DocumentError::Conflict("document with ID already exists".to_string()),
+        ),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// sets the document sub type if necessary
@@ -155,7 +153,8 @@ pub async fn set_document_version(
 
 /// Sets share permission for the document
 ///
-/// The permission is resolved by the domain layer; this function persists it verbatim.
+/// Link permission is resolved by the domain layer. Canonical team state always starts
+/// NULL; only guarded explicit task initialization may establish a team share.
 #[tracing::instrument(skip(transaction, share_permission), err)]
 pub async fn set_share_permission(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -386,7 +385,7 @@ pub async fn insert_new_document(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     args: CreateDocumentRepoArgs,
     share_permission: &SharePermissionV2,
-) -> Result<DocumentMetadata, sqlx::Error> {
+) -> Result<DocumentMetadata, DocumentError> {
     let CreateDocumentRepoArgs {
         id,
         sha,
@@ -395,6 +394,7 @@ pub async fn insert_new_document(
         file_type,
         project_id,
         team_id,
+        share_with_team,
         created_at: provided_created_at,
         sub_type: requested_sub_type,
         skip_history,
@@ -453,6 +453,19 @@ pub async fn insert_new_document(
         entity_access_db_utils::AccessLevel::Owner,
     )
     .await?;
+
+    if share_with_team {
+        let document_id_string = document_id.to_string();
+        let entity = model_entity::EntityType::Document.with_entity_str(&document_id_string);
+        team_share::initialize(transaction, &entity, TeamShareCreation::ExplicitTask)
+            .await
+            .map_err(|error| match error.current_context() {
+                TeamShareError::InvalidState => DocumentError::BadRequest(
+                    "document owner does not belong to a team".to_string(),
+                ),
+                _ => DocumentError::Internal(error.into()),
+            })?;
+    }
 
     Ok(DocumentMetadata::new_document(
         &document_id.to_string(),

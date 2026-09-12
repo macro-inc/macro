@@ -63,7 +63,7 @@ export type EntityRefInput = {
   type: GraphqlEntityType;
 };
 
-/** Shared link/channel share-policy update. */
+/** Shared link, explicit team, and channel share-policy update. */
 export type EntitySharePolicyInput = {
   /** Channel access entries to add, remove, or replace. */
   channelSharePermissions?: Array<ChannelSharePolicyInput> | null | undefined;
@@ -74,6 +74,12 @@ export type EntitySharePolicyInput = {
    * when a link share exists.
    */
   linkShareAccessLevel?: GraphqlEntityAccessLevel | null | undefined;
+  /**
+   * Explicit team access level. Omit to leave unchanged or pass null to disable team sharing,
+   * independently of link sharing. Only the actual owner may change this setting;
+   * enabling it requires the owner to belong to a team. OWNER is not an allowed level.
+   */
+  teamShareAccessLevel?: GraphqlEntityAccessLevel | null | undefined;
 };
 
 /** The two operands of a recursive `AgentSessionFilterExpr` binary expression. */
@@ -1163,7 +1169,7 @@ export type UpdateEntityPropertyOptionsInput = {
 export type UpdateEntitySharePolicyInput = {
   /** Entity whose share policy should change. */
   entity: EntityRefInput;
-  /** New link/channel policy values. */
+  /** New link, explicit team, and channel policy values. */
   policy: EntitySharePolicyInput;
 };
 

@@ -10,6 +10,16 @@ export type LinkSharePayload = Required<
   Pick<UpdateSharePermissionRequestV2, 'linkShare' | 'linkShareAccessLevel'>
 >;
 
+export const NO_TEAM_SHARE = 'NONE' as const;
+
+export type TeamShareLevel = Exclude<AccessLevel, 'owner'>;
+
+export type TeamShareScope = TeamShareLevel | typeof NO_TEAM_SHARE;
+
+export type TeamSharePayload = Required<
+  Pick<UpdateSharePermissionRequestV2, 'teamShareAccessLevel'>
+>;
+
 type LinkShareScopeCopy = {
   label: string;
   title: string;
@@ -41,11 +51,25 @@ const LINK_SHARE_SCOPE_COPY: Record<LinkShareScope, LinkShareScopeCopy> = {
   },
 };
 
+const TEAM_SHARE_COPY: Record<TeamShareScope, string> = {
+  NONE: 'None',
+  view: 'View',
+  comment: 'Comment',
+  edit: 'Edit',
+};
+
 export const LINK_SHARE_SCOPE_OPTIONS = (
   ['NONE', 'PUBLIC', 'TEAM'] as const
 ).map((scope) => ({
   value: scope,
   label: LINK_SHARE_SCOPE_COPY[scope].label,
+}));
+
+export const TEAM_SHARE_SCOPE_OPTIONS = (
+  ['NONE', 'view', 'comment', 'edit'] as const
+).map((scope) => ({
+  value: scope,
+  label: TEAM_SHARE_COPY[scope],
 }));
 
 export function getLinkShareScope(
@@ -85,6 +109,29 @@ export function getLinkShareScopeCopy(
   scope: LinkShareScope
 ): LinkShareScopeCopy {
   return LINK_SHARE_SCOPE_COPY[scope];
+}
+
+export function getTeamShareScope(
+  teamShareAccessLevel: AccessLevel | null | undefined
+): TeamShareScope {
+  if (
+    teamShareAccessLevel === 'view' ||
+    teamShareAccessLevel === 'comment' ||
+    teamShareAccessLevel === 'edit'
+  ) {
+    return teamShareAccessLevel;
+  }
+  return NO_TEAM_SHARE;
+}
+
+export function buildTeamSharePayload(scope: TeamShareScope): TeamSharePayload {
+  return {
+    teamShareAccessLevel: scope === NO_TEAM_SHARE ? null : scope,
+  };
+}
+
+export function getTeamShareScopeCopy(scope: TeamShareScope): string {
+  return TEAM_SHARE_COPY[scope];
 }
 
 export function getShareStatus(

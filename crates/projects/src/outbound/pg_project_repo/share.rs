@@ -73,6 +73,7 @@ pub(super) async fn get_project_share_permission(
         id: row.id,
         link_share,
         link_share_access_level: row.link_share_access_level,
+        team_share_access_level: None,
         owner: row.owner,
         channel_share_permissions,
     })

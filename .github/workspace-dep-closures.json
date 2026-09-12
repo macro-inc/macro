@@ -5679,6 +5679,9 @@
       "crates/workspace-hack"
     ],
     "models_permissions": [
+      "crates/cowlike",
+      "crates/macro_user_id",
+      "crates/model-entity",
       "crates/model_file_type",
       "crates/models_permissions",
       "crates/workspace-hack"

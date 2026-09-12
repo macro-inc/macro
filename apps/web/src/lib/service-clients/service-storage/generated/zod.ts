@@ -2067,6 +2067,14 @@ export const editCallRecordBody = zod
                 .describe('Ordered from least to most access top -> bottom'),
             ])
             .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
         }),
       ])
       .optional(),
@@ -7380,6 +7388,14 @@ export const editDocumentBody = zod
                 .describe('Ordered from least to most access top -> bottom'),
             ])
             .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
         }),
       ])
       .optional(),
@@ -8282,7 +8298,7 @@ export const getDocumentTeamShareResponse = zod
     sharedWithTeam: zod
       .boolean()
       .describe(
-        "Whether the document is currently shared with the owner's team."
+        'Whether explicit team sharing is enabled; inherited team access does not count.'
       ),
     teamId: zod
       .uuid()
@@ -8296,9 +8312,10 @@ export const getDocumentTeamShareResponse = zod
   );
 
 /**
- * @summary Sets the team-share state of a document. Sharing grants the document
-owner's team Edit access; unsharing removes the team's access. Requires
-Edit access on the document.
+ * @summary Sets explicit team sharing. Requires a verified acting identity matching
+the persisted document owner, not merely effective Edit or Owner access.
+Initial enable defaults to Edit; repeated enable preserves the chosen level.
+Clear removes only the managed direct grant, not inherited team access.
  */
 export const setDocumentTeamShareParams = zod.object({
   document_id: zod.string().describe('Document ID'),
@@ -8317,7 +8334,7 @@ export const setDocumentTeamShareResponse = zod
     sharedWithTeam: zod
       .boolean()
       .describe(
-        "Whether the document is currently shared with the owner's team."
+        'Whether explicit team sharing is enabled; inherited team access does not count.'
       ),
     teamId: zod
       .uuid()
@@ -28965,6 +28982,14 @@ export const getProjectPermissionsV2Response = zod.object({
     ])
     .optional(),
   owner: zod.string().describe('The owner of the item'),
+  teamShareAccessLevel: zod
+    .union([
+      zod.null(),
+      zod
+        .enum(['view', 'comment', 'edit', 'owner'])
+        .describe('Ordered from least to most access top -> bottom'),
+    ])
+    .optional(),
 });
 
 /**
@@ -29725,6 +29750,14 @@ export const editThreadV2Body = zod.object({
               .describe('Ordered from least to most access top -> bottom'),
           ])
           .optional(),
+        teamShareAccessLevel: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+          ])
+          .optional(),
       }),
     ])
     .optional(),
@@ -29856,6 +29889,14 @@ export const getDocumentPermissionsV2Response = zod.object({
       ])
       .optional(),
     owner: zod.string().describe('The owner of the item'),
+    teamShareAccessLevel: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['view', 'comment', 'edit', 'owner'])
+          .describe('Ordered from least to most access top -> bottom'),
+      ])
+      .optional(),
   }),
 });
 
@@ -29908,6 +29949,14 @@ export const editProjectV2Body = zod.object({
           ])
           .optional(),
         linkShareAccessLevel: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+          ])
+          .optional(),
+        teamShareAccessLevel: zod
           .union([
             zod.null(),
             zod

@@ -10843,13 +10843,17 @@ dependencies = [
 name = "models_permissions"
 version = "0.1.0"
 dependencies = [
+ "macro_user_id",
+ "model-entity",
  "model_file_type",
  "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
  "strum 0.27.2",
+ "thiserror 2.0.18",
  "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -15163,8 +15167,11 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "model-entity",
  "models_permissions",
+ "rootcause",
  "sqlx",
+ "thiserror 2.0.18",
  "tokio",
  "workspace-hack",
 ]
