@@ -175,7 +175,10 @@ function RecentChatsEmptyState(props: {
       }
       documentationUrl={`${DOCS_BASE}/product/${search() ? 'search' : 'agents'}`}
       documentationIcon={BookOpenIcon}
-      class="h-auto overflow-visible px-2 pt-4 @4xl:px-2 [&>div:first-child]:basis-0"
+      class={cn(
+        'h-auto overflow-visible px-2 pt-4 @4xl:px-2 [&>div:first-child]:basis-0',
+        search() && '[&_h2]:w-full [&_h2]:break-words'
+      )}
     />
   );
 }
