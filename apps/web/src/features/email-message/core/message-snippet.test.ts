@@ -44,6 +44,32 @@ describe('messageSnippet', () => {
     ).toBe('Thanks — from Cam Pak faith.tools • dotflowy.com');
   });
 
+  it('does not reinterpret asterisks in already-rendered HTML as markdown', () => {
+    expect(
+      messageSnippet(
+        message('asterisks', {
+          body_macro: 'Cost is 2 * 3 * 4',
+          body_text: 'Cost is 2 * 3 * 4',
+          body_html_sanitized: '<p>Cost is 2 * 3 * 4</p>',
+        })
+      )
+    ).toBe('Cost is 2 * 3 * 4');
+  });
+
+  it('prefers replyless HTML so quoted thread history is not in the preview', () => {
+    expect(
+      messageSnippet(
+        message('reply', {
+          body_macro: 'Sounds good.',
+          body_text: 'Sounds good.',
+          body_replyless: '<p>Sounds good.</p>',
+          body_html_sanitized:
+            '<p>Sounds good.</p><div class="macro_quote"><blockquote>Earlier message in the thread</blockquote></div>',
+        })
+      )
+    ).toBe('Sounds good.');
+  });
+
   it('inserts a space where HTML block elements met with no whitespace', () => {
     expect(
       messageSnippet(

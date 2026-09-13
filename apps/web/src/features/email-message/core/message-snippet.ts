@@ -70,7 +70,7 @@ function textFromMarkdown(markdown: string): string {
 
 type SnippetMessage = Pick<
   EmailMessage,
-  'body_html_sanitized' | 'body_macro' | 'body_text'
+  'body_html_sanitized' | 'body_macro' | 'body_replyless' | 'body_text'
 >;
 
 function nonEmpty(value: string | null | undefined): string | undefined {
@@ -81,18 +81,20 @@ function nonEmpty(value: string | null | undefined): string | undefined {
 /**
  * One-line collapsed-thread preview. Macro-authored mail (`body_macro`) is
  * converted from the rendered HTML, or from markdown when HTML is missing, so
- * signature emphasis and links do not show as `*…*` / `[text](url)`. Received
- * mail keeps the existing plaintext-first preview.
+ * signature emphasis and links do not show as `*…*` / `[text](url)`. Prefer
+ * `body_replyless` so quoted thread history is not part of the preview.
+ * Received mail keeps the existing plaintext-first preview.
  */
 export function messageSnippet(message: SnippetMessage): string {
-  const html = nonEmpty(message.body_html_sanitized);
+  const html =
+    nonEmpty(message.body_replyless) ?? nonEmpty(message.body_html_sanitized);
   const markdown = nonEmpty(message.body_macro);
   const text = collapseWhitespace(message.body_text ?? '');
 
   if (markdown) {
     if (html) {
       const fromHtml = textFromHtml(html);
-      return fromHtml ? textFromMarkdown(fromHtml) : textFromMarkdown(markdown);
+      if (fromHtml) return fromHtml;
     }
     return textFromMarkdown(markdown);
   }
