@@ -1,9 +1,13 @@
 import { runCreateAction } from '@app/features/command/Launcher';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
-import { useFavoriteDisplayName } from '@app/util/favorites';
+import {
+  useFavoriteDisplayName,
+  useFavoriteDmRecipientId,
+} from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { SplitPanel } from '@components/app/split-panel';
+import { UserIcon } from '@core/component/UserIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type ChannelEntity, Entity } from '@entity';
 import ChannelIcon from '@icon/wide-channel.svg';
@@ -97,6 +101,40 @@ const GROUPS: GroupConfig[] = [
   },
 ];
 
+function SlimFavoriteAvatar(props: {
+  favorite: Favorite;
+  displayName: () => string;
+}) {
+  const dmRecipientId = useFavoriteDmRecipientId(props.favorite);
+
+  return (
+    <Switch>
+      <Match when={dmRecipientId()}>
+        {(recipientId) => (
+          <span class="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-surface-2">
+            <UserIcon
+              id={recipientId()}
+              size="fill"
+              suppressClick
+              showTooltip={false}
+            />
+          </span>
+        )}
+      </Match>
+      <Match when={props.favorite.channelType === 'direct_message'}>
+        <span class="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-surface-2">
+          <FavoriteIcon favorite={props.favorite} class="size-4" />
+        </span>
+      </Match>
+      <Match when={true}>
+        <span class="flex size-8 shrink-0 items-center justify-center rounded-full border border-edge bg-surface-2 text-xs font-semibold tracking-wide text-ink">
+          {channelInitials(props.displayName())}
+        </span>
+      </Match>
+    </Switch>
+  );
+}
+
 function SlimFavoriteItem(props: { favorite: Favorite }) {
   const rail = useChannelsRail();
   const displayName = useFavoriteDisplayName(props.favorite);
@@ -125,9 +163,10 @@ function SlimFavoriteItem(props: { favorite: Favorite }) {
         aria-current={item().selected ? 'page' : undefined}
         onClick={() => rail.activateRow(rowKeyForFavorite(props.favorite))}
       >
-        <span class="flex size-8 shrink-0 items-center justify-center rounded-full border border-edge bg-surface-2">
-          <FavoriteIcon favorite={props.favorite} class="size-4" />
-        </span>
+        <SlimFavoriteAvatar
+          favorite={props.favorite}
+          displayName={displayName}
+        />
       </button>
     </Tooltip>
   );
