@@ -172,25 +172,23 @@ function AgentsWorkspace() {
                         <Match when={page() === 'new'}>
                           <div class="flex size-full items-center justify-center px-6 pb-16">
                             <div class="w-full max-w-2xl">
-                              <Show
-                                when={!agentsFlag().loading}
-                                fallback={<LoadingComposer />}
-                              >
-                                <Show
-                                  when={agentsFlag().enabled}
-                                  fallback={
-                                    <ChatInputProvider>
-                                      <HomeChatInput />
-                                    </ChatInputProvider>
-                                  }
-                                >
+                              <Switch>
+                                <Match when={agentsFlag().loading}>
+                                  <LoadingComposer />
+                                </Match>
+                                <Match when={agentsFlag().enabled}>
                                   <AgentInput
                                     autofocus
                                     placeholder="Message the agent, @mention anything"
                                     onSend={startSession}
                                   />
-                                </Show>
-                              </Show>
+                                </Match>
+                                <Match when={true}>
+                                  <ChatInputProvider>
+                                    <HomeChatInput />
+                                  </ChatInputProvider>
+                                </Match>
+                              </Switch>
                             </div>
                           </div>
                         </Match>
@@ -213,9 +211,18 @@ function AgentsWorkspace() {
               }
             >
               {(conversation) => (
-                <Show
-                  when={conversation.type === 'agent_session'}
-                  fallback={
+                <Switch>
+                  <Match when={conversation.type === 'agent_session'}>
+                    <Suspense>
+                      <AgentSessionPane
+                        id={conversation.id}
+                        onSessionId={(sessionId) =>
+                          adoptSessionId(conversation.id, sessionId)
+                        }
+                      />
+                    </Suspense>
+                  </Match>
+                  <Match when={true}>
                     <Suspense>
                       <PreviewPanel
                         selectedEntity={conversation}
@@ -223,17 +230,8 @@ function AgentsWorkspace() {
                         splitPanelContext={panel}
                       />
                     </Suspense>
-                  }
-                >
-                  <Suspense>
-                    <AgentSessionPane
-                      id={conversation.id}
-                      onSessionId={(sessionId) =>
-                        adoptSessionId(conversation.id, sessionId)
-                      }
-                    />
-                  </Suspense>
-                </Show>
+                  </Match>
+                </Switch>
               )}
             </Show>
           </ViewShell.Main>

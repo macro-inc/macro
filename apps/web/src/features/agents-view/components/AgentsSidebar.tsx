@@ -5,6 +5,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { DOCS_BASE } from '@app/constants/docs-links';
+import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import {
@@ -60,16 +61,18 @@ function FavoriteRow(props: {
   const name = useFavoriteDisplayName(props.favorite);
 
   return (
-    <ViewSidebar.Item
-      class="font-normal"
-      title={name()}
-      onClick={() => props.onOpen(props.favorite)}
-    >
-      <span class="flex size-4 shrink-0 items-center justify-center">
-        <FavoriteIcon favorite={props.favorite} class="size-4" />
-      </span>
-      <span class="truncate">{name()}</span>
-    </ViewSidebar.Item>
+    <FavoriteContextMenu favorite={props.favorite} triggerClass="block">
+      <ViewSidebar.Item
+        class="font-normal"
+        title={name()}
+        onClick={() => props.onOpen(props.favorite)}
+      >
+        <span class="flex size-4 shrink-0 items-center justify-center">
+          <FavoriteIcon favorite={props.favorite} class="size-4" />
+        </span>
+        <span class="truncate">{name()}</span>
+      </ViewSidebar.Item>
+    </FavoriteContextMenu>
   );
 }
 
@@ -164,6 +167,8 @@ function RecentChatsEmptyState(props: {
       }
       descriptionClass="mt-1 text-balance"
       actionsClass="mt-5 flex-row @max-sm:flex-row"
+      topSpacerClass="basis-0"
+      titleClass={search() ? 'w-full break-words' : undefined}
       primaryAction={
         search()
           ? undefined
@@ -175,10 +180,7 @@ function RecentChatsEmptyState(props: {
       }
       documentationUrl={`${DOCS_BASE}/product/${search() ? 'search' : 'agents'}`}
       documentationIcon={BookOpenIcon}
-      class={cn(
-        'h-auto overflow-visible px-2 pt-4 @4xl:px-2 [&>div:first-child]:basis-0',
-        search() && '[&_h2]:w-full [&_h2]:break-words'
-      )}
+      class="h-auto overflow-visible px-2 pt-4 @4xl:px-2"
     />
   );
 }

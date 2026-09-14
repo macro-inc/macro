@@ -15,8 +15,10 @@ export interface EmptyStatePanelProps {
   graphic?: Component<{ class?: string }>;
   graphicClass?: string;
   title?: string;
+  titleClass?: string;
   description?: JSXElement;
   descriptionClass?: string;
+  topSpacerClass?: string;
   primaryAction?: EmptyStateAction;
   actionsClass?: string;
   /**
@@ -62,7 +64,13 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
           position is constant; the bottom grows to fill. On mobile the viewport
           is short and the wrapper already adds a top inset, so the spacer is
           reduced to keep content from overflowing the visible area. */}
-      <div aria-hidden="true" class="shrink-0 basis-[28%] mobile:basis-[8%]" />
+      <div
+        aria-hidden="true"
+        class={cn(
+          'shrink-0 basis-[28%] mobile:basis-[8%]',
+          props.topSpacerClass
+        )}
+      />
       <div
         class={cn(
           // Explicit vertical rhythm: a generous gap below the graphic, then a
@@ -86,7 +94,9 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
           )}
         </Show>
         <Show when={props.title}>
-          <h2 class="text-base font-semibold text-ink">{props.title}</h2>
+          <h2 class={cn('text-base font-semibold text-ink', props.titleClass)}>
+            {props.title}
+          </h2>
         </Show>
         <Show when={props.description}>
           <p
