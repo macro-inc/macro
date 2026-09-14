@@ -9,7 +9,10 @@ fn frontend_nil_exclusions_are_supported_without_indexing_deferred_entities() {
     ast.reminder_filter = Some(Arc::new(Expr::val(ReminderLiteral::Id(Uuid::nil()))));
     ast.agent_session_filter = Some(Arc::new(Expr::val(AgentSessionLiteral::Id(Uuid::nil()))));
     assert_eq!(check_soup_flat_v3(&ast, request()), Eligibility::Supported);
-    assert_eq!(check_soup_flat_v4(&ast, request()), Eligibility::Supported);
+    assert!(matches!(
+        compile_soup_flat_v4(&ast, request()).unwrap(),
+        LocalCompileOutcome::Supported(_)
+    ));
 
     // Exact forms emitted by the Email view's confine()/GraphQL translation.
     ast.document_filter = Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil()))));
