@@ -302,6 +302,38 @@ describe('GraphQL favorites queries', () => {
     );
   });
 
+  it('optimistically updates matching filtered GraphQL lists', async () => {
+    const hooks = renderHook(() => ({
+      query: createGraphqlFavoritesQuery({
+        entityType: ['document'],
+      }),
+      mutation: createGraphqlAddFavoriteMutation(),
+    }));
+    await vi.waitFor(() => expect(hooks.query.isSuccess).toBe(true));
+
+    await hooks.mutation.mutateAsync({
+      entityType: 'document',
+      entityId: 'document-3',
+    });
+
+    const optimistic =
+      executeMutation.mock.calls[0]?.[2]?.normalizedCacheOptimistic;
+    expect(optimistic.linkPatches).toEqual([
+      expect.objectContaining({
+        variablesJson: '{"filter":{"entityTypes":["DOCUMENT"]}}',
+        operation: expect.objectContaining({ kind: 'prependUnique' }),
+      }),
+    ]);
+    expect(optimistic.revalidations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ variablesJson: '{}' }),
+        expect.objectContaining({
+          variablesJson: '{"filter":{"entityTypes":["DOCUMENT"]}}',
+        }),
+      ])
+    );
+  });
+
   it('refetches the urql-solid list after setting a favorite', async () => {
     const onSuccess = vi.fn();
     const hooks = renderHook(() => ({

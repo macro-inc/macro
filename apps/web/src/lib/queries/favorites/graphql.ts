@@ -18,6 +18,7 @@ import {
 import {
   executeGraphqlReorderFavoritesMutation,
   executeGraphqlSetFavoriteMutation,
+  type FavoritesCacheTarget,
   graphqlReorderFavoritesResult,
   graphqlSetFavoriteResult,
   mapGraphqlFavorite,
@@ -37,7 +38,13 @@ type GraphqlFavoritesQuery = UrqlQueryResult<
   FavoritesQuery
 >;
 
-const activeFavoritesQueries = new Set<GraphqlFavoritesQuery>();
+type ActiveFavoritesQuery = {
+  query: GraphqlFavoritesQuery;
+  filter: ListFavoritesParams | undefined;
+  variables: FavoritesQueryVariables;
+};
+
+const activeFavoritesQueries = new Set<ActiveFavoritesQuery>();
 
 function selectFavorites(data: FavoritesQuery): FavoritesList {
   return {
@@ -47,10 +54,53 @@ function selectFavorites(data: FavoritesQuery): FavoritesList {
   };
 }
 
+function favoritesQueryVariables(
+  filter: ListFavoritesParams | undefined
+): FavoritesQueryVariables {
+  return filter
+    ? {
+        filter: {
+          entityTypes: filter.entityType?.map(toGraphqlFavoriteEntityType),
+          entityIds: filter.entityId,
+        },
+      }
+    : {};
+}
+
+function favoriteMatchesFilter(
+  favorite: SetFavoriteArgs,
+  filter: ListFavoritesParams | undefined
+): boolean {
+  return (
+    (!filter?.entityType || filter.entityType.includes(favorite.entityType)) &&
+    (!filter?.entityId || filter.entityId.includes(favorite.entityId))
+  );
+}
+
+function activeFavoritesCacheTargets(
+  favorite?: SetFavoriteArgs
+): FavoritesCacheTarget[] {
+  const targets = new Map<string, FavoritesCacheTarget>([
+    [JSON.stringify({}), { variables: {}, updateCachedList: false }],
+  ]);
+  for (const active of activeFavoritesQueries) {
+    if (favorite && !favoriteMatchesFilter(favorite, active.filter)) continue;
+    const key = JSON.stringify(active.variables);
+    targets.set(key, {
+      variables: active.variables,
+      updateCachedList:
+        Boolean(active.query.data) ||
+        Boolean(targets.get(key)?.updateCachedList),
+    });
+  }
+  return [...targets.values()];
+}
+
 /** Creates the live urql-solid favorites query. */
 export function createGraphqlFavoritesQuery(
   filter?: ListFavoritesParams
 ): GraphqlFavoritesQuery {
+  const variables = favoritesQueryVariables(filter);
   const query = createUrqlQuery<
     FavoritesQuery,
     FavoritesQueryVariables,
@@ -58,28 +108,22 @@ export function createGraphqlFavoritesQuery(
   >(() => ({
     query: FavoritesDocument,
     client: getGraphqlSoupClient(),
-    variables: filter
-      ? {
-          filter: {
-            entityTypes: filter.entityType?.map(toGraphqlFavoriteEntityType),
-            entityIds: filter.entityId,
-          },
-        }
-      : {},
+    variables,
     requestPolicy: 'cache-and-network',
     keepPreviousData: false,
     select: selectFavorites,
   }));
 
-  activeFavoritesQueries.add(query);
-  onCleanup(() => activeFavoritesQueries.delete(query));
+  const active = { query, filter, variables };
+  activeFavoritesQueries.add(active);
+  onCleanup(() => activeFavoritesQueries.delete(active));
   return query;
 }
 
 /** Refetches mounted lists, including clients running without the cache exchange. */
 export async function refreshActiveGraphqlFavoritesQueries(): Promise<void> {
   await Promise.all(
-    [...activeFavoritesQueries].map((query) =>
+    [...activeFavoritesQueries].map(({ query }) =>
       // Refetch replaces the observer's subscription. Read through the cache
       // to register its dependencies even if the network request fails, so
       // later offline optimistic writes still update this mounted list.
@@ -88,13 +132,9 @@ export async function refreshActiveGraphqlFavoritesQueries(): Promise<void> {
   );
 }
 
-function hasCachedFavoritesList(): boolean {
-  return [...activeFavoritesQueries].some((query) => query.data !== undefined);
-}
-
 function nextFavoriteSortOrder(): number {
   let maximum = -1;
-  for (const query of activeFavoritesQueries) {
+  for (const { query } of activeFavoritesQueries) {
     for (const favorite of query.data?.favorites ?? []) {
       maximum = Math.max(maximum, favorite.sortOrder);
     }
@@ -184,7 +224,7 @@ export function createGraphqlAddFavoriteMutation<Context = void>(
         input,
         true,
         nextFavoriteSortOrder(),
-        hasCachedFavoritesList()
+        activeFavoritesCacheTargets(input)
       ),
     select: graphqlSetFavoriteResult,
     callbacks,
@@ -203,7 +243,7 @@ export function createGraphqlRemoveFavoriteMutation<Context = void>(
         input,
         false,
         0,
-        hasCachedFavoritesList()
+        activeFavoritesCacheTargets(input)
       ),
     select: (result) => {
       graphqlSetFavoriteResult(result);
@@ -222,7 +262,12 @@ export function createGraphqlReorderFavoritesMutation<Context = void>(
 ) {
   return createFavoriteMutation({
     mutation: ReorderFavoritesDocument,
-    execute: executeGraphqlReorderFavoritesMutation,
+    execute: (client, input) =>
+      executeGraphqlReorderFavoritesMutation(
+        client,
+        input,
+        activeFavoritesCacheTargets().map((target) => target.variables)
+      ),
     select: graphqlReorderFavoritesResult,
     callbacks,
   });

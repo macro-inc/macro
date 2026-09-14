@@ -113,15 +113,42 @@ export function useFavoritesData(
   return () => (query.isSuccess ? query.data : undefined);
 }
 
-function readList(): FavoritesList | undefined {
-  return queryClient.getQueryData<FavoritesList>(favoriteKeys.list().queryKey);
+function readLists() {
+  return queryClient.getQueriesData<FavoritesList>({
+    queryKey: favoriteKeys.list._def,
+  });
 }
 
-function writeList(update: (prev: FavoritesList) => FavoritesList) {
-  queryClient.setQueryData<FavoritesList>(
-    favoriteKeys.list().queryKey,
-    (prev) => (prev ? update(prev) : prev)
+type FavoriteListsSnapshot = ReturnType<typeof readLists>;
+type FavoriteListQueryKey = ReturnType<typeof favoriteKeys.list>['queryKey'];
+
+function favoriteMatchesFilter(
+  favorite: Favorite,
+  filter: FavoritesFilter | undefined
+): boolean {
+  return (
+    (!filter?.entityType || filter.entityType.includes(favorite.entityType)) &&
+    (!filter?.entityId || filter.entityId.includes(favorite.entityId))
   );
+}
+
+function writeLists(
+  update: (
+    prev: FavoritesList,
+    filter: FavoritesFilter | undefined
+  ) => FavoritesList
+) {
+  for (const [queryKey, prev] of readLists()) {
+    if (!prev) continue;
+    const [, , filter] = queryKey as FavoriteListQueryKey;
+    queryClient.setQueryData<FavoritesList>(queryKey, update(prev, filter));
+  }
+}
+
+function restoreLists(snapshot: FavoriteListsSnapshot) {
+  for (const [queryKey, previous] of snapshot) {
+    queryClient.setQueryData(queryKey, previous);
+  }
 }
 
 export function invalidateFavorites() {
@@ -164,23 +191,20 @@ export function useAddFavoriteMutation(callbacks?: AddFavoriteCallbacks) {
       {
         onMutate: async (args: AddFavoriteArgs) => {
           await queryClient.cancelQueries({
-            queryKey: favoriteKeys.list().queryKey,
+            queryKey: favoriteKeys.list._def,
           });
-          const previous = readList();
+          const previous = readLists();
           const optimistic = pendingFavorite(args);
-          writeList((prev) => ({
-            ...prev,
-            favorites: [...prev.favorites, optimistic],
-          }));
+          writeLists((prev, filter) =>
+            favoriteMatchesFilter(optimistic, filter)
+              ? {
+                  ...prev,
+                  favorites: [...prev.favorites, optimistic],
+                }
+              : prev
+          );
           return {
-            rollback: () => {
-              if (previous) {
-                queryClient.setQueryData(
-                  favoriteKeys.list().queryKey,
-                  previous
-                );
-              }
-            },
+            rollback: () => restoreLists(previous),
           };
         },
         onError: (_error, _args, context) => {
@@ -218,27 +242,20 @@ export function useRemoveFavoriteMutation(callbacks?: RemoveFavoriteCallbacks) {
       {
         onMutate: async (args: RemoveFavoriteArgs) => {
           await queryClient.cancelQueries({
-            queryKey: favoriteKeys.list().queryKey,
+            queryKey: favoriteKeys.list._def,
           });
-          const previous = readList();
+          const previous = readLists();
           const keep = (favorite: Favorite) =>
             !(
               favorite.entityType === args.entityType &&
               favorite.entityId === args.entityId
             );
-          writeList((prev) => ({
+          writeLists((prev) => ({
             ...prev,
             favorites: prev.favorites.filter(keep),
           }));
           return {
-            rollback: () => {
-              if (previous) {
-                queryClient.setQueryData(
-                  favoriteKeys.list().queryKey,
-                  previous
-                );
-              }
-            },
+            rollback: () => restoreLists(previous),
           };
         },
         onError: (_error, _args, context) => {
@@ -291,9 +308,9 @@ export function useReorderFavoritesMutation(
       {
         onMutate: async (args: ReorderFavoritesArgs) => {
           await queryClient.cancelQueries({
-            queryKey: favoriteKeys.list().queryKey,
+            queryKey: favoriteKeys.list._def,
           });
-          const previous = readList();
+          const previous = readLists();
           const reorder = (favorites: Favorite[]) => {
             const byKey = new Map(
               favorites.map((f) => [
@@ -314,19 +331,12 @@ export function useReorderFavoritesMutation(
             );
             return [...ordered, ...leftover];
           };
-          writeList((prev) => ({
+          writeLists((prev) => ({
             ...prev,
             favorites: reorder(prev.favorites),
           }));
           return {
-            rollback: () => {
-              if (previous) {
-                queryClient.setQueryData(
-                  favoriteKeys.list().queryKey,
-                  previous
-                );
-              }
-            },
+            rollback: () => restoreLists(previous),
           };
         },
         onError: (_error, _args, context) => {
