@@ -1,5 +1,3 @@
-//! Query for initiative access level.
-
 #[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
@@ -9,13 +7,14 @@ use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Sour
 use model_entity::EntityType;
 use sqlx::PgPool;
 
-/// Get the highest access level a user has for an initiative.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn get_initiative_access(
     pool: &PgPool,
     initiative_id: &uuid::Uuid,
     source_ids: &SourceIds,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
+    // The entity_access + SharePermission join is the follow-up query task.
+    // Returning None keeps exhaustive matches compiling without a new sqlx::query!.
     let _ = (pool, initiative_id, source_ids);
     Ok(None)
 }
