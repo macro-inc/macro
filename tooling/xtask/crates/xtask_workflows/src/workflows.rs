@@ -35,6 +35,7 @@ mod deploy_sync_service;
 mod deploy_web_app;
 mod docs_check;
 mod ensure_daytona_snapshot;
+mod ios_preview;
 mod path_validation;
 mod publish_sdk;
 mod pulumi_preview_pr;
@@ -246,6 +247,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "ensure_daytona_snapshot",
         file_name: "ensure_daytona_snapshot.yml",
         render_yaml: || render_gh_workflow(ensure_daytona_snapshot::ensure_daytona_snapshot)(),
+    },
+    WorkflowFile {
+        slug: "ios_preview",
+        file_name: "ios_preview.yml",
+        render_yaml: || render_gh_workflow(ios_preview::ios_preview)(),
     },
     WorkflowFile {
         slug: "push_local_stack_binaries",
