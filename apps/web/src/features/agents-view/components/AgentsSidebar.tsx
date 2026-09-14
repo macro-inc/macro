@@ -199,13 +199,14 @@ function RecentChatsEmptyState(props: {
 
 export type AgentsSidebarProps = {
   page: AgentsPage;
-  selectedId: string | undefined;
+  activeConversationId: string | undefined;
   search: string;
   conversations: AgentConversationEntity[];
   loading: boolean;
   error: boolean;
   hasNextPage: boolean;
   loadingNextPage: boolean;
+  loadMoreError: boolean;
   onNavigate: (page: AgentsPage) => void;
   onSearchChange: (search: string) => void;
   onOpenConversation: (conversation: AgentConversationEntity) => void;
@@ -260,7 +261,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
       !sentinel ||
       forceEmptyState() ||
       !props.hasNextPage ||
-      props.loadingNextPage
+      props.loadingNextPage ||
+      props.loadMoreError
     ) {
       return;
     }
@@ -268,7 +270,12 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     const observer = new IntersectionObserver(
       (entries) => {
         if (!entries[0]?.isIntersecting) return;
-        if (forceEmptyState() || !props.hasNextPage || props.loadingNextPage) {
+        if (
+          forceEmptyState() ||
+          !props.hasNextPage ||
+          props.loadingNextPage ||
+          props.loadMoreError
+        ) {
           return;
         }
         props.onLoadMore();
@@ -297,7 +304,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           <For each={PAGES}>
             {(item) => (
               <ViewSidebar.Item
-                active={props.page === item.id && !props.selectedId}
+                active={props.page === item.id && !props.activeConversationId}
                 class="font-normal"
                 onClick={() => props.onNavigate(item.id)}
               >
@@ -383,7 +390,9 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                     >
                       <ConversationRow
                         conversation={conversation()}
-                        active={props.selectedId === conversation().id}
+                        active={
+                          props.activeConversationId === conversation().id
+                        }
                         onOpen={() => props.onOpenConversation(conversation())}
                       />
                     </SoupEntityContextMenu>
@@ -419,7 +428,12 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                     }
                     class="grid h-9 shrink-0 place-items-center text-ink-muted"
                   >
-                    <Show when={props.loadingNextPage}>
+                    <Show when={props.loadMoreError}>
+                      <Button variant="ghost" onClick={props.onLoadMore}>
+                        Retry loading more chats
+                      </Button>
+                    </Show>
+                    <Show when={!props.loadMoreError && props.loadingNextPage}>
                       <SpinnerIcon class="size-4 animate-spin" />
                     </Show>
                   </div>

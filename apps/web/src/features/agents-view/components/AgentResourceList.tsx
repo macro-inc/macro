@@ -33,6 +33,7 @@ export function AgentResourceList(props: { page: 'routines' | 'skills' }) {
         ? []
         : (skillsQuery.data?.entities ?? []);
   const loading = () => props.page === 'skills' && skillsQuery.isLoading;
+  const error = () => props.page === 'skills' && Boolean(skillsQuery.error);
 
   return (
     <div class="flex h-full min-h-0 flex-col">
@@ -70,12 +71,12 @@ export function AgentResourceList(props: { page: 'routines' | 'skills' }) {
             </Button>
           )}
         </For>
-        <Show when={items().length === 0}>
+        <Show when={items().length === 0 && !error()}>
           <p class="px-3 py-6 text-sm text-ink-muted">
             {loading() ? 'Loading skills…' : `No ${props.page} yet`}
           </p>
         </Show>
-        <Show when={props.page === 'skills' && Boolean(skillsQuery.error)}>
+        <Show when={error()}>
           <Button variant="ghost" onClick={() => void skillsQuery.refetch()}>
             Retry loading skills
           </Button>

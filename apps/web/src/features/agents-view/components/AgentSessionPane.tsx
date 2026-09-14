@@ -48,7 +48,9 @@ export function AgentSessionPane(props: {
 }) {
   const pending = pendingSession(props.id);
   onCleanup(() => {
-    if (pending?.sessionId()) forgetPendingSession(props.id);
+    if (pending?.sessionId() || pending?.failed()) {
+      forgetPendingSession(props.id);
+    }
   });
 
   return (

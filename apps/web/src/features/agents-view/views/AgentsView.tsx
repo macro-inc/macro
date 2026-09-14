@@ -42,6 +42,11 @@ const PAGE_TITLES: Record<AgentsPage, string> = {
   skills: 'Skills',
 };
 
+type SelectedConversation = {
+  conversation: AgentConversationEntity;
+  activeConversationId: string;
+};
+
 function LoadingComposer() {
   return (
     <div class="grid size-full place-items-center text-ink-muted">
@@ -59,7 +64,7 @@ function AgentsWorkspace() {
   const userId = useUserId();
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
   const [page, setPage] = createSignal<AgentsPage>('new');
-  const [selected, setSelected] = createSignal<AgentConversationEntity>();
+  const [selected, setSelected] = createSignal<SelectedConversation>();
   const [search, setSearch] = createSignal('');
   const query = useSoupItemsQuery(
     () => {
@@ -94,7 +99,7 @@ function AgentsWorkspace() {
 
   const openConversation = (conversation: AgentConversationEntity) => {
     setPage('new');
-    setSelected(conversation);
+    setSelected({ conversation, activeConversationId: conversation.id });
   };
 
   const startSession = (prompt: string) => {
@@ -118,10 +123,13 @@ function AgentsWorkspace() {
 
   const adoptSessionId = (placeholderId: string, sessionId: string) => {
     setSelected((current) => {
-      if (current?.type !== 'agent_session' || current.id !== placeholderId) {
+      if (
+        current?.conversation.type !== 'agent_session' ||
+        current.conversation.id !== placeholderId
+      ) {
         return current;
       }
-      return { ...current, id: sessionId };
+      return { ...current, activeConversationId: sessionId };
     });
   };
 
@@ -144,13 +152,14 @@ function AgentsWorkspace() {
           <ViewShell.Aside>
             <AgentsSidebar
               page={page()}
-              selectedId={selected()?.id}
+              activeConversationId={selected()?.activeConversationId}
               search={search()}
               conversations={conversations()}
               loading={query.isPending}
-              error={query.isError}
+              error={query.isLoadingError}
               hasNextPage={Boolean(query.hasNextPage)}
               loadingNextPage={query.isFetchingNextPage}
+              loadMoreError={query.isFetchNextPageError}
               onNavigate={navigate}
               onSearchChange={setSearch}
               onOpenConversation={openConversation}
@@ -161,7 +170,7 @@ function AgentsWorkspace() {
 
           <ViewShell.Main class="overflow-hidden">
             <Show
-              when={selected()}
+              when={selected()?.conversation}
               keyed
               fallback={
                 <>
@@ -246,7 +255,9 @@ export function AgentsView() {
   return (
     <ListEntityMetadataQueryProvider>
       <StaticMarkdownContext>
-        <AgentsWorkspace />
+        <Suspense fallback={<LoadingComposer />}>
+          <AgentsWorkspace />
+        </Suspense>
       </StaticMarkdownContext>
     </ListEntityMetadataQueryProvider>
   );
