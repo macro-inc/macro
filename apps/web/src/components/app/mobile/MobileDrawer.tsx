@@ -1,7 +1,8 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import Drawer from '@corvu/drawer';
-import { cn, Layer } from '@ui';
+import { Layer } from '@ui/components/Layer';
+import { cn } from '@ui/utils/classname';
 import {
   type ComponentProps,
   onCleanup,
@@ -245,6 +246,8 @@ export const MobileDrawer = Object.assign(
     Overlay: MobileDrawerOverlay,
     Content: MobileDrawerContent,
     Close: Drawer.Close,
+    Title: Drawer.Label,
+    Description: Drawer.Description,
     ScrollBody: MobileDrawerScrollBody,
     Handle: MobileDrawerHandle,
     Section: MobileDrawerSection,

@@ -1,4 +1,5 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { isMobile } from '@core/mobile/isMobile';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import { ThrownResultError } from '@core/util/result';
 import BuildingsIcon from '@phosphor/buildings.svg';
@@ -94,21 +95,24 @@ export function CreateCompanyModal() {
       onOpenChange={(open) => !open && close()}
       class="w-120"
     >
-      <Panel depth={2} class="rounded-xl *:max-h-[75vh]">
+      <Panel
+        depth={2}
+        hideBorder={isMobile()}
+        class="rounded-xl touch:h-auto *:max-h-[75vh]"
+      >
         <Panel.Body>
           <form class="flex flex-col gap-4 p-4" onSubmit={handleSubmit}>
-            <div class="flex items-center gap-1">
-              <div class="flex-1" />
-              <Dialog.CloseButton
-                as={Button}
-                size="icon-sm"
-                label="Close"
-                tabIndex={-1}
-                disabled={createCompanyMutation.isPending}
-              >
-                <XIcon />
-              </Dialog.CloseButton>
-            </div>
+            <Dialog.CloseButton
+              as={Button}
+              size="icon-sm"
+              label="Close"
+              aria-label="Close company creation"
+              class="self-end"
+              tabIndex={-1}
+              disabled={createCompanyMutation.isPending}
+            >
+              <XIcon />
+            </Dialog.CloseButton>
 
             <div class="flex flex-col gap-4">
               <div class="flex items-center gap-2 px-2">

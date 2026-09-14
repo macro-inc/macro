@@ -453,7 +453,9 @@ export const SoupView = (props: SoupViewProps) => {
         if (owners.length > 0 !== soup.predicates.isActive('company-owner')) {
           soup.predicates.toggle({ and: ['company-owner'] });
         }
-        soupView.setViewMode(initialCrmView.viewMode ?? 'board');
+        soupView.setViewMode(
+          initialCrmView.viewMode ?? (isTouchDevice() ? 'list' : 'board')
+        );
       }
     });
   });
@@ -768,16 +770,19 @@ export const SoupView = (props: SoupViewProps) => {
             content that is already constrained in both layouts. */}
         <Show
           when={
-            (isTouchDevice()
-              ? isComponentListView('agents')
-              : ENABLE_UNIFIED_LIST_AI_INPUT) &&
+            !isTouchDevice() &&
+            ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isInboxView() &&
             !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&
             !isComponentListView('search')
           }
         >
-          <SoupChatInput />
+          <div class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none">
+            <div class="pointer-events-auto w-full min-w-0 max-w-3xl">
+              <SoupChatInput />
+            </div>
+          </div>
         </Show>
       </Suspense>
     </div>
