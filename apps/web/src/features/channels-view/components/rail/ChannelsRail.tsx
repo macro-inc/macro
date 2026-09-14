@@ -62,6 +62,7 @@ const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
   'channels',
   'direct_messages',
 ];
+const BROWSE_QUERY_SCOPES = ['channels', 'direct_messages'] as const;
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
 const DM_LOADING_PREVIEW_OFFSET = 80;
 const CHANNEL_SEARCH_FILTERS = {
@@ -178,6 +179,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     Partial<Record<ChannelsSourceScope, VirtualizerHandle>>
   >({});
   const [searchQuery, setSearchQuery] = createSignal('');
+  const [restoreListScroll, setRestoreListScroll] = createSignal(false);
   const normalizedSearchQuery = () => searchQuery().trim();
   const serviceSearchQuery = debouncedDependent(normalizedSearchQuery, 300);
   let searchInput: HTMLInputElement | undefined;
@@ -185,6 +187,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   onCleanup(() => previewAfterNavigation.clear());
 
   const closeSearch = () => {
+    if (props.searchOpen) setRestoreListScroll(true);
     setSearchQuery('');
     props.onSearchOpenChange(false);
   };
@@ -194,7 +197,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
   const selectTab = (tab: ChannelsTab) => {
     previewAfterNavigation.clear();
-    closeSearch();
+    setRestoreListScroll(true);
     setTab(tab);
   };
 
@@ -360,6 +363,94 @@ export function ChannelsRail(props: ChannelsRailProps) {
       }
     },
   };
+
+  const scrollScopeToSelectedOrStart = (scope: ChannelsQueryScope) => {
+    const items = props.sources[scope].items();
+    const selectedIndex = items.findIndex(
+      (channel) => channel.id === state.selectedChannelId
+    );
+    const targetIndex = selectedIndex >= 0 ? selectedIndex : 0;
+    const virtualizer = virtualizers()[scope];
+
+    if (virtualizer && items.length > 0) {
+      virtualizer.scrollToIndex(targetIndex, {
+        align: selectedIndex >= 0 ? 'nearest' : 'start',
+      });
+      return;
+    }
+
+    const scrollRoot =
+      scope === 'recents' ? listRoot() : sectionScrollRoots()[scope];
+    if (scrollRoot?.isConnected) scrollRoot.scrollTop = 0;
+  };
+
+  const scrollSearchToSelectedOrStart = () => {
+    const items = searchResults();
+    const selectedIndex = items.findIndex(
+      (channel) => channel.id === state.selectedChannelId
+    );
+    const virtualizer = virtualizers().search;
+    if (!virtualizer || items.length === 0) return;
+
+    virtualizer.scrollToIndex(selectedIndex >= 0 ? selectedIndex : 0, {
+      align: selectedIndex >= 0 ? 'nearest' : 'start',
+    });
+  };
+
+  const scrollFavoritesToSelectedOrStart = () => {
+    const scrollRoot = sectionScrollRoots().favorites;
+    if (!scrollRoot?.isConnected) return;
+
+    scrollRoot.scrollTop = 0;
+    const favorite = favorites().find(
+      (item) =>
+        item.entityType === 'channel' &&
+        item.entityId === state.selectedChannelId
+    );
+    if (!favorite) return;
+
+    const element = document.getElementById(
+      domIdForRow(listDomId, rowKeyForFavorite(favorite))
+    );
+    if (!element) return;
+
+    const elementBounds = element.getBoundingClientRect();
+    const scrollBounds = scrollRoot.getBoundingClientRect();
+    if (elementBounds.bottom > scrollBounds.bottom) {
+      scrollRoot.scrollTop += elementBounds.bottom - scrollBounds.bottom;
+    }
+  };
+
+  createEffect(() => {
+    if (!restoreListScroll() || props.mode !== 'full') return;
+
+    const searchOpen = props.searchOpen;
+    const sourcesReady = searchOpen
+      ? !props.sources.search.isLoading()
+      : state.tab === 'recents'
+        ? !props.sources.recents.isLoading()
+        : BROWSE_QUERY_SCOPES.every(
+            (scope) => !props.sources[scope].isLoading()
+          );
+    if (!sourcesReady) return;
+
+    const frame = requestAnimationFrame(() => {
+      if (props.searchOpen !== searchOpen || props.mode !== 'full') return;
+
+      if (searchOpen) {
+        scrollSearchToSelectedOrStart();
+      } else if (state.tab === 'recents') {
+        scrollScopeToSelectedOrStart('recents');
+      } else {
+        scrollFavoritesToSelectedOrStart();
+        for (const scope of BROWSE_QUERY_SCOPES) {
+          scrollScopeToSelectedOrStart(scope);
+        }
+      }
+      setRestoreListScroll(false);
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,

@@ -160,8 +160,10 @@ channels. Channel favorites open in the channel preview.
 The search action beside the tabs opens a search field below them and replaces
 the active tab contents with matching channels and direct messages from one
 activity-ordered source. Search results use compact rows on `All` and
-conversation cards on `Recent`. Selecting a tab or closing search restores the
-tab contents.
+conversation cards on `Recent`. Switching tabs preserves the active search and
+query, then scrolls the results to the selected channel when present or to the
+start. Closing search restores the active tab and applies the same scroll
+behavior to its lists.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
