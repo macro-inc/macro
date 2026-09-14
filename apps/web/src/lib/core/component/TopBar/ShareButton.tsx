@@ -46,6 +46,7 @@ import IconLink from '@phosphor/link.svg';
 import IconEdit from '@phosphor/pencil.svg';
 import IconShared from '@phosphor/share.svg';
 import IconX from '@phosphor/x.svg';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import {
   blockNameToItemType,
@@ -619,6 +620,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
 export function ShareModal(props: ShareModalProps) {
   const navigate = useNavigate();
   const analytics = useAnalytics();
+  const currentTeamQuery = useCurrentTeamQuery();
   const isBlockContext = isInBlock();
   const [fallbackPermissionsResource, { refetch: refetchFallback }] =
     createResource(
@@ -959,7 +961,10 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const teamShareControls = () =>
-    props.itemType === 'document' && props.userPermissions === Permissions.OWNER
+    props.itemType === 'document' &&
+    props.userPermissions === Permissions.OWNER &&
+    currentTeamQuery.isSuccess &&
+    currentTeamQuery.data
       ? {
           accessLevel: teamShareAccessLevel(),
           setAccessLevel: setTeamShareAccessLevel,
