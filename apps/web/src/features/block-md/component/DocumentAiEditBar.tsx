@@ -6,7 +6,7 @@ import clickOutside from '@core/directive/clickOutside';
 import { TOKENS } from '@core/hotkey/tokens';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { cancelAiEdit, requestAiEdit } from '@service-ai-editing/client';
-import { Button, SendButton, Surface } from '@ui';
+import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
 false && clickOutside;
@@ -118,19 +118,16 @@ export function DocumentAiEditBar(props: { documentId: string }) {
           </Button>
         }
       >
-        <Surface
+        <ComposerSurface
           onFocusIn={() => setFocused(true)}
           onFocusOut={(event) => {
             const next = event.relatedTarget as Node | null;
             if (next && event.currentTarget.contains(next)) return;
             setFocused(false);
           }}
-          active={focused()}
-          class="w-96 max-w-full rounded-xl"
-          depth={2}
-          solid
+          class="h-auto w-96 max-w-full"
         >
-          <div class="flex flex-col gap-2 p-3" use:clickOutside={collapse}>
+          <div class="flex flex-col gap-2 p-2" use:clickOutside={collapse}>
             <div class="flex items-start gap-2">
               <span class="flex h-8 w-4 shrink-0 items-center justify-center text-accent">
                 <AnimatedStarIcon triggerAnimation={focused()} />
@@ -152,7 +149,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
               />
             </div>
           </div>
-        </Surface>
+        </ComposerSurface>
       </Show>
     </div>
   );

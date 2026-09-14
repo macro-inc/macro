@@ -158,6 +158,7 @@ export type ChannelThreadEntity = EntityBase & {
 
 export type ChatEntity = EntityBase & {
   type: 'chat';
+  model?: string | null;
   projectId?: string;
   properties?: SoupProperty[];
 };

@@ -5,12 +5,16 @@ import type {
   CreateAgentSessionRequest,
 } from '@service-agent-harness/generated/schemas';
 import { useMutation } from '@tanstack/solid-query';
+import { invalidateAllSoup } from '../soup/cache';
 
 export function useCreateAgentSessionMutation() {
   return useMutation(() => ({
     retry: false,
     mutationFn: (request: CreateAgentSessionRequest) =>
       throwOnErr(() => agentHarnessServiceClient.create(request)),
+    onSuccess: () => {
+      invalidateAllSoup();
+    },
   }));
 }
 

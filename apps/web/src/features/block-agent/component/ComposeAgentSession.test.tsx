@@ -42,7 +42,11 @@ vi.mock('@components/app/split-layout/layout', () => ({
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({
-    handle: { close: navigation.close, isPopover: () => true },
+    handle: {
+      close: navigation.close,
+      isPopover: () => true,
+      setDisplayName: vi.fn(),
+    },
   }),
 }));
 vi.mock('@core/hotkey/hotkeys', () => ({

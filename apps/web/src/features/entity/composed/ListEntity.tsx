@@ -289,7 +289,7 @@ export function ListEntity(props: ListEntityProps) {
             <Entity.Search.ContentHits
               entity={props.entity}
               onClick={props.onContentHitClick}
-              visibleCount={0}
+              visibleCount={props.entity.type === 'agent_session' ? 1 : 0}
             />
           </div>
         </div>

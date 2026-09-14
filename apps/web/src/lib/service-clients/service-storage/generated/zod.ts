@@ -9959,6 +9959,12 @@ export const getItemsSoupResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -13920,6 +13926,12 @@ export const postItemsSoupResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -17322,6 +17334,12 @@ export const postItemsSoupAstResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -20986,6 +21004,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           isPersistent: zod
                             .boolean()
                             .describe('Whether the chat is persistent or not'),
+                          model: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The last model selected for a sent message (`provider\/model` id).'
+                            ),
                           name: zod.string().describe('The name of the chat'),
                           ownerId: zod
                             .string()
@@ -24386,6 +24410,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           isPersistent: zod
                             .boolean()
                             .describe('Whether the chat is persistent or not'),
+                          model: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The last model selected for a sent message (`provider\/model` id).'
+                            ),
                           name: zod.string().describe('The name of the chat'),
                           ownerId: zod
                             .string()

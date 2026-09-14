@@ -52,6 +52,8 @@ use agent_harness::outbound::daytona::{
 use agent_harness::outbound::egress::EgressProvisioner;
 use agent_harness::outbound::forward::RedisCommandForwarder;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
+use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
+use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
 use agent_inmem::domain::engine::TurnEngine;
@@ -59,6 +61,7 @@ use agent_inmem::outbound::acp_mcp::AcpMcpConnector;
 use agent_inmem::outbound::egress_mcp::EgressMcpClient;
 use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
+use agent_inmem::outbound::tool_catalog::McpToolCatalog;
 use agent_inmem::rig_engine::RigTurnEngine;
 use agent_runtime_directory::PgAgentRuntimeDirectory;
 use agent_session::domain::model::{AgentMcpServers, ReplicaId};
@@ -225,6 +228,12 @@ async fn run() -> anyhow::Result<()> {
             .context("failed to create kafka event publisher")?,
         macro_event_broker::GlobalSpawner,
     );
+    let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
+        queue: notification::outbound::queue::SqsQueue::new(
+            aws_sdk_sqs::Client::new(&aws_config),
+            macro_queues::NotificationIngressQueue::new().to_string(),
+        ),
+    });
     let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
@@ -361,6 +370,14 @@ async fn run() -> anyhow::Result<()> {
     // against it, so the two must be the same string.
     let egress_base_url = AgentHarnessEgressUrl::new()?.to_string();
 
+    // Every session's MCP tools, listed for its telemetry the way the harness
+    // itself lists them: through the egress proxy, in process.
+    let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
+        Arc::new(McpToolCatalog::new(Arc::new(AcpMcpConnector::new(
+            EgressMcpClient::new(Arc::clone(&egress), &egress_base_url),
+        ))));
+    let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
+
     let tool_context =
         ai_tools::build_tool_service_context_from_env(pool.clone(), event_broker_tracker.clone())
             .await
@@ -391,7 +408,8 @@ async fn run() -> anyhow::Result<()> {
         turn_observer.clone(),
         lifecycle_publisher.clone(),
         replica,
-    );
+    )
+    .with_tool_catalog(tool_catalog);
     let sandbox_and_inmem = RoutedContainers::new(sandbox, Some(inmem), inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
@@ -463,12 +481,6 @@ async fn run() -> anyhow::Result<()> {
     let containers =
         RoutedContainerManager::new(sandbox_and_inmem, cursor_manager, session_repo.clone());
 
-    let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
-        queue: notification::outbound::queue::SqsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::NotificationIngressQueue::new().to_string(),
-        ),
-    });
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
@@ -478,7 +490,7 @@ async fn run() -> anyhow::Result<()> {
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(connection_gateway.clone()),
-        NotificationChannelSender::new(notifications),
+        NotificationChannelSender::new(Arc::clone(&notifications)),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
     .with_macro_event_broker(broker);
@@ -497,6 +509,8 @@ async fn run() -> anyhow::Result<()> {
         LexicalServiceUrl::new()?.to_string(),
     );
     let announcer = ChannelAnnouncer::new(Arc::clone(&channel_service), lexical.clone());
+    let prompt_mentions =
+        LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
     let prompt_composer = LexicalAgentPromptComposer::new(lexical);
     let prompt_context =
         ChannelPromptContextAdapter::new(channel_service, Arc::clone(&entity_access));
@@ -541,6 +555,10 @@ async fn run() -> anyhow::Result<()> {
         defaults,
         Arc::clone(&lifecycle_publisher),
         pending_commands,
+        prompt_mentions,
+        // Finished / asking / mentioned reach people through the same
+        // notification ingress channel messages use.
+        IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
     ));
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.

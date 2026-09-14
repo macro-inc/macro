@@ -33,8 +33,8 @@ const MENU_STRIP_CLASS =
 
 const SCROLL_STRIP_CLASS =
   // The scrollport clips at its box, so the vertical padding must cover the
-  // full light-mode island shadow bloom (4px offset + 8px spread + 20px blur
-  // = 32px); the matching negative margin cancels its layout impact. The
+  // island's glass shadow bloom (14px offset + 32px blur - 22px spread, well
+  // inside 32px); the matching negative margin cancels its layout impact. The
   // strip is tap-transparent so the enlarged halo never swallows touches
   // meant for content behind it — the content row re-enables pointer events
   // for the pills. A pointer-events:none scroller receives no native scroll
@@ -124,9 +124,7 @@ function PillButton<T extends string>(props: {
       class={cn(
         PILL_CLASS,
         props.item.iconOnly && ICON_PILL_CLASS,
-        props.active
-          ? 'bg-accent text-surface ring-accent'
-          : 'text-ink-extra-muted'
+        props.active ? 'bg-accent text-surface' : 'text-ink-extra-muted'
       )}
       onPointerDown={(e) => {
         e.preventDefault();

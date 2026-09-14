@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   query: { isSuccess: true, isError: false, data: {} as unknown },
   open: vi.fn(),
+  magic: vi.fn(),
   subscribe: vi.fn(() => () => {}),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
@@ -19,6 +20,19 @@ vi.mock('@queries/agent-session/mentions', () => ({
 }));
 vi.mock('@queries/agent-session/session-fold', () => ({
   subscribeAgentSessionLog: mocks.subscribe,
+}));
+vi.mock('./MagicChip', () => ({
+  MagicChip: (props: unknown) => {
+    mocks.magic(props);
+    return <span data-magic-chip>Latest session response</span>;
+  },
+}));
+vi.mock('@core/component/DocumentPreview', () => ({
+  PopupPreview: () => null,
+}));
+vi.mock('@core/component/HoverCard', () => ({
+  HoverCard: (props: { trigger: import('solid-js').JSX.Element }) =>
+    props.trigger,
 }));
 vi.mock('../../plugins', () => ({ autoRegister: vi.fn() }));
 
@@ -40,6 +54,41 @@ beforeEach(() => {
 });
 
 describe('agent session mention rendering', () => {
+  it('mounts the shared Magic Chip with a null message lock only when expanded', () => {
+    const view = render(() => (
+      <AgentSessionMention
+        id="session"
+        label="Saved title"
+        key="node"
+        theme={{}}
+        expanded
+      />
+    ));
+    expect(view.container.querySelector('[data-magic-chip]')).not.toBeNull();
+    expect(mocks.magic).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentSessionId: 'session',
+        promptedMessage: null,
+      })
+    );
+  });
+  it.each(['no_access', 'does_not_exist'])(
+    'does not mount expanded session content for %s',
+    (access) => {
+      mocks.query.data = { access };
+      render(() => (
+        <AgentSessionMention
+          id="session"
+          label="Secret"
+          key="node"
+          theme={{}}
+          expanded
+        />
+      ));
+      expect(mocks.magic).not.toHaveBeenCalled();
+    }
+  );
+
   it('shows only the agent icon and underlined title, and opens the agent block', () => {
     const view = render(() => (
       <AgentSessionMention
@@ -58,6 +107,7 @@ describe('agent session mention rendering', () => {
       screen.getByText('Fix mentions').classList.contains('underline')
     ).toBe(true);
     expect(mocks.subscribe).not.toHaveBeenCalled();
+    expect(mocks.magic).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText('Fix mentions'));
     expect(mocks.open).toHaveBeenCalledWith(
       { type: 'agent', id: 'session' },
@@ -81,6 +131,7 @@ describe('agent session mention rendering', () => {
       fireEvent.click(view.container.firstElementChild!);
       expect(mocks.open).not.toHaveBeenCalled();
       expect(mocks.subscribe).not.toHaveBeenCalled();
+      expect(mocks.magic).not.toHaveBeenCalled();
     }
   );
   it('does not read pending query data or suspend the editor', () => {

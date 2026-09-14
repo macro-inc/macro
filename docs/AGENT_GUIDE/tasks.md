@@ -17,6 +17,9 @@ New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced tas
 
 ## Create a task
 
+On touch devices, task creation opens in a bottom sheet with a drag handle and
+scrollable, keyboard-aware content. Desktop uses the centered composer dialog.
+
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee

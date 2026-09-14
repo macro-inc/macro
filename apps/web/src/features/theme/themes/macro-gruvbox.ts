@@ -57,6 +57,7 @@ export const macroGruvboxTheme = {
     success: 'var(--color-green)',
     warning: 'var(--color-amber)',
     failure: 'var(--color-red)',
-    chrome: '#1d2021',
+    chrome:
+      'color-mix(in oklch, var(--color-surface-0) 85%, var(--color-content-0))',
   },
 } satisfies ThemeV3;

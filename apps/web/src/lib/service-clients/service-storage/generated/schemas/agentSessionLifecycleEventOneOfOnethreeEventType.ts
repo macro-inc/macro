@@ -10,5 +10,5 @@ export type AgentSessionLifecycleEventOneOfOnethreeEventType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const AgentSessionLifecycleEventOneOfOnethreeEventType = {
-  agent_sessionstopped: 'agent_session.stopped',
+  agent_sessionmentioned: 'agent_session.mentioned',
 } as const;

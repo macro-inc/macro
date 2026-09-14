@@ -162,6 +162,17 @@ TypeScript · `[ui]` UI / UX conventions
 - **CS-54** `[rust]` New crates put `#![deny(missing_docs)]` in `lib.rs` and document
   all public items. Do not mark documentation code blocks `ignore` to skip doctests
   unless explicitly directed.
+- **CS-55** `[err]` AI spans follow the OpenTelemetry GenAI conventions (`gen_ai.*`,
+  see `crates/genai_telemetry`). Agent sessions of every harness are traced in one
+  place: the session actor projects each session's ACP frames onto `invoke_agent` /
+  `execute_tool` spans (`crates/agent_session/src/domain/session/telemetry.rs`), so
+  do not add GenAI spans to a harness runtime — `agent_inmem` runs its agent loop with
+  `with_genai_telemetry(false)` for that reason. Outside sessions (chat in
+  `document_cognition_service`), the agent loop and `ai_toolset::ToolSet::try_tool_call`
+  emit and enrich the `invoke_agent` / `chat` / `execute_tool` spans; do not open tool
+  spans in tools or toolsets, and never record prompts, tool arguments or tool results
+  as span fields or logs — they are content, recorded on the spans under the
+  `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` policy and a size budget.
 
 ## Frontend and shared TypeScript (`apps/web`, `packages/`)
 

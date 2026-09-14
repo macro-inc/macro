@@ -2,6 +2,7 @@ use axum::{Router, routing::post};
 
 use crate::api::context::SearchHandlerState;
 
+pub(in crate::api) mod agent_session;
 pub(in crate::api) mod calendar_event;
 pub(in crate::api) mod call_record;
 pub(in crate::api) mod channel;

@@ -65,7 +65,7 @@ impl UserMcpTools {
 }
 
 impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
-    fn try_tool_call<'a>(
+    fn dispatch_tool_call<'a>(
         &'a self,
         context: Context,
         request_context: RequestContext,
@@ -76,10 +76,10 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
     > {
         match self {
             UserMcpTools::Pipedream(tools) => {
-                tools.try_tool_call(context, request_context, tool_name, json)
+                tools.dispatch_tool_call(context, request_context, tool_name, json)
             }
             UserMcpTools::Native(tools) => {
-                tools.try_tool_call(context, request_context, tool_name, json)
+                tools.dispatch_tool_call(context, request_context, tool_name, json)
             }
         }
     }
@@ -298,7 +298,7 @@ impl<T, Mcp> CombinedToolSet<T, Mcp> {
 }
 
 impl<T: Send + Sync + 'static, Mcp: ToolSet<T>> ToolSet<T> for CombinedToolSet<T, Mcp> {
-    fn try_tool_call<'a>(
+    fn dispatch_tool_call<'a>(
         &'a self,
         context: T,
         request_context: RequestContext,
@@ -309,10 +309,10 @@ impl<T: Send + Sync + 'static, Mcp: ToolSet<T>> ToolSet<T> for CombinedToolSet<T
     > {
         if tool_name.starts_with(MANGLED_PREFIX) {
             self.mcp_tools
-                .try_tool_call(context, request_context, tool_name, json)
+                .dispatch_tool_call(context, request_context, tool_name, json)
         } else {
             self.static_tools
-                .try_tool_call(context, request_context, tool_name, json)
+                .dispatch_tool_call(context, request_context, tool_name, json)
         }
     }
 

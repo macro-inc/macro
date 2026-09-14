@@ -59,6 +59,7 @@ fn deleted() -> AgentSessionLifecycleEvent {
                 .expect("valid user id")
                 .into_owned(),
             origin: None,
+            audience: Vec::new(),
         },
     })
 }

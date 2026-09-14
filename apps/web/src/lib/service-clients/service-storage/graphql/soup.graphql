@@ -130,6 +130,7 @@ fragment SoupItemFields on GraphqlSoupEntity {
 	}
 	... on GraphqlSoupChat {
 		chatName: name
+		model
 		ownerId
 		projectId
 		isPersistent
@@ -635,5 +636,46 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 		githubPrReviewReviewUrl: reviewUrl
 		githubPrReviewState: state
 		githubPrReviewReviewSnippet: reviewSnippet
+	}
+	... on GraphqlAgentSessionSettledMetadata {
+		agentSessionSettledSession: session {
+			sessionId
+			sessionName
+			botId
+			botName
+			channelId
+			threadId
+			announcementMessageId
+		}
+		agentSessionSettledTurn: turn
+		agentSessionSettledActor: actor
+		agentSessionSettledStopReason: stopReason
+		agentSessionSettledExcerpt: excerpt
+	}
+	... on GraphqlAgentSessionWaitingForInputMetadata {
+		agentSessionWaitingForInputSession: session {
+			sessionId
+			sessionName
+			botId
+			botName
+			channelId
+			threadId
+			announcementMessageId
+		}
+		agentSessionWaitingForInputTurn: turn
+		agentSessionWaitingForInputQuestion: question
+	}
+	... on GraphqlAgentSessionMentionedMetadata {
+		agentSessionMentionedSession: session {
+			sessionId
+			sessionName
+			botId
+			botName
+			channelId
+			threadId
+			announcementMessageId
+		}
+		agentSessionMentionedMentionedBy: mentionedBy
+		agentSessionMentionedActionId: actionId
 	}
 }

@@ -756,6 +756,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   onMount(() => {
+    splitPanel.handle.setDisplayName('New task');
     const container = containerRef();
     if (container) {
       attachHotkeys(container);

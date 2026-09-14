@@ -1,63 +1,79 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import WideCalendarIcon from '@icon/wide-calendar.svg';
-import { AnimatedCallIcon } from '@icon/wide-call';
-import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedEmailIcon } from '@icon/wide-email';
-import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
-import { AnimatedInboxIcon } from '@icon/wide-inbox';
-import { AnimatedStarIcon } from '@icon/wide-star';
-import { AnimatedTaskIcon } from '@icon/wide-task';
-import BellIcon from '@phosphor/bell-simple.svg';
-import { type Accessor, createMemo } from 'solid-js';
+import BellIcon from '@phosphor/bell.svg';
+import CalendarIcon from '@phosphor/calendar-blank.svg';
+import ChatsIcon from '@phosphor/chats-circle.svg';
+import EmailIcon from '@phosphor/envelope.svg';
+import FilesIcon from '@phosphor/folder-simple.svg';
+import TasksIcon from '@phosphor/list-checks.svg';
+import CallsIcon from '@phosphor/phone.svg';
+import AgentsIcon from '@phosphor/sparkle.svg';
+import BellFillIcon from '@phosphor-fill/bell-fill.svg';
+import CalendarFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
+import ChatsFillIcon from '@phosphor-fill/chats-circle-fill.svg';
+import EmailFillIcon from '@phosphor-fill/envelope-fill.svg';
+import FilesFillIcon from '@phosphor-fill/folder-simple-fill.svg';
+import { createMemo } from 'solid-js';
 import type { MobileTouchIconComponent } from './MobileTouchMenu';
 import type { MobileNavViewId } from './mobile-nav-views';
 
 export type MobileDockView = {
   id: Exclude<MobileNavViewId, 'search' | 'settings'>;
   label: string;
-  /** Views-menu row icon (animated where available). */
+  /** Same Phosphor glyph as the desktop sidebar. */
   icon: MobileTouchIconComponent;
-  /** Plain svg icons (e.g. the calendar) don't accept `triggerAnimation`. */
-  animateIcon?: boolean;
+  iconActive?: MobileTouchIconComponent;
   /** When set, the scope pill renders icon-only with this icon. */
   pillIcon?: MobileTouchIconComponent;
 };
 
 /**
- * The navigation views shared by the search scope pills (MobileViewsRow) and
- * the dock's Views menu (MoreViewsMenu), in canonical order: the pill row
- * renders it as-is after the "All" pill, the menu reversed so Notifications stays
- * nearest the thumb. "All" (pills only) and Settings (menu only) are
- * per-surface additions at the edges.
+ * Shared navigation order for the dock and search scope pills. The dock shows
+ * as many views as fit and puts the remainder in More. All and Settings are
+ * added by their respective surfaces.
  */
-const MOBILE_DOCK_VIEWS: MobileDockView[] = [
+const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
   {
     id: 'inbox',
     label: 'Notifications',
-    icon: AnimatedInboxIcon,
+    icon: BellIcon,
+    iconActive: BellFillIcon,
     pillIcon: BellIcon,
   },
   {
     id: 'calendar',
     label: 'Calendar',
-    icon: WideCalendarIcon,
-    animateIcon: false,
-    pillIcon: WideCalendarIcon,
+    icon: CalendarIcon,
+    iconActive: CalendarFillIcon,
+    pillIcon: CalendarIcon,
   },
-  { id: 'mail', label: 'Email', icon: AnimatedEmailIcon },
-  { id: 'channels', label: 'Channels', icon: AnimatedChannelIcon },
-  { id: 'documents', label: 'Files', icon: AnimatedFileMdIcon },
-  { id: 'agents', label: 'Agents', icon: AnimatedStarIcon },
-  { id: 'tasks', label: 'Tasks', icon: AnimatedTaskIcon },
-  { id: 'calls', label: 'Calls', icon: AnimatedCallIcon },
+  {
+    id: 'mail',
+    label: 'Email',
+    icon: EmailIcon,
+    iconActive: EmailFillIcon,
+  },
+  {
+    id: 'channels',
+    label: 'Channels',
+    icon: ChatsIcon,
+    iconActive: ChatsFillIcon,
+  },
+  {
+    id: 'documents',
+    label: 'Files',
+    icon: FilesIcon,
+    iconActive: FilesFillIcon,
+  },
+  { id: 'agents', label: 'Agents', icon: AgentsIcon },
+  { id: 'tasks', label: 'Tasks', icon: TasksIcon },
+  { id: 'calls', label: 'Calls', icon: CallsIcon },
 ];
 
-/** The dock views with feature gating applied (the calendar UI flag). */
-export function useMobileDockViews(): Accessor<MobileDockView[]> {
-  const calendarUiEnabled = useCalendarUiFlag();
+export function useMobileDockViews() {
+  const calendarEnabled = useCalendarUiFlag();
   return createMemo(() =>
     MOBILE_DOCK_VIEWS.filter(
-      (view) => view.id !== 'calendar' || calendarUiEnabled()
+      (view) => view.id !== 'calendar' || calendarEnabled()
     )
   );
 }

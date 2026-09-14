@@ -5,10 +5,12 @@
  * shimmer while the turn is in flight.
  */
 
+import { messageSendMotion } from '@core/util/message-send-motion';
 import type {
   FoldedMessage,
   MessagePart,
 } from '@service-agent-fold/generated/types';
+import { UserMessageBubble } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
@@ -79,13 +81,21 @@ function showsWorkingLine(message: FoldedMessage): boolean {
 /**
  * A prompt, in the chat block's user-bubble treatment
  * (`@core/component/AI/component/message/UserMessage.tsx`): right-aligned,
- * rounded gray surface with a hairline border.
+ * rounded, filled surface shared with production chat.
  */
 function UserMessage(props: { message: FoldedMessage }) {
   return (
-    <div class="flex w-full">
-      {/* Phone: a full-width card. Desktop: hugs the text, right-aligned. */}
-      <div class="relative w-full overflow-hidden rounded-lg border border-edge-muted bg-hover px-3 py-2 text-ink md:ml-auto md:w-auto md:max-w-[calc(100%-8rem)]">
+    <div
+      class="flex w-full"
+      ref={(el) =>
+        messageSendMotion(el, () =>
+          props.message.requestId
+            ? `agent:${props.message.agentSessionId}:${props.message.requestId}`
+            : undefined
+        )
+      }
+    >
+      <UserMessageBubble>
         <For each={props.message.parts}>
           {(part, index) => (
             <AgentMessagePart
@@ -96,7 +106,7 @@ function UserMessage(props: { message: FoldedMessage }) {
             />
           )}
         </For>
-      </div>
+      </UserMessageBubble>
     </div>
   );
 }

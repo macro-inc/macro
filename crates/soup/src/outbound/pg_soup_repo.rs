@@ -455,6 +455,7 @@ macro_rules! map_soup_type {
                 ::models_soup::chat::SoupChat {
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
                     name: r.name,
+                    model: r.model,
                     owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
                         .map_err(type_err)?
                         .into_owned(),

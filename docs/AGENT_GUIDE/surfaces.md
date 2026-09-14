@@ -60,6 +60,19 @@ an unread badge. Applying the active Inbox preset preserves read/unread selectio
 read (`seen` or `done`) narrows to `seen`, not to all active states. Email read/unread
 is separate from notification lifecycle state.
 
+Agent sessions notify through the same inbox. `<bot> finished <session>` goes to the
+owner and everyone who has prompted or answered in that session when a turn ends with
+nothing queued; `<bot> needs your answer in <session>` goes to the same people when the
+agent stops to ask (anyone with edit access may answer); `<user> mentioned you in <session>`
+goes to users @-mentioned in a prompt - when the author can edit the session, the mention
+grants them edit access first, so the link leads somewhere they can act. All three are
+filed under the session itself: the inbox shows an agent-session row (agent icon, session
+name, the bot or mentioner as sender, the excerpt or question as the body) and clicking it
+opens the session. They are
+not retracted automatically yet: answering the question or starting the next turn leaves
+the earlier notification until you mark it done. The chip announcement post itself no
+longer notifies the thread. Settings → notifications lists them under `AI`.
+
 ## Tasks — `/app/component/tasks`
 
 Task navigation uses `My Tasks`, `All Tasks`, and `Created by me`. The desktop
@@ -122,7 +135,9 @@ Threads open at `/app/email/<thread-id>`. Click a message header to expand or
 collapse it; `Show N hidden messages` reveals the collapsed middle of a longer
 conversation. A link with `?email_message_id=<message-id>` reveals that message.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
-body and its attachments.
+body and its attachments. On phones, messages form flat rows with horizontal
+separators and 16px side gutters; collapsed previews show one line. Desktop
+keeps the framed cards.
 Replies appear inline on desktop and in a composer drawer on touch devices.
 `R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
 or the latest message when none is selected. `F` opens a forward and focuses To.
@@ -180,12 +195,26 @@ Sidebar `Search` button → `/app/.../component/search` with a focused query box
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
+Agent-session results use the robot icon and show a highlighted transcript snippet.
+`Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
+Click a snippet to open `/app/agent/<uuid>` at that folded message; a plain row click
+opens the first content match, or opens the session normally for a title-only hit. These are
+ACP-backed sessions, distinct from legacy chat results. Legacy chat rename, delete,
+copy, and move-to-folder actions are not offered on agent-session search rows.
+
 ## Files — `/app/component/documents`
 
 Tabs `Owned` / `Shared` / `Attachments` / `Folders` / `All`; `New` menu; rows show title,
 tags, updated time. Clicking a row opens the doc.
 
 ## Calendar — `/app/calendar/view`
+
+Calendars default to Day on phones and Week on desktop. The selected view is
+remembered locally on each device.
+
+Calendar event creation and editing open in a bottom sheet on touch devices,
+with scrollable content above the keyboard. Desktop retains the centered dialog.
+Dismissing a changed event still asks before discarding the draft.
 
 Week view with `New event`, `Choose calendar view` menu, prev/next week, `Search events`,
 `Calendar settings`, and a mini month picker in the side panel. Events require connecting a
@@ -211,13 +240,14 @@ pill to primary calendars, and shows a `Decline meetings` pill (`Don't decline m
 `Decline message` pill; a warning note discloses the away/auto-decline effect before saving.
 When editing an existing event the kind is read-only (Google treats it as immutable), and an
 out-of-office event's decline settings can still be changed — they read as unset because the
-provider does not report the stored ones. Out-of-office events render on the grid as solid
-chips filled with their calendar color (like Google), unlike regular events' outlined chips,
-and their details card shows an `Out of office` line under the schedule.
+provider does not report the stored ones. Timed and all-day events use solid calendar-color
+blocks with dark text on desktop and mobile. Unanswered and tentative invitations have
+lighter fills; declined events are desaturated and struck through. Month-view timed events
+keep their compact dot treatment. Out-of-office details show an `Out of office` line under
+the schedule.
 An event that Google carries on several of an account's calendars (a shared calendar's
 re-import of a member's own event, for example) renders as one chip, not one per calendar:
-the chip carries one thin color bar on its left edge per shown calendar the event is on
-(the details popover's color square splits the same way), and shows the title, color, and
+the details popover's color square shows its calendars. The chip shows the title, color, and
 editability of the first shown copy in primary-first order — hiding the primary calendar
 switches the chip to the shared copy, hiding every one of its calendars hides the chip.
 Reminders, guests, and conferencing always show and follow the primary copy, since that is
@@ -323,3 +353,28 @@ Staff Noise emails still create in-app notification rows, but do not send a new-
 event over GraphQL or the legacy WebSocket gateway, so they do not trigger browser popups.
 Those rows are available on the next fetch/refetch. Signal delivery and the existing
 staff/customer eligibility rules are unchanged; no browser eligibility request is needed.
+
+Discussion composers on companies, contacts, documents, tasks, and PRs use the
+shared channel/AI glass surface, 22px desktop corners, 15px desktop text, and
+a circular neutral Send button. Document comment replies/edits and Edit with AI
+use the same composer treatment. Attachment and formatting actions stay available.
+
+On touch devices, an email thread's floating action bar has Previous email and
+Next email arrows beside the larger Mark done checkmark. The arrows follow the
+source list's filtered order, skip non-email items, and disable at its ends.
+They do not wrap; a thread opened without a source list has disabled arrows.
+Mark done archives the current thread and opens the next email in that same
+filtered list, loading pages until another email is found or the list ends.
+On native mobile, stepping replaces the current email while preserving the
+filtered list behind it for swipe-back. This works with both the legacy mobile
+list and the newer app views. To verify, open the first email from Signal or
+Noise, tap Next and then Previous, and swipe back to the same filtered list.
+Leaving the email cancels pending
+navigation and archiving while a page loads. At the end it opens the previous
+email; with no neighboring email it stays on the archived thread. Mark as not done
+does not advance. Undo restores the archived email and returns to it.
+
+The mobile reply/forward drawer uses matching circular glass buttons for
+discard, attachments, and send, with the dock's button/icon sizing and regular
+Phosphor icons. Send remains disabled until the draft is valid and shows a
+spinner while sending.

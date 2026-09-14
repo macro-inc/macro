@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT entity_id\n        FROM entity_access\n        WHERE entity_type = 'agent_session'\n          AND source_id = ANY($1)\n          AND (cardinality($2::uuid[]) = 0 OR entity_id = ANY($2))\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "04a02e2ea3a0fda139f1f1bf0398760e96a367cb525d0a551639f12e2b39ef4f"
+}

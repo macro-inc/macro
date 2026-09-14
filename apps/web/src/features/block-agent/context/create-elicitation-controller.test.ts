@@ -2,8 +2,8 @@
  * @vitest-environment jsdom
  *
  * The controller against a mocked harness client: an answer is one POST on
- * the agent's request id, only the owner may send it, a 409 is said once,
- * and the owner is named for everyone else.
+ * the agent's request id, only a viewer with edit access may send it, and a
+ * 409 is said once.
  */
 
 import type { PendingElicitation } from '@service-agent-fold/generated/types';
@@ -36,12 +36,6 @@ vi.mock('@service-agent-harness/client', () => ({
 const toast = vi.hoisted(() => ({ failure: vi.fn(), success: vi.fn() }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast }));
 
-vi.mock('@core/user', () => ({
-  tryMacroId: (id: string) => (id.startsWith('macro|') ? id : undefined),
-  getDisplayName: (id: string) =>
-    id === 'macro|alice@macro.com' ? 'Alice Owner' : '',
-}));
-
 const question: PendingElicitation = {
   requestId: 43,
   turn: 0,
@@ -53,22 +47,16 @@ const question: PendingElicitation = {
   },
 };
 
-function setup(options?: { ownerId?: string; viewerId?: string }) {
+function setup(options: { canEdit?: boolean } = { canEdit: true }) {
   const [pending, setPending] = createSignal<PendingElicitation | undefined>(
     question
   );
-  const [ownerId] = createSignal<string | undefined>(
-    'ownerId' in (options ?? {}) ? options?.ownerId : 'macro|alice@macro.com'
-  );
-  const [viewerId] = createSignal<string | undefined>(
-    'viewerId' in (options ?? {}) ? options?.viewerId : 'macro|alice@macro.com'
-  );
+  const [canEdit] = createSignal<boolean | undefined>(options.canEdit);
   const { controller, dispose } = createRoot((dispose) => ({
     controller: createElicitationController({
       sessionId: () => 'session-1',
       pending,
-      ownerId,
-      viewerId,
+      canEdit,
     }),
     dispose,
   }));
@@ -104,10 +92,9 @@ describe('createElicitationController', () => {
     dispose();
   });
 
-  it('a viewer who is not the owner cannot answer, and knows who can', async () => {
-    const { controller, dispose } = setup({ viewerId: 'macro|bob@macro.com' });
+  it('a viewer without edit access cannot answer', async () => {
+    const { controller, dispose } = setup({ canEdit: false });
     expect(controller.canAnswer()).toBe(false);
-    expect(controller.ownerName()).toBe('Alice Owner');
     const sent = await controller.respond({ action: 'decline' });
     expect(sent).toBe(false);
     expect(control.calls).toEqual([]);
@@ -115,9 +102,8 @@ describe('createElicitationController', () => {
   });
 
   it('nobody can answer before the session has loaded', () => {
-    const { controller, dispose } = setup({ ownerId: undefined });
+    const { controller, dispose } = setup({ canEdit: undefined });
     expect(controller.canAnswer()).toBe(false);
-    expect(controller.ownerName()).toBe('the session owner');
     dispose();
   });
 

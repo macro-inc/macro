@@ -65,7 +65,10 @@ vi.mock('@service-agent-harness/client', () => ({
     get: vi.fn(() => worker.getSession()),
     getLog: vi.fn(async () => ({
       isErr: () => false,
-      value: { bot: { id: 'bot', name: 'Agent' }, entries: [] },
+      value: {
+        bot: { id: 'bot', name: 'Agent', handle: 'agent' },
+        entries: [],
+      },
     })),
   },
 }));

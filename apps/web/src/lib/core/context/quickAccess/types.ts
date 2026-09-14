@@ -1,6 +1,7 @@
 import type { IUser } from '@core/user/types';
 import type { DateValue } from '@core/util/date';
 import type {
+  AgentSessionEntity,
   ChannelEntity,
   ChatEntity,
   CrmCompanyEntity,
@@ -30,7 +31,8 @@ export type Bucket =
   | 'chat'
   | 'project'
   | 'email'
-  | 'crm_company';
+  | 'crm_company'
+  | 'agent_session';
 
 export type EntityBucket = Exclude<Bucket, 'person'>;
 
@@ -47,6 +49,7 @@ const ALL_BUCKETS: Bucket[] = [
   'project',
   'email',
   'crm_company',
+  'agent_session',
 ];
 
 export type BucketCombination = 'all' | 'channels' | 'documents';
@@ -131,6 +134,7 @@ export type BucketItemMap = {
   project: EntityItem<ProjectEntity>;
   email: EntityItem<EmailEntity>;
   crm_company: EntityItem<CrmCompanyEntity>;
+  agent_session: EntityItem<AgentSessionEntity>;
   person: UserItem;
 };
 

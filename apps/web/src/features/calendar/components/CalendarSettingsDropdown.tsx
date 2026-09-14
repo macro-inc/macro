@@ -337,7 +337,7 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
         class="shrink-0 rounded-full"
         aria-label="Calendar settings"
       >
-        <GearIcon class="size-3.5" />
+        <GearIcon class="size-6" />
       </MobileDrawer.Trigger>
 
       <MobileDrawer.Portal>

@@ -12,13 +12,11 @@ const sessionFold = vi.hoisted(() => ({
   subscribeAgentSessionLog: vi.fn(),
 }));
 const serviceClient = vi.hoisted(() => ({ get: vi.fn(), control: vi.fn() }));
-const viewer = vi.hoisted(() => ({ id: 'macro|wolf@macro.com' }));
 
 vi.mock('@queries/agent-session/session-fold', () => sessionFold);
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: serviceClient,
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => viewer.id }));
 vi.mock('@core/user', () => ({
   tryMacroId: (id: string) => (id.startsWith('macro|') ? id : undefined),
   getDisplayName: (id: string) =>
@@ -87,7 +85,6 @@ const settle = async () => {
 describe('createMagicChipModel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    viewer.id = 'macro|wolf@macro.com';
     sessionFold.subscribeAgentSessionLog.mockReturnValue(vi.fn());
     sessionFold.acquireAgentSessionFold.mockResolvedValue({
       messages: [prompt, response],
@@ -99,9 +96,82 @@ describe('createMagicChipModel', () => {
       value: {
         status: { kind: 'disconnected' },
         ownerId: 'macro|alice@macro.com',
+        canEdit: true,
       },
     });
     serviceClient.control.mockResolvedValue({ isErr: () => false });
+  });
+
+  it('follows the latest turn and streaming updates without rewinding for late patches', async () => {
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const release = vi.fn();
+    sessionFold.acquireAgentSessionFold.mockResolvedValue({
+      messages: [prompt, response],
+      metadata: metadata(null),
+      release,
+    });
+    const dispose = createRoot((dispose) => {
+      model = createMagicChipModel({ ...props, promptedMessage: null });
+      return dispose;
+    });
+    await settle();
+    expect(model.presentation()).toEqual({ kind: 'settled', markdown: 'Hi!' });
+    const callbacks = sessionFold.acquireAgentSessionFold.mock.calls[0]![0];
+    callbacks.onChange([{ ...prompt, turn: 3 }]);
+    expect(model.presentation()).not.toMatchObject({ markdown: 'Hi!' });
+    callbacks.onChange([
+      {
+        ...openResponse,
+        turn: 3,
+        parts: [{ kind: 'text', text: 'Newest stream' }],
+      },
+    ]);
+    expect(model.presentation()).toMatchObject({
+      kind: 'answering',
+      markdown: 'Newest stream',
+    });
+    callbacks.onChange([
+      {
+        ...response,
+        turn: 1,
+        parts: [{ kind: 'text', text: 'Late old patch' }],
+      },
+    ]);
+    expect(model.presentation()).toMatchObject({ markdown: 'Newest stream' });
+    callbacks.onChange([
+      {
+        ...response,
+        turn: 3,
+        parts: [{ kind: 'text', text: 'Newest answer' }],
+      },
+    ]);
+    expect(model.presentation()).toEqual({
+      kind: 'settled',
+      markdown: 'Newest answer',
+    });
+    callbacks.onMetadata(metadata({ ...question, turn: 4 }));
+    expect(model.presentation()).toMatchObject({
+      kind: 'asking',
+      asking: { question: { turn: 4 } },
+    });
+    dispose();
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an explicit message lock when later turns arrive', async () => {
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const dispose = createRoot((dispose) => {
+      model = createMagicChipModel(props);
+      return dispose;
+    });
+    await settle();
+    const callbacks = sessionFold.acquireAgentSessionFold.mock.calls[0]![0];
+    callbacks.onChange([
+      { ...response, turn: 3, parts: [{ kind: 'text', text: 'New turn' }] },
+    ]);
+    callbacks.onMetadata(metadata({ ...question, turn: 3 }));
+    expect(model.presentation()).toEqual({ kind: 'settled', markdown: 'Hi!' });
+    dispose();
   });
 
   it('settles after the attached turn completes despite stale acp_ready status', async () => {
@@ -170,8 +240,7 @@ describe('createMagicChipModel', () => {
     dispose();
   });
 
-  it('offers a question asked in its turn, to the owner, and answers on the request id', async () => {
-    viewer.id = 'macro|alice@macro.com';
+  it('offers a question asked in its turn to an editor, and answers on the request id', async () => {
     sessionFold.acquireAgentSessionFold.mockResolvedValue({
       messages: [prompt, openResponse],
       metadata: metadata(question),
@@ -188,7 +257,7 @@ describe('createMagicChipModel', () => {
     expect(model.presentation()).toEqual({
       kind: 'asking',
       markdown: 'Setting that up.',
-      asking: { question, canAnswer: true, ownerName: 'Alice Owner' },
+      asking: { question, canAnswer: true },
     });
     expect(await model.elicitation.respond({ action: 'decline' })).toBe(true);
     expect(serviceClient.control).toHaveBeenCalledWith('session', {
@@ -206,6 +275,14 @@ describe('createMagicChipModel', () => {
       metadata: metadata(question),
       release: vi.fn(),
     });
+    serviceClient.get.mockResolvedValue({
+      isOk: () => true,
+      value: {
+        status: { kind: 'disconnected' },
+        ownerId: 'macro|alice@macro.com',
+        canEdit: false,
+      },
+    });
     let model!: ReturnType<typeof createMagicChipModel>;
     const dispose = createRoot((rootDispose) => {
       model = createMagicChipModel(props);
@@ -218,7 +295,6 @@ describe('createMagicChipModel', () => {
     expect(presentation.kind).toBe('asking');
     if (presentation.kind === 'asking') {
       expect(presentation.asking.canAnswer).toBe(false);
-      expect(presentation.asking.ownerName).toBe('Alice Owner');
     }
     expect(await model.elicitation.respond({ action: 'decline' })).toBe(false);
     expect(serviceClient.control).not.toHaveBeenCalled();

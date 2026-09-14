@@ -58,6 +58,8 @@ export type ViewShellLayout = {
 
 type ViewShellInternal = ViewShellLayout & { id: string };
 
+const RESIZE_GUTTER = 1;
+
 const ViewShellContext = createContext<ViewShellInternal>();
 
 function useViewShellInternal(): ViewShellInternal {
@@ -193,7 +195,12 @@ function Root(props: ViewShellRootProps) {
     if (currentWidth === undefined) return false;
 
     const asideMin = asideMode() === 'docked' ? asideLayout().min : 0;
-    const minimumWidth = asideMin + mainLayout().min + detailLayout().min;
+    const panelCount = asideMode() === 'docked' ? 3 : 2;
+    const minimumWidth =
+      asideMin +
+      mainLayout().min +
+      detailLayout().min +
+      (panelCount - 1) * RESIZE_GUTTER;
     return currentWidth >= minimumWidth;
   };
 
@@ -245,7 +252,11 @@ function Root(props: ViewShellRootProps) {
         data-view-shell=""
         data-view-shell-layout={atLayoutBreakpoint() ? layoutKey() : undefined}
       >
-        <Resize.Zone direction="horizontal" resizable={resizable()}>
+        <Resize.Zone
+          direction="horizontal"
+          gutter={RESIZE_GUTTER}
+          resizable={resizable()}
+        >
           {local.children}
         </Resize.Zone>
       </div>
@@ -284,7 +295,9 @@ function Aside(props: ViewShellAsideProps) {
     }
 
     const availableForAside =
-      shellWidth - Math.max(mainLayout.preferredWidth, mainLayout.min);
+      shellWidth -
+      RESIZE_GUTTER -
+      Math.max(mainLayout.preferredWidth, mainLayout.min);
 
     return Math.min(layout.width, Math.max(layout.min, availableForAside));
   };
@@ -366,7 +379,7 @@ function Header(props: JSX.HTMLAttributes<HTMLElement>) {
     <header
       {...rest}
       class={cn(
-        'shrink-0 px-4 py-4 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)]',
+        'shrink-0 border-b border-edge touch:border-b-0 px-4 py-4 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)]',
         local.class
       )}
       data-view-shell-header=""

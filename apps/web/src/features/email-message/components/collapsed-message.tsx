@@ -45,7 +45,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
           </EmailUserTooltip>
         </div>
       </div>
-      <div class="min-w-0 text-sm text-ink-extra-muted overflow-hidden text-ellipsis whitespace-nowrap @max-[480px]/message:col-span-full @max-[480px]/message:row-start-2 @max-[480px]/message:whitespace-normal @max-[480px]/message:line-clamp-2">
+      <div class="min-w-0 text-sm text-ink-extra-muted overflow-hidden text-ellipsis whitespace-nowrap @max-[480px]/message:col-span-full @max-[480px]/message:row-start-2 @max-[480px]/message:whitespace-normal @max-[480px]/message:line-clamp-2 mobile:line-clamp-1">
         {snippet()}
       </div>
       <Show when={props.message.internal_date_ts}>

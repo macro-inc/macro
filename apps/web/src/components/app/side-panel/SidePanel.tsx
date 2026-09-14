@@ -256,12 +256,12 @@ function SidePanelHeaderToggle() {
   const ToggleButton = () => (
     <Button
       depth={2}
-      variant="outline"
+      variant={isTouchDevice() ? 'ghost' : 'outline'}
       size="icon-sm"
       class={cn(
         !isTouchDevice() && 'bg-surface',
         isTouchDevice() &&
-          'border-transparent! hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
+          'rounded-full border-0 hover:bg-transparent! active:bg-transparent! focus-visible:bg-transparent! active:text-accent',
         isTouchDevice() && ctx.isOpen() && 'text-accent'
       )}
       tooltip={ctx.isOpen() ? 'Hide Side Panel' : 'Show Side Panel'}

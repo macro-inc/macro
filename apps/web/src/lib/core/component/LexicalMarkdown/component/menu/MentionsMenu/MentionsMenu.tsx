@@ -13,8 +13,6 @@ import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
-import { searchAgentSessionMentions } from '@queries/agent-session/mention-types';
-import { useRecentAgentSessionMentions } from '@queries/agent-session/mentions';
 import type { HistoryItem as Item } from '@queries/history/history';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { createVirtualizer } from '@tanstack/solid-virtual';
@@ -101,26 +99,19 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const sessionsEnabled = () =>
     !hasCustomEntities() &&
     (!props.sources || props.sources.includes('agentSessions'));
-  const sessionQuery = useRecentAgentSessionMentions(
-    () => props.menu.isOpen() && sessionsEnabled()
-  );
-  const agentSessions = createLazyMemo((): AgentSessionMentionItem[] => {
-    if (!sessionsEnabled() || !sessionQuery.isSuccess) return [];
-    return searchAgentSessionMentions(sessionQuery.data, searchTerm()).map(
-      (data) => ({
-        kind: 'agentSession',
-        id: data.id,
-        data,
-        searchText: `${data.name} ${data.bot?.name ?? ''}`,
-        timestamps: {
-          createdAt: new Date(data.createdAt),
-          updatedAt: new Date(data.updatedAt),
-        },
-      })
-    );
-  });
-
   const quickAccess = hasCustomEntities() ? undefined : useQuickAccess();
+  const sessionList = quickAccess?.useList({
+    buckets: ['agent_session'],
+    searchTerm: activeSearchTerm,
+    enabled: sessionsEnabled,
+  });
+  const agentSessions = createLazyMemo((): AgentSessionMentionItem[] =>
+    (sessionList?.items() ?? []).map((item) => ({
+      ...item,
+      kind: 'agentSession',
+    }))
+  );
+
   const allItems = props.entities ?? quickAccess!.useList().items;
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -266,8 +257,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const combined: MentionItem[] = [
       ...users,
       ...(docs() ?? []),
-      ...agentSessions(),
       ...(channels() ?? []),
+      ...agentSessions(),
       ...(companies() ?? []),
       ...(emails() ?? []),
       ...(dates() ?? []),
@@ -314,12 +305,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     const buckets: BucketConfig[] = [
       {
-        id: 'agentSessions',
-        label: 'Recent agent sessions',
-        getData: agentSessions,
-        getFullCount: () => agentSessions().length,
-      },
-      {
         id: 'users',
         label: groups().length > 0 ? 'People & Groups' : 'People',
         getData: () => usersAndGroups() ?? [],
@@ -342,6 +327,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         hasMore: channelsMention.hasMore,
         isLoadingMore: channelsMention.isLoadingMore,
         loadMore: channelsMention.loadMore,
+      },
+      {
+        id: 'agentSessions',
+        label: 'Recent agent sessions',
+        getData: agentSessions,
+        getFullCount: () => agentSessions().length,
       },
       {
         id: 'companies',
@@ -620,10 +611,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             clickOutside(el, () => clickOutsideHandler);
           }}
         >
-          <Surface
-            depth={2}
-            class="pt-2 pb-1.5 shadow-lg shadow-drop-shadow rounded-xl"
-          >
+          <Surface depth={2} class="pt-2 pb-1.5 glass bg-menu-glass rounded-xl">
             <Show
               when={controller.viewAllMode()}
               fallback={

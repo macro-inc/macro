@@ -287,6 +287,8 @@ pub struct SessionBot {
     pub id: BotId,
     /// Display name.
     pub name: String,
+    /// Stable `@` handle, without a leading `@`.
+    pub handle: String,
     /// Avatar, when it has one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,

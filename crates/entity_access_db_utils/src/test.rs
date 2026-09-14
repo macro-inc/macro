@@ -19,6 +19,51 @@ const CHAT_CHILD_ID: Uuid = Uuid::from_u128(0x66666666_6666_6666_6666_6666666666
 const CHAT_ROOT_ID: Uuid = Uuid::from_u128(0x77777777_7777_7777_7777_777777777777);
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bulk_user_upsert_raises_viewers_and_adds_strangers_but_leaves_the_owner(
+    pool: Pool<Postgres>,
+) {
+    let session_id = Uuid::from_u128(0x77777777_7777_7777_7777_777777777779);
+    let owner = MacroUserIdStr::try_from_email("owner@macro.com").unwrap();
+    let viewer = MacroUserIdStr::try_from_email("viewer@macro.com").unwrap();
+    let stranger = MacroUserIdStr::try_from_email("stranger@macro.com").unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    for (user, level) in [(&owner, AccessLevel::Owner), (&viewer, AccessLevel::View)] {
+        insert_entity_access_for_test(
+            &mut tx,
+            &session_id,
+            EntityType::AgentSession,
+            user.as_ref(),
+            EntityAccessSourceType::User,
+            level,
+            None,
+        )
+        .await;
+    }
+    tx.commit().await.unwrap();
+
+    upsert_user_entity_access_bulk(
+        &pool,
+        &[owner.clone(), viewer.clone(), stranger.clone()],
+        &session_id,
+        EntityType::AgentSession,
+        AccessLevel::Edit,
+    )
+    .await
+    .unwrap();
+
+    let rows = fetch_entity_access_rows(&pool, &session_id, EntityType::AgentSession).await;
+    let level_of = |user: &MacroUserIdStr<'_>| {
+        rows.iter()
+            .find(|row| row.source_id == user.as_ref())
+            .map(|row| row.access_level)
+            .expect("a row for every user")
+    };
+    assert_eq!(level_of(&owner), AccessLevel::Owner);
+    assert_eq!(level_of(&viewer), AccessLevel::Edit);
+    assert_eq!(level_of(&stranger), AccessLevel::Edit);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn session_channel_edit_grant_is_idempotent_and_removable(pool: Pool<Postgres>) {
     let session_id = Uuid::from_u128(0x77777777_7777_7777_7777_777777777778);
     for _ in 0..2 {

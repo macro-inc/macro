@@ -58,6 +58,7 @@ export {
   CommandMenuShell,
   createCommandListController,
 } from './components/CommandMenuPrimitives';
+export { ComposerSurface } from './components/ComposerSurface';
 export type {
   ConfirmDialogDisplayProps,
   ConfirmDialogProps,
@@ -164,6 +165,7 @@ export type {
 export { Toolbar } from './components/Toolbar';
 export type { TooltipClassOptions } from './components/Tooltip';
 export { Tooltip, tooltipClasses } from './components/Tooltip';
+export { UserMessageBubble } from './components/UserMessageBubble';
 export { cn } from './utils/classname';
 export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';
 export {

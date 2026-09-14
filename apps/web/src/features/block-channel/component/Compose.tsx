@@ -39,7 +39,7 @@ import {
 } from '@core/util/upload';
 import InfoIcon from '@phosphor/info.svg';
 import { useCreateChannelMutation } from '@queries/channel/channels';
-import { Surface } from '@ui';
+import { ComposerSurface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
 export function ChannelCompose() {
@@ -271,11 +271,7 @@ export function ChannelCompose() {
                 input={inputState.view()}
                 commands={inputState.commands}
               >
-                <Surface
-                  depth={2}
-                  class="rounded-xl touch:rounded-3xl ring ring-edge"
-                  style={{ border: '0' }}
-                >
+                <ComposerSurface>
                   <Input.DropZone
                     onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
                     onDragEnd={() => inputState.setIsDraggedOver(false)}
@@ -331,7 +327,7 @@ export function ChannelCompose() {
                       </Input.Footer>
                     </Input.Layout>
                   </Input.DropZone>
-                </Surface>
+                </ComposerSurface>
               </Input.Root>
             </ChannelInputContainer>
           </div>

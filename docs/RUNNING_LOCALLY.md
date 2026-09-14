@@ -184,6 +184,17 @@ across instances) debugging containers:
 See `.claude/skills/live-debug/SKILL.md` for query recipes (Tempo/Loki HTTP
 APIs) and the browser-debugging workflow.
 
+For agent turns, use Tempo's TraceQL query
+`{span.gen_ai.operation.name="invoke_agent"}`. The session actor records the
+ACP prompt, output and tool activity on that trace and sends its context in
+`params._meta["macro.dev/trace-context"]`. Macro's in-process runtime restores
+that context so its model calls and backend work appear in the same trace.
+Other runtimes must explicitly consume this metadata to correlate their
+internal spans; their ACP activity is still traced by the session actor.
+
+GenAI content is bounded by `genai_telemetry`; check
+`macro.genai.content_truncated` before using a span for evaluations.
+
 ## Control the Running Stack
 
 While `run_local` is attached:

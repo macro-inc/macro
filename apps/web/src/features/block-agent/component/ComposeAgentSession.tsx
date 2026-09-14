@@ -294,6 +294,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
     true
   );
   onMount(() => {
+    splitPanel.handle.setDisplayName('New agent session');
     const container = containerRef();
     if (container) attachHotkeys(container);
   });

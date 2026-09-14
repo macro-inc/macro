@@ -61,6 +61,24 @@ changes roll back rather than becoming committed local favorites.
 
 ## Create menu
 
+On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
+Calendar, Email, Channels, Files, Agents, Tasks, Calls. Calendar appears in the
+dock and search scope pills only when the calendar UI flag is enabled.
+Resizing the screen moves views between the dock
+and More views, which always includes Settings and lists the overflow views in
+reverse order. More and the separate bottom-right Search button always retain
+their space. Search opens the search input and scope pills.
+Once every view fits, the navigation island stops growing; Search stays aligned
+to the right edge.
+
+The separate button one row above Search opens the current page's creation
+flow directly: new task on Tasks, email on Email, message on Channels or
+Notifications, document on Files, agent session on Agents, and event on
+Calendar. It does not open a create menu. It hides during search, while the
+keyboard is open, and on entity/detail pages with their own reply or compose
+controls. All popover splits open as bottom drawers on touch devices and dialogs
+on desktop, including task, calendar event, skill, and agent session composers.
+
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
 Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task and Channel open dialogs.

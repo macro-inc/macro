@@ -20,7 +20,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import { isIOS } from '@solid-primitives/platform';
-import { Surface } from '@ui';
+import { ComposerSurface } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -70,7 +70,7 @@ function AttachImagesAction() {
         label="Attach images"
         onClick={() => fileInputRef?.click()}
       >
-        <PaperclipIcon class="size-5" />
+        <PaperclipIcon />
       </InputActionButton>
     </>
   );
@@ -99,7 +99,6 @@ export function DiscussionInput(props: DiscussionInputProps) {
   const [mentions, setMentions] = createSignal<ItemMention[]>([]);
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isSending, setIsSending] = createSignal(false);
-  const [isFocused, setIsFocused] = createSignal(false);
 
   const inputView = () => ({
     ...props.input,
@@ -208,18 +207,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   return (
     <Input.Root input={inputView()} commands={commands}>
-      <Surface
-        onFocusOut={(event) => {
-          const next = event.relatedTarget as Node | null;
-          if (next && event.currentTarget.contains(next)) return;
-          setIsFocused(false);
-        }}
-        onFocusIn={() => setIsFocused(true)}
-        active={isFocused()}
-        class="rounded-xl bg-surface"
-        depth={2}
-        solid
-      >
+      <ComposerSurface class="h-auto">
         <Input.Layout>
           <Input.FormatRibbon>
             <FormatButtons
@@ -260,7 +248,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
             </Switch>
           </Input.Footer>
         </Input.Layout>
-      </Surface>
+      </ComposerSurface>
     </Input.Root>
   );
 }

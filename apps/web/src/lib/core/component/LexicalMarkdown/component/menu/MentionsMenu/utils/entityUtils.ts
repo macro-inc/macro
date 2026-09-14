@@ -14,6 +14,7 @@ export function getBlockNameFromEntity(
     .with('channel', () => 'channel' as const)
     .with('dm', () => 'channel' as const)
     .with('email', () => 'email' as const)
+    .with('agent_session', () => 'agent' as const)
     .with('chat', () => 'chat' as const)
     .with('project', () => 'project' as const)
     .with('task', () => 'task' as const)

@@ -26,8 +26,15 @@ session-specific.
 
 ## Message composer
 
-The shared `@` menu also offers `Recent agent sessions` (the latest 500 accessible
-sessions, searchable by title or persona). These inline chips show the shared
+Desktop composer and conversation body text use 15px type. Mobile keeps its
+existing text sizing.
+
+Desktop message text uses a 16px horizontal inset and a compact gap above the
+toolbar, consistent at narrow and wide composer widths.
+
+The shared `@` menu also offers `Recent agent sessions` after Channels and
+before Companies (the latest 500 accessible sessions, searchable by title or
+persona). These inline chips show the shared
 agent icon and an underlined session name, and open the existing session when clicked.
 They are references, not bot invocations: selecting a session does not start a new
 agent run. Sending or editing a message that references a session you own grants
@@ -183,6 +190,10 @@ instead.
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —
 useful as a guaranteed-existing channel in tests.
+
+Locally sent channel messages and thread replies enter with a brief upward slide
+and fade, without bubble scaling. Opening history or remounting a row does not
+replay the effect. Reduced-motion preferences disable it.
 
 For mobile send regressions, keep the software keyboard open and send several
 short and multiline messages consecutively. The keyboard should remain open,

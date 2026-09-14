@@ -4,6 +4,7 @@ import type {
 } from '@lexical/markdown';
 import type { ElementNode, LexicalNode, TextNode } from 'lexical';
 import {
+  $createAgentSessionMentionNode,
   AgentSessionMentionNode,
   buildAgentSessionMentionMarkdown,
 } from '../nodes/AgentSessionMentionNode';
@@ -379,6 +380,7 @@ export const I_AGENT_SESSION_MENTION: TextMatchTransformer = {
       id: node.getId(),
       label: node.getLabel(),
       mentionUuid: node.getMentionUuid(),
+      ...(node.isExpanded() ? { expanded: true } : {}),
     });
   },
   replace: (node: TextNode, match: RegExpMatchArray) => {
@@ -387,12 +389,15 @@ export const I_AGENT_SESSION_MENTION: TextMatchTransformer = {
       if (!('id' in data) || typeof data.id !== 'string') {
         throw new Error('Missing field id');
       }
-      const prMentionNode = new AgentSessionMentionNode(
-        data.id,
-        typeof data.label === 'string' ? data.label : undefined,
-        typeof data.mentionUuid === 'string' ? data.mentionUuid : undefined
+      node.replace(
+        $createAgentSessionMentionNode({
+          id: data.id,
+          label: typeof data.label === 'string' ? data.label : undefined,
+          mentionUuid:
+            typeof data.mentionUuid === 'string' ? data.mentionUuid : undefined,
+          expanded: data.expanded === true,
+        })
       );
-      node.replace(prMentionNode);
     } catch (e) {
       console.error('Error in I_AGENT_SESSION_MENTION replace:', e);
       replaceTextWithUnknownMention(node, 'Unknown Agent Session');

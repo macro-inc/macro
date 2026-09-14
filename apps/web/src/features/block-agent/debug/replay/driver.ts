@@ -24,7 +24,11 @@ import { err, ok } from 'neverthrow';
 import { type Accessor, createSignal } from 'solid-js';
 import type { ReplayBackend } from './interceptor';
 
-export const REPLAY_BOT: SessionBot = { id: 'replay-bot', name: 'Replay' };
+export const REPLAY_BOT: SessionBot = {
+  id: 'replay-bot',
+  name: 'Replay',
+  handle: 'replay',
+};
 export const REPLAY_OWNER = 'macro|replay@example.com';
 
 /** POST ack → frame in the log, same ordering the harness produces. */
@@ -79,6 +83,7 @@ function sessionFixture(id: string): AgentSessionResponse {
     modifiedAt: now,
     name: 'Agent Session',
     ownerId: REPLAY_OWNER,
+    canEdit: true,
     repoUrl: 'https://example.com/replay.git',
     sandboxSize: 'default',
     status: { kind: 'no_messages' },

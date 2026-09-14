@@ -1,6 +1,8 @@
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -52,6 +54,7 @@ function PopoverSplitModal(props: {
   onClose: () => void;
 }) {
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
+  const [displayName, setDisplayName] = createSignal(props.popover.content.id);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
@@ -75,8 +78,8 @@ function PopoverSplitModal(props: {
     isActive: () => true,
     isFirst: () => true,
     isLast: () => true,
-    displayName: () => props.popover.content.id,
-    setDisplayName: () => {},
+    displayName,
+    setDisplayName,
     toggleSpotlight: () => {},
     isSpotLight: () => false,
     isPopover: () => true,
@@ -94,11 +97,11 @@ function PopoverSplitModal(props: {
     getUrl: () => '',
     meta: () =>
       props.popover.mount.kind === 'component'
-        ? (props.popover.mount as any).meta
+        ? props.popover.mount.meta
         : undefined,
     updateMeta:
       props.popover.mount.kind === 'component'
-        ? (props.popover.mount as any).updateMeta
+        ? props.popover.mount.updateMeta
         : undefined,
     referredFrom: () => null,
     lastNavigationCause: () => 'fresh',
@@ -151,30 +154,60 @@ function PopoverSplitModal(props: {
     },
   });
 
+  const attachPanel = (element: HTMLElement) => {
+    setPanelRef(element);
+    bindHotKeyDom(element);
+  };
+  const onOpenChange = (open: boolean) => {
+    if (!open) props.onClose();
+  };
+  const Content = () => (
+    <SplitPanelContext.Provider value={stubPanelContext}>
+      <SoupContextProvider>
+        <Show when={props.popover.mount}>
+          <Panel.Body>
+            <Dynamic component={props.popover.mount.element} />
+          </Panel.Body>
+        </Show>
+      </SoupContextProvider>
+    </SplitPanelContext.Provider>
+  );
+
   return (
-    <Dialog
-      open={props.popover.isOpen}
-      onOpenChange={(open) => {
-        if (!open) {
-          props.onClose();
-        }
-      }}
-      contentRef={(r) => {
-        setPanelRef(r);
-        bindHotKeyDom(r);
-      }}
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <Dialog
+          open={props.popover.isOpen}
+          onOpenChange={onOpenChange}
+          contentRef={attachPanel}
+        >
+          <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
+            <Content />
+          </Panel>
+        </Dialog>
+      }
     >
-      <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
-        <SplitPanelContext.Provider value={stubPanelContext}>
-          <SoupContextProvider>
-            <Show when={props.popover.mount}>
-              <Panel.Body>
-                <Dynamic component={props.popover.mount.element} />
-              </Panel.Body>
-            </Show>
-          </SoupContextProvider>
-        </SplitPanelContext.Provider>
-      </Panel>
-    </Dialog>
+      <MobileDrawer
+        side="bottom"
+        open={props.popover.isOpen}
+        onOpenChange={onOpenChange}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay" />
+          <MobileDrawer.Content
+            ref={attachPanel}
+            class="bg-dialog"
+            aria-label={displayName()}
+            maxHeight={92}
+          >
+            <MobileDrawer.Handle />
+            <MobileDrawer.ScrollBody>
+              <Content />
+            </MobileDrawer.ScrollBody>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </Show>
   );
 }

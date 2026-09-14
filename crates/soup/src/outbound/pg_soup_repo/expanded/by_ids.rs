@@ -76,6 +76,7 @@ async fn expanded_soup_by_ids_hydrated<'a>(
                 d."updatedAt"::timestamptz as "updated_at!",
                 d."projectId" as "project_id",
                 NULL as "is_persistent",
+                NULL::text as "model",
                 di.sha as "sha",
                 dt.sub_type as "sub_type?: DocumentSubType",
                 EXISTS (
@@ -163,6 +164,7 @@ async fn expanded_soup_by_ids_hydrated<'a>(
                 c."updatedAt"::timestamptz as "updated_at!",
                 c."projectId" as "project_id",
                 c."isPersistent" as "is_persistent",
+                c.model as "model",
                 NULL as "sha",
                 NULL as "sub_type",
                 false as "is_email_attachment!",
