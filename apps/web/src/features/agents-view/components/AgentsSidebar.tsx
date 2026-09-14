@@ -14,11 +14,7 @@ import {
 } from '@app/features/next-soup/actions';
 import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
-import {
-  favoriteSplitContent,
-  useFavoriteDisplayName,
-} from '@app/util/favorites';
-import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useFavoriteDisplayName } from '@app/util/favorites';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
@@ -33,7 +29,10 @@ import PlusIcon from '@phosphor/plus.svg';
 import RobotIcon from '@phosphor/robot.svg';
 import SkillIcon from '@phosphor/sparkle.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { useFavoritesData } from '@queries/favorites/favorites';
+import {
+  type FavoritesFilter,
+  useFavoritesData,
+} from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Key } from '@solid-primitives/keyed';
 import { Button, cn, EmptyStatePanel, Scroll } from '@ui';
@@ -47,7 +46,10 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { AgentsPage } from '../core/pages';
-import type { AgentConversationEntity } from '../core/recent-conversations';
+import type {
+  AgentConversationEntity,
+  AgentConversationTarget,
+} from '../core/recent-conversations';
 
 const PAGES = [
   { id: 'new', label: 'New Chat', icon: PlusIcon },
@@ -65,6 +67,10 @@ const AGENT_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
   senderBucket: undefined,
 };
+
+const AGENT_FAVORITES_FILTER = {
+  entityType: ['agent_session', 'chat'],
+} satisfies FavoritesFilter;
 
 function FavoriteRow(props: {
   favorite: Favorite;
@@ -89,33 +95,27 @@ function FavoriteRow(props: {
 }
 
 function AgentFavorites(props: {
-  conversations: AgentConversationEntity[];
-  onOpenConversation: (conversation: AgentConversationEntity) => void;
+  onOpenConversation: (conversation: AgentConversationTarget) => void;
 }) {
-  const layout = useSplitLayout();
-  const favoritesData = useFavoritesData();
+  const favoritesData = useFavoritesData(AGENT_FAVORITES_FILTER);
   const [open, setOpen] = createSignal(true);
   const favorites = createMemo(() =>
-    (favoritesData()?.favorites ?? [])
-      .filter(
-        (favorite) =>
-          favorite.entityType === 'agent_session' ||
-          favorite.entityType === 'chat'
-      )
-      .sort((left, right) => left.sortOrder - right.sortOrder)
+    (favoritesData()?.favorites ?? []).toSorted(
+      (left, right) => left.sortOrder - right.sortOrder
+    )
   );
 
   const openFavorite = (favorite: Favorite) => {
-    const conversation = props.conversations.find(
-      ({ id }) => id === favorite.entityId
-    );
-    if (conversation) {
-      props.onOpenConversation(conversation);
+    if (
+      favorite.entityType !== 'agent_session' &&
+      favorite.entityType !== 'chat'
+    ) {
       return;
     }
 
-    layout.openWithSplit(favoriteSplitContent(favorite), {
-      referredFrom: 'sidebar',
+    props.onOpenConversation({
+      id: favorite.entityId,
+      type: favorite.entityType,
     });
   };
 
@@ -209,7 +209,7 @@ export type AgentsSidebarProps = {
   loadMoreError: boolean;
   onNavigate: (page: AgentsPage) => void;
   onSearchChange: (search: string) => void;
-  onOpenConversation: (conversation: AgentConversationEntity) => void;
+  onOpenConversation: (conversation: AgentConversationTarget) => void;
   onRetry: () => void;
   onLoadMore: () => void;
 };
@@ -320,10 +320,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
         </ViewSidebar.Nav>
 
         <Show when={!forceEmptyState()}>
-          <AgentFavorites
-            conversations={props.conversations}
-            onOpenConversation={props.onOpenConversation}
-          />
+          <AgentFavorites onOpenConversation={props.onOpenConversation} />
         </Show>
 
         <section class="flex min-h-0 flex-1 flex-col gap-1">

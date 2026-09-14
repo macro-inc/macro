@@ -39,7 +39,11 @@ import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
 import {
+  type CalendarEventEntity,
   type ChannelClickTarget,
+  type ChannelEntity,
+  type ChannelMessageEntity,
+  type ChannelThreadEntity,
   type EntityData,
   emailQueryKeyExcludesDone,
   getSnippetHit,
@@ -54,6 +58,7 @@ import {
   type ReminderEntity,
   type SearchLocation,
   toNotificationEntity,
+  type WithNotification,
   type WithSearch,
 } from '@entity';
 import {
@@ -452,8 +457,20 @@ export function preventDuplicatePreviewEntityOpen(
  * row's preview shows (which may be your own send) rather than an older
  * notification or nothing.
  */
+export type ChannelPreviewSelection = WithNotification<
+  | Pick<ChannelEntity, 'id' | 'type' | 'target'>
+  | Pick<
+      ChannelMessageEntity,
+      'id' | 'type' | 'channelId' | 'messageId' | 'threadId' | 'target'
+    >
+  | Pick<
+      ChannelThreadEntity,
+      'id' | 'type' | 'channelId' | 'messageId' | 'threadId' | 'target'
+    >
+>;
+
 export function getChannelEntityTarget(
-  entity: EntityData
+  entity: EntityData | ChannelPreviewSelection
 ): ChannelClickTarget | undefined {
   if (
     entity.type !== 'channel' &&
@@ -513,22 +530,16 @@ export function getChannelEntityTarget(
  * entity unchanged, so a reactive derivation would never re-run — but a click
  * should always re-activate the target (e.g. after the user cleared the
  * highlight by clicking a message), matching the old inbox's per-click
- * behaviour. No-ops for non-channel entities or when there is no target.
+ * behaviour.
  */
 export async function navigateChannelEntityToTarget(
-  entity: EntityData,
+  entity: ChannelPreviewSelection,
   blockOrchestrator: BlockOrchestrator
 ): Promise<void> {
   const target = getChannelEntityTarget(entity);
   if (!target) return;
 
-  const channelId =
-    entity.type === 'channel'
-      ? entity.id
-      : entity.type === 'channel_message' || entity.type === 'channel_thread'
-        ? entity.channelId
-        : undefined;
-  if (!channelId) return;
+  const channelId = entity.type === 'channel' ? entity.id : entity.channelId;
 
   if (target.kind === 'latest') {
     await goToChannelLatest(blockOrchestrator, channelId);
@@ -543,13 +554,15 @@ export async function navigateChannelEntityToTarget(
   );
 }
 
+export type CalendarPreviewSelection = WithNotification<
+  Pick<CalendarEventEntity, 'id' | 'type' | 'time' | 'occurrenceKey'>
+>;
+
 /** Retargets the singleton Calendar block to a calendar event row. */
 export async function navigateCalendarEntityToTarget(
-  entity: EntityData,
+  entity: CalendarPreviewSelection,
   blockOrchestrator: BlockOrchestrator
 ): Promise<void> {
-  if (entity.type !== 'calendar_event') return;
-
   const calendarHandle = await blockOrchestrator.getBlockHandle(
     CALENDAR_BLOCK_ID,
     'calendar'
@@ -838,16 +851,17 @@ export function markReminderSeenOnOpen(
  * The event and instance a calendar row points at, resolved exactly as the
  * open path resolves it so a copied link lands where a click would.
  */
-export function calendarEventLinkTarget(
-  entity: Extract<EntityData, { type: 'calendar_event' }>
-): { eventId: string; occurrenceKey?: string } {
+export function calendarEventLinkTarget(entity: CalendarPreviewSelection): {
+  eventId: string;
+  occurrenceKey?: string;
+} {
   const { eventId, occurrenceKey } = calendarBlockParamsForEntity(entity);
   return { eventId: eventId ?? entity.id, occurrenceKey };
 }
 
 /** Build singleton calendar block parameters for an event row's occurrence. */
 export function calendarBlockParamsForEntity(
-  entity: Extract<EntityData, { type: 'calendar_event' }>
+  entity: CalendarPreviewSelection
 ): CalendarBlockProps {
   const notifications = isWithNotification(entity)
     ? (entity.notifications?.() ?? [])
@@ -885,7 +899,12 @@ export function calendarBlockParamsForEntity(
  * `fileType`/`subType` come resolved from the server, so a referenced document
  * lands on its real block rather than 'unknown'.
  */
-export function reminderSplitTarget(entity: ReminderEntity) {
+export type ReminderPreviewSelection = Pick<
+  ReminderEntity,
+  'id' | 'type' | 'referencedEntity'
+>;
+
+export function reminderSplitTarget(entity: ReminderPreviewSelection) {
   const referenced = entity.referencedEntity;
   if (!referenced) return undefined;
   return {
@@ -1193,7 +1212,14 @@ function notificationsForMarkDone(
   notifications: UnifiedNotification[],
   scopeChannelNotificationsToEntity: boolean
 ): UnifiedNotification[] {
-  if (!scopeChannelNotificationsToEntity) return notifications;
+  if (
+    !scopeChannelNotificationsToEntity ||
+    (entity.type !== 'channel' &&
+      entity.type !== 'channel_message' &&
+      entity.type !== 'channel_thread')
+  ) {
+    return notifications;
+  }
 
   return scopeChannelNotificationsForEntity(entity, notifications);
 }

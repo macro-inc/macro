@@ -13,15 +13,8 @@ import { SplitPanel } from '@components/app/split-panel';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
-import {
-  MACRO_CODER_BOT_ID,
-  MACRO_CODER_NAME,
-} from '@core/constant/macroCoder';
 import { useUserId } from '@core/context/user';
-import {
-  type AgentSessionEntity,
-  ListEntityMetadataQueryProvider,
-} from '@entity';
+import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { createSignal, Match, onMount, Show, Suspense, Switch } from 'solid-js';
@@ -30,7 +23,7 @@ import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentsSidebar } from '../components/AgentsSidebar';
 import type { AgentsPage } from '../core/pages';
 import {
-  type AgentConversationEntity,
+  type AgentConversationTarget,
   selectRecentAgentConversations,
 } from '../core/recent-conversations';
 
@@ -43,7 +36,7 @@ const PAGE_TITLES: Record<AgentsPage, string> = {
 };
 
 type SelectedConversation = {
-  conversation: AgentConversationEntity;
+  conversation: AgentConversationTarget;
   activeConversationId: string;
 };
 
@@ -97,28 +90,17 @@ function AgentsWorkspace() {
     setPage(next);
   };
 
-  const openConversation = (conversation: AgentConversationEntity) => {
+  const openConversation = (conversation: AgentConversationTarget) => {
     setPage('new');
-    setSelected({ conversation, activeConversationId: conversation.id });
+    setSelected({
+      conversation: { id: conversation.id, type: conversation.type },
+      activeConversationId: conversation.id,
+    });
   };
 
   const startSession = (prompt: string) => {
     const id = startPendingSession({ prompt });
-    const pendingSession: AgentSessionEntity = {
-      id,
-      name: 'New Chat',
-      ownerId: userId() ?? '',
-      type: 'agent_session',
-      botId: MACRO_CODER_BOT_ID,
-      bot: {
-        id: MACRO_CODER_BOT_ID,
-        name: MACRO_CODER_NAME,
-      },
-      status: 'no_messages',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    openConversation(pendingSession);
+    openConversation({ id, type: 'agent_session' });
   };
 
   const adoptSessionId = (placeholderId: string, sessionId: string) => {

@@ -1,6 +1,10 @@
 import type { AgentSessionEntity, ChatEntity, EntityData } from '@entity';
 
 export type AgentConversationEntity = AgentSessionEntity | ChatEntity;
+export type AgentConversationTarget = Pick<
+  AgentConversationEntity,
+  'id' | 'type'
+>;
 
 function isAgentConversation(
   entity: EntityData

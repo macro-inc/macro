@@ -1,8 +1,11 @@
 import {
+  type CalendarPreviewSelection,
+  type ChannelPreviewSelection,
   calendarBlockParamsForEntity,
   getChannelEntityTarget,
   navigateCalendarEntityToTarget,
   navigateChannelEntityToTarget,
+  type ReminderPreviewSelection,
   reminderSplitTarget,
 } from '@app/features/next-soup/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
@@ -16,12 +19,7 @@ import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
-import {
-  type EntityData,
-  isGithubPrEntity,
-  isSnippetEntity,
-  isTaskEntity,
-} from '@entity';
+import type { DocumentEntity, ForeignEntity } from '@entity';
 import { createContextProvider } from '@solid-primitives/context';
 import {
   createMemo,
@@ -44,16 +42,50 @@ import {
   type SplitPanelContextType,
 } from './split-layout/context';
 
+type IdOnlyPreviewSelection = {
+  id: string;
+  type:
+    | 'agent_session'
+    | 'automation'
+    | 'call'
+    | 'chat'
+    | 'crm_company'
+    | 'crm_contact'
+    | 'email'
+    | 'project';
+};
+
+type DocumentPreviewSelection = Pick<
+  DocumentEntity,
+  'id' | 'type' | 'fileType' | 'subType'
+>;
+
+type ForeignPreviewSelection = Pick<
+  ForeignEntity,
+  'id' | 'type' | 'foreignSource'
+>;
+
+export type PreviewPanelSelection =
+  | IdOnlyPreviewSelection
+  | DocumentPreviewSelection
+  | ForeignPreviewSelection
+  | ChannelPreviewSelection
+  | CalendarPreviewSelection
+  | ReminderPreviewSelection;
+
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
-    (props: { previewEntity: EntityData; onFocusOut?: VoidFunction }) => ({
+    (props: {
+      previewEntity: PreviewPanelSelection;
+      onFocusOut?: VoidFunction;
+    }) => ({
       previewEntity: () => props.previewEntity,
       onFocusOut: () => props.onFocusOut?.(),
     })
   );
 
 export type PreviewPanelProps = {
-  selectedEntity: EntityData | undefined;
+  selectedEntity: PreviewPanelSelection | undefined;
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
   onFocusOut?: VoidFunction;
@@ -69,7 +101,7 @@ type PreviewBlockTarget = {
 };
 
 function PreviewPanelContent(
-  props: PreviewPanelProps & { selectedEntity: EntityData }
+  props: PreviewPanelProps & { selectedEntity: PreviewPanelSelection }
 ) {
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const headerCollapseController = createPriorityCollapseController();
@@ -83,22 +115,28 @@ function PreviewPanelContent(
 
     const target = match(entity)
       .returnType<PreviewBlockTarget>()
-      .when(isTaskEntity, (task) => ({
-        blockType: fileTypeToResolvedBlockName(task.fileType),
-        blockId: task.id,
-        aliasContext: {
-          alias: 'task',
-          baseType: 'md',
-        } satisfies BlockAliasContext,
-      }))
-      .when(isSnippetEntity, (snippet) => ({
-        blockType: fileTypeToResolvedBlockName(snippet.fileType),
-        blockId: snippet.id,
-        aliasContext: {
-          alias: 'snippet',
-          baseType: 'md',
-        } satisfies BlockAliasContext,
-      }))
+      .with(
+        { type: 'document', fileType: 'md', subType: { type: 'task' } },
+        (task) => ({
+          blockType: fileTypeToResolvedBlockName(task.fileType),
+          blockId: task.id,
+          aliasContext: {
+            alias: 'task',
+            baseType: 'md',
+          } satisfies BlockAliasContext,
+        })
+      )
+      .with(
+        { type: 'document', fileType: 'md', subType: { type: 'snippet' } },
+        (snippet) => ({
+          blockType: fileTypeToResolvedBlockName(snippet.fileType),
+          blockId: snippet.id,
+          aliasContext: {
+            alias: 'snippet',
+            baseType: 'md',
+          } satisfies BlockAliasContext,
+        })
+      )
       .with({ type: 'document' }, (document) => ({
         blockType: fileTypeToResolvedBlockName(document.fileType),
         blockId: document.id,
@@ -124,7 +162,8 @@ function PreviewPanelContent(
       )
       .with({ type: 'foreign' }, (foreignEntity) => ({
         blockType:
-          USE_MACRO_PR_SUMMARY_BLOCK && isGithubPrEntity(foreignEntity)
+          USE_MACRO_PR_SUMMARY_BLOCK &&
+          foreignEntity.foreignSource === 'github_pull_request'
             ? 'pr'
             : 'unknown',
         blockId: foreignEntity.id,
@@ -175,8 +214,15 @@ function PreviewPanelContent(
       () => props.selectedEntity,
       (entity) => {
         setInteractedWith(false);
-        void navigateChannelEntityToTarget(entity, props.orchestrator);
-        void navigateCalendarEntityToTarget(entity, props.orchestrator);
+        if (
+          entity.type === 'channel' ||
+          entity.type === 'channel_message' ||
+          entity.type === 'channel_thread'
+        ) {
+          void navigateChannelEntityToTarget(entity, props.orchestrator);
+        } else if (entity.type === 'calendar_event') {
+          void navigateCalendarEntityToTarget(entity, props.orchestrator);
+        }
       }
     )
   );

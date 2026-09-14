@@ -7,6 +7,7 @@ import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimis
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { FavoritesList } from '@service-storage/generated/schemas/favoritesList';
+import type { ListFavoritesParams } from '@service-storage/generated/schemas/listFavoritesParams';
 import {
   FavoritesDocument,
   type FavoritesQuery,
@@ -22,6 +23,7 @@ import {
   mapGraphqlFavorite,
   type ReorderFavoritesResult,
   type SetFavoriteArgs,
+  toGraphqlFavoriteEntityType,
 } from '@service-storage/graphql-favorites';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { AnyVariables, Client, OperationResult } from '@urql/core';
@@ -46,7 +48,9 @@ function selectFavorites(data: FavoritesQuery): FavoritesList {
 }
 
 /** Creates the live urql-solid favorites query. */
-export function createGraphqlFavoritesQuery(): GraphqlFavoritesQuery {
+export function createGraphqlFavoritesQuery(
+  filter?: ListFavoritesParams
+): GraphqlFavoritesQuery {
   const query = createUrqlQuery<
     FavoritesQuery,
     FavoritesQueryVariables,
@@ -54,7 +58,14 @@ export function createGraphqlFavoritesQuery(): GraphqlFavoritesQuery {
   >(() => ({
     query: FavoritesDocument,
     client: getGraphqlSoupClient(),
-    variables: {},
+    variables: filter
+      ? {
+          filter: {
+            entityTypes: filter.entityType?.map(toGraphqlFavoriteEntityType),
+            entityIds: filter.entityId,
+          },
+        }
+      : {},
     requestPolicy: 'cache-and-network',
     keepPreviousData: false,
     select: selectFavorites,
