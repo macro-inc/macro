@@ -107,6 +107,19 @@ export async function expectRows(browser: Browser, numbers: number[]) {
   );
 }
 
+/** Exercise the same native HTTP transport as the app, not the runner's fetch. */
+export async function nativeHttpReachable(browser: Browser, origin: string) {
+  return browser.execute(async (origin) => {
+    const modulePath = '/src/lib/core/util/platformFetch.ts';
+    const { platformFetch }: { platformFetch: typeof fetch } = await import(modulePath);
+    try {
+      return (await platformFetch(`${origin}/health`, { signal: AbortSignal.timeout(2000) })).ok;
+    } catch {
+      return false;
+    }
+  }, origin);
+}
+
 export async function selectTab(browser: Browser, label: string) {
   await browser.$(`[aria-label="Email tabs"] button=${label}`).click();
 }

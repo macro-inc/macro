@@ -7,6 +7,7 @@ import {
   assertNativeRecords,
   checkpoints,
   expectRows,
+  nativeHttpReachable,
   selectTab,
   selectUnread,
   waitForBackfill,
@@ -34,7 +35,9 @@ const artifacts = resolve(
 await mkdir(artifacts, { recursive: true });
 const profile = await mkdtemp(resolve(tmpdir(), 'macro-native-e2e-'));
 const env = {
-  ...process.env,
+  ...Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+    !/^(VITE_|LOCAL_JWT$|MODE$|PORT$|TAURI_|https?_proxy$|all_proxy$|no_proxy$)/i.test(key)
+  )),
   HOME: profile,
   XDG_DATA_HOME: resolve(profile, 'data'),
   XDG_CONFIG_HOME: resolve(profile, 'config'),
@@ -160,7 +163,9 @@ try {
     'PASS: real UI, three backfill pages, and all six records in the native cache'
   );
 
+  assert.equal(await nativeHttpReachable(browser, fixture.origin), true);
   await fixture.disconnect();
+  assert.equal(await nativeHttpReachable(browser, fixture.origin), false);
   await assert.rejects(
     fetch(`${fixture.origin}/health`, { signal: AbortSignal.timeout(1000) })
   );
