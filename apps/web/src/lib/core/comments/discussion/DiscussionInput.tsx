@@ -107,7 +107,6 @@ export function DiscussionInput(props: DiscussionInputProps) {
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isSending, setIsSending] = createSignal(false);
   let isInternalRefocus = false;
-  let collapsedFilePicker: HTMLInputElement | undefined;
 
   const inputView = () => ({
     ...props.input,
@@ -242,7 +241,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
     <Input.Root input={inputView()} commands={commands}>
       <Show when={isCollapsed()}>
         <input
-          ref={collapsedFilePicker}
+          ref={collapsedInput.setFilePickerRef}
           type="file"
           class="hidden"
           multiple
@@ -267,7 +266,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
             collapsedInput.expand();
             return markdownEditor.lexical.getRootElement();
           }}
-          onAttach={() => collapsedFilePicker?.click()}
+          onAttach={collapsedInput.attach}
           onOpen={collapsedInput.expand}
           onSend={() => void commands.send()}
         />

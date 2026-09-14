@@ -388,8 +388,9 @@ a circular neutral Send button. Document comment replies/edits and Edit with AI
 use the same composer treatment. Attachment and formatting actions stay available.
 On mobile, open documents and tasks put their new-comment composer in the
 accessory dock above navigation, using the channel input's compact pill and
-expanded surface. Ask AI and New are hidden in these open views; their list
-screens keep those controls. Users without comment permission have no composer.
+expanded surface. Ask AI and New are hidden in these open views only when the
+comment composer is available; their list screens keep those controls. Users
+without comment permission have no comment composer, so Ask AI remains visible.
 
 On touch devices, an email thread's floating action bar has Previous email and
 Next email arrows beside the larger Mark done checkmark. The arrows follow the

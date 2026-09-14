@@ -8,6 +8,8 @@ const editor = vi.hoisted(() => ({
   root: undefined as HTMLTextAreaElement | undefined,
   isIOS: true,
 }));
+const pickPhotos = vi.hoisted(() => vi.fn<() => Promise<File[] | null>>());
+const addMedia = vi.hoisted(() => vi.fn());
 
 vi.mock('@solid-primitives/platform', () => ({
   get isIOS() {
@@ -15,13 +17,19 @@ vi.mock('@solid-primitives/platform', () => ({
   },
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => true }));
-vi.mock('@core/mobile/nativePhotoLibrary', () => ({}));
-vi.mock('@core/util/platform', () => ({ isPlatform: () => false }));
+vi.mock('@core/mobile/nativePhotoLibrary', () => ({
+  pickNativePhotoLibraryMedia: pickPhotos,
+}));
+vi.mock('@core/util/platform', () => ({
+  isPlatform: (platform: string) => platform === 'ios' && editor.isIOS,
+}));
 vi.mock('@channel/Input/ActionButton', () => ({}));
 vi.mock('@channel/Input/context', () => ({}));
 vi.mock('@channel/Input/FormatButtons', () => ({ FormatButtons: () => null }));
 vi.mock('@channel/Input/utils/formatting', () => ({}));
-vi.mock('@core/component/LexicalMarkdown/plugins/media', () => ({}));
+vi.mock('@core/component/LexicalMarkdown/plugins/media', () => ({
+  addMediaFromFile: addMedia,
+}));
 vi.mock('@core/component/LexicalMarkdown/theme', () => ({
   singleLineMarkdownTheme: {},
 }));
@@ -48,7 +56,11 @@ vi.mock('@ui', () => ({
   ComposerSurface: (props: JSX.HTMLAttributes<HTMLDivElement>) => (
     <div data-testid="composer" {...props} />
   ),
-  CollapsedInput: () => <div data-testid="compact-input" />,
+  CollapsedInput: (props: { onAttach: () => void }) => (
+    <div data-testid="compact-input">
+      <button onClick={props.onAttach}>Attach images</button>
+    </div>
+  ),
 }));
 
 // Keep the component's real send, clear, and collapse handlers; replace the
@@ -80,13 +92,71 @@ vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
 
 beforeEach(() => {
   editor.isIOS = true;
+  pickPhotos.mockReset().mockResolvedValue([]);
+  addMedia.mockReset();
   vi.useFakeTimers();
 });
 
 afterEach(() => {
   cleanup();
   editor.root = undefined;
+  vi.restoreAllMocks();
   vi.useRealTimers();
+});
+
+describe('collapsed discussion attachments', () => {
+  function renderCollapsed() {
+    render(() => (
+      <DiscussionInput input={{ mode: 'channel' }} collapsible>
+        <span />
+      </DiscussionInput>
+    ));
+    return vi.spyOn(HTMLInputElement.prototype, 'click');
+  }
+
+  it('inserts images selected from the native iOS photo library', async () => {
+    const photo = new File(['photo'], 'photo.jpg', { type: 'image/jpeg' });
+    pickPhotos.mockResolvedValue([photo]);
+    const browserPicker = renderCollapsed();
+
+    screen.getByRole('button', { name: 'Attach images' }).click();
+    await vi.runAllTimersAsync();
+
+    expect(pickPhotos).toHaveBeenCalledOnce();
+    expect(browserPicker).not.toHaveBeenCalled();
+    expect(addMedia).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Object),
+      photo,
+      'image'
+    );
+  });
+
+  it.each([true, false])(
+    'opens the browser picker when native selection is unavailable (iOS: %s)',
+    async (isIOS) => {
+      editor.isIOS = isIOS;
+      pickPhotos.mockResolvedValue(null);
+      const browserPicker = renderCollapsed();
+
+      screen.getByRole('button', { name: 'Attach images' }).click();
+      await vi.runAllTimersAsync();
+
+      expect(pickPhotos).toHaveBeenCalledTimes(isIOS ? 1 : 0);
+      expect(browserPicker).toHaveBeenCalledOnce();
+      expect(addMedia).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not open another picker when native selection is cancelled', async () => {
+    const browserPicker = renderCollapsed();
+
+    screen.getByRole('button', { name: 'Attach images' }).click();
+    await vi.runAllTimersAsync();
+
+    expect(pickPhotos).toHaveBeenCalledOnce();
+    expect(browserPicker).not.toHaveBeenCalled();
+    expect(addMedia).not.toHaveBeenCalled();
+  });
 });
 
 function setup(

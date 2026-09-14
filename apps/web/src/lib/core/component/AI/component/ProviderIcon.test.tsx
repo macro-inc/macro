@@ -11,6 +11,8 @@ describe('AI provider icons', () => {
     ['claude-opus-5', 'anthropic'],
     ['sonnet', 'anthropic'],
     ['openai/gpt-5.6', 'openai'],
+    ['openai/gpt-5.5', 'openai'],
+    ['gpt-5.5', 'openai'],
     ['gpt-5.6-mini', 'openai'],
     ['o3', 'openai'],
     ['google/gemini-pro', 'google'],

@@ -11,13 +11,18 @@ export const SearchRailButton = () => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
 
-  const openSearch = () => {
+  const openSearch = (newSplit: boolean) => {
     analytics.track('sidebar_click', { view: 'search' });
 
     let split = globalSplitManager()?.activeSplit();
     const content = split?.content();
 
-    if (split && content?.type === 'component' && content.id === 'search') {
+    if (
+      !newSplit &&
+      split &&
+      content?.type === 'component' &&
+      content.id === 'search'
+    ) {
       requestSearchFocus(split.id);
       globalSplitManager()?.returnFocus();
       return;
@@ -25,7 +30,7 @@ export const SearchRailButton = () => {
 
     split = navigateToSidebarView({
       viewId: 'search',
-      shiftKey: false,
+      shiftKey: newSplit,
       activeSplit: split,
       openWithSplit: layout.openWithSplit,
       referredFrom: 'sidebar',

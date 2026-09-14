@@ -32,8 +32,10 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 - Top: buttons `Search` and `Create`. Clicking sidebar `Search` opens a menu
   with `Command Menu` (⌘K on Mac / Ctrl+K elsewhere) and `Search everything`
   (`/`). Choose the first to open commands, or the second to open and focus
-  global search. This left-click menu shares its surface and item styling with
-  the sidebar right-click menus, in both the compact rail and expanded sidebar.
+  global search. Hold Shift while selecting `Search everything` to open it in a
+  new split, including when Search is already active. This left-click menu shares
+  its surface and item styling with the sidebar right-click menus, in both the
+  compact rail and expanded sidebar.
 - Nav: `Go to Home`, `Go to Getting Started`, `Go to Notifications`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
   `Go to Calendar`, `Go to Agents`, `Go to Customers`.

@@ -61,6 +61,14 @@ async function setup() {
         { value: 'all', label: 'All' },
         { value: 'files', label: 'Files' },
         {
+          value: 'shared',
+          label: (
+            <span>
+              Shared <span>files</span>
+            </span>
+          ),
+        },
+        {
           value: 'notifications',
           label: <svg />,
           iconOnly: true,
@@ -76,30 +84,33 @@ async function setup() {
 }
 
 describe('pill overflow drawer', () => {
-  it('opens on release and moves the chosen tab into the strip while closing', async () => {
-    const { trigger, value, onChange } = await setup();
-    fireEvent.pointerDown(trigger);
-    fireEvent.touchMove(trigger, { touches: [{ clientX: 10, clientY: 10 }] });
-    expect(screen.queryByRole('dialog')).toBeNull();
-    fireEvent.touchEnd(trigger);
-    fireEvent.click(trigger);
-    const drawer = screen.getByRole('dialog', { name: 'More tabs' });
-    fireEvent.click(
-      within(drawer).getByRole('button', { name: 'Notifications' })
-    );
-    expect(onChange).toHaveBeenCalledExactlyOnceWith('notifications');
-    expect(value()).toBe('notifications');
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(
-      screen.getByRole('button', { name: 'Notifications', pressed: true })
-    ).toBeTruthy();
-    fireEvent.click(trigger, { detail: 0 });
-    expect(
-      within(screen.getByRole('dialog')).queryByRole('button', {
-        name: 'Notifications',
-      })
-    ).toBeNull();
-  });
+  it.each([
+    ['Files', 'files'],
+    ['Shared files', 'shared'],
+    ['Notifications', 'notifications'],
+  ])(
+    'names the overflow tab "%s" and closes on selection',
+    async (name, selectedValue) => {
+      const { trigger, value, onChange } = await setup();
+      fireEvent.pointerDown(trigger);
+      fireEvent.touchMove(trigger, { touches: [{ clientX: 10, clientY: 10 }] });
+      expect(screen.queryByRole('dialog')).toBeNull();
+      fireEvent.touchEnd(trigger);
+      fireEvent.click(trigger);
+      const drawer = screen.getByRole('dialog', { name: 'More tabs' });
+      fireEvent.click(within(drawer).getByRole('button', { name }));
+      expect(onChange).toHaveBeenCalledExactlyOnceWith(selectedValue);
+      expect(value()).toBe(selectedValue);
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.getByRole('button', { name, pressed: true })).toBeTruthy();
+      fireEvent.click(trigger, { detail: 0 });
+      expect(
+        within(screen.getByRole('dialog')).queryByRole('button', {
+          name,
+        })
+      ).toBeNull();
+    }
+  );
 
   it('ignores cancelled gestures and dismisses keyboard-opened drawers without selecting', async () => {
     const { trigger, onChange } = await setup();

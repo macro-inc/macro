@@ -323,7 +323,10 @@ Both AI composers display their model trigger label at the input text size
 (15px), using the softer secondary text color. This includes the agent model
 catalog trigger and mobile model sheet trigger.
 
-Soup chat icons use the same model resolution as the chat composer: the saved
-per-chat selection takes precedence over the server model; retired server model
-IDs fall back to the current default. Changing a selection updates mounted list
-icons when the draft is saved, without refreshing the list.
+Soup and recent-chat icons recognize the provider in the saved model ID even
+when that model is no longer selectable. For example, `openai/gpt-5.5` retains
+the OpenAI logo; an unknown provider shows the standard chat icon instead of
+defaulting to Claude. A recognized per-chat selection takes precedence over the
+server model. New sends record that selection before navigation or a background
+send, so list icons can update immediately. Restoring a draft without a valid
+model lets the composer use the chat's saved model before applying its default.

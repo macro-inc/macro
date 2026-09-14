@@ -526,9 +526,9 @@ body.tauri-ios {
 @custom-variant touch (&:where(html[data-touch-device="true"] *));
 @custom-variant not-touch (&:where(html:not([data-touch-device="true"]) *));
 
-/* The glass shimmer replaces the browser's tap highlight on mobile controls. */
-html[data-touch-device='true'] :is(button, a, [role="button"], [role="tab"]) {
-  -webkit-tap-highlight-color: transparent;
+/* Restore native feedback suppressed by Tailwind's reset; glass opts out below. */
+html[data-touch-device='true'] {
+  -webkit-tap-highlight-color: initial;
 }
 
 @custom-variant mobile {
@@ -813,6 +813,8 @@ html[data-touch-device='true'] :is(
   [data-slot='button-group'].glass,
   :is(button, a, [role='button'], [role='tab']):is(.glass, .island, [class~='touch:island'])
 ) {
+  /* The shimmer replaces native tap feedback only on these press surfaces. */
+  -webkit-tap-highlight-color: transparent;
   --press-expansion: 0px;
   position: relative;
   isolation: isolate;
