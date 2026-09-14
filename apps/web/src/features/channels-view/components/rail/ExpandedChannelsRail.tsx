@@ -18,6 +18,7 @@ import {
   ChannelCallIndicator,
   ChannelMutedIndicator,
   ChannelRailItemContextMenu,
+  CONVERSATION_CARD_HEIGHT,
   ConversationCard,
   IncomingCallActions,
   isPrimaryMouseDown,
@@ -370,7 +371,7 @@ function ExpandedRecents() {
             ref={pagination.registerVirtualizer}
             data={scope().items}
             scrollRef={scrollRoot()}
-            itemSize={72}
+            itemSize={CONVERSATION_CARD_HEIGHT}
             bufferSize={360}
             keepMounted={scope().keepMounted}
             onScroll={pagination.loadMoreNearEnd}

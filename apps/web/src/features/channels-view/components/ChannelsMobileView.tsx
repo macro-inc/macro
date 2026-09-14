@@ -30,6 +30,7 @@ import { channelMentionsUser } from '../utils';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
 import {
   CHANNEL_ACTION_VIEW_CONTEXT,
+  CONVERSATION_CARD_HEIGHT,
   ConversationCard,
 } from './rail/ChannelRailItems';
 import { useChannelCalls } from './rail/hooks/useChannelCalls';
@@ -43,8 +44,7 @@ const MOBILE_CHANNEL_TABS: PillTabItem<ChannelsQueryScope>[] = [
 const MOBILE_TAB_STRIP_CLASS =
   '-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none';
 const MOBILE_TAB_CONTENT_CLASS = 'px-(--mobile-chrome-gutter)';
-const MOBILE_CHANNEL_ITEM_SIZE = 72;
-const MOBILE_CHANNEL_BUFFER_SIZE = MOBILE_CHANNEL_ITEM_SIZE * 6;
+const MOBILE_CHANNEL_BUFFER_SIZE = CONVERSATION_CARD_HEIGHT * 6;
 const LOAD_MORE_THRESHOLD = 300;
 
 export function ChannelsMobileView(props: {
@@ -186,7 +186,7 @@ export function ChannelsMobileView(props: {
                 data={visibleChannels()}
                 scrollRef={viewport()}
                 startMargin={topInset()}
-                itemSize={MOBILE_CHANNEL_ITEM_SIZE}
+                itemSize={CONVERSATION_CARD_HEIGHT}
                 bufferSize={MOBILE_CHANNEL_BUFFER_SIZE}
                 onScroll={checkNearEnd}
               >

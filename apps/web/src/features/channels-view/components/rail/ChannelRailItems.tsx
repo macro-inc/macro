@@ -6,6 +6,7 @@ import {
 import { SoupEntityContextMenu } from '@app/features/soup/SoupEntityContextMenu';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { inlineWrappingMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -25,6 +26,8 @@ import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
 import { rowKeyForChannel, useChannelsRail } from './ChannelsRailContext';
 
 export type ChannelCallStatus = 'active' | 'incoming';
+
+export const CONVERSATION_CARD_HEIGHT = 80;
 
 export type ChannelRailItemProps = {
   id: string;
@@ -270,7 +273,7 @@ export function ConversationCard(props: ConversationCardProps) {
       role="treeitem"
       tabIndex={-1}
       class={cn(
-        'relative w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none',
+        'relative h-20 w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none',
         props.selected && !isTouchDevice() && 'bg-active',
         !props.selected && !isTouchDevice() && props.focused && 'bg-hover',
         (!props.selected || isTouchDevice()) && 'bg-transparent',
@@ -349,22 +352,27 @@ export function ConversationCard(props: ConversationCardProps) {
                 </Show>
               </span>
             </Show>
-            <div class="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-xs leading-4">
+            <div class="min-w-0 overflow-hidden text-sm">
               <Switch>
                 <Match when={latestRootMessage()}>
                   {(message) => (
-                    <>
-                      <span class="shrink-0 font-medium text-ink-muted">
-                        <MessageSenderName id={props.senderId} />:
-                      </span>
+                    <div class="line-clamp-2 min-w-0 text-ink-muted">
+                      <span class="inline-flex min-w-0 font-medium">
+                        <span class="min-w-0 truncate">
+                          <MessageSenderName id={props.senderId} />
+                        </span>
+                        <span class="shrink-0">:</span>
+                      </span>{' '}
                       <Show when={message().content.trim()}>
                         {(content) => (
-                          <div class="min-w-0 flex-1 truncate text-ink-muted [&_*]:my-0 [&_*]:truncate">
-                            <StaticMarkdown markdown={content()} singleLine />
-                          </div>
+                          <StaticMarkdown
+                            markdown={content()}
+                            singleLine
+                            theme={inlineWrappingMarkdownTheme}
+                          />
                         )}
                       </Show>
-                    </>
+                    </div>
                   )}
                 </Match>
                 <Match when={true}>

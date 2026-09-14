@@ -182,7 +182,7 @@ export function RailListLoadingMore(props: {
               'flex items-center',
               props.variant === 'slim' && 'h-10 justify-center',
               props.variant === 'channel' && 'h-10 gap-2 px-2',
-              props.variant === 'recent' && 'h-18 items-start gap-3 px-2 py-2'
+              props.variant === 'recent' && 'h-20 items-start gap-3 px-2 py-2'
             )}
           >
             <div
