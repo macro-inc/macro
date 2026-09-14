@@ -38,6 +38,8 @@ export interface CalendarSource {
   isPrimary?: boolean;
   /** Whether this is a subscribed system calendar (holidays, birthdays). */
   isSubscription?: boolean;
+  /** A persistent sync failure isolated to this calendar, for a settings badge. */
+  syncError?: string;
 }
 
 /** Calendar occurrence data, independent from FullCalendar. */

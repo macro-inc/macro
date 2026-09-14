@@ -1,3 +1,4 @@
+import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
@@ -118,28 +119,27 @@ function SoupChatInputInner() {
   };
 
   return (
-    <div
-      ref={containerRef}
-      class="absolute bottom-0 inset-x-px pb-2 px-2 flex justify-center pointer-events-none"
-      style={{
-        'background-image': `linear-gradient(transparent, var(--color-surface) 85%)`,
-      }}
-    >
-      <div class="w-full max-w-3xl">
-        <div class="pointer-events-auto">
-          <ChatInput
-            editor={editor}
-            onSend={handleSend}
-            onEscape={() => {
-              splitPanelContext.panelRef()?.focus();
-              return true;
-            }}
-            isPersistent={true}
-            autoFocusOnMount={false}
-          />
+    <FloatRegionOrInline region="accessory">
+      <div
+        ref={containerRef}
+        class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none touch:static touch:pb-0 touch:px-(--mobile-chrome-gutter)"
+      >
+        <div class="w-full max-w-3xl">
+          <div class="pointer-events-auto">
+            <ChatInput
+              editor={editor}
+              onSend={handleSend}
+              onEscape={() => {
+                splitPanelContext.panelRef()?.focus();
+                return true;
+              }}
+              isPersistent={true}
+              autoFocusOnMount={false}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </FloatRegionOrInline>
   );
 }
 

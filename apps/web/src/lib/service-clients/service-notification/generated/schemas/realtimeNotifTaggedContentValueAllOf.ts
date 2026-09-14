@@ -4,6 +4,8 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { NotificationState } from './notificationState';
 import type { RealtimeNotifTaggedContentValueAllOfDeletedAt } from './realtimeNotifTaggedContentValueAllOfDeletedAt';
 import type { RealtimeNotifTaggedContentValueAllOfNotificationMetadata } from './realtimeNotifTaggedContentValueAllOfNotificationMetadata';
 import type { RealtimeNotifTaggedContentValueAllOfSenderId } from './realtimeNotifTaggedContentValueAllOfSenderId';
@@ -14,8 +16,6 @@ export type RealtimeNotifTaggedContentValueAllOf = {
   created_at: string;
   /** When the notification was deleted. */
   deleted_at?: RealtimeNotifTaggedContentValueAllOfDeletedAt;
-  /** Whether the notification is marked as done. */
-  done: boolean;
   /** The notification event type string (e.g. "channel_mention").
 TODO make this a new type */
   notification_event_type: string;
@@ -26,6 +26,8 @@ TODO make this a new type */
   sender_id?: RealtimeNotifTaggedContentValueAllOfSenderId;
   /** Whether the notification has been sent. */
   sent: boolean;
+  /** The authoritative lifecycle state, independent of viewing timestamps. */
+  state: NotificationState;
   /** When the notification was last updated. */
   updated_at: string;
   /** When the notification was viewed/seen. */

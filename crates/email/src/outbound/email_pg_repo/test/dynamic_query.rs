@@ -1,3 +1,5 @@
+mod notification_state;
+
 use super::*;
 use macro_user_id::cowlike::CowLike;
 
@@ -41,7 +43,7 @@ async fn test_dynamic_query_inbox_view(pool: Pool<Postgres>) -> anyhow::Result<(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
-async fn test_dynamic_query_notification_seen_filters_by_is_read(
+async fn test_dynamic_query_read_filter_is_independent_of_notifications(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
@@ -56,7 +58,7 @@ async fn test_dynamic_query_notification_seen_filters_by_is_read(
         .await?;
 
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
-    let unread_filter = Arc::new(Expr::Literal(EmailLiteral::NotificationSeen(false)));
+    let unread_filter = Arc::new(Expr::Literal(EmailLiteral::Read(false)));
     let unread_query = Query::new(None, SimpleSortMethod::UpdatedAt, unread_filter);
     let unread_results =
         dynamic::dynamic_email_thread_cursor(&pool, &[link_id], 50, &view, unread_query, "", None)
@@ -79,7 +81,7 @@ async fn test_dynamic_query_notification_seen_filters_by_is_read(
         "unread filter must exclude the thread marked read"
     );
 
-    let read_filter = Arc::new(Expr::Literal(EmailLiteral::NotificationSeen(true)));
+    let read_filter = Arc::new(Expr::Literal(EmailLiteral::Read(true)));
     let read_query = Query::new(None, SimpleSortMethod::UpdatedAt, read_filter);
     let read_results =
         dynamic::dynamic_email_thread_cursor(&pool, &[link_id], 50, &view, read_query, "", None)

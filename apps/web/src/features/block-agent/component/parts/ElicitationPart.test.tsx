@@ -25,7 +25,6 @@ vi.mock('../../context/AgentSessionContext', () => ({
     elicitation: {
       pending: () => pending,
       canAnswer: () => canAnswer,
-      ownerName: () => 'Alice Owner',
       answering: () => false,
       respond,
     },
@@ -205,15 +204,15 @@ describe('ElicitationPart', () => {
     expect(getByTestId('trailing').textContent).toBe('Waiting for you');
   });
 
-  it('a viewer who is not the owner sees the question locked and named for the owner', () => {
+  it('a viewer without edit access sees the question locked', () => {
     pending = live();
     canAnswer = false;
     const { getByTestId, getByText } = render(() => (
       <ElicitationPart part={part()} />
     ));
-    expect(getByTestId('trailing').textContent).toBe('Waiting for Alice Owner');
+    expect(getByTestId('trailing').textContent).toBe('Waiting for an editor');
     expect(getByTestId('body').textContent).toContain(
-      'Only Alice Owner can answer this.'
+      'Only people who can edit this session can answer.'
     );
     for (const label of ['Submit', 'Decline', 'Cancel']) {
       const button = getByText(label).closest('button');
@@ -440,7 +439,7 @@ describe('ElicitationPart', () => {
       ));
       expect(getByTestId('calendar-composer').dataset.canAct).toBe('false');
       expect(getByTestId('locked-notice').textContent).toBe(
-        'Waiting for Alice Owner to answer.'
+        'Waiting for an editor to answer.'
       );
       fireEvent.click(getByTestId('composer-execute'));
       expect(respond).not.toHaveBeenCalled();

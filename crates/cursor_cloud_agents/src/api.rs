@@ -296,6 +296,7 @@ impl CursorClient {
 }
 
 impl CursorAgents for CursorClient {
+    #[tracing::instrument(skip(self), err)]
     async fn raw_result(
         &self,
         agent: &CursorAgentId,
@@ -478,6 +479,9 @@ const STREAM_CONNECT_ATTEMPTS: usize = 5;
 const STREAM_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
 
 impl RunStream for CursorClient {
+    // Covers connecting the stream, retries included; reading it belongs to
+    // the caller's `cursor.run.ingest` span.
+    #[tracing::instrument(skip(self), err)]
     async fn raw_stream(
         &self,
         agent: &CursorAgentId,

@@ -314,20 +314,18 @@ impl CallRtcClient for LivekitRtcClient {
             event: event.event,
             id: event.id,
             room_name: event.room.map(|r| r.name),
-            participant_identity: event
-                .participant
-                .and_then(|p| {
-                    // The transcription agent joins with its agent name as the
-                    // identity, which is not a MacroUserId — short-circuit so
-                    // join/leave events for the agent don't fail parsing.
-                    if Some(p.identity.as_str()) == self.transcription_agent_name.as_deref() {
+            participant_identity: event.participant.and_then(|p| {
+                match MacroUserIdStr::parse_from_str(&p.identity) {
+                    Ok(id) => Some(id.into_owned()),
+                    Err(_) => {
+                        tracing::debug!(
+                            identity = %p.identity,
+                            "skipping non-user LiveKit participant identity"
+                        );
                         None
-                    } else {
-                        Some(MacroUserIdStr::parse_from_str(&p.identity).map(CowLike::into_owned))
                     }
-                })
-                .transpose()
-                .map_err(anyhow::Error::from)?,
+                }
+            }),
             egress_id,
             file_url,
             created_at: event.created_at,

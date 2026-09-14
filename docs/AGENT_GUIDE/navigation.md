@@ -30,12 +30,20 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 ## Sidebar (a11y names are load-bearing)
 
 - Top: buttons `Search` and `Create`.
-- Nav: `Go to Home`, `Go to Getting Started`, `Go to Inbox`, `Go to Recent`, `Go to Activity`.
+- Nav: `Go to Home`, `Go to Getting Started`, `Go to Notifications`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
   `Go to Calendar`, `Go to Agents`, `Go to Customers`.
 - Then `Favorites` (pinned items) and `Latest` (recent channels/DMs with an `Unread` switch).
 - Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
   `Settings (Ctrl ;)`, `Log out`.
+
+With the new app views enabled, the outer sidebar is an icon rail. Notifications,
+Email, and Chat show a small accent dot when the loaded data contains an unread
+item. Notifications uses Signal; Email uses Important across all linked inboxes.
+Noise does not light either dot. These are presence indicators, not counts; they
+do not fetch additional pages to find every unread item. Opening a view alone does
+not clear its dot — reading or completing the represented items does. The button's
+accessible description is `Unread items` while its dot is active.
 
 ## Favorites
 
@@ -52,6 +60,24 @@ in order. A newer queued reorder replaces an older queued reorder. Server-reject
 changes roll back rather than becoming committed local favorites.
 
 ## Create menu
+
+On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
+Calendar, Email, Channels, Files, Agents, Tasks, Calls. Calendar appears in the
+dock and search scope pills only when the calendar UI flag is enabled.
+Resizing the screen moves views between the dock
+and More views, which always includes Settings and lists the overflow views in
+reverse order. More and the separate bottom-right Search button always retain
+their space. Search opens the search input and scope pills.
+Once every view fits, the navigation island stops growing; Search stays aligned
+to the right edge.
+
+The separate button one row above Search opens the current page's creation
+flow directly: new task on Tasks, email on Email, message on Channels or
+Notifications, document on Files, agent session on Agents, and event on
+Calendar. It does not open a create menu. It hides during search, while the
+keyboard is open, and on entity/detail pages with their own reply or compose
+controls. All popover splits open as bottom drawers on touch devices and dialogs
+on desktop, including task, calendar event, skill, and agent session composers.
 
 `Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
 Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
@@ -70,6 +96,8 @@ category, Esc closes.
 - `c` then `d`/`t`/`e`/`m`/`a` — create doc / task / email / channel / AI chat.
   Single-letter shortcuts only work when no editor has focus; press `Escape` first.
 - `/` — search everything. `j`/`k` — move in lists. `e` — mark done. `g` then `i` — inbox.
+- In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
+  Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.

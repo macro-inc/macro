@@ -756,6 +756,7 @@ export function ComposeTask(props: ComposeTaskProps) {
   };
 
   onMount(() => {
+    splitPanel.handle.setDisplayName('New task');
     const container = containerRef();
     if (container) {
       attachHotkeys(container);
@@ -787,6 +788,7 @@ export function ComposeTask(props: ComposeTaskProps) {
     .withCode()
     .withMedia({ fileDrop: true })
     .withSelectionData()
+    .withFloatingFormatMenu()
     .withHistory()
     .onChange(setContent)
     .onFocusLeave({

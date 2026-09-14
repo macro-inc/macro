@@ -201,6 +201,12 @@ export const MarkdownShell: Component<
         )}
         on:keydown={(e) => e.stopPropagation()}
         on:click={(e) => {
+          // Embedded controls own focus and need Solid's delegated clicks.
+          if (
+            e.target instanceof Element &&
+            e.target.closest('[data-lexical-interactive]')
+          )
+            return;
           e.stopPropagation();
           if (!isMobile()) editor.focus();
         }}
@@ -378,6 +384,10 @@ export const MarkdownShell: Component<
               <FloatingFormatMenu
                 portalScope={props.portalScope}
                 showLinkButton={!!builderConfig.links?.floatingMenu}
+                extendedInlineFormats={
+                  typeof builderConfig.floatingFormatMenu === 'object' &&
+                  builderConfig.floatingFormatMenu.extendedInlineFormats
+                }
               />
             </Show>
           </FloatingMenuGroup>

@@ -1,4 +1,6 @@
 import { isListViewID } from '@app/constants/list-views';
+import { URL_PARAMS as EMAIL_PARAMS } from '@app/features/email-thread/core/location';
+import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-notifications';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCalendarBlockRange } from '@block-calendar/calendar-range';
@@ -13,7 +15,6 @@ import {
   goToChannelLatest,
   goToChannelMessage,
 } from '@block-channel/utils/link';
-import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/constants';
 import type {
@@ -222,6 +223,7 @@ export const openEntityInNewTab = ({
   entity: EntityData;
   location?: SearchLocation;
 }) => {
+  location ??= getRowClickFallbackLocation(entity);
   // A reminder opens its own editor — a `reminder-view` component split with a
   // URL of its own — the same as the split paths, even a standalone one that
   // references nothing.
@@ -262,6 +264,13 @@ export const openEntityInNewTab = ({
     }
   } else if (location) {
     switch (location.type) {
+      case 'agent':
+        for (const [key, value] of Object.entries(
+          agentMessageParams(location)
+        )) {
+          entityUrl.searchParams.set(key, value);
+        }
+        break;
       case 'channel':
         if (location.messageId) {
           entityUrl.searchParams.set(
@@ -559,9 +568,11 @@ export async function navigateCalendarEntityToTarget(
 export const getRowClickFallbackLocation = (
   entity: EntityData
 ): SearchLocation | undefined =>
-  isHitSnippetEntity(entity) && !isEmailEntity(entity)
-    ? getSnippetHit(entity)?.location
-    : undefined;
+  entity.type === 'agent_session' && isSearchEntity(entity)
+    ? entity.search.contentHitData?.[0]?.location
+    : isHitSnippetEntity(entity) && !isEmailEntity(entity)
+      ? getSnippetHit(entity)?.location
+      : undefined;
 
 /**
  * Opens an entity in a split, handling navigation to specific locations within the entity.
@@ -697,7 +708,9 @@ export const openEntityInSplitFromUnifiedList = async (
   }
 
   let params: Record<string, string> | undefined;
-  if (entity.type === 'channel' && location?.type === 'channel') {
+  if (entity.type === 'agent_session' && location?.type === 'agent') {
+    params = agentMessageParams(location);
+  } else if (entity.type === 'channel' && location?.type === 'channel') {
     params = getChannelParams(location.messageId, location.threadId);
   } else if (channelMessageTarget) {
     params = getChannelParams(
@@ -718,6 +731,9 @@ export const openEntityInSplitFromUnifiedList = async (
   const referredFrom = options.referredFrom ?? sourceListView;
 
   let splitContent: SplitContent = { ...content, params };
+  if (splitHandle && referredFrom && isListViewID(referredFrom)) {
+    splitContent = withListNavigationSource(splitContent, splitHandle);
+  }
   // Preview source metadata belongs on Viewer entries; a replacement takes the
   // Preview Pair's place, so its entry is ordinary split history.
   if (splitHandle?.isControllerSplit() && !replacePreview) {
@@ -899,6 +915,10 @@ function getEntitySplitContent(entity: EntityData) {
       .with({ type: 'foreign' }, (entity) => {
         return { type: 'unknown' as const, id: entity.id };
       })
+      .with({ type: 'agent_session' }, (entity) => ({
+        type: 'agent' as const,
+        id: entity.id,
+      }))
       .with({ type: 'crm_company' }, (entity) => {
         return { type: 'company' as const, id: entity.id };
       })
@@ -938,6 +958,10 @@ async function navigateToLocation(
   if (!blockHandle) return;
 
   switch (location.type) {
+    case 'agent': {
+      await blockHandle.goToLocationFromParams(agentMessageParams(location));
+      break;
+    }
     case 'channel': {
       // NOTE: this is handled by the channel block params but this can be used to re-flash an open channel
       await blockHandle.goToLocationFromParams(
@@ -1580,3 +1604,5 @@ export async function executeMarkEntitiesUndone(args: {
     ),
   ]);
 }
+
+import { agentMessageParams } from '@app/features/block-agent/core/search-location';

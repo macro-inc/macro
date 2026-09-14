@@ -97,13 +97,13 @@ fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
     );
 
     let secure = MacroApi {
-        api_url: "https://agent-harness.macro.com/".to_owned(),
+        api_url: "https://gateway.macro.com/agent-harness/".to_owned(),
         storage_url: "https://gateway.macro.com/dss".to_owned(),
         web_url: "https://macro.com/app/".to_owned(),
     };
     assert_eq!(
         secure.gateway_url(),
-        "wss://agent-harness.macro.com/runtime/ws",
+        "wss://gateway.macro.com/agent-harness/runtime/ws",
     );
     assert_eq!(
         secure.pairing_approval_url("KX7M-4QHD"),

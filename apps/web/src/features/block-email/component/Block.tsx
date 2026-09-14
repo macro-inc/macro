@@ -1,3 +1,4 @@
+import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
@@ -11,8 +12,7 @@ import { buildEntityData } from '@entity';
 import { EmailDebouncedReadMarker } from '@notifications';
 import { useThreadQuery } from '@queries/email/thread';
 import { createMemo, Show, Suspense } from 'solid-js';
-import { displaySubject } from '../util/subjectText';
-import { EmailView } from './Email';
+import { EmailBlockAdapter } from '../EmailBlockAdapter';
 
 export default function BlockEmail() {
   const blockId = useBlockId();
@@ -47,8 +47,12 @@ export default function BlockEmail() {
   // thread, and an offline load with nothing cached gates as the retryable
   // state. Loader-level errors (e.g. an invalid source) still reach
   // DocumentBlockContainer through blockErrorSignal.
+  const threadData = createMemo(
+    (previous: typeof threadQuery.data | undefined) =>
+      threadQuery.isSuccess || threadQuery.isError ? threadQuery.data : previous
+  );
   const threadLoadResult = {
-    data: () => threadQuery.data,
+    data: threadData,
     error: () =>
       threadQuery.isError ? toEntityLoadError(threadQuery.error) : undefined,
     isPending: () => threadQuery.isLoading,
@@ -60,7 +64,7 @@ export default function BlockEmail() {
   const isPreview = !!useSplitPanel()?.handle.isViewerSplit();
 
   const title = () => {
-    const data = threadQuery.data;
+    const data = threadData();
     if (!data || !data.thread || data.thread.messages.length === 0) return '';
     return displaySubject(data.thread.messages[0].subject);
   };
@@ -80,11 +84,11 @@ export default function BlockEmail() {
                   <EmailDebouncedReadMarker
                     notificationSource={notificationSource}
                     threadId={id()}
-                    linkId={threadQuery.data?.thread?.link_id}
+                    linkId={threadData()?.thread?.link_id}
                     debounceTime={isPreview ? 1_500 : 100}
                   />
                   <Suspense>
-                    <EmailView title={title()} threadId={id} />
+                    <EmailBlockAdapter title={title()} threadId={id} />
                   </Suspense>
                 </>
               )}

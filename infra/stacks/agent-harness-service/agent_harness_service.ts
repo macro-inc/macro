@@ -8,16 +8,16 @@ import {
   ServiceTargetGroup,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
-  serviceLoadBalancer,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
-  BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
   getGatewayAlb,
   getKafkaClusterPolicy,
+  getServiceUrl,
   GatewayService,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 
@@ -26,23 +26,9 @@ const gatewayLoadBalancer = getGatewayAlb();
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
 
-export const SERVICE_DOMAIN_NAME = `agent-harness${
-  stack === 'prod' ? '' : `-${stack}`
-}.${BASE_DOMAIN}`;
-
-// The sandbox-facing egress proxy gets its own hostname rather than paths
-// carved out of the control API's: the control routes authenticate Macro
-// users, the egress routes authenticate session tokens presented by
-// model-authored code, and a separate host keeps the two trust domains
-// separable at the load balancer.
-export const EGRESS_DOMAIN_NAME = `agent-harness-egress${
-  stack === 'prod' ? '' : `-${stack}`
-}.${BASE_DOMAIN}`;
-
 type Args = {
   vpc: {
     vpcId: pulumi.Output<string> | string;
-    publicSubnetIds: pulumi.Output<string[]> | string[];
     privateSubnetIds: pulumi.Output<string[]> | string[];
   };
   tags: { [key: string]: string };
@@ -52,7 +38,6 @@ type Args = {
   /** Container port of the sandbox-facing egress proxy listener. */
   egressContainerPort: number;
   healthCheckPath: string;
-  isPrivate?: boolean;
   ecsClusterArn: pulumi.Output<string> | string;
   cloudStorageClusterName: pulumi.Output<string> | string;
   secretKeyArns: (pulumi.Output<string> | string)[];
@@ -74,14 +59,11 @@ type Args = {
 export class AgentHarnessService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
-  public serviceAlbSg: aws.ec2.SecurityGroup;
   public serviceSg: aws.ec2.SecurityGroup;
   public domain: string;
   public egressDomain: string;
   public targetGroup: aws.lb.TargetGroup;
   public egressTargetGroup: aws.lb.TargetGroup;
-  public lb: aws.lb.LoadBalancer;
-  public listener: aws.lb.Listener;
   public service: awsx.ecs.FargateService;
   public cloudStorageClusterName: pulumi.Output<string> | string;
   public tags: { [key: string]: string };
@@ -99,7 +81,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       serviceContainerPort,
       egressContainerPort,
       healthCheckPath,
-      isPrivate,
       ecsClusterArn,
       cloudStorageClusterName,
       containerEnvVars,
@@ -108,8 +89,8 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       bucketArns,
     } = args;
 
-    this.domain = `https://${SERVICE_DOMAIN_NAME}`;
-    this.egressDomain = `https://${EGRESS_DOMAIN_NAME}`;
+    this.domain = getServiceUrl(ServiceUrl.AGENT_HARNESS_SERVICE_URL);
+    this.egressDomain = getServiceUrl(ServiceUrl.AGENT_HARNESS_EGRESS_URL);
     this.cloudStorageClusterName = cloudStorageClusterName;
     this.tags = tags;
 
@@ -246,11 +227,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     );
     this.ecr = image.ecr;
 
-    const { serviceAlbSg, serviceSg } = this.initializeSecurityGroups({
-      vpcId: vpc.vpcId,
-      serviceContainerPort,
-    });
-    this.serviceAlbSg = serviceAlbSg;
+    const serviceSg = this.initializeSecurityGroups({ vpcId: vpc.vpcId });
     this.serviceSg = serviceSg;
 
     const gatewayTargetGroup = new ServiceTargetGroup(
@@ -269,43 +246,23 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
-      serviceName: BASE_NAME,
-      serviceContainerPort,
-      healthCheckPath,
-      vpc,
-      albSecurityGroupId: serviceAlbSg.id,
-      isPrivate,
-      // The egress proxy carries MCP event streams and git pack negotiation,
-      // both of which sit idle past the ALB's 60s default. Same value the
-      // other streaming hosts (mcp-server, connection-gateway) use.
-      idleTimeout: 3600,
-      tags,
-    });
-    this.targetGroup = targetGroup;
-    this.lb = lb;
-    this.listener = listener;
+    this.targetGroup = gatewayTargetGroup.target_group;
 
-    // Egress stays host-routed on this dedicated ALB, not the shared
-    // gateway. Control API authenticates Macro users; egress authenticates
-    // sandbox session tokens on a second container port. Mixing those
-    // trust domains onto the gateway (or under `/agent-harness`) would
-    // collapse that boundary. This rule's priority 10 is scoped to this
-    // listener and does not collide with the gateway's DSS priority 10.
-    // Not `${BASE_NAME}-egress`: with the helper's `-tg` suffix that is 36
-    // chars, and target group names cap at 32.
+    // Forward the egress prefix unchanged to its own listener. Session-token
+    // Authorization headers are handled by the egress router as before.
+    // Use a new target group: AWS cannot attach one to two ALBs during cutover.
+    // Keep the name (including the helper's -tg suffix) below 32 characters.
     const egress = new ServiceTargetGroup(
-      `agent-harness-egress-${stack}`,
+      `ah-egress-gateway-${stack}`,
       {
-        listenerArn: listener.arn,
+        listenerArn: gatewayLoadBalancer.httpsListenerArn,
         vpcId: vpc.vpcId,
         containerPort: egressContainerPort,
         healthCheckPath,
-        hostHeaders: [EGRESS_DOMAIN_NAME],
-        // The only rule on this listener; any future rule must pick another.
-        priority: 10,
+        pathPatterns: ['/agent-harness-egress', '/agent-harness-egress/*'],
+        service: GatewayService.AGENT_HARNESS_EGRESS,
         serviceSecurityGroupId: serviceSg.id,
-        albSecurityGroupId: serviceAlbSg.id,
+        albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
         tags,
       },
       { parent: this }
@@ -344,17 +301,9 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         // and JWT secrets, so a 0s grace period trips the circuit breaker
         // before the replacement binds. Ignore those checks until then.
         healthCheckGracePeriodSeconds: 120,
-        // Register the control port in both the dedicated ALB and the
-        // gateway target group during cutover. An explicit `loadBalancers`
-        // replaces the list awsx derives from `portMappings.targetGroup`,
-        // so the legacy control entry and the egress entry must be listed
-        // here too.
+        // Both listeners use the shared gateway, with separate target groups
+        // for the control API and sandbox egress proxy.
         loadBalancers: [
-          {
-            targetGroupArn: targetGroup.arn,
-            containerName: 'service',
-            containerPort: serviceContainerPort,
-          },
           {
             targetGroupArn: gatewayTargetGroup.target_group.arn,
             containerName: 'service',
@@ -410,7 +359,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
                   name: `${BASE_NAME}-tcp-${stack}`,
                   hostPort: serviceContainerPort,
                   containerPort: serviceContainerPort,
-                  targetGroup,
+                  targetGroup: this.targetGroup,
                 },
                 {
                   appProtocol: 'http',
@@ -436,85 +385,24 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         // ECS refuses a service whose target group is not yet associated
         // with a load balancer; it is the listener rule that creates that
         // association.
-        dependsOn: [gatewayTargetGroup.listener_rule],
+        dependsOn: [gatewayTargetGroup.listener_rule, egress.listener_rule],
       }
     );
 
     this.setupServiceAlarms();
-
-    const zone = aws.route53.getZoneOutput({ name: BASE_DOMAIN });
-    new aws.route53.Record(
-      `${BASE_NAME}-domain-record`,
-      {
-        name: SERVICE_DOMAIN_NAME,
-        type: 'A',
-        zoneId: zone.zoneId,
-        aliases: [
-          {
-            evaluateTargetHealth: false,
-            name: this.lb.dnsName,
-            zoneId: this.lb.zoneId,
-          },
-        ],
-      },
-      { parent: this }
-    );
-    new aws.route53.Record(
-      `${BASE_NAME}-egress-domain-record`,
-      {
-        name: EGRESS_DOMAIN_NAME,
-        type: 'A',
-        zoneId: zone.zoneId,
-        aliases: [
-          {
-            evaluateTargetHealth: false,
-            name: this.lb.dnsName,
-            zoneId: this.lb.zoneId,
-          },
-        ],
-      },
-      { parent: this }
-    );
   }
 
   private initializeSecurityGroups({
     vpcId,
-    serviceContainerPort,
   }: {
     vpcId: pulumi.Output<string> | string;
-    serviceContainerPort: number;
   }) {
-    const serviceAlbSg = new aws.ec2.SecurityGroup(
-      `${BASE_NAME}-alb-sg-${stack}`,
-      {
-        name: `${BASE_NAME}-alb-sg-${stack}`,
-        description: `${BASE_NAME} application load balancer security group`,
-        vpcId,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
     const serviceSg = new aws.ec2.SecurityGroup(
       `${BASE_NAME}-sg-${stack}`,
       {
         name: `${BASE_NAME}-sg-${stack}`,
         vpcId,
         description: `${BASE_NAME} service security group`,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-alb-in`,
-      {
-        securityGroupId: serviceSg.id,
-        description: 'Allow inbound traffic from the service ALB',
-        referencedSecurityGroupId: serviceAlbSg.id,
-        fromPort: serviceContainerPort,
-        toPort: serviceContainerPort,
-        ipProtocol: 'tcp',
         tags: this.tags,
       },
       { parent: this }
@@ -532,49 +420,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-http`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow inbound HTTP traffic',
-        cidrIpv4: '0.0.0.0/0',
-        fromPort: 80,
-        toPort: 80,
-        ipProtocol: 'tcp',
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-https`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow inbound HTTPS traffic',
-        cidrIpv4: '0.0.0.0/0',
-        fromPort: 443,
-        toPort: 443,
-        ipProtocol: 'tcp',
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupEgressRule(
-      `${BASE_NAME}-alb-out`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow traffic to the service security group',
-        referencedSecurityGroupId: serviceSg.id,
-        fromPort: serviceContainerPort,
-        toPort: serviceContainerPort,
-        ipProtocol: 'tcp',
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    return { serviceAlbSg, serviceSg };
+    return serviceSg;
   }
 
   private setupServiceAlarms() {

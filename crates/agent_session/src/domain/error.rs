@@ -22,6 +22,8 @@ pub enum AgentSessionError {
     UnknownOwner,
     #[error("invalid agent session name: {0}")]
     InvalidName(&'static str),
+    #[error("a preview request may name at most {0} sessions")]
+    TooManyPreviewIds(usize),
     #[error("the caller may not control this agent session")]
     Forbidden,
     #[error("no queued action with this id; it may already have been dispatched")]

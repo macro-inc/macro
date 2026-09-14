@@ -24,25 +24,14 @@ const tabTypes: Record<InboxTab, ReadonlySet<InboxTypeFilter>> = {
     'calendar',
   ]),
   noise: new Set(['email']),
-  all: new Set([
-    'documents',
-    'tasks',
-    'email',
-    'channels',
-    'agents',
-    'projects',
-    'github',
-  ]),
   reminders: new Set(['reminders']),
 };
 
-function readFilter(
-  selection: FacetSelection
-): NotificationFilters | undefined {
+function readFilter(selection: FacetSelection): boolean | undefined {
   const active = selection.read ?? [];
   if (active.length !== 1) return undefined;
-  if (active[0] === 'read') return { seen: true };
-  if (active[0] === 'unread') return { seen: false };
+  if (active[0] === 'read') return true;
+  if (active[0] === 'unread') return false;
 
   return undefined;
 }
@@ -79,15 +68,18 @@ export function buildInboxSearchRequest(
   const filtersIncompleteEntities =
     context.tab === 'signal' || context.tab === 'noise';
 
-  const notificationFilters: NotificationFilters = {};
-
-  if (filtersIncompleteEntities) {
-    notificationFilters.done = false;
-  }
-
-  if (notification?.seen !== undefined) {
-    notificationFilters.seen = notification.seen;
-  }
+  const notificationFilters: NotificationFilters = {
+    states:
+      notification === false
+        ? ['unseen']
+        : notification === true
+          ? filtersIncompleteEntities
+            ? ['seen']
+            : ['seen', 'done']
+          : filtersIncompleteEntities
+            ? ['unseen', 'seen']
+            : [],
+  };
 
   const documentTypes = [...types].filter(
     (type) => type === 'documents' || type === 'tasks'
@@ -171,9 +163,9 @@ export function buildInboxSearchRequest(
       emailFilters.importance = false;
     }
 
-    if (hasNotificationFilter) {
-      emailFilters.notification_filters = notificationFilters;
-    }
+    // Email inbox/read state is independent of user notifications. Applying
+    // a notification predicate here would drop email that has no notification.
+    if (notification !== undefined) emailFilters.is_read = notification;
 
     filters.email_filters = emailFilters;
   }

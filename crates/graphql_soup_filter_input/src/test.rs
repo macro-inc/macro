@@ -15,7 +15,7 @@ fn generated_typescript_variables_materialize_authoritative_ast() {
     assert!(matches!(
         ast.document_filter.as_deref(),
         Some(Expr::And(left, right))
-            if matches!(left.as_ref(), Expr::Literal(DocumentLiteral::NotificationDone(false)))
+            if matches!(left.as_ref(), Expr::Or(_, _))
                 && matches!(right.as_ref(), Expr::Literal(DocumentLiteral::UpdatedAt(_)))
     ));
     assert!(matches!(

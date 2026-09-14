@@ -1930,6 +1930,7 @@ async fn messages_around_returns_404_when_not_found() {
 
 struct CapturingService {
     captured: std::sync::Mutex<Option<ChannelMessageFilters>>,
+    captured_direction: std::sync::Mutex<Option<MessagePageDirection>>,
     captured_notification_user_id: std::sync::Mutex<Option<MacroUserIdStr<'static>>>,
 }
 
@@ -1937,6 +1938,7 @@ impl CapturingService {
     fn new() -> std::sync::Arc<Self> {
         std::sync::Arc::new(Self {
             captured: std::sync::Mutex::new(None),
+            captured_direction: std::sync::Mutex::new(None),
             captured_notification_user_id: std::sync::Mutex::new(None),
         })
     }
@@ -1947,12 +1949,13 @@ impl ChannelService for std::sync::Arc<CapturingService> {
         &self,
         _channel_id: Uuid,
         _query: Query<Uuid, CreatedAt, ()>,
-        _direction: MessagePageDirection,
+        direction: MessagePageDirection,
         _limit: u16,
         filters: &ChannelMessageFilters,
         notification_user_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<ChannelMessagesQueryResult, ChannelMessagesErr> {
         *self.captured.lock().unwrap() = Some(filters.clone());
+        *self.captured_direction.lock().unwrap() = Some(direction);
         *self.captured_notification_user_id.lock().unwrap() =
             notification_user_id.map(CowLike::into_owned);
         Ok(ChannelMessagesQueryResult {
@@ -2124,8 +2127,7 @@ async fn post_messages_forwards_notification_filter_for_authenticated_user() {
     let channel_id = Uuid::new_v4();
     let body = serde_json::json!({
         "notification_filters": {
-            "done": false,
-            "seen": true
+            "states": ["seen"]
         }
     })
     .to_string();
@@ -2141,8 +2143,10 @@ async fn post_messages_forwards_notification_filter_for_authenticated_user() {
     assert_eq!(res.status(), StatusCode::OK);
 
     let captured = svc.captured.lock().unwrap().clone().unwrap();
-    assert_eq!(captured.notification_filters.done, Some(false));
-    assert_eq!(captured.notification_filters.seen, Some(true));
+    assert_eq!(
+        captured.notification_filters.states,
+        vec![item_filters::NotificationState::Seen]
+    );
     let captured_user_id = svc
         .captured_notification_user_id
         .lock()
@@ -2268,6 +2272,92 @@ async fn message_context_returns_flat_context_response() {
 }
 
 // --- Access control tests ---
+
+#[tokio::test]
+async fn catch_up_forwards_exclusive_after_and_older_direction() {
+    let svc = CapturingService::new();
+    let router = channels_router(ChannelsRouterState::new(
+        svc.clone(),
+        TestAccessService::allow(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
+
+    let channel_id = Uuid::new_v4();
+    let after = "2026-09-10T13:19:00.123456Z";
+    let request = Request::builder()
+        .uri(format!("/{channel_id}/messages/catch-up?after={after}"))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let captured = svc.captured.lock().unwrap().clone().unwrap();
+    assert_eq!(
+        captured.created_after_exclusive,
+        Some(
+            chrono::DateTime::parse_from_rfc3339(after)
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        )
+    );
+    assert!(captured.created_after.is_none());
+    assert_eq!(
+        *svc.captured_direction.lock().unwrap(),
+        Some(MessagePageDirection::Older)
+    );
+}
+
+#[tokio::test]
+async fn catch_up_rejects_missing_or_invalid_after() {
+    let svc = CapturingService::new();
+    let router = channels_router(ChannelsRouterState::new(
+        svc.clone(),
+        TestAccessService::allow(),
+        authorization_state(),
+    ))
+    .layer(axum::middleware::map_request(attach_bearer));
+
+    let channel_id = Uuid::new_v4();
+    for uri in [
+        format!("/{channel_id}/messages/catch-up"),
+        format!("/{channel_id}/messages/catch-up?after=yesterday"),
+    ] {
+        let request = Request::builder()
+            .uri(uri)
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let res = router.clone().oneshot(request).await.unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        let bytes = res.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["message"], "after must be an RFC3339 timestamp");
+        assert!(svc.captured.lock().unwrap().is_none());
+    }
+}
+
+#[tokio::test]
+async fn non_member_cannot_access_catch_up() {
+    let router = denied_router();
+    let channel_id = Uuid::new_v4();
+    let request = Request::builder()
+        .uri(format!(
+            "/{channel_id}/messages/catch-up?after=2026-09-10T13:19:00Z"
+        ))
+        .body(axum::body::Body::empty())
+        .unwrap();
+
+    let res = router.oneshot(request).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        json["message"],
+        "User does not have access to the requested resource"
+    );
+}
 
 #[tokio::test]
 async fn non_member_cannot_access_messages() {

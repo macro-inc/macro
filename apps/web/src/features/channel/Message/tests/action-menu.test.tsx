@@ -41,6 +41,7 @@ describe('ActionMenu', () => {
     expect(
       container.querySelector('[data-message-hover-actions]')
     ).not.toBeNull();
+    expect(container.querySelector('[data-slot="toolbar"]')).not.toBeNull();
 
     fireEvent.pointerLeave(root!);
 

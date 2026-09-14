@@ -21,7 +21,7 @@ function Trigger(props: ComponentProps<typeof Collapsible.Trigger>) {
     <Collapsible.Trigger
       {...rest}
       class={cn(
-        'group flex h-9 w-full min-w-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/30',
+        'group flex h-9 w-full min-w-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/30',
         local.class
       )}
     >

@@ -5,12 +5,9 @@ import {
   highlightedCommentThreadsSignal,
 } from '@block-md/comments/commentStore';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
-import type { Completion } from '@core/client/completion';
-import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
+import { PopupPositioner } from '@core/component/GeneralizedPopup/PopupPositioner';
 import { LocationHighlight } from '@core/component/LexicalMarkdown/component/core/Highlights';
 import {
   createMenuOpenSignal,
@@ -21,8 +18,10 @@ import {
   $getConvertibleListFromSelection,
   autoRegister,
   type EnhancedSelection,
+  INSERT_LINK_COMMAND,
   LIST_TO_TABLE_COMMAND,
   NODE_TRANSFORM,
+  normalizeLinkUrl,
   registerRootEventListener,
 } from '@core/component/LexicalMarkdown/plugins';
 import {
@@ -40,15 +39,15 @@ import {
   type PersistentLocation,
 } from '@core/component/LexicalMarkdown/plugins/location/locationPlugin';
 import {
-  HIGHLIGHT_SELECTED_NODES,
-  POPUP_REPLACE_TEXT,
   popupPlugin,
   RECOMPUTE_SELECTION_RECT,
-  REMOVE_HIGHLIGHT_SELECTED_NODES,
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import { enableInlineAiEditing } from '@core/constant/featureFlags';
+import {
+  ENABLE_MARKDOWN_COMMENTS,
+  enableInlineAiEditing,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -56,34 +55,26 @@ import {
   setNativeEditMenuSuppressed,
 } from '@core/mobile/nativeEditMenu';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
-import { createMarkdownFile } from '@core/util/create';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { debouncedDependent } from '@core/util/debounce';
 import { getScrollParentElement } from '@core/util/scrollParent';
-import MacroGridLoader from '@icon/macro-grid-noise-loader-4.svg';
 import type { NodeIdMappings } from '@macro-inc/lexical-core';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import ArrowUp from '@phosphor/arrow-up.svg';
+import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import GridIcon from '@phosphor/grid-four.svg';
 import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import ClipboardIcon from '@phosphor-icons/core/bold/clipboard-bold.svg?component-solid';
-import NotesIcon from '@phosphor-icons/core/bold/file-md-bold.svg?component-solid';
 import SparkleIcon from '@phosphor-icons/core/bold/sparkle-bold.svg?component-solid';
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
 import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
-import PencilIcon from '@phosphor-icons/core/regular/pencil.svg?component-solid';
 import {
   cancelAiEdit,
   hasActiveAiEdit,
   requestAiEdit,
 } from '@service-ai-editing/client';
-import { generateTitle } from '@service-cognition/client';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
-import { createCallback } from '@solid-primitives/rootless';
-import { Button, Layer } from '@ui';
+import { Button, Toolbar } from '@ui';
 import {
-  $getRoot,
   $getSelection,
   $isRangeSelection,
   $setSelection,
@@ -205,16 +196,12 @@ export function MarkdownPopup(props: {
   const highlightedCommentThreads = highlightedCommentThreadsSignal.get;
   const setActiveCommentThread = activeCommentThreadSignal.set;
 
-  const [copied, setCopied] = createSignal(false);
   const [locationCopied, setLocationCopied] = createSignal(false);
-  const [isLoading, setIsLoading] = createSignal<boolean>(false);
   const [isConverting, setIsConverting] = createSignal(false);
   const [hasCheckboxes, setHasCheckboxes] = createSignal(false);
   const [convertibleListKey, setConvertibleListKey] = createSignal<
     string | null
   >(null);
-  const { replaceOrInsertSplit } = useSplitLayout();
-  let markdownRootRef!: HTMLDivElement;
 
   const _selectedText = () => selection()?.text ?? undefined;
   const _selectedNodesText = () => selection()?.nodeText ?? undefined;
@@ -335,20 +322,19 @@ export function MarkdownPopup(props: {
       fallback={
         <Button
           size="icon-sm"
-          class="rounded-md"
-          depth={3}
-          variant="ghost"
-          tooltip="Ask Macro"
+          class="rounded-full"
+          variant="strong"
+          tooltip="Send"
           disabled={!aiEditInput().trim()}
           onClick={handleAiEditSubmit}
         >
-          <CheckIcon class="size-4" />
+          <ArrowUp class="size-4" />
         </Button>
       }
     >
       <Button
         size="icon-sm"
-        class="rounded-md"
+        class="rounded-full"
         depth={3}
         variant="ghost"
         tooltip="Stop AI edit"
@@ -499,403 +485,210 @@ export function MarkdownPopup(props: {
   };
 
   const MarkdownPopupToolbar = () => {
-    const _isAuthenticated = useIsAuthenticated();
-    const [completion, _setCompletion] = createSignal<Completion | undefined>(
-      undefined
-    );
+    let savedLinkSelection: RangeSelection | null = null;
+    const [activePrompt, setActivePrompt] = createSignal<
+      'none' | 'ai' | 'link'
+    >('none');
+    const [linkInput, setLinkInput] = createSignal('');
 
-    const [completionType, _setCompletionType] = createSignal<
-      'explain' | 'bullet' | 'translate' | 'rewrite' | undefined
-    >(undefined);
-
-    const isGenerating = () => completion()?.status !== 'completed';
-
-    const [inputVal, setInputVal] = createSignal('');
-    const [rewriteInputRef, setRewriteInputRef] = createSignal<
-      HTMLTextAreaElement | undefined
-    >(undefined);
-
-    const handleCopy = async () => {
-      const cleanedText = completion()?.content;
-      if (!cleanedText) {
-        return;
-      }
-      const html = markdownRootRef?.outerHTML ?? null;
-      if (!html) {
-        try {
-          await navigator.clipboard.writeText(cleanedText);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        } catch {}
-        return;
-      }
-
-      const clipboardItem = new ClipboardItem({
-        'text/plain': new Blob([cleanedText], { type: 'text/plain' }),
-        'text/html': new Blob([html], { type: 'text/html' }),
-      });
-      let written = false;
-      // try rich and plain first. Not avail in all browsers and contexts.
-      try {
-        await navigator.clipboard.write([clipboardItem]);
-        written = true;
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch {}
-
-      if (!written) {
-        try {
-          await navigator.clipboard.writeText(cleanedText);
-          written = true;
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-        } catch {}
-      }
+    // Track the toolbar's rendered width so a prompt that replaces it keeps the
+    // same footprint instead of snapping to its own content width.
+    const [toolbarWidth, setToolbarWidth] = createSignal<number>();
+    const measureToolbar = (el: HTMLDivElement) => {
+      const update = () => setToolbarWidth(el.getBoundingClientRect().width);
+      update();
+      const observer = new ResizeObserver(update);
+      observer.observe(el);
+      onCleanup(() => observer.disconnect());
     };
-
-    const handleReplaceText = createCallback(async (newText: string) => {
-      editor.dispatchCommand(POPUP_REPLACE_TEXT, newText);
-      setPopupVisible(false);
-    });
-
-    const name = useBlockDocumentName();
-    const handleEditInMarkdown = createCallback(async () => {
-      setIsLoading(true);
-      const content = completion()?.content;
-      if (!content) {
-        return;
-      }
-
-      const title = await generateTitle(content);
-      const documentId = await createMarkdownFile({
-        content,
-        title: title ?? `${name()} - AI Explanation`,
-      });
-
-      if (!documentId) {
-        console.error('Error opening AI message in Notes');
-        setIsLoading(false);
-        return;
-      }
-
-      replaceOrInsertSplit({
-        type: 'md',
-        id: documentId,
-      });
-      setIsLoading(false);
-    });
-
-    const _contentSize = () => {
-      let charCount = 0;
-      editor.getEditorState().read(() => {
-        const root = $getRoot();
-        const text = root.getTextContent();
-        charCount = text.length;
-      });
-      return charCount;
-    };
-
-    const handleRewrite = (_instructions: string) => {};
-
-    let aiInputRef: HTMLTextAreaElement | undefined;
-
-    createEffect(
-      on([completionType, rewriteInputRef], () => {
-        if (highlightLocation()) {
-          return;
-        }
-
-        const inputRef = rewriteInputRef();
-        if (completionType() === 'rewrite' && inputRef) {
-          const location = editor.read(() => $getSelectionLocation());
-          if (!location) return;
-
-          setHighlightLocation(location);
-          inputRef.focus();
-        }
-      })
-    );
 
     onCleanup(() => {
       setHighlightLocation(null);
     });
 
-    // HACK (seamus) : Would be nice to have a better way to make the
-    // width of the content follow the width of the buton row without width
-    // queries, but for now this works.
-    let buttonRowRef!: HTMLDivElement;
-    const [maxInnerWidth, setMaxInnerWidth] = createSignal(300);
-    onMount(() => {
-      setMaxInnerWidth(buttonRowRef.getBoundingClientRect().width);
-      const observer = new ResizeObserver(() => {
-        setMaxInnerWidth(buttonRowRef.getBoundingClientRect().width);
+    // Snapshot the selection before the link input steals focus so the URL can
+    // be applied to the original range on submit.
+    const handleRequestLink = () => {
+      savedLinkSelection = editor.read(() => {
+        const current = $getSelection();
+        return $isRangeSelection(current) ? current.clone() : null;
       });
-      observer.observe(buttonRowRef);
-      onCleanup(() => {
-        observer.disconnect();
+      setActivePrompt('link');
+    };
+
+    const handleInsertLink = () => {
+      const input = linkInput().trim();
+      const url = normalizeLinkUrl(input);
+      if (!url) return;
+      const linkText = selection()?.text ?? input;
+      editor.update(() => {
+        if (savedLinkSelection) $setSelection(savedLinkSelection);
       });
-    });
+      editor.dispatchCommand(INSERT_LINK_COMMAND, { url, linkText });
+      setLinkInput('');
+      setActivePrompt('none');
+      setPopupVisible(false);
+    };
+
+    // Escape dismisses the input and refocuses the editor so the selection is
+    // preserved (and never reaches lexical's own escape handling).
+    const dismissPrompt = () => {
+      setActivePrompt('none');
+      setLinkInput('');
+      setAiEditInput('');
+      editor.focus();
+    };
 
     return (
-      <>
-        <div
-          class="gap-1 flex flex-row items-center flex-nowrap p-0"
-          ref={buttonRowRef}
-        >
-          {/*<Show
-						when={
-							ENABLE_MARKDOWN_AI_GENERATE &&
-							isAuthenticated() &&
-							!!selectedText() &&
-							selectionType() === "range" &&
-							blockId
-						}
-					>
-						<AskAi
-							attachmentId={blockId}
-							blockName="md"
-							setCompletion={setCompletion}
-							setCompletionType={setCompletionType}
-							selectedText={selectedText()!}
-							canEdit={canEdit()}
-							contentSize={contentSize}
-							selectedNodesText={selectedNodesText()}
-							registerRewriteMethod={(fn: (instructions: string) => void) => {
-								handleRewrite = fn;
-							}}
-						/>
-					</Show>*/}
-          <Show when={canEdit() || canComment()}>
-            <FormatTools withinPopup />
-          </Show>
-          <Show when={shouldShowCheckboxToTaskButton()}>
-            <Button
-              size="sm"
-              class="rounded-md"
+      <Show
+        when={activePrompt() !== 'none'}
+        fallback={
+          <Toolbar ref={measureToolbar}>
+            {/* Selection actions: AI edit + convert to tasks. */}
+            <Show when={shouldShowEditWithAiButton()}>
+              <Toolbar.Button
+                size="sm"
+                depth={3}
+                onClick={() => setActivePrompt('ai')}
+              >
+                AI edit
+              </Toolbar.Button>
+            </Show>
+            <Show when={shouldShowCheckboxToTaskButton()}>
+              <Toolbar.Button
+                size="sm"
+                depth={3}
+                onClick={handleConvertToTasks}
+                disabled={isConverting()}
+              >
+                <Dynamic
+                  component={isConverting() ? LoadingIcon : CheckSquareIcon}
+                  class="size-4"
+                />
+                {isConverting() ? 'Converting...' : 'Tasks'}
+              </Toolbar.Button>
+            </Show>
+            <Show
+              when={
+                shouldShowEditWithAiButton() || shouldShowCheckboxToTaskButton()
+              }
+            >
+              <Toolbar.Divider />
+            </Show>
+
+            <Show when={canEdit()}>
+              <FormatTools withinPopup onRequestLink={handleRequestLink} />
+              <Toolbar.Divider />
+            </Show>
+
+            <Show when={shouldShowTableButton()}>
+              <Toolbar.Button
+                size="sm"
+                depth={3}
+                tooltip="Convert list to table"
+                onClick={handleConvertListToTable}
+              >
+                <GridIcon class="size-4" />
+                Table
+              </Toolbar.Button>
+              <Toolbar.Divider />
+            </Show>
+            <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>
+              <Toolbar.Button
+                size="icon-sm"
+                depth={3}
+                onClick={handleInsertComment}
+                tooltip="Comment"
+                label="Comment"
+              >
+                <ChatTeardrop />
+              </Toolbar.Button>
+            </Show>
+            <Toolbar.Button
+              size="icon-sm"
               depth={3}
-              variant="ghost"
-              onClick={handleConvertToTasks}
-              disabled={isConverting()}
+              onClick={() => void handleShare()}
+              tooltip="Copy link to snippet"
+              label="Copy link to snippet"
             >
               <Dynamic
-                component={isConverting() ? LoadingIcon : CheckSquareIcon}
-                class="size-4"
+                component={locationCopied() ? CheckIcon : LinkIcon}
+                class={locationCopied() ? 'text-success-ink size-4' : 'size-4'}
               />
-              {isConverting() ? 'Converting...' : 'Tasks'}
-            </Button>
-          </Show>
-          <Show when={shouldShowTableButton()}>
-            <Button
-              size="sm"
-              class="rounded-md"
-              depth={3}
-              variant="ghost"
-              tooltip="Convert list to table"
-              onClick={handleConvertListToTable}
-            >
-              <GridIcon class="size-4" />
-              Table
-            </Button>
-          </Show>
-          <Button
-            size="sm"
-            class="px-2 text-xs rounded-md py-1.25"
-            depth={3}
-            variant="ghost"
-            onClick={() => void handleShare()}
-          >
-            <Dynamic
-              component={locationCopied() ? CheckIcon : LinkIcon}
-              class={locationCopied() ? 'text-success-ink size-4' : 'size-4'}
-            />
-            Share
-          </Button>
-        </div>
-
-        <Show when={shouldShowEditWithAiButton()}>
-          <div class="mt-1 flex w-full min-w-72 items-center gap-1 border-t border-edge p-1 pt-1.5 pr-2">
-            <SparkleIcon class="size-4 shrink-0 text-ink-extra-muted" />
-            <textarea
-              class="grow resize-none overflow-hidden bg-transparent text-sm placeholder:text-ink-placeholder focus:outline-none"
-              rows={1}
-              placeholder="Ask Macro to edit this selection"
-              ref={(el) => {
-                aiInputRef = el;
-              }}
-              onFocus={() => setAiInputFocused(true)}
-              onBlur={() => setAiInputFocused(false)}
-              onInput={handleAiInput}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleAiEditSubmit();
-                } else if (e.key === 'Escape') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setAiEditInput('');
-                  aiInputRef?.blur();
-                }
-              }}
-            />
-            <AiEditSubmitButton />
-          </div>
-        </Show>
-
-        <Show when={!completion() && completionType() === 'rewrite'}>
-          <div class="flex flex-col border-t border-edge mt-1 pt-2 w-full">
-            <p class="text-ink-muted font-medium pt-1 pl-3 text-sm">
-              How would you like this text rewritten?
-            </p>
-            <div class="flex flex-row items-center space-x-2 w-full px-2">
+            </Toolbar.Button>
+          </Toolbar>
+        }
+      >
+        <Toolbar
+          class="gap-2"
+          style={{
+            width: toolbarWidth() ? `${toolbarWidth()}px` : undefined,
+          }}
+        >
+          <Show
+            when={activePrompt() === 'link'}
+            fallback={
               <textarea
-                class="resize-none rounded-xs w-full p-2 my-3 text-sm max-h-[800px] overflow-hidden border border-edge bg-hover"
-                ref={setRewriteInputRef}
+                class="grow resize-none overflow-hidden bg-transparent pl-2 text-sm placeholder:text-ink-placeholder focus:outline-none"
                 rows={1}
-                onSubmit={(e) => e.preventDefault()}
-                placeholder={'Check for spelling and grammar errors'}
-                onInput={(e) => {
-                  setInputVal(e.currentTarget.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = `${e.target.scrollHeight}px`;
+                placeholder="Describe changes"
+                ref={(el) => {
+                  requestAnimationFrame(() => el.focus());
                 }}
+                onFocus={() => setAiInputFocused(true)}
+                onBlur={() => setAiInputFocused(false)}
+                onInput={handleAiInput}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    handleRewrite(inputVal());
+                    handleAiEditSubmit();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dismissPrompt();
                   }
                 }}
               />
-              <button
-                class="bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center py-1"
-                onClick={() => {
-                  handleRewrite(inputVal());
-                }}
-              >
-                <PaperPlaneRight
-                  width={20}
-                  height={20}
-                  color="var(--color-accent)"
-                  class="text-accent fill-accent!"
-                />
-              </button>
-            </div>
-          </div>
-        </Show>
-
-        <Show when={completion()}>
-          {(completion) => (
-            <div
-              class="rounded-xs p-1 mt-1"
-              style={{
-                'overflow-wrap': 'break-word',
-                width: `${maxInnerWidth()}px`,
+            }
+          >
+            <input
+              type="text"
+              class="h-6 grow bg-transparent pl-2 text-sm placeholder:text-ink-placeholder focus:outline-none"
+              placeholder="Paste or insert link"
+              value={linkInput()}
+              ref={(el) => {
+                requestAnimationFrame(() => el.focus());
               }}
+              onInput={(e) => setLinkInput(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleInsertLink();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  dismissPrompt();
+                }
+              }}
+            />
+          </Show>
+          <Show when={activePrompt() === 'ai'}>
+            <AiEditSubmitButton />
+          </Show>
+          <Show when={activePrompt() === 'link'}>
+            <Button
+              size="icon-sm"
+              class="rounded-full"
+              variant="strong"
+              tooltip="Insert link"
+              disabled={!linkInput().trim()}
+              onClick={handleInsertLink}
             >
-              <Show
-                when={
-                  completion().status !== 'loading' &&
-                  completion().content.length > 0
-                }
-                fallback={
-                  <div class="p-2 font-mono text-sm flex items-center gap-2">
-                    <MacroGridLoader
-                      width={20}
-                      height={20}
-                      class="text-accent"
-                    />
-                  </div>
-                }
-              >
-                <div class="wrap-break-word p-2">
-                  <ChatMessageMarkdown
-                    text={completion().content}
-                    generating={isGenerating}
-                    rootRef={(ref: HTMLDivElement) => {
-                      markdownRootRef = ref;
-                    }}
-                  />
-                </div>
-                <div class="border-t border-edge">
-                  <div class="flex flex-row justify-end text-ink-muted mt-1">
-                    <Show when={completionType() === 'rewrite'}>
-                      {' '}
-                      <div class="w-fit mr-2">
-                        {' '}
-                        <button
-                          class="flex flex-row items-center space-x-1 hover:bg-hover hover-transition-bg rounded-md p-1 text-xs font-sans"
-                          onClick={() => {
-                            !isLoading() &&
-                              handleReplaceText(completion().content);
-                          }}
-                          onMouseEnter={() => {
-                            editor.dispatchCommand(
-                              HIGHLIGHT_SELECTED_NODES,
-                              undefined
-                            );
-                          }}
-                          onMouseLeave={() => {
-                            editor.dispatchCommand(
-                              REMOVE_HIGHLIGHT_SELECTED_NODES,
-                              undefined
-                            );
-                          }}
-                        >
-                          {' '}
-                          <Show
-                            when={!isLoading() && !isGenerating()}
-                            fallback={
-                              <LoadingIcon class="size-3 animate-spin" />
-                            }
-                          >
-                            {' '}
-                            <PencilIcon class="size-3" />{' '}
-                          </Show>{' '}
-                          <p>Accept Changes</p>{' '}
-                        </button>{' '}
-                      </div>
-                    </Show>
-                    <div class="w-fit mr-2">
-                      <button
-                        class="flex flex-row items-center space-x-1 hover:bg-hover hover-transition-bg rounded-md p-1 text-xs font-sans"
-                        onClick={() => {
-                          !isLoading() && handleEditInMarkdown();
-                        }}
-                      >
-                        <Show
-                          when={!isLoading() && !isGenerating()}
-                          fallback={<LoadingIcon class="size-3 animate-spin" />}
-                        >
-                          <NotesIcon class="size-3 text-note" />
-                        </Show>
-                        <p>Edit in Notes</p>
-                      </button>
-                    </div>
-                    <div class="w-fit">
-                      <button
-                        class="flex flex-row items-center space-x-1 hover:bg-hover hover-transition-bg rounded-md p-1 text-xs font-sans"
-                        onClick={handleCopy}
-                      >
-                        <Show
-                          when={!isGenerating()}
-                          fallback={<LoadingIcon class="size-3 animate-spin" />}
-                        >
-                          <Show
-                            when={!copied()}
-                            fallback={<CheckIcon class="size-3 text-success" />}
-                          >
-                            <ClipboardIcon class="size-3" />
-                          </Show>
-                        </Show>
-                        <p>{copied() ? 'Copied!' : 'Copy'}</p>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </Show>
-            </div>
-          )}
-        </Show>
-      </>
+              <CheckIcon class="size-4" />
+            </Button>
+          </Show>
+        </Toolbar>
+      </Show>
     );
   };
 
@@ -907,26 +700,47 @@ export function MarkdownPopup(props: {
       if (!aiEditRunning() && !aiEditDrawerOpen()) setAiEditLocation(null);
     });
     return (
-      <Show when={isTouchDevice()} fallback={<MarkdownPopupToolbar />}>
-        <TouchSelectionToolbar
-          canEdit={canEdit()}
-          canComment={canComment()}
-          isConverting={isConverting()}
-          hasSelection={(selection()?.text ?? '') !== ''}
-          showTasksOption={shouldShowCheckboxToTaskButton()}
-          showTableOption={shouldShowTableButton()}
-          showEditWithAiOption={shouldShowEditWithAiButton()}
-          showOpenCommentOption={highlightedCommentThreads().length > 0}
-          locationCopied={locationCopied()}
-          setPopupVisible={setPopupVisible}
-          onConvertToTasks={handleConvertToTasks}
-          onConvertListToTable={handleConvertListToTable}
-          onOpenComment={handleShowComment}
-          onShare={() => void handleShare()}
-          onInsertComment={handleInsertComment}
-          onPaste={() => void handlePaste()}
-          onEditWithAi={handleOpenAiEditDrawer}
-        />
+      <Show
+        when={isTouchDevice()}
+        fallback={
+          <PopupPositioner
+            anchor={anchorRef()!}
+            useBlockBoundary
+            ref={setMenuRef}
+          >
+            <MarkdownPopupToolbar />
+          </PopupPositioner>
+        }
+      >
+        <GeneralizedPopup
+          anchor={{
+            ref: anchorRef()!,
+            blockId: `${blockId}`,
+            blockType: 'md',
+          }}
+          useBlockBoundary={true}
+          ref={setMenuRef}
+        >
+          <TouchSelectionToolbar
+            canEdit={canEdit()}
+            canComment={canComment()}
+            isConverting={isConverting()}
+            hasSelection={(selection()?.text ?? '') !== ''}
+            showTasksOption={shouldShowCheckboxToTaskButton()}
+            showTableOption={shouldShowTableButton()}
+            showEditWithAiOption={shouldShowEditWithAiButton()}
+            showOpenCommentOption={highlightedCommentThreads().length > 0}
+            locationCopied={locationCopied()}
+            setPopupVisible={setPopupVisible}
+            onConvertToTasks={handleConvertToTasks}
+            onConvertListToTable={handleConvertListToTable}
+            onOpenComment={handleShowComment}
+            onShare={() => void handleShare()}
+            onInsertComment={handleInsertComment}
+            onPaste={() => void handlePaste()}
+            onEditWithAi={handleOpenAiEditDrawer}
+          />
+        </GeneralizedPopup>
       </Show>
     );
   };
@@ -980,18 +794,7 @@ export function MarkdownPopup(props: {
       </Show>
       <Show when={showPopup() && anchorRef()}>
         <ScopedPortal scope="local">
-          <Layer depth={2}>
-            <GeneralizedPopup
-              PopupComponents={PopupToolbar}
-              anchor={{
-                ref: anchorRef()!,
-                blockId: `${blockId}`,
-                blockType: 'md',
-              }}
-              useBlockBoundary={true}
-              ref={setMenuRef}
-            />
-          </Layer>
+          <PopupToolbar />
         </ScopedPortal>
       </Show>
       <Show when={highlightLocation()}>
@@ -1013,16 +816,23 @@ export function MarkdownPopup(props: {
       >
         <style>{`
           .ai-edit-highlight {
-            background: var(--color-accent);
-            opacity: 0.25;
+            background-color: color-mix(in oklab, var(--color-ink) 5%, transparent);
             border-radius: 3px;
           }
-          @keyframes ai-edit-pulse {
-            0%, 100% { opacity: 0.2; }
-            50% { opacity: 0.6; }
+          @keyframes ai-edit-swipe {
+            0% { background-position: 150% 0; }
+            100% { background-position: -50% 0; }
           }
           .ai-edit-highlight-running {
-            animation: ai-edit-pulse 1.4s ease-in-out infinite;
+            background-image: linear-gradient(
+              100deg,
+              transparent 40%,
+              color-mix(in oklab, var(--color-ink) 9%, transparent) 50%,
+              transparent 60%
+            );
+            background-size: 250% 100%;
+            background-repeat: no-repeat;
+            animation: ai-edit-swipe 1.6s ease-in-out infinite;
           }
         `}</style>
         <LocationHighlight
@@ -1060,7 +870,7 @@ export function MarkdownPopup(props: {
                 <textarea
                   class="grow resize-none bg-transparent py-1.5 text-sm placeholder:text-ink-placeholder focus:outline-none"
                   rows={1}
-                  placeholder="Ask Macro to edit this selection"
+                  placeholder="Describe changes"
                   value={aiEditInput()}
                   ref={(el) => {
                     requestAnimationFrame(() => el.focus());

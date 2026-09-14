@@ -1135,6 +1135,10 @@ pub struct VisibleCalendar {
     /// Whether this is one of Google's shared system calendars (holidays,
     /// birthdays) the account subscribes to rather than one a person maintains.
     pub is_subscription: bool,
+    /// A persistent sync failure isolated to this calendar, surfaced so the
+    /// settings row can badge it. `None` while the calendar is syncing
+    /// normally or a failure has not yet crossed the persistence threshold.
+    pub sync_error: Option<String>,
     /// Default reminders applied to events that keep `useDefault`.
     pub default_reminders: Vec<EventReminderOverride>,
 }
@@ -1198,6 +1202,11 @@ pub struct StoredGoogleCalendar {
 /// chronically resets their sync tokens, turning every poll into a full
 /// snapshot; a daily cadence keeps them fresh without that churn.
 pub const SYSTEM_CALENDAR_SYNC_INTERVAL: chrono::Duration = chrono::Duration::hours(24);
+
+/// Consecutive isolated sync failures a calendar must accumulate before its
+/// error surfaces to the user. A one-off transient failure clears on the next
+/// successful poll, so only a persistent failure earns a settings-row badge.
+pub const CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD: i32 = 3;
 
 /// Whether a provider calendar is one of Google's shared system calendars
 /// (`en.usa#holiday@group.v.calendar.google.com` and friends) rather than a

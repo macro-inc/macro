@@ -9,8 +9,8 @@ use agent_runtime_protocol::domain::schema::v0::{
 };
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
-    AgentSession, ChannelSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME,
-    SandboxSize, SessionBot, SessionStatus,
+    AgentSession, AgentSessionPreview, ChannelSession, CreateAgentSessionParams,
+    DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot, SessionStatus,
 };
 use bot_id::BotId;
 use cursor_api_key::cipher::CursorApiKey;
@@ -62,6 +62,14 @@ impl AgentSessionRepo for StubSessions {
         _egress_token_hash: &str,
     ) -> SessionResult<Option<AgentSession>> {
         unimplemented!("the manager never looks sessions up by egress token")
+    }
+
+    async fn preview(
+        &self,
+        _viewer: &MacroUserIdStr<'static>,
+        _ids: &[AgentSessionId],
+    ) -> SessionResult<Vec<AgentSessionPreview>> {
+        unimplemented!("the manager never previews sessions")
     }
 
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
@@ -733,8 +741,16 @@ async fn an_idle_pipe_is_shut_down() {
 
 #[test]
 fn a_pipe_is_not_idle_while_cursor_is_running_a_turn() {
-    assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, true));
-    assert!(should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false));
+    assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, true, false));
+    assert!(should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false, false));
+}
+
+#[test]
+fn a_pipe_is_not_idle_while_a_command_is_pending() {
+    // Same idle duration, no active turn yet - the case a command admitted
+    // just before the reap tick looks like, before the runtime has had a
+    // chance to mark a turn active.
+    assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false, true));
 }
 
 /// Teardown archives the agent on cursor.com and forgets the mapping; a

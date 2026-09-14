@@ -39,14 +39,14 @@ export type SidebarNextNavItem = SidebarItem & {
  *
  * The labels are new but every destination is an existing view id, so the
  * `hotkeyToken`s are the ones `GoToHotkeys` already registers — `g i` still
- * reaches Activity, `g f` still reaches Drive. `GoToHotkeys` is mounted from
+ * reaches Notifications, `g f` still reaches Drive. `GoToHotkeys` is mounted from
  * `Layout` off `buildSidebarLinks` and is independent of which sidebar renders,
  * so the shortcuts work unchanged; these tokens only label the tooltips.
  */
 const SIDEBAR_NEXT_NAV_ITEMS = [
   {
     id: 'inbox',
-    label: 'Activity',
+    label: 'Notifications',
     href: LIST_VIEW_PATHS.inbox,
     icon: BellIcon,
     iconActive: BellFillIcon,

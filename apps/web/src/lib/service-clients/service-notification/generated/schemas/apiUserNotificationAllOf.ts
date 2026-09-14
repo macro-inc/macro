@@ -8,14 +8,13 @@ import type { ApiUserNotificationAllOfDeletedAt } from './apiUserNotificationAll
 import type { ApiUserNotificationAllOfSenderId } from './apiUserNotificationAllOfSenderId';
 import type { ApiUserNotificationAllOfViewedAt } from './apiUserNotificationAllOfViewedAt';
 import type { NotifEvent } from './notifEvent';
+import type { NotificationState } from './notificationState';
 
 export type ApiUserNotificationAllOf = {
   /** When the notification was created. */
   created_at: string;
   /** When the notification was deleted. */
   deleted_at?: ApiUserNotificationAllOfDeletedAt;
-  /** Whether the notification is marked as done. */
-  done: boolean;
   /** The notification ID. */
   id: string;
   /** The notification event type string (e.g. "channel_mention").
@@ -29,6 +28,8 @@ TODO make this a new type */
   sender_id?: ApiUserNotificationAllOfSenderId;
   /** Whether the notification has been sent. */
   sent: boolean;
+  /** The authoritative notification lifecycle state. */
+  state: NotificationState;
   /** When the notification was last updated. */
   updated_at: string;
   /** When the notification was viewed/seen. */

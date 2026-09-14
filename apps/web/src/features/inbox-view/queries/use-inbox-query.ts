@@ -30,7 +30,6 @@ import { startOfDay, subWeeks } from 'date-fns';
 import { createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
-  explicitNoiseFilter,
   noiseFilter,
   signalFilter,
 } from '../../next-soup/filters/inbox-filters';
@@ -94,14 +93,14 @@ function matchesTab(
       );
     })
     .with('noise', () => noiseFilter(entity) && notDoneFilter(source)(entity))
-    .with('all', () => !explicitNoiseFilter(entity))
     .with('reminders', () => scheduledRemindersFilter(entity))
     .exhaustive();
 }
 
-export function useInboxDataSource(
-  state: InboxDataSourceInput
-): InboxDataSource {
+/** Shared feed membership for the Inbox list and its sidebar unread indicator. */
+export function useInboxEntitiesQuery(
+  state: Pick<InboxDataSourceInput, 'tab' | 'facets'>
+) {
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
 
@@ -155,6 +154,15 @@ export function useInboxDataSource(
       )
       .filter((entity) => matchesTab(entity, context.tab, notificationSource));
   };
+
+  return { query, viewContext, transformEntities };
+}
+
+export function useInboxDataSource(
+  state: InboxDataSourceInput
+): InboxDataSource {
+  const { query, viewContext, transformEntities } =
+    useInboxEntitiesQuery(state);
 
   const { entityPool } = useSearchContext();
   const localPool = createMemo(() => {

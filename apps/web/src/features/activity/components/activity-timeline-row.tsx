@@ -111,7 +111,9 @@ export function ActivityTimelineRow(props: {
         {...props.rowProps}
         class={cn(
           'flex min-w-0 flex-1 items-center whitespace-nowrap rounded-lg hover:bg-hover/30',
-          props.compact ? 'min-h-8 gap-1 px-1' : 'min-h-10 gap-1.5 px-2'
+          props.compact
+            ? 'min-h-8 gap-1 px-1'
+            : 'min-h-10 gap-1.5 px-2 touch:min-h-11'
         )}
       >
         <Show when={showActor()}>

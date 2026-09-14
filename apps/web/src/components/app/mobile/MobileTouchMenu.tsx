@@ -54,6 +54,7 @@ function useMenu(part: string) {
 }
 
 type MobileTouchMenuButtonProps = {
+  ariaLabel?: string;
   icon: MobileTouchIconComponent;
   ref?: HTMLButtonElement | ((el: HTMLButtonElement) => void);
   onPointerDown: () => void;
@@ -70,6 +71,7 @@ function MobileTouchMenuButton(props: MobileTouchMenuButtonProps) {
   return (
     <button
       type="button"
+      aria-label={props.ariaLabel}
       ref={props.ref}
       use:pressPulse
       onPointerDown={(e) => {
@@ -210,6 +212,7 @@ function MobileTouchMenuRoot(props: ParentProps) {
 }
 
 function MobileTouchMenuTrigger(props: {
+  ariaLabel?: string;
   icon: MobileTouchIconComponent;
   class?: string;
   iconClass?: string;
@@ -218,6 +221,7 @@ function MobileTouchMenuTrigger(props: {
 
   return (
     <MobileTouchMenuButton
+      ariaLabel={props.ariaLabel}
       ref={menu.setTriggerRef}
       icon={props.icon}
       animateIcon={false}
@@ -250,7 +254,7 @@ function MobileTouchMenuContent(props: ParentProps) {
             }}
           >
             <div
-              class="mobile-touch-menu-content flex items-end justify-start overflow-hidden rounded-2xl border border-edge bg-menu shadow-xl"
+              class="mobile-touch-menu-content flex items-end justify-start overflow-hidden rounded-2xl border border-edge bg-menu-glass glass"
               data-expanded={menu.open() ? '' : undefined}
               style={{
                 '--mobile-touch-menu-width': menuSize.width

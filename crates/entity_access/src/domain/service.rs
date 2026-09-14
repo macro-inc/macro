@@ -591,10 +591,14 @@ where
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         match entity_type {
+            // Agent sessions grant their owner directly and their originating
+            // channel as a channel source, both of which the generic accessor
+            // query expands.
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
-            | EntityType::EmailThread => {
+            | EntityType::EmailThread
+            | EntityType::AgentSession => {
                 let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid entity_id for get_users_by_entity")
                 })?;

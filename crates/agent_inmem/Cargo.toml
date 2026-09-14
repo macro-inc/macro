@@ -19,8 +19,10 @@ ai_usage = { path = "../ai_usage" }
 bytes = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
+chat = { path = "../chat", default-features = false }
 dashmap = { workspace = true }
 futures = { workspace = true }
+genai_telemetry = { path = "../genai_telemetry" }
 macro_user_id = { path = "../macro_user_id" }
 http = { workspace = true }
 http-body-util = { workspace = true }
@@ -39,7 +41,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt", "time", "macros"] }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
-url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
@@ -48,4 +49,8 @@ agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 futures = { workspace = true }
 rig-agent = "0.41.0"
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

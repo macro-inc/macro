@@ -5,6 +5,19 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './agentSessionMentionedMetadata';
+export * from './agentSessionMentionedMetadataAllOf';
+export * from './agentSessionMentionedMetadataAllOfMentionedBy';
+export * from './agentSessionNotificationRef';
+export * from './agentSessionNotificationRefAnnouncementMessageId';
+export * from './agentSessionNotificationRefChannelId';
+export * from './agentSessionNotificationRefThreadId';
+export * from './agentSessionSettledMetadata';
+export * from './agentSessionSettledMetadataAllOf';
+export * from './agentSessionSettledMetadataAllOfActor';
+export * from './agentSessionSettledMetadataAllOfExcerpt';
+export * from './agentSessionWaitingForInputMetadata';
+export * from './agentSessionWaitingForInputMetadataAllOf';
 export * from './aiResponseMetadata';
 export * from './apiUserNotification';
 export * from './apiUserNotificationAllOf';
@@ -117,8 +130,14 @@ export * from './notifEvent';
 export * from './notifEventOneOf';
 export * from './notifEventOneOfFive';
 export * from './notifEventOneOfFiveTag';
+export * from './notifEventOneOfFourfive';
+export * from './notifEventOneOfFourfiveTag';
+export * from './notifEventOneOfFournine';
+export * from './notifEventOneOfFournineTag';
 export * from './notifEventOneOfFourone';
 export * from './notifEventOneOfFouroneTag';
+export * from './notifEventOneOfFourseven';
+export * from './notifEventOneOfFoursevenTag';
 export * from './notifEventOneOfFourthree';
 export * from './notifEventOneOfFourthreeTag';
 export * from './notifEventOneOfNine';
@@ -167,6 +186,7 @@ export * from './notificationDocumentSubTypeOneOfThree';
 export * from './notificationDocumentSubTypeOneOfThreeType';
 export * from './notificationDocumentSubTypeOneOfType';
 export * from './notificationServiceApiVersion';
+export * from './notificationState';
 export * from './notificationTypeName';
 export * from './pushNotificationData';
 export * from './pushNotificationDataSenderProfilePictureUrl';

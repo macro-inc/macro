@@ -8,7 +8,7 @@ import LinkIcon from '@phosphor/link.svg';
 import EditIcon from '@phosphor/pencil-simple.svg';
 import AddEmojiIcon from '@phosphor/smiley.svg';
 import TrashIcon from '@phosphor/trash.svg';
-import { Button, cn, Layer } from '@ui';
+import { cn, Toolbar } from '@ui';
 import {
   type Component,
   createSignal,
@@ -68,21 +68,19 @@ function ActionButton(props: {
   onPointerDown?: JSX.EventHandlerUnion<HTMLButtonElement, PointerEvent>;
 }) {
   return (
-    <Button
+    <Toolbar.Button
       aria-label={props.action.label}
       data-message-action={props.action.id}
       onClick={props.onClick}
       onPointerDown={props.onPointerDown}
       tooltip={props.action.label}
-      size="icon-sm"
-      variant="ghost"
       class={props.action.class}
     >
       {renderIcon(
         props.action.icon,
         cn(props.action.iconClass, props.action.class)
       )}
-    </Button>
+    </Toolbar.Button>
   );
 }
 
@@ -178,32 +176,26 @@ function ActionMenuContent(props: ActionMenuProps) {
         // the very top; float the toolbar fully above so it never covers it.
         position={props.showTimestamp ? 'above' : 'straddle'}
       >
-        <Layer depth={2}>
-          <div
-            class="flex flex-row bg-surface ring-1 ring-ink/10 p-1 shadow-md items-center rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Show when={props.showTimestamp}>
-              <Timestamp format="time" class="px-1.5 whitespace-nowrap" />
-              <div class="w-px self-stretch bg-ink/10 mx-1" />
-            </Show>
-            <Show when={hasReactAction()}>
+        <Toolbar size="icon-sm" onClick={(event) => event.stopPropagation()}>
+          <Show when={props.showTimestamp}>
+            <Timestamp format="time" class="px-1.5 whitespace-nowrap" />
+            <Toolbar.Divider />
+          </Show>
+          <Show when={hasReactAction()}>
+            <Toolbar.Group>
               <For each={QUICK_REACTION_EMOJIS}>
                 {(emoji) => (
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
+                  <Toolbar.Button
                     onClick={(event) => {
                       recordEmojiUsage(emoji);
                       handleReaction(emoji, event);
                     }}
-                    tooltip={`React ${emoji}`}
                     aria-label={`React ${emoji}`}
                     data-message-action="react-quick"
                     data-emoji={emoji}
                   >
                     <span class="text-base my-0">{emoji}</span>
-                  </Button>
+                  </Toolbar.Button>
                 )}
               </For>
 
@@ -216,77 +208,83 @@ function ActionMenuContent(props: ActionMenuProps) {
                 }}
                 trigger={renderIcon(AddEmojiIcon, 'size-4')}
                 triggerProps={{
-                  title: 'More reactions',
                   'aria-label': 'More reactions',
-                  tooltip: 'More reactions',
                   variant: 'ghost',
                   size: 'icon-sm',
                 }}
               />
-              <Show when={visibleActions.length > 0}>
-                <div class="w-px self-stretch bg-ink/10 mx-1" />
-              </Show>
+            </Toolbar.Group>
+            <Show when={visibleActions.length > 0}>
+              <Toolbar.Divider />
             </Show>
+          </Show>
 
-            <For each={visibleCompose}>
-              {(action) => (
-                <ActionButton
-                  action={action}
-                  onClick={(event) => {
-                    void action.onClick?.({ message: message(), event });
-                  }}
-                />
-              )}
-            </For>
-            <Show when={visibleCompose.length > 0 && visibleOther.length > 0}>
-              <div class="w-px self-stretch bg-ink/10 mx-1" />
-            </Show>
-            <For each={visibleOther}>
-              {(action) => (
-                <ActionButton
-                  action={action}
-                  onPointerDown={(event) => {
-                    if (action.id !== 'reply') return;
-                    selectedReplyText = getSelectedMessageText(
-                      event.currentTarget,
-                      message().id
-                    );
-                    renderedReplyText = getRenderedMessageReplyText(
-                      event.currentTarget,
-                      message().id
-                    );
-                  }}
-                  onClick={(event) => {
-                    const selectedText =
-                      action.id === 'reply'
-                        ? (selectedReplyText ??
-                          getSelectedMessageText(
-                            event.currentTarget,
-                            message().id
-                          ))
-                        : undefined;
-                    selectedReplyText = undefined;
-                    const renderedText =
-                      action.id === 'reply'
-                        ? (renderedReplyText ??
-                          getRenderedMessageReplyText(
-                            event.currentTarget,
-                            message().id
-                          ))
-                        : undefined;
-                    renderedReplyText = undefined;
-                    void action.onClick?.({
-                      message: message(),
-                      event,
-                      selectedText,
-                      renderedText,
-                    });
-                  }}
-                />
-              )}
-            </For>
-          </div>
-        </Layer>
+          <Show when={visibleCompose.length > 0}>
+            <Toolbar.Group>
+              <For each={visibleCompose}>
+                {(action) => (
+                  <ActionButton
+                    action={action}
+                    onClick={(event) => {
+                      void action.onClick?.({ message: message(), event });
+                    }}
+                  />
+                )}
+              </For>
+            </Toolbar.Group>
+          </Show>
+          <Show when={visibleCompose.length > 0 && visibleOther.length > 0}>
+            <Toolbar.Divider />
+          </Show>
+          <Show when={visibleOther.length > 0}>
+            <Toolbar.Group>
+              <For each={visibleOther}>
+                {(action) => (
+                  <ActionButton
+                    action={action}
+                    onPointerDown={(event) => {
+                      if (action.id !== 'reply') return;
+                      selectedReplyText = getSelectedMessageText(
+                        event.currentTarget,
+                        message().id
+                      );
+                      renderedReplyText = getRenderedMessageReplyText(
+                        event.currentTarget,
+                        message().id
+                      );
+                    }}
+                    onClick={(event) => {
+                      const selectedText =
+                        action.id === 'reply'
+                          ? (selectedReplyText ??
+                            getSelectedMessageText(
+                              event.currentTarget,
+                              message().id
+                            ))
+                          : undefined;
+                      selectedReplyText = undefined;
+                      const renderedText =
+                        action.id === 'reply'
+                          ? (renderedReplyText ??
+                            getRenderedMessageReplyText(
+                              event.currentTarget,
+                              message().id
+                            ))
+                          : undefined;
+                      renderedReplyText = undefined;
+                      void action.onClick?.({
+                        message: message(),
+                        event,
+                        selectedText,
+                        renderedText,
+                      });
+                    }}
+                  />
+                )}
+              </For>
+            </Toolbar.Group>
+          </Show>
+        </Toolbar>
       </HoverActions>
     </Show>
   );

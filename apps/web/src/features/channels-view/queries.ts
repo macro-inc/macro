@@ -4,6 +4,7 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
+import { compareDateDesc } from '@core/util/date';
 import { type ChannelEntity, type EntityData, isChannelEntity } from '@entity';
 import {
   type SoupAstItemsQueryArgs,
@@ -48,7 +49,7 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     matches: (channel) => !isDirectMessage(channel),
   },
   direct_messages: {
-    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
     filters: defineQueryFilters({
       include: {
         channelType: ['direct_message'],
@@ -137,8 +138,16 @@ function useChannelsDataSource(
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isLoading) return previous;
 
-    const channels = (query.data?.entities ?? []).filter(isChannelEntity);
-    return filterChannelsForScope(scope, channels);
+    const channels = filterChannelsForScope(
+      scope,
+      (query.data?.entities ?? []).filter(isChannelEntity)
+    );
+
+    if (scope !== 'direct_messages') return channels;
+
+    return channels
+      .slice()
+      .sort((left, right) => compareDateDesc(left.updatedAt, right.updatedAt));
   }, []);
 
   return {

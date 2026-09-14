@@ -1,22 +1,45 @@
 //! OpenAPI document for the agent harness service's session routes.
 
+use agent_harness::inbound::model_load::{
+    self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
+    ModelHarnessDto,
+};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::inbound::axum_router::{
-    self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionQueueResponse,
-    AgentSessionResponse, ControlRequest, ControlResponse, ControlStatusDto,
-    CreateAgentSessionRequest, CreateAgentSessionResponse, CreateSessionThread,
-    EditQueuedActionRequest, LogDirectionDto, LogFrameDto, QueuedActionDto,
-    RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto,
+    self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionPreviewData,
+    AgentSessionPreviewDto, AgentSessionQueueResponse, AgentSessionResponse, ControlRequest,
+    ControlResponse, ControlStatusDto, CreateAgentSessionRequest, CreateAgentSessionResponse,
+    CreateSessionThread, EditQueuedActionRequest, LogDirectionDto, LogFrameDto,
+    PreviewAgentSessionsRequest, PreviewAgentSessionsResponse, QueuedActionDto,
+    RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto, WithAgentSessionId,
 };
-use utoipa::OpenApi;
+use utoipa::{
+    Modify, OpenApi,
+    openapi::security::{Http, HttpAuthScheme, SecurityScheme},
+};
+
+struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "bearerAuth",
+                SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
+            );
+        }
+    }
+}
 
 #[derive(OpenApi)]
 #[openapi(
+    modifiers(&SecurityAddon),
     info(terms_of_service = "https://macro.com/terms"),
     paths(
         axum_router::create_agent_session_handler,
         axum_router::get_agent_session_handler,
+        axum_router::preview_agent_sessions_handler,
         axum_router::rename_agent_session_handler,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
@@ -27,6 +50,7 @@ use utoipa::OpenApi;
         axum_router::put_agent_session_sandbox_size_handler,
         axum_router::get_agent_sandbox_size_handler,
         axum_router::put_agent_sandbox_size_handler,
+        model_load::load_agent_models_handler,
     ),
     components(schemas(
         CreateAgentSessionRequest,
@@ -41,6 +65,11 @@ use utoipa::OpenApi;
         AgentAction,
         AgentActionId,
         AgentSessionResponse,
+        PreviewAgentSessionsRequest,
+        PreviewAgentSessionsResponse,
+        AgentSessionPreviewDto,
+        AgentSessionPreviewData,
+        WithAgentSessionId,
         RenameAgentSessionRequest,
         SessionStatusDto,
         AgentSessionLogResponse,
@@ -50,7 +79,15 @@ use utoipa::OpenApi;
         LogDirectionDto,
         SandboxSize,
         SandboxSizeBody,
+        LoadAgentModelsRequest,
+        LoadAgentModelsResponse,
+        AgentModelDto,
+        AgentModelsStatusDto,
+        ModelHarnessDto,
     )),
-    tags((name = "agent-sessions", description = "Agent sessions"))
+    tags(
+        (name = "agent-sessions", description = "Agent sessions"),
+        (name = "agent-models", description = "Fresh provider model discovery")
+    )
 )]
 pub struct ApiDoc;

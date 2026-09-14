@@ -6,6 +6,7 @@
 #![deny(missing_docs)]
 
 pub mod about_macro;
+pub mod agent_identity;
 pub mod agent_session;
 pub mod channel_mention;
 pub mod citations;
@@ -218,6 +219,25 @@ mod tests {
         let preamble = agent_session::PROMPT.to_string();
         assert!(preamble.contains("XML mention tag"));
         assert!(preamble.contains("clickable chips"));
+        assert!(preamble.contains("agent session"));
+        assert!(preamble.contains("date/time"));
+    }
+
+    #[test]
+    fn mentions_prompt_covers_date_and_agent_session_chips() {
+        let instructions = mentions::PROMPT.instructions.as_ref();
+        assert!(instructions.contains("<m-date-mention>"));
+        assert!(instructions.contains("<m-agent-session-mention>"));
+        assert!(instructions.contains("<m-user-mention>"));
+        assert!(instructions.contains("\"expanded\":true"));
+        assert!(instructions.contains("\"blockName\":\"skill\""));
+    }
+
+    #[test]
+    fn agent_identity_names_the_agent_before_the_session_preamble() {
+        let identity = agent_identity::render("Grunk", "grunk");
+        assert!(identity.starts_with("# Identity\n"));
+        assert!(identity.contains("You are Grunk (@grunk)."));
     }
 
     #[test]

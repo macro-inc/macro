@@ -61,6 +61,7 @@ export const rainTheme: ThemeV3 = {
     success: 'var(--color-green)',
     warning: 'var(--color-amber)',
     failure: 'var(--color-red)',
-    chrome: 'var(--color-surface-4)',
+    chrome:
+      'color-mix(in oklch, var(--color-surface-0) 80%, var(--color-content-0))',
   },
 };

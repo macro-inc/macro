@@ -132,7 +132,7 @@ pub struct RunArgs {
     #[arg(long)]
     pub with_chrome: bool,
     /// Open Cloudflare quick tunnels into this stack: one for `@cursor`
-    /// sessions (a public `EGRESS_BASE_URL`) and one sharing the app itself
+    /// sessions (a public egress service URL) and one sharing the app itself
     /// through the reverse proxy. Off by default — nothing dials out and the
     /// stack stays localhost-only. `run_local` only.
     #[arg(long)]

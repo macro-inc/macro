@@ -9,10 +9,14 @@ pub mod fold;
 pub mod harness;
 /// Durable snapshot and live-row ingestion around the append-only protocol fold.
 pub mod ingestion;
+/// A fold that also reports what each frame meant for the turn.
+pub mod lifecycle;
 /// The raw log vocabulary the fold consumes.
 pub mod log;
 /// The renderable message vocabulary.
 pub mod model;
+/// Projection of ACP model configuration into domain model choices.
+pub mod model_selection;
 /// The driving query port and the driven log-source port.
 pub mod ports;
 /// The domain service answering queries by folding on read.

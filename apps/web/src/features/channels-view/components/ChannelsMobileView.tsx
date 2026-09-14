@@ -1,7 +1,11 @@
+import { createListController } from '@app/components/list';
+import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
+import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
@@ -24,7 +28,10 @@ import type { ChannelsDataSource } from '../queries';
 import type { ChannelsQueryScope } from '../types';
 import { channelMentionsUser } from '../utils';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
-import { ConversationCard } from './rail/ChannelRailItems';
+import {
+  CHANNEL_ACTION_VIEW_CONTEXT,
+  ConversationCard,
+} from './rail/ChannelRailItems';
 import { useChannelCalls } from './rail/hooks/useChannelCalls';
 import { useChannelRailActivity } from './rail/hooks/useChannelRailActivity';
 
@@ -60,6 +67,15 @@ export function ChannelsMobileView(props: {
   const channelCalls = useChannelCalls();
   const visibleChannels = createMemo(() => props.source.items());
   const channelActivity = useChannelRailActivity(visibleChannels, channelCalls);
+  const actionController = createListController({
+    items: visibleChannels,
+    getKey: (channel) => channel.id,
+    isSelectable: () => false,
+  });
+  const actionList = toEntityActionListState({
+    controller: actionController,
+    getEntity: (channel) => channel,
+  });
 
   const selectTab = (tab: ChannelsQueryScope) => {
     props.onTabChange(tab);
@@ -119,8 +135,12 @@ export function ChannelsMobileView(props: {
         role="tree"
         aria-label={`${MOBILE_CHANNEL_TABS.find((tab) => tab.value === props.tab)?.label ?? 'Channels'} conversations`}
         aria-busy={props.source.isLoadingMore()}
-        class="size-full min-h-0 overflow-hidden"
+        class="relative size-full min-h-0 overflow-hidden"
       >
+        <PullToRefresh
+          scrollContainer={viewport}
+          onRefresh={props.source.refresh}
+        />
         <div
           ref={setViewport}
           class="scrollbar-hidden size-full min-h-0 overflow-y-auto overscroll-none"
@@ -171,29 +191,48 @@ export function ChannelsMobileView(props: {
                 onScroll={checkNearEnd}
               >
                 {(channel) => (
-                  <ConversationCard
-                    id={`${listId}-channel:${channel.id}`}
-                    class="border-b border-edge-muted/50 px-(--mobile-chrome-gutter) touch:pl-6"
-                    channel={channel}
-                    showLatestMessage={props.tab === 'recents'}
-                    senderId={channel.latestRootMessage?.senderId}
-                    mentionedCurrentUser={channelMentionsUser(
-                      channel,
-                      currentUserId()
-                    )}
-                    unread={channelActivity.unreadChannelIds().has(channel.id)}
-                    muted={isMutedItem(notificationSource.mutedEntities(), {
-                      item_id: channel.id,
-                      item_type: 'channel',
-                    })}
-                    callStatus={channelActivity.callStatuses().get(channel.id)}
-                    incomingCallId={channelActivity
-                      .incomingCallIds()
-                      .get(channel.id)}
-                    selected={state.selectedChannelId === channel.id}
-                    focused={false}
-                    onActivate={() => openChannel(channel)}
-                  />
+                  <SoupEntityContextMenu
+                    entity={channel}
+                    list={actionList}
+                    selectedEntities={() => []}
+                    viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
+                    class="block w-full"
+                    onOpenChange={(open) => {
+                      if (!open) return;
+                      actionController.focus.set(channel.id, {
+                        reason: 'pointer',
+                        force: true,
+                      });
+                    }}
+                  >
+                    <ConversationCard
+                      id={`${listId}-channel:${channel.id}`}
+                      class="border-b border-edge-muted/50 px-(--mobile-chrome-gutter) touch:pl-6"
+                      channel={channel}
+                      showLatestMessage={props.tab === 'recents'}
+                      senderId={channel.latestRootMessage?.senderId}
+                      mentionedCurrentUser={channelMentionsUser(
+                        channel,
+                        currentUserId()
+                      )}
+                      unread={channelActivity
+                        .unreadChannelIds()
+                        .has(channel.id)}
+                      muted={isMutedItem(notificationSource.mutedEntities(), {
+                        item_id: channel.id,
+                        item_type: 'channel',
+                      })}
+                      callStatus={channelActivity
+                        .callStatuses()
+                        .get(channel.id)}
+                      incomingCallId={channelActivity
+                        .incomingCallIds()
+                        .get(channel.id)}
+                      selected={state.selectedChannelId === channel.id}
+                      focused={false}
+                      onActivate={() => openChannel(channel)}
+                    />
+                  </SoupEntityContextMenu>
                 )}
               </Virtualizer>
               <Show when={props.source.isLoadingMore()}>

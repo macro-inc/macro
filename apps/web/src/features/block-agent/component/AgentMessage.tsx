@@ -5,14 +5,16 @@
  * shimmer while the turn is in flight.
  */
 
+import { messageSendMotion } from '@core/util/message-send-motion';
 import type {
   FoldedMessage,
   MessagePart,
 } from '@service-agent-fold/generated/types';
+import { UserMessageBubble } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
-import { ActionLine, Thought } from '../ui';
+import { ActionLine, Thought, WorkingLine } from '../ui';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
@@ -56,15 +58,44 @@ function AgentMessagePart(props: {
 }
 
 /**
+ * Whether an open turn should show the working row at its tail.
+ *
+ * Skipped wherever the transcript already shows the turn is alive — prose
+ * streaming in, a thought shimmering — and wherever it is not: a permission
+ * or elicitation prompt is waiting on the reader, not working.
+ */
+function showsWorkingLine(message: FoldedMessage): boolean {
+  const last = message.parts[message.parts.length - 1];
+  if (last === undefined) return true;
+  return match(last)
+    .with(
+      { kind: 'text' },
+      { kind: 'thought' },
+      { kind: 'permission' },
+      { kind: 'elicitation' },
+      () => false
+    )
+    .otherwise(() => true);
+}
+
+/**
  * A prompt, in the chat block's user-bubble treatment
  * (`@core/component/AI/component/message/UserMessage.tsx`): right-aligned,
- * rounded gray surface with a hairline border.
+ * rounded, filled surface shared with production chat.
  */
 function UserMessage(props: { message: FoldedMessage }) {
   return (
-    <div class="flex w-full">
-      {/* Phone: a full-width card. Desktop: hugs the text, right-aligned. */}
-      <div class="relative w-full overflow-hidden rounded-lg border border-edge-muted bg-hover px-3 py-2 text-ink md:ml-auto md:w-auto md:max-w-[calc(100%-8rem)]">
+    <div
+      class="flex w-full"
+      ref={(el) =>
+        messageSendMotion(el, () =>
+          props.message.requestId
+            ? `agent:${props.message.agentSessionId}:${props.message.requestId}`
+            : undefined
+        )
+      }
+    >
+      <UserMessageBubble>
         <For each={props.message.parts}>
           {(part, index) => (
             <AgentMessagePart
@@ -75,7 +106,7 @@ function UserMessage(props: { message: FoldedMessage }) {
             />
           )}
         </For>
-      </div>
+      </UserMessageBubble>
     </div>
   );
 }
@@ -105,6 +136,11 @@ export function Message(props: { message: FoldedMessage }) {
               />
             )}
           </For>
+          {/* The turn is open with nothing to read yet — a dot and a rotating
+              verb, so the wait reads as work rather than as a stall. */}
+          <Show when={inFlight() && showsWorkingLine(props.message)}>
+            <WorkingLine />
+          </Show>
           {/* A turn the runtime errored is something that happened to the
               session, like a model change or a stop — so it reads as one,
               at the foot of whatever the agent managed to say first. */}

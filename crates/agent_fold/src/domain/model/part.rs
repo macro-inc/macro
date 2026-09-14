@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use super::ToolUseId;
@@ -166,7 +166,7 @@ pub enum ControlOutcome {
 /// anything unmodelled falls through to [`Self::Other`], so parsing never
 /// fails. [`Self::Failed`] is the exception - no wire string produces it,
 /// because it is what a turn that got no `stopReason` at all stopped for.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StopReason {
     /// The agent finished its turn.

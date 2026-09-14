@@ -19,13 +19,17 @@ use thiserror::Error;
 mod profile;
 mod wire;
 
-pub use profile::{ProfileValidationError, validate_soup_flat_v2, validate_soup_flat_v3};
+pub use profile::{
+    ProfileValidationError, validate_soup_flat_v2, validate_soup_flat_v3, validate_soup_flat_v4,
+};
 pub use wire::{
     MAX_SOUP_CACHE_PROJECTION_BYTES, MAX_SOUP_CACHE_PROJECTION_ENCODED_BYTES,
-    SOUP_CACHE_PROJECTION_WIRE_VERSION, SOUP_CACHE_PROJECTION_WIRE_VERSION_V1,
-    SOUP_CACHE_PROJECTION_WIRE_VERSION_V2, SoupCacheProjectionCapsuleV1,
-    SoupCacheProjectionCapsuleV2, SoupCacheProjectionSupplement, SoupCacheProjectionWireError,
-    decode_cache_projection_supplement, encode_cache_projection_supplement,
+    MailCacheProjectionFacts, SOUP_CACHE_PROJECTION_WIRE_VERSION,
+    SOUP_CACHE_PROJECTION_WIRE_VERSION_V1, SOUP_CACHE_PROJECTION_WIRE_VERSION_V2,
+    SOUP_CACHE_PROJECTION_WIRE_VERSION_V3, SoupCacheProjectionCapsuleV1,
+    SoupCacheProjectionCapsuleV2, SoupCacheProjectionCapsuleV3, SoupCacheProjectionSupplement,
+    SoupCacheProjectionWireError, decode_cache_projection_supplement,
+    encode_cache_projection_supplement,
 };
 
 /// Maximum authoritative task Status options accepted in one complete projection.
@@ -240,7 +244,11 @@ pub fn compose_soup_flat_v3(
             }
             document.exact_facts.push(ExactFact {
                 attribute: vocabulary::email_attachment(),
-                value: ExactValue::new([u8::from(supplement.is_email_attachment())])?,
+                value: ExactValue::new([u8::from(
+                    supplement
+                        .is_email_attachment()
+                        .ok_or(SoupFlatV3CompositionError::MissingDocumentSupplement)?,
+                )])?,
             });
             let is_important = supplement
                 .is_important()
@@ -369,7 +377,8 @@ pub fn project_soup_item<T>(
         | SoupItem::CalendarEvent(_)
         | SoupItem::CrmCompany(_)
         | SoupItem::ForeignEntity(_)
-        | SoupItem::Reminder(_) => Ok(None),
+        | SoupItem::Reminder(_)
+        | SoupItem::AgentSession(_) => Ok(None),
     }
 }
 

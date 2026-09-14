@@ -1,9 +1,11 @@
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use entity_access::domain::models::{
     Entity, EntityAccessReceipt, EntityPermission, EntityType, TeamRole,
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use system_properties::StageOption;
 
 use super::*;
 use crate::domain::model::CrmPermissionRole;
@@ -26,6 +28,15 @@ impl StubSettings {
         self
     }
 
+    fn with_legacy(self, map: BTreeMap<Uuid, Uuid>) -> Self {
+        self.settings.lock().unwrap().legacy_stage_ids = map;
+        self
+    }
+
+    fn legacy(&self) -> BTreeMap<Uuid, Uuid> {
+        self.settings.lock().unwrap().legacy_stage_ids.clone()
+    }
+
     fn patches(&self) -> Vec<CrmTeamSettingsPatch> {
         self.patches.lock().unwrap().clone()
     }
@@ -45,6 +56,9 @@ impl TeamSettingsStore for StubSettings {
         let mut settings = self.settings.lock().unwrap();
         if let Some(closed) = &patch.closed_stage_ids {
             settings.closed_stage_ids = closed.clone();
+        }
+        if let Some(legacy) = &patch.legacy_stage_ids {
+            settings.legacy_stage_ids = legacy.clone();
         }
         Ok(settings.clone())
     }
@@ -463,12 +477,13 @@ async fn deleting_an_unclosed_stage_leaves_settings_alone() {
     let [lead, won] = store.stage_ids()[..] else {
         panic!("expected two seeded stages");
     };
-    let settings = StubSettings::requiring(CrmPermissionRole::Admin).with_closed(vec![won]);
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin)
+        .with_closed(vec![won])
+        .with_legacy(BTreeMap::from([(StageOption::LEAD_UUID, lead)]));
     CrmStageServiceImpl::new(settings.clone(), store)
         .replace_stages(&receipt_with_role(TeamRole::Admin), vec![keep(won, "Won")])
         .await
         .unwrap();
-    let _ = lead;
     assert!(settings.patches().is_empty());
 }
 
@@ -564,4 +579,117 @@ async fn reset_on_defaults_is_a_no_op() {
         .await
         .unwrap();
     assert!(store.writes().is_empty());
+}
+
+#[tokio::test]
+async fn customizing_records_where_each_default_stage_went() {
+    let store = MemoryStore::default();
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin);
+    let set = CrmStageServiceImpl::new(settings.clone(), store)
+        .replace_stages(
+            &receipt_with_role(TeamRole::Admin),
+            vec![new_stage("Lead"), new_stage("customer"), new_stage("Won")],
+        )
+        .await
+        .unwrap();
+    let legacy = settings.legacy();
+    assert_eq!(legacy.len(), 2);
+    assert_eq!(legacy[&StageOption::LEAD_UUID], set.stages[0].id);
+    assert_eq!(legacy[&StageOption::CUSTOMER_UUID], set.stages[1].id);
+}
+
+#[tokio::test]
+async fn renaming_a_seeded_stage_keeps_its_legacy_entry() {
+    let store = MemoryStore::customized(&["Lead", "Customer"]);
+    let [lead, customer] = store.stage_ids()[..] else {
+        panic!("expected two seeded stages");
+    };
+    let legacy = BTreeMap::from([(StageOption::CUSTOMER_UUID, customer)]);
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin).with_legacy(legacy.clone());
+    CrmStageServiceImpl::new(settings.clone(), store)
+        .replace_stages(
+            &receipt_with_role(TeamRole::Admin),
+            vec![keep(lead, "Lead"), keep(customer, "Client")],
+        )
+        .await
+        .unwrap();
+    assert!(settings.patches().is_empty());
+    assert_eq!(settings.legacy(), legacy);
+}
+
+#[tokio::test]
+async fn deleting_a_seeded_stage_leaves_the_map_alone() {
+    let store = MemoryStore::customized(&["Lead", "Customer"]);
+    let [lead, customer] = store.stage_ids()[..] else {
+        panic!("expected two seeded stages");
+    };
+    let legacy = BTreeMap::from([
+        (StageOption::LEAD_UUID, lead),
+        (StageOption::CUSTOMER_UUID, customer),
+    ]);
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin).with_legacy(legacy.clone());
+    CrmStageServiceImpl::new(settings.clone(), store)
+        .replace_stages(
+            &receipt_with_role(TeamRole::Admin),
+            vec![keep(lead, "Lead")],
+        )
+        .await
+        .unwrap();
+    assert!(settings.patches().is_empty());
+    assert_eq!(settings.legacy(), legacy);
+}
+
+#[tokio::test]
+async fn a_set_without_a_map_gets_one_on_the_next_edit() {
+    let store = MemoryStore::customized(&["Lead", "Client"]);
+    let [lead, client] = store.stage_ids()[..] else {
+        panic!("expected two seeded stages");
+    };
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin);
+    CrmStageServiceImpl::new(settings.clone(), store)
+        .replace_stages(
+            &receipt_with_role(TeamRole::Admin),
+            vec![keep(lead, "Lead"), keep(client, "Client")],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        settings.legacy(),
+        BTreeMap::from([(StageOption::LEAD_UUID, lead)])
+    );
+}
+
+#[tokio::test]
+async fn a_backfilled_map_reads_labels_from_before_the_edit() {
+    let store = MemoryStore::customized(&["Lead", "Client"]);
+    let [lead, client] = store.stage_ids()[..] else {
+        panic!("expected two seeded stages");
+    };
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin);
+    CrmStageServiceImpl::new(settings.clone(), store)
+        .replace_stages(
+            &receipt_with_role(TeamRole::Admin),
+            vec![keep(lead, "Prospect"), keep(client, "Client")],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        settings.legacy(),
+        BTreeMap::from([(StageOption::LEAD_UUID, lead)])
+    );
+}
+
+#[tokio::test]
+async fn reset_clears_legacy_ids() {
+    let store = MemoryStore::customized(&["Lead"]);
+    let [lead] = store.stage_ids()[..] else {
+        panic!("expected one seeded stage");
+    };
+    let settings = StubSettings::requiring(CrmPermissionRole::Admin)
+        .with_legacy(BTreeMap::from([(StageOption::LEAD_UUID, lead)]));
+    CrmStageServiceImpl::new(settings.clone(), store)
+        .reset_stages(&receipt_with_role(TeamRole::Admin))
+        .await
+        .unwrap();
+    assert!(settings.legacy().is_empty());
 }

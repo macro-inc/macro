@@ -1,25 +1,8 @@
-import { type BlockName, isInBlock } from '@core/block';
-import { blockElementSignal } from '@core/signal/blockElement';
-import {
-  autoUpdate,
-  type Boundary,
-  computePosition,
-  flip,
-  offset,
-  shift,
-} from '@floating-ui/dom';
-import { mergeRefs } from '@solid-primitives/refs';
-import { Layer } from '@ui';
-import {
-  type Component,
-  createEffect,
-  createSignal,
-  onCleanup,
-  type Ref,
-} from 'solid-js';
+import type { BlockName } from '@core/block';
+import type { ParentProps, Ref } from 'solid-js';
+import { PopupPositioner } from './PopupPositioner';
 
-type GeneralizedPopupProps = {
-  PopupComponents: Component;
+type GeneralizedPopupProps = ParentProps<{
   anchor: {
     ref: HTMLElement;
     blockId: string;
@@ -27,58 +10,26 @@ type GeneralizedPopupProps = {
   };
   useBlockBoundary?: boolean;
   ref?: Ref<HTMLDivElement>;
-};
+}>;
 
+/**
+ * Anchored popup with the legacy surface chrome. Positioning lives in
+ * `PopupPositioner`; new surfaces should prefer the opinionated `Toolbar`
+ * component instead of this container.
+ */
 export function GeneralizedPopup(props: GeneralizedPopupProps) {
-  const [popupRef, setPopupRef] = createSignal<HTMLDivElement>();
-  const [position, setPosition] = createSignal({ x: 0, y: 0 });
-
-  let boundary: Boundary = 'clippingAncestors';
-  if (props.useBlockBoundary && isInBlock()) {
-    const blockEl = blockElementSignal.get;
-    boundary = blockEl() ?? 'clippingAncestors';
-  }
-
-  const updatePosition = async () => {
-    const ref = popupRef();
-    if (!ref) return;
-    const { x, y } = await computePosition(props.anchor.ref, ref, {
-      placement: 'bottom',
-      middleware: [
-        offset(12),
-        flip({
-          fallbackStrategy: 'initialPlacement',
-          boundary,
-        }),
-        shift({ padding: 8, boundary }),
-      ],
-    });
-
-    setPosition({ x, y });
-  };
-
-  createEffect(() => {
-    const ref = popupRef();
-    if (!ref) return;
-
-    const cleanup = autoUpdate(props.anchor.ref, ref, updatePosition);
-    onCleanup(() => cleanup());
-  });
-
   return (
-    <Layer depth={2}>
+    <PopupPositioner
+      anchor={props.anchor.ref}
+      useBlockBoundary={props.useBlockBoundary}
+    >
       <div
-        ref={mergeRefs(setPopupRef, props.ref)}
+        ref={props.ref}
         id="generalized-popup"
-        class="absolute border border-edge bg-surface shadow-xl rounded-lg z-highlight-menu inline-flex items-start flex-col p-1"
-        style={{
-          left: `${position().x}px`,
-          top: `${position().y}px`,
-          'transform-origin': 'top',
-        }}
+        class="border border-edge bg-surface shadow-xl rounded-lg z-highlight-menu inline-flex items-start flex-col p-1"
       >
-        <props.PopupComponents />
+        {props.children}
       </div>
-    </Layer>
+    </PopupPositioner>
   );
 }

@@ -150,10 +150,9 @@ pub fn print(
         );
         row("Receive webhooks at", sdk_webhook::relay_url().to_string());
     }
-    // The Cursor egress tunnel, when one opened this run: a public
-    // `EGRESS_BASE_URL` is always a tunnel, and the in-network default is not
-    // worth a row.
-    if let Some(url) = env.merged.get("EGRESS_BASE_URL")
+    // Show the public egress override (normally this run's Cursor tunnel),
+    // but not the default in-network address.
+    if let Some(url) = env.merged.get("OVERRIDE_AGENT_HARNESS_EGRESS_URL")
         && url.starts_with("https://")
     {
         row("cursor egress", url.clone());

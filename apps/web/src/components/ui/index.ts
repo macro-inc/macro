@@ -56,6 +56,7 @@ export {
   CommandMenuShell,
   createCommandListController,
 } from './components/CommandMenuPrimitives';
+export { ComposerSurface } from './components/ComposerSurface';
 export type {
   ConfirmDialogDisplayProps,
   ConfirmDialogProps,
@@ -90,6 +91,29 @@ export {
   openDialog,
   useImperativeDialog,
 } from './components/ImperativeDialog';
+export type {
+  InputClassOptions,
+  InputProps,
+  InputSize,
+  InputVariant,
+  InputVariantProps,
+} from './components/Input';
+export {
+  Input,
+  inputClasses,
+  inputOutlineFocusClasses,
+  inputVariants,
+} from './components/Input';
+export type {
+  InputGroupAddonAlign,
+  InputGroupAddonProps,
+  InputGroupButtonProps,
+  InputGroupClearButtonProps,
+  InputGroupInputProps,
+  InputGroupProps,
+  InputGroupVariantProps,
+} from './components/InputGroup';
+export { InputGroup, inputGroupVariants } from './components/InputGroup';
 export { Layer } from './components/Layer';
 export { LogoProgress } from './components/LogoProgress';
 export type { NavRowProps } from './components/NavRow';
@@ -118,9 +142,28 @@ export { Surface } from './components/Surface';
 export { TabbedControl } from './components/TabbedControl';
 export type { TabItem, TabsProps } from './components/Tabs';
 export { Tabs } from './components/Tabs';
+export type {
+  TextFieldDescriptionProps,
+  TextFieldError,
+  TextFieldErrorMessageProps,
+  TextFieldInputProps,
+  TextFieldLabelProps,
+  TextFieldProps,
+  TextFieldTextAreaProps,
+} from './components/TextField';
+export { TextField } from './components/TextField';
 export type { ToggleSwitchProps } from './components/ToggleSwitch';
 export { ToggleSwitch } from './components/ToggleSwitch';
-export { Tooltip } from './components/Tooltip';
+export type {
+  ToolbarButtonProps,
+  ToolbarDividerProps,
+  ToolbarGroupProps,
+  ToolbarProps,
+} from './components/Toolbar';
+export { Toolbar } from './components/Toolbar';
+export type { TooltipClassOptions } from './components/Tooltip';
+export { Tooltip, tooltipClasses } from './components/Tooltip';
+export { UserMessageBubble } from './components/UserMessageBubble';
 export { cn } from './utils/classname';
 export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';
 export {
@@ -137,5 +180,6 @@ export {
   PALETTE_COLORS,
   type PaletteColor,
 } from './utils/palette';
+export { pressHandlers } from './utils/press';
 export type { VariantProps } from './utils/variants';
 export { createVariants } from './utils/variants';

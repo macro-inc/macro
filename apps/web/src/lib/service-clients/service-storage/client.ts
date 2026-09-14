@@ -85,6 +85,7 @@ import type { CrmCommentEntityType } from './generated/schemas/crmCommentEntityT
 import type { CrmCommentThread } from './generated/schemas/crmCommentThread';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
+import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
 import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
 import type { DeleteCrmCommentResult } from './generated/schemas/deleteCrmCommentResult';
@@ -126,10 +127,12 @@ import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupP
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
 import type { Item } from './generated/schemas/item';
+import type { ListFavoritesParams } from './generated/schemas/listFavoritesParams';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
+import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
@@ -149,6 +152,7 @@ import type { RemindersList } from './generated/schemas/remindersList';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
+import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
@@ -308,15 +312,7 @@ export type Harness = {
 };
 
 /** A pending macrod pairing request, looked up by its printed code. */
-export type HarnessPairing = {
-  code: string;
-  requested_name: string;
-  host: string | null;
-  /** The scope the daemon's config asked for; preselects the dialog. */
-  requested_scope: 'private' | 'team' | null;
-  created_at: string;
-  expires_at: string;
-};
+export type HarnessPairing = PairingDetails;
 
 type ApproveHarnessPairingRequest = {
   name?: string;
@@ -1020,6 +1016,31 @@ export const storageServiceClient = {
     return (
       await dssFetch<ApiChannelMessagesPage>(
         `/channels/${channel_id}/messages?${params.toString()}`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async getChannelMessagesCatchUp(
+    args: WithChannelId & {
+      after: string;
+      limit: number;
+      next_cursor: string | null;
+      previous_cursor: string | null;
+    }
+  ) {
+    const { channel_id, after, limit, next_cursor, previous_cursor } = args;
+    const params = new URLSearchParams();
+    params.append('after', after);
+    params.append('limit', limit.toString());
+    if (next_cursor) {
+      params.append('cursor', next_cursor);
+    } else if (previous_cursor) {
+      params.append('previous_cursor', previous_cursor);
+    }
+    return (
+      await dssFetch<ApiChannelMessagesPage>(
+        `/channels/${channel_id}/messages/catch-up?${params.toString()}`,
         { method: 'GET' }
       )
     ).map((result) => result);
@@ -2503,8 +2524,17 @@ export const storageServiceClient = {
   },
 
   favorites: {
-    async getFavorites() {
-      return await dssFetch<FavoritesList>('/favorites');
+    async getFavorites(params?: ListFavoritesParams) {
+      const query = new URLSearchParams();
+      // Each dimension repeats its key once per value; the two combine with AND.
+      params?.entityType?.forEach((entityType) =>
+        query.append('entityType', entityType)
+      );
+      params?.entityId?.forEach((entityId) =>
+        query.append('entityId', entityId)
+      );
+      const qs = query.toString();
+      return await dssFetch<FavoritesList>(`/favorites${qs ? `?${qs}` : ''}`);
     },
     async addFavorite(params: AddFavoriteRequest) {
       return await dssFetch<Favorite>('/favorites', {
@@ -2537,8 +2567,12 @@ export const storageServiceClient = {
     },
     async listReminders(params?: ListRemindersParams) {
       const query = new URLSearchParams();
-      if (params?.entityType) query.set('entityType', params.entityType);
-      if (params?.entityId) query.set('entityId', params.entityId);
+      params?.entityType?.forEach((entityType) =>
+        query.append('entityType', entityType)
+      );
+      params?.entityId?.forEach((entityId) =>
+        query.append('entityId', entityId)
+      );
       if (params?.includeCompleted !== undefined) {
         query.set('includeCompleted', String(params.includeCompleted));
       }
@@ -2680,6 +2714,15 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify(body),
     });
+  },
+  async replaceCrmTeamStages(body: ReplaceCrmStagesRequest) {
+    return await dssFetch<CrmStagesResponse>('/crm/stages', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  },
+  async resetCrmTeamStages() {
+    return await dssFetch('/crm/stages', { method: 'DELETE' });
   },
   crmComments: {
     async list({

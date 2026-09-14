@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   buildLinkSharePayload,
   buildLinkShareScopePayload,
+  buildTeamSharePayload,
   getLinkShareScope,
   getLinkShareScopeCopy,
   getShareStatus,
+  getTeamShareScope,
   LINK_SHARE_SCOPE_OPTIONS,
+  TEAM_SHARE_SCOPE_OPTIONS,
 } from './linkShare';
 
 describe('getLinkShareScope', () => {
@@ -85,6 +88,40 @@ describe('link share copy', () => {
     expect(copy.description).toContain(
       'does not share it directly with a team or channel'
     );
+  });
+});
+
+describe('team share payload', () => {
+  it('lists None plus the allowed team levels', () => {
+    expect(TEAM_SHARE_SCOPE_OPTIONS).toEqual([
+      { value: 'NONE', label: 'None' },
+      { value: 'view', label: 'View' },
+      { value: 'comment', label: 'Comment' },
+      { value: 'edit', label: 'Edit' },
+    ]);
+  });
+
+  it.each([undefined, null, 'owner'] as const)(
+    'treats %s as no explicit team share',
+    (level) => {
+      expect(getTeamShareScope(level)).toBe('NONE');
+    }
+  );
+
+  it.each(['view', 'comment', 'edit'] as const)(
+    'preserves explicit %s team access',
+    (level) => {
+      expect(getTeamShareScope(level)).toBe(level);
+      expect(buildTeamSharePayload(level)).toEqual({
+        teamShareAccessLevel: level,
+      });
+    }
+  );
+
+  it('clears team sharing with an explicit null', () => {
+    expect(buildTeamSharePayload('NONE')).toEqual({
+      teamShareAccessLevel: null,
+    });
   });
 });
 

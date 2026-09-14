@@ -6609,6 +6609,10 @@
           "name": {
             "type": "string",
             "description": "Provider display name."
+          },
+          "syncError": {
+            "type": ["string", "null"],
+            "description": "A persistent sync failure isolated to this calendar, surfaced so the\nsettings row can badge it. `None` while the calendar is syncing\nnormally or a failure has not yet crossed the persistence threshold."
           }
         }
       }

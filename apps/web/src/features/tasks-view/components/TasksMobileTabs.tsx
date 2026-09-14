@@ -17,6 +17,8 @@ export function TasksMobileTabs() {
     <div class="h-10 min-w-0 flex-1">
       <PillTabs
         scrollable
+        class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+        contentClass="px-(--mobile-chrome-gutter)"
         leading={<TasksFilterDrawer />}
         items={items()}
         value={state.tab}

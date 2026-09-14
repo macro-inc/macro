@@ -1,14 +1,27 @@
 //! A session after it is open: control events from the app, sandbox sizing,
 //! turn boundaries, and teardown.
 
+use agent_fold::domain::model::TurnSignal;
+use agent_session::domain::session::StopReason;
+
 use super::*;
 
 /// The harness is what holds a session's live resources, so it is what the
 /// control routes notify. Both operations go through the per-session queue, so
 /// a teardown cannot land in the middle of an open and a model change cannot
 /// overtake the prompt it was meant to follow.
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
-    AgentSessionNotificationRecipient
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> AgentSessionNotificationRecipient
     for AgentHarnessService<
         Sessions,
         Containers,
@@ -17,6 +30,9 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
@@ -26,6 +42,9 @@ where
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     async fn session_deleted(
         &self,
@@ -132,8 +151,18 @@ where
 /// only admit an internal command there and return. Admission is synchronous
 /// inside [`AgentHarnessService::execute_here`]; the returned future only
 /// awaits the completion, which nothing here needs.
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
-    agent_session::domain::ports::SessionTurnObserver
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> agent_session::domain::ports::SessionTurnObserver
     for AgentHarnessService<
         Sessions,
         Containers,
@@ -142,6 +171,9 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
@@ -151,17 +183,36 @@ where
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
-    fn turn_ended(&self, id: AgentSessionId) {
-        drop(self.execute_here(id, HarnessCommand::TurnEnded));
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        drop(self.execute_here(id, HarnessCommand::Turn(signal)));
     }
 
-    fn session_stopped(&self, id: AgentSessionId) {
-        drop(self.execute_here(id, HarnessCommand::SessionStopped));
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
+        drop(self.execute_here(
+            id,
+            HarnessCommand::SessionStopped {
+                reason: reason.to_string(),
+            },
+        ));
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
     AgentHarnessInner<
         Sessions,
         Containers,
@@ -170,6 +221,9 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
@@ -179,6 +233,9 @@ where
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     /// The MCP servers to advertise when reattaching to an existing container.
     ///

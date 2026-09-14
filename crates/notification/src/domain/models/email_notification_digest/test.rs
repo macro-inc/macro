@@ -226,7 +226,7 @@ fn create_test_notification_row<T: Notification>(metadata: T) -> UserNotificatio
         notification_event_type: T::TYPE_NAME.to_string(),
         entity: EntityType::Document.with_entity_str("doc_123"),
         sent: false,
-        done: false,
+        state: crate::domain::models::NotificationState::Unseen,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  agentRuntimeDescription,
   harnessDisplayName,
   isManagedHarness,
   modelPillLabel,
@@ -29,6 +30,34 @@ const ENGINEER: PersonaOption = {
   handle: 'test-engineer',
   defaultModel: 'anthropic/claude-sonnet-5',
 };
+
+describe('agentRuntimeDescription', () => {
+  it('describes in-memory agents without implying a local sandbox', () => {
+    for (const harness of ['in-memory', 'macro-inmem']) {
+      expect(agentRuntimeDescription({ ...ENGINEER, harness })).toBe(
+        'Starts quickly and runs in-memory. Great for workspace tasks'
+      );
+    }
+  });
+
+  it('describes Cursor coding work', () => {
+    expect(agentRuntimeDescription({ ...ENGINEER, harness: 'cursor' })).toBe(
+      'Bring in Cursor for some heavier coding work'
+    );
+  });
+
+  it('names the local agent and its owner', () => {
+    expect(
+      agentRuntimeDescription({ ...ENGINEER, harness: 'macrod' }, 'Wolf')
+    ).toBe('Do work locally using Test Engineer owned by Wolf');
+  });
+
+  it('does not invent an owner while their name is unavailable', () => {
+    expect(agentRuntimeDescription({ ...ENGINEER, harness: 'macrod' })).toBe(
+      'Do work locally using Test Engineer'
+    );
+  });
+});
 
 describe('overrideModelOptions', () => {
   it('lists every model when the persona has no default', () => {
@@ -127,19 +156,17 @@ describe('shortlistModelOptions', () => {
 
 describe('personaDefaultLabel', () => {
   it('is generic without a known default', () => {
-    expect(personaDefaultLabel(CODER, MODELS)).toBe('Agent default');
+    expect(personaDefaultLabel(CODER, MODELS)).toBe('default');
   });
 
   it('names the default model when the persona has one', () => {
-    expect(personaDefaultLabel(ENGINEER, MODELS)).toBe(
-      'Agent default · Sonnet 5'
-    );
+    expect(personaDefaultLabel(ENGINEER, MODELS)).toBe('default (Sonnet 5)');
   });
 
   it('falls back to the raw id for models the catalog does not know', () => {
     expect(
       personaDefaultLabel({ ...ENGINEER, defaultModel: 'acme/x' }, MODELS)
-    ).toBe('Agent default · acme/x');
+    ).toBe('default (acme/x)');
   });
 });
 
@@ -151,10 +178,10 @@ describe('modelPillLabel', () => {
   });
 
   it('shows the persona default otherwise', () => {
-    expect(modelPillLabel('', ENGINEER, MODELS)).toBe('Sonnet 5');
+    expect(modelPillLabel('', ENGINEER, MODELS)).toBe('default (Sonnet 5)');
   });
 
   it('shows a neutral label when nothing is known', () => {
-    expect(modelPillLabel('', CODER, MODELS)).toBe('Default model');
+    expect(modelPillLabel('', CODER, MODELS)).toBe('default');
   });
 });

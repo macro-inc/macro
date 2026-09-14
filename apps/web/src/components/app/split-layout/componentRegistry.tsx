@@ -4,6 +4,8 @@ import { ComposeAgentSession } from '@app/features/block-agent/component/Compose
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
+import { EmailCompose } from '@app/features/email-compose/email-compose';
+import { EmailView } from '@app/features/email-view/email-view';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { InboxView } from '@app/features/inbox-view/inbox-view';
@@ -23,7 +25,6 @@ import { useFeatureFlag, usePosthog } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
 import { ChannelCompose } from '@block-channel/component/Compose';
-import { EmailCompose } from '@block-email/component/compose/Compose';
 import { ComposeSkill } from '@block-md/component/ComposeSkill';
 import { ComposeTask } from '@block-md/component/ComposeTask';
 import {
@@ -156,15 +157,15 @@ type ComponentRegistration = {
 
 const REGISTRY = new Map<string, ComponentRegistration>();
 
-function registerComponent<TMeta extends Record<string, unknown>>(
+function registerComponent(
   name: string,
   factory: ComponentFactory,
-  initialMeta?: TMeta
+  initialMeta?: ComponentMeta
 ) {
   const metaWithKind = initialMeta ? { kind: name, ...initialMeta } : undefined;
   REGISTRY.set(name, {
     factory,
-    initialMeta: metaWithKind as ComponentMeta,
+    initialMeta: metaWithKind,
   });
 }
 
@@ -240,7 +241,7 @@ function LegacyInboxView() {
   const preset = getViewPreset('inbox');
   return (
     <SoupView
-      viewName="Inbox"
+      viewName="Notifications"
       initialFilters={preset?.filters}
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
@@ -393,21 +394,34 @@ registerComponent(
   })
 );
 
-registerComponent(
-  'mail',
-  withAuth(() => {
-    usePageViewTracking('mail');
-    const preset = getViewPreset('mail');
-    return (
-      <SoupView
-        viewName="Email"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
-  })
-);
+function LegacyMailView() {
+  const preset = getViewPreset('mail');
+  return (
+    <SoupView
+      viewName="Email"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      initialGroupBy={preset?.groupBy}
+    />
+  );
+}
+
+function RegisteredMailView() {
+  usePageViewTracking('mail');
+  const newAppViews = useNewAppViews({
+    enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
+  });
+
+  return (
+    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+      <Show when={newAppViews.enabled()} fallback={<LegacyMailView />}>
+        <EmailView />
+      </Show>
+    </Show>
+  );
+}
+
+registerComponent('mail', withAuth(RegisteredMailView));
 
 registerComponent(
   'documents',
@@ -677,7 +691,7 @@ registerComponent('email-compose', (params) => {
       .filter(Boolean);
   const draftID =
     typeof params.draftID === 'string' ? params.draftID : undefined;
-  return <EmailCompose draftID={draftID} initialTo={initialTo} />;
+  return <EmailCompose draftId={draftID} initialTo={initialTo} />;
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
@@ -874,4 +888,12 @@ if (DEV_MODE_ENV) {
 registerComponent(
   'icon-gallery',
   lazy(() => import('@core/internal/IconGallery'))
+);
+
+// Component library. Registered outside LOCAL_ONLY so design can browse it on
+// preview deploys; the whole gallery is one lazy chunk the app never loads
+// unless the route is opened.
+registerComponent(
+  'ui',
+  lazy(() => import('@app/features/ui-gallery/UiGallery'))
 );

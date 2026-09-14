@@ -16,11 +16,9 @@ use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::SearchEntityFilters;
-use models_search::{
-    SearchOn, SimpleSearchResponse,
-    unified::{SimpleUnifiedSearchResponse, UnifiedSearchRequest},
-};
+use models_search::{SearchOn, SimpleSearchResponse, unified::UnifiedSearchRequest};
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
+use opensearch_client::search::agent_sessions::{AgentSessionSearchArgs, AgentSessionSearchMode};
 use opensearch_client::search::call_records::CallRecordSearchMode;
 use opensearch_client::search::documents::{DocumentSearchMode, PropertyFilterArg};
 use opensearch_client::search::model::SearchHit;
@@ -260,6 +258,25 @@ pub(in crate::api::search) async fn perform_unified_search(
     let should_include_crm = crm_access.is_some() && !tags_active;
 
     let search_filters = SearchEntityFilters::from(req.filters);
+    let requested_sessions = search_filters
+        .agent_session_filters
+        .ids
+        .iter()
+        .map(|id| {
+            uuid::Uuid::parse_str(id).map_err(|_| SearchError::InvalidAgentSessionId(id.clone()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let agent_sessions = ctx
+        .agent_session_search()
+        .scope(
+            &user_id,
+            &requested_sessions,
+            &search_filters.agent_session_filters.owners,
+            search_filters.should_include_agent_sessions,
+            tags_active,
+        )
+        .await
+        .map_err(|error| SearchError::InternalError(anyhow::anyhow!("{error}")))?;
     let channel_filters = search_filters.channel_filters;
     let email_filters = search_filters.email_filters;
     let chat_filters = search_filters.chat_filters;
@@ -411,6 +428,18 @@ pub(in crate::api::search) async fn perform_unified_search(
     let crm_cursor_for_search = crm_cursor.clone();
 
     let unified_search_args = UnifiedSearchArgs {
+        agent_session_search_args: AgentSessionSearchArgs {
+            terms: search_terms.clone(),
+            session_ids: agent_sessions
+                .iter()
+                .map(|session| session.id.to_string())
+                .collect(),
+            mode: match search_on {
+                SearchOn::Name => AgentSessionSearchMode::Name,
+                SearchOn::Content => AgentSessionSearchMode::Content,
+                SearchOn::NameContent => AgentSessionSearchMode::NameContent,
+            },
+        },
         user_id: user_id.as_ref().to_string(),
         page: 0, // With cursor-based pagination, we always start from "page 0" relative to cursor
         page_size,
@@ -419,6 +448,9 @@ pub(in crate::api::search) async fn perform_unified_search(
         collapse,
         search_indices: {
             let mut indices = std::collections::HashSet::new();
+            if !agent_sessions.is_empty() {
+                indices.insert(models_opensearch::OpenSearchEntityType::AgentSessions);
+            }
             if should_include_documents
                 && !(filter_document_response.ids_only
                     && filter_document_response.document_ids.is_empty())
@@ -509,6 +541,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                     args.email_search_args.subject_only = true;
                     args.search_indices.retain(|i| {
                         *i == models_opensearch::OpenSearchEntityType::Documents
+                            || *i == models_opensearch::OpenSearchEntityType::AgentSessions
                             || *i == models_opensearch::OpenSearchEntityType::Emails
                             || *i == models_opensearch::OpenSearchEntityType::Projects
                             || *i == models_opensearch::OpenSearchEntityType::CallRecords
@@ -679,7 +712,7 @@ pub(in crate::api::search) async fn perform_unified_search(
             ("cursor" = Option<String>, Query, description = "Base64 encoded cursor for pagination."),
     ),
     responses(
-            (status = 200, body=SimpleUnifiedSearchResponse),
+            (status = 200, body=SimpleSearchResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 500, body=ErrorResponse),

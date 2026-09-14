@@ -8,6 +8,9 @@ import type {
   ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  LoadAgentModelsRequest,
+  LoadAgentModelsResponse,
+  PreviewAgentSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
 } from './generated/schemas';
@@ -18,6 +21,29 @@ const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
+  preview(sessionIds: string[]) {
+    return fetchWithToken<PreviewAgentSessionsResponse>(
+      `${agentHarnessHost}/agent-sessions/preview`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionIds }),
+      }
+    );
+  },
+  /** Probes one agent target for its current, uncached model catalog. */
+  loadAgentModels(request: LoadAgentModelsRequest, signal?: AbortSignal) {
+    return fetchWithToken<LoadAgentModelsResponse>(
+      `${agentHarnessHost}/agent-models/load`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal,
+      }
+    );
+  },
+
   create(request: CreateAgentSessionRequest) {
     return fetchWithToken<CreateAgentSessionResponse>(
       `${agentHarnessHost}/agent-sessions`,

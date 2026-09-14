@@ -398,7 +398,7 @@ services:
       services:
         aliases:
           # Hyphenated for the same reason as the harness alias above, and
-          # because it is the host the egress proxy's MACRO_MCP_URL names.
+          # because it is the host OVERRIDE_MCP_SERVICE_URL names.
           - mcp-service
 
   # ============================================================================

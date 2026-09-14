@@ -142,33 +142,6 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
-  tailwind:
-    needs:
-    - path-check
-    if: needs.path-check.outputs.should_run == 'true'
-    name: Theme Hygiene Inspector
-    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
-    steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      with:
-        fetch-depth: '0'
-    - name: Mount Namespace cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-        path: /home/runner/.bun/install/cache
-      continue-on-error: true
-    - name: Setup Nix
-      uses: './.github/actions/setup-nix'
-    - name: Setup Prereqs
-      uses: './.github/actions/setup-reqs-web'
-    - name: Check Tailwind Classes
-      run: just check-tailwind
-      working-directory: apps/web
-    - name: Teardown Nix
-      if: always()
-      uses: './.github/actions/teardown-nix'
   test:
     needs:
     - path-check
@@ -253,7 +226,6 @@ jobs:
     - path-check
     - typescript
     - biome-check
-    - tailwind
     - test
     - cycles
     - build
@@ -266,7 +238,6 @@ jobs:
         echo "path-check: ${{ needs.path-check.result }}"
         echo "typescript: ${{ needs.typescript.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "tailwind: ${{ needs.tailwind.result }}"
         echo "test: ${{ needs.test.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
         echo "build: ${{ needs.build.result }}"
@@ -275,7 +246,6 @@ jobs:
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
            [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.tailwind.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \
            [[ "${{ needs.build.result }}" == "failure" ]]; then

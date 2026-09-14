@@ -25,13 +25,11 @@ use uuid::Uuid;
 const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
     message_ids: Vec::new(),
     created_after: None,
+    created_after_exclusive: None,
     created_before: None,
     activity_after: None,
     activity_before: None,
-    notification_filters: NotificationFilters {
-        done: None,
-        seen: None,
-    },
+    notification_filters: NotificationFilters { states: vec![] },
 };
 
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
@@ -1128,13 +1126,14 @@ async fn insert_user_notification(
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
-        INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, done)
+        INSERT INTO user_notification (user_id, notification_id, created_at, seen_at, state)
         VALUES (
             $1,
             $2,
             '2024-01-02 00:00:00'::timestamp,
             CASE WHEN $3::bool THEN '2024-01-02 00:00:00'::timestamp ELSE NULL END,
-            $4
+            CASE WHEN $4::bool THEN 'done'::notification_state
+                 WHEN $3 THEN 'seen'::notification_state ELSE 'unseen'::notification_state END
         )
         "#,
         user_id,
@@ -1428,7 +1427,9 @@ async fn channel_thread_rows_filter_by_notification_done_secondary_entity(
         .get_thread_messages(
             thread_rows_request(
                 USER_A,
-                thread_filter(ChannelThreadLiteral::NotificationDone(true)),
+                thread_filter(ChannelThreadLiteral::NotificationState(
+                    item_filters::NotificationState::Done,
+                )),
                 SimpleSortMethod::UpdatedAt,
                 50,
             )
@@ -1457,7 +1458,9 @@ async fn channel_thread_rows_filter_by_notification_seen_secondary_entity(
         .get_thread_messages(
             thread_rows_request(
                 USER_A,
-                thread_filter(ChannelThreadLiteral::NotificationSeen(true)),
+                thread_filter(ChannelThreadLiteral::NotificationState(
+                    item_filters::NotificationState::Seen,
+                )),
                 SimpleSortMethod::UpdatedAt,
                 50,
             )
@@ -1751,6 +1754,154 @@ async fn top_level_message_ids_filter_limits_to_subset(pool: Pool<Postgres>) -> 
 
     let ids: Vec<Uuid> = result.rows.iter().map(|r| r.id).collect();
     assert_eq!(ids, vec![MSG3, MSG1]);
+    Ok(())
+}
+
+fn ts(rfc3339: &str) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(rfc3339)
+        .unwrap()
+        .with_timezone(&Utc)
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn top_level_created_after_exclusive_drops_boundary_row(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool);
+    let bound = ts("2024-01-01T11:00:00Z");
+    let exclusive = ChannelMessageFilters {
+        created_after_exclusive: Some(bound),
+        ..Default::default()
+    };
+    let inclusive = ChannelMessageFilters {
+        created_after: Some(bound),
+        ..Default::default()
+    };
+    for (direction, query) in [
+        (MessagePageDirection::Older, Query::Sort(CreatedAt, ())),
+        (
+            MessagePageDirection::Newer,
+            Query::Cursor(Cursor {
+                id: MSG1,
+                limit: 50,
+                val: CursorVal {
+                    sort_type: CreatedAt,
+                    last_val: ts("2024-01-01T10:00:00Z"),
+                },
+                filter: (),
+            }),
+        ),
+    ] {
+        let exclusive_ids: Vec<Uuid> = repo
+            .get_top_level_messages(CH1, &query, direction, 50, &exclusive, None)
+            .await?
+            .rows
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(exclusive_ids, vec![MSG3], "{direction:?}: exclusive bound");
+
+        let inclusive_ids: Vec<Uuid> = repo
+            .get_top_level_messages(CH1, &query, direction, 50, &inclusive, None)
+            .await?
+            .rows
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        assert_eq!(
+            inclusive_ids,
+            vec![MSG3, MSG2],
+            "{direction:?}: inclusive bound"
+        );
+    }
+    Ok(())
+}
+
+async fn insert_catch_up_messages(pool: &Pool<Postgres>, count: i64) -> anyhow::Result<Vec<Uuid>> {
+    let mut ids = Vec::with_capacity(usize::try_from(count)?);
+    let base = ts("2024-01-01T13:00:00Z");
+    for i in 1..=count {
+        let id = Uuid::now_v7();
+        let created_at = base + chrono::Duration::seconds(i);
+        sqlx::query!(
+            r#"
+            INSERT INTO comms_messages (
+                id, channel_id, thread_id, sender_id, content, created_at, updated_at
+            )
+            VALUES ($1, $2, NULL, $3, $4, $5, $5)
+            "#,
+            id,
+            CH1,
+            USER_A,
+            format!("catch-up {i}"),
+            created_at,
+        )
+        .execute(pool)
+        .await?;
+        ids.push(id);
+    }
+    Ok(ids)
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn top_level_created_after_exclusive_holds_across_cursor_pages(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let seeded = insert_catch_up_messages(&pool, 60).await?;
+    let repo = repo(pool);
+    let bound = ts("2024-01-01T12:30:00Z");
+    let filters = ChannelMessageFilters {
+        created_after_exclusive: Some(bound),
+        ..Default::default()
+    };
+    let page_one = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Sort(CreatedAt, ()),
+            MessagePageDirection::Older,
+            50,
+            &filters,
+            None,
+        )
+        .await?;
+    assert_eq!(page_one.rows.len(), 50);
+    let last = page_one.rows.last().expect("page one has rows");
+    let page_two = repo
+        .get_top_level_messages(
+            CH1,
+            &Query::Cursor(Cursor {
+                id: last.id,
+                limit: 50,
+                val: CursorVal {
+                    sort_type: CreatedAt,
+                    last_val: last.created_at,
+                },
+                filter: (),
+            }),
+            MessagePageDirection::Older,
+            50,
+            &filters,
+            None,
+        )
+        .await?;
+    assert_eq!(page_two.rows.len(), 10);
+    let all_ids: HashSet<Uuid> = page_one
+        .rows
+        .iter()
+        .chain(page_two.rows.iter())
+        .map(|r| r.id)
+        .collect();
+    assert_eq!(all_ids.len(), 60);
+    assert!(seeded.iter().all(|id| all_ids.contains(id)));
+    for row in page_one.rows.iter().chain(page_two.rows.iter()) {
+        assert!(row.created_at > bound);
+    }
     Ok(())
 }
 
@@ -2414,8 +2565,7 @@ async fn notification_done_filter_matches_top_level_messages_and_thread_replies(
 
     let filters = ChannelMessageFilters {
         notification_filters: NotificationFilters {
-            done: Some(true),
-            seen: None,
+            states: vec![item_filters::NotificationState::Done],
         },
         ..Default::default()
     };
@@ -2448,8 +2598,10 @@ async fn notification_not_done_filter_matches_top_level_messages_and_thread_repl
 
     let filters = ChannelMessageFilters {
         notification_filters: NotificationFilters {
-            done: Some(false),
-            seen: None,
+            states: vec![
+                item_filters::NotificationState::Unseen,
+                item_filters::NotificationState::Seen,
+            ],
         },
         ..Default::default()
     };
@@ -2482,8 +2634,10 @@ async fn notification_seen_filter_matches_top_level_messages_and_thread_replies(
 
     let filters = ChannelMessageFilters {
         notification_filters: NotificationFilters {
-            done: None,
-            seen: Some(true),
+            states: vec![
+                item_filters::NotificationState::Seen,
+                item_filters::NotificationState::Done,
+            ],
         },
         ..Default::default()
     };
@@ -2516,8 +2670,7 @@ async fn notification_not_seen_filter_matches_top_level_messages_and_thread_repl
 
     let filters = ChannelMessageFilters {
         notification_filters: NotificationFilters {
-            done: None,
-            seen: Some(false),
+            states: vec![item_filters::NotificationState::Unseen],
         },
         ..Default::default()
     };
@@ -2541,16 +2694,19 @@ async fn notification_not_seen_filter_matches_top_level_messages_and_thread_repl
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn notification_done_and_seen_filters_match_soup_independent_exists_semantics(
+async fn notification_state_union_matches_any_selected_state(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    insert_channel_message_notification(&pool, USER_A, CH1, MSG3, false, true).await?;
-    insert_channel_message_notification(&pool, USER_A, CH1, MSG3, true, false).await?;
+    // Either of the selected exact states may witness the filter.
+    insert_channel_message_notification(&pool, USER_A, CH1, MSG3, false, false).await?;
+    insert_channel_message_notification(&pool, USER_A, CH1, MSG3, true, true).await?;
 
     let filters = ChannelMessageFilters {
         notification_filters: NotificationFilters {
-            done: Some(false),
-            seen: Some(false),
+            states: vec![
+                item_filters::NotificationState::Unseen,
+                item_filters::NotificationState::Done,
+            ],
         },
         ..Default::default()
     };
@@ -2581,8 +2737,10 @@ async fn notification_filter_is_scoped_to_requesting_user(
 
     let filters = ChannelMessageFilters {
         notification_filters: NotificationFilters {
-            done: Some(false),
-            seen: None,
+            states: vec![
+                item_filters::NotificationState::Unseen,
+                item_filters::NotificationState::Seen,
+            ],
         },
         ..Default::default()
     };
@@ -2605,8 +2763,10 @@ async fn notification_filter_is_scoped_to_requesting_user(
 async fn notification_filter_requires_requesting_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let filters = ChannelMessageFilters {
         notification_filters: NotificationFilters {
-            done: Some(false),
-            seen: None,
+            states: vec![
+                item_filters::NotificationState::Unseen,
+                item_filters::NotificationState::Seen,
+            ],
         },
         ..Default::default()
     };

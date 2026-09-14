@@ -7,13 +7,15 @@ export type PersonaOption = {
   botId?: string;
   name: string;
   handle: string;
+  description?: string;
   avatarUrl?: string;
   harness: string;
   defaultModel?: string;
+  ownerId?: string;
   /** Why this persona cannot be picked right now, when it cannot. */
   unavailableReason?: string;
-  /** Short form of `unavailableReason` for the card subtitle. */
-  unavailableLabel?: string;
+  /** An unavailable agent with a setup action remains clickable. */
+  connectLabel?: string;
 };
 
 /** A model the user can pin the session to instead of the persona default. */
@@ -39,6 +41,42 @@ export function isManagedHarness(harness: string): boolean {
   return (
     harness === 'in-memory' || harness === 'macro-inmem' || harness === 'cursor'
   );
+}
+
+/** 'claude-code' → 'Claude Code'; the fallback when nothing names a harness. */
+export function harnessTitle(harness: string | undefined): string {
+  if (!harness) return 'Agent session';
+  return harness
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/** A model's display name, or its id when the runtime lists no name for it. */
+export function modelDisplayName(
+  id: string,
+  available: readonly Pick<ModelOption, 'id' | 'name'>[]
+): string {
+  return available.find((model) => model.id === id)?.name ?? id;
+}
+
+/** Explains the selected runtime below the composer, independently of its model. */
+export function agentRuntimeDescription(
+  persona: PersonaOption | undefined,
+  ownerName?: string
+): string {
+  if (!persona) return '';
+  if (persona.harness === 'in-memory' || persona.harness === 'macro-inmem') {
+    return 'Starts quickly and runs in-memory. Great for workspace tasks';
+  }
+  if (persona.harness === 'cursor') {
+    return 'Bring in Cursor for some heavier coding work';
+  }
+  if (persona.harness === 'macrod') {
+    return `Do work locally using ${persona.name}${ownerName ? ` owned by ${ownerName}` : ''}`;
+  }
+  return `Runs using ${harnessDisplayName(persona.harness)}`;
 }
 
 /**
@@ -123,10 +161,8 @@ export function personaDefaultLabel(
   available: readonly ModelOption[]
 ): string {
   const defaultModel = persona?.defaultModel;
-  if (!defaultModel) return 'Agent default';
-  const name =
-    available.find((model) => model.id === defaultModel)?.name ?? defaultModel;
-  return `Agent default · ${name}`;
+  if (!defaultModel) return 'default';
+  return `default (${modelDisplayName(defaultModel, available)})`;
 }
 
 /** Short label for the closed model pill. */
@@ -135,12 +171,6 @@ export function modelPillLabel(
   persona: PersonaOption | undefined,
   available: readonly ModelOption[]
 ): string {
-  if (override) {
-    return available.find((model) => model.id === override)?.name ?? override;
-  }
-  const defaultModel = persona?.defaultModel;
-  if (!defaultModel) return 'Default model';
-  return (
-    available.find((model) => model.id === defaultModel)?.name ?? defaultModel
-  );
+  if (override) return modelDisplayName(override, available);
+  return personaDefaultLabel(persona, available);
 }

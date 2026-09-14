@@ -9,6 +9,7 @@ use utoipa::ToSchema;
 pub mod access_level;
 pub mod channel_share_permission;
 mod link_share;
+pub mod team_share;
 
 pub use link_share::LinkShare;
 
@@ -22,6 +23,8 @@ pub struct SharePermissionV2 {
     /// The level of access granted through the share link
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link_share_access_level: Option<AccessLevel>,
+    /// The explicit access level granted to the owner's team, or `null` when disabled.
+    pub team_share_access_level: Option<AccessLevel>,
     /// The owner of the item
     pub owner: String,
     /// The channel share permissions for the item
@@ -41,6 +44,7 @@ impl SharePermissionV2 {
             id: String::new(),
             link_share,
             link_share_access_level,
+            team_share_access_level: None,
             owner: String::new(),
             channel_share_permissions: None,
         }
@@ -121,6 +125,14 @@ pub struct UpdateSharePermissionRequestV2 {
         skip_serializing_if = "Option::is_none"
     )]
     pub link_share_access_level: Option<Option<AccessLevel>>,
+    /// The explicit team access level. Omit to leave unchanged or pass `null` to disable team
+    /// sharing. Only the actual owner may change this setting; `owner` is not an allowed level.
+    #[serde(
+        default,
+        deserialize_with = "double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub team_share_access_level: Option<Option<AccessLevel>>,
     /// Any channel share permissions to be created/updated/removed
     pub channel_share_permissions: Option<Vec<UpdateChannelSharePermission>>,
 }

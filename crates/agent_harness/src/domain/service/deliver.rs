@@ -3,7 +3,18 @@
 
 use super::*;
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
     AgentHarnessInner<
         Sessions,
         Containers,
@@ -12,6 +23,9 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
@@ -21,6 +35,9 @@ where
     PromptContext: ChannelPromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     /// Deliver one already-composed action to the session's runtime.
     ///
@@ -158,6 +175,7 @@ where
         action: &AgentAction,
         actor: Option<&MacroUserIdStr<'static>>,
         announce: Option<AnnounceOrigin>,
+        prompted_message_id: MessageId,
     ) -> Result<Option<SessionAnnouncement>> {
         let (Some(origin), Some(triggered_by), AgentAction::Prompt(prompt)) =
             (announce, actor, action)
@@ -175,7 +193,7 @@ where
             origin_channel_id: origin.channel_id,
             origin_thread_id: origin.thread_id,
             origin_message_id: origin.message_id,
-            prompted_message_id: self.sessions.next_prompt_message_id(session_id).await?,
+            prompted_message_id,
             prompted_content: prompt.prompt.clone(),
             triggered_by: triggered_by.clone(),
         }))

@@ -167,7 +167,7 @@ async fn create_chat_returns_id(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "fixtures", scripts("users"))
 )]
-async fn create_message_bumps_chat_updated_at(pool: Pool<Postgres>) {
+async fn create_message_updates_chat_timestamp_and_selected_model(pool: Pool<Postgres>) {
     let repo = PgChatRepo::new(pool);
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
@@ -216,6 +216,34 @@ async fn create_message_bumps_chat_updated_at(pool: Pool<Postgres>) {
         .updated_at
         .unwrap();
     assert!(updated_at > original_updated_at);
+    assert_eq!(
+        repo.get_metadata(&chat_id).await.unwrap().model.as_deref(),
+        Some("test-model")
+    );
+
+    for (role, model) in [(Role::User, "new-model"), (Role::Assistant, "test-model")] {
+        let now = Utc::now();
+        crate::domain::ports::MessageRepo::create(
+            &repo,
+            &chat_id,
+            NewChatMessage {
+                id: None,
+                content: ChatMessageContent::Text("another message".to_owned()),
+                role,
+                attachments: None,
+                model: model.to_owned(),
+                created_at: now,
+                updated_at: now,
+            },
+        )
+        .await
+        .unwrap();
+        // An older reply finishing after a new send must not undo its model selection.
+        assert_eq!(
+            repo.get_metadata(&chat_id).await.unwrap().model.as_deref(),
+            Some("new-model")
+        );
+    }
 }
 
 #[sqlx::test(
@@ -976,6 +1004,7 @@ async fn patch_chat_sets_team_share_and_defaults_explicit_null_level_to_view(poo
         UpdateSharePermissionRequestV2 {
             link_share: Some(Some(LinkShare::Team)),
             link_share_access_level: Some(None),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )
@@ -1000,6 +1029,7 @@ async fn patch_chat_defaults_explicit_null_level_for_existing_link_share(pool: P
         UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )
@@ -1010,6 +1040,7 @@ async fn patch_chat_defaults_explicit_null_level_for_existing_link_share(pool: P
         UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(None),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )
@@ -1034,6 +1065,7 @@ async fn patch_chat_disables_link_sharing_and_clears_both_levels(pool: Pool<Post
         UpdateSharePermissionRequestV2 {
             link_share: Some(None),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )

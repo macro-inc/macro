@@ -20,11 +20,13 @@ import {
   removeThreadReplyFromChannelMessages,
   removeTopLevelMessageFromChannelMessages,
   replaceThreadReplyAttachmentsInChannelMessages,
+  replaceThreadReplyCreatedAtInChannelMessages,
   replaceThreadReplyIdInChannelMessages,
   replaceThreadReplyReactionsInChannelMessages,
   replaceThreadReplyStateInChannelMessages,
   replaceTopLevelMessageAttachmentsInChannelMessages,
   replaceTopLevelMessageAttachmentsInChannelMessagesByIds,
+  replaceTopLevelMessageCreatedAtInChannelMessages,
   replaceTopLevelMessageIdInChannelMessages,
   replaceTopLevelMessageReactionsInChannelMessages,
   replaceTopLevelMessageReactionsInChannelMessagesByIds,
@@ -46,6 +48,7 @@ import {
   insertThreadReply,
   removeThreadReply,
   replaceThreadReplyAttachments,
+  replaceThreadReplyCreatedAt,
   replaceThreadReplyId,
   replaceThreadReplyReactions,
   replaceThreadReplyState,
@@ -349,6 +352,36 @@ export function replaceTargetMessageId(
 
   setChannelMessagesData(channelId, (prev) =>
     replaceTopLevelMessageIdInChannelMessages(prev, target.messageId, realId)
+  );
+}
+
+export function replaceTargetCreatedAt(
+  channelId: string,
+  target: MessageTarget,
+  createdAt: string,
+  optimisticId?: string | null
+) {
+  const ids = [target.messageId, optimisticId].filter(
+    (id): id is string => id != null && id !== ''
+  );
+  if (target.kind === 'thread_reply') {
+    queryClient.setQueryData<Array<ApiThreadReply>>(
+      getThreadRepliesQueryKey(channelId, target.threadId),
+      (prev) => replaceThreadReplyCreatedAt(prev, ids, createdAt)
+    );
+    setChannelMessagesData(channelId, (prev) =>
+      replaceThreadReplyCreatedAtInChannelMessages(
+        prev,
+        target.threadId,
+        ids,
+        createdAt
+      )
+    );
+    return;
+  }
+
+  setChannelMessagesData(channelId, (prev) =>
+    replaceTopLevelMessageCreatedAtInChannelMessages(prev, ids, createdAt)
   );
 }
 

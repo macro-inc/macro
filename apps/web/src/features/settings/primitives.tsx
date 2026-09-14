@@ -30,7 +30,7 @@ export function SettingsPage(props: {
   children: JSX.Element;
 }) {
   return (
-    <div class="h-full min-h-0 overflow-y-auto [overflow-anchor:none]">
+    <div class="h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children">
       {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
           scroll content (plus the usual breathing room) so pages scroll under
           the floating header and bottom rows like every other block. */}
@@ -73,7 +73,7 @@ export function SettingsSection(props: {
         <div class="flex items-end justify-between gap-4 px-6">
           <div class="flex flex-col gap-0.5 min-w-0">
             <Show when={props.title}>
-              <h2 class="text-[15px] font-semibold text-ink">{props.title}</h2>
+              <h2 class="text-sm font-semibold text-ink">{props.title}</h2>
             </Show>
             <Show when={props.description}>
               <p class="text-sm text-ink-muted">{props.description}</p>

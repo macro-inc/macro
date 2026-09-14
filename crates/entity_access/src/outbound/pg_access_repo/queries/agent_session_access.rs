@@ -1,8 +1,40 @@
 //! Query for agent session access level.
 
+#[cfg(feature = "explain_binary")]
+use crate::{
+    domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
+};
 use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+#[cfg(feature = "explain_binary")]
+use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
+
+#[cfg(test)]
+mod test;
+
+/// List agent sessions granted to the caller's current user/channel/team sources.
+/// Optional requested IDs narrow the allowlist before it reaches OpenSearch.
+#[tracing::instrument(err, skip(pool, source_ids, requested_ids))]
+pub async fn accessible_session_ids(
+    pool: &PgPool,
+    source_ids: &SourceIds,
+    requested_ids: &[uuid::Uuid],
+) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT entity_id
+        FROM entity_access
+        WHERE entity_type = 'agent_session'
+          AND source_id = ANY($1)
+          AND (cardinality($2::uuid[]) = 0 OR entity_id = ANY($2))
+        "#,
+        &source_ids.0,
+        requested_ids,
+    )
+    .fetch_all(pool)
+    .await
+}
 
 /// Get the highest access level a user has for an agent session.
 ///
@@ -45,4 +77,14 @@ pub async fn get_agent_session_access(
         .max();
 
     Ok(highest_level)
+}
+
+#[cfg(feature = "explain_binary")]
+#[tracing::instrument(err, skip(pool, source_ids))]
+pub async fn explain_agent_session_access(
+    pool: &PgPool,
+    agent_session_id: &uuid::Uuid,
+    source_ids: &SourceIds,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    list_entity_access_grants(pool, agent_session_id, EntityType::AgentSession, source_ids).await
 }

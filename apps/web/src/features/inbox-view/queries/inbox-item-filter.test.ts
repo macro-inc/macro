@@ -60,13 +60,6 @@ describe('noise tab', () => {
   });
 });
 
-describe('all tab', () => {
-  it('accepts emails of either importance', () => {
-    expect(soupItemMatchesInboxTab(noiseEmail, 'all')).toBe(true);
-    expect(soupItemMatchesInboxTab(signalEmail, 'all')).toBe(true);
-  });
-});
-
 describe('reminders tab', () => {
   it('accepts only reminders', () => {
     expect(soupItemMatchesInboxTab(reminderItem, 'reminders')).toBe(true);

@@ -1,14 +1,16 @@
-import KeyReturn from '@phosphor/arrow-elbow-down-left.svg';
+import { Hotkey, Surface, tooltipClasses } from '@ui';
 import { Show } from 'solid-js';
 
 export function MentionTooltip(props: { show: boolean; text: string }) {
   return (
     <Show when={props.show}>
-      <div class="select-none pointer-events-none absolute z-action-menu top-full flex gap-1 left-0 mt-2 p-1 w-fit whitespace-pre text-surface bg-ink text-xs rounded-xs font-mono">
-        <div class="h-4 w-6 text-surface flex flex-row">
-          [<KeyReturn />]
-        </div>
-        {props.text}
+      <div class="pointer-events-none absolute top-full left-0 z-tool-tip mt-1 w-fit whitespace-pre select-none">
+        <Surface class={tooltipClasses({ class: 'h-auto w-fit' })} depth={3}>
+          <div class="flex flex-row items-center gap-2">
+            <div class="text-xs">{props.text}</div>
+            <Hotkey shortcut="enter" theme="subtle" />
+          </div>
+        </Surface>
       </div>
     </Show>
   );

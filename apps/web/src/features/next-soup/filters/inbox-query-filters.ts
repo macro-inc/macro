@@ -1,7 +1,7 @@
 import type { SoupItemsQueryFilters } from '@queries/soup/items';
 import type { NotificationFilters } from '@service-storage/generated/schemas';
 
-const INBOX_DONE = false;
+const INBOX_STATES = ['unseen', 'seen'] as const;
 const INBOX_IMPORTANCE = true;
 const OTHER_IMPORTANCE = false;
 
@@ -18,15 +18,19 @@ function withInboxNotification<T extends FilterWithNotification>(
   if (!filters) {
     return {
       notification_filters: {
-        done: INBOX_DONE,
+        states: [...INBOX_STATES],
       },
     } as T;
   }
+  const selected = filters.notification_filters?.states;
+  const active = INBOX_STATES.filter((state) => selected?.includes(state));
   return {
     ...filters,
     notification_filters: {
-      ...filters?.notification_filters,
-      done: INBOX_DONE,
+      // Intersect mixed read/unread selections with the active preset. Keep
+      // the existing preset reset for absent, empty, or Done-only selections;
+      // an empty states array would incorrectly disable notification filtering.
+      states: active.length ? active : [...INBOX_STATES],
     },
   };
 }
@@ -36,14 +40,15 @@ function withoutInboxNotification<T extends FilterWithNotification>(
 ): T | undefined {
   if (!filters) return undefined;
   const { notification_filters, ...rest } = filters;
-  if (!notification_filters || notification_filters.done !== INBOX_DONE) {
+  const states = notification_filters?.states;
+  if (
+    !states ||
+    states.length !== 2 ||
+    !INBOX_STATES.every((state) => states.includes(state))
+  ) {
     return filters;
   }
-  const { done: _, ...notifRest } = notification_filters;
-  const result = {
-    ...rest,
-    ...(isNonEmptyObject(notifRest) ? { notification_filters: notifRest } : {}),
-  };
+  const result = rest;
   return isNonEmptyObject(result as Record<string, unknown>)
     ? (result as T)
     : undefined;

@@ -463,7 +463,49 @@ where
     }
 
     /// Run a prompt retaining its original ACP blocks in the native journal.
+    ///
+    /// This is the whole of a Cursor turn, and the ACP path calls straight
+    /// through here rather than through [`Self::prompt`] - so an
+    /// uninstrumented body leaves a turn with no span at all.
+    ///
+    /// The outcome is recorded on the way out rather than left to `err`.
+    /// A turn whose future is dropped - a pipe torn down under it - still
+    /// closes its span, with no error and no recorded outcome, which is
+    /// otherwise indistinguishable from a turn that ended normally. An unset
+    /// `agent.turn.outcome` is what tells those two apart.
+    #[tracing::instrument(
+        name = "agent.turn",
+        skip_all,
+        fields(
+            agent.acp.session_id = ?session_id,
+            cursor.agent.id = tracing::field::Empty,
+            cursor.run.id = tracing::field::Empty,
+            agent.turn.stop_reason = tracing::field::Empty,
+            agent.turn.outcome = tracing::field::Empty,
+        ),
+        err,
+    )]
     pub async fn prompt_content(
+        &self,
+        session_id: &SessionId,
+        prompt: &str,
+        blocks: Vec<ContentBlock>,
+    ) -> Result<StopReason, SessionError> {
+        let outcome = self.run_turn(session_id, prompt, blocks).await;
+        let span = tracing::Span::current();
+        match &outcome {
+            Ok(stop_reason) => {
+                span.record("agent.turn.stop_reason", tracing::field::debug(stop_reason));
+                span.record("agent.turn.outcome", "completed");
+            }
+            Err(_) => {
+                span.record("agent.turn.outcome", "failed");
+            }
+        }
+        outcome
+    }
+
+    async fn run_turn(
         &self,
         session_id: &SessionId,
         prompt: &str,
@@ -609,6 +651,12 @@ where
         // not observe/project the new run until every older run is reconciled.
         self.backfill_foreign_runs(session_id, &session, &agent, Some(&run))
             .await?;
+        // The turn span is the only place all three identities meet, and it
+        // is what makes a Macro session joinable to the cursor.com run that
+        // served it.
+        let span = tracing::Span::current();
+        span.record("cursor.agent.id", tracing::field::display(&agent));
+        span.record("cursor.run.id", tracing::field::display(&run));
         tracing::info!(%agent, %run, "cursor run started");
         let cancelled_before_the_run = {
             let mut state = session.state.lock().expect("session state poisoned");
@@ -862,6 +910,24 @@ where
     /// One ordered path for live, foreign, and hydration ingestion. Reconnect
     /// starts at the beginning and verifies the captured content prefix. No
     /// local sequence is sent to Cursor as a remote resume token.
+    ///
+    /// One span per ingestion attempt: this is where a turn or a replay spends
+    /// its time between the run being listed and its records being journaled,
+    /// and the Cursor stream and poll calls inside it are what a stalled
+    /// handshake or turn was otherwise waiting on invisibly.
+    #[tracing::instrument(
+        name = "cursor.run.ingest",
+        skip_all,
+        fields(
+            agent.acp.session_id = ?session_id,
+            cursor.agent.id = %agent,
+            cursor.run.id = %run,
+            cursor.ingest.emit = mode.emit,
+            cursor.ingest.strict = mode.strict,
+            cursor.ingest.attempt = mode.attempt,
+        ),
+        err,
+    )]
     async fn ingest_run(
         &self,
         session_id: &SessionId,
@@ -1105,6 +1171,27 @@ where
         }
     }
 
+    /// One poll of a running turn.
+    ///
+    /// Named explicitly so a rename of the client method underneath cannot
+    /// silently take the span with it: this loop is the only continuous
+    /// heartbeat a Cursor turn has, and a turn that stops polling is the
+    /// first evidence that something took it down.
+    ///
+    /// `debug` because the loop runs every [`POLL_INTERVAL`]; the turn span
+    /// above carries the outcome, this carries the liveness.
+    #[tracing::instrument(
+        name = "cursor.run.poll",
+        level = "debug",
+        skip_all,
+        fields(
+            agent.acp.session_id = ?session_id,
+            cursor.agent.id = %agent,
+            cursor.run.id = %run,
+            cursor.run.status = tracing::field::Empty,
+        ),
+        err,
+    )]
     async fn poll_once(
         &self,
         session_id: &SessionId,
@@ -1442,6 +1529,15 @@ where
 
     /// Reconstruct the entire session before allowing a successful load reply.
     /// The returned guard serializes the reply itself with every live writer.
+    ///
+    /// The runtime-side counterpart of the harness's handshake span: a
+    /// `session/load` that times out upstream is spent in here.
+    #[tracing::instrument(
+        name = "cursor.session.replay",
+        skip(self),
+        fields(agent.acp.session_id = ?id),
+        err,
+    )]
     pub async fn replay_session(&self, id: &SessionId) -> Result<ReplayGuard, SessionError> {
         let session = self.session(id)?;
         let gate = Arc::clone(&session.turn_gate).lock_owned().await;

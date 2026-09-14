@@ -1,3 +1,4 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
@@ -22,6 +23,7 @@ import {
   ChannelRailItemContextMenu,
   ConversationCard,
   IncomingCallActions,
+  isPrimaryMouseDown,
 } from './ChannelRailItems';
 import {
   domIdForRow,
@@ -125,7 +127,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         role="treeitem"
         tabIndex={-1}
         class={cn(
-          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors',
+          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none',
           isDirectMessage(props.channel) ? 'min-h-10 py-2' : 'h-8',
           item().selected && !isTouchDevice() && 'bg-active text-ink',
           (!item().selected || isTouchDevice()) && 'text-ink-muted',
@@ -139,7 +141,10 @@ function ChannelOption(props: { channel: ChannelEntity }) {
             'hover:bg-hover hover:text-ink'
         )}
         aria-current={item().selected ? 'page' : undefined}
-        onClick={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
+        onMouseDown={(event) => {
+          if (!isPrimaryMouseDown(event)) return;
+          rail.activateRow(rowKeyForChannel(props.channel.id));
+        }}
       >
         <ChannelAvatar channel={props.channel} />
         <span class="min-w-0 flex-1 truncate text-sm font-medium">
@@ -217,27 +222,27 @@ function ExpandedHeader() {
   };
 
   return (
-    <div class="flex shrink-0 flex-col gap-3 px-4">
-      <div class="flex items-center">
-        <SplitPanel.ControlGroup>
+    <div class="flex shrink-0 flex-col gap-3">
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
           <SplitPanel.CloseButton />
+          <ViewSidebar.Title>Chat</ViewSidebar.Title>
+        </div>
+        <SplitPanel.ControlGroup>
           <SplitPanel.BackButton />
           <SplitPanel.ForwardButton />
+          <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
         </SplitPanel.ControlGroup>
+      </ViewSidebar.Header>
+      <div class="px-4">
+        <Tabs
+          aria-label="Chat sidebar views"
+          fullWidth
+          list={CHANNEL_TABS}
+          value={rail.tab()}
+          onChange={selectTab}
+        />
       </div>
-      <div class="flex h-8 items-center gap-2">
-        <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
-        <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-          Chat
-        </h1>
-      </div>
-      <Tabs
-        aria-label="Chat sidebar views"
-        fullWidth
-        list={CHANNEL_TABS}
-        value={rail.tab()}
-        onChange={selectTab}
-      />
     </div>
   );
 }
@@ -271,7 +276,10 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           tabIndex={-1}
           class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none"
           aria-expanded={section().open}
-          onClick={() => rail.activateRow(rowKeyForSection(props.config.group))}
+          onMouseDown={(event) => {
+            if (!isPrimaryMouseDown(event)) return;
+            rail.activateRow(rowKeyForSection(props.config.group));
+          }}
         >
           <CaretDownIcon
             class={cn(

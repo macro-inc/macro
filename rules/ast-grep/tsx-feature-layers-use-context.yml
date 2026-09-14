@@ -3,24 +3,38 @@ language: tsx
 # Twin of ts-feature-layers-use-context — ast-grep rules are single-language,
 # and `typescript` only scans .ts files.
 severity: warning
-message: Layered features reach the app only through context/. Add the capability to the feature's Context type and wire it in context/.
+message: Supply app capabilities through feature-owned contracts; construct production adapters at the feature root.
 note: |-
   Rule FE-33 in docs/STYLE_GUIDE.md. Inside a layered feature, `queries/`,
   `primitives/`, `components/`, and `views/` never import the app's singletons
   or context hooks (GraphQL soup client, user context, display names,
   entity display, openDocument, PostHog). Those arrive through the
-  feature's `Context` record so every layer runs against mocks in tests. Only
-  `context/` (the contract and its production wiring) at the
-  feature root touch them. Adopting features add their layer paths to
+  feature's `Context` record so every layer runs against mocks in tests. Keep `context/` free of production imports. Only production entry points
+  and adapters at the feature root construct app capabilities. The pure
+  `@core/user/macroId` identity helpers are a documented exception. Adopting features add their layer paths to
   `files` in each ts-/tsx-feature-* rule.
 files:
   - apps/web/src/features/activity/components/**
   - apps/web/src/features/activity/queries/**
   - apps/web/src/features/activity/primitives/**
   - apps/web/src/features/activity/views/**
+  - apps/web/src/features/email-message/components/**
+  - apps/web/src/features/email-message/queries/**
+  - apps/web/src/features/email-message/primitives/**
+  - apps/web/src/features/email-message/views/**
+  - apps/web/src/features/email-thread/components/**
+  - apps/web/src/features/email-thread/queries/**
+  - apps/web/src/features/email-thread/primitives/**
+  - apps/web/src/features/email-thread/views/**
+  - apps/web/src/features/email-compose/components/**
+  - apps/web/src/features/email-compose/queries/**
+  - apps/web/src/features/email-compose/primitives/**
+  - apps/web/src/features/email-compose/views/**
 rule:
   kind: string
   regex: ^['"](@service-storage/graphql-soup|@core/context/user|@core/user|@property/hooks|@property/editor/hooks|@core/component/LexicalMarkdown/component/core/BlockLink|@app/lib/analytics/posthog)
+  not:
+    regex: ^['"]@core/user/macroId['"]
   any:
     - inside:
         kind: import_statement

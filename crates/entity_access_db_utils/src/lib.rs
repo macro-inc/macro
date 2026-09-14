@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod test;
 
+pub mod team_share;
+
 use macro_user_id::user_id::MacroUserIdStr;
 pub use model_entity::EntityType;
 pub use models_entity_access_management::EntityAccessSourceType;
@@ -94,7 +96,11 @@ pub async fn delete_entity_access_rows(
     Ok(())
 }
 
-/// Bulk upserts entity access for users
+/// Bulk upserts entity access for users.
+///
+/// An owner row is never rewritten: the guard sits on the `DO UPDATE`, where
+/// it filters the conflicting row, not on the conflict target, where it would
+/// only steer index inference.
 #[tracing::instrument(skip(executor), err)]
 pub async fn upsert_user_entity_access_bulk<'e, E>(
     executor: E,
@@ -119,8 +125,8 @@ where
         FROM UNNEST($4::text[]) as u(user_id)
         ON CONFLICT (entity_id, entity_type, source_id, source_type)
         WHERE granted_from_project_id IS NULL
-        AND access_level != 'owner' -- this prevents us from overriding the owner user
         DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
+        WHERE entity_access.access_level != 'owner'
         "#,
         entity_id,
         entity_type.as_ref(),
@@ -261,10 +267,7 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Skill
             | EntityType::ForeignEntity
             // Reminders are never channel-shared: they are private to one user.
-            | EntityType::Reminder
-            // Agent sessions grant their originating channel directly at
-            // creation; they carry no `SharePermission` to update.
-            | EntityType::AgentSession => {
+            | EntityType::Reminder => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "received unexpected entity type {entity_type:?}"
                 )));
@@ -298,7 +301,8 @@ pub async fn update_entity_access_channel_share_permissions(
                 .execute(transaction.as_mut())
                 .await?;
             }
-            EntityType::Chat
+            EntityType::AgentSession
+            | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
             | EntityType::Call => {
@@ -332,10 +336,7 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Skill
             | EntityType::ForeignEntity
             // Reminders are never channel-shared: they are private to one user.
-            | EntityType::Reminder
-            // Agent sessions grant their originating channel directly at
-            // creation; they carry no `SharePermission` to update.
-            | EntityType::AgentSession => {
+            | EntityType::Reminder => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "Received invalid EntityType {entity_type:?}"
                 )));
@@ -411,7 +412,8 @@ pub async fn update_entity_access_channel_share_permissions(
                     qb.build().execute(transaction.as_mut()).await?;
                 }
             }
-            EntityType::Chat
+            EntityType::AgentSession
+            | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
             | EntityType::Call => {

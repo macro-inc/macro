@@ -12,7 +12,10 @@ mod schema;
 #[cfg(test)]
 mod sdl_test;
 
-pub use edges::{SoupEdges, SoupEmailThreadEdges};
+pub use edges::{
+    AgentSessionBotDataLoader, AgentSessionBotLoader, GraphqlSessionBot, SoupAgentSessionEdges,
+    SoupEdges, SoupEmailThreadEdges, agent_session_bot_loader,
+};
 pub use graphql_activity::{
     ActivityEdgeKey, ActivityEdgeLoad, ActivityFeedInput, ActivityFeedReader,
     ActivityOverviewInput, ActivityPortReader, ActivityReader, EntityActivityLoader,
@@ -28,12 +31,13 @@ pub use graphql_channel::{
 pub use graphql_common::GraphqlRequestParts;
 pub use graphql_email::{
     EmailContentKey, EmailContentLoad, EmailContentLoader, EmailMutationService,
-    EmailServiceEmailContentReader, EmailThreadMetadataLoad, EmailThreadMetadataLoader,
-    GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings, GraphqlEmailMutation,
-    GraphqlEmailProvider, GraphqlEmailQuery, GraphqlEmailSyncStatus, MarkEmailThreadSeenInput,
-    NoOpSoupEmailContentEdgeReader, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
+    EmailServiceEmailContentReader, EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader,
+    EmailThreadMetadataLoad, EmailThreadMetadataLoader, GraphqlEmailLabel, GraphqlEmailLink,
+    GraphqlEmailLinkSettings, GraphqlEmailMutation, GraphqlEmailProvider, GraphqlEmailQuery,
+    GraphqlEmailSyncStatus, MarkEmailThreadSeenInput, NoOpSoupEmailContentEdgeReader,
+    SoupEmailContentEdgeReader, SoupEmailEdgeReader, SoupEmailThreadMailProjectionEdgeReader,
     SoupEmailThreadMetadataEdgeReader, UpdateEmailThreadLabelInput, email_content_loader,
-    email_thread_metadata_loader,
+    email_thread_mail_projection_loader, email_thread_metadata_loader,
 };
 pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,
@@ -44,8 +48,8 @@ pub use graphql_entity_mutation::{
 };
 pub use graphql_favorite::{
     EntityFavoriteEdgeReader, EntityFavoriteLoader, FavoriteMutationRoot, FavoriteQueryReader,
-    GraphqlFavorite, NoOpFavoriteMutationService, ReorderFavoritesInput, entity_favorite_loader,
-    resolve_favorites,
+    FavoritesFilterInput, GraphqlFavorite, NoOpFavoriteMutationService, ReorderFavoritesInput,
+    entity_favorite_loader, resolve_favorites,
 };
 pub use graphql_notification::{
     EntityNotificationsLoader, GraphqlNotificationUpdateOperation, NoOpNotificationMutationService,

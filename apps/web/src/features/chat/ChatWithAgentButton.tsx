@@ -128,7 +128,11 @@ export async function openChatWithMessageReplacingSplit(
   await createAndOpenChat({ message, replaceSplit: splitHandle });
 }
 
-export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
+export function ChatWithAgentButton(props: {
+  entity: ChatWithAgentEntity;
+  /** Button text; defaults to "Chat". */
+  label?: string;
+}) {
   const [hovering, setHovering] = createSignal(false);
 
   return (
@@ -143,7 +147,7 @@ export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
       class="bg-surface"
     >
       <AnimatedStarIcon triggerAnimation={hovering()} />
-      <span class="text-xs">Chat</span>
+      <span class="text-xs">{props.label ?? 'Chat'}</span>
     </Button>
   );
 }

@@ -1,15 +1,21 @@
 //! The harness child process and the bridge between its stdio and the
 //! gateway channel.
 
+use std::path::Path;
+use std::time::Duration;
+
 use crate::config::Harness;
+use crate::outbound::acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Client, ConnectTo};
 use agent_runtime_protocol::domain::connection::{
-    ConnectionError, RuntimeChannel, RuntimeConnection,
+    ConnectionError, ModelProbeHandler, RuntimeChannel, RuntimeConnection,
 };
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 
 #[cfg(test)]
 mod test;
+
+const MODEL_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Why the bridge ended.
 #[derive(Debug, thiserror::Error)]
@@ -23,8 +29,15 @@ pub enum BridgeError {
 }
 
 /// Spawn the harness in ACP mode and pump frames until either side ends.
-pub async fn bridge(harness: &Harness, channel: RuntimeChannel) -> Result<(), BridgeError> {
-    let (runtime, acp) = RuntimeConnection::connect(channel);
+pub async fn bridge(
+    harness: &Harness,
+    cwd: &Path,
+    channel: RuntimeChannel,
+) -> Result<(), BridgeError> {
+    let probes = HarnessModelProbes {
+        process: probe_process(harness, cwd),
+    };
+    let (runtime, acp) = RuntimeConnection::connect_with_model_probe_handler(channel, probes);
 
     let agent = AcpAgent::new(AcpAgentConfig::new(&harness.command).args(harness.args.clone()))
         // The wire tap: every ndjson line crossing the child's stdio, plus
@@ -46,4 +59,39 @@ pub async fn bridge(harness: &Harness, channel: RuntimeChannel) -> Result<(), Br
     }
 
     outcome.map_err(|error| BridgeError::Harness(error.to_string()))
+}
+
+fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {
+    ProbeSubprocess {
+        command: harness.command.clone().into(),
+        args: harness.args.clone(),
+        cwd: cwd.to_owned(),
+    }
+}
+
+#[derive(Clone)]
+struct HarnessModelProbes {
+    process: ProbeSubprocess,
+}
+
+impl ModelProbeHandler for HarnessModelProbes {
+    async fn probe(
+        &self,
+    ) -> Result<Vec<agent_client_protocol::schema::v1::SessionConfigOption>, String> {
+        probe_subprocess(&self.process, MODEL_PROBE_TIMEOUT)
+            .await
+            .map_err(safe_probe_error)
+    }
+}
+
+fn safe_probe_error(error: ProbeError) -> String {
+    match error {
+        ProbeError::Timeout(_) => "the ACP model probe timed out".to_owned(),
+        #[cfg(not(unix))]
+        ProbeError::UnsupportedWorkingDirectory => {
+            "the ACP model probe cannot apply the configured working directory".to_owned()
+        }
+        ProbeError::Protocol(_) => "the ACP model probe protocol failed".to_owned(),
+        ProbeError::Process(_) => "the ACP model probe process failed".to_owned(),
+    }
 }

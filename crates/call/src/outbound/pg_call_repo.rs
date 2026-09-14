@@ -315,6 +315,7 @@ impl CallRepository for PgCallRepo {
             id: share_permission_id.to_string(),
             link_share: None,
             link_share_access_level: None,
+            team_share_access_level: None,
             owner: created_by.to_string(),
             channel_share_permissions: Some(vec![ChannelSharePermission {
                 channel_id: channel_id.to_string(),

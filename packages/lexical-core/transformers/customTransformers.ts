@@ -9,6 +9,7 @@ import {
 } from '@lexical/markdown';
 import { $isHeadingNode } from '@lexical/rich-text';
 import { $isElementNode, type ElementNode, type LexicalNode } from 'lexical';
+import { HTML_TEXT_FORMAT_TRANSFORMERS } from './htmlTextFormats';
 
 const customTransformer = (
   original: ElementTransformer
@@ -46,6 +47,7 @@ const customTransformer = (
 };
 
 export const CUSTOM_TRANSFORMERS: Transformer[] = [
+  ...HTML_TEXT_FORMAT_TRANSFORMERS,
   ...TRANSFORMERS.filter((t) => {
     return t !== CHECK_LIST && t !== ORDERED_LIST && t !== UNORDERED_LIST;
   }),

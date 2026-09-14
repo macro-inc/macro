@@ -330,6 +330,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             share_permission: Some(UpdateSharePermissionRequestV2 {
                 link_share: Some(Some(LinkShare::Team)),
                 link_share_access_level: Some(None),
+                team_share_access_level: None,
                 channel_share_permissions: None,
             }),
         })
@@ -351,6 +352,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(Some(AccessLevel::Comment)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
     })
@@ -371,6 +373,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: Some(Some(LinkShare::Public)),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
     })
@@ -392,6 +395,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: None,
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
     })
@@ -409,6 +413,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: Some(None),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
     })

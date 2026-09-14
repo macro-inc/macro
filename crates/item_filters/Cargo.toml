@@ -7,8 +7,8 @@ version = "0.1.0"
 [features]
 default = ["native"]
 mock = []
-native = ["document_sub_type/default"]
-schema = ["dep:schemars", "dep:utoipa"]
+native = ["document_sub_type/default", "notification_state/postgres"]
+schema = ["dep:schemars", "dep:utoipa", "notification_state/schema"]
 
 [dependencies]
 chrono = { workspace = true }
@@ -19,6 +19,7 @@ macro_user_id = { path = "../macro_user_id" }
 model_file_type = { path = "../model_file_type" }
 nom = { workspace = true }
 non_empty = { path = "../non_empty" }
+notification_state = { path = "../notification_state" }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true, features = ["rc"] }

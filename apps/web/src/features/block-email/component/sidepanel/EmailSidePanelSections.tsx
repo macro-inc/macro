@@ -1,4 +1,5 @@
 import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
+import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
@@ -7,7 +8,6 @@ import { SidePanel } from '@components/app/side-panel';
 import { References } from '@core/component/References';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { Show, Suspense } from 'solid-js';
-import { useEmailContext } from '../EmailContext';
 
 interface EmailSidePanelSectionsProps {
   threadId: string;
@@ -15,7 +15,7 @@ interface EmailSidePanelSectionsProps {
 }
 
 export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
-  const emailCtx = useEmailContext();
+  const emailCtx = useEmailThreadState();
   const canEdit = () => emailCtx.permissions().isOwner;
 
   return (

@@ -104,6 +104,22 @@ describe('runSoupBackfills', () => {
     vi.restoreAllMocks();
   });
 
+  it('refreshes all Mail metadata instead of using message timestamps for archive/read changes', async () => {
+    const fetchPage = vi.fn(
+      async (
+        _input: Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0]
+      ) => ({ nextCursor: null })
+    );
+    const params = {
+      ...lane('email-filter-metadata', fetchPage),
+      refreshAll: true,
+    };
+    await Effect.runPromise(runSoupBackfill('user-1', params));
+    await Effect.runPromise(runSoupBackfill('user-1', params));
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(fetchPage.mock.calls[1]?.[0]).toEqual(fetchPage.mock.calls[0]?.[0]);
+  });
+
   it('runs each lane to completion before starting the next lane', async () => {
     const order: string[] = [];
     let finishFirstLane!: () => void;
@@ -393,7 +409,7 @@ describe('runSoupBackfills', () => {
 
   it('restarts from the beginning when the cache generation is replaced', async () => {
     localStorage.setItem(
-      'graphql-soup-backfill:v8:user-1:core-entities',
+      'graphql-soup-backfill:v11:user-1:core-entities',
       JSON.stringify({
         userId: 'user-1',
         nextCursor: 'stale-cursor',

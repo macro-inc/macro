@@ -37,6 +37,8 @@ export function favoriteEntityType(
   switch (type) {
     case 'document':
       return 'document';
+    case 'agent_session':
+      return 'agent_session';
     case 'chat':
       return 'chat';
     case 'project':

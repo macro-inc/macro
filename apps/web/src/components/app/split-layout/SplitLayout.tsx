@@ -1,15 +1,10 @@
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
-import {
-  isSidebarVisible,
-  useSidebarCollapse,
-} from '@components/app/sidebarVisibility';
 import { Resize } from '@core/component/Resize';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { useWindowSize } from '@solid-primitives/resize-observer';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { cn } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -64,7 +59,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   );
   restorePreviewPairs(splitManager, initialLayout.previewPairs);
   const [, setTabTitle] = tabTitleSignal;
-  const sidebar = useSidebarCollapse();
 
   // Create the mobile swipe layout once on mobile devices.
   const mobileSwipeLayout: MobileSwipeLayout | undefined =
@@ -115,18 +109,16 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <div
-        class={cn('size-full p-2 touch:p-0', {
-          'pl-0': isSidebarVisible() && !sidebar.isCollapsed(),
-        })}
-      >
+      {/* Desktop panes are flush with the window and each other: the resize
+          gutter between them is the 1px divider. Touch keeps its own layout. */}
+      <div class="size-full">
         <Show
           when={isNativeMobilePlatform() && mobileSwipeLayout}
           fallback={
             // Desktop: side-by-side resizable splits.
             <Resize.Zone
               direction="horizontal"
-              gutter={8}
+              gutter={1}
               captureResizeCtx={splitManager.setResizeContext}
             >
               <For each={ids()}>

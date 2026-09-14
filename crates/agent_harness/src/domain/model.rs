@@ -2,6 +2,7 @@
 
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
 use agent_egress::domain::model::McpServerSlug;
+use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
@@ -211,14 +212,18 @@ pub enum HarnessCommand {
         /// The user responsible, as on [`Self::EditQueued`].
         actor: Option<MacroUserIdStr<'static>>,
     },
-    /// The session's runtime answered its in-flight turn: clear the busy
-    /// mark and dispatch the next queued action. Internal - enqueued by the
-    /// turn observer on the managing replica, never forwarded.
-    TurnEnded,
+    /// The session's fold reported a turn fact: an ended turn clears the
+    /// busy mark and dispatches the next queued action; a raised or cleared
+    /// question is published as is. Internal - enqueued by the turn observer
+    /// on the managing replica, never forwarded.
+    Turn(TurnSignal),
     /// The session's live actor stopped: clear the busy mark and nothing
     /// more - resuming a dead runtime stays the next user action's job.
-    /// Internal, like [`Self::TurnEnded`].
-    SessionStopped,
+    /// Internal, like [`Self::Turn`].
+    SessionStopped {
+        /// Why the actor stopped.
+        reason: String,
+    },
     /// Change the session's sandbox size and the owner's default.
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
@@ -304,6 +309,13 @@ pub struct SessionAnnouncement {
     pub prompted_content: String,
     /// User whose mention triggered the announcement.
     pub triggered_by: MacroUserIdStr<'static>,
+}
+
+/// The channel message an announcement became.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnnouncedMessage {
+    /// The posted message: the magic chip its turn renders into.
+    pub message_id: Uuid,
 }
 
 /// Values required to provision a new session container.

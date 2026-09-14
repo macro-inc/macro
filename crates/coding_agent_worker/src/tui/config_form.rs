@@ -18,7 +18,7 @@ mod environment {
 }
 
 const DEFAULT_CONFIG: &str = include_str!("../../default.macrod.toml");
-const DEV_API_URL: &str = "https://agent-harness-dev.macro.com";
+const DEV_API_URL: &str = "https://dev-gateway.macro.com/agent-harness";
 const DEV_STORAGE_URL: &str = "https://dev-gateway.macro.com/dss";
 const DEV_WEB_URL: &str = "https://dev.macro.com/app";
 

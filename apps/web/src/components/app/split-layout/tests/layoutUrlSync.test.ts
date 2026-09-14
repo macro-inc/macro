@@ -282,4 +282,15 @@ describe('layout URL synchronization', () => {
 
     harness.dispose();
   });
+
+  it('preserves agent creation links while settings canonicalizes its tab', async () => {
+    const harness = createHarness({
+      managerContent: [{ type: 'component', id: 'settings' }],
+      urlSegments: ['settings', 'agents'],
+      search: '?createAgent=true',
+    });
+    await flushUrlSync();
+    expect(harness.navigate).not.toHaveBeenCalled();
+    harness.dispose();
+  });
 });

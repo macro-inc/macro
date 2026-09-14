@@ -6,6 +6,7 @@ const originalFetch = globalThis.fetch;
 const sessionId = '0198a4cc-e138-7670-a308-a6b766602700';
 const session: AgentSessionResponse = {
   botId: '0198a4cc-e138-7670-a308-a6b766602701',
+  canEdit: true,
   createdAt: '2026-08-24T12:00:00Z',
   harness: 'claude-code',
   id: sessionId,
@@ -111,7 +112,10 @@ describe('AgentSession', () => {
       }
       if (request.url.endsWith('/log')) {
         return Response.json(
-          { bot: { id: session.botId, name: 'Agent' }, entries: [] },
+          {
+            bot: { id: session.botId, name: 'Agent', handle: 'agent' },
+            entries: [],
+          },
           { status: 200 },
         );
       }

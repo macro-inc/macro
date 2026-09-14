@@ -18,6 +18,7 @@ import type {
   UnifiedSearchRequest,
 } from '@service-search/generated/models';
 import { type Accessor, createMemo, type Setter } from 'solid-js';
+import { agentSessionSearchFilters } from './agent-session-search-filters';
 
 // Map the tasks-view property filters (status/priority/assignee/custom) into the
 // search request shape, mirroring the soup path so search and soup agree. Values
@@ -47,6 +48,7 @@ function includePropertiesToFilters(
 function filterDataToQueryFilters(data: QueryState): EntityFilters {
   const filters: EntityFilters = {};
   const { include } = data;
+  filters.agent_session_filters = agentSessionSearchFilters(include);
 
   // Calendar events are searchable by title, so they are scoped like every
   // other entity type: a view that names ids gets them, one that names none

@@ -10,7 +10,9 @@
 //! What it is given is still the ACP server list, URLs and all, because that
 //! is what every harness is given. The URL's path names the server and the
 //! `Authorization` header carries the session token; both are read here the
-//! way the proxy's router reads them.
+//! way the proxy's router reads them - minus the proxy's own route prefix,
+//! which the gateway strips before the router sees a request and nothing
+//! strips here.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -63,12 +65,22 @@ type CallError = StreamableHttpError<EgressCallError>;
 /// service with the same pools, not two configured alike.
 pub struct EgressMcpClient<Egress> {
     egress: Arc<Egress>,
+    base_url: String,
 }
 
 impl<Egress> EgressMcpClient<Egress> {
-    /// A client over the service the proxy's listener also serves.
-    pub fn new(egress: Arc<Egress>) -> Self {
-        Self { egress }
+    /// A client over the service the proxy's listener also serves, told the
+    /// proxy's public address.
+    ///
+    /// It must be the same value the advertised server URLs were built from -
+    /// the harness's `SandboxEgress::base_url` - because that is what comes
+    /// back off the front of them here. Trimmed the way the provisioner trims
+    /// it, so a configured trailing slash cannot make the two disagree.
+    pub fn new(egress: Arc<Egress>, base_url: &str) -> Self {
+        Self {
+            egress,
+            base_url: base_url.trim_end_matches('/').to_owned(),
+        }
     }
 }
 
@@ -77,8 +89,14 @@ impl<Egress> Clone for EgressMcpClient<Egress> {
     fn clone(&self) -> Self {
         Self {
             egress: Arc::clone(&self.egress),
+            base_url: self.base_url.clone(),
         }
     }
+}
+
+/// The refusal for a URL this proxy does not serve.
+fn not_an_egress_url(uri: &str) -> CallError {
+    StreamableHttpError::Client(EgressCallError::NotAnEgressUrl(uri.to_owned()))
 }
 
 /// Where a request is going, read off the pieces rmcp hands over.
@@ -87,13 +105,19 @@ struct Addressed {
     target: EgressTarget,
 }
 
-fn address(uri: &str, auth_header: Option<String>) -> Result<Addressed, CallError> {
-    let url = url::Url::parse(uri).map_err(|_| {
-        StreamableHttpError::Client(EgressCallError::NotAnEgressUrl(uri.to_owned()))
-    })?;
-    let destination = McpDestination::from_path(url.path()).ok_or_else(|| {
-        StreamableHttpError::Client(EgressCallError::NotAnEgressUrl(uri.to_owned()))
-    })?;
+/// Read a request's destination off an advertised URL.
+///
+/// The advertised URL is the proxy's base URL with a route appended, and that
+/// base may be a path on a shared host
+/// (`https://dev-gateway.macro.com/agent-harness-egress`). A sandbox dials it
+/// whole and the gateway strips the prefix, so the router only ever reads
+/// `/mcp/{slug}`. Nothing strips anything on the way here, so the base comes
+/// off first and what is left is read the way the router reads it.
+fn address(base_url: &str, uri: &str, auth_header: Option<String>) -> Result<Addressed, CallError> {
+    let route = uri
+        .strip_prefix(base_url)
+        .ok_or_else(|| not_an_egress_url(uri))?;
+    let destination = McpDestination::from_path(route).ok_or_else(|| not_an_egress_url(uri))?;
     let token = auth_header
         .map(SessionToken::new)
         .ok_or(StreamableHttpError::Client(EgressCallError::NoSessionToken))?;
@@ -189,7 +213,7 @@ where
         auth_header: Option<String>,
         custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<StreamableHttpPostResponse, CallError> {
-        let Addressed { token, target } = address(&uri, auth_header)?;
+        let Addressed { token, target } = address(&self.base_url, &uri, auth_header)?;
         let body = serde_json::to_vec(&message)?;
         let mut request = build_request(
             Method::POST,
@@ -259,7 +283,7 @@ where
         auth_header: Option<String>,
         custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<(), CallError> {
-        let Addressed { token, target } = address(&uri, auth_header)?;
+        let Addressed { token, target } = address(&self.base_url, &uri, auth_header)?;
         let request = build_request(
             Method::DELETE,
             &uri,
@@ -293,7 +317,7 @@ where
         auth_header: Option<String>,
         custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<BoxStream<'static, Result<Sse, SseError>>, CallError> {
-        let Addressed { token, target } = address(&uri, auth_header)?;
+        let Addressed { token, target } = address(&self.base_url, &uri, auth_header)?;
         let mut request = build_request(
             Method::GET,
             &uri,

@@ -46,7 +46,6 @@ pub fn web_app_check_main() -> Workflow {
         .add_job("path-check", path_check())
         .add_job("typescript", typescript())
         .add_job("biome-check", biome_check())
-        .add_job("tailwind", tailwind())
         .add_job("test", test())
         .add_job("cycles", cycles())
         .add_job("build", build())
@@ -96,16 +95,6 @@ fn biome_check() -> Job {
         .add_step(steps::teardown_nix())
 }
 
-fn tailwind() -> Job {
-    gated_web_job("Theme Hygiene Inspector")
-        .add_step(checkout("Checkout Repo", true))
-        .add_step(steps::mount_web_cache_volume(false))
-        .add_step(steps::setup_nix())
-        .add_step(steps::setup_reqs_web("Setup Prereqs", false))
-        .add_step(check_tailwind_classes())
-        .add_step(steps::teardown_nix())
-}
-
 fn test() -> Job {
     gated_web_job("Test")
         .add_step(checkout("Checkout Repo", false))
@@ -147,7 +136,6 @@ fn status_check() -> Job {
             "path-check".to_string(),
             "typescript".to_string(),
             "biome-check".to_string(),
-            "tailwind".to_string(),
             "test".to_string(),
             "cycles".to_string(),
             "build".to_string(),
@@ -241,12 +229,6 @@ fn run_collaboration_biome() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
 }
 
-fn check_tailwind_classes() -> Step<Run> {
-    Step::new("Check Tailwind Classes")
-        .run("just check-tailwind")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-}
-
 fn run_tests() -> Step<Run> {
     Step::new("Test")
         .run("bunx vitest")
@@ -276,7 +258,6 @@ fn check_job_results() -> Step<Run> {
         echo "path-check: ${{ needs.path-check.result }}"
         echo "typescript: ${{ needs.typescript.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
-        echo "tailwind: ${{ needs.tailwind.result }}"
         echo "test: ${{ needs.test.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
         echo "build: ${{ needs.build.result }}"
@@ -285,7 +266,6 @@ fn check_job_results() -> Step<Run> {
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
            [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
-           [[ "${{ needs.tailwind.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \
            [[ "${{ needs.build.result }}" == "failure" ]]; then

@@ -6,9 +6,10 @@ mod tests;
 use crate::domain::{
     models::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
-        BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
-        CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        HarnessId, HarnessOwner, PatchBotRequest, UpdateAgentRequest,
+        BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotProfile, BotToken,
+        BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        CreateChannelScopedBotRequest, HarnessId, HarnessOwner, PatchBotRequest,
+        UpdateAgentRequest,
     },
     ports::BotRepo,
 };
@@ -17,6 +18,7 @@ use bot_token::{HashedBotToken, hash_token};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Postgres implementation of [`BotRepo`].
@@ -850,6 +852,66 @@ impl BotRepo for PgBotsRepo {
         .await
         .context("failed to get bot")?;
         row.map(map_bot_row).transpose()
+    }
+
+    async fn get_bot_profiles(
+        &self,
+        bot_ids: &[BotId],
+    ) -> Result<HashMap<BotId, BotProfile>, Self::Err> {
+        if bot_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut profiles = bot_ids
+            .iter()
+            .filter_map(|id| {
+                bot_id::system_bot(*id).map(|bot| {
+                    (
+                        *id,
+                        BotProfile {
+                            id: *id,
+                            name: bot.name.to_owned(),
+                            avatar_url: None,
+                        },
+                    )
+                })
+            })
+            .collect::<HashMap<_, _>>();
+        let ids = bot_ids
+            .iter()
+            .filter(|id| !bot_id::is_system_bot(**id))
+            .map(|id| id.as_uuid())
+            .collect::<Vec<_>>();
+        if ids.is_empty() {
+            return Ok(profiles);
+        }
+
+        // Include soft-deleted bots so historical sessions retain their bot
+        // identity and avatar.
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, name, avatar_url
+            FROM bots
+            WHERE id = ANY($1)
+            "#,
+            &ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to get bot profiles")?;
+
+        profiles.extend(rows.into_iter().map(|row| {
+            let id = BotId::new_from_uuid(row.id);
+            (
+                id,
+                BotProfile {
+                    id,
+                    name: row.name,
+                    avatar_url: row.avatar_url,
+                },
+            )
+        }));
+        Ok(profiles)
     }
 
     async fn get_agent(&self, bot_id: BotId) -> Result<Option<Agent>, Self::Err> {

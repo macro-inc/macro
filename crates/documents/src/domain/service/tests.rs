@@ -181,13 +181,17 @@ impl TaskPropertiesPort for TestTaskPropertiesPort {
     }
 }
 
-struct TestConnectionService;
+#[derive(Default)]
+struct TestConnectionService {
+    invalidations: Mutex<usize>,
+}
 
 impl ConnectionService for TestConnectionService {
     async fn send_invalidation_event<'a, T: std::fmt::Debug + serde::Serialize + Send>(
         &self,
         _invalidation_event: InvalidationEvent<'a, T>,
     ) -> Result<(), connection::domain::models::ConnectionError> {
+        *self.invalidations.lock().unwrap() += 1;
         Ok(())
     }
 
@@ -418,7 +422,7 @@ fn make_test_service_with_foreign_entity_service(
         ),
         TestUploadUrlPort,
         TestTaskPropertiesPort,
-        TestConnectionService,
+        TestConnectionService::default(),
         TestEntityAccessManagementService::default(),
         foreign_entity_service,
         TestEventBroker::default(),
@@ -439,7 +443,7 @@ fn make_test_service_with_entity_access(
         ),
         TestUploadUrlPort,
         TestTaskPropertiesPort,
-        TestConnectionService,
+        TestConnectionService::default(),
         entity_access.clone(),
         TestForeignEntityService::default(),
         TestEventBroker::default(),
@@ -467,7 +471,7 @@ fn make_test_service_with_configured_event_broker(
         ),
         TestUploadUrlPort,
         TestTaskPropertiesPort,
-        TestConnectionService,
+        TestConnectionService::default(),
         TestEntityAccessManagementService::default(),
         TestForeignEntityService::default(),
         event_broker.clone(),
@@ -1506,6 +1510,266 @@ fn owner_receipt(document_id: &str) -> EntityAccessReceipt<OwnerAccessLevel> {
     )
 }
 
+fn team_share_facts() -> models_permissions::share_permission::team_share::TeamShareFacts {
+    models_permissions::share_permission::team_share::TeamShareFacts {
+        entity: EntityType::Document.with_entity_str("doc-1"),
+        owner: task_document_context("doc-1").owner,
+        owner_team_id: Some(uuid::Uuid::from_u128(1)),
+        current: None,
+        revision: 0,
+    }
+}
+
+#[tokio::test]
+async fn team_toggle_rejects_non_owner_without_writes_or_events() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_team_share_facts()
+        .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
+    let (service, broker) = make_test_service_with_event_broker(repo);
+    let result = service.set_team_share(edit_receipt("doc-1"), true).await;
+    assert!(matches!(result, Err(DocumentError::Unauthorized)));
+    assert!(broker.published().lock().unwrap().is_empty());
+}
+
+fn team_edit_args(
+    level: Option<models_permissions::share_permission::access_level::AccessLevel>,
+) -> EditDocumentServiceArgs {
+    EditDocumentServiceArgs {
+        document_name: Some("renamed".to_string()),
+        project_id: None,
+        file_type: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            team_share_access_level: Some(level),
+            link_share: None,
+            link_share_access_level: None,
+            channel_share_permissions: None,
+        }),
+    }
+}
+
+fn team_policy_receipts() -> Vec<EntityAccessReceipt<EditAccessLevel>> {
+    use entity_access::domain::models::{AccessLevel, Entity, EntityPermission};
+    let entity = Entity {
+        entity_id: "doc-1".to_string(),
+        entity_type: EntityType::Document,
+    };
+    let non_owner = edit_receipt("doc-1").acting_user_id().unwrap().clone();
+    let mut receipts = Vec::new();
+    for access_level in [AccessLevel::Edit, AccessLevel::Owner] {
+        receipts.push(
+            EntityAccessReceipt::try_new_authenticated_user(
+                non_owner.clone(),
+                entity.clone(),
+                EntityPermission::AccessLevel { access_level },
+            )
+            .unwrap(),
+        );
+    }
+    receipts.push(
+        EntityAccessReceipt::try_new_bot(
+            bot_id().into_storage_id(),
+            bot_receipt_scope(),
+            entity.clone(),
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+        )
+        .unwrap(),
+    );
+    for auth in [
+        EntityAccessAuth::Internal,
+        EntityAccessAuth::Unauthenticated,
+    ] {
+        receipts.push(
+            EntityAccessReceipt::try_new(
+                auth,
+                entity.clone(),
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::Owner,
+                },
+            )
+            .unwrap(),
+        );
+    }
+    receipts
+}
+
+#[tokio::test]
+async fn team_policy_rejects_editors_inherited_owners_and_identityless_receipts() {
+    use models_permissions::share_permission::access_level::AccessLevel;
+    for level in [
+        Some(AccessLevel::View),
+        Some(AccessLevel::Comment),
+        Some(AccessLevel::Edit),
+        None,
+    ] {
+        for receipt in team_policy_receipts() {
+            let mut repo = make_mock_repo();
+            repo.expect_get_team_share_facts()
+                .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
+            let (service, broker) = make_test_service_with_event_broker(repo);
+            // Even a context claiming the actor owns it cannot replace persisted facts.
+            let mut context = task_document_context("doc-1");
+            context.owner = edit_receipt("doc-1").acting_user_id().unwrap().clone();
+            assert!(matches!(
+                service
+                    .edit_document(receipt, context, team_edit_args(level))
+                    .await,
+                Err(DocumentError::Unauthorized)
+            ));
+            assert!(broker.published().lock().unwrap().is_empty());
+        }
+    }
+    for enabled in [true, false] {
+        for receipt in team_policy_receipts() {
+            let mut repo = make_mock_repo();
+            repo.expect_get_team_share_facts()
+                .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
+            assert!(matches!(
+                make_test_service(repo)
+                    .set_team_share(receipt, enabled)
+                    .await,
+                Err(DocumentError::Unauthorized)
+            ));
+        }
+    }
+}
+
+fn owner_bot_edit_receipt() -> EntityAccessReceipt<EditAccessLevel> {
+    use entity_access::domain::models::{AccessLevel, Entity, EntityPermission};
+    EntityAccessReceipt::try_new_bot(
+        bot_id().into_storage_id(),
+        BotReceiptScope::User {
+            acting_user: team_share_facts().owner,
+        },
+        Entity {
+            entity_id: "doc-1".to_string(),
+            entity_type: EntityType::Document,
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit,
+        },
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn owner_scoped_bot_can_edit_and_toggle_explicit_team_sharing() {
+    use models_permissions::share_permission::access_level::AccessLevel;
+    for level in [
+        Some(AccessLevel::View),
+        Some(AccessLevel::Comment),
+        Some(AccessLevel::Edit),
+        None,
+    ] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_team_share_facts()
+            .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
+        repo.expect_edit_document()
+            .times(1)
+            .withf(move |args| {
+                let command = args.team_share.as_ref().unwrap();
+                command.expected() == &team_share_facts()
+                    && command.target().map(|grant| AccessLevel::from(grant.level)) == level
+            })
+            .returning(|_| Box::pin(async { Ok(()) }));
+        make_test_service(repo)
+            .edit_document(
+                owner_bot_edit_receipt(),
+                task_document_context("doc-1"),
+                team_edit_args(level),
+            )
+            .await
+            .unwrap();
+    }
+    for enabled in [true, false] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_team_share_facts()
+            .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
+        repo.expect_set_team_share()
+            .times(1)
+            .withf(move |command| command.target().is_some() == enabled)
+            .returning(move |_| {
+                Box::pin(async move {
+                    Ok(super::super::models::DocumentTeamShare {
+                        team_id: team_share_facts().owner_team_id,
+                        shared_with_team: enabled,
+                    })
+                })
+            });
+        make_test_service(repo)
+            .set_team_share(owner_bot_edit_receipt(), enabled)
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn team_edit_conflict_does_not_publish_success() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_team_share_facts()
+        .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
+    repo.expect_edit_document()
+        .returning(|_| Box::pin(async { Err(DocumentError::Conflict("stale facts".to_string())) }));
+    let (service, broker) = make_test_service_with_event_broker(repo);
+    assert!(matches!(
+        service
+            .edit_document(
+                owner_bot_edit_receipt(),
+                task_document_context("doc-1"),
+                team_edit_args(None)
+            )
+            .await,
+        Err(DocumentError::Conflict(_))
+    ));
+    assert!(broker.published().lock().unwrap().is_empty());
+    assert_eq!(*service.connection_service.invalidations.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn team_toggle_conflict_does_not_invalidate() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_team_share_facts()
+        .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
+    repo.expect_set_team_share()
+        .returning(|_| Box::pin(async { Err(DocumentError::Conflict("stale facts".to_string())) }));
+    let service = make_test_service(repo);
+    assert!(matches!(
+        service.set_team_share(owner_bot_edit_receipt(), true).await,
+        Err(DocumentError::Conflict(_))
+    ));
+    assert_eq!(*service.connection_service.invalidations.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn team_edit_rejects_owner_level_and_enable_without_team_before_writes() {
+    use models_permissions::share_permission::access_level::AccessLevel;
+    for (level, has_team) in [(AccessLevel::Owner, true), (AccessLevel::View, false)] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_team_share_facts().returning(move |_| {
+            Box::pin(async move {
+                let mut facts = team_share_facts();
+                if !has_team {
+                    facts.owner_team_id = None;
+                }
+                Ok(facts)
+            })
+        });
+        let service = make_test_service(repo);
+        assert!(matches!(
+            service
+                .edit_document(
+                    owner_bot_edit_receipt(),
+                    task_document_context("doc-1"),
+                    team_edit_args(Some(level))
+                )
+                .await,
+            Err(DocumentError::BadRequest(_))
+        ));
+        assert_eq!(*service.connection_service.invalidations.lock().unwrap(), 0);
+    }
+}
+
 fn edit_receipt(document_id: &str) -> EntityAccessReceipt<EditAccessLevel> {
     let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
         .unwrap()
@@ -1686,6 +1950,7 @@ async fn edit_document_sets_revocation_intent_from_link_share_target() {
                     share_permission: Some(UpdateSharePermissionRequestV2 {
                         link_share,
                         link_share_access_level: None,
+                        team_share_access_level: None,
                         channel_share_permissions: None,
                     }),
                     file_type: None,
@@ -1893,6 +2158,84 @@ async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event()
     assert_eq!(event.payload["metadata"]["owner"], "macro|user@user.com");
 }
 
+struct RejectUnexpectedFinalization;
+
+impl crate::domain::ports::markdown::MarkdownInitializationPort for RejectUnexpectedFinalization {
+    async fn initialize_existing_markdown(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> Result<Vec<u8>, DocumentError> {
+        panic!("failed repository creation must not initialize markdown");
+    }
+}
+
+impl crate::domain::ports::create::DocumentBytesUploadPort for RejectUnexpectedFinalization {
+    async fn upload_document_bytes(
+        &self,
+        _: crate::domain::ports::create::DocumentBytesUpload,
+    ) -> Result<(), DocumentError> {
+        panic!("failed repository creation must not upload content");
+    }
+}
+
+#[tokio::test]
+async fn creator_forwards_explicit_consent_and_stops_after_repository_failure() {
+    use crate::domain::create::{
+        DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
+    };
+
+    for (subtype, expected_share) in [
+        (MarkdownSubtype::Note, false),
+        (MarkdownSubtype::Snippet, false),
+        (
+            MarkdownSubtype::from_task_flag(true, Some(uuid::Uuid::from_u128(7))),
+            true,
+        ),
+        (
+            MarkdownSubtype::Task {
+                property_values: None,
+                share_with_team: false,
+                team_id: None,
+            },
+            false,
+        ),
+    ] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_team_default_link_share()
+            .returning(|_| Box::pin(std::future::ready(Ok(None))));
+        repo.expect_create_document()
+            .withf(move |args, permission| {
+                args.share_with_team == expected_share
+                    && permission.team_share_access_level.is_none()
+            })
+            .times(1)
+            .returning(|_, _| {
+                Box::pin(std::future::ready(Err(DocumentError::Internal(
+                    anyhow::anyhow!("creation rolled back"),
+                ))))
+            });
+        let (service, event_broker) = make_test_service_with_event_broker(repo);
+        let creator = DocumentCreator::new(
+            service,
+            RejectUnexpectedFinalization,
+            RejectUnexpectedFinalization,
+        );
+        let result = creator
+            .create_markdown_text(
+                create_document_repo_args(FileType::Md).user_id,
+                NewMarkdownTextDocument {
+                    metadata: NewDocumentMetadata::new("test"),
+                    markdown: String::new(),
+                    subtype,
+                },
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(event_broker.published().lock().unwrap().is_empty());
+    }
+}
+
 fn create_document_repo_args(file_type: FileType) -> CreateDocumentRepoArgs {
     CreateDocumentRepoArgs {
         id: None,
@@ -1904,6 +2247,7 @@ fn create_document_repo_args(file_type: FileType) -> CreateDocumentRepoArgs {
         file_type: Some(file_type),
         project_id: None,
         team_id: None,
+        share_with_team: false,
         created_at: None,
         sub_type: None,
         skip_history: false,
@@ -2099,7 +2443,7 @@ async fn handle_task_properties_forwards_create_attribution() {
         ),
         TestUploadUrlPort,
         task_properties.clone(),
-        TestConnectionService,
+        TestConnectionService::default(),
         TestEntityAccessManagementService::default(),
         TestForeignEntityService::default(),
         TestEventBroker::default(),

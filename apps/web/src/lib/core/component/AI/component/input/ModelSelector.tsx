@@ -47,7 +47,10 @@ export function ModelSelector(props: ModelSelectorProps) {
       <Dropdown.Trigger
         variant="ghost"
         size={props.compact ? 'icon-sm' : 'sm'}
-        class={cn('rounded-lg text-xs', !props.compact && 'gap-1.5')}
+        class={cn(
+          'rounded-lg text-sm text-ink-subtle',
+          !props.compact && 'gap-1.5'
+        )}
         label={props.compact ? MODEL_PRETTYNAME[model()] : undefined}
       >
         <Dynamic component={MODEL_PROVIDER_ICON[model()]} />
@@ -56,7 +59,7 @@ export function ModelSelector(props: ModelSelectorProps) {
           <CaretDown />
         </Show>
       </Dropdown.Trigger>
-      <Dropdown.Content>
+      <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)]">
         <Dropdown.Group>
           <For each={options()}>
             {(option) => (
@@ -70,7 +73,7 @@ export function ModelSelector(props: ModelSelectorProps) {
                   component={MODEL_PROVIDER_ICON[option.id]}
                   class="size-4 shrink-0"
                 />
-                <span class="flex-1 truncate text-xs">
+                <span class="flex-1 truncate">
                   {MODEL_PRETTYNAME[option.id]}
                 </span>
                 <Show when={!option.available}>

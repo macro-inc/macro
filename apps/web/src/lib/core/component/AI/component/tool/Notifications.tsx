@@ -21,6 +21,7 @@ const NOTIFICATION_TYPE_LABELS: Record<NotificationFilterType, string> = {
   github: 'GitHub',
   reminder: 'reminders',
   calendar: 'calendar events',
+  agent: 'agent sessions',
 };
 
 const formatList = (items: string[]) => {
@@ -31,12 +32,10 @@ const formatList = (items: string[]) => {
 };
 
 const formatNotificationFilters = (filters: ListNotificationsTool) => {
-  const statusFilters = [filters.done ? 'done' : 'not done'];
-  if (filters.seen != null) {
-    statusFilters.push(filters.seen ? 'seen' : 'unseen');
-  }
-
-  let text = `filtered by ${formatList(statusFilters)}`;
+  const states = filters.states ?? ['unseen', 'seen'];
+  let text = states.length
+    ? `filtered by ${states.join(' or ')}`
+    : 'all notification states';
 
   if (filters.includeTypes?.length) {
     text += ` in ${formatList(

@@ -741,6 +741,11 @@ export const SoupView = (props: SoupViewProps) => {
             setPreviewOpenPreference(open);
         }}
       />
+      <Show when={soupView.source.cachedMail?.()}>
+        <p role="status" class="px-4 py-1 text-xs text-ink-muted">
+          Showing cached mail. Only synchronized messages are available.
+        </p>
+      </Show>
       <Show when={applyDefaultCrmView}>
         <CrmDefaultViewLoader />
       </Show>
@@ -763,8 +768,9 @@ export const SoupView = (props: SoupViewProps) => {
             content that is already constrained in both layouts. */}
         <Show
           when={
-            ENABLE_UNIFIED_LIST_AI_INPUT &&
-            !isTouchDevice() &&
+            (isTouchDevice()
+              ? isComponentListView('agents')
+              : ENABLE_UNIFIED_LIST_AI_INPUT) &&
             !isInboxView() &&
             !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&
@@ -938,6 +944,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     isFetching: source.isFetching,
     isFetchingNextPage: source.isFetchingNextPage,
     fetchNextPage: source.fetchNextPage,
+    error: source.error,
   });
 
   // Register entity action hotkeys

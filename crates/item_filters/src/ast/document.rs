@@ -38,12 +38,9 @@ pub enum DocumentLiteral {
     /// this node value filters by document importance. false short-circuits to match nothing.
     #[serde(rename = "imp")]
     Importance(bool),
-    /// this node value filters by notification done state for the document.
-    #[serde(rename = "nd")]
-    NotificationDone(bool),
-    /// this node value filters by notification seen state for the document.
+    /// An entity has a non-deleted notification in this exact state.
     #[serde(rename = "ns")]
-    NotificationSeen(bool),
+    NotificationState(crate::NotificationState),
     /// include tasks that are created by me, assigned to me, and not completed.
     #[serde(rename = "cbm")]
     IncludeCbmAtmNc(bool),
@@ -211,12 +208,11 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
 
         let importance_node = importance.map(|imp| Expr::Literal(DocumentLiteral::Importance(imp)));
 
-        let notification_done_node = notification_filters
-            .done
-            .map(|done| Expr::Literal(DocumentLiteral::NotificationDone(done)));
-        let notification_seen_node = notification_filters
-            .seen
-            .map(|seen| Expr::Literal(DocumentLiteral::NotificationSeen(seen)));
+        let notification_state_node = notification_filters
+            .into_unique_states()
+            .into_iter()
+            .map(|state| Expr::Literal(DocumentLiteral::NotificationState(state)))
+            .reduce(Expr::or);
 
         let sub_types_node = sub_types
             .iter()
@@ -232,8 +228,7 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             project_ids,
             owners,
             importance_node,
-            notification_done_node,
-            notification_seen_node,
+            notification_state_node,
             sub_types_node,
             is_email_attachment_node,
         ]

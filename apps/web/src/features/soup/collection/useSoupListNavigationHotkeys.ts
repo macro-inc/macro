@@ -3,6 +3,7 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import type { EntityData } from '@entity';
+import { registerListNavigationSource } from './list-navigation-source';
 import type { SoupRow } from './types';
 
 const LOAD_MORE_DISTANCE_FROM_END = 3;
@@ -27,6 +28,19 @@ export type UseSoupListNavigationHotkeysOptions<TEntity extends EntityData> = {
 export function useSoupListNavigationHotkeys<TEntity extends EntityData>(
   options: UseSoupListNavigationHotkeysOptions<TEntity>
 ) {
+  registerListNavigationSource(options.handle, {
+    viewId: options.viewId,
+    entities: () =>
+      options.dataSource
+        .items()
+        .flatMap((row) => (row.kind === 'entity' ? [row.entity] : [])),
+    hasMore: options.dataSource.hasMore,
+    loadMore: async () => {
+      await options.dataSource.loadMore();
+      const error = options.dataSource.error();
+      if (error) throw error;
+    },
+  });
   const canNavigate = () => {
     const content = options.handle.content();
     return (

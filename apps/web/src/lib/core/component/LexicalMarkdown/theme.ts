@@ -45,6 +45,8 @@ export const theme: EditorThemeClasses = {
     code: 'bg-code-buffer font-mono rounded-xs md-inline-code p-0.5',
     strikethrough: 'md-strike',
     underline: 'md-underline',
+    subscript: 'md-subscript',
+    superscript: 'md-superscript',
     highlight: 'text-accent font-semibold',
   },
   paragraph: `${VERTICAL_GAP} md-p text-[1em]`,

@@ -241,6 +241,7 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::join_channel_handler,
         channels::inbound::axum_router::leave_channel_handler,
         channels::inbound::axum_router::get_channel_messages_handler,
+        channels::inbound::axum_router::get_channel_messages_catch_up_handler,
         channels::inbound::axum_router::post_channel_messages_handler,
         channels::inbound::axum_router::get_thread_replies_handler,
         channels::inbound::axum_router::get_message_with_context_handler,

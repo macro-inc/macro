@@ -15,6 +15,7 @@ use super::errors::DaytonaError;
 use super::types::{AnthropicApiKey, DaytonaSettings, Env, Labels, PortPreview, Snapshot};
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::SpawnContainer;
+use crate::domain::pending::PendingCommands;
 use crate::domain::ports::ContainerManager;
 use crate::domain::sandbox::{
     SandboxResizeEffect, SandboxResources, resize_effect_from_resources, resources,
@@ -49,6 +50,10 @@ struct DaytonaContainerManagerState {
     shutdown_complete: CancellationToken,
     lifecycle: Mutex<ManagerLifecycle>,
     tasks: TaskTracker,
+    /// Sessions the harness has a command in flight for right now; consulted
+    /// by the idle reaper so it never stops a sandbox a command is already
+    /// on its way to.
+    pending: PendingCommands,
 }
 
 #[derive(Default)]
@@ -57,17 +62,18 @@ struct ManagerLifecycle {
 }
 
 impl DaytonaContainerManagerState {
-    fn new() -> Self {
+    fn new(pending: PendingCommands) -> Self {
         Self {
             containers: ManagedContainers::new(),
             shutdown: CancellationToken::new(),
             shutdown_complete: CancellationToken::new(),
             lifecycle: Mutex::new(ManagerLifecycle::default()),
             tasks: TaskTracker::new(),
+            pending,
         }
     }
 
-    fn register(&self, id: DaytonaSandboxId) -> bool {
+    fn register(&self, id: DaytonaSandboxId, session: AgentSessionId) -> bool {
         let lifecycle = self
             .lifecycle
             .lock()
@@ -75,7 +81,7 @@ impl DaytonaContainerManagerState {
         if lifecycle.shutting_down {
             return false;
         }
-        self.containers.register(id);
+        self.containers.register(id, session);
         true
     }
 }
@@ -92,7 +98,7 @@ pub struct DaytonaContainerManager {
 impl DaytonaContainerManager {
     /// Build the manager from its settings.
     #[must_use]
-    pub fn new(settings: DaytonaSettings) -> Self {
+    pub fn new(settings: DaytonaSettings, pending: PendingCommands) -> Self {
         let DaytonaSettings {
             api_url,
             api_key,
@@ -100,7 +106,7 @@ impl DaytonaContainerManager {
             anthropic_api_key,
         } = settings;
         let client = DaytonaClient::new(api_url, api_key);
-        let managed = Arc::new(DaytonaContainerManagerState::new());
+        let managed = Arc::new(DaytonaContainerManagerState::new(pending));
         managed
             .tasks
             .spawn(reap_idle_containers(client.clone(), managed.clone()));
@@ -386,7 +392,7 @@ impl ContainerManager for DaytonaContainerManager {
                 .map_err(unavailable)?,
         );
         tracing::info!(sandbox_id = %id.as_str(), session = %session_id, "sandbox created");
-        if !self.managed.register(id.clone()) {
+        if !self.managed.register(id.clone(), session_id) {
             if !stop_sandbox(&self.client, &id, "shutdown during sandbox creation").await {
                 self.managed
                     .containers
@@ -473,7 +479,7 @@ impl ContainerManager for DaytonaContainerManager {
                     HarnessError::Container(format!("session {session} has no sandbox to resume"))
                 })?,
         );
-        if !self.managed.register(id.clone()) {
+        if !self.managed.register(id.clone(), session) {
             return Err(HarnessError::Container(
                 "the container manager is shutting down".to_owned(),
             ));
@@ -557,7 +563,12 @@ async fn reap_idle_containers(client: DaytonaClient, managed: Arc<DaytonaContain
             biased;
             () = managed.shutdown.cancelled() => return,
             _ = interval.tick() => {
-                let stale = managed.containers.reap_stale(Instant::now(), IDLE_TIMEOUT);
+                let stale = managed.containers.reap_stale(Instant::now(), IDLE_TIMEOUT, |id| {
+                    managed
+                        .containers
+                        .session_of(id)
+                        .is_some_and(|session| managed.pending.is_pending(session))
+                });
                 stop_reaped(&client, &managed, stale).await;
             }
         }

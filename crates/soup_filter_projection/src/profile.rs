@@ -43,6 +43,7 @@ pub enum ProfileValidationError {
 enum ProfileVersion {
     V2,
     V3,
+    V4,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -64,6 +65,11 @@ pub fn validate_soup_flat_v3(document: &IndexDocument) -> Result<(), ProfileVali
     validate_soup_flat(document, ProfileVersion::V3)
 }
 
+/// Validate a browser-composed profile with complete active-notification ID sets.
+pub fn validate_soup_flat_v4(document: &IndexDocument) -> Result<(), ProfileValidationError> {
+    validate_soup_flat(document, ProfileVersion::V4)
+}
+
 fn validate_soup_flat(
     document: &IndexDocument,
     version: ProfileVersion,
@@ -72,6 +78,7 @@ fn validate_soup_flat(
     let expected_profile = match version {
         ProfileVersion::V2 => vocabulary::profile_v2(),
         ProfileVersion::V3 => vocabulary::profile_v3(),
+        ProfileVersion::V4 => vocabulary::profile_v4(),
     };
     if document.profile != expected_profile {
         return Err(ProfileValidationError::UnsupportedProfile(
@@ -146,7 +153,7 @@ fn validate_exact_facts(
             if !matches!(value, [0] | [1]) {
                 return Err(ProfileValidationError::InvalidValue("email-attachment"));
             }
-        } else if version == ProfileVersion::V3
+        } else if matches!(version, ProfileVersion::V3 | ProfileVersion::V4)
             && attribute == &vocabulary::importance()
             && kind == PartitionKind::Document
         {
@@ -154,13 +161,28 @@ fn validate_exact_facts(
             if !matches!(value, [0] | [1]) {
                 return Err(ProfileValidationError::InvalidValue("importance"));
             }
-        } else if version == ProfileVersion::V3
+        } else if matches!(version, ProfileVersion::V3 | ProfileVersion::V4)
             && attribute == &vocabulary::task_status_option()
             && kind == PartitionKind::Document
         {
             status_options += 1;
             if value.len() != 16 {
                 return Err(ProfileValidationError::InvalidValue("task-status-option"));
+            }
+        } else if version == ProfileVersion::V4
+            && (attribute == &vocabulary::notification_unseen()
+                || attribute == &vocabulary::notification_seen())
+        {
+            if value.len() != 16 {
+                return Err(ProfileValidationError::InvalidValue("notification-id"));
+            }
+            if facts.iter().any(|other| {
+                other.value == fact.value
+                    && other.attribute != *attribute
+                    && (other.attribute == vocabulary::notification_seen()
+                        || other.attribute == vocabulary::notification_unseen())
+            }) {
+                return Err(ProfileValidationError::InvalidValue("notification-state"));
             }
         } else {
             return Err(unexpected("exact", attribute));
@@ -175,7 +197,7 @@ fn validate_exact_facts(
     match kind {
         PartitionKind::Document => {
             require_one("email-attachment", email_attachment)?;
-            if version == ProfileVersion::V3 {
+            if matches!(version, ProfileVersion::V3 | ProfileVersion::V4) {
                 require_one("importance", importance)?;
                 if status_options > crate::MAX_TASK_STATUS_OPTION_IDS {
                     return Err(ProfileValidationError::TooManyValues("task-status-option"));

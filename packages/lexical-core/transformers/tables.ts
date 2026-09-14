@@ -21,6 +21,7 @@ import {
 import { $isParagraphNode, $isTextNode, type LexicalNode } from "lexical";
 import { z } from "zod";
 import { CUSTOM_TRANSFORMERS } from "./customTransformers";
+import { HTML_TEXT_FORMAT_TRANSFORMERS } from "./htmlTextFormats";
 import { I_IMAGE_CONSTRAINED, IMAGE } from "./image";
 import { E_BLOCK_EQUATION_NODE, I_EQUATION_NODE } from "./katex";
 import {
@@ -102,6 +103,7 @@ const internalTransformersWithinTables: Transformer[] = [
 	I_IMAGE_CONSTRAINED,
 	IMAGE,
 	I_VIDEO,
+	...HTML_TEXT_FORMAT_TRANSFORMERS,
 	...TRANSFORMERS,
 ];
 
@@ -251,6 +253,7 @@ const externalTransformersWithinTables: Transformer[] = [
 	IMAGE,
 	I_VIDEO,
 	...HTML_ENTITY_TRANSFORMERS,
+	...HTML_TEXT_FORMAT_TRANSFORMERS,
 	...TRANSFORMERS,
 ];
 

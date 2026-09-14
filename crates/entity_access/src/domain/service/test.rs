@@ -46,6 +46,7 @@ struct MockRepo {
     chat_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     project_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     thread_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    agent_session_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     channel_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
     user_team: Arc<Mutex<Option<UserTeamInfo>>>,
@@ -81,6 +82,7 @@ impl MockRepo {
             chat_users: Arc::new(Mutex::new(vec![])),
             project_users: Arc::new(Mutex::new(vec![])),
             thread_users: Arc::new(Mutex::new(vec![])),
+            agent_session_users: Arc::new(Mutex::new(Vec::new())),
             channel_users: Arc::new(Mutex::new(vec![])),
             call_channel: Arc::new(Mutex::new(None)),
             user_team: Arc::new(Mutex::new(None)),
@@ -202,6 +204,11 @@ impl MockRepo {
 
     fn with_thread_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
         self.thread_users = Arc::new(Mutex::new(users));
+        self
+    }
+
+    fn with_agent_session_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.agent_session_users = Arc::new(Mutex::new(users));
         self
     }
 
@@ -405,6 +412,7 @@ impl AccessRepository for MockRepo {
             EntityType::Chat => Ok(self.chat_users.lock().await.clone()),
             EntityType::Project => Ok(self.project_users.lock().await.clone()),
             EntityType::EmailThread => Ok(self.thread_users.lock().await.clone()),
+            EntityType::AgentSession => Ok(self.agent_session_users.lock().await.clone()),
             _ => Err(AccessError::BadRequest("unsupported entity type")),
         }
     }
@@ -1924,6 +1932,28 @@ async fn test_get_users_by_entity_document_returns_users() {
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].to_string(), "macro|alice@test.com");
     assert_eq!(result[1].to_string(), "macro|bob@test.com");
+}
+
+/// Sessions grant their owner and their originating channel, both of which
+/// the generic accessor expansion reads, so they fan out like documents do.
+#[tokio::test]
+async fn test_get_users_by_entity_agent_session_returns_users() {
+    let users = vec![
+        user_id("macro|owner@test.com"),
+        user_id("macro|channel-member@test.com"),
+    ];
+    let repo = MockRepo::new().with_agent_session_users(users.clone());
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity(
+            "00000000-0000-0000-0000-00000000000a",
+            EntityType::AgentSession,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result, users);
 }
 
 #[tokio::test]

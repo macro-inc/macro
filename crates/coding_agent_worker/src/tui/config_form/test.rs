@@ -26,7 +26,14 @@ fn creates_a_valid_production_config() {
     assert_eq!(config.harness.command, "hermes");
     assert_eq!(config.harness.args, ["acp"]);
     assert_eq!(config.workspace.path, directory.path());
-    assert_eq!(config.macro_api.api_url, "https://agent-harness.macro.com");
+    assert_eq!(
+        config.macro_api.api_url,
+        "https://gateway.macro.com/agent-harness"
+    );
+    assert_eq!(
+        config.macro_api.gateway_url(),
+        "wss://gateway.macro.com/agent-harness/runtime/ws"
+    );
     assert_eq!(
         config.macro_api.storage_url,
         "https://gateway.macro.com/dss"
@@ -45,7 +52,14 @@ fn creates_a_dev_config_when_dev_mode_is_set() {
         .expect("create config");
     let config = Config::load(&path).expect("load generated config");
 
-    assert_eq!(config.macro_api.api_url, DEV_API_URL);
+    assert_eq!(
+        config.macro_api.api_url,
+        "https://dev-gateway.macro.com/agent-harness"
+    );
+    assert_eq!(
+        config.macro_api.gateway_url(),
+        "wss://dev-gateway.macro.com/agent-harness/runtime/ws"
+    );
     assert_eq!(config.macro_api.storage_url, DEV_STORAGE_URL);
     assert_eq!(config.macro_api.web_url, DEV_WEB_URL);
 }

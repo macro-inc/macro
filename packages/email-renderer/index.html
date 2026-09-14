@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Email renderer fixtures</title></head>
+  <body>
+    <header>
+      <label>Fixture <select id="fixture"></select></label>
+      <label>Theme <select id="theme"><option>light</option><option>dark</option></select></label>
+      <label>Width <input id="width" type="number" min="240" max="1200" value="600"></label>
+      <label><input id="full" type="checkbox">Show quoted content</label>
+      <label><input id="expanded" type="checkbox" checked>Expanded</label>
+    </header>
+    <p id="description"></p>
+    <main><div id="email-host"></div></main>
+    <script type="module" src="/viewer/main.ts"></script>
+  </body>
+</html>

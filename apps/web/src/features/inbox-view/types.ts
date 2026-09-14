@@ -1,6 +1,6 @@
 import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 
-export type InboxTab = 'signal' | 'noise' | 'all' | 'reminders';
+export type InboxTab = 'signal' | 'noise' | 'reminders';
 
 export type InboxGroupBy = 'date' | 'type' | 'none';
 

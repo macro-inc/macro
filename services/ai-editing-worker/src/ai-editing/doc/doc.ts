@@ -31,6 +31,7 @@ import {
   TableCellHeaderStates,
   type TableNode,
 } from '@lexical/table';
+import { $createAgentSessionMentionNode } from '@macro-inc/lexical-core/nodes/AgentSessionMentionNode';
 import { $createContactMentionNode } from '@macro-inc/lexical-core/nodes/ContactMentionNode';
 import {
   $createDateMentionNode,
@@ -46,6 +47,8 @@ import {
   $createImageNode,
   ImageNode,
 } from '@macro-inc/lexical-core/nodes/ImageNode';
+import { $createPullRequestMentionNode } from '@macro-inc/lexical-core/nodes/PullRequestMentionNode';
+import { $createTagMentionNode } from '@macro-inc/lexical-core/nodes/TagMentionNode';
 import { $createUserMentionNode } from '@macro-inc/lexical-core/nodes/UserMentionNode';
 import {
   $createVideoNode,
@@ -72,7 +75,6 @@ import * as blocks from '../ai-toolkit/blocks';
 import * as inline from '../ai-toolkit/inline';
 import * as lists from '../ai-toolkit/lists';
 import * as locate from '../ai-toolkit/locate';
-import { assertSubstringMatched } from './substring-miss';
 import * as modify from '../ai-toolkit/modify';
 import type { LexicalSession } from '../ai-toolkit/session';
 import * as tables from '../ai-toolkit/tables';
@@ -88,6 +90,7 @@ import type {
 } from '../editor';
 import { EditError } from '../editor';
 import type { DocReader, DocWriter, Match } from './interfaces';
+import { assertSubstringMatched } from './substring-miss';
 
 const FORMAT_BIT: Record<
   Format,
@@ -994,25 +997,51 @@ export function buildNode(spec: NodeSpec): LexicalNode {
         displayFormat: session.displayFormat ?? session.date,
       })
     )
-    .with({ inline: 'mention' }, (session) => {
-      const m = session.mention;
-      if (m.kind === 'user')
-        return $createUserMentionNode({ userId: m.userId, email: m.email });
-      if (m.kind === 'contact')
-        return $createContactMentionNode({
-          contactId: m.contactId,
-          name: m.name,
-          emailOrDomain: m.emailOrDomain,
-          isCompany: m.isCompany,
-        });
-      if (m.kind === 'group')
-        return $createGroupMentionNode({ groupAlias: m.groupAlias });
-      return $createDocumentMentionNode({
-        documentId: m.documentId,
-        documentName: m.documentName,
-        blockName: m.blockName,
-      });
-    })
+    .with({ inline: 'mention' }, (session) =>
+      match(session.mention)
+        .with({ kind: 'user' }, (m) =>
+          $createUserMentionNode({ userId: m.userId, email: m.email })
+        )
+        .with({ kind: 'contact' }, (m) =>
+          $createContactMentionNode({
+            contactId: m.contactId,
+            name: m.name,
+            emailOrDomain: m.emailOrDomain,
+            isCompany: m.isCompany,
+          })
+        )
+        .with({ kind: 'group' }, (m) =>
+          $createGroupMentionNode({ groupAlias: m.groupAlias })
+        )
+        .with({ kind: 'document' }, (m) =>
+          $createDocumentMentionNode({
+            documentId: m.documentId,
+            documentName: m.documentName,
+            blockName: m.blockName,
+            blockParams: m.blockParams,
+          })
+        )
+        .with({ kind: 'agent_session' }, (m) =>
+          $createAgentSessionMentionNode({
+            id: m.id,
+            label: m.label,
+            expanded: m.expanded,
+          })
+        )
+        .with({ kind: 'pr' }, (m) =>
+          $createPullRequestMentionNode({ id: m.id, label: m.label })
+        )
+        .with({ kind: 'tag' }, (m) =>
+          $createTagMentionNode({
+            optionId: m.optionId,
+            propertyDefinitionId: m.propertyDefinitionId,
+            scope: m.scope,
+            name: m.name,
+            color: m.color,
+          })
+        )
+        .exhaustive()
+    )
     .exhaustive();
 }
 

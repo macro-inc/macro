@@ -15,6 +15,7 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ChannelEntity } from '@entity';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
+import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
   createMemo,
@@ -159,6 +160,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const [virtualizers, setVirtualizers] = createSignal<
     Partial<Record<ChannelsQueryScope, VirtualizerHandle>>
   >({});
+  const previewAfterNavigation = debounce(setSelectedChannelId, 150);
+  onCleanup(() => previewAfterNavigation.clear());
+
+  const selectTab = (tab: ChannelsTab) => {
+    previewAfterNavigation.clear();
+    setTab(tab);
+  };
 
   const channelCalls = useChannelCalls();
   const channels = createMemo(() =>
@@ -190,6 +198,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
           ? undefined
           : rowKeyForChannel(state.selectedChannelId),
       onActivate: ({ item }) => {
+        previewAfterNavigation.clear();
+
         if (item.kind === 'section') {
           setGroupOpen(item.group, !state.expandedGroups[item.group]);
           return;
@@ -249,7 +259,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     enabled: panel.isPanelActive,
     ids: () => CHANNEL_TAB_IDS,
     activeId: () => state.tab,
-    setActiveId: setTab,
+    setActiveId: selectTab,
   });
 
   withSplitPanelOwner(listOwnedSlotName('navigation-hotkeys'), () =>
@@ -299,15 +309,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
         },
         onNavigate: (event) => {
           listRoot()?.focus({ preventScroll: true });
+          previewAfterNavigation.clear();
 
           const row = event.result?.item;
           if (row?.kind === 'conversation') {
-            setSelectedChannelId(row.channel.id);
+            previewAfterNavigation(row.channel.id);
           } else if (
             row?.kind === 'favorite' &&
             row.favorite.entityType === 'channel'
           ) {
-            setSelectedChannelId(row.favorite.entityId);
+            previewAfterNavigation(row.favorite.entityId);
           }
         },
       },
@@ -405,7 +416,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     railId: listDomId,
     list,
     tab: () => state.tab,
-    selectTab: setTab,
+    selectTab,
     setMode: (mode) => props.onModeChange(mode),
     sources: props.sources,
     favorites,
@@ -427,7 +438,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     <ChannelsRailProvider value={rail}>
       <aside
         aria-label="Chat navigation"
-        class="flex size-full min-h-0 flex-col gap-3 bg-inset pt-2"
+        class="flex size-full min-h-0 flex-col gap-3 bg-panel"
       >
         {props.mode === 'full' ? (
           <ExpandedChannelsRail />

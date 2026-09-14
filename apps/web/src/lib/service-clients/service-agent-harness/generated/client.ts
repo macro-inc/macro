@@ -13,9 +13,97 @@ import type {
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
   EditQueuedActionRequest,
+  LoadAgentModelsRequest,
+  LoadAgentModelsResponse,
+  PreviewAgentSessionsRequest,
+  PreviewAgentSessionsResponse,
   RenameAgentSessionRequest,
   SandboxSizeBody,
 } from './schemas';
+
+/**
+ * @summary Probe one provider's model catalog without creating an agent session.
+ */
+export type loadAgentModelsHandlerResponse200 = {
+  data: LoadAgentModelsResponse;
+  status: 200;
+};
+
+export type loadAgentModelsHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type loadAgentModelsHandlerResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type loadAgentModelsHandlerResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type loadAgentModelsHandlerResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type loadAgentModelsHandlerResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type loadAgentModelsHandlerResponse504 = {
+  data: void;
+  status: 504;
+};
+
+export type loadAgentModelsHandlerResponseSuccess =
+  loadAgentModelsHandlerResponse200 & {
+    headers: Headers;
+  };
+export type loadAgentModelsHandlerResponseError = (
+  | loadAgentModelsHandlerResponse400
+  | loadAgentModelsHandlerResponse401
+  | loadAgentModelsHandlerResponse403
+  | loadAgentModelsHandlerResponse409
+  | loadAgentModelsHandlerResponse502
+  | loadAgentModelsHandlerResponse504
+) & {
+  headers: Headers;
+};
+
+export type loadAgentModelsHandlerResponse =
+  | loadAgentModelsHandlerResponseSuccess
+  | loadAgentModelsHandlerResponseError;
+
+export const getLoadAgentModelsHandlerUrl = () => {
+  return `/agent-models/load`;
+};
+
+export const loadAgentModelsHandler = async (
+  loadAgentModelsRequest: LoadAgentModelsRequest,
+  options?: RequestInit
+): Promise<loadAgentModelsHandlerResponse> => {
+  const res = await fetch(getLoadAgentModelsHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(loadAgentModelsRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: loadAgentModelsHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as loadAgentModelsHandlerResponse;
+};
 
 /**
  * @summary Read the caller's default sandbox size for new `@coder` sessions.
@@ -213,6 +301,76 @@ export const createAgentSession = async (
     status: res.status,
     headers: res.headers,
   } as createAgentSessionResponse;
+};
+
+/**
+ * No per-id access extractor: a chip has to render for a session the caller
+cannot open, so access is answered per id in the body rather than
+enforced on the request. The caller learns the fields a chip shows for
+sessions they may view, and only existence for the rest.
+ * @summary Preview a batch of agent sessions for rendering chips.
+ */
+export type previewAgentSessionsResponse200 = {
+  data: PreviewAgentSessionsResponse;
+  status: 200;
+};
+
+export type previewAgentSessionsResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type previewAgentSessionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type previewAgentSessionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type previewAgentSessionsResponseSuccess =
+  previewAgentSessionsResponse200 & {
+    headers: Headers;
+  };
+export type previewAgentSessionsResponseError = (
+  | previewAgentSessionsResponse400
+  | previewAgentSessionsResponse401
+  | previewAgentSessionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type previewAgentSessionsResponse =
+  | previewAgentSessionsResponseSuccess
+  | previewAgentSessionsResponseError;
+
+export const getPreviewAgentSessionsUrl = () => {
+  return `/agent-sessions/preview`;
+};
+
+export const previewAgentSessions = async (
+  previewAgentSessionsRequest: PreviewAgentSessionsRequest,
+  options?: RequestInit
+): Promise<previewAgentSessionsResponse> => {
+  const res = await fetch(getPreviewAgentSessionsUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(previewAgentSessionsRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: previewAgentSessionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as previewAgentSessionsResponse;
 };
 
 /**

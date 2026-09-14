@@ -1,9 +1,9 @@
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
+import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
-import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
 import {
   endTrackedDocumentSpan,
   registerDocumentSpan,
@@ -16,7 +16,6 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
-  enableAgentSessionComposer,
   enableChatV3Agents,
   enableReminders,
   enableSnippets,
@@ -419,7 +418,7 @@ export function runCreateAction(
       openStandaloneReminderComposer();
       return;
     case 'agent': {
-      if (isFeatureEnabled(enableAgentSessionComposer)) {
+      if (isFeatureEnabled(enableChatV3Agents)) {
         createComponent({
           componentId: 'agent-session-compose',
           asPopover: true,
@@ -693,7 +692,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
 /**
  * The creatable-block entries a create menu renders, with feature gating
  * applied — the single source of truth shared by the desktop menus and the
- * mobile dock's Create menu, so they cannot drift. Callers with a custom
+ * mobile page create actions, so they cannot drift. Callers with a custom
  * block list (e.g. the onboarding sandbox launcher) pass it as `source` to
  * run it through the same gating.
  */
@@ -1003,13 +1002,9 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   onCleanup(hkGroup.dispose);
 
   return (
-    <div
-      class="w-200 max-w-[calc(100vw-16px)] rounded-xl"
-      style={{
-        'box-shadow':
-          '0 5px 40px rgba(0, 0, 0, 0.1), 0 5px 50px rgba(0,0,0,0.03)',
-      }}
-    >
+    // The shared shell stopped painting its own pane (cmd+k gets one from the
+    // app Dialog wrapper); this raw-Kobalte dialog carries it here.
+    <div class="w-200 max-w-[calc(100vw-16px)] rounded-xl glass bg-menu-glass [--color-dialog:var(--color-menu-glass)]">
       <CommandMenuShell
         depth={2}
         class="h-auto w-full outline-none"
@@ -1137,7 +1132,7 @@ export const Launcher = (props: LauncherProps) => {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal"></Dialog.Overlay>
+        <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass dialog-overlay-open-animation" />
         <Dialog.Content class="[--color-surface:var(--color-dialog)]">
           <div
             class={cn(

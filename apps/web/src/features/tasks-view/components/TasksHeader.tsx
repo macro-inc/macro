@@ -1,4 +1,8 @@
-import { SearchBar, useViewControlHotkeys } from '@app/components/view-shell';
+import {
+  SearchBar,
+  useViewControlHotkeys,
+  ViewShell,
+} from '@app/components/view-shell';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -13,7 +17,20 @@ import { TasksControls } from './TasksControls';
 import { TasksMobileTabs } from './TasksMobileTabs';
 import { TasksNavigation } from './TasksSidebar';
 
-export function TasksHeader() {
+export type TasksHeaderProps = {
+  /** Restores list focus when Escape leaves the search field. */
+  onSearchEscape?: () => void;
+};
+
+export function TasksTopBar() {
+  const { state } = useTasksView();
+  const title = () =>
+    TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
+
+  return <ViewShell.TopBar>{title()}</ViewShell.TopBar>;
+}
+
+export function TasksHeader(props: TasksHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const { state, setState } = useTasksView();
@@ -98,6 +115,7 @@ export function TasksHeader() {
                 value={state.search}
                 hotkey="cmd+f"
                 onValueChange={(search) => setState('search', search)}
+                onEscape={props.onSearchEscape}
                 placeholder="Search tasks"
                 class="max-w-md flex-1"
               />

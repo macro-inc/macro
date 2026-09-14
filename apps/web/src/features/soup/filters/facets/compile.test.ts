@@ -127,7 +127,7 @@ describe('facet compiler', () => {
       '|': [{ l: { dst: ['task'] } }, { l: { id: NIL_UUID } }],
     });
     expect(result.ef).toEqual({
-      '|': [{ l: { ThreadId: NIL_UUID } }, { l: { NotificationSeen: false } }],
+      '|': [{ l: { ThreadId: NIL_UUID } }, { l: { Read: false } }],
     });
   });
 

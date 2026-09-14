@@ -14,7 +14,35 @@
 Channels are invite-only ("Only people you invite can see this channel"). A DM is just a
 channel between two users.
 
+## Agent session entities
+
+The Agents list includes owned and shared sessions. Rows show the shared agent
+icon and session title; opening one navigates to `/app/agent/<id>`. The session title
+menu uses the shared entity actions: Favorite/Unfavorite and Copy link, plus
+Rename and Delete for the owner. Rename uses the shared rename dialog, not a
+session-specific modal. Folder moves, duplication, and property/tag editing are
+not offered because those APIs do not support sessions. Runtime controls remain
+session-specific.
+
 ## Message composer
+
+Desktop composer and conversation body text use 15px type. Mobile keeps its
+existing text sizing.
+
+Desktop message text uses a 16px horizontal inset and a compact gap above the
+toolbar, consistent at narrow and wide composer widths.
+
+The shared `@` menu also offers `Recent agent sessions` after Channels and
+before Companies (the latest 500 accessible sessions, searchable by title or
+persona). These inline chips show the shared
+agent icon and an underlined session name, and open the existing session when clicked.
+They are references, not bot invocations: selecting a session does not start a new
+agent run. Sending or editing a message that references a session you own grants
+that channel/DM edit access to it. Non-owner references do not create grants.
+Access follows active membership; deleting the reference does not revoke the
+grant. Inaccessible sessions render a private/deleted label. Chips omit persona
+avatars and status; previews refresh periodically while the browser tab is active
+to update titles and access.
 
 Placeholder `Type @ to share with #<name>`. Click it, `type_text`, press Enter to send.
 The message renders immediately with avatar, email, timestamp. Composer extras: `Attach
@@ -44,13 +72,28 @@ bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cu
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 The reply renders a Magic Chip: a rounded card of constant height that is present
-from the moment the session boots. Its answer area shows a pulsing star while the
-agent works, then the opening of the answer clipped to four lines and faded out; its
-bottom row reads the current activity (`Booting agent`, `Writing response`, ...) and
-`Open session` once the turn ends. A `Show more` cue sits over the fade: click the
-answer text to expand it in place (`Show less` collapses it again); click the
-bottom row to open the agent session. Before an
-answer exists, clicking the answer area also opens the session.
+from the moment the session boots. Its header names the persona (`Macro Agent`,
+`Cursor Agent`), the model, and what the turn is doing (`Booting agent`, `Running
+command · cargo test`, `Waiting for you`, `Done`); clicking the header or its arrow
+(`Open in session`) opens the agent session. The area under the header holds the agent's
+latest passage: a pulsing star while the agent is busy before it writes, the passage as it
+streams, and the final passage once the turn ends - the last text the agent wrote, not the
+whole turn, and a finished turn with nothing said leaves the area empty. The area is
+cropped at the chip's height with a fade at its foot; clicking it expands it in place, and
+clicking again collapses it. Before anything is there to expand, clicking the area also
+opens the session.
+
+When the agent stops to ask a question the question takes the area in the passage's
+place, cropped and expandable the same way: the prompt, then what is asked - a form's
+fields (choice rows with an accent box, an `Other` row when the agent allows a free-text
+answer, text and number inputs, a yes/no), a URL request's host and address, or a Macro
+user tool's draft (`SendEmail`, `CreateCalendarEvent`) in the tool's own composer - the
+same email compose or calendar event form the session shows, editable in place; expand
+the area to reach its `Send`/`Create`, which answers with the edited draft. A row at the
+bottom of the area carries the other decisions, refusal first: `Dismiss · Open in session`
+for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) for a question.
+Only the session's owner can act; other viewers see the question read-only and the header
+names who is being waited on. Once answered, the area shows the agent's passage again.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention. With GraphQL enabled, document mentions and preview cards load
 in bounded batches, including task status/priority/assignees and the viewer's edit
@@ -73,6 +116,19 @@ when only slightly above the bottom. Composer and viewport resizing respect the
 same boundary. Returning to the bottom resumes following; loading older messages
 preserves the reading position.
 
+On Safari and iOS, open or navigate near the oldest loaded messages and allow the
+history buffer to fill, then flick into older history. Loading should stop once
+roughly six screens are available above the viewport and resume as you approach
+that buffer. Check that pagination retains the visible message, and that latest
+stays pinned when messages arrive, images load, or the composer resizes. Verify
+message/reply navigation, restoration, and the custom scrollbar after pagination.
+Very long flings or slow responses can still exhaust the available scroll range.
+
+Inline document mentions should show their stored title before entering the viewport
+and while preview requests are pending. With a slow preview response, check that a
+long, unchanged title retains its line wrapping as the preview loads; a renamed
+document should update to its fetched title afterward.
+
 Message and reply links reveal the target inside its thread. Keyboard message
 navigation scrolls only when the selected message is outside the usable viewport.
 Returning through split navigation restores the saved message position and expanded
@@ -86,6 +142,15 @@ A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
 keyed by message ID; offscreen rows are normally absent from the DOM.
 
+Reopening a channel already loaded this session requests
+`GET /dss/channels/<id>/messages/catch-up?after=<newest cached created_at>&limit=50`
+and merges the result into the cached first page. A first open, a message link,
+a channel cached away from its latest page, and a delta longer than one page use
+`GET /dss/channels/<id>/messages`. The `channel_messages_load` event records
+`path` (`catch_up` or `full`) and `reason`
+(`watermark`, `list_ahead`, `no_cache`, `cache_not_at_latest`, `load_around`,
+`delta_overflow`, or `catch_up_error`).
+
 ## Chat navigation rail
 
 On desktop, the Chat rail has `Browse` and `Recents` tabs. Browse contains an
@@ -93,8 +158,10 @@ optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has favorites. Channel favorites open
 in the channel preview; other favorite types open their corresponding split.
 Collapsing a section does not discard its loaded pages. Recents has its own
-pagination cursor. Each conversation list is virtualized, so offscreen
-conversations may not exist in the DOM.
+pagination cursor. Each list is virtualized, so offscreen conversations may not
+exist in the DOM.
+Rows and section headers act on primary-button mousedown, so the selection
+and highlight change before the click completes; a normal click still works.
 
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances
@@ -108,7 +175,9 @@ their own loaded pages and load more as their active list approaches the end.
 ## Channel tabs
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,
-plus a `Call` button. Clicking the radio input can time out — click the adjacent label text
+plus `Ask Macro` and `Call` buttons. `Ask Macro` opens a new chat pane with the channel
+already @mentioned as context (see ai-chat.md). On mobile it lives in the channel title's
+`...` drawer instead. Clicking the radio input can time out — click the adjacent label text
 instead.
 
 `Participants` tab:
@@ -124,3 +193,15 @@ instead.
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —
 useful as a guaranteed-existing channel in tests.
+
+Locally sent channel messages and thread replies enter with a brief upward slide
+and fade, without bubble scaling. Opening history or remounting a row does not
+replay the effect. Reduced-motion preferences disable it.
+
+For mobile send regressions, keep the software keyboard open and send several
+short and multiline messages consecutively. The keyboard should remain open,
+the cleared composer should retain focus, and a pinned chat should remain at the
+bottom through composer resizing and server acknowledgement. Check that restoring
+the caret after send does not pan the page while the keyboard resizes. Repeat with dictation
+and check that sent text does not return. Scroll into history before an incoming
+message or acknowledgement and verify that it does not pull you to latest.

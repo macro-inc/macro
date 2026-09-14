@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Offline Mail filters</title></head>
+<body>
+<h1>Offline Mail filters</h1>
+<p>Isolated production WASM/OPFS cache; synchronized metadata only, no message bodies.</p>
+<label>View <select id="view"><option value="ALL">All</option><option value="INBOX">Inbox</option><option value="DRAFTS">Drafts</option><option value="SENT">Sent</option></select></label>
+<label>Signal <select id="signal"><option value="all">All</option><option value="true">Signal</option><option value="false">Noise</option></select></label>
+<label>Read <select id="read"><option value="all">All</option><option value="false">Unread</option><option value="true">Read</option></select></label>
+<label>Status <select id="archive"><option value="all">All</option><option value="true">Not Done</option><option value="false">Done</option></select></label>
+<label>Account <select id="account"><option value="all">All</option><option value="1000">Primary</option><option value="1001">Delegated</option></select></label>
+<label>Calendar <select id="calendar"><option value="all">All</option><option value="true">Calendar invites</option></select></label>
+<label>Sharing <select id="sharing"><option value="EXCLUDE">Owned/delegated</option><option value="ONLY">Shared</option><option value="INCLUDE">Include shared</option></select></label>
+<p id="result" role="status" data-status="loading">Initializing…</p>
+<ol id="rows"></ol><button id="more" disabled>Load more cached mail</button>
+<script type="module" src="./mail-projection-harness.ts"></script>
+</body></html>

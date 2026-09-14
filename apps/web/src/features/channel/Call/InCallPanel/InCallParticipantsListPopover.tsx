@@ -154,7 +154,11 @@ export function InCallParticipantsListPopover(
 
       <Popover.Portal>
         <Popover.Content class="z-modal">
-          <Surface depth={3} class="min-w-48 max-w-72">
+          <Surface
+            depth={3}
+            hideBorder
+            class="min-w-48 max-w-72 rounded-xl glass bg-menu-glass"
+          >
             <InCallRosterListSection
               panel={props.panel}
               members={members()}

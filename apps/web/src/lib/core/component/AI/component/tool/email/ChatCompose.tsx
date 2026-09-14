@@ -7,7 +7,7 @@
  * (`callTool`) and writes the sent outcome back into the chat's message.
  */
 
-import type { EmailRecipient } from '@block-email/component/EmailContext';
+import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
@@ -30,6 +30,7 @@ type ComposeToolProps = {
 };
 
 type SendEmailSnapshot = {
+  body: string;
   bcc: Array<{ email: string; name: string | null }>;
   cc: Array<{ email: string; name: string | null }>;
   includeSignature: boolean | null;
@@ -40,6 +41,7 @@ type SendEmailSnapshot = {
 
 function createSendEmailSnapshot(data: SendEmail): SendEmailSnapshot {
   return {
+    body: data.body ?? '',
     to: (data.to ?? []).map((item) => ({
       email: item.email,
       name: item.name ?? null,
@@ -229,6 +231,11 @@ export function ComposeTool(props: ComposeToolProps) {
     <EmailDraftComposer
       initialData={props.initialData}
       sink={sink}
+      onBodyInitialized={(bodyHtml) => {
+        // Opening a Markdown draft must not count as a user edit merely
+        // because the editor imports it into its HTML representation.
+        lastPersistedSnapshot.body = bodyHtml;
+      }}
       recipientOptions={props.recipientOptions}
       header={props.header}
       readOnly={props.readOnly}

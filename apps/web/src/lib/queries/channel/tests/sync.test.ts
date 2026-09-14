@@ -22,8 +22,10 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: {},
 }));
 
+import { registerNonce } from '../../nonce';
 import type { ChannelMessagesData } from '../channel-messages';
 import { getChannelMessagesQueryKey } from '../channel-messages';
+import { ChannelNonceKeys } from '../keys';
 import {
   normalizeChannelMessageSender,
   normalizeThreadReplySender,
@@ -247,5 +249,34 @@ describe('channel sync', () => {
     expect(cached?.pages[0].items[0].thread.preview[0].reactions).toEqual([
       { emoji: '👍', users: ['user-1'] },
     ]);
+  });
+
+  it('adopts server created_at on an own message echo', () => {
+    registerNonce(ChannelNonceKeys.MESSAGE, 'own-nonce');
+    testQueryClient.setQueryData(
+      getChannelMessagesQueryKey('channel-1'),
+      createChannelMessagesData([
+        [createPaginatedMessage('own-nonce', '2026-09-10T13:20:00.000Z')],
+      ])
+    );
+
+    handleCommsMessage({
+      channel_id: 'channel-1',
+      id: 'server-msg',
+      thread_id: null,
+      created_at: '2026-09-10T13:19:00.500Z',
+      updated_at: '2026-09-10T13:19:00.500Z',
+      nonce: 'own-nonce',
+      sender_id: 'user-1',
+      content: 'hello',
+    } as Parameters<typeof handleCommsMessage>[0]);
+
+    const cached = testQueryClient.getQueryData<ChannelMessagesData>(
+      getChannelMessagesQueryKey('channel-1')
+    );
+    expect(cached?.pages[0].items[0].id).toBe('own-nonce');
+    expect(cached?.pages[0].items[0].created_at).toBe(
+      '2026-09-10T13:19:00.500Z'
+    );
   });
 });

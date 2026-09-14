@@ -20,6 +20,7 @@ export function useCalendarSources() {
       emailLinkId: calendar.emailLinkId,
       isPrimary: calendar.isPrimary,
       isSubscription: calendar.isSubscription,
+      syncError: calendar.syncError ?? undefined,
     }));
   });
   const sourceById = createMemo(
