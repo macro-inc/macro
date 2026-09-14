@@ -10,4 +10,4 @@ mod sync;
 #[cfg(feature = "link")]
 pub use link::{Auth, GithubLinkService, GithubOauth, GithubRepo};
 #[cfg(feature = "sync")]
-pub use sync::{GithubSyncClient, GithubSyncRepo, GithubSyncService};
+pub use sync::{GithubSyncClient, GithubSyncRealtime, GithubSyncRepo, GithubSyncService};

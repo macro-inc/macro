@@ -7114,6 +7114,7 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "chrono",
+ "connection_gateway_client",
  "cowlike",
  "document_sub_type",
  "documents",

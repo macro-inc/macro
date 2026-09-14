@@ -309,3 +309,13 @@ pub trait GithubSyncService: Send + Sync + 'static {
         installation_id: u64,
     ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
 }
+
+/// Publishes persisted PR mappings to users allowed to view their source.
+pub trait GithubSyncRealtime: Send + Sync + 'static {
+    /// Forward a saved entity; recipient selection belongs to the sync service.
+    fn publish_pull_request(
+        &self,
+        recipients: &[MacroUserIdStr<'static>],
+        entity: &foreign_entity::domain::models::ForeignEntity,
+    ) -> impl Future<Output = Result<(), GithubError>> + Send;
+}

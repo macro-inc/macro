@@ -302,3 +302,10 @@ Soup chat icons use the same model resolution as the chat composer: the saved
 per-chat selection takes precedence over the server model; retired server model
 IDs fall back to the current default. Changing a selection updates mounted list
 icons when the draft is saved, without refreshing the list.
+
+Agent header PR chips resolve their GitHub URL once and receive saved PR metadata
+through connection gateway. A newly opened PR can remain unresolved until its
+webhook sync completes; its chip should then appear without a page refresh.
+Verify status changes (open/merged/closed) while the chip stays mounted, and
+verify that reconnecting the gateway catches up changes missed while disconnected.
+There is no periodic PR lookup polling.

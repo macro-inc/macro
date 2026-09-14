@@ -78,6 +78,7 @@ use foreign_entity::{
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::GithubSyncServiceImpl;
+use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -496,6 +497,7 @@ pub(crate) type GithubSyncServiceType = GithubSyncServiceImpl<
     GithubSyncClientImpl,
     ForeignEntityServiceType,
     NotificationIngressType,
+    ConnectionGatewayGithubRealtime,
 >;
 
 /// Type alias for the cal.com webhook service.

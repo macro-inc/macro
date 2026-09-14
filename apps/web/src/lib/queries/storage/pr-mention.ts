@@ -6,8 +6,6 @@ import type { Accessor } from 'solid-js';
 import { pullRequestMentionKeys } from './keys';
 
 const PR_MENTION_STALE_TIME = 60 * 1000;
-/** Keep mounted chips current after webhook updates, including late arrivals. */
-const PR_STATUS_POLL_INTERVAL_MS = 15_000;
 
 type EnabledInput = boolean | Accessor<boolean>;
 
@@ -36,7 +34,7 @@ const GITHUB_PULL_REQUEST_SOURCE = 'github_pull_request';
  *
  * A pull request that was just opened may not have been synced by the webhook
  * yet, so a `404` resolves to `null` data instead of an error and callers
- * can poll until the mapping appears.
+ * receive the mapping through connection gateway when it appears.
  */
 function pullRequestByGithubKeyQueryOptions(githubKey: string) {
   return {
@@ -71,7 +69,6 @@ export function usePullRequestByGithubKeyQuery(
 
     return {
       ...pullRequestByGithubKeyQueryOptions(key ?? ''),
-      refetchInterval: PR_STATUS_POLL_INTERVAL_MS,
       enabled: !!key && readEnabled(enabled),
     };
   });
