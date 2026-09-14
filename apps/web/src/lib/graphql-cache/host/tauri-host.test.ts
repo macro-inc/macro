@@ -6,7 +6,10 @@ const listenMock = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
 
-import { INITIAL_CACHE_REVISION } from '../protocol';
+import {
+  type EntityFilterCacheArgs,
+  INITIAL_CACHE_REVISION,
+} from '../protocol';
 import { createTauriCacheHost } from './tauri-host';
 
 type EventCallback = (event: { payload: Record<string, unknown> }) => void;
@@ -141,6 +144,44 @@ describe('createTauriCacheHost', () => {
         nowMs: 123,
       },
     });
+  });
+
+  it('waits for native initialization and forwards Mail filter requests over IPC', async () => {
+    let initialize: () => void = () => {
+      throw new Error('init not requested');
+    };
+    const page = {
+      kind: 'mail-page',
+      revision: INITIAL_CACHE_REVISION,
+      keys: ['GraphqlSoupEmailThread:thread-1'],
+      sortTimestamps: ['2025-01-04T00:00:00Z'],
+      nextCursor: 'local-cursor',
+      optimistic: false,
+    };
+    invokeMock.mockImplementation((command: string) =>
+      command === 'graphql_cache_init'
+        ? new Promise<void>((resolve) => {
+            initialize = resolve;
+          })
+        : Promise.resolve(page)
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const args: EntityFilterCacheArgs = {
+      filters: { emailFilter: { tree: { literal: { importance: false } } } },
+      sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC',
+      limit: 25,
+      mail: { view: 'INBOX', cursor: 'previous-local-cursor' },
+    };
+    const pending = host.entityFilter(args);
+    await Promise.resolve();
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    initialize();
+    await expect(pending).resolves.toEqual(page);
+    expect(invokeMock).toHaveBeenLastCalledWith('graphql_cache_entity_filter', {
+      request: args,
+    });
+    host.dispose();
   });
 
   it('sends writes with origin and dependency registration', async () => {

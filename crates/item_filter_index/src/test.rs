@@ -21,6 +21,7 @@ use predicate_index::{PredicateExpr, RangeBound};
 use super::*;
 
 mod channels;
+mod confinement;
 
 fn request() -> SoupFlatRequest {
     SoupFlatRequest {

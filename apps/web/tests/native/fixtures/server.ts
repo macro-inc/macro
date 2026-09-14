@@ -9,6 +9,13 @@ const schema = buildSchema(
   ).text()
 );
 
+function excludesMail(input: SoupInput) {
+  return (
+    input.initial?.filters?.emailFilter?.tree?.literal?.threadId ===
+    fixtureId(0)
+  );
+}
+
 export type RequestRecord = {
   method: string;
   path: string;
@@ -53,10 +60,7 @@ export function startFixtureServer(port = 0) {
     }
     if (operation === 'Soup') {
       // The app sidebar also queries channel Soup, explicitly excluding mail.
-      if (
-        input.initial?.filters?.emailFilter?.tree?.literal?.threadId ===
-        fixtureId(0)
-      ) {
+      if (excludesMail(input)) {
         return { items: [], nextCursor: null };
       }
       if (
@@ -78,11 +82,47 @@ export function startFixtureServer(port = 0) {
   const json = (data: unknown, status = 200) =>
     Response.json(data, { status, headers: cors });
 
+  async function graphqlResponse(request: Request, record: RequestRecord) {
+    try {
+      const body = (await request.json()) as {
+        query: string;
+        operationName?: string;
+        variables?: Record<string, unknown>;
+      };
+      const operation =
+        body.operationName ?? /\bquery\s+(\w+)/.exec(body.query)?.[1] ?? '';
+      record.operation = operation;
+      record.variables = body.variables;
+      const result = await graphql({
+        schema,
+        source: body.query,
+        variableValues: body.variables,
+        operationName: body.operationName,
+        rootValue: {
+          user: {
+            id: USER_ID,
+            emailLinks: accounts,
+            emailLabels: [],
+            favorites: [],
+            soup: ({ input }: { input: SoupInput }) =>
+              soupPage(input, operation),
+          },
+        },
+      });
+      if (result.errors)
+        record.error = result.errors.map((error) => error.message).join('; ');
+      return json(result);
+    } catch (error) {
+      record.error = String(error);
+      return json({ error: record.error }, 500);
+    }
+  }
+
   const sockets = new Set<Bun.ServerWebSocket<{ path: string }>>();
   const server = Bun.serve<{ path: string }>({
     hostname: '127.0.0.1',
     port,
-    async fetch(request, server) {
+    fetch(request, server) {
       const path = new URL(request.url).pathname;
       if (request.method === 'OPTIONS')
         return new Response(null, { headers: cors });
@@ -104,36 +144,7 @@ export function startFixtureServer(port = 0) {
         const bootstrap = bootstrapResponses.get(`${request.method} ${path}`);
         if (bootstrap) return json(bootstrap.body, bootstrap.status);
         if (path === '/dss/items/soup/graphql' && request.method === 'POST') {
-          const body = (await request.json()) as {
-            query: string;
-            operationName?: string;
-            variables?: Record<string, unknown>;
-          };
-          const operation =
-            body.operationName ?? /\bquery\s+(\w+)/.exec(body.query)?.[1] ?? '';
-          record.operation = operation;
-          record.variables = body.variables;
-          const result = await graphql({
-            schema,
-            source: body.query,
-            variableValues: body.variables,
-            operationName: body.operationName,
-            rootValue: {
-              user: {
-                id: USER_ID,
-                emailLinks: accounts,
-                emailLabels: [],
-                favorites: [],
-                soup: ({ input }: { input: SoupInput }) =>
-                  soupPage(input, operation),
-              },
-            },
-          });
-          if (result.errors)
-            record.error = result.errors
-              .map((error) => error.message)
-              .join('; ');
-          return json(result);
+          return graphqlResponse(request, record);
         }
         record.error = `Unimplemented fixture: ${request.method} ${path}`;
         return json({ error: record.error }, 501);
@@ -161,6 +172,7 @@ export function startFixtureServer(port = 0) {
     },
   });
 
+  let shutdown: Promise<void> | undefined;
   return {
     origin: `http://localhost:${server.port}`,
     requests,
@@ -173,9 +185,13 @@ export function startFixtureServer(port = 0) {
     /** Closes the listener and every in-flight connection, including native
      * HTTP. The runner's network namespace has no external route to fall back to. */
     async disconnect() {
+      if (shutdown) return await shutdown;
+      // Start stopping before terminating upgrades: Bun's stop promise can
+      // otherwise miss their close notifications and never settle.
+      shutdown = server.stop(true);
       for (const socket of sockets) socket.terminate();
       sockets.clear();
-      await server.stop(true);
+      await shutdown;
     },
   };
 }

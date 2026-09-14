@@ -25,7 +25,8 @@ mod engine;
 pub use engine::{
     AffectedOperationsResultWire, ClaimedMutationWire, CommitOptimisticWriteResultWire,
     DeferOptimisticWriteResultWire, EngineHandle, EnqueueOptimisticMutationResultWire,
-    InitialMutationClaimWire, ReadResultWire, RecordSelectionResultWire,
+    EntityFilterRequest, EntityFilterResult, InitialMutationClaimWire, PredicateBaselineEntry,
+    PredicateFilterResult, ReadResultWire, RecordSelectionResultWire,
     RollbackOptimisticWriteResultWire, WriteResultWire,
 };
 

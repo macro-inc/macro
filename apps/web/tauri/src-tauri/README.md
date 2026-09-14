@@ -39,6 +39,12 @@ The `beforeBuildCommand` is `just build-tauri`, which runs `bun run build` and
 emits the frontend into `dist`. Tauri then packages that output
 according to `tauri.conf.json`.
 
+## Automated offline tests (Linux)
+
+See [native E2E](../../tests/native/README.md) for the isolated WebDriver setup,
+fixture-backed backfill smoke test, and offline Mail filter regression. Use
+`nix develop .#tauri-e2e`; this exercises the native cache, not browser WASM.
+
 ## Platform aware UI
 
 Use the helpers in `@core/util/platform` (`isTauri()`, `getPlatform()`,

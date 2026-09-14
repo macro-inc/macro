@@ -32,7 +32,7 @@ export const bootstrapResponses = new Map<
   ['POST /auth/user/get_names_with_email', { body: { names: [name] } }],
   ['POST /auth/user/profile_pictures', { body: { pictures: [] } }],
   ['GET /auth/team', { body: {}, status: 404 }],
-  ['GET /auth/team/user/invites', { body: [] }],
+  ['GET /auth/team/user/invites', { body: { invites: [] } }],
   [
     'GET /auth/link/github/status',
     { body: { reauthentication_required: false } },

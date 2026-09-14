@@ -18,6 +18,8 @@ import type {
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
+  EntityFilterCacheArgs,
+  EntityFilterCacheResult,
   HydrationResult,
   MutationClaim,
   MutationSettlement,
@@ -204,9 +206,16 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
-    async entityFilter() {
-      // The first profile is browser Turso/OPFS-only.
-      return { kind: 'unsupported' };
+    async entityFilter(
+      args: EntityFilterCacheArgs
+    ): Promise<EntityFilterCacheResult> {
+      await ready;
+      return await request<EntityFilterCacheResult>(
+        'graphql_cache_entity_filter',
+        {
+          request: args,
+        }
+      );
     },
 
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {

@@ -72,6 +72,24 @@ test('unknown endpoints fail closed; disconnect removes the TCP listener', async
   await expect(fetch(`${server.origin}/health`)).rejects.toThrow();
 });
 
+test('disconnect closes live WebSockets and finishes shutdown', async () => {
+  server = startFixtureServer();
+  const socket = new WebSocket(
+    server.origin.replace('http', 'ws') + '/connection-gateway'
+  );
+  await new Promise<void>((resolve, reject) => {
+    socket.onopen = () => resolve();
+    socket.onerror = reject;
+  });
+  expect(server.socketCount).toBe(1);
+  const closed = new Promise<void>((resolve) => {
+    socket.onclose = () => resolve();
+  });
+  await server.disconnect();
+  await closed;
+  expect(server.socketCount).toBe(0);
+}, 3000);
+
 test('invalid cursors fail rather than silently completing the scan', async () => {
   server = startFixtureServer();
   const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {

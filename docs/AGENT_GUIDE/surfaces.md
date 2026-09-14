@@ -98,7 +98,7 @@ connected account. Search is `Ctrl+F` within the surface.
 
 ### Cached Mail filtering
 
-With browser GraphQL caching enabled and the email metadata backfill synchronized,
+With GraphQL caching enabled (browser or native Tauri) and the email metadata backfill synchronized,
 All, Signal, Noise, Drafts, Sent, Calendar, and Shared support tab changes and new
 filter combinations while offline: account selection
 (including delegated inboxes), read/unread, and archive-based Done/Not Done. Mail Done
@@ -138,7 +138,16 @@ and a new backfill checkpoint, preserving existing queued work. Deploy the backe
 schema additions before the client: it selects canonical message eligibility/recency
 fields, body-free canonical preview references, and viewer-relative share facts.
 The `soup-mail-v2` profile and new backfill checkpoint rebuild Mail proof without
-changing the persisted mutation queue format.
+changing the persisted mutation queue format. Native Tauri maintains the same
+predicate projections and revision-bound local page contract as the browser.
+Checkpoint v13 restarts older scans to populate native indexes without wiping
+queued work. A background network failure does not hide a usable current-query
+cached Mail page; server-reported GraphQL errors still surface.
+
+For Linux desktop automation, see the [native E2E guide](../../apps/web/tests/native/README.md).
+The first scenario covers Signal → Noise → All after disconnecting both native
+HTTP and WebSockets. iOS shares the native cache code but is not yet covered by
+that driver.
 
 Threads open at `/app/email/<thread-id>`. Click a message header to expand or
 collapse it; `Show N hidden messages` reveals the collapsed middle of a longer

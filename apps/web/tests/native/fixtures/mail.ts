@@ -28,7 +28,6 @@ export const mail = [4, 6, 8, 9, 10, 12].map((n) => {
     entityType: 'EMAIL_THREAD',
     name: `Email ${n}`,
     displayName: `Email ${n}`,
-    metadata: { __typename: 'GraphqlEmailThreadMetadata' },
     ownerId: USER_ID,
     linkId: accounts[0].id,
     cacheProjection: mailProjectionCapsules[n - 1],

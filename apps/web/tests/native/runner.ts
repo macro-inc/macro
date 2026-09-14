@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
+import { mkdir, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { type Browser, remote } from 'webdriverio';
 import {
@@ -8,7 +9,6 @@ import {
   expectRows,
   nativeHttpReachable,
   selectTab,
-  selectUnread,
   waitForBackfill,
 } from './driver';
 import { startFixtureServer } from './fixtures/server';
@@ -49,6 +49,16 @@ const env = {
 const children: ReturnType<typeof Bun.spawn>[] = [];
 let browser: Browser | undefined;
 const fixture = startFixtureServer(18090);
+// Bound even a wedged WebDriver request or shutdown. The shell owns namespace
+// and profile cleanup, so forced exit cannot leave an app or fixture listening.
+const watchdog = setTimeout(() => {
+  writeFileSync(
+    resolve(artifacts, 'requests.json'),
+    JSON.stringify(fixture.requests, null, 2)
+  );
+  console.error(`E2E timed out after four minutes. Artifacts: ${artifacts}`);
+  process.exit(1);
+}, 240_000);
 
 function spawn(name: string, cmd: string[], extraEnv = {}) {
   const child = Bun.spawn(cmd, {
@@ -76,16 +86,16 @@ async function ready(url: string, child: ReturnType<typeof Bun.spawn>) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
-async function capture() {
+async function capture(prefix = 'webview') {
   await Bun.write(
     resolve(artifacts, 'requests.json'),
     JSON.stringify(fixture.requests, null, 2)
   );
   if (!browser) return;
   try {
-    await browser.saveScreenshot(resolve(artifacts, 'webview.png'));
+    await browser.saveScreenshot(resolve(artifacts, `${prefix}.png`));
     await Bun.write(
-      resolve(artifacts, 'webview.html'),
+      resolve(artifacts, `${prefix}.html`),
       await browser.getPageSource()
     );
     await Bun.write(
@@ -143,9 +153,11 @@ try {
     connectionRetryTimeout: 120_000,
     capabilities,
   });
+  console.log(`Native session ${browser.sessionId}; opening Email`);
   const emailNavigation = browser.$('button[aria-label="Go to Email"]');
   await emailNavigation.waitForDisplayed({ timeout: 120_000 });
   await emailNavigation.click();
+  console.log('Waiting for three metadata backfill pages');
   await waitForBackfill(browser);
   assert.equal(fixture.metadataPagesServed, 3);
   assert.deepEqual(
@@ -153,6 +165,14 @@ try {
     []
   );
   await assertNativeRecords(browser);
+  const cacheFile = resolve(
+    process.env.XDG_DATA_HOME!,
+    'com.macro.app.e2e/graphql-cache/cache.turso'
+  );
+  assert(
+    (await stat(cacheFile)).size > 0,
+    'Expected the isolated native Turso database'
+  );
   await expectRows(browser, [6, 12]);
   const onlineSoupRequests = fixture.requests.filter(
     (request) =>
@@ -184,13 +204,33 @@ try {
     const requestsAtDisconnect = fixture.requests.length;
     // None of these views were fetched online: their rows must be selected
     // from backfilled normalized records, not replayed query-response caches.
-    await selectTab(browser, 'Noise');
-    await expectRows(browser, [4, 8, 10]);
-    await selectUnread(browser);
-    await expectRows(browser, [10]);
-    await selectTab(browser, 'All');
-    await expectRows(browser, [6, 9, 10]);
+    const failures: unknown[] = [];
+    const cases = [
+      {
+        name: 'noise',
+        select: () => selectTab(browser!, 'Noise'),
+        rows: [4, 8, 10],
+      },
+      {
+        name: 'all',
+        select: () => selectTab(browser!, 'All'),
+        rows: [4, 6, 8, 9, 10, 12],
+      },
+    ];
+    for (const scenario of cases) {
+      await scenario.select();
+      try {
+        await expectRows(browser, scenario.rows);
+        console.log(`PASS: offline ${scenario.name}`);
+      } catch (error) {
+        failures.push(error);
+        console.error(`FAIL: offline ${scenario.name}`);
+        await capture(scenario.name);
+      }
+    }
     assert.equal(fixture.requests.length, requestsAtDisconnect);
+    if (failures.length)
+      throw new AggregateError(failures, 'Native offline filter regressions');
     console.log('PASS: unseen email filter combinations evaluated offline');
   } else {
     console.log(
@@ -218,5 +258,6 @@ try {
       await child.exited;
     }
   }
+  clearTimeout(watchdog);
   console.log(`Artifacts: ${artifacts}`);
 }

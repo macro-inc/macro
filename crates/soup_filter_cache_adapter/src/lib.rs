@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-//! Soup-specific browser adapter for the generic predicate-index cache.
+//! Soup-specific host adapter for the generic predicate-index cache.
 //!
 //! This crate owns the application GraphQL schema and Soup projection policy.
 //! Cache crates receive only the generic query and projection IR produced here.

@@ -102,7 +102,7 @@ export async function expectRows(browser: Browser, numbers: number[]) {
     },
     {
       timeout: 15_000,
-      timeoutMsg: `Expected visible mail rows ${numbers.join(', ')}. Native entityFilter() currently returns unsupported.`,
+      timeoutMsg: `Expected visible mail rows ${numbers.join(', ')} from the native cache.`,
     }
   );
 }
@@ -126,13 +126,18 @@ export async function nativeHttpReachable(browser: Browser, origin: string) {
   }, origin);
 }
 
-export async function selectTab(browser: Browser, label: string) {
-  await browser.$(`[aria-label="Email tabs"] button=${label}`).click();
-}
-
-export async function selectUnread(browser: Browser) {
-  await browser.$('button[aria-label="Filter email"]').click();
-  await browser.$('[role="menuitem"]=Status').moveTo();
-  await browser.$('[role="menuitemradio"]=Unread').click();
-  await browser.keys('Escape');
+export async function selectTab(browser: Browser, label: 'Noise' | 'All') {
+  const tab = browser.$(
+    `//nav[@aria-label="Email tabs"]//button[.//span[normalize-space(.)="${label}"]]`
+  );
+  await tab.click();
+  if ((await tab.getAttribute('aria-current')) !== 'page')
+    await browser.keys('Enter');
+  await browser.waitUntil(
+    async () => (await tab.getAttribute('aria-current')) === 'page',
+    {
+      timeout: 5000,
+      timeoutMsg: `${label} tab did not become selected`,
+    }
+  );
 }

@@ -23,7 +23,7 @@ unset DBUS_SESSION_BUS_ADDRESS WAYLAND_DISPLAY
 export GDK_BACKEND=x11 GTK_USE_PORTAL=0
 child=
 cleanup() {
-  if [ -n "$child" ]; then kill "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; fi
+  if [ -n "$child" ]; then kill -KILL "$child" 2>/dev/null || true; wait "$child" 2>/dev/null || true; fi
   rm -rf "$profile"
 }
 trap cleanup EXIT
