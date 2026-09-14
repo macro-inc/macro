@@ -17,14 +17,12 @@ function SectionScrollArea(props: {
   activityTargetId?: string;
   activityLabel?: string;
   activityTooltip?: boolean;
-  onActivityVisible?: (targetId: string) => void;
   children: JSX.Element;
 }) {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const activity = useOffscreenActivity({
     scrollRoot,
     targetId: () => props.activityTargetId,
-    onTargetVisible: (targetId) => props.onActivityVisible?.(targetId),
   });
 
   return (
@@ -57,7 +55,7 @@ function SectionScrollArea(props: {
           >
             <button
               type="button"
-              class="flex h-7 max-w-full items-center gap-1 rounded-full border border-edge bg-lift px-2 text-xxs font-medium text-ink-muted shadow-sm transition-colors hover:bg-surface hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+              class="flex h-7 max-w-full items-center gap-1 rounded-full border border-edge bg-surface px-2 text-xxs font-medium text-ink-muted shadow-sm transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
               aria-label={`${props.activityLabel ?? 'New activity'} ${
                 direction() === 'start' ? 'above' : 'below'
               }; scroll to it`}
@@ -132,7 +130,6 @@ function CollapsibleSectionContent(props: {
   activityTargetId?: string;
   activityLabel?: string;
   activityTooltip?: boolean;
-  onActivityVisible?: (targetId: string) => void;
   children: JSX.Element;
 }) {
   return (
@@ -144,7 +141,6 @@ function CollapsibleSectionContent(props: {
         activityTargetId={props.activityTargetId}
         activityLabel={props.activityLabel}
         activityTooltip={props.activityTooltip}
-        onActivityVisible={props.onActivityVisible}
       >
         {props.children}
       </SectionScrollArea>
@@ -182,7 +178,7 @@ export function RailListLoadingMore(props: {
               'flex items-center',
               props.variant === 'slim' && 'h-10 justify-center',
               props.variant === 'channel' && 'h-10 gap-2 px-2',
-              props.variant === 'recent' && 'h-18 items-start gap-3 px-2 py-2'
+              props.variant === 'recent' && 'h-20 items-start gap-3 px-2 py-2'
             )}
           >
             <div

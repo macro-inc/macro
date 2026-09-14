@@ -51,6 +51,7 @@ enum PartitionKind {
     Document,
     Project,
     Chat,
+    Channel,
 }
 
 /// Validate strict Soup-specific completeness and canonical value semantics for
@@ -92,6 +93,9 @@ fn validate_soup_flat(
         PartitionKind::Project
     } else if document.partition == vocabulary::chat_partition() {
         PartitionKind::Chat
+    } else if version == ProfileVersion::V4 && document.partition == vocabulary::channel_partition()
+    {
+        PartitionKind::Channel
     } else {
         return Err(ProfileValidationError::UnsupportedPartition(
             document.partition.as_str().to_owned(),
@@ -117,6 +121,10 @@ fn validate_exact_facts(
     let mut email_attachment = 0;
     let mut importance = 0;
     let mut status_options = 0;
+    let mut channel_type = 0;
+    let mut channel_participant = 0;
+    let mut channel_team = 0;
+    let mut channel_organization = 0;
 
     for fact in facts {
         let attribute = &fact.attribute;
@@ -131,7 +139,7 @@ fn validate_exact_facts(
             if value.is_empty() || std::str::from_utf8(value).is_err() {
                 return Err(ProfileValidationError::InvalidValue("owner"));
             }
-        } else if attribute == &vocabulary::project_id() {
+        } else if attribute == &vocabulary::project_id() && kind != PartitionKind::Channel {
             project_id += 1;
             if value.len() != 16 {
                 return Err(ProfileValidationError::InvalidValue("project-id"));
@@ -168,6 +176,28 @@ fn validate_exact_facts(
             status_options += 1;
             if value.len() != 16 {
                 return Err(ProfileValidationError::InvalidValue("task-status-option"));
+            }
+        } else if kind == PartitionKind::Channel && attribute == &vocabulary::channel_type() {
+            channel_type += 1;
+            if !matches!(value, b"public" | b"private" | b"direct_message" | b"team") {
+                return Err(ProfileValidationError::InvalidValue("channel-type"));
+            }
+        } else if kind == PartitionKind::Channel && attribute == &vocabulary::channel_participant()
+        {
+            channel_participant += 1;
+            if !matches!(value, [0] | [1]) {
+                return Err(ProfileValidationError::InvalidValue("channel-participant"));
+            }
+        } else if kind == PartitionKind::Channel && attribute == &vocabulary::channel_team() {
+            channel_team += 1;
+            if value.len() != 16 {
+                return Err(ProfileValidationError::InvalidValue("channel-team"));
+            }
+        } else if kind == PartitionKind::Channel && attribute == &vocabulary::channel_organization()
+        {
+            channel_organization += 1;
+            if value.len() != 8 {
+                return Err(ProfileValidationError::InvalidValue("channel-organization"));
             }
         } else if version == ProfileVersion::V4
             && (attribute == &vocabulary::notification_unseen()
@@ -211,6 +241,12 @@ fn validate_exact_facts(
             });
         }
         PartitionKind::Project | PartitionKind::Chat => {}
+        PartitionKind::Channel => {
+            require_one("channel-type", channel_type)?;
+            require_one("channel-participant", channel_participant)?;
+            allow_at_most_one("channel-team", channel_team)?;
+            allow_at_most_one("channel-organization", channel_organization)?;
+        }
     }
     Ok(())
 }

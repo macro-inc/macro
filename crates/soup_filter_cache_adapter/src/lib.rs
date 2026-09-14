@@ -23,6 +23,7 @@ use soup_filter_projection::{
 };
 use std::collections::HashSet;
 
+mod channels;
 pub mod mail;
 mod notifications;
 pub use notifications::{
@@ -177,7 +178,17 @@ fn walk_authoritative_object(
     collect_applicable_fields(selections, concrete_type, &mut fields);
 
     if let Some(partition) = projection_partition(concrete_type) {
-        let mut projection_object = object.clone();
+        let (mut projection_object, valid_selection) =
+            if partition == vocabulary::channel_partition() {
+                match channels::selected_object(object, &fields) {
+                    Ok(selected) => (selected, true),
+                    // Use the original ID only to invalidate a conflicting snapshot;
+                    // never interpret conflicting nullable aliases as absent facts.
+                    Err(()) => (object.clone(), false),
+                }
+            } else {
+                (object.clone(), true)
+            };
         projection_object.remove("notifications");
         if let Some(snapshot) = notifications::selected_snapshot(object, &fields) {
             projection_object.insert("notifications".into(), snapshot);
@@ -190,7 +201,7 @@ fn walk_authoritative_object(
         projection_fields.sort_by(|left, right| left.response_key.cmp(&right.response_key));
         projection_fields.dedup_by(|left, right| left.response_key == right.response_key);
 
-        let normalized_key = object
+        let normalized_key = projection_object
             .get("id")
             .and_then(serde_json::Value::as_str)
             .map(|id| format!("{concrete_type}:{id}"))
@@ -200,8 +211,14 @@ fn walk_authoritative_object(
                     .map(|key| (key_text, key))
             });
         if let Some((key_text, record_key)) = normalized_key {
-            let kind = projection_kind(&partition).expect("supported partition has a kind");
-            let mutation = if projection_fields.is_empty() {
+            let mutation = if !valid_selection {
+                Some(ProjectionMutation::MarkIncomplete {
+                    record_key,
+                    profile: vocabulary::profile_v4(),
+                    partition,
+                    kind: ProjectionIncompleteKind::Dirty,
+                })
+            } else if projection_fields.is_empty() {
                 match authoritative_v4_patch_for_object(
                     record_key.clone(),
                     partition.clone(),
@@ -215,7 +232,7 @@ fn walk_authoritative_object(
                         kind: ProjectionIncompleteKind::Dirty,
                     }),
                 }
-            } else if kind == SoupFlatEntityKind::Document {
+            } else if partition == vocabulary::document_partition() {
                 Some(selected_document_projection_for_object(
                     record_key,
                     partition,
@@ -546,6 +563,9 @@ fn complete_v4_projection_for_object(
     object: &serde_json::Map<String, serde_json::Value>,
     supplement: Option<&SoupCacheProjectionSupplement>,
 ) -> Result<IndexDocument, ()> {
+    if partition == vocabulary::channel_partition() {
+        return channels::complete(record_key, object);
+    }
     let input =
         direct_projection_input_for_object(record_key, &partition, object, None).ok_or(())?;
     let sub_type = if input.kind == SoupFlatEntityKind::Document {
@@ -562,6 +582,27 @@ fn authoritative_v4_patch_for_object(
     partition: Token,
     object: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<ProjectionMutation, ()> {
+    if partition == vocabulary::channel_partition() {
+        let OptimisticProjectionMutation::Patch {
+            record_key,
+            profile,
+            partition,
+            exact,
+            integers,
+            sorts,
+        } = channels::patch(record_key, object, None)?
+        else {
+            return Err(());
+        };
+        return Ok(ProjectionMutation::Patch {
+            record_key,
+            profile,
+            partition,
+            exact,
+            integers,
+            sorts,
+        });
+    }
     let kind = projection_kind(&partition).ok_or(())?;
     let project_field = if kind == SoupFlatEntityKind::Project {
         "parentId"
@@ -673,6 +714,11 @@ fn optimistic_projection_for_object(
     object: &serde_json::Map<String, serde_json::Value>,
     created_at_ms: i64,
 ) -> Option<OptimisticProjectionMutation> {
+    if partition == vocabulary::channel_partition() {
+        // Cached channel access is authoritative. Optimism may patch a known
+        // base but cannot fabricate a complete, newly accessible channel.
+        return channels::patch(record_key, object, Some(created_at_ms)).ok();
+    }
     let kind = projection_kind(&partition)?;
     if kind != SoupFlatEntityKind::Document
         && let Some(input) = direct_projection_input_for_object(
@@ -793,6 +839,7 @@ fn projection_partition(typename: &str) -> Option<Token> {
         "GraphqlSoupDocument" => Some(vocabulary::document_partition()),
         "GraphqlSoupProject" => Some(vocabulary::project_partition()),
         "GraphqlSoupChat" => Some(vocabulary::chat_partition()),
+        "GraphqlSoupChannel" => Some(vocabulary::channel_partition()),
         _ => None,
     }
 }
