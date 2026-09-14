@@ -163,7 +163,8 @@ activity-ordered source. Search results use compact rows on `All` and
 conversation cards on `Recent`. Switching tabs preserves the active search and
 query, then scrolls the results to the selected channel when present or to the
 start. Closing search restores the active tab and applies the same scroll
-behavior to its lists.
+behavior to its lists. An empty result uses the standard search empty state
+artwork and wraps long queries.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.

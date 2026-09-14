@@ -7,11 +7,13 @@ import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import XIcon from '@phosphor/x.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { Button, cn, Hotkey, Tabs } from '@ui';
+import { Button, cn, EmptyStatePanel, Hotkey, Tabs } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -305,6 +307,7 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const pagination = useChannelRailVirtualizer(() => 'search');
+  const query = () => props.search.query().trim();
   const focusedIndex = () => {
     const row = rail.list.focus.item();
     return row?.kind === 'conversation' && row.scope === 'search'
@@ -363,11 +366,30 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
         </div>
       </Match>
       <Match when={true}>
-        <p class="break-words px-6 py-4 text-sm text-ink-muted">
-          {props.search.query().trim()
-            ? `No results for "${props.search.query().trim()}"`
-            : 'No conversations to show'}
-        </p>
+        <EmptyStatePanel
+          centered
+          graphic={EmptyStateNoSearchMatchGraphic}
+          title={query() ? 'No results' : 'No conversations to show'}
+          description={
+            query() ? (
+              <span>
+                No conversations match{' '}
+                <span class="[overflow-wrap:anywhere]">“{query()}”</span>
+              </span>
+            ) : (
+              'Channels and direct messages you join will appear here.'
+            )
+          }
+          primaryAction={
+            query()
+              ? {
+                  label: 'Clear search',
+                  icon: XIcon,
+                  onClick: () => props.search.setQuery(''),
+                }
+              : undefined
+          }
+        />
       </Match>
     </Switch>
   );
