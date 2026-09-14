@@ -16,8 +16,10 @@ mod email;
 /// consumer cannot take - so a caller gains nothing by waiting indefinitely,
 /// and some lose a great deal: an agent session's frame writer holds a
 /// one-minute budget per frame and tears the session down when it runs out.
-/// Comfortably above the gateway's own queue timeout, so its error arrives
-/// here rather than being pre-empted by ours.
+///
+/// Every endpoint here pushes one realtime message and returns; the slowest
+/// runs a p99 of 81ms in production. This is a backstop against the gateway
+/// itself stalling, not a budget anything is expected to spend.
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// HTTP client for communicating with the connection gateway service.

@@ -32,14 +32,3 @@ pub const DEFAULT_TIMEOUT_THRESHOLD: u64 = 60_000;
 
 /// Emit diagnostics while a websocket queue or write remains blocked this long.
 pub(crate) const SLOW_WEBSOCKET_OPERATION_THRESHOLD: Duration = Duration::from_secs(1);
-
-/// Give up waiting for a websocket's outbound queue to make room after this
-/// long, and drop the connection.
-///
-/// Every publisher shares this queue, so an unbounded wait here is their
-/// stall, not ours: a consumer that has stopped draining holds up whoever is
-/// sending to it for as long as it stays that way. A publisher that carries
-/// its own deadline then fails the work behind the send rather than the one
-/// delivery - an agent session's frame writer gives up after a minute and
-/// tears the session down.
-pub(crate) const WEBSOCKET_QUEUE_SEND_TIMEOUT: Duration = Duration::from_secs(5);
