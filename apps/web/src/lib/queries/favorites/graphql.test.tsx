@@ -280,6 +280,28 @@ describe('GraphQL favorites queries', () => {
     );
   });
 
+  it('passes favorites filters to the GraphQL backend', async () => {
+    renderHook(() =>
+      createGraphqlFavoritesQuery({
+        entityType: ['channel'],
+        entityId: ['channel-1'],
+      })
+    );
+
+    await vi.waitFor(() => expect(executeQuery).toHaveBeenCalledOnce());
+    expect(executeQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variables: {
+          filter: {
+            entityTypes: ['CHANNEL'],
+            entityIds: ['channel-1'],
+          },
+        },
+      }),
+      { requestPolicy: 'cache-and-network' }
+    );
+  });
+
   it('refetches the urql-solid list after setting a favorite', async () => {
     const onSuccess = vi.fn();
     const hooks = renderHook(() => ({

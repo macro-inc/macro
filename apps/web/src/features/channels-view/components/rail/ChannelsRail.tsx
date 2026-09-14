@@ -151,7 +151,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     useChannelsView();
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
-  const favoritesData = useFavoritesData();
+  const favoritesData = useFavoritesData({ entityType: ['channel'] });
   const listDomId = createUniqueId();
   const [sectionScrollRoots, setSectionScrollRoots] = createSignal<
     Partial<Record<ChannelsRailSection, HTMLDivElement>>
@@ -237,11 +237,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
       const element = document.getElementById(domIdForRow(listDomId, row.id));
       const scrollRoot =
-        row.kind === 'conversation' && row.group
-          ? sectionScrollRoots()[row.group]
-          : state.tab === 'recents'
-            ? listRoot()
-            : undefined;
+        row.kind === 'favorite'
+          ? sectionScrollRoots().favorites
+          : row.kind === 'conversation' && row.group
+            ? sectionScrollRoots()[row.group]
+            : state.tab === 'recents'
+              ? listRoot()
+              : undefined;
       if (!element || !scrollRoot) return;
 
       const elementBounds = element.getBoundingClientRect();

@@ -155,8 +155,8 @@ a channel cached away from its latest page, and a delta longer than one page use
 
 On desktop, the Chat rail has `Browse` and `Recents` tabs. Browse contains an
 optional `Favorites` section above the independently paginated `Channels` and
-`DMs` sections. It appears when the user has favorites. Channel favorites open
-in the channel preview; other favorite types open their corresponding split.
+`DMs` sections. It appears when the user has channel favorites and only lists
+channels. Channel favorites open in the channel preview.
 Collapsing a section does not discard its loaded pages. Recents has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
