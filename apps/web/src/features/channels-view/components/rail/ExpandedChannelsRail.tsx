@@ -164,7 +164,7 @@ function ExpandedHeader() {
 function ExpandedGroupSection(props: { config: GroupConfig }) {
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  const { state: section, clearVisibleActivity } = useChannelRailSectionState(
+  const { state: section } = useChannelRailSectionState(
     () => props.config.group
   );
   const pagination = useChannelRailVirtualizer(() => props.config.group);
@@ -221,7 +221,6 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
         class="flex min-h-0 flex-col gap-0.5"
         activityTargetId={section().targetId}
         activityLabel={section().label}
-        onActivityVisible={clearVisibleActivity}
       >
         <Switch>
           <Match

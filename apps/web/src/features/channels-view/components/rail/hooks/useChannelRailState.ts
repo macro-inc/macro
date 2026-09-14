@@ -132,19 +132,5 @@ export function useChannelRailSectionState(group: Accessor<ChannelsGroup>) {
     };
   });
 
-  const clearVisibleActivity = (visibleTargetId: string) => {
-    const section = group();
-    const targetChannelId = rail.channelActivity.targetChannelId(section);
-    if (
-      targetChannelId === undefined ||
-      domIdForRow(rail.railId, rowKeyForChannel(targetChannelId)) !==
-        visibleTargetId
-    ) {
-      return;
-    }
-
-    rail.channelActivity.clearTarget(section, targetChannelId);
-  };
-
-  return { state, clearVisibleActivity };
+  return { state };
 }
