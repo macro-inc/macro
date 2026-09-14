@@ -1,5 +1,7 @@
 //! Metadata needed to present a searchable session without loading its ACP log.
 
+pub mod indexing;
+
 use std::{future::Future, pin::Pin};
 
 use chrono::{DateTime, Utc};

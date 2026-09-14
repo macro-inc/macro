@@ -14431,6 +14431,8 @@ dependencies = [
 name = "search_processing_service"
 version = "0.1.0"
 dependencies = [
+ "agent_fold",
+ "agent_session",
  "anyhow",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",

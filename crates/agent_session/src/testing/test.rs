@@ -2,6 +2,36 @@ use super::*;
 use crate::domain::model::Message;
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
 
+#[test]
+fn seeded_frames_remain_ordered_when_the_clock_has_not_advanced() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = AgentSessionId::new();
+    let entry = AgentSessionLog {
+        agent_session_id: session,
+        user_id: None,
+        content: Message::ToServer(ToServerMessage::Event {
+            event: SystemEvent::AcpReady,
+        }),
+    };
+    // Put the existing seed ahead of the wall clock to exercise the tie/backward
+    // clock path deterministically, rather than hoping two calls share a tick.
+    repo.logs.lock().unwrap().insert(
+        session,
+        vec![StoredAgentSessionLog {
+            id: Uuid::from_u128(1),
+            created_at: chrono::Utc::now() + chrono::Duration::seconds(60),
+            entry: entry.clone(),
+        }],
+    );
+    repo.extend_log([entry.clone(), entry]);
+    let rows = repo.logs.lock().unwrap();
+    assert!(
+        rows[&session]
+            .windows(2)
+            .all(|pair| pair[0].created_at < pair[1].created_at)
+    );
+}
+
 #[tokio::test]
 async fn effective_history_orders_timestamps_and_uuid_ties_before_selecting_boundary() {
     let repo = InMemoryAgentSessionRepo::new();
