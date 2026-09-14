@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)\n                SELECT $2, agent_session_id, user_id, direction, content, clock_timestamp()\n                FROM agent_session_log\n                WHERE agent_session_id = $1 AND direction = 'to_server'\n                  AND content->>'type' = 'pullRequestSet'\n                ORDER BY created_at DESC, id DESC\n                LIMIT 1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a1bade39e5ec47cff87e8a4ea668e3b5a138369a96275ad720ac9844ade9e766"
+}

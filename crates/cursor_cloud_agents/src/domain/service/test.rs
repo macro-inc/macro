@@ -2655,3 +2655,37 @@ async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambigu
         "failed setup never creates remote work"
     );
 }
+
+#[tokio::test]
+async fn native_pr_is_reported_to_the_host_without_cursor_metadata() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Vec::new());
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+            text: Some("Done".into()),
+            duration_ms: None,
+            git: Some(crate::domain::event::GitState {
+                branches: vec![crate::domain::event::GitBranch {
+                    repo_url: "github.com/org/repo".into(),
+                    branch: Some("fix".into()),
+                    pr_url: Some("https://github.com/org/repo/pull/1".into()),
+                }],
+            }),
+        })
+        .unwrap();
+    drop(events);
+    service.prompt(&session, "fix it").await.unwrap();
+    assert_eq!(
+        notifier.pull_requests(),
+        ["https://github.com/org/repo/pull/1"]
+    );
+    assert!(
+        !notifier
+            .updates()
+            .iter()
+            .any(|(_, update)| matches!(update, SessionUpdate::SessionInfoUpdate(_)))
+    );
+}

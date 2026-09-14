@@ -9,9 +9,8 @@ use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
     AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, RecentAgentSession, ReplicaAddress,
-    ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus,
-    StoredAgentSessionLog,
+    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, Message, ReplicaAddress, ReplicaId,
+    SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -260,7 +259,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         &self,
         owner: &MacroUserIdStr<'_>,
         limit: NonZeroUsize,
-    ) -> Result<Vec<RecentAgentSession>> {
+    ) -> Result<Vec<AgentSession>> {
         let mut found: Vec<AgentSession> = self
             .sessions
             .lock()
@@ -274,17 +273,8 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
                 .cmp(&a.created_at)
                 .then_with(|| b.id.as_uuid().cmp(&a.id.as_uuid()))
         });
-        Ok(found
-            .into_iter()
-            .take(limit.get())
-            .map(|session| RecentAgentSession {
-                id: session.id,
-                name: session.name,
-                harness: session.harness,
-                repo_url: session.repo_url,
-                created_at: session.created_at,
-            })
-            .collect())
+        found.truncate(limit.get());
+        Ok(found)
     }
 
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
@@ -634,7 +624,27 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
             }
         }
         let session = log.agent_session_id;
+        let pull_request = if boundary.is_some() {
+            self.logs
+                .lock()
+                .unwrap()
+                .get(&session)
+                .and_then(|rows| {
+                    rows.iter().rev().find(|row| {
+                        matches!(
+                            &row.entry.content,
+                            Message::ToServer(ToServerMessage::PullRequestSet { .. })
+                        )
+                    })
+                })
+                .map(|row| row.entry.clone())
+        } else {
+            None
+        };
         let stored = self.create_log(log)?;
+        if let Some(pr) = pull_request {
+            self.create_log(pr)?;
+        }
         if let Some(boundary) = boundary {
             self.history_boundaries
                 .lock()
@@ -825,5 +835,42 @@ impl AgentSessionLifecyclePublisher for RecordingLifecyclePublisher {
             .push(event);
         self.count.send_modify(|published| *published += 1);
         Box::pin(async {})
+    }
+}
+
+impl crate::domain::pull_request::SessionPullRequestRepo for InMemoryAgentSessionRepo {
+    async fn record_pull_request(
+        &self,
+        session: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+        url: &str,
+    ) -> Result<Option<StoredAgentSessionLog>> {
+        let _transaction = self.log_transaction.lock().unwrap();
+        if !self
+            .sessions
+            .lock()
+            .unwrap()
+            .get(&session)
+            .is_some_and(|stored| &stored.owner_id == owner)
+        {
+            return Err(AgentSessionError::Forbidden);
+        }
+        let previous = self.logs.lock().unwrap().get(&session).and_then(|rows| {
+            rows.iter().rev().find_map(|row| match &row.entry.content {
+                Message::ToServer(ToServerMessage::PullRequestSet { url }) => Some(url.clone()),
+                _ => None,
+            })
+        });
+        if previous.as_deref() == Some(url) {
+            return Ok(None);
+        }
+        self.create_log(AgentSessionLog {
+            agent_session_id: session,
+            user_id: Some(owner.clone()),
+            content: Message::ToServer(ToServerMessage::PullRequestSet {
+                url: url.to_owned(),
+            }),
+        })
+        .map(Some)
     }
 }

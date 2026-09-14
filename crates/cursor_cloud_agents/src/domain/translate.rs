@@ -29,9 +29,8 @@ mod test;
 
 use crate::domain::event::{CursorEvent, GitState, InteractionUpdate, ToolCallEvent};
 use agent_client_protocol::schema::v1::{
-    ContentBlock, ContentChunk, Diff, SessionInfoUpdate, SessionUpdate, TextContent, ToolCall,
-    ToolCallContent, ToolCallLocation, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields,
-    ToolKind,
+    ContentBlock, ContentChunk, Diff, SessionUpdate, TextContent, ToolCall, ToolCallContent,
+    ToolCallLocation, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -86,14 +85,7 @@ impl TranslateMachine {
         }
     }
 
-    /// The pull request a run's git state names, announced as a
-    /// `session_info_update` under `_meta.cursor.pullRequestUrl` the first
-    /// time it is seen. ACP has no field for it, and `_meta` is the protocol's
-    /// extension point; the fold reads this namespace back into the session's
-    /// metadata. A result with no pull request - the usual case for a
-    /// question, or for a session that has not asked for one - announces
-    /// nothing, and a pull request once announced stays announced: Cursor
-    /// does not report a pull request going away.
+    /// Retain the provider's PR for the host's shared session operation.
     fn pull_request(&mut self, git: Option<&GitState>) -> Vec<SessionUpdate> {
         let Some(url) = git.and_then(pull_request_url) else {
             return Vec::new();
@@ -102,14 +94,12 @@ impl TranslateMachine {
             return Vec::new();
         }
         self.pull_request_url = Some(url.to_owned());
-        let mut meta = serde_json::Map::new();
-        meta.insert(
-            "cursor".to_owned(),
-            serde_json::json!({ "pullRequestUrl": url }),
-        );
-        vec![SessionUpdate::SessionInfoUpdate(
-            SessionInfoUpdate::new().meta(meta),
-        )]
+        Vec::new()
+    }
+
+    /// Latest PR reported by the provider, for the host's session operation.
+    pub fn pull_request_url(&self) -> Option<&str> {
+        self.pull_request_url.as_deref()
     }
 
     /// One `tool_call` event: an announcement the first time a call id is

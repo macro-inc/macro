@@ -99,6 +99,11 @@ pub struct ReplayMachine {
     runs: HashMap<CursorRunId, RunState>,
 }
 impl ReplayMachine {
+    /// Latest PR recovered from native results or fallback polling.
+    pub fn pull_request_url(&self) -> Option<&str> {
+        self.translator.pull_request_url()
+    }
+
     /// Whether the run's original prompt is reconstructable.
     pub fn has_prompt(&self, run: &CursorRunId) -> bool {
         self.runs.get(run).is_some_and(|s| s.prompt)

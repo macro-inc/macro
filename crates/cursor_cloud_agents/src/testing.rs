@@ -457,6 +457,7 @@ type RecordedUpdates = Vec<(SessionId, SessionUpdate)>;
 pub struct RecordingNotifier {
     updates: Arc<Mutex<RecordedUpdates>>,
     reloads: Arc<Mutex<Vec<SessionId>>>,
+    pull_requests: Arc<Mutex<Vec<String>>>,
     delivered: Arc<tokio::sync::Notify>,
 }
 
@@ -471,6 +472,14 @@ impl RecordingNotifier {
     #[must_use]
     pub fn updates(&self) -> Vec<(SessionId, SessionUpdate)> {
         self.updates.lock().expect("notifier poisoned").clone()
+    }
+
+    /// PRs handed to the host operation.
+    pub fn pull_requests(&self) -> Vec<String> {
+        self.pull_requests
+            .lock()
+            .expect("notifier poisoned")
+            .clone()
     }
 
     /// Sessions whose recovered history needs a client load.
@@ -498,6 +507,18 @@ impl RecordingNotifier {
 }
 
 impl SessionNotifier for RecordingNotifier {
+    async fn set_pull_request(
+        &self,
+        _session: &SessionId,
+        url: &str,
+    ) -> Result<(), rootcause::Report> {
+        self.pull_requests
+            .lock()
+            .expect("notifier poisoned")
+            .push(url.to_owned());
+        Ok(())
+    }
+
     async fn notify(
         &self,
         session: &SessionId,

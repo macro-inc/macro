@@ -205,17 +205,13 @@ fn streamed_artifact_survives_shortened_result_and_pr_metadata_is_emitted_once()
         }).to_string(),
     });
     let updates = machine.push(Some(&run), &result).unwrap();
-    assert_eq!(
-        updates.len(),
-        1,
+    assert!(
+        updates.is_empty(),
         "the result must not duplicate the streamed answer"
     );
-    let SessionUpdate::SessionInfoUpdate(update) = &updates[0] else {
-        panic!("missing PR metadata")
-    };
     assert_eq!(
-        update.meta.as_ref().unwrap()["cursor"]["pullRequestUrl"],
-        "https://github.com/macro-inc/macro/pull/6369"
+        machine.pull_request_url(),
+        Some("https://github.com/macro-inc/macro/pull/6369")
     );
     assert_eq!(machine.terminal_status(&run), Some(RunStatus::Finished));
     assert_eq!(machine.runs[&run].text, answer);
@@ -231,10 +227,9 @@ fn polling_preserves_pr_metadata() {
         "git": {"branches": [{"repoUrl": "github.com/macro-inc/macro", "branch": "readme-hi", "prUrl": "https://github.com/macro-inc/macro/pull/6369"}]}
     }).to_string());
     let updates = machine.push(Some(&run), &poll).unwrap();
-    assert!(
-        updates
-            .iter()
-            .any(|u| matches!(u, SessionUpdate::SessionInfoUpdate(_)))
+    assert_eq!(
+        machine.pull_request_url(),
+        Some("https://github.com/macro-inc/macro/pull/6369")
     );
     assert!(
         updates

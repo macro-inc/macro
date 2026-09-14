@@ -305,3 +305,29 @@ fn a_reconnect_clears_pending_correlation() {
     );
     assert_eq!(machine.metadata().model, None, "no config ever resolved");
 }
+
+#[test]
+fn shared_pull_request_survives_a_successful_history_replacement() {
+    let mut machine = FoldMachineImpl::new();
+    let pr = r#"{"direction":"to_server","content":{"type":"pullRequestSet","url":"https://github.com/org/repo/pull/1"}}"#;
+    assert_eq!(drive(&mut machine, pr), 1);
+    assert_eq!(drive(&mut machine, pr), 0);
+    drive(
+        &mut machine,
+        r#"{"direction":"to_server","content":{"type":"event","event":"acp_ready"}}"#,
+    );
+    drive(
+        &mut machine,
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"load","method":"session/load","params":{"sessionId":"s1","cwd":"/w","mcpServers":[]}}}"#,
+    );
+    let changed = r#"{"direction":"to_server","content":{"type":"pullRequestSet","url":"https://github.com/org/repo/pull/2"}}"#;
+    assert_eq!(drive(&mut machine, changed), 1);
+    drive(
+        &mut machine,
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"load","result":{}}}"#,
+    );
+    assert_eq!(
+        machine.metadata().pull_request_url.as_deref(),
+        Some("https://github.com/org/repo/pull/2")
+    );
+}

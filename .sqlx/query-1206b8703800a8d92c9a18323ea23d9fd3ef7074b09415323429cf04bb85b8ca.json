@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT content->>'url' FROM agent_session_log WHERE agent_session_id = $1 AND direction = 'to_server' AND content->>'type' = 'pullRequestSet' ORDER BY created_at DESC, id DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "?column?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1206b8703800a8d92c9a18323ea23d9fd3ef7074b09415323429cf04bb85b8ca"
+}

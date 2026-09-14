@@ -156,7 +156,7 @@ impl AgentSessionRepo for FixedBotSessions {
         &self,
         _owner: &MacroUserIdStr<'_>,
         _limit: std::num::NonZeroUsize,
-    ) -> SessionResult<Vec<agent_session::domain::model::RecentAgentSession>> {
+    ) -> SessionResult<Vec<agent_session::domain::model::AgentSession>> {
         unimplemented!("the router never summarizes an owner's recent sessions")
     }
 

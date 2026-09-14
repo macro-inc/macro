@@ -1209,7 +1209,7 @@ where
         &self,
         owner: &MacroUserIdStr<'_>,
         limit: std::num::NonZeroUsize,
-    ) -> Result<Vec<super::model::RecentAgentSession>> {
+    ) -> Result<Vec<super::model::AgentSession>> {
         self.repo.recent_for_owner(owner, limit).await
     }
 

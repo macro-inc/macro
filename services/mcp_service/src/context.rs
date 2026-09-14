@@ -52,6 +52,7 @@ use crate::config::Config;
 pub struct McpContext {
     pub jwt_args: JwtValidationArgs,
     pub tool_context: ToolServiceContext,
+    pub session_pull_requests: Arc<dyn agent_session::domain::pull_request::SessionPullRequests>,
     pub auth_proxy: McpAuthProxyServiceImpl<RedisInflightAuth>,
     pub mcp_public_host: String,
 }
@@ -127,7 +128,17 @@ pub async fn build_context(
         .context("MCP_PUBLIC_URL has no host")?
         .to_owned();
 
+    let session_repo = agent_session::outbound::postgres::PgAgentSessionRepo::new(db.clone());
+    let session_pull_requests = Arc::new(agent_session::domain::pull_request::SessionPullRequestService::new(
+        session_repo.clone(),
+        agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime::new(
+            Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
+                config.internal_api_key.to_string(), ConnectionGatewayUrl::new()?.to_string(),
+            )), session_repo,
+        ),
+    ));
     Ok(McpContext {
+        session_pull_requests,
         jwt_args,
         tool_context,
         auth_proxy,

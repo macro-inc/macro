@@ -123,7 +123,7 @@ impl AgentSessionRepo for StubSessions {
         &self,
         _owner: &MacroUserIdStr<'_>,
         _limit: std::num::NonZeroUsize,
-    ) -> SessionResult<Vec<agent_session::domain::model::RecentAgentSession>> {
+    ) -> SessionResult<Vec<agent_session::domain::model::AgentSession>> {
         unimplemented!("the manager never summarizes an owner's recent sessions")
     }
 

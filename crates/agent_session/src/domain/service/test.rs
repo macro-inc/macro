@@ -432,7 +432,7 @@ impl AgentSessionRepo for BlockingPromptLogs {
         &self,
         owner: &MacroUserIdStr<'_>,
         limit: std::num::NonZeroUsize,
-    ) -> Result<Vec<crate::domain::model::RecentAgentSession>> {
+    ) -> Result<Vec<crate::domain::model::AgentSession>> {
         self.repo.recent_for_owner(owner, limit).await
     }
 

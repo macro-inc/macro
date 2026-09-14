@@ -83,13 +83,11 @@ fn a_result_with_a_pull_request_announces_it_once() {
     let url = "https://github.com/macro-inc/macro/pull/6303";
 
     let updates = machine.push(result(Some(url)));
-    let [SessionUpdate::SessionInfoUpdate(info)] = updates.as_slice() else {
-        panic!("expected one session_info_update, got {updates:?}");
-    };
-    assert_eq!(
-        info.meta.as_ref().and_then(|meta| meta.get("cursor")),
-        Some(&serde_json::json!({ "pullRequestUrl": url }))
+    assert!(
+        updates.is_empty(),
+        "PRs are host operations, not ACP metadata"
     );
+    assert_eq!(machine.pull_request_url(), Some(url));
 
     // The next run restates the same branches; the client heard already.
     assert!(machine.push(result(Some(url))).is_empty());

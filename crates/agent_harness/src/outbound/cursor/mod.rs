@@ -3,6 +3,7 @@
 pub mod keys;
 pub mod manager;
 pub mod pipe;
+mod pull_request;
 pub mod repository_chooser;
 
 pub use keys::{CursorApiKeys, PgCursorApiKeys};

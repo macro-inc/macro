@@ -156,12 +156,12 @@ async fn history_excludes_the_current_session_without_crowding_out_prior_work() 
             Box::pin(async move {
                 Ok(std::iter::once(current)
                     .chain(prior)
-                    .map(|id| RecentAgentSession {
+                    .map(|id| AgentSession {
                         id,
                         name: "session".into(),
                         harness: "cursor".into(),
                         repo_url: None,
-                        created_at: chrono::Utc::now(),
+                        ..agent_session::testing::test_agent_session(id)
                     })
                     .collect())
             })

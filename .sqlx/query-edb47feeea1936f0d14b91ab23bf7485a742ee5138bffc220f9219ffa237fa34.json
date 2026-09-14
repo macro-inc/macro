@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at) VALUES ($1, $2, $3, $4, $5, clock_timestamp()) RETURNING created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "edb47feeea1936f0d14b91ab23bf7485a742ee5138bffc220f9219ffa237fa34"
+}

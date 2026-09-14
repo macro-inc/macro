@@ -1018,3 +1018,41 @@ async fn a_session_without_a_repository_can_use_mcp_but_cannot_mint_git_credenti
     ));
     assert!(service.tokens.asked.lock().expect("lock").is_empty());
 }
+
+#[tokio::test]
+async fn session_credential_is_stamped_only_for_macro_and_never_echoed() {
+    use crate::domain::model::MACRO_SESSION_TOKEN_HEADER;
+    for destination in [
+        McpDestination::Macro,
+        McpDestination::Connected(McpServerSlug::parse("github").unwrap()),
+    ] {
+        let macro_destination = matches!(destination, McpDestination::Macro);
+        let service = EgressServiceImpl::new(
+            StubSessions::granting(),
+            SpyCredentials::knowing(),
+            SpyGithubTokens::default(),
+            SpyForwarder::answering(&[(MACRO_SESSION_TOKEN_HEADER, "echo")]),
+        );
+        let response = service
+            .proxy(
+                &SessionToken::new("actual-session-token"),
+                EgressTarget::McpServer(destination),
+                request(Method::POST, &[(MACRO_SESSION_TOKEN_HEADER, "spoofed")]),
+            )
+            .await
+            .unwrap();
+        service.forward.forwarded(|parts| {
+            assert_eq!(
+                parts
+                    .headers
+                    .get(MACRO_SESSION_TOKEN_HEADER)
+                    .map(|value| value.to_str().unwrap()),
+                macro_destination.then_some("actual-session-token")
+            );
+            if let Some(value) = parts.headers.get(MACRO_SESSION_TOKEN_HEADER) {
+                assert!(value.is_sensitive());
+            }
+        });
+        assert!(!response.headers().contains_key(MACRO_SESSION_TOKEN_HEADER));
+    }
+}

@@ -32,6 +32,7 @@ fn mcp_annotations(annotations: &ai_toolset::ToolAnnotations) -> ToolAnnotations
 pub struct AuthenticatedToolService<Context> {
     toolset: Arc<AsyncToolCollection<Context>>,
     context: Context,
+    session_tools: Option<Arc<dyn agent_session::domain::pull_request::SessionPullRequests>>,
     /// Base URL of the Macro web app used to build links to Macro items in MCP
     /// responses (e.g. `https://macro.com`). Comes from the `APP_BASE_URL`
     /// environment variable.
@@ -48,8 +49,50 @@ impl<Context> AuthenticatedToolService<Context> {
         Self {
             toolset,
             context,
+            session_tools: None,
             item_base_url,
         }
+    }
+
+    /// Add tools whose session comes from a verified egress credential.
+    pub fn with_session_tools(
+        mut self,
+        service: Arc<dyn agent_session::domain::pull_request::SessionPullRequests>,
+    ) -> Self {
+        self.session_tools = Some(service);
+        self
+    }
+
+    async fn session_context(
+        &self,
+        extensions: &rmcp::model::Extensions,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<agent_session::inbound::toolset::SessionToolContext, rmcp::ErrorData> {
+        let forbidden = || {
+            rmcp::ErrorData::invalid_request(
+                "set_pull_request requires an active sandbox session",
+                None,
+            )
+        };
+        let service = self.session_tools.as_ref().ok_or_else(forbidden)?;
+        let token = extensions
+            .get::<http::request::Parts>()
+            .and_then(|parts| {
+                parts
+                    .headers
+                    .get(agent_egress::domain::model::MACRO_SESSION_TOKEN_HEADER)
+            })
+            .and_then(|value| value.to_str().ok())
+            .ok_or_else(forbidden)?;
+        let hash = agent_egress::domain::model::SessionToken::new(token).hash();
+        let session = service
+            .tool_session(&hash, user)
+            .await
+            .map_err(|_| forbidden())?;
+        Ok(agent_session::inbound::toolset::SessionToolContext {
+            service: service.clone(),
+            session,
+        })
     }
 
     fn tool_definitions(&self) -> Vec<Tool> {
@@ -122,10 +165,25 @@ where
         _request: Option<PaginatedRequestParams>,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
-        Self::authenticated_user_id(&context.extensions)?;
-
+        let user = Self::authenticated_user_id(&context.extensions)?;
+        let mut tools = self.tool_definitions();
+        if self
+            .session_context(&context.extensions, &user)
+            .await
+            .is_ok()
+        {
+            tools.extend(session_toolset().tools.iter().map(|(name, tool)| {
+                Tool::new(
+                    name.clone(),
+                    tool.description.clone(),
+                    Arc::new(tool.input_schema.clone()),
+                )
+                .with_title(tool.annotations.title)
+                .annotate(mcp_annotations(&tool.annotations))
+            }));
+        }
         Ok(ListToolsResult {
-            tools: self.tool_definitions(),
+            tools,
             ..Default::default()
         })
     }
@@ -144,23 +202,29 @@ where
             .map(serde_json::Value::Object)
             .ok_or(rmcp::ErrorData::invalid_params("No params provided", None))?;
 
-        let result = self
-            .toolset
-            .try_tool_call(
-                self.context.clone(),
-                request_context,
-                &request.name,
-                &arguments,
-            )
-            .await
-            .map_err(|error| match error {
-                ai_toolset::ToolSetError::Deserialization(error) => {
-                    rmcp::ErrorData::parse_error(error.to_string(), None)
-                }
-                ai_toolset::ToolSetError::NotFound(message) => {
-                    rmcp::ErrorData::resource_not_found(message, None)
-                }
-            })?;
+        let result = if request.name.as_ref() == "set_pull_request" {
+            let session = self.session_context(&context.extensions, &user_id).await?;
+            session_toolset()
+                .try_tool_call(session, request_context, &request.name, &arguments)
+                .await
+        } else {
+            self.toolset
+                .try_tool_call(
+                    self.context.clone(),
+                    request_context,
+                    &request.name,
+                    &arguments,
+                )
+                .await
+        }
+        .map_err(|error| match error {
+            ai_toolset::ToolSetError::Deserialization(error) => {
+                rmcp::ErrorData::parse_error(error.to_string(), None)
+            }
+            ai_toolset::ToolSetError::NotFound(message) => {
+                rmcp::ErrorData::resource_not_found(message, None)
+            }
+        })?;
 
         match result {
             Ok(value) => Ok(tool_result_with_images(&self.context, &user_id, value).await),
@@ -169,4 +233,10 @@ where
             )])),
         }
     }
+}
+
+/// These tools are absent from ordinary MCP and chat catalogs: each invocation
+/// requires the calling sandbox's session credential.
+fn session_toolset() -> AsyncToolCollection<agent_session::inbound::toolset::SessionToolContext> {
+    AsyncToolCollection::new().add_tool::<agent_session::inbound::toolset::SetPullRequest, agent_session::inbound::toolset::SessionToolContext>()
 }

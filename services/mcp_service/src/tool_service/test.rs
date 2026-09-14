@@ -211,3 +211,39 @@ fn authenticated_user_id_requires_user_extension_inside_request_parts() {
     assert_eq!(error.code, ErrorCode::INTERNAL_ERROR);
     assert_eq!(error.message, "missing user identity — is auth configured?");
 }
+
+#[test]
+fn session_tool_schema_accepts_only_the_url() {
+    let tools = session_toolset();
+    let tool = tools.tools.get("set_pull_request").unwrap();
+    let properties = tool
+        .input_schema
+        .get("properties")
+        .unwrap()
+        .as_object()
+        .unwrap();
+    assert_eq!(properties.keys().collect::<Vec<_>>(), ["url"]);
+    assert_eq!(
+        tool.input_schema.get("additionalProperties"),
+        Some(&serde_json::json!(false))
+    );
+    assert!(tool.annotations.idempotent);
+    assert!(
+        !empty_service()
+            .tool_definitions()
+            .iter()
+            .any(|tool| tool.name == "set_pull_request")
+    );
+}
+
+#[tokio::test]
+async fn ordinary_mcp_requests_have_no_session_tool_context() {
+    let service = empty_service();
+    let user = MacroUserIdStr::try_from_email("owner@macro.com").unwrap();
+    assert!(
+        service
+            .session_context(&rmcp::model::Extensions::default(), &user)
+            .await
+            .is_err()
+    );
+}

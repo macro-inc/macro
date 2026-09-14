@@ -6,12 +6,14 @@ pub mod search;
 #[cfg(test)]
 mod test;
 
+mod pull_request;
+
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
     AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    ExternalSession, ManagerFence, Message, RecentAgentSession, ReplicaAddress, ReplicaId,
-    SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    ExternalSession, ManagerFence, Message, ReplicaAddress, ReplicaId, SandboxSize, SessionBot,
+    SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -578,13 +580,24 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         &self,
         owner: &MacroUserIdStr<'_>,
         limit: NonZeroUsize,
-    ) -> Result<Vec<RecentAgentSession>> {
-        let rows = sqlx::query!(
+    ) -> Result<Vec<AgentSession>> {
+        let rows = sqlx::query_as!(
+            AgentSessionRow,
             r#"
-            SELECT id, name, harness, repo_url, created_at
+            SELECT
+                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                mcp_scope, mcp_servers, acp_session_id, status,
+                status_event_name, agent_session.created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?",
+                ext.provider AS "external_provider?", ext.external_id AS "external_id?",
+                ext.external_name AS "external_name?", ext.external_url AS "external_url?",
+                ext.last_run_id AS "external_last_run_id?"
             FROM agent_session
+            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
             WHERE owner_id = $1
-            ORDER BY created_at DESC, id DESC
+            ORDER BY agent_session.created_at DESC, id DESC
             LIMIT $2
             "#,
             owner.as_ref(),
@@ -596,14 +609,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
 
         Ok(rows
             .into_iter()
-            .map(|row| RecentAgentSession {
-                id: AgentSessionId::new_from_uuid(row.id),
-                name: row.name,
-                harness: row.harness,
-                repo_url: row.repo_url,
-                created_at: row.created_at,
-            })
-            .collect())
+            .map(AgentSession::try_from)
+            .collect::<anyhow::Result<Vec<_>>>()?)
     }
 
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
@@ -1092,6 +1099,23 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
                     "invalid history boundary".into(),
                 ));
             }
+        }
+
+        if boundary.is_some() {
+            // Carry application-owned metadata into the newly selected history
+            // in this transaction, so GET retains its indexed boundary cursor.
+            sqlx::query!(
+                r#"
+                INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)
+                SELECT $2, agent_session_id, user_id, direction, content, clock_timestamp()
+                FROM agent_session_log
+                WHERE agent_session_id = $1 AND direction = 'to_server'
+                  AND content->>'type' = 'pullRequestSet'
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                "#,
+                log.agent_session_id.as_uuid(), macro_uuid::generate_uuid_v7(),
+            ).execute(&mut *transaction).await.context("retain session PR across history replacement")?;
         }
 
         if let Some(run_id) = checkpoint {

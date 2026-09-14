@@ -67,10 +67,8 @@ pub struct SessionMetadata {
     /// nothing is pending, when the turn that asked has ended, or when the
     /// connection that asked is gone - the request id dies with it.
     pub pending_elicitation: Option<PendingElicitation>,
-    /// The pull request the session's work is on, when the harness reports
-    /// one (Cursor announces it under `_meta.cursor.pullRequestUrl` on a
-    /// `session_info_update` once a run has opened it). Latest-wins and never
-    /// cleared by the fold: no harness reports a pull request going away.
+    /// The session's PR, set by a provider adapter or its MCP tool.
+    /// Derived from durable `PullRequestSet` events; latest value wins.
     pub pull_request_url: Option<String>,
 }
 

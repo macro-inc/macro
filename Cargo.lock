@@ -443,8 +443,10 @@ dependencies = [
  "agent-client-protocol",
  "agent_fold",
  "agent_runtime_protocol",
+ "ai_toolset",
  "ai_usage",
  "anyhow",
+ "async-trait",
  "axum",
  "bot_id",
  "bots",
@@ -469,6 +471,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "rootcause",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
@@ -481,6 +484,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "url",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -10309,6 +10313,8 @@ dependencies = [
 name = "mcp_service"
 version = "0.1.0"
 dependencies = [
+ "agent_egress",
+ "agent_session",
  "ai_tools",
  "ai_toolset",
  "ai_usage",

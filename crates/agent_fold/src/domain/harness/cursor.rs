@@ -1,7 +1,7 @@
 //! Cursor cloud agents, through this repository's `cursor_cloud_agents`
 //! translator (`agentInfo.name = "cursor-acp"`).
 //!
-//! The translator writes no `_meta`. Cursor's subagent tool is `task`, kind
+//! Cursor's subagent tool is `task`, kind
 //! `other`, with the Task-tool arguments in Cursor's own spelling:
 //!
 //! ```json
@@ -37,8 +37,8 @@
 //! steps into the subagent's children and takes the closing prose as its
 //! answer, so the transcript reads like the child had streamed.
 //!
-//! The one `_meta` the translator does write is on `session_info_update`,
-//! once a run has opened a pull request:
+//! Older logs announced PRs in `session_info_update` metadata. Retain this
+//! reader for those logs; new PRs use the shared `PullRequestSet` event:
 //!
 //! ```json
 //! { "cursor": { "pullRequestUrl": "https://github.com/org/repo/pull/1" } }
@@ -65,7 +65,7 @@ use crate::domain::model::{
 /// Reader for Cursor's conventions.
 pub struct Cursor;
 
-/// The `cursor` namespace of a `session_info_update`'s `_meta`.
+/// Legacy Cursor PR metadata, retained for previously recorded sessions.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SessionInfoMeta {

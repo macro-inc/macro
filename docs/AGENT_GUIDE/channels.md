@@ -99,6 +99,13 @@ PR status in an open Magic Chip refreshes every 15 seconds while the app is
 focused, including after the initial webhook sync. A late webhook does not
 require reloading the page.
 
+Sandboxed coding agents can call Macro's `set_pull_request` MCP tool after
+`gh pr create`, or to associate an existing PR with the current session. The tool
+accepts only the GitHub URL; the calling session comes from authentication.
+Repeating the URL leaves the link unchanged, and setting another URL replaces it.
+Cursor uses its returned PR URL automatically and does not expose this tool.
+Both paths should show the same chip link, including after a history reload.
+
 When Cursor opens a pull request, the chip header shows its GitHub link as soon
 as the run reports it, including after restoring a session. The link remains
 usable while the webhook mapping is loading or absent, then becomes a Macro PR

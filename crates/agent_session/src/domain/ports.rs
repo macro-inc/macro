@@ -313,16 +313,11 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
 
     /// The owner's newest sessions, newest first, at most `limit`.
-    ///
-    /// A summary of what this person has been working on lately, so it reads
-    /// the narrow [`RecentAgentSession`] rather than whole sessions: nothing
-    /// here drives a session, and a bounded prompt cannot spend a full row's
-    /// worth of columns on each one.
     fn recent_for_owner<'owner>(
         &self,
         owner: &MacroUserIdStr<'owner>,
         limit: NonZeroUsize,
-    ) -> impl Future<Output = Result<Vec<RecentAgentSession>>> + Send;
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
 
     /// The agent behind a session, for rendering the messages it sent.
     ///

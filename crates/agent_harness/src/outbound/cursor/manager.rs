@@ -121,6 +121,7 @@ pub struct CursorContainerManager<Sessions, Keys, Repositories> {
     sessions: Sessions,
     repositories: Arc<Repositories>,
     usage: Arc<dyn ai_usage::UsageRecorder>,
+    pull_requests: Option<Arc<dyn agent_session::domain::pull_request::SessionPullRequests>>,
     journal_storage: JournalStorage,
     /// Sessions the harness has a command in flight for right now, shared
     /// with `AgentHarnessService` so the idle reaper below never closes a
@@ -188,6 +189,7 @@ where
             sessions,
             repositories,
             usage,
+            pull_requests: None,
             journal_storage: JournalStorage::Postgres {
                 pool: journal.pool,
                 replica: journal.replica,
@@ -209,9 +211,19 @@ where
             sessions,
             repositories,
             usage: Arc::new(ai_usage::NoOpUsageRecorder),
+            pull_requests: None,
             journal_storage: JournalStorage::Memory,
             pending: PendingCommands::new(),
         }
+    }
+
+    /// Persist Cursor's returned PR using the shared session operation.
+    pub fn with_pull_requests(
+        mut self,
+        service: Arc<dyn agent_session::domain::pull_request::SessionPullRequests>,
+    ) -> Self {
+        self.pull_requests = Some(service);
+        self
     }
 
     /// A client authenticated as `session`'s owner.
@@ -292,7 +304,16 @@ where
             sessions: self.sessions.clone(),
         };
         let (reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel();
-        let notifier = AcpNotifier::new().with_reload(reload_tx);
+        let mut notifier = AcpNotifier::new().with_reload(reload_tx);
+        if let Some(service) = &self.pull_requests {
+            notifier = notifier.with_pull_requests(Arc::new(
+                super::pull_request::CursorPullRequestReporter {
+                    service: service.clone(),
+                    session: session_id,
+                    owner: session.owner_id.clone(),
+                },
+            ));
+        }
         // The user's chosen model seeds the session as its default: a fresh
         // session starts on it, and a resumed one still prefers whatever it
         // was actually last using (carried in `restore.model_id`) over this.

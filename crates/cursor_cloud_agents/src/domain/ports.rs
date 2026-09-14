@@ -118,6 +118,13 @@ pub trait RunStream: Sync {
 
 /// Deliver one translated update to the session's client.
 pub trait SessionNotifier {
+    /// Report the provider's PR to the host's shared session operation.
+    fn set_pull_request(
+        &self,
+        session: &SessionId,
+        url: &str,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
     /// Send a `session/update` for the given session.
     fn notify(
         &self,

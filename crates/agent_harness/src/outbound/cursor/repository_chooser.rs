@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use agent::structured_output::{DynamicSchema, dynamic_structured_completion};
 use agent::{Message, PredefinedModel};
-use agent_session::domain::model::{AgentSessionId, RecentAgentSession};
+use agent_session::domain::model::{AgentSession, AgentSessionId};
 use agent_session::domain::ports::AgentSessionRepo;
 use cursor_cloud_agents::domain::model::RepoUrl;
 use cursor_cloud_agents::domain::ports::{RepositoryChooser, SessionIntent};
@@ -100,7 +100,7 @@ where
     }
 
     /// The five prior sessions, excluding the placeholder being initialized.
-    async fn recent_sessions(&self) -> Result<Vec<RecentAgentSession>, rootcause::Report> {
+    async fn recent_sessions(&self) -> Result<Vec<AgentSession>, rootcause::Report> {
         let recent = self
             .sessions
             .recent_for_owner(
@@ -123,7 +123,7 @@ where
         &self,
         prompt: &str,
         candidates: &[String],
-        recent: &[RecentAgentSession],
+        recent: &[AgentSession],
     ) -> Result<SessionIntent, rootcause::Report> {
         let value = dynamic_structured_completion(
             self.model,
@@ -201,7 +201,7 @@ where
 
 /// The three sections the model reads: what it may choose from, what the user
 /// has been doing, and what they just asked for.
-fn user_message(prompt: &str, candidates: &[String], recent: &[RecentAgentSession]) -> String {
+fn user_message(prompt: &str, candidates: &[String], recent: &[AgentSession]) -> String {
     use std::fmt::Write as _;
 
     let mut message = String::from("<candidate_repositories>\n");

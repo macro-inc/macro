@@ -62,13 +62,23 @@ use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt 
 /// Notifications enter the connection's own outgoing queue — the same one
 /// responses use — so a turn's updates and its `session/prompt` response
 /// cannot reorder.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct AcpNotifier {
     /// Empty until the connection is up. Write-once: one notifier serves one
     /// connection, exactly as one service does.
     connection: Arc<OnceLock<ConnectionTo<Client>>>,
+    pull_request: Option<Arc<dyn PullRequestReporter>>,
     bound: Arc<tokio::sync::Notify>,
     reload: Option<tokio::sync::mpsc::UnboundedSender<SessionId>>,
+}
+
+/// Host operation receiving PRs independently of ACP presentation.
+pub trait PullRequestReporter: Send + Sync {
+    /// Persist a PR reported by this provider.
+    fn set_pull_request<'a>(
+        &'a self,
+        url: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<(), rootcause::Report>> + Send + 'a>>;
 }
 
 impl AcpNotifier {
@@ -84,6 +94,12 @@ impl AcpNotifier {
         self
     }
 
+    /// Use the embedding host's shared session operation for PR reports.
+    pub fn with_pull_requests(mut self, reporter: Arc<dyn PullRequestReporter>) -> Self {
+        self.pull_request = Some(reporter);
+        self
+    }
+
     /// Attach the connection updates will travel over.
     fn bind(&self, connection: ConnectionTo<Client>) {
         // A second bind can only be a bug in `serve`; the first connection
@@ -94,6 +110,17 @@ impl AcpNotifier {
 }
 
 impl SessionNotifier for AcpNotifier {
+    async fn set_pull_request(
+        &self,
+        _session: &SessionId,
+        url: &str,
+    ) -> Result<(), rootcause::Report> {
+        if let Some(reporter) = &self.pull_request {
+            reporter.set_pull_request(url).await?;
+        }
+        Ok(())
+    }
+
     async fn notify(
         &self,
         session: &SessionId,

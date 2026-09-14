@@ -449,7 +449,16 @@ async fn run() -> anyhow::Result<()> {
             replica,
         },
         pending_commands.clone(),
-    );
+    )
+    .with_pull_requests(Arc::new(
+        agent_session::domain::pull_request::SessionPullRequestService::new(
+            session_repo.clone(),
+            ConnectionGatewayAgentSessionRealtime::new(
+                connection_gateway.clone(),
+                session_repo.clone(),
+            ),
+        ),
+    ));
     // Fixed system agents retain their deployment defaults. User/team agents
     // are resolved from agent_configs for every trigger so newly-created or
     // edited agents require no service restart.

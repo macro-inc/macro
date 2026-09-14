@@ -1568,8 +1568,9 @@ where
                 state.ready_for_sync = false;
                 SessionError::Journal(error)
             })?;
-        let (updates, completion) = {
+        let (updates, completion, pull_request) = {
             let mut state = session.state.lock().expect("session state poisoned");
+            let previous_pr = state.machine.pull_request_url().map(str::to_owned);
             let before = run.and_then(|run| state.machine.terminal_status(run));
             state.journal_entries.push(entry.clone());
             let SessionState {
@@ -1593,9 +1594,25 @@ where
             } else {
                 None
             };
-            (updates, completion)
+            let pull_request = state
+                .machine
+                .pull_request_url()
+                .filter(|url| Some(*url) != previous_pr.as_deref())
+                .map(str::to_owned);
+            (updates, completion, pull_request)
         };
         if emit {
+            if let Some(url) = pull_request {
+                self.notifier
+                    .set_pull_request(id, &url)
+                    .await
+                    .map_err(|error| {
+                        let mut state = session.state.lock().expect("session state poisoned");
+                        state.capture_failed = true;
+                        state.ready_for_sync = false;
+                        SessionError::Journal(error)
+                    })?;
+            }
             // The live prompt request already carries these original blocks.
             // Replay projects them at the run boundary; live must not echo them.
             let local_prompt = run.is_some_and(|run| {
@@ -1707,6 +1724,9 @@ where
             .journal_entries
             .clone();
         let (machine, updates) = history_projection(&entries)?;
+        if let Some(url) = machine.pull_request_url() {
+            self.notifier.set_pull_request(id, url).await?;
+        }
         for (batch, outcome) in updates {
             for update in batch {
                 self.notifier.notify(id, update).await?;

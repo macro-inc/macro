@@ -1826,3 +1826,50 @@ async fn participants_are_the_distinct_users_the_log_attributes(pool: PgPool) {
 
     assert_eq!(participants, vec![alice, bob]);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
+    use crate::domain::pull_request::SessionPullRequestRepo;
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let url = "https://github.com/org/repo/pull/123";
+    let (first, second) = tokio::join!(
+        repo.record_pull_request(session.id, &session.owner_id, url),
+        repo.record_pull_request(session.id, &session.owner_id, url),
+    );
+    assert_eq!(
+        usize::from(first.unwrap().is_some()) + usize::from(second.unwrap().is_some()),
+        1
+    );
+    let replica = ReplicaId::mint();
+    let ClaimOutcome::Claimed(claim) = repo.claim(session.id, replica).await.unwrap() else {
+        panic!("claim");
+    };
+    let initialization = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    repo.create_fenced_with_boundary(
+        fenced_log(session.id),
+        &claim,
+        Some(crate::domain::model::HistoryBoundary {
+            initialization_log_id: initialization.id,
+        }),
+    )
+    .await
+    .unwrap();
+    let log = AgentSessionLogRepo::list_by_session(&repo, session.id)
+        .await
+        .unwrap();
+    assert_eq!(log[0].id, initialization.id);
+    assert!(
+        matches!(&log.last().unwrap().entry.content, Message::ToServer(ToServerMessage::PullRequestSet { url: stored }) if stored == url)
+    );
+    assert!(
+        repo.record_pull_request(session.id, &session.owner_id, url)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
