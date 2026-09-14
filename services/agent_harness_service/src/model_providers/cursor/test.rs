@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use agent_harness::domain::model_load::{CursorModelProbe as _, RawModelProbe};
+use agent_harness::domain::capability_discovery::{CursorCapabilityProbe as _, RawCapabilityProbe};
 use agent_harness::outbound::cursor::keys::ResolvedCursorConfig;
 use axum::extract::{Request, State};
 use axum::routing::any;
@@ -37,7 +37,17 @@ async fn cursor_api(
     Json(serde_json::json!({
         "items": [
             {"id": "default", "displayName": "Auto", "variants": []},
-            {"id": "fast", "displayName": "Fast", "variants": []}
+            {
+                "id": "fast",
+                "displayName": "Fast",
+                "variants": [
+                    {"params": [{"id": "effort", "value": "low"}]},
+                    {
+                        "params": [{"id": "effort", "value": "high"}],
+                        "isDefault": true
+                    }
+                ]
+            }
         ]
     }))
 }
@@ -53,7 +63,7 @@ async fn probe_lists_models_without_creating_an_agent() {
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     let provider = CursorModels::new(TestCursorKeys, format!("http://{address}"));
 
-    let RawModelProbe::Options(options) = provider
+    let RawCapabilityProbe::Options(options) = provider
         .probe(&MacroUserIdStr::try_from_email("models@example.com").unwrap())
         .await
         .unwrap()
@@ -61,7 +71,12 @@ async fn probe_lists_models_without_creating_an_agent() {
         panic!("cursor should return options");
     };
 
-    assert_eq!(options.len(), 1);
+    assert_eq!(options.len(), 2);
+    assert_eq!(options[1].id.to_string(), "reasoning_effort");
+    assert_eq!(
+        options[1].category,
+        Some(agent_client_protocol::schema::v1::SessionConfigOptionCategory::ThoughtLevel)
+    );
     assert_eq!(
         calls.lock().unwrap().as_slice(),
         &[("GET".to_owned(), "/v1/models".to_owned())]

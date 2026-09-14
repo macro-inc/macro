@@ -12,9 +12,9 @@ import type {
   ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  DiscoverAgentCapabilitiesRequest,
+  DiscoverAgentCapabilitiesResponse,
   EditQueuedActionRequest,
-  LoadAgentModelsRequest,
-  LoadAgentModelsResponse,
   PreviewAgentSessionsRequest,
   PreviewAgentSessionsResponse,
   RenameAgentSessionRequest,
@@ -22,87 +22,87 @@ import type {
 } from './schemas';
 
 /**
- * @summary Probe one provider's model catalog without creating an agent session.
+ * @summary Probe one provider's ACP session configuration without persisting a session.
  */
-export type loadAgentModelsHandlerResponse200 = {
-  data: LoadAgentModelsResponse;
+export type discoverAgentCapabilitiesHandlerResponse200 = {
+  data: DiscoverAgentCapabilitiesResponse;
   status: 200;
 };
 
-export type loadAgentModelsHandlerResponse400 = {
+export type discoverAgentCapabilitiesHandlerResponse400 = {
   data: void;
   status: 400;
 };
 
-export type loadAgentModelsHandlerResponse401 = {
+export type discoverAgentCapabilitiesHandlerResponse401 = {
   data: void;
   status: 401;
 };
 
-export type loadAgentModelsHandlerResponse403 = {
+export type discoverAgentCapabilitiesHandlerResponse403 = {
   data: void;
   status: 403;
 };
 
-export type loadAgentModelsHandlerResponse409 = {
+export type discoverAgentCapabilitiesHandlerResponse409 = {
   data: void;
   status: 409;
 };
 
-export type loadAgentModelsHandlerResponse502 = {
+export type discoverAgentCapabilitiesHandlerResponse502 = {
   data: void;
   status: 502;
 };
 
-export type loadAgentModelsHandlerResponse504 = {
+export type discoverAgentCapabilitiesHandlerResponse504 = {
   data: void;
   status: 504;
 };
 
-export type loadAgentModelsHandlerResponseSuccess =
-  loadAgentModelsHandlerResponse200 & {
+export type discoverAgentCapabilitiesHandlerResponseSuccess =
+  discoverAgentCapabilitiesHandlerResponse200 & {
     headers: Headers;
   };
-export type loadAgentModelsHandlerResponseError = (
-  | loadAgentModelsHandlerResponse400
-  | loadAgentModelsHandlerResponse401
-  | loadAgentModelsHandlerResponse403
-  | loadAgentModelsHandlerResponse409
-  | loadAgentModelsHandlerResponse502
-  | loadAgentModelsHandlerResponse504
+export type discoverAgentCapabilitiesHandlerResponseError = (
+  | discoverAgentCapabilitiesHandlerResponse400
+  | discoverAgentCapabilitiesHandlerResponse401
+  | discoverAgentCapabilitiesHandlerResponse403
+  | discoverAgentCapabilitiesHandlerResponse409
+  | discoverAgentCapabilitiesHandlerResponse502
+  | discoverAgentCapabilitiesHandlerResponse504
 ) & {
   headers: Headers;
 };
 
-export type loadAgentModelsHandlerResponse =
-  | loadAgentModelsHandlerResponseSuccess
-  | loadAgentModelsHandlerResponseError;
+export type discoverAgentCapabilitiesHandlerResponse =
+  | discoverAgentCapabilitiesHandlerResponseSuccess
+  | discoverAgentCapabilitiesHandlerResponseError;
 
-export const getLoadAgentModelsHandlerUrl = () => {
-  return `/agent-models/load`;
+export const getDiscoverAgentCapabilitiesHandlerUrl = () => {
+  return `/agent-capabilities/discover`;
 };
 
-export const loadAgentModelsHandler = async (
-  loadAgentModelsRequest: LoadAgentModelsRequest,
+export const discoverAgentCapabilitiesHandler = async (
+  discoverAgentCapabilitiesRequest: DiscoverAgentCapabilitiesRequest,
   options?: RequestInit
-): Promise<loadAgentModelsHandlerResponse> => {
-  const res = await fetch(getLoadAgentModelsHandlerUrl(), {
+): Promise<discoverAgentCapabilitiesHandlerResponse> => {
+  const res = await fetch(getDiscoverAgentCapabilitiesHandlerUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(loadAgentModelsRequest),
+    body: JSON.stringify(discoverAgentCapabilitiesRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: loadAgentModelsHandlerResponse['data'] = body
+  const data: discoverAgentCapabilitiesHandlerResponse['data'] = body
     ? JSON.parse(body)
     : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as loadAgentModelsHandlerResponse;
+  } as discoverAgentCapabilitiesHandlerResponse;
 };
 
 /**

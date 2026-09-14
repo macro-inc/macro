@@ -25,6 +25,7 @@ const EMPTY_METADATA: SessionMetadata = {
   harness: 'unknown',
   model: null,
   supportedModels: [],
+  configOptions: [],
   title: null,
   availableCommands: [],
   status: null,

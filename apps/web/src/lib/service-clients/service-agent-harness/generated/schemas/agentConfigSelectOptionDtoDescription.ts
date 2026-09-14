@@ -6,6 +6,6 @@
  */
 
 /**
- * Optional group heading supplied by the provider.
+ * Optional provider description of this value.
  */
-export type AgentModelDtoGroup = string | null;
+export type AgentConfigSelectOptionDtoDescription = string | null;

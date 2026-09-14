@@ -79,10 +79,19 @@ The **Model override** selector (`aria-label="Model override"`) sits inside the
 prompt box at the bottom left. It
 shows `default (<model name>)` when using the agent's configured default and
 the model name alone when overridden. It has no model icon. Saved-agent defaults
-come from their configuration; built-in defaults are loaded from model discovery.
-While a default is unknown, the selector reads `default`. Changing agent resets
-the override. Tab order is selected agent row (and any connection action) →
-**Create agent** → prompt → model → **Start session**.
+come from their configuration; built-in defaults are loaded from capability discovery.
+When the selected runtime advertises an ACP `thought_level` option, a
+**Reasoning effort** selector appears beside the model selector. It uses the
+runtime's labels and allowed values, and changing agents resets the override.
+Macro's in-memory runtime advertises **Low**, **Medium**, and **High**, with
+**High** as its default; the choice applies to the next turn and survives a
+runtime reattach.
+Cursor advertises the effort values accepted by its currently selected model
+variant. Changing the value selects the matching Cursor variant for the next
+run while preserving its other parameters.
+While a default is unknown, the model selector reads `default`. Changing agent
+resets both overrides. Tab order is selected agent row (and any connection action) →
+**Create agent** → prompt → model → reasoning effort (when supported) → **Start session**.
 Escape in the prompt first blurs to the dialog; a second Escape closes it.
 The prompt footer’s start control is a **Live / Background** dropdown
 (`aria-label="Session start mode"`) to the left of the circular send button.
@@ -97,12 +106,12 @@ selected, the modifier does nothing.
 `Enter` starts the selected mode (`Shift+Enter` still inserts a newline).
 `Cmd`/`Ctrl+Enter` starts in the background when Live is selected.
 The send button shows a spinner and is labelled **Starting…**
-while the server creates the session, applies the model override, and accepts the
+while the server creates the session, applies the model and effort overrides, and accepts the
 first prompt. Live mode then closes
 and opens the real `/app/agent/<uuid>` URL. It never navigates to a temporary
 `pending-…` URL. Creation failures keep the prompt in the modal and show **Retry**.
-If model setup or prompt delivery fails after creation, **Retry** reuses that
-session, and **Open session** opens it directly; agent and model selection stay
+If configuration setup or prompt delivery fails after creation, **Retry** reuses that
+session, and **Open session** opens it directly; agent, model, and effort selection stay
 locked to the session already created.
 Leaving Macro selected uses the backend's in-memory default in every
 environment, including production; it does not provision a Daytona container.

@@ -136,6 +136,13 @@ pub enum Control {
         /// The model slug requested by the caller.
         model: String,
     },
+    /// The runtime was asked to change an advertised session setting.
+    SetConfigOption {
+        /// Opaque config id supplied by the runtime.
+        config_id: String,
+        /// Opaque select value requested by the caller.
+        value: String,
+    },
     /// The runtime was asked to compact its context.
     Compact,
     /// The runtime was asked to stop its current work.

@@ -3,8 +3,7 @@
  */
 
 import { Model } from '@core/component/AI/constant/model';
-import { useAgentModelsQueries } from '@queries/agents/models';
-import type { LoadAgentModelsResponse } from '@service-agent-harness/generated/schemas';
+import { useAgentCapabilitiesQueries } from '@queries/agents/capabilities';
 import {
   fireEvent,
   render,
@@ -91,7 +90,7 @@ function modelTargetKey(target: {
 }
 
 function successfulModels(
-  models: { id: string; name: string }[],
+  models: { id: string; name: string; group?: string }[],
   currentModel = models[0]?.id
 ) {
   return {
@@ -107,12 +106,13 @@ function successfulModels(
   };
 }
 
-vi.mock('@queries/agents/models', async (importOriginal) => {
+vi.mock('@queries/agents/capabilities', async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import('@queries/agents/models')>();
+    await importOriginal<typeof import('@queries/agents/capabilities')>();
   return {
     ...actual,
-    useAgentModelsQueries: vi.fn(
+    discoveredModels: (data: unknown) => data,
+    useAgentCapabilitiesQueries: vi.fn(
       (targets: () => { harness: string; harnessId?: string }[]) =>
         targets().map(
           (target) =>
@@ -310,18 +310,17 @@ describe('Agents', () => {
     'keeps settings visible while Cursor models load and after %s',
     async (outcome) => {
       cursorMocks.status.data.registered = true;
-      let resolveModels!: (models: LoadAgentModelsResponse) => void;
+      type ModelResponse = ReturnType<typeof successfulModels>['data'];
+      let resolveModels!: (models: ModelResponse) => void;
       let rejectModels!: (error: Error) => void;
-      const response = new Promise<LoadAgentModelsResponse>(
-        (resolve, reject) => {
-          resolveModels = resolve;
-          rejectModels = reject;
-        }
-      );
+      const response = new Promise<ModelResponse>((resolve, reject) => {
+        resolveModels = resolve;
+        rejectModels = reject;
+      });
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
-      vi.mocked(useAgentModelsQueries).mockImplementationOnce((targets) =>
+      vi.mocked(useAgentCapabilitiesQueries).mockImplementationOnce((targets) =>
         targets().map((target) =>
           useQuery(() => ({
             queryKey: ['pending-models', target.harness],

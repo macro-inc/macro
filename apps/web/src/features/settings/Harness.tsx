@@ -6,7 +6,10 @@ import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
-import { useAgentModelsQuery } from '@queries/agents/models';
+import {
+  discoveredModels,
+  useAgentCapabilitiesQuery,
+} from '@queries/agents/capabilities';
 import {
   useCursorApiKeyStatusQuery,
   useDisconnectCursorApiKey,
@@ -76,12 +79,12 @@ export function Harness() {
     }
   };
 
-  const cursorModels = useAgentModelsQuery(
+  const cursorModels = useAgentCapabilitiesQuery(
     () => ({ harness: 'cursor' }),
     cursorRegistered
   );
   const cursorModelData = () =>
-    cursorModels.isSuccess ? cursorModels.data : undefined;
+    cursorModels.isSuccess ? discoveredModels(cursorModels.data) : undefined;
   const cursorModelOptions = () => {
     const data = cursorModelData();
     if (data?.status !== 'available') return [];

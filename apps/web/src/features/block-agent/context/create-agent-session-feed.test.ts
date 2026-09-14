@@ -42,6 +42,7 @@ const worker = vi.hoisted(() => ({
 const emptyMetadata = {
   model: null,
   supportedModels: [],
+  configOptions: [],
   title: null,
   availableCommands: [],
   status: null,

@@ -11,6 +11,8 @@ export type AgentAction = (AgentPromptAction & {
     type: 'prompt';
 }) | (AgentSetModelAction & {
     type: 'setModel';
+}) | (AgentSetConfigOptionAction & {
+    type: 'setConfigOption';
 }) | {
     type: 'compact';
 } | {
@@ -34,11 +36,54 @@ export type AgentAction = (AgentPromptAction & {
 export type AgentActionId = string;
 
 /**
- * One model picker option.
+ * Type-specific state for one agent session setting.
  */
-export type AgentModelDto = {
+export type AgentConfigKindDto = {
     /**
-     * Optional provider description.
+     * Current opaque value.
+     */
+    currentValue: string;
+    /**
+     * Ordered values supplied by the agent.
+     */
+    options: Array<AgentConfigSelectOptionDto>;
+    type: 'select';
+} | {
+    /**
+     * Current value.
+     */
+    currentValue: boolean;
+    type: 'boolean';
+};
+
+/**
+ * One agent-advertised ACP session setting.
+ */
+export type AgentConfigOptionDto = AgentConfigKindDto & {
+    /**
+     * ACP semantic category, such as `model` or `thought_level`.
+     */
+    category?: string | null;
+    /**
+     * Optional explanatory copy.
+     */
+    description?: string | null;
+    /**
+     * Opaque id used to change this setting.
+     */
+    id: string;
+    /**
+     * Display label supplied by the agent.
+     */
+    name: string;
+};
+
+/**
+ * One value in an agent-advertised select.
+ */
+export type AgentConfigSelectOptionDto = {
+    /**
+     * Optional provider description of this value.
      */
     description?: string | null;
     /**
@@ -46,19 +91,14 @@ export type AgentModelDto = {
      */
     group?: string | null;
     /**
-     * Provider model id.
-     */
-    id: string;
-    /**
-     * Display name.
+     * Display label.
      */
     name: string;
+    /**
+     * Opaque value returned to the agent when selected.
+     */
+    value: string;
 };
-
-/**
- * Model-selection availability returned over HTTP.
- */
-export type AgentModelsStatusDto = 'available' | 'unsupported';
 
 /**
  * Ask the agent to work on something.
@@ -298,6 +338,20 @@ export type AgentSessionResponse = {
 };
 
 /**
+ * Ask the agent to change one advertised select-style session setting.
+ */
+export type AgentSetConfigOptionAction = {
+    /**
+     * Opaque ACP config id advertised by the agent.
+     */
+    configId: string;
+    /**
+     * Opaque select value advertised for that config option.
+     */
+    value: string;
+};
+
+/**
  * Ask the agent to run on a different model from here on.
  */
 export type AgentSetModelAction = {
@@ -308,6 +362,11 @@ export type AgentSetModelAction = {
 };
 
 export type BotId = string;
+
+/**
+ * Harness names accepted by the capability-discovery endpoint.
+ */
+export type CapabilityHarnessDto = 'in-memory' | 'cursor' | 'macrod';
 
 /**
  * The operation to perform.
@@ -437,6 +496,30 @@ export type CreateSessionThread = {
 };
 
 /**
+ * HTTP request selecting one provider to probe.
+ */
+export type DiscoverAgentCapabilitiesRequest = {
+    /**
+     * Provider to probe.
+     */
+    harness: CapabilityHarnessDto;
+    /**
+     * Required for macrod and forbidden for other targets.
+     */
+    harnessId?: string | null;
+};
+
+/**
+ * Successful capability-discovery response.
+ */
+export type DiscoverAgentCapabilitiesResponse = {
+    /**
+     * Complete ordered ACP session configuration advertised by the agent.
+     */
+    configOptions: Array<AgentConfigOptionDto>;
+};
+
+/**
  * Request body for editing a queued prompt.
  */
 export type EditQueuedActionRequest = {
@@ -507,38 +590,6 @@ export type ExternalSessionResponse = {
 };
 
 /**
- * HTTP request selecting one provider to probe.
- */
-export type LoadAgentModelsRequest = {
-    /**
-     * Provider to probe.
-     */
-    harness: ModelHarnessDto;
-    /**
-     * Required for macrod and forbidden for other targets.
-     */
-    harnessId?: string | null;
-};
-
-/**
- * Successful model-discovery response.
- */
-export type LoadAgentModelsResponse = {
-    /**
-     * Current provider model, if model selection is available.
-     */
-    currentModel?: string | null;
-    /**
-     * Ordered model catalog.
-     */
-    models: Array<AgentModelDto>;
-    /**
-     * Model-selection availability.
-     */
-    status: AgentModelsStatusDto;
-};
-
-/**
  * Which way a logged frame travelled, mirroring [`Message`]'s discriminant.
  */
 export type LogDirectionDto = 'to_server' | 'to_runtime';
@@ -565,11 +616,6 @@ export type LogFrameDto = {
      */
     direction: LogDirectionDto;
 };
-
-/**
- * Harness names accepted by the model discovery endpoint.
- */
-export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
 
 /**
  * Request body for `POST /agent-sessions/preview`.
@@ -706,14 +752,14 @@ export type WithAgentSessionId = {
     id: string;
 };
 
-export type LoadAgentModelsHandlerData = {
-    body: LoadAgentModelsRequest;
+export type DiscoverAgentCapabilitiesHandlerData = {
+    body: DiscoverAgentCapabilitiesRequest;
     path?: never;
     query?: never;
-    url: '/agent-models/load';
+    url: '/agent-capabilities/discover';
 };
 
-export type LoadAgentModelsHandlerErrors = {
+export type DiscoverAgentCapabilitiesHandlerErrors = {
     /**
      * Invalid target
      */
@@ -740,14 +786,14 @@ export type LoadAgentModelsHandlerErrors = {
     504: unknown;
 };
 
-export type LoadAgentModelsHandlerResponses = {
+export type DiscoverAgentCapabilitiesHandlerResponses = {
     /**
-     * Fresh provider model catalog
+     * Fresh provider session capabilities
      */
-    200: LoadAgentModelsResponse;
+    200: DiscoverAgentCapabilitiesResponse;
 };
 
-export type LoadAgentModelsHandlerResponse = LoadAgentModelsHandlerResponses[keyof LoadAgentModelsHandlerResponses];
+export type DiscoverAgentCapabilitiesHandlerResponse = DiscoverAgentCapabilitiesHandlerResponses[keyof DiscoverAgentCapabilitiesHandlerResponses];
 
 export type GetAgentSandboxSizeData = {
     body?: never;

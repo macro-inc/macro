@@ -253,6 +253,9 @@ fn render_part(part: &MessagePart) -> String {
             MessagePart::Control { control, outcome } => {
                 let label = match control {
                     Control::SetModel { model } => format!("model changed to {model}"),
+                    Control::SetConfigOption { config_id, value } => {
+                        format!("{config_id} changed to {value}")
+                    }
                     Control::Compact => "context compacted".to_owned(),
                     Control::Stop => "stop requested".to_owned(),
                 };

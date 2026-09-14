@@ -217,6 +217,20 @@ impl FoldState {
                                 entry.user_id.clone(),
                             )
                         }
+                        AgentAction::SetConfigOption(action) => {
+                            let request_id = match &acp.0 {
+                                RawJsonRpcMessage::Request(request) => Some(&request.id),
+                                _ => None,
+                            };
+                            self.record_control(
+                                Control::SetConfigOption {
+                                    config_id: action.config_id,
+                                    value: action.value,
+                                },
+                                request_id,
+                                entry.user_id.clone(),
+                            )
+                        }
                         AgentAction::Compact => match &acp.0 {
                             RawJsonRpcMessage::Request(request) => {
                                 self.begin_compact(&request.id, entry.user_id.clone())

@@ -3,7 +3,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_harness::domain::model_load::{MacrodModelProbe, ModelProbeError, RawModelProbe};
+use agent_harness::domain::capability_discovery::{
+    CapabilityProbeError, MacrodCapabilityProbe, RawCapabilityProbe,
+};
 use agent_harness::inbound::runtime_gateway::GatewaySender;
 use agent_harness::outbound::forward::COMMAND_CHANNEL;
 use agent_harness::outbound::runtime_registry::RuntimeRegistry;
@@ -53,7 +55,7 @@ impl MacrodModels {
     }
 
     /// Handle a bus event independently of HTTP requests and other commands.
-    pub(crate) async fn observe(&self, event: ModelProbeEvent) -> Result<(), ModelProbeError> {
+    pub(crate) async fn observe(&self, event: ModelProbeEvent) -> Result<(), CapabilityProbeError> {
         match event {
             ModelProbeEvent::ModelsProbed { harness, result } => {
                 // Nobody waiting is normal: all replicas receive the event.
@@ -83,23 +85,23 @@ impl MacrodModels {
         }
     }
 
-    async fn publish(&self, event: ModelProbeEvent) -> Result<(), ModelProbeError> {
+    async fn publish(&self, event: ModelProbeEvent) -> Result<(), CapabilityProbeError> {
         let payload = serde_json::to_string(&event)
-            .map_err(|error| ModelProbeError::Failed(error.to_string()))?;
+            .map_err(|error| CapabilityProbeError::Failed(error.to_string()))?;
         let mut connection = self
             .redis
             .get_multiplexed_async_connection()
             .await
-            .map_err(|error| ModelProbeError::Failed(error.to_string()))?;
+            .map_err(|error| CapabilityProbeError::Failed(error.to_string()))?;
         connection
             .publish::<_, _, ()>(COMMAND_CHANNEL, payload)
             .await
-            .map_err(|error| ModelProbeError::Failed(error.to_string()))
+            .map_err(|error| CapabilityProbeError::Failed(error.to_string()))
     }
 }
 
-impl MacrodModelProbe for MacrodModels {
-    async fn probe(&self, harness: HarnessId) -> Result<RawModelProbe, ModelProbeError> {
+impl MacrodCapabilityProbe for MacrodModels {
+    async fn probe(&self, harness: HarnessId) -> Result<RawCapabilityProbe, CapabilityProbeError> {
         // Observe first, so even an immediate answer cannot be missed.
         // Concurrent callers for this harness may use the same fresh observation.
         let mut observations = self.observations.subscribe();
@@ -109,15 +111,15 @@ impl MacrodModelProbe for MacrodModels {
             let (observed_harness, result) = observations
                 .recv()
                 .await
-                .map_err(|error| ModelProbeError::Failed(error.to_string()))?;
+                .map_err(|error| CapabilityProbeError::Failed(error.to_string()))?;
             if observed_harness != harness {
                 continue;
             }
             return match result {
                 ModelProbeResult::Available { config_options } => {
-                    Ok(RawModelProbe::Options(config_options))
+                    Ok(RawCapabilityProbe::Options(config_options))
                 }
-                ModelProbeResult::Error { message } => Err(ModelProbeError::Failed(message)),
+                ModelProbeResult::Error { message } => Err(CapabilityProbeError::Failed(message)),
             };
         }
     }

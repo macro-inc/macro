@@ -7,6 +7,7 @@
  */
 
 export { ActionLine, type ActionLineProps } from './ActionLine';
+export { AgentEffortSelector } from './AgentEffortSelector';
 export {
   AGENT_INPUT_TEXT_AREA_ID,
   AgentInput,

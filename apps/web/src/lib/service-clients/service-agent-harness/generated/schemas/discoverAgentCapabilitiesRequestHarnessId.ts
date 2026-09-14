@@ -6,6 +6,6 @@
  */
 
 /**
- * Optional provider description.
+ * Required for macrod and forbidden for other targets.
  */
-export type AgentModelDtoDescription = string | null;
+export type DiscoverAgentCapabilitiesRequestHarnessId = string | null;

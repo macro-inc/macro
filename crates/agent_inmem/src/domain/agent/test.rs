@@ -3,8 +3,9 @@ use std::sync::Arc;
 use agent::StreamPart;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, SessionNotification,
-    TextContent,
+    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, SessionConfigKind,
+    SessionConfigOptionCategory, SessionConfigSelectOptions, SessionConfigValueId,
+    SessionNotification, SetSessionConfigOptionRequest, TextContent,
 };
 use agent_client_protocol::{Client, ConnectionTo};
 use rig_agent::agent::StreamingError;
@@ -156,6 +157,57 @@ async fn new_session_advertises_the_engine_supported_models() {
             .map(|model| (model.id.as_str(), model.name.as_str()))
             .collect::<Vec<_>>(),
         vec![("test-model", "test-model"), ("other-model", "other-model")]
+    );
+
+    let effort = config_options
+        .iter()
+        .find(|option| option.id.to_string() == REASONING_EFFORT_CONFIG_ID)
+        .expect("session/new should advertise reasoning effort");
+    assert_eq!(
+        effort.category,
+        Some(SessionConfigOptionCategory::ThoughtLevel)
+    );
+    let SessionConfigKind::Select(effort) = &effort.kind else {
+        panic!("reasoning effort should be a select");
+    };
+    assert_eq!(effort.current_value.to_string(), "high");
+    let SessionConfigSelectOptions::Ungrouped(options) = &effort.options else {
+        panic!("reasoning effort should be ungrouped");
+    };
+    assert_eq!(
+        options
+            .iter()
+            .map(|option| option.value.to_string())
+            .collect::<Vec<_>>(),
+        ["low", "medium", "high"]
+    );
+}
+
+#[tokio::test]
+async fn changing_reasoning_effort_applies_to_the_next_turn() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let (_notifications, _config_options, ()) =
+        with_agent(Arc::clone(&engine), async |connection, session| {
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    REASONING_EFFORT_CONFIG_ID,
+                    SessionConfigValueId::new("low"),
+                ))
+                .block_task()
+                .await
+                .expect("the effort selection should be accepted");
+            connection
+                .send_request(text_prompt(&session, "be quick"))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        })
+        .await;
+
+    assert_eq!(
+        engine.requests()[0].reasoning_effort,
+        agent::ReasoningEffort::Low
     );
 }
 

@@ -2,8 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { useAgentModelsQuery } from '@queries/agents/models';
-import type { LoadAgentModelsResponse } from '@service-agent-harness/generated/schemas';
+import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import {
   fireEvent,
   render,
@@ -89,8 +88,9 @@ vi.mock('@queries/auth/cursor-api-key', () => ({
   }),
 }));
 
-vi.mock('@queries/agents/models', () => ({
-  useAgentModelsQuery: vi.fn(() => mocks.models),
+vi.mock('@queries/agents/capabilities', () => ({
+  discoveredModels: (data: unknown) => data,
+  useAgentCapabilitiesQuery: vi.fn(() => mocks.models),
 }));
 
 vi.mock('@queries/harnesses/harnesses', () => ({
@@ -187,18 +187,19 @@ describe('Harness', () => {
     'keeps settings visible while Cursor models load and after %s',
     async (outcome) => {
       mocks.status.data.registered = true;
-      let resolveModels!: (models: LoadAgentModelsResponse) => void;
+      type ModelResponse = Omit<typeof mocks.models.data, 'models'> & {
+        models: { id: string; name: string; group?: string }[];
+      };
+      let resolveModels!: (models: ModelResponse) => void;
       let rejectModels!: (error: Error) => void;
-      const response = new Promise<LoadAgentModelsResponse>(
-        (resolve, reject) => {
-          resolveModels = resolve;
-          rejectModels = reject;
-        }
-      );
+      const response = new Promise<ModelResponse>((resolve, reject) => {
+        resolveModels = resolve;
+        rejectModels = reject;
+      });
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
-      vi.mocked(useAgentModelsQuery).mockImplementationOnce(() =>
+      vi.mocked(useAgentCapabilitiesQuery).mockImplementationOnce(() =>
         useQuery(() => ({
           queryKey: ['pending-cursor-models'],
           queryFn: () => response,

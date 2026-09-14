@@ -44,6 +44,7 @@ const message = { agentSessionId: 'session-a' } as FoldedMessage;
 const metadata = {
   model: null,
   supportedModels: [],
+  configOptions: [],
   title: null,
   availableCommands: [],
   status: null,

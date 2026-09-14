@@ -7,11 +7,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildAgentModelTargets, useAgentModelsQueries } from './models';
+import {
+  buildAgentCapabilityTargets,
+  useAgentCapabilitiesQueries,
+} from './capabilities';
 
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: {
-    loadAgentModels: vi.fn(),
+    discoverAgentCapabilities: vi.fn(),
   },
 }));
 
@@ -45,27 +48,27 @@ afterEach(() => {
   queryClient.clear();
 });
 
-describe('agent model discovery', () => {
+describe('agent capability discovery', () => {
   it('constructs every available target in parallel without waiting for another target', async () => {
-    const targets = buildAgentModelTargets(true, [
+    const targets = buildAgentCapabilityTargets(true, [
       { id: 'harness-a' },
       { id: 'harness-b' },
     ]);
     const pending = new Promise<never>(() => {});
-    vi.mocked(agentHarnessServiceClient.loadAgentModels).mockReturnValue(
-      pending
-    );
+    vi.mocked(
+      agentHarnessServiceClient.discoverAgentCapabilities
+    ).mockReturnValue(pending);
 
-    renderHook(() => useAgentModelsQueries(() => targets));
+    renderHook(() => useAgentCapabilitiesQueries(() => targets));
 
     await vi.waitFor(() => {
-      expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(
-        4
-      );
+      expect(
+        agentHarnessServiceClient.discoverAgentCapabilities
+      ).toHaveBeenCalledTimes(4);
     });
     expect(
       vi
-        .mocked(agentHarnessServiceClient.loadAgentModels)
+        .mocked(agentHarnessServiceClient.discoverAgentCapabilities)
         .mock.calls.map(([request]) => request)
     ).toEqual([
       { harness: 'in-memory' },
@@ -76,7 +79,7 @@ describe('agent model discovery', () => {
   });
 
   it('omits Cursor when it is not registered', () => {
-    expect(buildAgentModelTargets(false, [{ id: 'harness-a' }])).toEqual([
+    expect(buildAgentCapabilityTargets(false, [{ id: 'harness-a' }])).toEqual([
       { harness: 'in-memory' },
       { harness: 'macrod', harnessId: 'harness-a' },
     ]);

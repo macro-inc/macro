@@ -20,6 +20,8 @@ pub(crate) struct ScriptedEngine {
 pub(crate) struct RecordedTurn {
     /// Model the turn was to run on.
     pub(crate) model: String,
+    /// Reasoning effort the turn was to use.
+    pub(crate) reasoning_effort: agent::ReasoningEffort,
     /// The conversation, flattened to text per message.
     pub(crate) messages: Vec<String>,
     /// The session's instructions, as handed to the engine.
@@ -52,6 +54,7 @@ impl TurnEngine for ScriptedEngine {
             .expect("requests lock")
             .push(RecordedTurn {
                 model: request.model.clone(),
+                reasoning_effort: request.reasoning_effort,
                 messages: request
                     .messages
                     .iter()

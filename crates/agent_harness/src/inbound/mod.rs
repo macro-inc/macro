@@ -3,7 +3,7 @@
 //! Thin by construction - decode the broker message, ask the domain whether it
 //! is addressed to us, hand one value inward. No policy lives here.
 
+/// Authenticated ACP capability discovery.
+pub mod capability_discovery;
 pub mod kafka;
-/// Authenticated model discovery.
-pub mod model_load;
 pub mod runtime_gateway;

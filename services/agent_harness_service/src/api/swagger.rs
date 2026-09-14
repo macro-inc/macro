@@ -1,8 +1,8 @@
 //! OpenAPI document for the agent harness service's session routes.
 
-use agent_harness::inbound::model_load::{
-    self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
-    ModelHarnessDto,
+use agent_harness::inbound::capability_discovery::{
+    self, AgentConfigKindDto, AgentConfigOptionDto, AgentConfigSelectOptionDto,
+    CapabilityHarnessDto, DiscoverAgentCapabilitiesRequest, DiscoverAgentCapabilitiesResponse,
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{SandboxSize, SessionBot};
@@ -50,7 +50,7 @@ impl Modify for SecurityAddon {
         axum_router::put_agent_session_sandbox_size_handler,
         axum_router::get_agent_sandbox_size_handler,
         axum_router::put_agent_sandbox_size_handler,
-        model_load::load_agent_models_handler,
+        capability_discovery::discover_agent_capabilities_handler,
     ),
     components(schemas(
         CreateAgentSessionRequest,
@@ -79,15 +79,16 @@ impl Modify for SecurityAddon {
         LogDirectionDto,
         SandboxSize,
         SandboxSizeBody,
-        LoadAgentModelsRequest,
-        LoadAgentModelsResponse,
-        AgentModelDto,
-        AgentModelsStatusDto,
-        ModelHarnessDto,
+        DiscoverAgentCapabilitiesRequest,
+        DiscoverAgentCapabilitiesResponse,
+        AgentConfigOptionDto,
+        AgentConfigKindDto,
+        AgentConfigSelectOptionDto,
+        CapabilityHarnessDto,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),
-        (name = "agent-models", description = "Fresh provider model discovery")
+        (name = "agent-capabilities", description = "Fresh provider capability discovery")
     )
 )]
 pub struct ApiDoc;

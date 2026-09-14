@@ -142,6 +142,14 @@ export type Control =
       /**  The model slug requested by the caller. */
       model: string;
     }
+  /**  The runtime was asked to change an advertised session setting. */
+  | {
+      kind: 'set_config_option';
+      /**  Opaque config id supplied by the runtime. */
+      config_id: string;
+      /**  Opaque select value requested by the caller. */
+      value: string;
+    }
   /**  The runtime was asked to compact its context. */
   | { kind: 'compact' }
   /**  The runtime was asked to stop its current work. */
@@ -718,6 +726,47 @@ export type PlanEntryStatus =
   /**  Successfully completed. */
   | 'completed';
 
+/**  The supported ACP session-config shapes. */
+export type SessionConfigKind =
+  /**  A single-value selector. */
+  | {
+      type: 'select';
+      /**  The value currently selected by the agent. */
+      currentValue: string;
+      /**  Choices in the order advertised by the agent. */
+      options: SessionConfigSelectOption[];
+    }
+  /**  An on/off setting. */
+  | {
+      type: 'boolean';
+      /**  The value currently selected by the agent. */
+      currentValue: boolean;
+    };
+
+/**  One session setting advertised by an ACP agent. */
+export type SessionConfigOption = {
+  /**  Opaque id to return in `session/set_config_option`. */
+  id: string;
+  /**  Human-readable label supplied by the agent. */
+  name: string;
+  /**  Optional explanatory copy supplied by the agent. */
+  description: string | null;
+  /**  ACP semantic category, such as `model` or `thought_level`. */
+  category: string | null;
+} & SessionConfigKind;
+
+/**  One value in an ACP select option. */
+export type SessionConfigSelectOption = {
+  /**  Opaque value to return in `session/set_config_option`. */
+  value: string;
+  /**  Human-readable label supplied by the agent. */
+  name: string;
+  /**  Optional explanatory copy supplied by the agent. */
+  description: string | null;
+  /**  Optional group heading supplied by the agent. */
+  group: string | null;
+};
+
 /**
  *  Session-level state derived from the log, latest-wins and carried whole.
  *  Fields start absent and fill in as the log reveals them.
@@ -734,6 +783,11 @@ export type SessionMetadata = {
   model: string | null;
   /**  The models the runtime offers, in the order it listed them. */
   supportedModels: ModelOption[];
+  /**
+   *  Every setting the ACP agent currently advertises. The list is replaced
+   *  whole whenever ACP returns a new `configOptions` snapshot.
+   */
+  configOptions: SessionConfigOption[];
   /**  Session title, when the harness reports one. */
   title: string | null;
   /**

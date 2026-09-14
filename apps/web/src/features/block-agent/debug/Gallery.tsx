@@ -110,7 +110,7 @@ function ModelSelectorDemo() {
   return (
     <AgentInput
       onSend={(content) => console.info('[gallery] send', content)}
-      modelControl={
+      sessionControls={
         <AgentModelSelector
           model={model()}
           options={FIXTURE_MODELS}

@@ -1,6 +1,6 @@
 //! Authorization adapter for registered harness model discovery.
 
-use agent_harness::domain::model_load::HarnessModelAccess;
+use agent_harness::domain::capability_discovery::HarnessCapabilityAccess;
 use harness_id::HarnessId;
 use harnesses::domain::ports::{HarnessRepo, HarnessService};
 use harnesses::domain::service::HarnessServiceImpl;
@@ -20,7 +20,7 @@ impl<Repo> VisibleHarnessAccess<Repo> {
     }
 }
 
-impl<Repo> HarnessModelAccess for VisibleHarnessAccess<Repo>
+impl<Repo> HarnessCapabilityAccess for VisibleHarnessAccess<Repo>
 where
     Repo: HarnessRepo,
 {

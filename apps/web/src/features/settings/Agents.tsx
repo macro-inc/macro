@@ -22,10 +22,11 @@ import {
   useUpdateAgentMutation,
 } from '@queries/agents/agents';
 import {
-  type AgentModelTarget,
-  buildAgentModelTargets,
-  useAgentModelsQueries,
-} from '@queries/agents/models';
+  type AgentCapabilityTarget,
+  buildAgentCapabilityTargets,
+  discoveredModels,
+  useAgentCapabilitiesQueries,
+} from '@queries/agents/capabilities';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
@@ -67,7 +68,7 @@ type ConnectedHarness = {
   id: string;
   name: string;
   kind: 'builtin' | 'macrod';
-  target: AgentModelTarget;
+  target: AgentCapabilityTarget;
   connected?: boolean;
 };
 
@@ -118,7 +119,7 @@ export function Agents() {
   const harnessesQuery = useHarnessesQuery();
   const connectedHarnesses = (): readonly ConnectedHarness[] => {
     const harnesses = harnessesQuery.isSuccess ? harnessesQuery.data : [];
-    return buildAgentModelTargets(cursorConnected(), harnesses).map(
+    return buildAgentCapabilityTargets(cursorConnected(), harnesses).map(
       (target) => {
         if (target.harness === 'in-memory') return IN_MEMORY_HARNESS;
         if (target.harness === 'cursor') {
@@ -543,7 +544,7 @@ function AgentDialog(props: {
       props.connectedHarnesses[0]?.id ??
       ''
   );
-  const modelQueries = useAgentModelsQueries(() =>
+  const capabilityQueries = useAgentCapabilitiesQueries(() =>
     props.connectedHarnesses.map((harness) => harness.target)
   );
   const selectedHarness = () =>
@@ -552,11 +553,11 @@ function AgentDialog(props: {
     const index = props.connectedHarnesses.findIndex(
       (harness) => harness.id === id
     );
-    return index >= 0 ? modelQueries[index] : undefined;
+    return index >= 0 ? capabilityQueries[index] : undefined;
   };
   const modelDataForHarness = (id: string) => {
     const query = modelQueryForHarness(id);
-    return query?.isSuccess ? query.data : undefined;
+    return query?.isSuccess ? discoveredModels(query.data) : undefined;
   };
   const preferredModelId = (id: string) => {
     const data = modelDataForHarness(id);
@@ -584,9 +585,10 @@ function AgentDialog(props: {
     if (data?.status !== 'available') return [];
 
     const selected = selectedDefaultModelId();
+    const agent = props.agent;
     const savedModel =
-      props.agent?.default_model === selected &&
-      (props.agent.harness_id ?? props.agent.harness) === harnessId();
+      agent?.default_model === selected &&
+      (agent.harness_id ?? agent.harness) === harnessId();
     if (
       selected.length === 0 ||
       data.models.some((model) => model.id === selected)

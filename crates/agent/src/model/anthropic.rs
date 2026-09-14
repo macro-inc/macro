@@ -1,3 +1,4 @@
+use crate::model::ReasoningEffort;
 use crate::model::types::Model;
 use rig_core::{client::CompletionClient, providers::anthropic};
 use std::sync::Arc;
@@ -38,23 +39,42 @@ impl<'a> AnthropicModel<'a> {
     ///
     /// `temperature` is never set: it is rejected on Opus 4.7+ and constrained
     /// to 1 with extended thinking elsewhere, so we let the API default apply.
-    pub fn thinking_params(&self) -> Option<serde_json::Value> {
+    pub fn thinking_params(
+        &self,
+        reasoning_effort: Option<ReasoningEffort>,
+    ) -> Option<serde_json::Value> {
         let model = self.model.name().to_lowercase();
 
-        if model.contains("opus")
+        let mut params = if model.contains("opus")
             || model.contains("fable")
             || model.contains("mythos")
             || model.contains("sonnet")
         {
-            Some(serde_json::json!({
+            serde_json::json!({
                 "thinking": { "type": "adaptive", "display": "summarized" }
-            }))
+            })
         } else if model.contains("haiku") {
-            Some(serde_json::json!({
+            serde_json::json!({
                 "thinking": { "type": "enabled", "budget_tokens": 10_000 }
-            }))
+            })
         } else {
-            None
+            serde_json::json!({})
+        };
+
+        // Claude's output effort is supported by the current Opus, Sonnet,
+        // Fable, and Mythos families. Haiku does not accept the field, so its
+        // existing thinking configuration remains unchanged.
+        let supports_effort = model.contains("opus")
+            || model.contains("fable")
+            || model.contains("mythos")
+            || model.contains("sonnet");
+        if supports_effort && let Some(effort) = reasoning_effort {
+            params["output_config"] = serde_json::json!({ "effort": effort.as_str() });
         }
+
+        params
+            .as_object()
+            .is_some_and(|params| !params.is_empty())
+            .then_some(params)
     }
 }

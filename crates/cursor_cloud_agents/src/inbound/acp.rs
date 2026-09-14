@@ -29,7 +29,9 @@
 mod test;
 
 use crate::domain::model::{McpHeader, McpServer, McpTransport};
-use crate::domain::model_options::{MODEL_CONFIG_ID, cursor_model_config_options};
+use crate::domain::model_options::{
+    MODEL_CONFIG_ID, REASONING_EFFORT_CONFIG_ID, cursor_session_config_options,
+};
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
 use crate::domain::service::CursorSessionService;
 use agent_client_protocol::schema::ProtocolVersion;
@@ -451,15 +453,19 @@ where
                 let service = Arc::clone(&service);
                 async move |request: SetSessionConfigOptionRequest, responder, _connection| {
                     let session = request.session_id;
-                    // Only the model is configurable, so anything else is the
-                    // client naming an option this agent never advertised.
-                    if request.config_id.to_string() != MODEL_CONFIG_ID {
-                        return responder.respond_with_error(AcpError::invalid_params());
-                    }
                     let Some(model) = request.value.as_value_id() else {
                         return responder.respond_with_error(AcpError::invalid_params());
                     };
-                    if let Err(error) = service.set_model(&session, &model.to_string()).await {
+                    let result = match request.config_id.to_string().as_str() {
+                        MODEL_CONFIG_ID => service.set_model(&session, &model.to_string()).await,
+                        REASONING_EFFORT_CONFIG_ID => {
+                            service
+                                .set_reasoning_effort(&session, &model.to_string())
+                                .await
+                        }
+                        _ => return responder.respond_with_error(AcpError::invalid_params()),
+                    };
+                    if let Err(error) = result {
                         // The id is the client's to get right, and the error
                         // names what this account may choose instead.
                         tracing::warn!(error = %error, "could not set the session model");
@@ -497,7 +503,7 @@ where
         .await
 }
 
-/// The session's config options: the model select, and nothing else yet.
+/// The session's config options: model and any effort values its variant supports.
 ///
 /// This is the whole of how a client learns which models exist and which one a
 /// session is on — ACP carries it as `configOptions` on the `session/new`,
@@ -507,8 +513,8 @@ where
 /// One entry per model, using Cursor's own default variant, rather than one per
 /// variant: `claude-opus-4-8` alone offers forty, and a picker listing hundreds
 /// of near-identical rows is worse than one listing the models. Exposing the
-/// variant parameters (`effort`, `reasoning`, `fast`) is a separate control and
-/// a separate change.
+/// reasoning variant is projected as a separate ACP thought-level control;
+/// unrelated variant parameters remain on Cursor's selected default.
 ///
 /// The entries go out grouped by family ([`ModelFamily`]) — ACP's select
 /// options may be headed groups — so a client can show `Claude Opus` once with
@@ -536,7 +542,7 @@ where
             return Vec::new();
         }
     };
-    let current = match service.session_model_id(session).await {
+    let current = match service.session_model(session).await {
         Ok(current) => current,
         Err(error) => {
             tracing::warn!(error = %error, "could not read the session's model");
@@ -556,7 +562,7 @@ where
     //
     // If Cursor ever drops the entry there is no honest resting value, and no
     // picker beats one resting on a guess.
-    cursor_model_config_options(&models, current)
+    cursor_session_config_options(&models, current.as_ref())
 }
 
 /// Concatenate a prompt's content blocks into the single string Cursor takes.

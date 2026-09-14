@@ -102,7 +102,7 @@ async fn probe_through_bus(remote: bool) {
     .await
     .expect("probe crosses Redis and returns");
 
-    let RawModelProbe::Options(actual) = result.unwrap() else {
+    let RawCapabilityProbe::Options(actual) = result.unwrap() else {
         panic!("the runtime advertised options");
     };
     assert_eq!(actual, options());
@@ -141,7 +141,7 @@ async fn remote_probe_errors_reach_the_waiting_replica() {
     })
     .await
     .unwrap();
-    assert!(matches!(result, Err(ModelProbeError::Failed(_))));
+    assert!(matches!(result, Err(CapabilityProbeError::Failed(_))));
 }
 
 #[tokio::test]
@@ -205,6 +205,6 @@ async fn concurrent_callers_can_observe_the_same_fresh_harness_result() {
     })
     .await
     .unwrap();
-    assert!(matches!(one, Ok(RawModelProbe::Options(_))));
-    assert!(matches!(two, Ok(RawModelProbe::Options(_))));
+    assert!(matches!(one, Ok(RawCapabilityProbe::Options(_))));
+    assert!(matches!(two, Ok(RawCapabilityProbe::Options(_))));
 }

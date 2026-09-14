@@ -3,6 +3,7 @@
 use crate::domain::harness::ToolFrame;
 use crate::domain::model::{AvailableCommand, Harness};
 use crate::domain::model_selection::model_selection;
+use crate::domain::session_config::session_config_options;
 use agent_client_protocol::schema::MaybeUndefined;
 use agent_client_protocol::schema::v1::{
     AvailableCommandInput, AvailableCommandsUpdate as AcpAvailableCommandsUpdate,
@@ -91,15 +92,20 @@ impl FoldState {
 
     /// Update the metadata's model fields from a fresh config-options list.
     pub(super) fn apply_config_options(&mut self, options: Vec<SessionConfigOption>) -> bool {
-        let Some(selection) = model_selection(&options) else {
-            return false;
-        };
-
-        let model = Some(selection.current);
-        let changed =
-            self.metadata.model != model || self.metadata.supported_models != selection.options;
+        let projected = session_config_options(&options);
+        let selection = model_selection(&options);
+        let model = selection
+            .as_ref()
+            .map(|selection| selection.current.clone());
+        let supported_models = selection
+            .map(|selection| selection.options)
+            .unwrap_or_default();
+        let changed = self.metadata.config_options != projected
+            || self.metadata.model != model
+            || self.metadata.supported_models != supported_models;
+        self.metadata.config_options = projected;
         self.metadata.model = model;
-        self.metadata.supported_models = selection.options;
+        self.metadata.supported_models = supported_models;
         changed
     }
 

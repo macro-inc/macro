@@ -6,6 +6,6 @@
  */
 
 /**
- * Required for macrod and forbidden for other targets.
+ * Optional explanatory copy.
  */
-export type LoadAgentModelsRequestHarnessId = string | null;
+export type AgentConfigOptionDtoAllOfDescription = string | null;

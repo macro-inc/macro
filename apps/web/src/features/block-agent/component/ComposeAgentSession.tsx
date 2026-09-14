@@ -29,7 +29,10 @@ import {
   useCreateAgentSessionMutation,
 } from '@queries/agent-session/mutations';
 import { useAgentsQuery } from '@queries/agents/agents';
-import { useAgentModelsQuery } from '@queries/agents/models';
+import {
+  discoveredModels,
+  useAgentCapabilitiesQuery,
+} from '@queries/agents/capabilities';
 import {
   useCursorApiKeyStatusQuery,
   useCursorModelsQuery,
@@ -45,6 +48,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { createRecentAgentSelections } from '../context/recent-agent-selections';
+import { AgentEffortSelector } from '../ui/AgentEffortSelector';
 import { AgentPicker } from './AgentPicker';
 import {
   agentRuntimeDescription,
@@ -106,8 +110,10 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
     !cursorStatus.isPlaceholderData &&
     !cursorStatus.data.registered;
   const cursorModels = useCursorModelsQuery(cursorConnected);
-  const macroDefaults = useAgentModelsQuery(() => ({ harness: 'in-memory' }));
-  const cursorDefaults = useAgentModelsQuery(
+  const macroCapabilities = useAgentCapabilitiesQuery(() => ({
+    harness: 'in-memory',
+  }));
+  const cursorCapabilities = useAgentCapabilitiesQuery(
     () => ({ harness: 'cursor' }),
     cursorConnected
   );
@@ -119,6 +125,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   const [prompt, setPrompt] = createSignal('');
   const [personaId, setPersonaId] = createSignal(MACRO_PERSONA_ID);
   const [modelOverride, setModelOverride] = createSignal('');
+  const [effortOverride, setEffortOverride] = createSignal('');
   const [submitting, setSubmitting] = createSignal(false);
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
@@ -126,6 +133,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
     'live' | 'background' | undefined
   >();
   let appliedModel: string | undefined;
+  let appliedEffort: string | undefined;
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   let promptRef: HTMLTextAreaElement | undefined;
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
@@ -140,8 +148,8 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
       name: MACRO_AGENT_NAME,
       handle: MACRO_AGENT_HANDLE,
       harness: 'in-memory',
-      defaultModel: macroDefaults.isSuccess
-        ? (macroDefaults.data.currentModel ?? undefined)
+      defaultModel: macroCapabilities.isSuccess
+        ? (discoveredModels(macroCapabilities.data).currentModel ?? undefined)
         : undefined,
     },
     {
@@ -152,8 +160,9 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
       harness: 'cursor',
       defaultModel: cursorStatus.isSuccess
         ? (cursorStatus.data.defaultModelId ??
-          (cursorDefaults.isSuccess
-            ? (cursorDefaults.data.currentModel ?? undefined)
+          (cursorCapabilities.isSuccess
+            ? (discoveredModels(cursorCapabilities.data).currentModel ??
+              undefined)
             : undefined))
         : undefined,
       unavailableReason: cursorConnected()
@@ -182,6 +191,17 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   ]);
   const selectedPersona = () =>
     personas().find((persona) => persona.id === personaId()) ?? personas()[0];
+  const selectedCapabilities = () =>
+    selectedPersona()?.harness === 'cursor'
+      ? cursorCapabilities.data
+      : macroCapabilities.data;
+  const effortOption = () => {
+    const options = selectedCapabilities()?.configOptions ?? [];
+    const option =
+      options.find((item) => item.category === 'thought_level') ??
+      options.find((item) => item.id === 'reasoning_effort');
+    return option?.type === 'select' ? option : undefined;
+  };
   const runtimeDescription = () => {
     const persona = selectedPersona();
     return agentRuntimeDescription(
@@ -207,7 +227,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
     shortlistModelOptions(selectedPersona(), availableModels());
   const modelsForPersona = (persona: PersonaOption): ModelOption[] => {
     const defaults =
-      persona.harness === 'cursor' ? cursorDefaults : macroDefaults;
+      persona.harness === 'cursor' ? cursorCapabilities : macroCapabilities;
     const models =
       persona.harness === 'cursor'
         ? cursorModels.isSuccess
@@ -217,11 +237,11 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
             }))
           : []
         : IN_MEMORY_MODELS;
-    return defaults.isSuccess
-      ? [
-          ...models,
-          ...defaults.data.models.map(({ id, name }) => ({ id, name })),
-        ]
+    const discovered = defaults.isSuccess
+      ? discoveredModels(defaults.data)
+      : undefined;
+    return discovered
+      ? [...models, ...discovered.models.map(({ id, name }) => ({ id, name }))]
       : models;
   };
 
@@ -242,6 +262,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
     if (submitting() || sessionId()) return;
     setPersonaId(id);
     setModelOverride('');
+    setEffortOverride('');
   };
   const openSession = (id: string) => {
     close();
@@ -258,6 +279,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
     setSubmitting(true);
     setError(undefined);
     const model = modelOverride();
+    const effort = effortOverride();
     const firstPrompt = prompt().trim();
     let id = sessionId();
     let failureMessage =
@@ -281,6 +303,20 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
           request: { type: 'setModel', model },
         });
         appliedModel = model;
+      }
+      const effortConfig = effortOption();
+      if (effortConfig && effort && effort !== appliedEffort) {
+        failureMessage =
+          'Session created, but the reasoning effort could not be changed. Retry or open the session.';
+        await controlMutation.mutateAsync({
+          sessionId: id,
+          request: {
+            type: 'setConfigOption',
+            configId: effortConfig.id,
+            value: effort,
+          },
+        });
+        appliedEffort = effort;
       }
       if (firstPrompt) {
         failureMessage =
@@ -461,6 +497,16 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
                 disabled={submitting() || !!sessionId()}
                 onSelect={setModelOverride}
               />
+              <Show when={effortOption()}>
+                {(option) => (
+                  <AgentEffortSelector
+                    current={effortOverride() || option().currentValue}
+                    options={option().options}
+                    disabled={submitting() || !!sessionId()}
+                    onSelect={setEffortOverride}
+                  />
+                )}
+              </Show>
             </Suspense>
           </div>
 

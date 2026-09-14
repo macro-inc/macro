@@ -152,6 +152,12 @@ export function AgentSessionProvider(
     sessionId,
     working,
     model: () => feed.metadata()?.model,
+    configValue: (configId) => {
+      const option = feed
+        .metadata()
+        ?.configOptions.find((option) => option.id === configId);
+      return option?.type === 'select' ? option.currentValue : undefined;
+    },
     controlOutcome: (requestId) => controlOutcome(feed.messages(), requestId),
   });
   const pendingElicitation = () =>

@@ -1,7 +1,10 @@
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import type { CreateAgentSessionResponse } from '@service-agent-harness/generated/schemas';
+import type {
+  AgentConfigOptionDto,
+  CreateAgentSessionResponse,
+} from '@service-agent-harness/generated/schemas';
 import {
   fireEvent,
   render,
@@ -30,6 +33,10 @@ const hotkeys = vi.hoisted(() => ({
 }));
 const toasts = vi.hoisted(() => ({ success: vi.fn() }));
 const cmd = vi.hoisted(() => ({ held: false }));
+const capabilities = vi.hoisted(() => ({
+  configOptions: [] as AgentConfigOptionDto[],
+}));
+const storedValues = new Map<string, string>();
 
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'test-user',
@@ -125,12 +132,17 @@ vi.mock('@queries/agents/agents', () => ({
     ],
   }),
 }));
-vi.mock('@queries/agents/models', () => ({
-  useAgentModelsQuery: () => ({
+vi.mock('@queries/agents/capabilities', () => ({
+  discoveredModels: (data: { currentModel?: string; models: unknown[] }) =>
+    data,
+  useAgentCapabilitiesQuery: () => ({
     isSuccess: true,
     data: {
       currentModel: 'anthropic/claude-sonnet-5',
       models: [{ id: 'anthropic/claude-sonnet-5', name: 'Sonnet 5' }],
+      get configOptions() {
+        return capabilities.configOptions;
+      },
     },
   }),
 }));
@@ -222,7 +234,17 @@ beforeEach(() => {
   cursorConnection.registered = true;
   cursorConnection.isPlaceholderData = false;
   cmd.held = false;
-  window.localStorage.clear();
+  capabilities.configOptions = [];
+  storedValues.clear();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      clear: () => storedValues.clear(),
+      getItem: (key: string) => storedValues.get(key) ?? null,
+      removeItem: (key: string) => storedValues.delete(key),
+      setItem: (key: string, value: string) => storedValues.set(key, value),
+    },
+  });
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   client = new QueryClient();
@@ -474,6 +496,43 @@ describe('agent session creation', () => {
       { type: 'prompt', prompt: 'Fix the tests' }
     );
     expect(agentHarnessServiceClient.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies discovered reasoning effort before the first prompt', async () => {
+    capabilities.configOptions = [
+      {
+        id: 'reasoning_effort',
+        name: 'Reasoning effort',
+        category: 'thought_level',
+        type: 'select',
+        currentValue: 'medium',
+        options: [
+          { value: 'medium', name: 'Medium' },
+          { value: 'high', name: 'High' },
+        ],
+      },
+    ];
+    mount();
+    enterPrompt();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Medium' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'High' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start session' }));
+
+    await waitFor(() => expect(navigation.open).toHaveBeenCalled());
+    expect(agentHarnessServiceClient.control).toHaveBeenNthCalledWith(
+      1,
+      sessionId,
+      {
+        type: 'setConfigOption',
+        configId: 'reasoning_effort',
+        value: 'high',
+      }
+    );
+    expect(agentHarnessServiceClient.control).toHaveBeenNthCalledWith(
+      2,
+      sessionId,
+      { type: 'prompt', prompt: 'Fix the tests' }
+    );
   });
 
   it('retries a failed prompt on the already-created session', async () => {

@@ -2,7 +2,9 @@
 
 use std::sync::Arc;
 
-use agent_harness::domain::model_load::{InMemoryModelProbe, ModelProbeError, RawModelProbe};
+use agent_harness::domain::capability_discovery::{
+    CapabilityProbeError, InMemoryCapabilityProbe, RawCapabilityProbe,
+};
 use agent_inmem::domain::engine::TurnEngine;
 
 /// In-memory catalog adapter over the same engine used for turns.
@@ -18,15 +20,16 @@ impl InMemoryModels {
     }
 }
 
-impl InMemoryModelProbe for InMemoryModels {
-    async fn probe(&self) -> Result<RawModelProbe, ModelProbeError> {
+impl InMemoryCapabilityProbe for InMemoryModels {
+    async fn probe(&self) -> Result<RawCapabilityProbe, CapabilityProbeError> {
         let Some(engine) = &self.engine else {
-            return Ok(RawModelProbe::Unsupported);
+            return Ok(RawCapabilityProbe::Unsupported);
         };
-        Ok(RawModelProbe::Options(
-            agent_inmem::domain::model_options::model_config_options(
+        Ok(RawCapabilityProbe::Options(
+            agent_inmem::domain::model_options::session_config_options(
                 &self.current,
                 engine.supported_models(),
+                Default::default(),
             ),
         ))
     }

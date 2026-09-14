@@ -6,13 +6,13 @@
  */
 
 /**
- * Harness names accepted by the model discovery endpoint.
+ * Harness names accepted by the capability-discovery endpoint.
  */
-export type ModelHarnessDto =
-  (typeof ModelHarnessDto)[keyof typeof ModelHarnessDto];
+export type CapabilityHarnessDto =
+  (typeof CapabilityHarnessDto)[keyof typeof CapabilityHarnessDto];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ModelHarnessDto = {
+export const CapabilityHarnessDto = {
   'in-memory': 'in-memory',
   cursor: 'cursor',
   macrod: 'macrod',

@@ -5,6 +5,7 @@
 //! reattach within one process lifetime, and a cold attach after a restart
 //! rebuilds it from the frame log (see [`crate::domain::replay`]).
 
+use agent::ReasoningEffort;
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::model::AgentSessionId;
@@ -29,6 +30,8 @@ pub struct SessionState {
     pub acp_session_id: Option<SessionId>,
     /// Model id turns run on; `session/set_config_option` moves it.
     pub model: String,
+    /// Reasoning effort applied to subsequent turns.
+    pub reasoning_effort: ReasoningEffort,
     /// Who this agent is, snapshotted from the session's bot at attach.
     pub identity: Option<AgentIdentity>,
     /// Instructions every turn runs under, snapshotted from the session row
@@ -47,6 +50,7 @@ impl SessionState {
         Self {
             acp_session_id: None,
             model,
+            reasoning_effort: ReasoningEffort::default(),
             identity: None,
             instructions: None,
             history: Vec::new(),

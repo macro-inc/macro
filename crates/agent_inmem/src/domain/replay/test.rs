@@ -1,6 +1,6 @@
 use agent_client_protocol::schema::v1::{
-    ContentChunk, SessionId, TextContent, ToolCall as AcpToolCall, ToolCallStatus, ToolCallUpdate,
-    ToolCallUpdateFields,
+    ContentChunk, SessionConfigValueId, SessionId, SetSessionConfigOptionRequest, TextContent,
+    ToolCall as AcpToolCall, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields,
 };
 use agent_runtime_protocol::domain::schema::v0::AcpMessage;
 
@@ -37,6 +37,22 @@ fn update_frame(update: SessionUpdate) -> Message {
     }))
     .expect("a notification frame should deserialize");
     Message::ToServer(ToServerMessage::Acp(AcpMessage(raw)))
+}
+
+fn config_frame(config_id: &str, value: &str) -> Message {
+    let request = SetSessionConfigOptionRequest::new(
+        acp_session(),
+        config_id.to_owned(),
+        SessionConfigValueId::new(value.to_owned()),
+    );
+    let raw: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "session/set_config_option",
+        "params": serde_json::to_value(request).expect("a config change should serialize"),
+    }))
+    .expect("a request frame should deserialize");
+    Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(raw)))
 }
 
 fn message_chunk(text: &str) -> SessionUpdate {
@@ -162,4 +178,17 @@ fn a_call_the_log_never_answered_is_closed_rather_than_left_dangling() {
 #[test]
 fn an_empty_log_replays_to_an_empty_conversation() {
     assert!(replay_history(Vec::new()).is_empty());
+}
+
+#[test]
+fn the_last_valid_reasoning_effort_replays() {
+    let frames = vec![
+        config_frame(REASONING_EFFORT_CONFIG_ID, "low"),
+        config_frame("another_option", "anything"),
+        config_frame(REASONING_EFFORT_CONFIG_ID, "invalid"),
+        config_frame(REASONING_EFFORT_CONFIG_ID, "medium"),
+    ];
+
+    assert_eq!(replay_reasoning_effort(&frames), ReasoningEffort::Medium);
+    assert_eq!(replay_reasoning_effort(&[]), ReasoningEffort::High);
 }

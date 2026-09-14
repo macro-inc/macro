@@ -1,6 +1,6 @@
-use crate::model::PredefinedModel;
 use crate::model::router::*;
 use crate::model::types::Model;
+use crate::model::{PredefinedModel, ReasoningEffort};
 use rig_core::providers::{anthropic, openai};
 
 fn test_router() -> ModelRouter {
@@ -72,4 +72,40 @@ fn registered_openai_compatible_provider_routes_to_chat_completions() {
         router.route("local/llama-3.3-70b").unwrap(),
         RoutedModel::OpenAiChatCompletions(_)
     ));
+}
+
+#[test]
+fn selected_effort_is_mapped_to_each_provider_request_shape() {
+    let router = test_router();
+
+    let RoutedModel::Anthropic(anthropic) = router.route("anthropic/claude-sonnet-5").unwrap()
+    else {
+        panic!("sonnet should use the native Anthropic client");
+    };
+    let params = anthropic
+        .thinking_params(Some(ReasoningEffort::Low))
+        .expect("sonnet supports thinking and effort");
+    assert_eq!(params["thinking"]["type"], "adaptive");
+    assert_eq!(params["output_config"]["effort"], "low");
+
+    let RoutedModel::OpenAiResponses(openai) = router.route("openai/gpt-5.5").unwrap() else {
+        panic!("GPT-5.5 should use OpenAI Responses");
+    };
+    let params = openai
+        .thinking_params(Some(ReasoningEffort::Medium))
+        .expect("GPT-5.5 supports reasoning effort");
+    assert_eq!(params["reasoning"]["effort"], "medium");
+}
+
+#[test]
+fn unsupported_anthropic_models_do_not_receive_effort() {
+    let router = test_router();
+    let RoutedModel::Anthropic(haiku) = router.route("anthropic/claude-haiku-4-5").unwrap() else {
+        panic!("haiku should use the native Anthropic client");
+    };
+
+    let params = haiku
+        .thinking_params(Some(ReasoningEffort::Low))
+        .expect("haiku retains its thinking configuration");
+    assert!(params.get("output_config").is_none());
 }

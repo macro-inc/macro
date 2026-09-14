@@ -15,17 +15,19 @@
 //! and a tool call is rebuilt under the display title it was streamed with,
 //! which for the Macro product toolset is the tool name itself.
 
+use agent::ReasoningEffort;
 use agent::types::AssistantMessagePart;
 use agent_client_protocol::schema::v1::{
     ContentBlock, PromptRequest, SessionNotification, SessionUpdate, ToolCallStatus,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
-use agent_runtime_protocol::domain::action::COMPACT_COMMAND;
+use agent_runtime_protocol::domain::action::{AgentSetConfigOptionAction, COMPACT_COMMAND};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::model::Message;
 use futures::future::BoxFuture;
 
 use crate::domain::agent::close_dangling_tool_calls;
+use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::HistoryEntry;
 
 #[cfg(test)]
@@ -109,6 +111,26 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
     }
     close_turn(&mut history, &mut open);
     history
+}
+
+/// Rebuild the last valid reasoning-effort selection from durable frames.
+#[must_use]
+pub fn replay_reasoning_effort(frames: &[Message]) -> ReasoningEffort {
+    frames
+        .iter()
+        .fold(ReasoningEffort::default(), |current, frame| {
+            let Message::ToRuntime(frame) = frame else {
+                return current;
+            };
+            let Some((_session_id, action)) = AgentSetConfigOptionAction::from_runtime(frame)
+            else {
+                return current;
+            };
+            if action.config_id != REASONING_EFFORT_CONFIG_ID {
+                return current;
+            }
+            action.value.parse().unwrap_or(current)
+        })
 }
 
 /// Fold one `session/update` back into the open turn's parts.

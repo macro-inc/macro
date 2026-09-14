@@ -180,6 +180,14 @@ function partActivity(part: MessagePart): MagicChipActivity {
       detail: part.control.model,
       busy: false,
     }))
+    .with(
+      { kind: 'control', control: { kind: 'set_config_option' } },
+      (part) => ({
+        label: 'Session setting changed',
+        detail: `${part.control.config_id}: ${part.control.value}`,
+        busy: false,
+      })
+    )
     .with({ kind: 'control', control: { kind: 'compact' } }, () => ({
       label: 'Context compacted',
       busy: false,

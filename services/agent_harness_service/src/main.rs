@@ -29,16 +29,16 @@ use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, WithMacroMcp};
 use agent_egress::outbound::mcp_credentials::PipedreamMcpCredentials;
 use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_fold::domain::service::FoldedMessageService;
+use agent_harness::domain::capability_discovery::AgentCapabilitiesServiceImpl;
 use agent_harness::domain::model::{
     AgentKind, AgentRuntimeConfig, HarnessCommand, HarnessDefaults, SessionDefaults,
 };
-use agent_harness::domain::model_load::AgentModelsServiceImpl;
 use agent_harness::domain::ports::AgentRuntimeDirectory as _;
 use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::domain::trigger_router::{
     RoutedTrigger, agent_trigger_bot_id, route_agent_trigger,
 };
-use agent_harness::inbound::model_load::AgentModelsRouterState;
+use agent_harness::inbound::capability_discovery::AgentCapabilitiesRouterState;
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
@@ -624,15 +624,15 @@ async fn run() -> anyhow::Result<()> {
     .with_harness_authorizer(PgHarnessAuthorizer::new(PgHarnessAuthorizationRepo::new(
         pool.clone(),
     )));
-    let model_service = Arc::new(AgentModelsServiceImpl::new(
+    let capability_service = Arc::new(AgentCapabilitiesServiceImpl::new(
         VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
         InMemoryModels::new(Some(inmem_model_engine), config.inmem_model.clone()),
         CursorModels::new(cursor_keys, CURSOR_API_BASE_URL.to_owned()),
         macrod_models,
         model_probe_timeout,
     ));
-    let model_state = AgentModelsRouterState::new(
-        model_service,
+    let capability_state = AgentCapabilitiesRouterState::new(
+        capability_service,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let read_state = AgentSessionRouterState::new(
@@ -672,7 +672,7 @@ async fn run() -> anyhow::Result<()> {
                 control_state,
                 create_state,
                 gateway_state,
-                model_state,
+                capability_state,
             ),
             http_runtime_commands_readiness,
             http_port,

@@ -7,8 +7,10 @@ use std::time::Duration;
 
 use agent_egress::domain::service::EgressService;
 use agent_egress::inbound::axum_router::{EgressRouterState, egress_router};
-use agent_harness::domain::model_load::AgentModelsService;
-use agent_harness::inbound::model_load::{AgentModelsRouterState, agent_models_router};
+use agent_harness::domain::capability_discovery::AgentCapabilitiesService;
+use agent_harness::inbound::capability_discovery::{
+    AgentCapabilitiesRouterState, agent_capabilities_router,
+};
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
 use agent_session::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, SessionOpener,
@@ -56,29 +58,31 @@ fn health_router(ready: tokio::sync::watch::Receiver<bool>) -> Router {
 }
 
 /// All route state served by the public agent-harness HTTP listener.
-pub struct ApiStates<T, R, Opener, Bots, Access, Auth, Models> {
+pub struct ApiStates<T, R, Opener, Bots, Access, Auth, Capabilities> {
     read: AgentSessionRouterState<T, Access, Auth>,
     control: AgentSessionControlState<R, Access, Auth>,
     create: CreateSessionState<Opener, Bots, Auth>,
     gateway: RuntimeGatewayState<Auth>,
-    models: AgentModelsRouterState<Models, Auth>,
+    capabilities: AgentCapabilitiesRouterState<Capabilities, Auth>,
 }
 
-impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Access, Auth, Models> {
+impl<T, R, Opener, Bots, Access, Auth, Capabilities>
+    ApiStates<T, R, Opener, Bots, Access, Auth, Capabilities>
+{
     /// Group the independently constructed route states for the HTTP server.
     pub fn new(
         read: AgentSessionRouterState<T, Access, Auth>,
         control: AgentSessionControlState<R, Access, Auth>,
         create: CreateSessionState<Opener, Bots, Auth>,
         gateway: RuntimeGatewayState<Auth>,
-        models: AgentModelsRouterState<Models, Auth>,
+        capabilities: AgentCapabilitiesRouterState<Capabilities, Auth>,
     ) -> Self {
         Self {
             read,
             control,
             create,
             gateway,
-            models,
+            capabilities,
         }
     }
 }
@@ -110,8 +114,8 @@ where
 }
 
 /// Build the router and serve it until the process is asked to stop.
-pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Models>(
-    states: ApiStates<T, R, Opener, Bots, Access, Auth, Models>,
+pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Capabilities>(
+    states: ApiStates<T, R, Opener, Bots, Access, Auth, Capabilities>,
     runtime_commands_ready: tokio::sync::watch::Receiver<bool>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
@@ -123,7 +127,7 @@ where
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
-    Models: AgentModelsService,
+    Capabilities: AgentCapabilitiesService,
 {
     let inner = api_router(states)
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
@@ -148,8 +152,8 @@ where
         .context("agent harness service http failed")
 }
 
-fn api_router<T, R, Opener, Bots, Access, Auth, Models>(
-    states: ApiStates<T, R, Opener, Bots, Access, Auth, Models>,
+fn api_router<T, R, Opener, Bots, Access, Auth, Capabilities>(
+    states: ApiStates<T, R, Opener, Bots, Access, Auth, Capabilities>,
 ) -> Router
 where
     T: AgentSessionService,
@@ -158,7 +162,7 @@ where
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
-    Models: AgentModelsService,
+    Capabilities: AgentCapabilitiesService,
 {
     let agent_sessions = agent_session_read_router(states.read.clone())
         .merge(agent_session_control_router(states.control))
@@ -166,7 +170,7 @@ where
     Router::new()
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(states.read))
-        .merge(agent_models_router(states.models))
+        .merge(agent_capabilities_router(states.capabilities))
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

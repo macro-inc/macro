@@ -5,7 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-import type { AgentActionOneOfOneoneAllOf } from './agentActionOneOfOneoneAllOf';
+import type { AgentActionOneOfOnefourAllOf } from './agentActionOneOfOnefourAllOf';
 import type { AgentRespondElicitationAction } from './agentRespondElicitationAction';
 
 /**
@@ -16,5 +16,5 @@ request or notification: the agent asked, we answer on its id. The
 minted [`AgentActionId`] therefore never reaches the wire for this
 action; the fold correlates on the agent's id instead.
  */
-export type AgentActionOneOfOneone = AgentRespondElicitationAction &
-  AgentActionOneOfOneoneAllOf;
+export type AgentActionOneOfOnefour = AgentRespondElicitationAction &
+  AgentActionOneOfOnefourAllOf;

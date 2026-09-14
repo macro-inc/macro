@@ -8,8 +8,8 @@ import type {
   ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
-  LoadAgentModelsRequest,
-  LoadAgentModelsResponse,
+  DiscoverAgentCapabilitiesRequest,
+  DiscoverAgentCapabilitiesResponse,
   PreviewAgentSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
@@ -31,10 +31,13 @@ export const agentHarnessServiceClient = {
       }
     );
   },
-  /** Probes one agent target for its current, uncached model catalog. */
-  loadAgentModels(request: LoadAgentModelsRequest, signal?: AbortSignal) {
-    return fetchWithToken<LoadAgentModelsResponse>(
-      `${agentHarnessHost}/agent-models/load`,
+  /** Probes one agent target for its current, uncached ACP session settings. */
+  discoverAgentCapabilities(
+    request: DiscoverAgentCapabilitiesRequest,
+    signal?: AbortSignal
+  ) {
+    return fetchWithToken<DiscoverAgentCapabilitiesResponse>(
+      `${agentHarnessHost}/agent-capabilities/discover`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

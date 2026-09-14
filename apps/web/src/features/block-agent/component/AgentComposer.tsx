@@ -8,7 +8,9 @@ import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { effortConfigOption } from '../state/session-config';
 import {
+  AgentEffortSelector,
   AgentInput,
   AgentModelSelector,
   ComposerNotice,
@@ -35,6 +37,7 @@ export function AgentComposer(props: {
     registerQuoteInsert,
   } = useAgentSession();
   const userId = useUserId();
+  const effort = () => effortConfigOption(metadata()?.configOptions ?? []);
 
   // Focus plumbing between the input and the queue list above it: Up at the
   // start of the input lands on the bottom (next-to-dispatch) queue row, and
@@ -107,14 +110,29 @@ export function AgentComposer(props: {
           focusInput = focus;
         }}
         registerQuoteInsert={registerQuoteInsert}
-        modelControl={
-          <AgentModelSelector
-            model={metadata()?.model ?? null}
-            changingTo={composer.changingModel()}
-            options={metadata()?.supportedModels ?? []}
-            disabled={loadFailed()}
-            onSelect={composer.setModel}
-          />
+        sessionControls={
+          <>
+            <AgentModelSelector
+              model={metadata()?.model ?? null}
+              changingTo={composer.changingModel()}
+              options={metadata()?.supportedModels ?? []}
+              disabled={loadFailed()}
+              onSelect={composer.setModel}
+            />
+            <Show when={effort()}>
+              {(option) => (
+                <AgentEffortSelector
+                  current={option().currentValue}
+                  changingTo={composer.changingConfigOption(option().id)}
+                  options={option().options}
+                  disabled={loadFailed()}
+                  onSelect={(value) =>
+                    composer.setConfigOption(option().id, value)
+                  }
+                />
+              )}
+            </Show>
+          </>
         }
       />
     </>

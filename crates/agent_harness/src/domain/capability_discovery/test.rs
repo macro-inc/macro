@@ -22,7 +22,7 @@ fn options() -> Vec<SessionConfigOption> {
 
 struct Access(bool);
 
-impl HarnessModelAccess for Access {
+impl HarnessCapabilityAccess for Access {
     async fn can_use(
         &self,
         _caller: &MacroUserIdStr<'static>,
@@ -34,11 +34,11 @@ impl HarnessModelAccess for Access {
 
 struct Probe {
     calls: AtomicUsize,
-    result: fn() -> Result<RawModelProbe, ModelProbeError>,
+    result: fn() -> Result<RawCapabilityProbe, CapabilityProbeError>,
 }
 
 impl Probe {
-    fn new(result: fn() -> Result<RawModelProbe, ModelProbeError>) -> Self {
+    fn new(result: fn() -> Result<RawCapabilityProbe, CapabilityProbeError>) -> Self {
         Self {
             calls: AtomicUsize::new(0),
             result,
@@ -50,45 +50,45 @@ impl Probe {
     }
 }
 
-impl InMemoryModelProbe for Probe {
-    async fn probe(&self) -> Result<RawModelProbe, ModelProbeError> {
+impl InMemoryCapabilityProbe for Probe {
+    async fn probe(&self) -> Result<RawCapabilityProbe, CapabilityProbeError> {
         self.calls.fetch_add(1, Ordering::Relaxed);
         (self.result)()
     }
 }
 
-impl CursorModelProbe for Probe {
+impl CursorCapabilityProbe for Probe {
     async fn probe(
         &self,
         _caller: &MacroUserIdStr<'static>,
-    ) -> Result<RawModelProbe, ModelProbeError> {
+    ) -> Result<RawCapabilityProbe, CapabilityProbeError> {
         self.calls.fetch_add(1, Ordering::Relaxed);
         (self.result)()
     }
 }
 
-impl MacrodModelProbe for Probe {
-    async fn probe(&self, _harness: HarnessId) -> Result<RawModelProbe, ModelProbeError> {
+impl MacrodCapabilityProbe for Probe {
+    async fn probe(&self, _harness: HarnessId) -> Result<RawCapabilityProbe, CapabilityProbeError> {
         self.calls.fetch_add(1, Ordering::Relaxed);
         (self.result)()
     }
 }
 
-fn available() -> Result<RawModelProbe, ModelProbeError> {
-    Ok(RawModelProbe::Options(options()))
+fn available() -> Result<RawCapabilityProbe, CapabilityProbeError> {
+    Ok(RawCapabilityProbe::Options(options()))
 }
 
-fn unsupported() -> Result<RawModelProbe, ModelProbeError> {
-    Ok(RawModelProbe::Unsupported)
+fn unsupported() -> Result<RawCapabilityProbe, CapabilityProbeError> {
+    Ok(RawCapabilityProbe::Unsupported)
 }
 
 struct HangingCursor;
 
-impl CursorModelProbe for HangingCursor {
+impl CursorCapabilityProbe for HangingCursor {
     async fn probe(
         &self,
         _caller: &MacroUserIdStr<'static>,
-    ) -> Result<RawModelProbe, ModelProbeError> {
+    ) -> Result<RawCapabilityProbe, CapabilityProbeError> {
         std::future::pending().await
     }
 }
@@ -98,7 +98,7 @@ async fn macrod_authorizes_before_dispatch_and_projects_the_catalog() {
     let in_memory = Probe::new(unsupported);
     let cursor = Probe::new(unsupported);
     let macrod = Probe::new(available);
-    let service = AgentModelsServiceImpl::new(
+    let service = AgentCapabilitiesServiceImpl::new(
         Access(true),
         in_memory,
         cursor,
@@ -109,17 +109,15 @@ async fn macrod_authorizes_before_dispatch_and_projects_the_catalog() {
     let result = service
         .load(
             caller(),
-            LoadAgentModels {
-                harness: ModelHarness::Macrod,
+            DiscoverAgentCapabilities {
+                harness: CapabilityHarness::Macrod,
                 harness_id: Some(HarnessId::TEST_A),
             },
         )
         .await
         .unwrap();
 
-    assert_eq!(result.status, AgentModelsStatus::Available);
-    assert_eq!(result.current_model.as_deref(), Some("fast"));
-    assert_eq!(result.models[0].id, "fast");
+    assert_eq!(result.config_options[0].id, "model");
     assert_eq!(service.in_memory.calls(), 0);
     assert_eq!(service.cursor.calls(), 0);
     assert_eq!(service.macrod.calls(), 1);
@@ -127,7 +125,7 @@ async fn macrod_authorizes_before_dispatch_and_projects_the_catalog() {
 
 #[tokio::test]
 async fn invisible_macrod_is_forbidden_without_probing() {
-    let service = AgentModelsServiceImpl::new(
+    let service = AgentCapabilitiesServiceImpl::new(
         Access(false),
         Probe::new(unsupported),
         Probe::new(unsupported),
@@ -138,20 +136,23 @@ async fn invisible_macrod_is_forbidden_without_probing() {
     let result = service
         .load(
             caller(),
-            LoadAgentModels {
-                harness: ModelHarness::Macrod,
+            DiscoverAgentCapabilities {
+                harness: CapabilityHarness::Macrod,
                 harness_id: Some(HarnessId::TEST_A),
             },
         )
         .await;
 
-    assert!(matches!(result, Err(LoadAgentModelsError::Forbidden)));
+    assert!(matches!(
+        result,
+        Err(DiscoverAgentCapabilitiesError::Forbidden)
+    ));
     assert_eq!(service.macrod.calls(), 0);
 }
 
 #[tokio::test]
 async fn unsupported_provider_returns_the_supported_response_shape() {
-    let service = AgentModelsServiceImpl::new(
+    let service = AgentCapabilitiesServiceImpl::new(
         Access(true),
         Probe::new(unsupported),
         Probe::new(available),
@@ -162,22 +163,22 @@ async fn unsupported_provider_returns_the_supported_response_shape() {
     let result = service
         .load(
             caller(),
-            LoadAgentModels {
-                harness: ModelHarness::InMemory,
+            DiscoverAgentCapabilities {
+                harness: CapabilityHarness::InMemory,
                 harness_id: None,
             },
         )
         .await
         .unwrap();
 
-    assert_eq!(result, AgentModels::unsupported());
+    assert_eq!(result, AgentCapabilities::unsupported());
     assert_eq!(service.in_memory.calls(), 1);
     assert_eq!(service.cursor.calls(), 0);
 }
 
 #[tokio::test]
 async fn cursor_probe_obeys_the_service_timeout() {
-    let service = AgentModelsServiceImpl::new(
+    let service = AgentCapabilitiesServiceImpl::new(
         Access(true),
         Probe::new(unsupported),
         HangingCursor,
@@ -188,12 +189,15 @@ async fn cursor_probe_obeys_the_service_timeout() {
     let result = service
         .load(
             caller(),
-            LoadAgentModels {
-                harness: ModelHarness::Cursor,
+            DiscoverAgentCapabilities {
+                harness: CapabilityHarness::Cursor,
                 harness_id: None,
             },
         )
         .await;
 
-    assert!(matches!(result, Err(LoadAgentModelsError::Timeout)));
+    assert!(matches!(
+        result,
+        Err(DiscoverAgentCapabilitiesError::Timeout)
+    ));
 }

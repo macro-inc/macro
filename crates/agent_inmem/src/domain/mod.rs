@@ -4,7 +4,7 @@
 pub mod agent;
 pub mod engine;
 pub mod mcp;
-/// ACP model configuration generated from the turn engine catalog.
+/// ACP session configuration generated from the turn engine catalog.
 pub mod model_options;
 pub mod replay;
 pub mod session;

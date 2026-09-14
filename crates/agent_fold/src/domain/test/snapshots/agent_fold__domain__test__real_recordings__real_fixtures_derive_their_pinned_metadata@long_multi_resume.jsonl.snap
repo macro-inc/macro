@@ -1,5 +1,6 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 256
 expression: machine.metadata()
 input_file: crates/agent_fold/fixtures/real/long_multi_resume.jsonl
 ---
@@ -48,6 +49,227 @@ SessionMetadata {
                 "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
             ),
             group: None,
+        },
+    ],
+    config_options: [
+        SessionConfigOption {
+            id: "mode",
+            name: "Mode",
+            description: Some(
+                "Session permission mode",
+            ),
+            category: Some(
+                "mode",
+            ),
+            kind: Select {
+                current_value: "bypassPermissions",
+                options: [
+                    SessionConfigSelectOption {
+                        value: "auto",
+                        name: "Auto",
+                        description: Some(
+                            "Use a model classifier to approve/deny permission prompts",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "default",
+                        name: "Manual",
+                        description: Some(
+                            "Standard behavior, prompts for dangerous operations",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "acceptEdits",
+                        name: "Accept Edits",
+                        description: Some(
+                            "Auto-accept file edit operations",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "plan",
+                        name: "Plan Mode",
+                        description: Some(
+                            "Planning mode, no actual tool execution",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "dontAsk",
+                        name: "Don't Ask",
+                        description: Some(
+                            "Don't prompt for permissions, deny if not pre-approved",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "bypassPermissions",
+                        name: "Bypass Permissions",
+                        description: Some(
+                            "Bypass all permission checks",
+                        ),
+                        group: None,
+                    },
+                ],
+            },
+        },
+        SessionConfigOption {
+            id: "model",
+            name: "Model",
+            description: Some(
+                "AI model to use",
+            ),
+            category: Some(
+                "model",
+            ),
+            kind: Select {
+                current_value: "opus[1m]",
+                options: [
+                    SessionConfigSelectOption {
+                        value: "default",
+                        name: "Default (recommended)",
+                        description: Some(
+                            "Use the default model (currently Opus 5 (1M context)) · $5/$25 per Mtok",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "opus[1m]",
+                        name: "Opus (1M context)",
+                        description: Some(
+                            "Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "claude-fable-5[1m]",
+                        name: "Fable",
+                        description: Some(
+                            "Fable 5 · Most capable for your hardest and longest-running tasks · $10/$50 per Mtok",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "sonnet",
+                        name: "Sonnet",
+                        description: Some(
+                            "Sonnet 5 · Efficient for routine tasks · $2/$10 per Mtok · promo through Aug 31",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "haiku",
+                        name: "Haiku",
+                        description: Some(
+                            "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
+                        ),
+                        group: None,
+                    },
+                ],
+            },
+        },
+        SessionConfigOption {
+            id: "effort",
+            name: "Effort",
+            description: Some(
+                "Available effort levels for this model",
+            ),
+            category: Some(
+                "thought_level",
+            ),
+            kind: Select {
+                current_value: "medium",
+                options: [
+                    SessionConfigSelectOption {
+                        value: "default",
+                        name: "Default",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "low",
+                        name: "Low",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "medium",
+                        name: "Medium",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "high",
+                        name: "High",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "xhigh",
+                        name: "Xhigh",
+                        description: None,
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "max",
+                        name: "Max",
+                        description: None,
+                        group: None,
+                    },
+                ],
+            },
+        },
+        SessionConfigOption {
+            id: "fast",
+            name: "Fast mode",
+            description: Some(
+                "Faster responses on supported models",
+            ),
+            category: Some(
+                "model_config",
+            ),
+            kind: Boolean {
+                current_value: false,
+            },
+        },
+        SessionConfigOption {
+            id: "agent",
+            name: "Agent",
+            description: Some(
+                "Main-thread agent persona",
+            ),
+            category: None,
+            kind: Select {
+                current_value: "default",
+                options: [
+                    SessionConfigSelectOption {
+                        value: "default",
+                        name: "Default",
+                        description: Some(
+                            "Standard Claude Code agent",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "honeycomb:honeycomb-investigator",
+                        name: "honeycomb:honeycomb-investigator",
+                        description: Some(
+                            "Use this agent when the user needs an autonomous, multi-step investigation of a production\nissue using Honeycomb. Examples:\n\n<example>\nContext: User received a PagerDuty alert about high latency\nuser: \"Our checkout API is slow, can you investigate using Honeycomb?\"\nassistant: \"I'll use the honeycomb-investigator agent to run a systematic investigation.\"\n<commentary>\nUser needs autonomous investigation using Honeycomb MCP tools. The agent will prime context,\nrun queries, use BubbleUp, trace analysis, and report findings.\n</commentary>\n</example>\n\n<example>\nContext: User sees errors in production after a deployment\nuser: \"We deployed v2.5 and errors spiked. Investigate what went wrong in Honeycomb.\"\nassistant: \"I'll launch the honeycomb-investigator to analyze the deployment impact.\"\n<commentary>\nMulti-step investigation needed — query for errors, BubbleUp to compare versions, trace\nanalysis to find root cause. Agent orchestrates the full workflow.\n</commentary>\n</example>\n\n<example>\nContext: SLO budget is burning fast\nuser: \"Our checkout SLO is burning budget fast. Can you figure out what's going on?\"\nassistant: \"I'll launch the honeycomb-investigator to analyze the SLO burn and identify the cause.\"\n<commentary>\nSLO-driven investigation. Agent will check SLO status, identify contributing errors/latency,\nuse BubbleUp to find differentiators, and trace affected requests.\n</commentary>\n</example>",
+                        ),
+                        group: None,
+                    },
+                    SessionConfigSelectOption {
+                        value: "honeycomb:instrumentation-advisor",
+                        name: "honeycomb:instrumentation-advisor",
+                        description: Some(
+                            "Use this agent when the user wants to improve their application's observability by analyzing\ntheir codebase against what Honeycomb actually receives. This agent autonomously scans code,\nqueries Honeycomb for existing coverage, and produces a prioritized gap analysis with\nready-to-apply code. Unlike the otel-instrumentation skill (SDK guidance), this agent reads\nthe user's actual code and compares it against live Honeycomb data. Examples:\n\n<example>\nContext: User wants to know what they should instrument next\nuser: \"What's missing from our instrumentation? We have basic tracing but I feel like we're not getting enough detail.\"\nassistant: \"I'll use the instrumentation-advisor agent to analyze your codebase against your Honeycomb data.\"\n<commentary>\nAgent will scan the codebase for uninstrumented code paths, query Honeycomb for existing field\ncoverage, and produce a prioritized gap report with code suggestions.\n</commentary>\n</example>\n\n<example>\nContext: User wants to add observability to a specific service\nuser: \"Can you instrument our checkout service? It's in Go and we have basic OTel but no custom spans.\"\nassistant: \"I'll launch the instrumentation-advisor to analyze the checkout service and add custom instrumentation.\"\n<commentary>\nAgent will read the service code, identify high-value operations (HTTP handlers, DB calls,\nbusiness logic), check what Honeycomb already sees, and write instrumentation code.\n</commentary>\n</example>\n\n<example>\nContext: User is debugging and notices gaps in their traces\nuser: \"Our traces are missing context — I can't tell which user or tenant is affected. Can you fix that?\"\nassistant: \"I'll use the instrumentation-advisor to find where to add user and tenant context to your spans.\"\n<commentary>\nAttribute enrichment task. Agent will find where user/tenant info is available in code,\ncheck which attributes Honeycomb already has, and add span attributes at the right points.\n</commentary>\n</example>",
+                        ),
+                        group: None,
+                    },
+                ],
+            },
         },
     ],
     title: Some(

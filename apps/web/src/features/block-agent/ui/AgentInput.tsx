@@ -3,7 +3,7 @@
  * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), including `@`
  * mentions so users can attach Macro items the same way they do in chat.
  * Attachments, upload queue, and chat contexts stay out; model plumbing
- * arrives through the `modelControl` slot. Visual chrome mirrors
+ * arrives through the `sessionControls` slot. Visual chrome mirrors
  * `@core/component/AI/component/input/ChatInput.tsx`.
  */
 
@@ -46,8 +46,8 @@ export interface AgentInputProps {
   /** Receives the composed markdown, including any `<m-document-mention>` tags. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
-  /** Model control: a pill above the box on desktop, footer-left on touch. */
-  modelControl?: JSX.Element;
+  /** Session controls: pills above the box on desktop, footer-left on touch. */
+  sessionControls?: JSX.Element;
   /**
    * Ref-style: receives the quote-insert function once the editor mounts
    * (and `undefined` again on unmount), so the transcript's "Reply to this"
@@ -172,9 +172,11 @@ export function AgentInput(props: AgentInputProps) {
 
   return (
     <div ref={containerRef} data-keep-keyboard class="flex flex-col gap-1.5">
-      {/* Desktop: the model pill sits above the box, as it always has. */}
-      <Show when={!isTouchDevice() && props.modelControl}>
-        <div class="flex items-center px-0.5">{props.modelControl}</div>
+      {/* Desktop: session controls sit above the box. */}
+      <Show when={!isTouchDevice() && props.sessionControls}>
+        <div class="flex items-center gap-1 px-0.5">
+          {props.sessionControls}
+        </div>
       </Show>
       {/* h-auto beats Surface's size-full so the in-flow controls are not
           clipped over the editor (that was Auto sitting on the placeholder). */}
@@ -218,8 +220,10 @@ export function AgentInput(props: AgentInputProps) {
 
           {/* In-flow — never absolute over the text. */}
           <div class="flex shrink-0 items-center gap-1 pb-0.5 touch:h-8 touch:gap-2 touch:p-2 touch:mb-2">
-            <Show when={isTouchDevice() && props.modelControl}>
-              <div class="min-w-0">{props.modelControl}</div>
+            <Show when={isTouchDevice() && props.sessionControls}>
+              <div class="flex min-w-0 items-center gap-1">
+                {props.sessionControls}
+              </div>
             </Show>
             <div class="ml-auto shrink-0">
               <Show

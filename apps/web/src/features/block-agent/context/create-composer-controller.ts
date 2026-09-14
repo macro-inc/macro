@@ -1,5 +1,5 @@
 /**
- * The composer's send/stop/model controls.
+ * The composer's send, stop, and session-configuration controls.
  *
  * Prompt ordering lives in the service: every control POST joins the
  * session's per-command queue there, so a prompt sent mid-turn waits its
@@ -33,17 +33,23 @@ export type ComposerController = {
    * evidence anything is happening at all.
    */
   changingModel: Accessor<string | undefined>;
+  /** Requested value for one generic config option while it is settling. */
+  changingConfigOption: (configId: string) => string | undefined;
   /** Post the prompt. No-op without a session — the input disables until
    *  there is one. */
   send: (markdown: string) => void;
   stop: () => void;
   /** Ask the agent to run on a different model from here on. */
   setModel: (model: string) => void;
+  /** Change one select-style option advertised by the ACP agent. */
+  setConfigOption: (configId: string, value: string) => void;
 };
 
 export function createComposerController(options: {
   /** The fold's current model, which is how a model change is seen to land. */
   model?: Accessor<string | null | undefined>;
+  /** Read a folded config option's current select value. */
+  configValue?: (configId: string) => string | null | undefined;
   /** Absent until a just-created session's `POST` lands
    *  (`context/pending-session.ts`). */
   sessionId: Accessor<string | undefined>;
@@ -69,6 +75,9 @@ export function createComposerController(options: {
      * (nor an older refusal of the same model) can answer this request.
      */
     requestedActionId: string | undefined;
+    requestedConfigId: string | undefined;
+    requestedConfigValue: string | undefined;
+    requestedConfigActionId: string | undefined;
     /**
      * A stop has been posted and the fold has not settled the turn yet.
      * Further clicks must not stack another `session/cancel`, each of which
@@ -79,6 +88,9 @@ export function createComposerController(options: {
     inflightPrompts: 0,
     requestedModel: undefined,
     requestedActionId: undefined,
+    requestedConfigId: undefined,
+    requestedConfigValue: undefined,
+    requestedConfigActionId: undefined,
     stopping: false,
   });
 
@@ -123,6 +135,35 @@ export function createComposerController(options: {
     }
   };
 
+  const postSetConfigOption = async (
+    sessionId: string,
+    configId: string,
+    value: string
+  ) => {
+    batch(() => {
+      setState('requestedConfigId', configId);
+      setState('requestedConfigValue', value);
+    });
+    const result = await agentHarnessServiceClient
+      .control(sessionId, { type: 'setConfigOption', configId, value })
+      .catch(() => undefined);
+    if (result === undefined || result.isErr()) {
+      batch(() => {
+        setState('requestedConfigId', undefined);
+        setState('requestedConfigValue', undefined);
+        setState('requestedConfigActionId', undefined);
+      });
+      toast.failure('The session setting could not be changed');
+      return;
+    }
+    if (
+      state.requestedConfigId === configId &&
+      state.requestedConfigValue === value
+    ) {
+      setState('requestedConfigActionId', result.value.actionId);
+    }
+  };
+
   const postStop = async (sessionId: string) => {
     const result = await agentHarnessServiceClient
       .control(sessionId, { type: 'stop' })
@@ -151,6 +192,32 @@ export function createComposerController(options: {
         setState('requestedActionId', undefined);
       });
     }
+  });
+
+  createEffect(() => {
+    const configId = state.requestedConfigId;
+    const requested = state.requestedConfigValue;
+    if (configId === undefined || requested === undefined) return;
+    const current = options.configValue?.(configId);
+    if (current !== requested) return;
+    batch(() => {
+      setState('requestedConfigId', undefined);
+      setState('requestedConfigValue', undefined);
+      setState('requestedConfigActionId', undefined);
+    });
+  });
+
+  createEffect(() => {
+    const actionId = state.requestedConfigActionId;
+    if (actionId === undefined) return;
+    const outcome = options.controlOutcome?.(actionId);
+    if (outcome?.kind !== 'rejected') return;
+    batch(() => {
+      setState('requestedConfigId', undefined);
+      setState('requestedConfigValue', undefined);
+      setState('requestedConfigActionId', undefined);
+    });
+    toast.failure('The session setting could not be changed');
   });
 
   // The other resolution: the runtime refused the change. The fold resolves
@@ -199,6 +266,9 @@ export function createComposerController(options: {
       inflightPrompts: 0,
       requestedModel: undefined,
       requestedActionId: undefined,
+      requestedConfigId: undefined,
+      requestedConfigValue: undefined,
+      requestedConfigActionId: undefined,
       stopping: false,
     });
   });
@@ -207,6 +277,10 @@ export function createComposerController(options: {
     sending: () => state.inflightPrompts > 0,
     busy,
     changingModel: () => state.requestedModel,
+    changingConfigOption: (configId) =>
+      state.requestedConfigId === configId
+        ? state.requestedConfigValue
+        : undefined,
     send: (markdown) => {
       const sessionId = options.sessionId();
       if (!sessionId) return;
@@ -223,6 +297,11 @@ export function createComposerController(options: {
       const sessionId = options.sessionId();
       if (!sessionId) return;
       void postSetModel(sessionId, model);
+    },
+    setConfigOption: (configId, value) => {
+      const sessionId = options.sessionId();
+      if (!sessionId) return;
+      void postSetConfigOption(sessionId, configId, value);
     },
   };
 }

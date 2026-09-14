@@ -6,6 +6,6 @@
  */
 
 /**
- * Current provider model, if model selection is available.
+ * ACP semantic category, such as `model` or `thought_level`.
  */
-export type LoadAgentModelsResponseCurrentModel = string | null;
+export type AgentConfigOptionDtoAllOfCategory = string | null;
