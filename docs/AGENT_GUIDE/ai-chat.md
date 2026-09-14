@@ -17,15 +17,12 @@ The area behind the composer is transparent, without a bottom gradient overlay.
 
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
-press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
-`Create` → `Agent A`, or keyboard `c` then `a`, opens a managed agent session
-directly at `/app/agent/<uuid>` (the runtime starts while the block mounts).
-That create path focuses the agent composer so you can type immediately.
-When the `enable-agent-session-composer` flag is on (default in dev;
-`VITE_ENABLE_AGENT_SESSION_COMPOSER` overrides), the same entry instead opens
-the **Start a session** composer popover. A centered title sits above two rounded
-boxes of equal width: a shallow agent strip and a prompt box about twice its
-height, separated by a small gap. The picker has
+press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively,
+when `enable-chat-v3-agents` is on (default in dev;
+`VITE_ENABLE_CHAT_V3_AGENTS` overrides), `Create` → `Agent`, or keyboard `c`
+then `a`, opens the **Start a session** composer popover. A centered title sits
+above two rounded boxes of equal width: a shallow agent strip and a prompt box
+about twice its height, separated by a small gap. The picker has
 compact choices in a horizontally scrolling `radiogroup` (`aria-label="Agent"`,
 `aria-orientation="horizontal"`, `role="radio"`, `aria-checked`). All agents are
 available by scrolling sideways, with recent successful choices first.
