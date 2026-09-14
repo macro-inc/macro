@@ -146,18 +146,23 @@ impl ConnectionManager {
     /// IMPORTANT: this removes all entities associated with the connection_id
     /// and not just a specific entity like document, chat, channel activity.
     pub async fn remove_connection(&self, connection_id: &str) -> Result<()> {
-        // if the connection exists, then we kill the task
-        // that forwards the messages to the websocket
-        if let Some(connection) = self.connections.get(connection_id) {
-            // Only abort the task if it has not already been aborted
+        // Removing twice is the normal case, not an edge one: a refused send
+        // removes the connection and aborts its forwarder, and the socket
+        // handler removes it again when it sees that task end. Taking the
+        // entry out is the one step that cannot happen twice, so it is what
+        // the count and the abort hang off - `fetch_sub` on a count already
+        // at zero wraps to `usize::MAX`.
+        if let Some((_, connection)) = self.connections.remove(connection_id) {
+            self.connection_count
+                .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            // Killing the task that forwards messages to the websocket.
             if !connection.abort_handle.is_finished() {
                 connection.abort_handle.abort();
             }
         }
-        self.connections.remove(connection_id);
-        self.connection_count
-            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
+        // Unconditional: a connection this instance never held still has rows
+        // to clear, and the delete is idempotent.
         self.persistence
             .remove_all_entries_for_by_connection_id(connection_id)
             .await?;

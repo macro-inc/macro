@@ -140,3 +140,33 @@ async fn a_saturated_connection_is_dropped_rather_than_waited_on() {
         "its forwarder must be aborted"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn removing_a_connection_twice_does_not_wrap_the_count() {
+    let manager = ConnectionManager::new(UnusedRepo);
+    let (sender, _receiver) = tokio::sync::mpsc::channel(1);
+    let forwarder = tokio::spawn(std::future::pending::<()>());
+    manager.connections.insert(
+        "connection".to_owned(),
+        Connection {
+            sender,
+            abort_handle: forwarder.abort_handle(),
+        },
+    );
+    manager
+        .connection_count
+        .store(1, std::sync::atomic::Ordering::SeqCst);
+
+    // A refused send removes it, then the socket handler removes it again
+    // when it notices the forwarder has ended.
+    manager.remove_connection("connection").await.unwrap();
+    manager.remove_connection("connection").await.unwrap();
+
+    assert_eq!(
+        manager
+            .connection_count
+            .load(std::sync::atomic::Ordering::SeqCst),
+        0,
+        "only the removal that took the entry may decrement the count"
+    );
+}
