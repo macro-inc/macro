@@ -57,7 +57,10 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { formatDate } from '../../../../util/date';
-import { TaskPropertiesPreview } from '../../../TaskPropertiesPreview';
+import {
+  TaskPropertiesPreview,
+  TaskPropertiesPreviewProvider,
+} from '../../../TaskPropertiesPreview';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
@@ -484,7 +487,10 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         </Match>
         <Match when={matches(item(), isAccessiblePreviewItem)}>
           {(item) => (
-            <>
+            <TaskPropertiesPreviewProvider
+              taskId={props.blockName === 'task' ? item().id : undefined}
+              previewProperties={documentProperties()}
+            >
               <DocumentInfo item={item()} blockName={props.blockName} />
               <Show when={props.blockName === 'task'}>
                 <Card.Body
@@ -527,7 +533,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                   </Card>
                 </Card.Body>
               </Show>
-            </>
+            </TaskPropertiesPreviewProvider>
           )}
         </Match>
       </Switch>

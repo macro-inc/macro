@@ -67,7 +67,10 @@ vi.mock('@property/context/PropertiesContext', () => ({
 
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { InlineTaskProperties } from './InlineTaskProperties';
-import { TaskPropertiesPreview } from './TaskPropertiesPreview';
+import {
+  TaskPropertiesPreview,
+  TaskPropertiesPreviewProvider,
+} from './TaskPropertiesPreview';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -89,6 +92,87 @@ const status = {
 } as Property;
 
 describe('task preview data ownership', () => {
+  it('shares one REST property and permission subscription across both slots', () => {
+    const [properties, setProperties] = createSignal<Property[]>([status]);
+    propertiesQuery.mockReturnValue({
+      properties,
+      isLoading: () => false,
+      refetch: vi.fn(),
+    });
+    const view = render(() => (
+      <TaskPropertiesPreviewProvider taskId="task">
+        <TaskPropertiesPreview taskId="task" mode="status" />
+        <TaskPropertiesPreview taskId="task" mode="details" />
+      </TaskPropertiesPreviewProvider>
+    ));
+    expect(propertiesQuery).toHaveBeenCalledTimes(1);
+    expect(accessQuery).toHaveBeenCalledTimes(1);
+    expect(
+      view.getByRole('button', { name: /Task status: status-1/ })
+    ).toBeTruthy();
+    setProperties([
+      { ...status, value: ['status-2'] } as Property,
+      {
+        ...status,
+        propertyDefinitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
+        displayName: 'Priority',
+      } as Property,
+    ]);
+    expect(
+      view.getByRole('button', { name: /Task status: status-2/ })
+    ).toBeTruthy();
+    expect(view.container.textContent).toContain('Priority');
+    expect(propertiesQuery).toHaveBeenCalledTimes(1);
+    expect(accessQuery).toHaveBeenCalledTimes(1);
+    view.unmount();
+  });
+
+  it('shares pending and loaded GraphQL data without mounting REST subscriptions', () => {
+    const [metadata, setMetadata] = createSignal<PreviewDocumentProperties>({
+      properties: undefined,
+      canEdit: false,
+      refetch: vi.fn(async () => {}),
+    });
+    const view = render(() => (
+      <TaskPropertiesPreviewProvider
+        taskId="task"
+        previewProperties={metadata()}
+      >
+        <TaskPropertiesPreview taskId="task" mode="status" />
+        <TaskPropertiesPreview taskId="task" mode="details" />
+      </TaskPropertiesPreviewProvider>
+    ));
+    expect(propertiesQuery).not.toHaveBeenCalled();
+    expect(accessQuery).not.toHaveBeenCalled();
+    setMetadata((old) => ({ ...old, properties: [status], canEdit: true }));
+    expect(
+      view
+        .getByRole('button', { name: /Task status: status-1/ })
+        .getAttribute('aria-disabled')
+    ).toBe('false');
+    setMetadata((old) => ({ ...old, canEdit: false }));
+    expect(
+      view
+        .getByRole('button', { name: /Task status: status-1/ })
+        .getAttribute('aria-disabled')
+    ).toBe('true');
+    expect(propertiesQuery).not.toHaveBeenCalled();
+    expect(accessQuery).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it('does not subscribe for non-task card content', () => {
+    const view = render(() => (
+      <TaskPropertiesPreviewProvider>
+        <span>Document</span>
+      </TaskPropertiesPreviewProvider>
+    ));
+    expect(view.container.textContent).toBe('Document');
+    expect(propertiesQuery).not.toHaveBeenCalled();
+    expect(accessQuery).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
   it('renders an icon-only status control that tracks values and permissions', () => {
     const [metadata, setMetadata] = createSignal<PreviewDocumentProperties>({
       properties: [status],

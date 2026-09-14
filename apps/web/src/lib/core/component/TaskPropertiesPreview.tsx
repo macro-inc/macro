@@ -18,7 +18,15 @@ import { hasValue } from '@property/utils/typeGuards';
 import type { PreviewDocumentProperties } from '@queries/preview/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentAccessLevelQuery } from '@queries/storage/document-metadata';
-import { type Accessor, createMemo, For, Show } from 'solid-js';
+import {
+  type Accessor,
+  createContext,
+  createMemo,
+  For,
+  type JSX,
+  Show,
+  useContext,
+} from 'solid-js';
 
 const TASK_PREVIEW_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.STATUS,
@@ -32,33 +40,56 @@ type TaskPreviewProps = {
   mode?: 'all' | 'status' | 'details';
 };
 
-/** Status, priority, and assignee editors; GraphQL previews own their data. */
-export function TaskPropertiesPreview(
-  props: TaskPreviewProps & {
-    previewProperties?: PreviewDocumentProperties;
-  }
-) {
+type TaskPreviewData = {
+  taskId: Accessor<string>;
+  properties: Accessor<Property[]>;
+  isLoading: Accessor<boolean>;
+  canEdit: Accessor<boolean>;
+  refetch: () => void;
+};
+
+const TaskPreviewDataContext = createContext<TaskPreviewData>();
+
+/** One data owner for status and details; non-task cards are a passthrough. */
+export function TaskPropertiesPreviewProvider(props: {
+  taskId?: string;
+  previewProperties?: PreviewDocumentProperties;
+  children: JSX.Element;
+}) {
   return (
-    <Show
-      when={props.previewProperties}
-      fallback={<RestTaskPropertiesPreview {...props} />}
-    >
-      {(metadata) => (
-        <TaskPropertiesPreviewContent
-          taskId={props.taskId}
-          taskName={props.taskName}
-          mode={props.mode}
-          properties={() => metadata().properties ?? []}
-          isLoading={metadata().properties === undefined}
-          canEdit={metadata().canEdit}
-          refetch={() => void metadata().refetch()}
-        />
+    <Show when={props.taskId} keyed fallback={props.children}>
+      {(taskId) => (
+        <Show
+          when={props.previewProperties}
+          fallback={
+            <RestTaskPreviewProvider taskId={taskId}>
+              {props.children}
+            </RestTaskPreviewProvider>
+          }
+        >
+          {(metadata) => (
+            <TaskPreviewDataContext.Provider
+              value={{
+                taskId: () => taskId,
+                properties: () => metadata().properties ?? [],
+                isLoading: () => metadata().properties === undefined,
+                canEdit: () => metadata().canEdit,
+                refetch: () => void metadata().refetch(),
+              }}
+            >
+              {props.children}
+            </TaskPreviewDataContext.Provider>
+          )}
+        </Show>
       )}
     </Show>
   );
 }
 
-function RestTaskPropertiesPreview(props: TaskPreviewProps) {
+function RestTaskPreviewProvider(props: {
+  taskId: string;
+  children: JSX.Element;
+}) {
   const { properties, isLoading, refetch } = useEntityProperties(
     props.taskId,
     'TASK',
@@ -66,16 +97,54 @@ function RestTaskPropertiesPreview(props: TaskPreviewProps) {
   );
   const accessQuery = useDocumentAccessLevelQuery(() => props.taskId);
   return (
-    <TaskPropertiesPreviewContent
-      {...props}
-      properties={() => (isLoading() ? [] : properties())}
-      isLoading={isLoading()}
-      canEdit={
-        accessQuery.isSuccess &&
-        hasPermissions(getPermissions(accessQuery.data), Permissions.CAN_EDIT)
+    <TaskPreviewDataContext.Provider
+      value={{
+        taskId: () => props.taskId,
+        properties: () => (isLoading() ? [] : properties()),
+        isLoading,
+        canEdit: () =>
+          accessQuery.isSuccess &&
+          hasPermissions(
+            getPermissions(accessQuery.data),
+            Permissions.CAN_EDIT
+          ),
+        refetch,
+      }}
+    >
+      {props.children}
+    </TaskPreviewDataContext.Provider>
+  );
+}
+
+/** Standalone use gets its own owner; sibling slots reuse the surrounding owner. */
+export function TaskPropertiesPreview(
+  props: TaskPreviewProps & {
+    previewProperties?: PreviewDocumentProperties;
+  }
+) {
+  const shared = useContext(TaskPreviewDataContext);
+  return (
+    <Show
+      when={shared?.taskId() === props.taskId ? shared : undefined}
+      fallback={
+        <TaskPropertiesPreviewProvider
+          taskId={props.taskId}
+          previewProperties={props.previewProperties}
+        >
+          <TaskPropertiesPreview {...props} />
+        </TaskPropertiesPreviewProvider>
       }
-      refetch={refetch}
-    />
+    >
+      {(data) => (
+        <TaskPropertiesPreviewContent
+          {...props}
+          properties={() => data().properties()}
+          isLoading={data().isLoading()}
+          canEdit={data().canEdit()}
+          refetch={() => data().refetch()}
+        />
+      )}
+    </Show>
   );
 }
 

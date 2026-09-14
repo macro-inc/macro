@@ -71,7 +71,10 @@ import { formatDate } from '../util/date';
 import NotFound from './AccessErrorViews/NotFound';
 import Unauthorized from './AccessErrorViews/Unauthorized';
 import { useItemPreviewData } from './ItemPreview';
-import { TaskPropertiesPreview } from './TaskPropertiesPreview';
+import {
+  TaskPropertiesPreview,
+  TaskPropertiesPreviewProvider,
+} from './TaskPropertiesPreview';
 
 /**
  * Container for displaying mentions with optional collapsing
@@ -785,158 +788,167 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
           };
 
           return (
-            <div class="w-full flex flex-col">
-              <Card.Header class="py-2.5">
-                <Item class="grid grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2 border-0 p-0">
-                  <Item.Icon class="col-start-1 row-start-1">
-                    <Show
-                      when={targetBlockType() === 'task'}
-                      fallback={<ItemEntityIcon size="xs" />}
-                    >
-                      <Suspense
-                        fallback={
-                          <LoadingSpinner class="size-4 animate-spin text-ink-muted" />
+            <TaskPropertiesPreviewProvider
+              taskId={
+                targetBlockType() === 'task' ? props.documentInfo.id : undefined
+              }
+              previewProperties={documentProperties()}
+            >
+              <div class="w-full flex flex-col">
+                <Card.Header class="py-2.5">
+                  <Item class="grid grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2 border-0 p-0">
+                    <Item.Icon class="col-start-1 row-start-1">
+                      <Show
+                        when={targetBlockType() === 'task'}
+                        fallback={<ItemEntityIcon size="xs" />}
+                      >
+                        <Suspense
+                          fallback={
+                            <LoadingSpinner class="size-4 animate-spin text-ink-muted" />
+                          }
+                        >
+                          <TaskPropertiesPreview
+                            taskId={props.documentInfo.id}
+                            taskName={accessibleItem().name}
+                            previewProperties={documentProperties()}
+                            mode="status"
+                          />
+                        </Suspense>
+                      </Show>
+                    </Item.Icon>
+                    <Item.Content class="col-start-2 row-start-1">
+                      <PreviewTitle
+                        name={props.documentInfo.name || accessibleItem().name}
+                      />
+                      <Show
+                        when={
+                          messageContext()?.sender_id ||
+                          accessibleItem().owner ||
+                          messageContext()?.created_at ||
+                          accessibleItem().updatedAt
                         }
                       >
-                        <TaskPropertiesPreview
-                          taskId={props.documentInfo.id}
-                          taskName={accessibleItem().name}
-                          previewProperties={documentProperties()}
-                          mode="status"
-                        />
-                      </Suspense>
-                    </Show>
-                  </Item.Icon>
-                  <Item.Content class="col-start-2 row-start-1">
-                    <PreviewTitle
-                      name={props.documentInfo.name || accessibleItem().name}
-                    />
-                    <Show
-                      when={
-                        messageContext()?.sender_id ||
-                        accessibleItem().owner ||
-                        messageContext()?.created_at ||
-                        accessibleItem().updatedAt
-                      }
+                        <Item.Description class="text-left wrap-anywhere">
+                          <Show
+                            when={
+                              messageContext()?.sender_id ||
+                              accessibleItem().owner
+                            }
+                          >
+                            {(owner) =>
+                              getDisplayName(tryMacroId(owner())) ||
+                              owner().replace('macro|', '')
+                            }
+                          </Show>
+                          <Show
+                            when={
+                              (messageContext()?.sender_id ||
+                                accessibleItem().owner) &&
+                              (messageContext()?.created_at ||
+                                accessibleItem().updatedAt)
+                            }
+                          >
+                            {' - '}
+                          </Show>
+                          <Show
+                            when={
+                              messageContext()?.created_at ||
+                              accessibleItem().updatedAt
+                            }
+                          >
+                            {(time) => formatDate(time())}
+                          </Show>
+                        </Item.Description>
+                      </Show>
+                      <Show when={accessories()}>
+                        {(acc) => (
+                          <Item.Metadata>
+                            {acc().note}
+                            {getMentionsIcon(acc().icon)}
+                          </Item.Metadata>
+                        )}
+                      </Show>
+                    </Item.Content>
+                    {renderActionButtons()}
+                  </Item>
+                </Card.Header>
+
+                {/* Status lives in the header; remaining properties align with the title. */}
+                <Show when={targetBlockType() === 'task'}>
+                  <Card.Body class="pt-2 pl-9 [&>div]:px-0 [&>div]:pb-0">
+                    <Suspense
+                      fallback={<div class="w-full bg-active h-4 m-2" />}
                     >
-                      <Item.Description class="text-left wrap-anywhere">
-                        <Show
-                          when={
-                            messageContext()?.sender_id ||
-                            accessibleItem().owner
-                          }
-                        >
-                          {(owner) =>
-                            getDisplayName(tryMacroId(owner())) ||
-                            owner().replace('macro|', '')
-                          }
-                        </Show>
-                        <Show
-                          when={
-                            (messageContext()?.sender_id ||
-                              accessibleItem().owner) &&
-                            (messageContext()?.created_at ||
-                              accessibleItem().updatedAt)
-                          }
-                        >
-                          {' - '}
-                        </Show>
-                        <Show
-                          when={
-                            messageContext()?.created_at ||
-                            accessibleItem().updatedAt
-                          }
-                        >
-                          {(time) => formatDate(time())}
-                        </Show>
-                      </Item.Description>
-                    </Show>
-                    <Show when={accessories()}>
-                      {(acc) => (
-                        <Item.Metadata>
-                          {acc().note}
-                          {getMentionsIcon(acc().icon)}
-                        </Item.Metadata>
+                      <TaskPropertiesPreview
+                        taskId={props.documentInfo.id}
+                        taskName={accessibleItem().name}
+                        previewProperties={documentProperties()}
+                        mode="details"
+                      />
+                    </Suspense>
+                  </Card.Body>
+                </Show>
+
+                {/* Calendar event schedule, location, and people */}
+                <Show when={matches(item(), isCalendarEventPreviewItem)}>
+                  {(calendarItem) => (
+                    <CalendarEventPreviewDetails event={calendarItem().event} />
+                  )}
+                </Show>
+
+                {/* Visual preview for images */}
+                <Show when={props.documentInfo.type === 'image'}>
+                  <Card.Body class="px-3 pt-2 pb-3">
+                    <Card
+                      variant="filled"
+                      offset={1}
+                      class="overflow-hidden rounded-lg"
+                    >
+                      <ImageCoverStrip
+                        documentId={accessibleItem().id}
+                        fileType={accessibleItem().fileType}
+                        class="shrink-0 h-32"
+                      />
+                    </Card>
+                  </Card.Body>
+                </Show>
+
+                {/* Message excerpt and snapshot details */}
+                <Show when={messageContext() || props.snapshotInfo}>
+                  <Card.Body class="pt-2">
+                    <Show when={messageContext()}>
+                      {(context) => (
+                        <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
+                          <div class="line-clamp-3 wrap-break-word">
+                            <StaticMarkdown
+                              markdown={context().content}
+                              theme={channelTheme}
+                              target="internal"
+                            />
+                          </div>
+                        </div>
                       )}
                     </Show>
-                  </Item.Content>
-                  {renderActionButtons()}
-                </Item>
-              </Card.Header>
 
-              {/* Status lives in the header; remaining properties align with the title. */}
-              <Show when={targetBlockType() === 'task'}>
-                <Card.Body class="pt-2 pl-9 [&>div]:px-0 [&>div]:pb-0">
-                  <Suspense fallback={<div class="w-full bg-active h-4 m-2" />}>
-                    <TaskPropertiesPreview
-                      taskId={props.documentInfo.id}
-                      taskName={accessibleItem().name}
-                      previewProperties={documentProperties()}
-                      mode="details"
-                    />
-                  </Suspense>
-                </Card.Body>
-              </Show>
-
-              {/* Calendar event schedule, location, and people */}
-              <Show when={matches(item(), isCalendarEventPreviewItem)}>
-                {(calendarItem) => (
-                  <CalendarEventPreviewDetails event={calendarItem().event} />
-                )}
-              </Show>
-
-              {/* Visual preview for images */}
-              <Show when={props.documentInfo.type === 'image'}>
-                <Card.Body class="px-3 pt-2 pb-3">
-                  <Card
-                    variant="filled"
-                    offset={1}
-                    class="overflow-hidden rounded-lg"
-                  >
-                    <ImageCoverStrip
-                      documentId={accessibleItem().id}
-                      fileType={accessibleItem().fileType}
-                      class="shrink-0 h-32"
-                    />
-                  </Card>
-                </Card.Body>
-              </Show>
-
-              {/* Message excerpt and snapshot details */}
-              <Show when={messageContext() || props.snapshotInfo}>
-                <Card.Body class="pt-2">
-                  <Show when={messageContext()}>
-                    {(context) => (
-                      <div class="mb-2 text-sm text-ink-muted border-l-2 border-edge pl-3 py-1">
-                        <div class="line-clamp-3 wrap-break-word">
-                          <StaticMarkdown
-                            markdown={context().content}
-                            theme={channelTheme}
-                            target="internal"
-                          />
+                    <Show when={props.snapshotInfo}>
+                      {(snapshot) => (
+                        <div class="mt-2 pt-2 border-t border-edge">
+                          <div class="flex items-center gap-1.5 text-ink-muted">
+                            <ClockIcon class="size-3" />
+                            <span class="text-xs font-medium font-mono uppercase">
+                              Snapshot from{' '}
+                              {formatDate(new Date(snapshot().date), {
+                                showTime: true,
+                              })}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </Show>
-
-                  <Show when={props.snapshotInfo}>
-                    {(snapshot) => (
-                      <div class="mt-2 pt-2 border-t border-edge">
-                        <div class="flex items-center gap-1.5 text-ink-muted">
-                          <ClockIcon class="size-3" />
-                          <span class="text-xs font-medium font-mono uppercase">
-                            Snapshot from{' '}
-                            {formatDate(new Date(snapshot().date), {
-                              showTime: true,
-                            })}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </Show>
-                </Card.Body>
-              </Show>
-            </div>
+                      )}
+                    </Show>
+                  </Card.Body>
+                </Show>
+              </div>
+            </TaskPropertiesPreviewProvider>
           );
         }}
       </Match>

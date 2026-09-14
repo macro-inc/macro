@@ -82,6 +82,9 @@ small actions button, and task status control; image previews keep equal side in
 Metadata-only references omit the preview. Tasks replace the type icon with an
 icon-only status control; click it to change status when you have edit access.
 Priority and assignee chips remain below, without a duplicate status chip.
+Status and detail slots share one TaskPropertiesPreviewProvider per card:
+GraphQL preview data is reused, and REST fallback property/access queries are
+owned once, not separately by each slot. Non-task cards do not load task properties.
 Use the title to open the referenced document and the
 actions menu to copy its link, convert it to an inline mention, or delete the card.
 Click the card frame to select its editor node; controls and embedded content
