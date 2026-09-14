@@ -45,6 +45,9 @@ pub struct BotFacts {
     /// Runtime profile for a persisted agent. Fixed system bots have no
     /// persisted profile and use deployment defaults instead.
     pub managed_profile: Option<ManagedAgentProfile>,
+    /// Whether the persona is limited to selected channels. Channel co-members
+    /// may start a session as it, matching `@` mentions in those channels.
+    pub selected_channels: bool,
 }
 
 /// Runtime settings snapshotted when a managed persona opens a session.
@@ -81,6 +84,13 @@ pub trait BotDirectory: Send + Sync + 'static {
         user: MacroUserIdStr<'static>,
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Whether the user and bot share at least one active channel.
+    fn user_shares_channel_with_bot(
+        &self,
+        user: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Why a user cannot select a bot as a managed session persona.
@@ -101,9 +111,10 @@ pub enum ManagedPersonaError {
 /// Resolve and authorize a managed persona for a user.
 ///
 /// Ownership policy lives in the domain: private personas belong to their
-/// owner, team personas are available to team members, and managed system
-/// bots (the deployment's own coders) are available to everyone, exactly as
-/// they are when mentioned in a channel.
+/// owner, team personas are available to team members, selected-channel
+/// personas are available to anyone who can `@` them in a shared channel,
+/// and managed system bots (the deployment's own coders) are available to
+/// everyone, exactly as they are when mentioned in a channel.
 pub async fn managed_persona_for_user<Bots: BotDirectory>(
     bots: &Bots,
     bot_id: BotId,
@@ -126,12 +137,22 @@ pub async fn managed_persona_for_user<Bots: BotDirectory>(
             profile: None,
         });
     }
-    let authorized = if let Some(owner) = facts.owner_user_id {
+    let authorized = if let Some(owner) = &facts.owner_user_id {
         owner.as_ref() == user.as_ref()
+            || (facts.selected_channels
+                && bots
+                    .user_shares_channel_with_bot(user.clone(), bot_id)
+                    .await
+                    .map_err(ManagedPersonaError::Lookup)?)
     } else if let Some(team_id) = facts.owner_team_id {
         bots.user_has_team(user.clone(), team_id)
             .await
             .map_err(ManagedPersonaError::Lookup)?
+            || (facts.selected_channels
+                && bots
+                    .user_shares_channel_with_bot(user.clone(), bot_id)
+                    .await
+                    .map_err(ManagedPersonaError::Lookup)?)
     } else {
         false
     };
@@ -917,3 +938,6 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         id: AgentSessionId,
     ) -> impl Future<Output = Result<Option<harness_id::HarnessId>>> + Send;
 }
+
+#[cfg(test)]
+mod test;

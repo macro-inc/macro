@@ -1365,10 +1365,11 @@ where
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionRequest {
     /// Bot the session runs for. On a managed request this optionally selects
-    /// a persisted persona the user owns or may use through team membership;
-    /// omitting it uses the deployment's default coding persona. On an
-    /// external request, bot callers may omit it (their own identity is used)
-    /// and must not name another bot; user callers must supply a bot they own.
+    /// a persisted persona the user owns, may use through team membership, or
+    /// can `@` mention in a shared channel; omitting it uses the deployment's
+    /// default coding persona. On an external request, bot callers may omit it
+    /// (their own identity is used) and must not name another bot; user callers
+    /// must supply a bot they own.
     pub bot_id: Option<Uuid>,
     /// Absolute directory the bot's harness runs in on its runtime. Present
     /// for an external session, absent for a managed one, which runs in the
@@ -1661,8 +1662,8 @@ pub async fn create_agent_session_handler<
     let instructions = request.instructions.filter(|text| !text.trim().is_empty());
 
     // No workspace means the managed shape. A bot id selects a managed
-    // persona; the domain resolver owns its user/team authorization policy.
-    // External-only fields remain invalid on this shape.
+    // persona; the domain resolver owns its user/team/channel authorization
+    // policy. External-only fields remain invalid on this shape.
     let Some(workspace) = request.workspace else {
         if request.repo_url.is_some() || request.thread.is_some() || request.owner.is_some() {
             return Err(CreateSessionApiError::MixedSessionShape);

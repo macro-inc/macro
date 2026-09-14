@@ -484,6 +484,59 @@ describe('Agents', () => {
     ).toBeTruthy();
   });
 
+  it('does not list a coworker private agent in Settings', () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-shared',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|coworker@example.com' },
+          name: 'Shared Reviewer',
+          handle: 'shared-reviewer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Review pull requests.',
+        harness: 'in-memory',
+        default_model: Model.sonnet5,
+        channel_scope: 'selected',
+        channel_ids: ['channel-engineering'],
+      },
+    ];
+
+    render(() => <Agents />);
+
+    expect(screen.queryByText('Shared Reviewer')).toBeNull();
+    expect(screen.getByText('No private agents yet.')).toBeTruthy();
+  });
+
+  it("does not list another team's mentionable agent in Settings", () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-other-team',
+          kind: 'owned',
+          owner: { type: 'team', team_id: 'team-other' },
+          name: 'Other Team Helper',
+          handle: 'other-team-helper',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Help the other team.',
+        harness: 'in-memory',
+        default_model: Model.sonnet5,
+        channel_scope: 'selected',
+        channel_ids: ['channel-engineering'],
+      },
+    ];
+
+    render(() => <Agents />);
+
+    expect(screen.queryByText('Other Team Helper')).toBeNull();
+  });
+
   it('edits and persists an existing agent through the agents API', async () => {
     agentMocks.query.data = [
       {

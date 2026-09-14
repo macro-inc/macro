@@ -30,7 +30,9 @@ An accent **Create agent** button stays fixed to the right of the strip.
 It closes the session composer and opens the new-agent form at
 `/app/settings/agents?createAgent=true`; it does not create a session.
 Recents are remembered per user on this device. With no history, **Macro**
-`@macro` (the default) and **Cursor** `@cursor` lead, followed by saved agents.
+`@macro` (the default) and **Cursor** `@cursor` lead, followed by saved agents
+the caller can start: their own, team-shared personas, and selected-channel
+personas they can `@` mention.
 Without a connected Cursor API key, Cursor is a **Connect Cursor** button:
 clicking it closes the composer and opens Settings → Harness without creating
 a session. It is keyboard-accessible; arrow navigation focuses it without

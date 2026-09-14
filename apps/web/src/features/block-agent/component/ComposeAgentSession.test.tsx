@@ -74,6 +74,33 @@ vi.mock('@queries/agents/agents', () => ({
         harness: 'in-memory',
         default_model: 'anthropic/claude-opus-5',
       },
+      {
+        bot: {
+          id: 'shared-reviewer',
+          name: 'Shared Reviewer',
+          handle: 'shared-reviewer',
+          has_agent: true,
+          owner: { type: 'user', user_id: 'macro|coworker@example.com' },
+        },
+        harness: 'in-memory',
+        default_model: 'anthropic/claude-sonnet-5',
+      },
+      {
+        bot: {
+          id: 'team-helper',
+          name: 'Team Helper',
+          handle: 'team-helper',
+          has_agent: true,
+          owner: { type: 'team', team_id: 'team-1' },
+        },
+        harness: 'in-memory',
+        default_model: 'anthropic/claude-sonnet-5',
+      },
+      {
+        bot: { id: 'local', name: 'Local', handle: 'local', has_agent: true },
+        harness: 'macrod',
+        default_model: 'anthropic/claude-sonnet-5',
+      },
     ],
   }),
 }));
@@ -349,6 +376,17 @@ describe('agent session creation', () => {
     expect(reviewer.queryByText('coding')).toBeNull();
     expect(coder.getByText('@coder')).toBeTruthy();
     expect(coder.queryByText('coding')).toBeNull();
+    expect(
+      within(screen.getByRole('radio', { name: /Shared Reviewer/ })).getByText(
+        '@shared-reviewer'
+      )
+    ).toBeTruthy();
+    expect(
+      within(screen.getByRole('radio', { name: /Team Helper/ })).getByText(
+        '@team-helper'
+      )
+    ).toBeTruthy();
+    expect(screen.queryByRole('radio', { name: /Local/ })).toBeNull();
     expect(
       screen.getByText(
         'Starts quickly and runs in-memory. Great for workspace tasks'

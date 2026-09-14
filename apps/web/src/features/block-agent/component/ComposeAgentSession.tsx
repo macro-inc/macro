@@ -124,7 +124,8 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   let appliedModel: string | undefined;
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
 
-  // The two first-party agents lead, then the user's own personas.
+  // First-party agents lead, then saved personas the caller can start —
+  // their own, team-shared, and selected-channel personas they can `@`.
   const personas = createMemo<PersonaOption[]>(() => [
     {
       id: MACRO_PERSONA_ID,

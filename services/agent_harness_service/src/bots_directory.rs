@@ -8,7 +8,7 @@ use agent_harness::domain::model::AgentKind;
 use agent_session::domain::error::{AgentSessionError, Result};
 use agent_session::domain::ports::{BotDirectory, BotFacts, ManagedAgentProfile};
 use bot_id::BotId;
-use bots::domain::models::{BotKind, BotOwner};
+use bots::domain::models::{AgentChannelScope, BotKind, BotOwner};
 use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -48,7 +48,7 @@ impl BotDirectory for PgBotDirectory {
             Some(BotOwner::Team { team_id }) => (None, Some(team_id)),
             None => (None, None),
         };
-        let (is_managed, harness_id, managed_profile) = if row.has_agent {
+        let (is_managed, harness_id, managed_profile, selected_channels) = if row.has_agent {
             let agent = self
                 .repo
                 .get_agent(bot)
@@ -62,6 +62,9 @@ impl BotDirectory for PgBotDirectory {
                     |agent| AgentKind::from_harness(&agent.harness),
                 )
                 .is_managed();
+            let selected_channels = agent
+                .as_ref()
+                .is_some_and(|agent| agent.channel_scope == AgentChannelScope::Selected);
             let managed_profile = agent
                 .filter(|_| is_managed)
                 .map(|agent| ManagedAgentProfile {
@@ -70,9 +73,9 @@ impl BotDirectory for PgBotDirectory {
                     instructions: agent.instructions,
                     mcp_servers: agent.mcp,
                 });
-            (is_managed, harness_id, managed_profile)
+            (is_managed, harness_id, managed_profile, selected_channels)
         } else {
-            (false, None, None)
+            (false, None, None, false)
         };
         Ok(Some(BotFacts {
             has_agent: row.has_agent,
@@ -82,6 +85,7 @@ impl BotDirectory for PgBotDirectory {
             owner_team_id,
             harness_id,
             managed_profile,
+            selected_channels,
         }))
     }
 
@@ -92,6 +96,17 @@ impl BotDirectory for PgBotDirectory {
     ) -> Result<bool> {
         self.repo
             .user_has_team(user, team_id)
+            .await
+            .map_err(AgentSessionError::Unknown)
+    }
+
+    async fn user_shares_channel_with_bot(
+        &self,
+        user: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> Result<bool> {
+        self.repo
+            .user_shares_channel_with_bot(user, bot_id)
             .await
             .map_err(AgentSessionError::Unknown)
     }
