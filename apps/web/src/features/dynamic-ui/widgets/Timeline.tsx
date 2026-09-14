@@ -21,6 +21,7 @@ function toItemType(type: EntityRef['type']): ItemType | undefined {
       'reminder',
       'skill',
       'agent_session',
+      'scheduled_action',
       () => undefined
     )
     .otherwise((itemType) => itemType);
