@@ -61,7 +61,9 @@ The six threads are IDs ending in 4, 6, 8, 9, 10, and 12:
 Only the initial Signal view may receive an online Mail response. The other rows
 arrive via metadata backfill. Tests wait for the real three-page completion
 checkpoint, then read the six normalized records through native IPC before
-changing filters. Assertions compare exact row identities, not just counts.
+changing filters. Tab changes use the app's public numeric hotkeys (2 / 7) and
+verify `aria-current` before checking results. Assertions compare exact row
+identities, not just counts.
 
 ## Offline model and isolation
 

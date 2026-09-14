@@ -130,9 +130,9 @@ export async function selectTab(browser: Browser, label: 'Noise' | 'All') {
   const tab = browser.$(
     `//nav[@aria-label="Email tabs"]//button[.//span[normalize-space(.)="${label}"]]`
   );
-  await tab.click();
-  if ((await tab.getAttribute('aria-current')) !== 'page')
-    await browser.keys('Enter');
+  // Public Email tab hotkeys (see useViewTabHotkeys/EMAIL_TABS). Keep focus
+  // in the list; Enter would activate an email rather than the sidebar tab.
+  await browser.keys(label === 'Noise' ? '2' : '7');
   await browser.waitUntil(
     async () => (await tab.getAttribute('aria-current')) === 'page',
     {
