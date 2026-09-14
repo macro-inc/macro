@@ -157,6 +157,11 @@ On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
 channels. Channel favorites open in the channel preview.
+The search action beside the tabs opens a search field below them and replaces
+the active tab contents with matching channels and direct messages from one
+activity-ordered source. Search results use compact rows on `All` and
+conversation cards on `Recent`. Selecting a tab or closing search restores the
+tab contents.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.

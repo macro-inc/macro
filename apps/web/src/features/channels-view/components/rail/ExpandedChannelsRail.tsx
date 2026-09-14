@@ -1,4 +1,4 @@
-import { ViewSidebar } from '@app/components/view-shell';
+import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
@@ -9,9 +9,17 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { cn, Hotkey, Tabs } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import { Button, cn, Hotkey, Tabs } from '@ui';
+import {
+  type Accessor,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { Virtualizer } from 'virtua/solid';
 import type { ChannelsGroup } from '../../types';
 import { channelMentionsUser, isDirectMessage } from '../../utils';
@@ -54,6 +62,19 @@ const CHANNEL_TABS = [
   { value: 'browse', label: 'All' },
   { value: 'recents', label: 'Recent' },
 ];
+
+type ChannelRailSearch = {
+  isOpen: Accessor<boolean>;
+  query: Accessor<string>;
+  results: Accessor<readonly ChannelEntity[]>;
+  isLoading: Accessor<boolean>;
+  error: Accessor<unknown | undefined>;
+  open: () => void;
+  close: () => void;
+  setQuery: (query: string) => void;
+  registerInput: (element: HTMLInputElement) => void;
+  retry: () => Promise<void>;
+};
 
 type GroupConfig = {
   group: ChannelsGroup;
@@ -214,7 +235,7 @@ function ExpandedFavoritesSection() {
   );
 }
 
-function ExpandedHeader() {
+function ExpandedHeader(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
   const selectTab = (value: string) => {
     if (value === 'browse' || value === 'recents') {
@@ -235,15 +256,120 @@ function ExpandedHeader() {
           <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
         </SplitPanel.ControlGroup>
       </ViewSidebar.Header>
-      <div class="px-4">
+      <div class="flex items-center justify-between gap-2 px-4">
         <Tabs
           aria-label="Chat sidebar views"
           list={CHANNEL_TABS}
           value={rail.tab()}
           onChange={selectTab}
         />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          label={
+            props.search.isOpen() ? 'Close search' : 'Search conversations'
+          }
+          aria-pressed={props.search.isOpen()}
+          class={cn(
+            'size-7 rounded-lg',
+            props.search.isOpen() && 'bg-active text-ink'
+          )}
+          onClick={() =>
+            props.search.isOpen() ? props.search.close() : props.search.open()
+          }
+        >
+          <MagnifyingGlassIcon class="size-3.5" />
+        </Button>
       </div>
+      <Show when={props.search.isOpen()}>
+        <div class="px-4">
+          <SearchBar
+            ref={props.search.registerInput}
+            label="Search channels and direct messages"
+            placeholder="Search conversations"
+            value={props.search.query()}
+            hotkey="cmd+f"
+            onValueChange={props.search.setQuery}
+            onEscape={() => {
+              if (!props.search.query()) props.search.close();
+            }}
+            class="h-9 shrink-0 rounded-xl"
+          />
+        </div>
+      </Show>
     </div>
+  );
+}
+
+function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
+  const rail = useChannelsRail();
+  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  const pagination = useChannelRailVirtualizer(() => 'search');
+  const focusedIndex = () => {
+    const row = rail.list.focus.item();
+    return row?.kind === 'conversation' && row.scope === 'search'
+      ? row.localIndex
+      : -1;
+  };
+
+  return (
+    <Switch>
+      <Match
+        when={props.search.isLoading() && props.search.results().length === 0}
+      >
+        <RailListLoading />
+      </Match>
+      <Match when={props.search.error() && props.search.results().length === 0}>
+        <RailListError retry={props.search.retry} />
+      </Match>
+      <Match when={props.search.results().length > 0}>
+        <div
+          ref={setScrollRoot}
+          class="scrollbar-hidden size-full min-h-0 overflow-y-auto"
+          aria-busy={rail.sources.search.isLoadingMore()}
+        >
+          <Virtualizer
+            ref={pagination.registerVirtualizer}
+            data={props.search.results()}
+            scrollRef={scrollRoot()}
+            itemSize={rail.tab() === 'recents' ? CONVERSATION_CARD_HEIGHT : 42}
+            bufferSize={360}
+            keepMounted={focusedIndex() >= 0 ? [focusedIndex()] : undefined}
+            onScroll={pagination.loadMoreNearEnd}
+          >
+            {(channel) => (
+              <Show
+                when={rail.tab() === 'recents'}
+                fallback={
+                  <div class="px-4 pb-0.5">
+                    <ChannelOption channel={channel} />
+                  </div>
+                }
+              >
+                <RecentConversationCard channel={channel} />
+              </Show>
+            )}
+          </Virtualizer>
+          <Show when={rail.sources.search.isLoadingMore()}>
+            <RailListLoadingMore
+              variant={rail.tab() === 'recents' ? 'recent' : 'channel'}
+            />
+          </Show>
+          <Show when={props.search.isLoading()}>
+            <RailListLoadingMore
+              variant={rail.tab() === 'recents' ? 'recent' : 'channel'}
+            />
+          </Show>
+        </div>
+      </Match>
+      <Match when={true}>
+        <p class="break-words px-6 py-4 text-sm text-ink-muted">
+          {props.search.query().trim()
+            ? `No results for "${props.search.query().trim()}"`
+            : 'No conversations to show'}
+        </p>
+      </Match>
+    </Switch>
   );
 }
 
@@ -479,7 +605,7 @@ function ExpandedRecents() {
   );
 }
 
-export function ExpandedChannelsRail() {
+export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
   const activeDescendant = () => {
     const rowId = rail.list.focus.key();
@@ -488,7 +614,7 @@ export function ExpandedChannelsRail() {
 
   return (
     <>
-      <ExpandedHeader />
+      <ExpandedHeader search={props.search} />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
           ref={rail.registerRootRef}
@@ -498,6 +624,9 @@ export function ExpandedChannelsRail() {
           class="min-h-0 flex-1 overflow-hidden outline-none"
         >
           <Switch>
+            <Match when={props.search.isOpen()}>
+              <ExpandedSearchResults search={props.search} />
+            </Match>
             <Match when={rail.tab() === 'browse'}>
               <ExpandedBrowse />
             </Match>
@@ -506,7 +635,7 @@ export function ExpandedChannelsRail() {
             </Match>
           </Switch>
         </div>
-        <Show when={rail.tab() === 'browse'}>
+        <Show when={!props.search.isOpen() && rail.tab() === 'browse'}>
           <footer class="flex h-9 shrink-0 items-center justify-start gap-1 border-t border-edge-muted px-4 text-xxs text-ink-extra-muted">
             <span>Use</span>
             <Hotkey shortcut="[" theme="subtle" />

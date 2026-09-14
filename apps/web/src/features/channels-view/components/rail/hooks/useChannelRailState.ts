@@ -3,6 +3,7 @@ import { isMutedItem } from '@entity/utils/notification';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
+import type { ChannelsSourceScope } from '../../../queries';
 import type { ChannelsGroup, ChannelsQueryScope } from '../../../types';
 import {
   domIdForRow,
@@ -104,7 +105,9 @@ export function useChannelRailScopeState(scope: Accessor<ChannelsQueryScope>) {
   });
 }
 
-export function useChannelRailVirtualizer(scope: Accessor<ChannelsQueryScope>) {
+export function useChannelRailVirtualizer(
+  scope: Accessor<ChannelsSourceScope>
+) {
   const rail = useChannelsRail();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   let unregister: (() => void) | undefined;

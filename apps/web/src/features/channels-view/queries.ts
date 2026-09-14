@@ -27,7 +27,9 @@ type ChannelsQueryDefinition = {
 
 export type ChannelsDataSource = ListDataSource<ChannelEntity>;
 
-export type ChannelsSources = Record<ChannelsQueryScope, ChannelsDataSource>;
+export type ChannelsSourceScope = ChannelsQueryScope | 'search';
+
+export type ChannelsSources = Record<ChannelsSourceScope, ChannelsDataSource>;
 
 export const CHANNELS_QUERY_DEFINITIONS = {
   recents: {
@@ -58,10 +60,17 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     }),
     matches: isDirectMessage,
   },
-} satisfies Record<ChannelsQueryScope, ChannelsQueryDefinition>;
+  search: {
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
+    filters: defineQueryFilters({
+      include: { channelIsParticipant: [true] },
+    }),
+    matches: () => true,
+  },
+} satisfies Record<ChannelsSourceScope, ChannelsQueryDefinition>;
 
 export function channelsQueryArgs(
-  scope: ChannelsQueryScope
+  scope: ChannelsSourceScope
 ): SoupAstItemsQueryArgs {
   const definition = CHANNELS_QUERY_DEFINITIONS[scope];
 
@@ -72,7 +81,7 @@ export function channelsQueryArgs(
 }
 
 export function filterChannelsForScope(
-  scope: ChannelsQueryScope,
+  scope: ChannelsSourceScope,
   channels: readonly ChannelEntity[]
 ): ChannelEntity[] {
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
@@ -128,7 +137,7 @@ export function resolveSelectedChannel(
 }
 
 function useChannelsDataSource(
-  scope: ChannelsQueryScope,
+  scope: ChannelsSourceScope,
   enabled: Accessor<boolean>
 ): ChannelsDataSource {
   const query = useSoupAstItemsQuery(
@@ -143,7 +152,7 @@ function useChannelsDataSource(
       (query.data?.entities ?? []).filter(isChannelEntity)
     );
 
-    if (scope !== 'direct_messages') return channels;
+    if (scope !== 'direct_messages' && scope !== 'search') return channels;
 
     return channels
       .slice()
@@ -172,7 +181,7 @@ function useChannelsDataSource(
 }
 
 export function useChannelsSources(
-  enabled: (scope: ChannelsQueryScope) => boolean
+  enabled: (scope: ChannelsSourceScope) => boolean
 ): ChannelsSources {
   return {
     channels: useChannelsDataSource('channels', () => enabled('channels')),
@@ -180,6 +189,7 @@ export function useChannelsSources(
       enabled('direct_messages')
     ),
     recents: useChannelsDataSource('recents', () => enabled('recents')),
+    search: useChannelsDataSource('search', () => enabled('search')),
   };
 }
 

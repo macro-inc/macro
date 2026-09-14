@@ -5,10 +5,9 @@ import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import type { Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
-import type { ChannelsSources } from '../../queries';
+import type { ChannelsSourceScope, ChannelsSources } from '../../queries';
 import type {
   ChannelsGroup,
-  ChannelsQueryScope,
   ChannelsRailSection,
   ChannelsTab,
 } from '../../types';
@@ -32,7 +31,7 @@ export type ChannelRailRow =
       kind: 'conversation';
       id: `channel:${string}`;
       group?: ChannelsGroup;
-      scope: ChannelsQueryScope;
+      scope: ChannelsSourceScope;
       localIndex: number;
       channel: ChannelEntity;
     };
@@ -66,7 +65,7 @@ export type ChannelsRailContext = {
     element: HTMLDivElement
   ) => void;
   registerVirtualizer: (
-    scope: ChannelsQueryScope,
+    scope: ChannelsSourceScope,
     handle: VirtualizerHandle
   ) => () => void;
   channelActivity: ChannelRailActivity;
