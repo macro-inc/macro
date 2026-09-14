@@ -35,6 +35,7 @@ async fn unsupported_types_are_bad_request() {
         EntityType::User,
         EntityType::ChannelMessage,
         EntityType::Skill,
+        EntityType::ScheduledAction,
     ] {
         let error = service
             .explain_access(&user, "id", entity_type)

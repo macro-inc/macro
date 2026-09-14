@@ -266,8 +266,10 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::CrmContact
             | EntityType::Skill
             | EntityType::ForeignEntity
-            // Reminders are never channel-shared: they are private to one user.
-            | EntityType::Reminder => {
+            // Reminders and scheduled actions are never channel-shared: they
+            // are private to one user.
+            | EntityType::Reminder
+            | EntityType::ScheduledAction => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "received unexpected entity type {entity_type:?}"
                 )));
@@ -335,8 +337,10 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::CrmContact
             | EntityType::Skill
             | EntityType::ForeignEntity
-            // Reminders are never channel-shared: they are private to one user.
-            | EntityType::Reminder => {
+            // Reminders and scheduled actions are never channel-shared: they
+            // are private to one user.
+            | EntityType::Reminder
+            | EntityType::ScheduledAction => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "Received invalid EntityType {entity_type:?}"
                 )));

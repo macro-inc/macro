@@ -2219,6 +2219,10 @@ enum GraphqlEntityType {
 	AI coding agent session entity.
 	"""
 	AGENT_SESSION
+	"""
+	Scheduled action entity.
+	"""
+	SCHEDULED_ACTION
 }
 
 """

@@ -190,7 +190,10 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                 .await?)
             }
             EntityType::StaticFile => Ok(vec![AccessGrant::StaticFileAlwaysView]),
-            EntityType::User | EntityType::ChannelMessage | EntityType::Skill => Ok(vec![]),
+            EntityType::User
+            | EntityType::ChannelMessage
+            | EntityType::Skill
+            | EntityType::ScheduledAction => Ok(vec![]),
         }
     }
 }

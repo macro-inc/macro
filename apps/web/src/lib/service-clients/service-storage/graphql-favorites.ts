@@ -41,6 +41,7 @@ const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   reminder: 'REMINDER',
   skill: 'SKILL',
   agent_session: 'AGENT_SESSION',
+  scheduled_action: 'SCHEDULED_ACTION',
 } satisfies Record<FavoriteEntityType, GraphqlEntityType>;
 
 const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
@@ -58,6 +59,7 @@ const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
   PROJECT: 'project',
   REMINDER: 'reminder',
   SKILL: 'skill',
+  SCHEDULED_ACTION: 'scheduled_action',
   STATIC_FILE: 'static_file',
   TEAM: 'team',
   USER: 'user',

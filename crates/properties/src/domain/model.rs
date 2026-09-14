@@ -55,7 +55,8 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         | AccessEntityType::CrmContact
         | AccessEntityType::Reminder
         | AccessEntityType::Skill
-        | AccessEntityType::AgentSession => None,
+        | AccessEntityType::AgentSession
+        | AccessEntityType::ScheduledAction => None,
     }
 }
 
