@@ -28,6 +28,7 @@ struct MockRepo {
     owned_email_thread_ids: Arc<Mutex<Vec<Uuid>>>,
     call_access: Arc<Mutex<Option<AccessLevel>>>,
     agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
+    initiative_access: Arc<Mutex<Option<AccessLevel>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access_calls: Arc<AtomicUsize>,
@@ -64,6 +65,7 @@ impl MockRepo {
             owned_email_thread_ids: Arc::new(Mutex::new(Vec::new())),
             call_access: Arc::new(Mutex::new(None)),
             agent_session_access: Arc::new(Mutex::new(None)),
+            initiative_access: Arc::new(Mutex::new(None)),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
             team_entity_access_calls: Arc::new(AtomicUsize::new(0)),
@@ -310,6 +312,14 @@ impl AccessRepository for MockRepo {
         Ok(*self.agent_session_access.lock().await)
     }
 
+    async fn get_initiative_access(
+        &self,
+        _initiative_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.initiative_access.lock().await)
+    }
+
     async fn get_reminder_access(
         &self,
         _reminder_id: &str,
@@ -413,6 +423,7 @@ impl AccessRepository for MockRepo {
             EntityType::Project => Ok(self.project_users.lock().await.clone()),
             EntityType::EmailThread => Ok(self.thread_users.lock().await.clone()),
             EntityType::AgentSession => Ok(self.agent_session_users.lock().await.clone()),
+            EntityType::Initiative => Ok(vec![]),
             _ => Err(AccessError::BadRequest("unsupported entity type")),
         }
     }
@@ -1234,6 +1245,7 @@ async fn team_scoped_bot_dispatches_all_item_types() {
         EntityType::Project,
         EntityType::EmailThread,
         EntityType::Call,
+        EntityType::Initiative,
     ] {
         let receipt = service
             .generate_bot_entity_access_receipt::<ViewAccessLevel>(
@@ -1257,7 +1269,7 @@ async fn team_scoped_bot_dispatches_all_item_types() {
         ));
     }
 
-    assert_eq!(repo.team_entity_access_calls.load(Ordering::SeqCst), 5);
+    assert_eq!(repo.team_entity_access_calls.load(Ordering::SeqCst), 6);
 }
 
 #[tokio::test]

@@ -69,6 +69,8 @@ pub enum GraphqlEntityType {
     AgentSession,
     /// Scheduled action entity.
     ScheduledAction,
+    /// Initiative entity.
+    Initiative,
 }
 
 impl GraphqlSoupEntityType {
@@ -100,7 +102,8 @@ impl GraphqlSoupEntityType {
             | EntityType::StaticFile
             | EntityType::CrmContact
             | EntityType::Skill
-            | EntityType::ScheduledAction => return None,
+            | EntityType::ScheduledAction
+            | EntityType::Initiative => return None,
         })
     }
 
@@ -145,6 +148,7 @@ impl GraphqlEntityType {
             EntityType::Skill => Self::Skill,
             EntityType::AgentSession => Self::AgentSession,
             EntityType::ScheduledAction => Self::ScheduledAction,
+            EntityType::Initiative => Self::Initiative,
         }
     }
 
@@ -174,6 +178,7 @@ impl GraphqlEntityType {
             Self::Skill => EntityType::Skill,
             Self::AgentSession => EntityType::AgentSession,
             Self::ScheduledAction => EntityType::ScheduledAction,
+            Self::Initiative => EntityType::Initiative,
         }
     }
 }
@@ -228,5 +233,17 @@ mod test {
     #[test]
     fn scheduled_action_is_not_a_soup_entity_type() {
         assert!(GraphqlSoupEntityType::try_new(EntityType::ScheduledAction).is_none());
+    }
+
+    #[test]
+    fn initiative_round_trips_through_graphql_entity_type() {
+        let graphql = GraphqlEntityType::new(EntityType::Initiative);
+        assert!(matches!(graphql, GraphqlEntityType::Initiative));
+        assert!(matches!(graphql.into_model(), EntityType::Initiative));
+    }
+
+    #[test]
+    fn initiative_is_not_a_soup_entity_type() {
+        assert!(GraphqlSoupEntityType::try_new(EntityType::Initiative).is_none());
     }
 }

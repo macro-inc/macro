@@ -225,6 +225,25 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    async fn get_initiative_access(
+        &self,
+        initiative_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let initiative_uuid = initiative_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid initiative ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::initiative_access::get_initiative_access(
+            &self.pool,
+            &initiative_uuid,
+            &source_ids,
+        )
+        .await?)
+    }
+
     // A macro user id embeds the user's email, so it stays out of the span; the
     // reminder id is what identifies the lookup anyway.
     #[tracing::instrument(err, skip(self, user_id))]
@@ -303,6 +322,14 @@ impl AccessRepository for PgAccessRepository {
             }
             EntityType::AgentSession => {
                 queries::agent_session_access::get_agent_session_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                )
+                .await
+            }
+            EntityType::Initiative => {
+                queries::initiative_access::get_initiative_access(
                     &self.pool,
                     &entity_uuid,
                     &source_ids,

@@ -27,3 +27,23 @@ fn scheduled_action_round_trips_as_snake_case() {
 fn scheduled_action_is_not_an_entity_access_entity() {
     assert!(!EntityType::ScheduledAction.is_valid_entity_access_entity());
 }
+
+#[test]
+fn initiative_round_trips_as_snake_case() {
+    let encoded = serde_json::to_string(&EntityType::Initiative).unwrap();
+    assert_eq!(encoded, "\"initiative\"");
+    assert_eq!(
+        serde_json::from_str::<EntityType>(&encoded).unwrap(),
+        EntityType::Initiative
+    );
+    assert_eq!(EntityType::Initiative.as_ref(), "initiative");
+    assert_eq!(
+        EntityType::from_str("initiative").unwrap(),
+        EntityType::Initiative
+    );
+}
+
+#[test]
+fn initiative_is_not_an_entity_access_entity() {
+    assert!(!EntityType::Initiative.is_valid_entity_access_entity());
+}

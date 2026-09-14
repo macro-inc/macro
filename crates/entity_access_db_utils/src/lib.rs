@@ -307,7 +307,8 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
-            | EntityType::Call => {
+            | EntityType::Call
+            | EntityType::Initiative => {
                 sqlx::query!(
                     r#"
                     DELETE FROM entity_access
@@ -420,7 +421,8 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
-            | EntityType::Call => {
+            | EntityType::Call
+            | EntityType::Initiative => {
                 let entity_type_str = entity_type.as_ref();
 
                 let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(

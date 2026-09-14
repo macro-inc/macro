@@ -2223,6 +2223,10 @@ enum GraphqlEntityType {
 	Scheduled action entity.
 	"""
 	SCHEDULED_ACTION
+	"""
+	Initiative entity.
+	"""
+	INITIATIVE
 }
 
 """
