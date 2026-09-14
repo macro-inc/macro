@@ -3,6 +3,6 @@ import type { ListFavoritesParams } from '@service-storage/generated/schemas/lis
 
 export const favoriteKeys = createQueryKeys('favorites', {
   list: (filter?: ListFavoritesParams) => ({
-    queryKey: filter ? [filter] : [],
+    queryKey: [filter],
   }),
 });
