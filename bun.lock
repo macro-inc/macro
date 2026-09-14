@@ -306,6 +306,7 @@
       "dependencies": {
         "@ai-sdk/anthropic": "^3.0.85",
         "@ai-sdk/cerebras": "^2.0.57",
+        "@ai-sdk/google": "^3.0.83",
         "@ai-sdk/openai": "^3.0.73",
         "@hono/zod-validator": "^0.8.0",
         "@loro-mirror/core": "workspace:*",

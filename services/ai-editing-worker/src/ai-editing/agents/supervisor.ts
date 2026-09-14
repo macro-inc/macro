@@ -2,10 +2,7 @@ import { type Span, Telemetry } from '@macro-inc/observability';
 import { hasToolCall, stepCountIs, streamText } from 'ai';
 import type { ResolvedModels } from '../../run-edit';
 import type { LexicalSession } from '../ai-toolkit';
-import API_COMPACT from '../prompts/API_COMPACT.md';
-import INTERPRET from '../prompts/INTERPRET.md';
-import SHARED from '../prompts/SHARED.md';
-import SUPERVISOR from '../prompts/SUPERVISOR.md';
+import { INTERPRET_SYSTEM, SUPERVISOR_SYSTEM } from '../prompts';
 import { TokenTracker } from '../token-tracker';
 import { createDispatchTool, createImBlockedTool } from '../tools';
 import { numberLines, serializeWithXml } from '../utils';
@@ -16,12 +13,6 @@ import { cachedPrompt, EDIT_PROVIDER_OPTIONS } from './model-options';
 import type { RunAgentOptions } from './types';
 
 export type { RunAgentOptions } from './types';
-
-// TODO(wolf): figure out if we want this. Leaving it off for now.
-const USE_COMPACT = false;
-
-const MASTER_SYSTEM = `${SHARED}\n${SUPERVISOR}${USE_COMPACT ? `\n${API_COMPACT}` : ''}`;
-const INTERPRET_SYSTEM = `${SHARED}\n${INTERPRET}`;
 
 export async function supervisor(
   session: LexicalSession,
@@ -117,7 +108,7 @@ export async function supervisor(
     const result = streamText({
       model: models.supervisor,
       stopWhen: [stepCountIs(7), hasToolCall('reportBlocked')],
-      system: MASTER_SYSTEM,
+      system: SUPERVISOR_SYSTEM,
       messages: cachedPrompt(prompt),
       tools,
       providerOptions: EDIT_PROVIDER_OPTIONS,

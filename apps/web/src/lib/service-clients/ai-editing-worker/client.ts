@@ -34,7 +34,26 @@ const MODELS = {
     { provider: 'cerebras', model: 'gpt-oss-120b' },
     { provider: 'anthropic', model: 'claude-haiku-4-5' },
   ],
+  // The fast path's single model: whole doc in, `runCode` out, no supervisor.
+  // Benched on a real inline request (10k-token prompt, one runCode step):
+  // 3.5 Flash Lite 0.8-1.1 s, 3.8 Flash 1.5-5 s, 3.7 Flash 3.8-5.4 s (it
+  // spends ~450 thinking tokens even at `low`). Lite produced the same code as
+  // the larger models on a translation, a list-to-table, and a bold+divider+
+  // rewrite, so it leads; the others are provider-error fallbacks only.
+  fast: [
+    { provider: 'google', model: 'gemini-3.5-flash-lite' },
+    { provider: 'google', model: 'gemini-3.8-flash' },
+    { provider: 'anthropic', model: 'claude-haiku-4-5' },
+  ],
 } as const;
+
+/**
+ * `supervised` runs the full interpreter → supervisor → coders pipeline.
+ * `fast` gives one model the whole document and lets it edit directly; a few
+ * seconds instead of tens, at the cost of the supervisor's review loop. Meant
+ * for small, well-scoped inline edits.
+ */
+export type AiEditMode = 'supervised' | 'fast';
 
 export type AiEditResult = 'ok' | 'failed' | 'cancelled';
 
@@ -75,6 +94,8 @@ export function cancelAiEdit(documentId: string): void {
 export async function requestAiEdit(args: {
   documentId: string;
   prompt: string;
+  /** Defaults to the worker's `supervised` pipeline. */
+  mode?: AiEditMode;
   onOps?: (ops: DocumentOp[]) => void;
 }): Promise<AiEditResult> {
   const controller = new AbortController();
@@ -90,6 +111,7 @@ export async function requestAiEdit(args: {
   span.setAttr('http.method', 'POST');
   span.setAttr('http.url', `${AI_EDITING_WORKER_HOST}/edit`);
   span.setAttr('document.id', args.documentId);
+  span.setAttr('edit.mode', args.mode ?? 'supervised');
   try {
     const token = await getDocumentPermissionToken(args.documentId);
     const headers: Record<string, string> = {
@@ -104,6 +126,7 @@ export async function requestAiEdit(args: {
         documentId: args.documentId,
         prompt: args.prompt,
         models: MODELS,
+        mode: args.mode,
         interpret: false,
         propagate: args.onOps === undefined ? undefined : false,
       }),
