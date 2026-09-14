@@ -1,15 +1,49 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import { SessionStartToggle } from './SessionStartToggle';
-import { SESSION_START_TOGGLE_DRAG_THRESHOLD } from './session-start-mode';
+
+vi.mock('@ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ui')>();
+  const Pass = (props: { children?: import('solid-js').JSX.Element }) =>
+    props.children;
+  return {
+    ...actual,
+    Dropdown: Object.assign(Pass, {
+      Trigger: (
+        props: import('solid-js').JSX.ButtonHTMLAttributes<HTMLButtonElement>
+      ) => (
+        <button aria-label={props['aria-label']} disabled={props.disabled}>
+          {props.children}
+        </button>
+      ),
+      Content: Pass,
+      Group: Pass,
+      Item: (props: {
+        children?: import('solid-js').JSX.Element;
+        role?: string;
+        'aria-checked'?: boolean | 'true' | 'false';
+        onSelect: () => void;
+      }) => (
+        <button
+          role={props.role}
+          aria-checked={props['aria-checked']}
+          onClick={props.onSelect}
+        >
+          {props.children}
+        </button>
+      ),
+    }),
+  };
+});
 
 describe('SessionStartToggle', () => {
-  it('starts the selected mode from the arrow and toggles from the other side', () => {
+  it('starts the selected mode from the send button and changes mode from the dropdown', () => {
     const onModeChange = vi.fn();
     const onStart = vi.fn();
     render(() => (
       <SessionStartToggle
         mode="live"
+        committed="live"
         onModeChange={onModeChange}
         onStart={onStart}
       />
@@ -19,7 +53,7 @@ describe('SessionStartToggle', () => {
     expect(onStart).toHaveBeenCalledOnce();
     expect(onModeChange).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Background' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Background/ }));
     expect(onModeChange).toHaveBeenCalledWith('background');
     expect(onStart).toHaveBeenCalledOnce();
   });
@@ -30,6 +64,7 @@ describe('SessionStartToggle', () => {
     render(() => (
       <SessionStartToggle
         mode="background"
+        committed="background"
         onModeChange={onModeChange}
         onStart={onStart}
       />
@@ -39,97 +74,55 @@ describe('SessionStartToggle', () => {
       screen.getByRole('button', { name: 'Start session in background' })
     );
     expect(onStart).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByRole('button', { name: 'Live' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Live/ }));
     expect(onModeChange).toHaveBeenCalledWith('live');
   });
 
-  it('drags across the midpoint to switch modes without starting', () => {
-    const onModeChange = vi.fn();
-    const onStart = vi.fn();
+  it('keeps the mode dropdown to the left of the send button', () => {
     render(() => (
       <SessionStartToggle
         mode="live"
-        onModeChange={onModeChange}
-        onStart={onStart}
-      />
-    ));
-    const track = screen
-      .getByRole('group', {
-        name: 'Session start mode',
-      })
-      .querySelector('[data-session-start-switch]');
-    expect(track).toBeInstanceOf(HTMLElement);
-    vi.spyOn(track as HTMLElement, 'getBoundingClientRect').mockReturnValue({
-      x: 0,
-      y: 0,
-      top: 0,
-      left: 0,
-      bottom: 28,
-      right: 48,
-      width: 48,
-      height: 28,
-      toJSON: () => ({}),
-    });
-
-    fireEvent.mouseDown(track as HTMLElement, { button: 0, clientX: 8 });
-    fireEvent.mouseMove(track as HTMLElement, {
-      button: 0,
-      clientX: 8 + SESSION_START_TOGGLE_DRAG_THRESHOLD,
-    });
-    fireEvent.mouseMove(track as HTMLElement, { button: 0, clientX: 40 });
-    fireEvent.mouseUp(track as HTMLElement, { button: 0, clientX: 40 });
-
-    expect(onModeChange).toHaveBeenCalledWith('background');
-    expect(onStart).not.toHaveBeenCalled();
-  });
-
-  it('keeps Live and Background outside a compact iOS switch', () => {
-    render(() => (
-      <SessionStartToggle
-        mode="live"
+        committed="live"
         onModeChange={vi.fn()}
         onStart={vi.fn()}
       />
     ));
-    const track = screen
-      .getByRole('group', { name: 'Session start mode' })
-      .querySelector('[data-session-start-switch]');
-    expect(track?.className.split(/\s+/)).toEqual(
-      expect.arrayContaining(['w-12', 'h-7', 'rounded-full'])
-    );
-    expect(track?.textContent).not.toContain('Live');
-    expect(track?.textContent).not.toContain('Background');
-    expect(screen.getByRole('button', { name: 'Live' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Background' })).toBeTruthy();
+    const group = screen.getByRole('group', { name: 'Session start mode' });
+    const mode = screen.getByRole('button', { name: 'Session start mode' });
+    const send = screen.getByRole('button', { name: 'Start session' });
+    expect(group.contains(mode)).toBe(true);
+    expect(group.contains(send)).toBe(true);
+    expect(
+      mode.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
-  it('toggles from a click on the empty side of the switch', () => {
-    const onModeChange = vi.fn();
-    const onStart = vi.fn();
+  it('previews background on the trigger without changing the committed check', () => {
     render(() => (
       <SessionStartToggle
-        mode="live"
-        onModeChange={onModeChange}
-        onStart={onStart}
+        mode="background"
+        committed="live"
+        onModeChange={vi.fn()}
+        onStart={vi.fn()}
       />
     ));
-    const track = screen
-      .getByRole('group', { name: 'Session start mode' })
-      .querySelector('[data-session-start-switch]') as HTMLElement;
-    vi.spyOn(track, 'getBoundingClientRect').mockReturnValue({
-      x: 0,
-      y: 0,
-      top: 0,
-      left: 0,
-      bottom: 28,
-      right: 48,
-      width: 48,
-      height: 28,
-      toJSON: () => ({}),
-    });
-
-    fireEvent.click(track, { button: 0, clientX: 40 });
-    expect(onModeChange).toHaveBeenCalledWith('background');
-    expect(onStart).not.toHaveBeenCalled();
+    expect(
+      screen
+        .getByRole('group', { name: 'Session start mode' })
+        .getAttribute('data-session-start-mode')
+    ).toBe('background');
+    expect(
+      screen.getByRole('button', { name: 'Start session in background' })
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('menuitemradio', { name: /Live/ })
+        .getAttribute('aria-checked')
+    ).toBe('true');
+    expect(
+      screen
+        .getByRole('menuitemradio', { name: /Background/ })
+        .getAttribute('aria-checked')
+    ).toBe('false');
   });
 });

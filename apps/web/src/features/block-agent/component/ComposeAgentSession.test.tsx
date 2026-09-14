@@ -176,6 +176,8 @@ vi.mock('@ui', () => {
     }),
     Tooltip: (props: { children?: import('solid-js').JSX.Element }) =>
       props.children,
+    Hotkey: () => null,
+    SingleSelectCheck: () => null,
     badgeTriggerClasses: () => '',
     cn: (...inputs: Array<string | false | undefined>) =>
       inputs.filter(Boolean).join(' '),

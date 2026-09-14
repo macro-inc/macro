@@ -465,6 +465,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
 
           <SessionStartToggle
             mode={submitMode() ?? startMode.effective()}
+            committed={startMode.committed()}
             pending={submitting()}
             error={!!error()}
             disabled={submitting() || !!selectedPersona()?.unavailableReason}
