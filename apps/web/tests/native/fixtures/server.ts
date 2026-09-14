@@ -1,6 +1,7 @@
 import { buildSchema, graphql } from 'graphql';
 import type { SoupInput } from '../../../src/lib/service-clients/service-storage/graphql/generated/graphql';
-import { accounts, EMAIL, identity, mail, USER_ID } from './mail';
+import { bootstrapResponses } from './bootstrap';
+import { accounts, fixtureId, mail, USER_ID } from './mail';
 
 const schema = buildSchema(
   await Bun.file(
@@ -45,11 +46,19 @@ export function startFixtureServer(port = 0) {
     // This fixture has metadata, no core/shared entities or message bodies.
     if (
       operation === 'SoupBackfill' ||
-      operation === 'SoupSharedMailBackfill'
+      operation === 'SoupSharedMailBackfill' ||
+      operation === 'SoupNotifications'
     ) {
       return { items: [], nextCursor: null };
     }
     if (operation === 'Soup') {
+      // The app sidebar also queries channel Soup, explicitly excluding mail.
+      if (
+        input.initial?.filters?.emailFilter?.tree?.literal?.threadId ===
+        fixtureId(0)
+      ) {
+        return { items: [], nextCursor: null };
+      }
       if (
         input.initial?.emailView !== 'INBOX' ||
         !JSON.stringify(input.initial.filters).includes('"importance":true')
@@ -69,10 +78,11 @@ export function startFixtureServer(port = 0) {
   const json = (data: unknown, status = 200) =>
     Response.json(data, { status, headers: cors });
 
-  const server = Bun.serve({
+  const sockets = new Set<Bun.ServerWebSocket<{ path: string }>>();
+  const server = Bun.serve<{ path: string }>({
     hostname: '127.0.0.1',
     port,
-    async fetch(request) {
+    async fetch(request, server) {
       const path = new URL(request.url).pathname;
       if (request.method === 'OPTIONS')
         return new Response(null, { headers: cors });
@@ -80,31 +90,19 @@ export function startFixtureServer(port = 0) {
       requests.push(record);
       try {
         if (path === '/health') return json({ ok: true });
-        if (path === '/auth/user/legacy_user_permissions')
-          return json(identity);
-        if (path === '/auth/user/me')
-          return json({ user_id: USER_ID, permissions: [] });
-        if (path === '/auth/jwt/macro')
-          return json({ macro_api_token: 'fixture-only' });
-        if (path === '/email/links')
-          return json({
-            links: [
-              {
-                id: accounts[0].id,
-                macro_id: USER_ID,
-                email_address: EMAIL,
-                is_primary: true,
-                provider: 'GMAIL',
-                is_sync_active: true,
-                sync_status: 'ACTIVE',
-                needs_reauth: false,
-                photo_url: null,
-                settings: { signature: null },
-                created_at: '2025-01-01T00:00:00Z',
-                updated_at: '2025-01-01T00:00:00Z',
-              },
-            ],
-          });
+        if (
+          [
+            '/websocket',
+            '/connection-gateway',
+            '/dss/items/soup/graphql/ws',
+          ].includes(path) &&
+          request.headers.get('upgrade')?.toLowerCase() === 'websocket'
+        ) {
+          if (server.upgrade(request, { data: { path } })) return;
+          throw new Error('WebSocket upgrade failed');
+        }
+        const bootstrap = bootstrapResponses.get(`${request.method} ${path}`);
+        if (bootstrap) return json(bootstrap.body, bootstrap.status);
         if (path === '/dss/items/soup/graphql' && request.method === 'POST') {
           const body = (await request.json()) as {
             query: string;
@@ -144,17 +142,39 @@ export function startFixtureServer(port = 0) {
         return json({ error: record.error }, 500);
       }
     },
+    websocket: {
+      open(socket) {
+        sockets.add(socket);
+      },
+      close(socket) {
+        sockets.delete(socket);
+      },
+      message(socket, message) {
+        if (socket.data.path !== '/dss/items/soup/graphql/ws') return;
+        const payload: { type?: string } = JSON.parse(String(message));
+        if (payload.type === 'connection_init')
+          socket.send(JSON.stringify({ type: 'connection_ack' }));
+        if (payload.type === 'ping')
+          socket.send(JSON.stringify({ type: 'pong' }));
+        // No fixture entity changes; subscriptions stay connected until offline.
+      },
+    },
   });
 
   return {
     origin: `http://localhost:${server.port}`,
     requests,
+    get socketCount() {
+      return sockets.size;
+    },
     get metadataPagesServed() {
       return pagesServed;
     },
     /** Closes the listener and every in-flight connection, including native
      * HTTP. The runner's network namespace has no external route to fall back to. */
     async disconnect() {
+      for (const socket of sockets) socket.terminate();
+      sockets.clear();
       await server.stop(true);
     },
   };

@@ -12,6 +12,7 @@ if ! test -x "$out/tools/bin/tauri-driver"; then
 fi
 
 \cd "$web"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$out/prepare-target}"
 just ensure-cache-wasm
 just ensure-agent-fold-wasm
 
@@ -28,7 +29,7 @@ trap restore EXIT
 printf development > "$env_file"
 export TAURI_CONFIG
 TAURI_CONFIG=$(< "$web/tests/native/tauri.e2e.conf.json")
-export CARGO_TARGET_DIR="$web/tauri/target"
+export CARGO_TARGET_DIR="$out/cargo"
 \cd "$web/tauri/src-tauri"
 # Dev-protocol binary: Vite serves the real UI. No production bundle or OTA.
 cargo build --locked -p app --no-default-features

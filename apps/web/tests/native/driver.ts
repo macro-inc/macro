@@ -111,9 +111,15 @@ export async function expectRows(browser: Browser, numbers: number[]) {
 export async function nativeHttpReachable(browser: Browser, origin: string) {
   return browser.execute(async (origin) => {
     const modulePath = '/src/lib/core/util/platformFetch.ts';
-    const { platformFetch }: { platformFetch: typeof fetch } = await import(modulePath);
+    const { platformFetch }: { platformFetch: typeof fetch } = await import(
+      modulePath
+    );
     try {
-      return (await platformFetch(`${origin}/health`, { signal: AbortSignal.timeout(2000) })).ok;
+      return (
+        await platformFetch(`${origin}/health`, {
+          signal: AbortSignal.timeout(2000),
+        })
+      ).ok;
     } catch {
       return false;
     }

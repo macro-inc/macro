@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { type Browser, remote } from 'webdriverio';
 import {
@@ -33,15 +32,15 @@ const artifacts = resolve(
   new Date().toISOString().replaceAll(':', '-')
 );
 await mkdir(artifacts, { recursive: true });
-const profile = await mkdtemp(resolve(tmpdir(), 'macro-native-e2e-'));
 const env = {
-  ...Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-    !/^(VITE_|LOCAL_JWT$|MODE$|PORT$|TAURI_|https?_proxy$|all_proxy$|no_proxy$)/i.test(key)
-  )),
-  HOME: profile,
-  XDG_DATA_HOME: resolve(profile, 'data'),
-  XDG_CONFIG_HOME: resolve(profile, 'config'),
-  XDG_CACHE_HOME: resolve(profile, 'cache'),
+  ...Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([key]) =>
+        !/^(VITE_|LOCAL_JWT$|MODE$|PORT$|TAURI_|https?_proxy$|all_proxy$|no_proxy$)/i.test(
+          key
+        )
+    )
+  ),
   // This app is root only within the unprivileged, loopback-only user namespace.
   WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: '1',
   WEBKIT_DISABLE_DMABUF_RENDERER: '1',
@@ -144,16 +143,21 @@ try {
     connectionRetryTimeout: 120_000,
     capabilities,
   });
+  const emailNavigation = browser.$('button[aria-label="Go to Email"]');
+  await emailNavigation.waitForDisplayed({ timeout: 120_000 });
+  await emailNavigation.click();
   await waitForBackfill(browser);
   assert.equal(fixture.metadataPagesServed, 3);
   assert.deepEqual(
-    fixture.requests.filter((request) => request.operation && request.error),
+    fixture.requests.filter((request) => request.error),
     []
   );
   await assertNativeRecords(browser);
   await expectRows(browser, [6, 12]);
   const onlineSoupRequests = fixture.requests.filter(
-    (request) => request.operation === 'Soup'
+    (request) =>
+      request.operation === 'Soup' &&
+      JSON.stringify(request.variables).includes('"emailView":"INBOX"')
   );
   assert(
     onlineSoupRequests.length > 0,
@@ -164,7 +168,12 @@ try {
   );
 
   assert.equal(await nativeHttpReachable(browser, fixture.origin), true);
+  assert(
+    fixture.socketCount > 0,
+    'Realtime transports must connect before the outage'
+  );
   await fixture.disconnect();
+  assert.equal(fixture.socketCount, 0);
   assert.equal(await nativeHttpReachable(browser, fixture.origin), false);
   await assert.rejects(
     fetch(`${fixture.origin}/health`, { signal: AbortSignal.timeout(1000) })
@@ -209,6 +218,5 @@ try {
       await child.exited;
     }
   }
-  await rm(profile, { recursive: true, force: true });
   console.log(`Artifacts: ${artifacts}`);
 }
