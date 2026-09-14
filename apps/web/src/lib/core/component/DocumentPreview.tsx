@@ -16,7 +16,7 @@ import {
   type BlockName,
   useMaybeBlockName,
 } from '@core/block';
-import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { useHoldParentHoverCardOpen } from '@core/component/HoverCard';
 import { isBlockNameWithLocation } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -462,7 +462,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     return { id: props.documentInfo.id, type, messageId };
   };
 
-  const { item, ItemEntityIcon, documentProperties, targetType } =
+  const { item, ItemEntityIcon, documentProperties } =
     useItemPreviewData(itemPreviewEntity);
 
   const [menuOpen, setMenuOpen] = createSignal(false);
@@ -669,7 +669,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   });
 
   const PreviewTitle = (local: { name: string }) => (
-    <Item.Title class="col-start-2 row-start-1 flex min-h-8 items-center">
+    <Item.Title>
       <Show
         when={props.documentInfo.isOpenable}
         fallback={<span class="wrap-anywhere">{local.name}</span>}
@@ -690,12 +690,12 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
 
   const renderActionButtons = () => (
     <Item.Actions
-      class="col-start-3 row-start-1"
+      class="col-start-3 row-start-1 h-5"
       onClick={(event) => event.stopPropagation()}
     >
       <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
         <Dropdown.Trigger
-          size="icon-md"
+          size="icon-sm"
           variant="ghost"
           aria-label="Reference actions"
         >
@@ -787,20 +787,27 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
           return (
             <div class="w-full flex flex-col">
               <Card.Header class="py-2.5">
-                <Item class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-0 p-0">
-                  <Item.Media
-                    class={cn(
-                      'relative col-start-1 row-start-1 size-8 rounded-lg bg-transparent',
-                      getIconConfig(targetType()).foreground
-                    )}
-                  >
-                    <span
-                      aria-hidden="true"
-                      class="pointer-events-none absolute inset-0 rounded-[inherit] bg-current/10"
-                    />
-                    <ItemEntityIcon size="xs" class="relative" />
-                  </Item.Media>
-                  <Item.Content class="contents">
+                <Item class="grid grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2 border-0 p-0">
+                  <Item.Icon class="col-start-1 row-start-1">
+                    <Show
+                      when={targetBlockType() === 'task'}
+                      fallback={<ItemEntityIcon size="xs" />}
+                    >
+                      <Suspense
+                        fallback={
+                          <LoadingSpinner class="size-4 animate-spin text-ink-muted" />
+                        }
+                      >
+                        <TaskPropertiesPreview
+                          taskId={props.documentInfo.id}
+                          taskName={accessibleItem().name}
+                          previewProperties={documentProperties()}
+                          mode="status"
+                        />
+                      </Suspense>
+                    </Show>
+                  </Item.Icon>
+                  <Item.Content class="col-start-2 row-start-1">
                     <PreviewTitle
                       name={props.documentInfo.name || accessibleItem().name}
                     />
@@ -812,7 +819,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                         accessibleItem().updatedAt
                       }
                     >
-                      <Item.Description class="col-start-2 row-start-2 text-xs wrap-anywhere">
+                      <Item.Description class="text-left wrap-anywhere">
                         <Show
                           when={
                             messageContext()?.sender_id ||
@@ -846,7 +853,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                     </Show>
                     <Show when={accessories()}>
                       {(acc) => (
-                        <Item.Metadata class="col-start-2 row-start-3">
+                        <Item.Metadata>
                           {acc().note}
                           {getMentionsIcon(acc().icon)}
                         </Item.Metadata>
@@ -857,14 +864,15 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                 </Item>
               </Card.Header>
 
-              {/* Task properties: status, priority, assignees */}
-              <Show when={props.documentInfo.type === 'task'}>
-                <Card.Body class="pt-2 [&>div]:px-0 [&>div]:pb-0">
+              {/* Status lives in the header; remaining properties align with the title. */}
+              <Show when={targetBlockType() === 'task'}>
+                <Card.Body class="pt-2 pl-9 [&>div]:px-0 [&>div]:pb-0">
                   <Suspense fallback={<div class="w-full bg-active h-4 m-2" />}>
                     <TaskPropertiesPreview
                       taskId={props.documentInfo.id}
                       taskName={accessibleItem().name}
                       previewProperties={documentProperties()}
+                      mode="details"
                     />
                   </Suspense>
                 </Card.Body>
@@ -916,7 +924,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                       <div class="mt-2 pt-2 border-t border-edge">
                         <div class="flex items-center gap-1.5 text-ink-muted">
                           <ClockIcon class="size-3" />
-                          <span class="text-xxs font-medium font-mono uppercase">
+                          <span class="text-xs font-medium font-mono uppercase">
                             Snapshot from{' '}
                             {formatDate(new Date(snapshot().date), {
                               showTime: true,
@@ -953,24 +961,11 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
             }
           >
             <Card.Header class="py-2.5">
-              <Item class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-0 p-0">
-                <Item.Media
-                  class={cn(
-                    'relative col-start-1 row-start-1 size-8 rounded-lg bg-transparent',
-                    getIconConfig(props.documentInfo.type).foreground
-                  )}
-                >
-                  <span
-                    aria-hidden="true"
-                    class="pointer-events-none absolute inset-0 rounded-[inherit] bg-current/10"
-                  />
-                  <EntityIcon
-                    targetType={props.documentInfo.type}
-                    size="xs"
-                    class="relative"
-                  />
-                </Item.Media>
-                <Item.Content class="contents">
+              <Item class="grid grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2 border-0 p-0">
+                <Item.Icon class="col-start-1 row-start-1">
+                  <EntityIcon targetType={props.documentInfo.type} size="xs" />
+                </Item.Icon>
+                <Item.Content class="col-start-2 row-start-1">
                   <PreviewTitle name={props.documentInfo.name ?? ''} />
                 </Item.Content>
                 {renderActionButtons()}
@@ -1004,7 +999,11 @@ export function PopupPreview(
       onMouseEnter={props.mouseEnter}
       onMouseLeave={props.mouseLeave}
     >
-      <Card variant="filled" depth={2} class="shadow-lg shadow-drop-shadow">
+      <Card
+        variant="filled"
+        depth={2}
+        class="rounded-xl shadow-lg shadow-drop-shadow"
+      >
         <DocumentPreviewContent
           delete={props.delete}
           collapseInfo={props.collapseInfo}

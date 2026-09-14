@@ -4,6 +4,30 @@ import { render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Test preview composition/data ownership independently of the property editors.
+vi.mock('@property', () => ({
+  Property: {
+    Root: (props: {
+      canEdit: boolean;
+      children: import('solid-js').JSX.Element;
+    }) => (
+      <div data-status-editable={String(props.canEdit)}>{props.children}</div>
+    ),
+    Tooltip: (props: { children: import('solid-js').JSX.Element }) =>
+      props.children,
+    EditTrigger: (
+      props: import('solid-js').JSX.ButtonHTMLAttributes<HTMLButtonElement>
+    ) => <button {...props} />,
+    Icon: (props: { property: Property }) => (
+      <span>icon:{String(props.property.value)}</span>
+    ),
+    Text: (props: { property: Property }) => (
+      <span>{String(props.property.value)}</span>
+    ),
+    PopoverEditor: () => null,
+  },
+}));
+
 const propertiesQuery = vi.hoisted(() => vi.fn());
 const accessQuery = vi.hoisted(() => vi.fn());
 vi.mock('@property/hooks', () => ({ useEntityProperties: propertiesQuery }));
@@ -65,6 +89,66 @@ const status = {
 } as Property;
 
 describe('task preview data ownership', () => {
+  it('renders an icon-only status control that tracks values and permissions', () => {
+    const [metadata, setMetadata] = createSignal<PreviewDocumentProperties>({
+      properties: [status],
+      canEdit: true,
+      refetch: vi.fn(async () => {}),
+    });
+    const view = render(() => (
+      <TaskPropertiesPreview
+        taskId="task"
+        mode="status"
+        previewProperties={metadata()}
+      />
+    ));
+    expect(
+      view
+        .getByRole('button', { name: /Task status: status-1/ })
+        .getAttribute('aria-disabled')
+    ).toBe('false');
+    expect(view.container.textContent).toContain('icon:status-1');
+    setMetadata((old) => ({
+      ...old,
+      canEdit: false,
+      properties: [{ ...status, value: ['status-2'] } as Property],
+    }));
+    expect(
+      view
+        .getByRole('button', { name: /Task status: status-2/ })
+        .getAttribute('aria-disabled')
+    ).toBe('true');
+    expect(
+      view.container
+        .querySelector('[data-status-editable]')
+        ?.getAttribute('data-status-editable')
+    ).toBe('false');
+    expect(propertiesQuery).not.toHaveBeenCalled();
+    expect(accessQuery).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it('omits the duplicate status chip from card details', () => {
+    const priority = {
+      ...status,
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
+      displayName: 'Priority',
+    } as Property;
+    const view = render(() => (
+      <TaskPropertiesPreview
+        taskId="task"
+        mode="details"
+        previewProperties={{
+          properties: [status, priority],
+          canEdit: true,
+          refetch: vi.fn(async () => {}),
+        }}
+      />
+    ));
+    expect(view.container.textContent).toBe('Priority');
+    view.unmount();
+  });
+
   it('never mounts child queries for pending or loaded GraphQL edges', () => {
     const [metadata, setMetadata] = createSignal<PreviewDocumentProperties>({
       properties: undefined,

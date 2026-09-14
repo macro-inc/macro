@@ -4,7 +4,6 @@ import {
   useBlockOwner,
   useMaybeBlockName,
 } from '@core/block';
-import { getIconConfig } from '@core/component/EntityIcon';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
@@ -93,11 +92,12 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
 
-  const { item, ItemEntityIcon, documentProperties, targetType } =
-    useItemPreviewData(() => ({
+  const { item, ItemEntityIcon, documentProperties } = useItemPreviewData(
+    () => ({
       id: props.documentId,
       type: previewType(),
-    }));
+    })
+  );
 
   const channelMessageId = () => {
     if (previewType() !== 'channel') return undefined;
@@ -352,26 +352,33 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   }) => {
     return (
       <Card.Header class="shrink-0 py-2.5">
-        <Item class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-0 p-0">
-          <Item.Media
-            class={cn(
-              'relative col-start-1 row-start-1 size-8 rounded-lg bg-transparent',
-              getIconConfig(targetType()).foreground
-            )}
-          >
-            <span
-              aria-hidden="true"
-              class="pointer-events-none absolute inset-0 rounded-[inherit] bg-current/10"
-            />
-            <ItemEntityIcon size="xs" class="relative" />
-          </Item.Media>
-          <Item.Content class="contents">
-            <Item.Title class="col-start-2 row-start-1 flex min-h-8 items-center">
+        <Item class="grid grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2 border-0 p-0">
+          <Item.Icon class="col-start-1 row-start-1">
+            <Show
+              when={props.blockName === 'task'}
+              fallback={<ItemEntityIcon size="xs" />}
+            >
+              <Suspense
+                fallback={
+                  <LoadingSpinner class="size-4 animate-spin text-ink-muted" />
+                }
+              >
+                <TaskPropertiesPreview
+                  taskId={props.item.id}
+                  taskName={props.item.name}
+                  previewProperties={documentProperties()}
+                  mode="status"
+                />
+              </Suspense>
+            </Show>
+          </Item.Icon>
+          <Item.Content class="col-start-2 row-start-1">
+            <Item.Title>
               <BlockLink id={props.item.id} blockOrFileName={props.blockName}>
                 <span
                   role="link"
                   tabIndex={0}
-                  class="block wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+                  class="wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
                   onKeyDown={(event) => {
                     if (event.key !== 'Enter') return;
                     event.preventDefault();
@@ -384,7 +391,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
               </BlockLink>
             </Item.Title>
             <Show when={props.item.owner || props.item.updatedAt}>
-              <Item.Description class="col-start-2 row-start-2 text-xs wrap-anywhere">
+              <Item.Description class="text-left wrap-anywhere">
                 <Show when={props.item.owner}>
                   {(owner) =>
                     getDisplayName(tryMacroId(owner())) ||
@@ -400,10 +407,10 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
               </Item.Description>
             </Show>
           </Item.Content>
-          <Item.Actions class="col-start-3 row-start-1">
+          <Item.Actions class="col-start-3 row-start-1 h-5">
             <Dropdown open={dropdownOpen()} onOpenChange={setDropdownOpen}>
               <Dropdown.Trigger
-                size="icon-md"
+                size="icon-sm"
                 variant="ghost"
                 aria-label="Document card actions"
               >
@@ -481,13 +488,14 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
               <DocumentInfo item={item()} blockName={props.blockName} />
               <Show when={props.blockName === 'task'}>
                 <Card.Body
-                  class="shrink-0 pt-2 [&>div]:px-0 [&>div]:pb-0"
+                  class="shrink-0 pt-2 pl-9 [&>div]:px-0 [&>div]:pb-0"
                   data-document-card-controls
                 >
                   <Suspense fallback={<div class="w-full bg-active h-4 m-2" />}>
                     <TaskPropertiesPreview
                       taskId={item().id}
                       previewProperties={documentProperties()}
+                      mode="details"
                     />
                   </Suspense>
                 </Card.Body>

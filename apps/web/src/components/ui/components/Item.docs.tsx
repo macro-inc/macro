@@ -1,8 +1,10 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
+import CheckCircle from '@phosphor/check-circle.svg';
+import Circle from '@phosphor/circle.svg';
 import FilePdf from '@phosphor/file-pdf.svg';
 import FileText from '@phosphor/file-text.svg';
 import Heart from '@phosphor/heart.svg';
-import { createSignal, For } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { Badge } from './Badge';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -31,6 +33,24 @@ function ReferenceDemo() {
           <Heart class={saved() ? 'fill-current text-accent' : ''} />
         </Button>
       </Item.Actions>
+    </Item>
+  );
+}
+// #endregion
+
+// #region demo:inline-icon
+function InlineIconDemo() {
+  return (
+    <Item variant="outlined" class="w-full max-w-sm items-start gap-2">
+      <Item.Icon aria-hidden="true">
+        <FileText />
+      </Item.Icon>
+      <Item.Content>
+        <Item.Title>
+          A longer document title that wraps onto another line
+        </Item.Title>
+        <Item.Description>Alex Morgan - Updated today</Item.Description>
+      </Item.Content>
     </Item>
   );
 }
@@ -150,6 +170,136 @@ function VariantsDemo() {
 }
 // #endregion
 
+// #region demo:wrapping
+function WrappingDemo() {
+  return (
+    <div class="grid w-full gap-3 sm:grid-cols-2">
+      <For
+        each={[
+          'Design tokens',
+          'Design tokens for a quieter workspace, from the first draft to the final details',
+        ]}
+      >
+        {(title) => (
+          <Item variant="outlined" class="items-start gap-2">
+            <Item.Icon aria-hidden="true">
+              <FileText />
+            </Item.Icon>
+            <Item.Content>
+              <Item.Title>{title}</Item.Title>
+              <Item.Description>Alex Morgan - Edited 2h ago</Item.Description>
+            </Item.Content>
+          </Item>
+        )}
+      </For>
+    </div>
+  );
+}
+// #endregion
+
+// #region demo:task
+function TaskDemo() {
+  const [completed, setCompleted] = createSignal(false);
+  return (
+    <Item variant="outlined" class="w-full max-w-md items-start gap-2">
+      <Item.Icon>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          class="shrink-0 rounded-full text-task"
+          aria-label="Complete review task"
+          aria-pressed={completed()}
+          onClick={() => setCompleted(!completed())}
+        >
+          <Show when={completed()} fallback={<Circle class="size-4" />}>
+            <CheckCircle class="size-4" />
+          </Show>
+        </Button>
+      </Item.Icon>
+      <Item.Content>
+        <Item.Title>Review the reading room proposal</Item.Title>
+        <Item.Description>Seamus - Today</Item.Description>
+        <Item.Metadata class="pt-2" aria-live="polite">
+          <Badge size="sm" variant="outline">
+            {completed() ? 'Completed' : 'Not started'}
+          </Badge>
+          <Badge size="sm" variant="outline">
+            Medium priority
+          </Badge>
+          <span>Alex + 2 others</span>
+        </Item.Metadata>
+      </Item.Content>
+    </Item>
+  );
+}
+// #endregion
+
+// #region demo:text-only
+function TextOnlyDemo() {
+  const [following, setFollowing] = createSignal(false);
+  return (
+    <Item variant="filled" depth={2} class="w-full max-w-md items-start">
+      <Item.Content>
+        <Item.Title>Design updates</Item.Title>
+        <Item.Description>
+          Decisions, drafts, and progress from the team.
+        </Item.Description>
+        <Item.Metadata class="gap-x-1.5 pt-1">
+          <span>12 members</span>
+          <span aria-hidden="true">·</span>
+          <span>3 unread</span>
+        </Item.Metadata>
+      </Item.Content>
+      <Item.Actions class="h-5">
+        <Button
+          size="sm"
+          variant="outline"
+          aria-pressed={following()}
+          onClick={() => setFollowing(!following())}
+        >
+          {following() ? 'Following' : 'Follow'}
+        </Button>
+      </Item.Actions>
+    </Item>
+  );
+}
+// #endregion
+
+// #region demo:attachments
+function AttachmentsDemo() {
+  return (
+    <div class="w-full max-w-md divide-y divide-edge-muted">
+      <For
+        each={[
+          { title: 'Reading room brief.pdf', detail: 'PDF · 8 pages · 2.4 MB' },
+          {
+            title: 'Material and finish specifications.pdf',
+            detail: 'PDF · 24 pages · 6.1 MB',
+          },
+        ]}
+      >
+        {(file) => (
+          <Item size="sm" class="items-start gap-2">
+            <Item.Icon aria-hidden="true">
+              <FilePdf />
+            </Item.Icon>
+            <Item.Content>
+              <Item.Title>{file.title}</Item.Title>
+              <Item.Description>{file.detail}</Item.Description>
+            </Item.Content>
+            <Item.Actions class="h-5">
+              <Badge size="sm" variant="outline">
+                PDF
+              </Badge>
+            </Item.Actions>
+          </Item>
+        )}
+      </For>
+    </div>
+  );
+}
+// #endregion
+
 export default defineDoc({
   name: 'Item',
   category: 'Data Display',
@@ -157,13 +307,48 @@ export default defineDoc({
   exports: ['Item'],
   import: "import { Item } from '@ui';",
   description:
-    'An identity row for rich cards and lists. Media, content, and actions share a flexible layout without requiring feature context.',
+    'An identity row for rich cards and lists. Titles and descriptions use text-sm with 20px leading: semibold titles and regular descriptions in ink-muted. Metadata uses medium text-xs with 16px leading in ink-subtle. Content keeps a 4px gap even when titles wrap. Icon is a plain inline-flex slot aligned with the first title line; Media is a larger tile.',
   demos: [
+    {
+      id: 'wrapping',
+      title: 'Short and wrapped titles',
+      description:
+        'Compare the same first-line alignment and byline gap across different title lengths.',
+      render: WrappingDemo,
+    },
+    {
+      id: 'task',
+      title: 'Interactive task status',
+      description:
+        'The Icon slot can contain a real button. Toggle completion to try it; metadata stays aligned with the title.',
+      render: TaskDemo,
+    },
+    {
+      id: 'text-only',
+      title: 'Text-only with an action',
+      description:
+        'Icons and media are optional. A follow button and metadata make a useful row on their own.',
+      render: TextOnlyDemo,
+    },
+    {
+      id: 'attachments',
+      title: 'Compact attachments',
+      description:
+        'Small rows with plain file icons, wrapping filenames, and file facts.',
+      render: AttachmentsDemo,
+    },
+    {
+      id: 'inline-icon',
+      title: 'First-line icon',
+      description:
+        'Item.Icon stays aligned with the first title line, independently of wrapping and secondary content.',
+      render: InlineIconDemo,
+    },
     {
       id: 'reference',
       title: 'Document reference',
       description:
-        'A centered media tile, two-line identity, and an independent favorite action.',
+        'A top-aligned media tile, two-line identity, and an independent favorite action. Use self-center on Media when centered alignment is preferred.',
       render: ReferenceDemo,
     },
     {

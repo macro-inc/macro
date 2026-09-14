@@ -67,12 +67,22 @@ fetch cascade.
 
 Document cards use a compact icon/title row and an actions menu. Full previews
 sit inside an inset surface; the author's display name and update time appear
-under the title as a byline. Task property chips align with the icon's left edge.
-Long titles wrap. The tinted icon and menu are centered on the title row, with
-the byline in its own row below the title. Full embeds have a 320px minimum
+under the title as a byline. The plain 1rem icon sits in a column to the left
+of the title, aligned with its first line. Wrapped title lines, the byline,
+and task chips share the title's left edge. Full previews use the card's full
+content width with equal left and right insets. Title and byline share a text
+stack with a consistent 4px gap and 20px title leading, including when the title wraps.
+Titles and bylines use text-sm, differentiated by semibold and regular weight;
+smaller details use text-xs.
+Item.Icon provides the plain first-line-aligned icon slot. The small ellipsis button
+sits at the top right. Full embeds have a 320px minimum
 card height and a smaller rounded inset frame.
-Metadata-only references omit the preview, and tasks retain status, priority,
-and assignee controls. Use the title to open the referenced document and the
+The document-preview overlay uses the same plain icon, title/byline stack,
+small actions button, and task status control; image previews keep equal side insets.
+Metadata-only references omit the preview. Tasks replace the type icon with an
+icon-only status control; click it to change status when you have edit access.
+Priority and assignee chips remain below, without a duplicate status chip.
+Use the title to open the referenced document and the
 actions menu to copy its link, convert it to an inline mention, or delete the card.
 Click the card frame to select its editor node; controls and embedded content
 handle their own clicks. Full embeds remain vertically resizable and scroll

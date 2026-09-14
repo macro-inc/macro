@@ -42,7 +42,7 @@ function CardHeader(props: ComponentProps<'div'>) {
   return (
     <div
       data-slot="card-header"
-      class={cn('flex min-w-0 flex-col gap-2 p-3', local.class)}
+      class={cn('flex min-w-0 flex-col gap-1 p-3', local.class)}
       {...rest}
     />
   );
@@ -104,6 +104,7 @@ export const Card = Object.assign(CardRoot, {
   Body: CardBody,
   Footer: CardFooter,
   Title: Item.Title,
+  Icon: Item.Icon,
   Description: Item.Description,
   Metadata: Item.Metadata,
   Actions: Item.Actions,
