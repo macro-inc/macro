@@ -58,7 +58,7 @@ export function AgentResourceList(props: { page: 'routines' | 'skills' }) {
               class="h-12 w-full justify-start gap-3 rounded-xl px-3 font-normal"
               onClick={() =>
                 layout.openWithSplit({
-                  type: props.page === 'routines' ? 'automation' : 'md',
+                  type: props.page === 'routines' ? 'automation' : 'skill',
                   id: item.id,
                 })
               }
