@@ -276,8 +276,7 @@ async fn fake_cursor_api() -> (
                     async move { axum::Json(serde_json::json!({"items": items})) }
                 }
             })
-            .post(move |axum::Json(body): axum::Json<serde_json::Value>| {
-                assert!(body["prompt"]["text"].as_str().unwrap().contains("macro_internal.set_pull_request"));
+            .post(move || {
                 follow_ups.fetch_add(1, SeqCst);
                 async { axum::Json(serde_json::json!({"id":"run-test-2"})) }
             })
@@ -658,12 +657,6 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
     }
 
     let body = created.lock().expect("create log poisoned")[0].clone();
-    assert!(
-        body["prompt"]["text"]
-            .as_str()
-            .unwrap()
-            .contains("macro_internal.set_pull_request")
-    );
     assert_eq!(
         body["mcpServers"],
         serde_json::json!([

@@ -15,7 +15,7 @@ use super::SessionToolContext;
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "set_pull_request",
-    description = "Set the pull request associated with this coding session. Call after creating a PR with gh pr create, or when continuing work on an existing PR. This records the link shown in Macro; it does not create or modify the GitHub PR. Returns the recorded URL."
+    description = "Set the pull request associated with this coding session. This records the link shown in Macro; it does not create or modify the GitHub PR. Returns the recorded URL."
 )]
 pub struct SetPullRequest {
     /// Link to the PR this session works on.
