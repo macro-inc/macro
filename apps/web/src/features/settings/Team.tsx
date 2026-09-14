@@ -1,3 +1,4 @@
+import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getLinkShareScope,
@@ -39,7 +40,10 @@ import {
   useInviteToTeamMutation,
   useTeamInvitesQuery,
 } from '@queries/team/invites';
-import { useRemoveUserFromTeamMutation } from '@queries/team/members';
+import {
+  useRemoveUserFromTeamMutation,
+  useSetTeamMemberPlanMutation,
+} from '@queries/team/members';
 import {
   useCreateTeamWithInvitesMutation,
   useDeleteTeamMutation,
@@ -49,6 +53,7 @@ import {
   useToggleNonAdminInvitesMutation,
   useUserTeamsQuery,
 } from '@queries/team/teams';
+import type { PaidPlan } from '@service-auth/ai-billing-types';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
@@ -146,6 +151,77 @@ function RoleSelect(props: {
       </Select.Trigger>
       <Select.Portal>
         <Select.Content class="z-action-menu border border-edge bg-surface rounded shadow-lg min-w-25 p-1">
+          <Select.Listbox />
+        </Select.Content>
+      </Select.Portal>
+    </Select>
+  );
+}
+
+type PlanOption = { value: PaidPlan; label: string; description: string };
+
+const planOptions: PlanOption[] = [
+  { value: 'premium', label: 'Premium', description: '$40 · $40 of AI' },
+  { value: 'max', label: 'Max', description: '$200 · $200 of AI' },
+];
+
+/**
+ * The plan a member's seat is billed at. Until the generated `TeamMember`
+ * schema carries `plan`, read it defensively; every seat starts on Premium.
+ */
+function memberPlan(member: TeamMember): PaidPlan {
+  const plan = (member as TeamMember & { plan?: PaidPlan }).plan;
+  return plan === 'max' ? 'max' : 'premium';
+}
+
+function PlanSelect(props: {
+  value: PaidPlan;
+  onChange: (plan: PaidPlan) => void;
+  disabled?: boolean;
+}) {
+  const selectedOption = () =>
+    planOptions.find((o) => o.value === props.value) ?? planOptions[0];
+
+  return (
+    <Select<PlanOption>
+      options={planOptions}
+      value={selectedOption()}
+      onChange={(opt) => opt && props.onChange(opt.value)}
+      optionValue="value"
+      optionTextValue="label"
+      gutter={4}
+      placement="bottom-end"
+      disabled={props.disabled}
+      itemComponent={(itemProps: { item: CollectionNode<PlanOption> }) => (
+        <Select.Item
+          item={itemProps.item}
+          class="flex items-center justify-between gap-3 px-2 py-1.5 text-sm rounded-xs hover:bg-hover outline-none data-highlighted:bg-hover"
+        >
+          <Select.ItemLabel class="flex flex-col">
+            <span>{itemProps.item.rawValue.label}</span>
+            <span class="text-xs text-ink-muted">
+              {itemProps.item.rawValue.description}
+            </span>
+          </Select.ItemLabel>
+          <Select.ItemIndicator>
+            <CheckIcon class="size-3" />
+          </Select.ItemIndicator>
+        </Select.Item>
+      )}
+    >
+      <Select.Trigger
+        as={Button}
+        class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
+        disabled={props.disabled}
+        aria-label="Seat plan"
+      >
+        <Select.Value<PlanOption>>
+          {(state) => state.selectedOption().label}
+        </Select.Value>
+        <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Content class="z-action-menu border border-edge bg-surface rounded shadow-lg min-w-40 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -319,8 +395,13 @@ function MemberRow(props: {
   isCurrentUser: boolean;
   canManageRemovals: boolean;
   canRemove: boolean;
+  /** Whether seat plans apply (paid team) and the viewer may change them. */
+  showPlan: boolean;
+  canEditPlan: boolean;
+  planPending: boolean;
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
+  onPlanChange: (plan: PaidPlan) => void;
 }) {
   const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
   const isMemberOwner = () => props.member.role === TeamRole.owner;
@@ -352,6 +433,22 @@ function MemberRow(props: {
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
+        <Show when={props.showPlan}>
+          <Show
+            when={props.canEditPlan}
+            fallback={
+              <span class="text-xs text-ink-muted capitalize">
+                {memberPlan(props.member)}
+              </span>
+            }
+          >
+            <PlanSelect
+              value={memberPlan(props.member)}
+              onChange={props.onPlanChange}
+              disabled={props.planPending}
+            />
+          </Show>
+        </Show>
         <Show
           when={props.isOwner && !isMemberOwner()}
           fallback={
@@ -962,6 +1059,15 @@ function TeamManagement(props: {
   });
   const isAdminOrOwner = () => isTeamAdminOrOwner(currentUserRole());
   const canManageMemberRemovals = () => isAdminOrOwner();
+  // Seat plans only exist on paying (or enterprise) teams; a member of such
+  // a team has paid access, a free-team member does not.
+  const hasPaid = useHasPaidAccess();
+  const showSeatPlans = () => hasPaid();
+  const setMemberPlanMutation = useSetTeamMemberPlanMutation();
+  const pendingPlanMemberId = () =>
+    setMemberPlanMutation.isPending
+      ? setMemberPlanMutation.variables?.userId
+      : undefined;
   const isOwner = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return false;
@@ -1454,6 +1560,18 @@ function TeamManagement(props: {
                         currentUserRole(),
                         member
                       )}
+                      showPlan={showSeatPlans()}
+                      canEditPlan={isAdminOrOwner()}
+                      planPending={pendingPlanMemberId() === member.user_id}
+                      onPlanChange={(plan) => {
+                        if (!props.teamId || plan === memberPlan(member))
+                          return;
+                        setMemberPlanMutation.mutate({
+                          teamId: props.teamId,
+                          userId: member.user_id,
+                          plan,
+                        });
+                      }}
                       onRemove={() => setShowRemoveModal(member)}
                       onRoleChange={(newRole) => {
                         if (!props.teamId) return;

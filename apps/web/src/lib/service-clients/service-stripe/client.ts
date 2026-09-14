@@ -1,4 +1,5 @@
 import { registerClient } from '@core/util/mockClient';
+import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
 
 /**
@@ -46,9 +47,11 @@ export const stripeServiceClient = {
       successUrl?: string;
       /** Override the default cancel URL. Useful for flows that want cancellation to return to a specific page. */
       cancelUrl?: string;
+      /** The plan to subscribe to; defaults to Premium. */
+      plan?: PaidPlan;
     } = {}
   ) => {
-    const { type = '', discount, successUrl, cancelUrl } = args;
+    const { type = '', discount, successUrl, cancelUrl, plan } = args;
     const gaClientId = await getGaClientId();
     const { fbp, fbc } = getMetaIds();
 
@@ -64,6 +67,7 @@ export const stripeServiceClient = {
         fbp: fbp ?? null,
         fbc: fbc ?? null,
       },
+      plan,
     });
 
     if (!result.isOk()) {

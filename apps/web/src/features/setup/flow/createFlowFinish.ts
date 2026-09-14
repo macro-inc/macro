@@ -1,6 +1,6 @@
 import { AFTER_SETUP_ROUTE, DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { createOnboardingCheckoutSession } from '@app/features/onboarding/use-onboarding-checkout';
-import type { PaidPlanTier } from '@app/features/paywall/plans';
+import type { PaidPlanTier, PlanTier } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { authKeys } from '@queries/auth/keys';
@@ -32,7 +32,7 @@ export function createFlowFinish(options?: {
   const analytics = useAnalytics();
   const [finishing, setFinishing] = createSignal(false);
 
-  const trackCompleted = (plan: 'free' | 'premium', planSkipped: boolean) => {
+  const trackCompleted = (plan: PlanTier, planSkipped: boolean) => {
     analytics.track('onboarding_v4_completed', {
       plan,
       plan_skipped: planSkipped,

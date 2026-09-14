@@ -22,6 +22,8 @@ pub mod join_team;
 pub mod patch_team;
 /// Enable / disable CRM for a team.
 pub mod patch_team_crm_settings;
+/// Move a team member's seat between paid plans.
+pub mod patch_team_member_plan;
 /// Extractor ensuring the authenticated user is premium.
 pub mod premium_user;
 /// Reject a team invitation.
@@ -51,8 +53,9 @@ use model_error_response::ErrorResponse;
 
 use crate::domain::{
     model::{
-        CreateTeamError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
-        RemoveTeamInviteError, RemoveUserFromTeamError, TeamError, ToggleAutoJoinDomainError,
+        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError, JoinTeamError,
+        RemoveTeamInviteError, RemoveUserFromTeamError, SetTeamMemberPlanError, TeamError,
+        ToggleAutoJoinDomainError,
     },
     team_repo::TeamService,
 };
@@ -133,6 +136,10 @@ where
         .route(
             "/remove/{remove_user_id}",
             delete(remove_user_from_team::handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/members/{member_user_id}/plan",
+            patch(patch_team_member_plan::handler::<T, Eas, Auth>),
         )
         .route(
             "/invite/{team_invite_id}",
@@ -338,6 +345,35 @@ impl IntoResponse for RemoveTeamInviteError {
             ),
         }
         .into_response()
+    }
+}
+
+impl IntoResponse for SetTeamMemberPlanError {
+    fn into_response(self) -> Response {
+        match self {
+            SetTeamMemberPlanError::TeamNotPaying => (
+                StatusCode::PAYMENT_REQUIRED,
+                Json(ErrorResponse {
+                    message: "the team has no active subscription".into(),
+                }),
+            )
+                .into_response(),
+            SetTeamMemberPlanError::CustomerError(CustomerError::PlanUnavailable(plan)) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: format!("the {plan} plan is not available").into(),
+                }),
+            )
+                .into_response(),
+            SetTeamMemberPlanError::TeamError(e) => e.into_response(),
+            SetTeamMemberPlanError::CustomerError(_) | SetTeamMemberPlanError::RolesError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "internal server error".into(),
+                }),
+            )
+                .into_response(),
+        }
     }
 }
 

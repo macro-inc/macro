@@ -1,6 +1,8 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
 
 export const authKeys = createQueryKeys('auth', {
+  aiBillingPlans: null,
+  aiBillingSummary: null,
   cursorApiKeyStatus: null,
   cursorModels: null,
   githubLinkStatus: null,

@@ -1,3 +1,4 @@
+import type { PaidPlanTier } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { FEATURED_MCP_SERVERS } from '@core/component/AI/constant/mcpServers';
@@ -89,7 +90,7 @@ interface StepControls {
   finishing: () => boolean;
   finishFree: (planSkipped: boolean) => void;
   /** Redirect to Stripe checkout without completing the flow. */
-  startPremiumCheckout: (tier: 'premium') => void;
+  startPremiumCheckout: (tier: PaidPlanTier) => void;
   /** Finish after checkout confirmed payment (or an existing license). */
   finishPremium: () => void;
 }
@@ -217,7 +218,7 @@ function buildSteps(
     {
       key: 'plan',
       title: 'Choose your plan',
-      subtitle: 'Start free, or go Premium. You can change this anytime.',
+      subtitle: 'Start free, or pick a paid plan. You can change this anytime.',
       wide: true,
       render: (controls) => (
         <PlanStep

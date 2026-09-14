@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT overage_enabled, overage_limit_cents, overage_suspended_at\n            FROM ai_billing_account\n            WHERE user_id = $1\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "overage_enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "overage_limit_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "overage_suspended_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3eb27474ff84463a8866c5f3d65a095e7e46cc9db3496dd2754927210aa29a5f"
+}

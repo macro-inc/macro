@@ -79,6 +79,19 @@ Leaving Macro selected uses the backend's in-memory default in every
 environment, including production; it does not provision a Daytona container.
 Explicit coding-agent selections still use their configured runtimes.
 
+## AI usage limits
+
+Paid plans include a monthly AI allowance (Premium $40, Max $200, at Macro's
+usage rates). When it is used up and no credits or usage billing cover the
+request, sending a message answers HTTP 402 and the app opens the
+**AI usage limit** dialog (title `You've used this month's included AI`, or the
+spending-limit / failed-charge variants). It shows the same meter and controls
+as Settings → Billing: credit-pack buttons, the `Usage billing` toggle, an
+`Open billing settings` button, and `Upgrade to Max` for Premium payers (on a
+team this moves only the payer's own seat). Team members who are not the payer
+see a note to ask the team owner, or a team admin to move their seat to Max.
+A team's pool is the sum of its seats' allowances, so Premium and Max seats mix.
+
 ## Start a doc-scoped chat
 
 Open a doc → side panel `Actions` → `Ask Macro`. Opens a chat pane with the document already
@@ -92,7 +105,10 @@ Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
-- Model picker button showing the current model (e.g. `Haiku 4.5`).
+- Model picker button showing the current model (e.g. `Haiku 4.5`). Paid plans list
+  `Sonnet 5`, `Opus 5`, `Fable 5.1`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
+  heavy models carry a `2.5× usage` / `5× usage` hint. On the free plan everything but `Haiku 4.5` is
+  dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
 
 On desktop, production AI, new agent, and channel composers use 28px circular

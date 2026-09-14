@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(SUM(\n                COALESCE(\n                    total::float8,\n                    (input_tokens::float8 / 1000000.0) * $4\n                        + (output_tokens::float8 / 1000000.0) * $5\n                )\n            ), 0)::float8 AS \"usd!\"\n            FROM ai_usage\n            WHERE user_id = ANY($1)\n              AND created_at >= $2\n              AND created_at < $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "usd!",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Timestamptz",
+        "Timestamptz",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "67ae17eef308cd01d2c4ebe7d97f850dc080ba9b3161921174462f0fc203d971"
+}

@@ -6,7 +6,7 @@ use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use super::{StripeOperationError, StripeSessionResponse};
+use super::{PaidPlan, StripeOperationError, StripeSessionResponse};
 use crate::api::context::{ApiContext, AuthorizationService};
 use model::response::ErrorResponse;
 
@@ -35,6 +35,9 @@ pub struct CreateCheckoutSessionV2Request {
     /// Tracking metadata for conversion attribution
     #[serde(default)]
     pub metadata: CheckoutSessionMetadata,
+    /// The plan to subscribe to. Defaults to Premium.
+    #[serde(default)]
+    pub plan: Option<PaidPlan>,
 }
 
 /// Creates a Stripe checkout session for the user to subscribe.
@@ -141,7 +144,8 @@ pub async fn create_checkout_session<Eas: EntityAccessService>(
             ..Default::default()
         });
 
-    let price_id = ctx.stripe_price_id;
+    let plan = req.plan.unwrap_or(PaidPlan::Premium);
+    let price_id = ctx.stripe_prices.price_id(plan)?.to_string();
 
     // Create the checkout session
     let params = stripe::CreateCheckoutSession {

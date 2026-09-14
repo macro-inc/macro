@@ -33,7 +33,8 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
     /// `None` if the model doesn't support it.
     ///
     /// The Chat Completions API takes a flat `reasoning_effort` field, accepted
-    /// only by reasoning models (the GPT-5 family and the `o`-series); anything
+    /// only by reasoning models (the GPT-5 and GPT-6 families and the
+    /// `o`-series); anything
     /// else returns `None`, since sending it elsewhere 400s. `mini` / `nano`
     /// variants get a lower effort. `temperature` is never set (reasoning models
     /// reject it).
@@ -41,6 +42,7 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
         let model = self.model.name().to_lowercase();
 
         let is_reasoning = model.contains("gpt-5")
+            || model.contains("gpt-6")
             || model.starts_with("o1")
             || model.starts_with("o3")
             || model.starts_with("o4");
@@ -90,6 +92,7 @@ impl<'a> OpenAiResponsesModel<'a> {
         let model = self.model.name().to_lowercase();
 
         let is_reasoning = model.contains("gpt-5")
+            || model.contains("gpt-6")
             || model.starts_with("o1")
             || model.starts_with("o3")
             || model.starts_with("o4");

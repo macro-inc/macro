@@ -107,3 +107,16 @@ async fn query_filters_by_user(pool: PgPool) {
     assert_eq!(only_other.len(), 1);
     assert_eq!(only_other[0].user.as_ref(), "macro|someone@example.com");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pricing_resolves_provider_qualified_ids(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+    assert_eq!(
+        repo.get_pricing("anthropic/claude-opus-5").await.unwrap(),
+        Some((5.0, 25.0))
+    );
+    assert_eq!(
+        repo.get_pricing("claude-sonnet-5").await.unwrap(),
+        Some((2.0, 10.0))
+    );
+}

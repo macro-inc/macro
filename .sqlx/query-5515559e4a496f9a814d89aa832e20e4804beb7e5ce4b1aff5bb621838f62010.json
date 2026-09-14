@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COALESCE(SUM(amount_cents), 0)::bigint AS \"charged!\"\n        FROM ai_overage_charge\n        WHERE user_id = $1 AND period_start = $2 AND status <> 'failed'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "charged!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5515559e4a496f9a814d89aa832e20e4804beb7e5ce4b1aff5bb621838f62010"
+}

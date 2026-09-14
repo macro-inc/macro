@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO team_user (team_id, user_id, team_role, plan)\n            VALUES ($1, $2, 'owner', $3)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "seat_plan",
+            "kind": {
+              "Enum": [
+                "premium",
+                "max"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0638b88c64a545b8ff3679c47169133e60f79b86620b89c438d9d91d529e85a1"
+}

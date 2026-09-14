@@ -99,7 +99,7 @@ export type AppEvents = {
    * everything connected along the way.
    */
   onboarding_v4_completed: {
-    plan: 'free' | 'premium';
+    plan: 'free' | 'premium' | 'max';
     plan_skipped: boolean;
     emails_connected: number;
     connectors_connected: string[];
@@ -179,6 +179,12 @@ export type AppEvents = {
 
   ai_message_sent: Record<string, unknown>;
   ai_attachment_add: Record<string, unknown>;
+  /** A paid user opened Stripe Checkout for an AI credit pack. */
+  ai_credits_checkout_start: { amountCents: number };
+  /** A payer changed their AI usage billing (overage) settings. */
+  ai_overage_updated: { enabled: boolean; limitCents: number };
+  /** An existing subscriber moved between Premium and Max. */
+  plan_changed: { plan: 'premium' | 'max'; from?: string };
 
   email_message_sent: Record<string, unknown>;
 
