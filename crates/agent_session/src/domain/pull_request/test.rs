@@ -9,6 +9,10 @@ fn normalizes_pr_urls_and_rejects_non_pr_destinations() {
         canonical_url("https://github.com/org/repo/pull/001/#discussion").unwrap(),
         "https://github.com/org/repo/pull/1"
     );
+    assert_eq!(
+        canonical_url("https://GITHUB.com:443/org/repo/pull/42?diff=split#discussion").unwrap(),
+        "https://github.com/org/repo/pull/42"
+    );
     for invalid in [
         "javascript:alert(1)",
         "http://github.com/org/repo/pull/1",
@@ -17,6 +21,10 @@ fn normalizes_pr_urls_and_rejects_non_pr_destinations() {
         "https://github.com/org/repo/issues/1",
         "https://github.com/org/repo/pull/0",
         "https://github.com/org/repo/pull/1/files",
+        "https://github.com:8443/org/repo/pull/1",
+        "https://github.com.evil.com/org/repo/pull/1",
+        "https://github.com/org/repo/pull/18446744073709551616",
+        "https://github.com/org/repo/pull/1\n",
     ] {
         assert!(canonical_url(invalid).is_err(), "{invalid}");
     }

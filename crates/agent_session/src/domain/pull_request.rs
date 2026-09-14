@@ -75,36 +75,17 @@ where
     }
 }
 
-/// Normalize a GitHub PR link, excluding credentials, fragments and queries.
+/// Normalize a GitHub PR link, rejecting credentials and removing queries and fragments.
 fn canonical_url(input: &str) -> Result<String> {
     let invalid = || AgentSessionError::InvalidPullRequestUrl;
-    let url = url::Url::parse(input).map_err(|_| invalid())?;
-    if url.scheme() != "https"
-        || url.host_str() != Some("github.com")
-        || !url.username().is_empty()
-        || url.password().is_some()
-        || url.port().is_some()
-    {
-        return Err(invalid());
-    }
-    let parts: Vec<_> = url.path().trim_end_matches('/').split('/').collect();
-    if parts.len() != 5
-        || parts[3] != "pull"
-        || !parts[1..3].iter().all(|part| {
-            !part.is_empty()
-                && part
-                    .bytes()
-                    .all(|c| c.is_ascii_alphanumeric() || b"-_.".contains(&c))
-        })
-    {
-        return Err(invalid());
-    }
-    let number: u64 = parts[4].parse().map_err(|_| invalid())?;
+    let (_, owner, repo, number) = lazy_regex::regex_captures!(
+        r"\A(?i:https://github\.com)(?::443)?/([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)/pull/([0-9]+)/*(?:[?#][^\r\n]*)?\z",
+        input
+    )
+    .ok_or_else(invalid)?;
+    let number: u64 = number.parse().map_err(|_| invalid())?;
     if number == 0 {
         return Err(invalid());
     }
-    Ok(format!(
-        "https://github.com/{}/{}/pull/{number}",
-        parts[1], parts[2]
-    ))
+    Ok(format!("https://github.com/{owner}/{repo}/pull/{number}"))
 }

@@ -36,7 +36,7 @@ schema = ["dep:utoipa", "agent_runtime_protocol/utoipa", "macro_user_id/schema"]
 test-utils = ["dep:mockall", "agent_fold/test-utils"]
 
 [dependencies]
-url = { workspace = true }
+lazy-regex = { workspace = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
