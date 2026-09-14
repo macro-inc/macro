@@ -192,6 +192,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     props.onSearchOpenChange(false);
   };
   const openSearch = () => {
+    if (props.mode === 'slim') props.onModeChange('full');
     props.onSearchOpenChange(true);
     queueMicrotask(() => searchInput?.focus());
   };
