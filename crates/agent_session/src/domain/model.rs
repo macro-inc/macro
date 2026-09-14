@@ -279,7 +279,7 @@ pub struct ExternalSession {
 }
 
 /// The agent behind a session, as much of it as rendering a message needs.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct SessionBot {
@@ -287,6 +287,8 @@ pub struct SessionBot {
     pub id: BotId,
     /// Display name.
     pub name: String,
+    /// Stable `@` handle, without a leading `@`.
+    pub handle: String,
     /// Avatar, when it has one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
@@ -427,7 +429,7 @@ pub const MAX_PREVIEW_SESSION_IDS: usize = 100;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentSessionPreview {
     /// The viewer holds at least view access; here is what a chip needs.
-    Access(AgentSessionPreviewData),
+    Access(Box<AgentSessionPreviewData>),
     /// The session exists, but the viewer holds no grant on it.
     NoAccess(AgentSessionId),
     /// No session with this id exists.
@@ -456,6 +458,8 @@ pub struct AgentSessionPreviewData {
     pub owner_id: MacroUserIdStr<'static>,
     /// The bot running the agent, for its avatar.
     pub bot_id: BotId,
+    /// Minimal bot identity, hydrated by the service after checking session access.
+    pub bot: Option<SessionBot>,
     /// The session's last known status, for a live status indicator.
     pub status: SessionStatus,
     /// When the session was created.

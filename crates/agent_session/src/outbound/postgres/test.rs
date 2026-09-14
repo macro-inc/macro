@@ -1,4 +1,5 @@
 use super::*;
+mod search;
 use crate::domain::model::{AgentMcpServer, DEFAULT_AGENT_SESSION_NAME};
 use crate::domain::ports::AgentSessionRepo;
 use agent_client_protocol::RawJsonRpcMessage;
@@ -876,17 +877,19 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
         .expect("owner preview");
     owner_view.sort_by_key(|preview| preview.id().as_uuid());
     let mut expected = vec![
-        AgentSessionPreview::Access(AgentSessionPreviewData {
+        AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
             id: from_channel.id,
+            bot: None,
             name: DEFAULT_AGENT_SESSION_NAME.to_string(),
             owner_id: user_id(OWNER),
             bot_id,
             status: SessionStatus::NoMessages,
             created_at: from_channel.created_at,
             modified_at: from_channel.modified_at,
-        }),
-        AgentSessionPreview::Access(AgentSessionPreviewData {
+        })),
+        AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
             id: private.id,
+            bot: None,
             name: DEFAULT_AGENT_SESSION_NAME.to_string(),
             owner_id: user_id(OWNER),
             bot_id,
@@ -897,7 +900,7 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
                 .await
                 .expect("reload")
                 .modified_at,
-        }),
+        })),
         AgentSessionPreview::DoesNotExist(missing),
     ];
     expected.sort_by_key(|preview| preview.id().as_uuid());
@@ -1693,4 +1696,42 @@ async fn history_boundary_range_uses_order_index_and_uuid_tie_break(pool: PgPool
             .len(),
         10000
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn participants_are_the_distinct_users_the_log_attributes(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session_id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+    let alice = user_id("macro|alice@example.com");
+    let bob = user_id("macro|bob@example.com");
+
+    // Two prompts from alice, one from bob, and a frame from nobody.
+    for user in [
+        Some(alice.clone()),
+        Some(bob.clone()),
+        Some(alice.clone()),
+        None,
+    ] {
+        let _ = AgentSessionLogRepo::create(
+            &repo,
+            AgentSessionLog {
+                agent_session_id: session_id,
+                user_id: user,
+                content: Message::ToRuntime(ToRuntimeMessage::Acp(acp_notification())),
+            },
+        )
+        .await
+        .expect("create log entry");
+    }
+
+    let mut participants = repo
+        .participants(session_id)
+        .await
+        .expect("list participants");
+    participants.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+
+    assert_eq!(participants, vec![alice, bob]);
 }

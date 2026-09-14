@@ -1,10 +1,11 @@
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ImagePreview } from '@core/component/ImagePreview';
 import { ItemPreview } from '@core/component/ItemPreview';
+import { messageSendMotion } from '@core/util/message-send-motion';
 import PencilIcon from '@phosphor/note-pencil.svg';
 import QuoteIcon from '@phosphor-icons/core/bold/arrow-elbow-down-right-bold.svg?component-solid';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
-import { Button, Layer } from '@ui';
+import { Button, UserMessageBubble } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { DEFAULT_MODEL } from '../../constant';
 import { ChatMessageMarkdown } from './ChatMessageMarkdown';
@@ -77,7 +78,10 @@ export function UserMessage(props: {
     visibleAttachments().items.length > 0;
 
   return (
-    <div class="flex flex-col group">
+    <div
+      class="flex flex-col group"
+      ref={(el) => messageSendMotion(el, () => `chat:${props.message.id}`)}
+    >
       <Show when={quote()}>
         <div class="relative w-full text-xs flex flex-row space-x-2 items-start text-ink-muted">
           <div class="flex flex-row items-center space-x-3">
@@ -123,27 +127,25 @@ export function UserMessage(props: {
         <div class="flex flex-row w-full items-center">
           <Switch>
             <Match when={!isEditing()}>
-              <Layer depth={0}>
-                <div class="relative ml-auto max-w-[calc(100%-8rem)] whitespace-pre-line overflow-hidden rounded-lg border border-edge-muted bg-surface px-3 py-2 text-ink">
-                  <CollapsibleMessage>
-                    <ChatMessageMarkdown
-                      generating={() => false}
-                      text={content()!}
-                    />
-                  </CollapsibleMessage>
-                  <Show when={props.edit}>
-                    <div class="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <Button
-                        variant="ghost"
-                        size="icon-md"
-                        onClick={() => setIsEditing(true)}
-                      >
-                        <PencilIcon />
-                      </Button>
-                    </div>
-                  </Show>
-                </div>
-              </Layer>
+              <UserMessageBubble>
+                <CollapsibleMessage>
+                  <ChatMessageMarkdown
+                    generating={() => false}
+                    text={content()!}
+                  />
+                </CollapsibleMessage>
+                <Show when={props.edit}>
+                  <div class="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <Button
+                      variant="ghost"
+                      size="icon-md"
+                      onClick={() => setIsEditing(true)}
+                    >
+                      <PencilIcon />
+                    </Button>
+                  </div>
+                </Show>
+              </UserMessageBubble>
             </Match>
             <Match when={isEditing()}>
               <EditableChatMessage

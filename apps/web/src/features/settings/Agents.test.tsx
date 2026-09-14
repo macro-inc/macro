@@ -18,8 +18,21 @@ import {
   useQuery,
 } from '@tanstack/solid-query';
 import { Suspense } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
+
+const [searchParams, updateSearchParams] = createStore<{
+  createAgent?: string;
+}>({});
+const setSearchParams = vi.fn((next: { createAgent?: string }) =>
+  updateSearchParams(next)
+);
+
+vi.mock('@solidjs/router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@solidjs/router')>()),
+  useSearchParams: () => [searchParams, setSearchParams],
+}));
 
 const cursorMocks = vi.hoisted(() => ({
   status: {
@@ -233,6 +246,8 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  updateSearchParams({ createAgent: undefined });
+  setSearchParams.mockClear();
   cursorMocks.status.data = {
     registered: false,
     updatedAt: null,
@@ -276,6 +291,21 @@ const MACROD_HARNESS = {
 };
 
 describe('Agents', () => {
+  it('opens the new-agent form from a link and clears the action on cancel', () => {
+    updateSearchParams({ createAgent: 'true' });
+    render(() => <Agents />);
+    const dialog = screen.getByRole('dialog');
+    expect(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    ).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(setSearchParams).toHaveBeenCalledWith(
+      { createAgent: undefined },
+      { replace: true }
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it.each(['success', 'error'] as const)(
     'keeps settings visible while Cursor models load and after %s',
     async (outcome) => {

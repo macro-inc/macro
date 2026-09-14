@@ -11,8 +11,8 @@ use graphql_activity::{
 };
 use graphql_email::{
     EmailContentKey, GraphqlSoupEmailMessage, SoupEmailEdgeReader,
-    email_message_selection_requires_full_payload, load_email_messages, load_email_thread_metadata,
-    load_latest_email_message,
+    email_message_selection_requires_full_payload, load_email_messages,
+    load_email_thread_mail_projection, load_email_thread_metadata, load_latest_email_message,
 };
 use graphql_favorite::{EntityFavoriteEdgeReader, load_entity_favorite};
 use graphql_notification::{
@@ -23,6 +23,10 @@ use graphql_permission::{
 };
 use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
 use graphql_soup::SoupEntityEdges;
+use predicate_index::{RecordKey, utc_timestamp_micros};
+use soup_filter_projection::{
+    MailCacheProjectionFacts, SoupCacheProjectionSupplement, encode_cache_projection_supplement,
+};
 use uuid::Uuid;
 
 /// The types of the edge readers for soup
@@ -90,6 +94,26 @@ where
             thread_id,
             _reader: PhantomData,
         }
+    }
+
+    async fn resolve_email_cache_projection(
+        &self,
+        ctx: &Context<'_>,
+        thread_id: Uuid,
+    ) -> async_graphql::Result<Option<String>> {
+        let projection = load_email_thread_mail_projection::<ER>(ctx, thread_id).await?;
+        let facts = &projection.cache_facts;
+        let record_key = RecordKey::new(format!("GraphqlSoupEmailThread:{thread_id}"))?;
+        let supplement = SoupCacheProjectionSupplement::mail(
+            record_key,
+            MailCacheProjectionFacts::new(
+                facts.latest_non_spam_message_ts.map(utc_timestamp_micros),
+                facts.latest_outbound_message_ts.map(utc_timestamp_micros),
+                facts.has_calendar_attachment,
+                facts.has_thread_share,
+            ),
+        );
+        Ok(Some(encode_cache_projection_supplement(&supplement)?))
     }
 
     fn agent_session_edges(bot_id: Uuid) -> Self::AgentSessionEdges {
@@ -340,6 +364,45 @@ where
         Ok(metadata
             .latest_inbound_message_ts
             .map(|timestamp| timestamp.to_rfc3339()))
+    }
+
+    /// Latest eligible message for ALL, INBOX, Calendar and Shared, without bodies.
+    async fn mail_all_preview(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
+        Ok(load_email_thread_mail_projection::<ER>(ctx, self.thread_id)
+            .await?
+            .previews
+            .all
+            .clone()
+            .map(Into::into))
+    }
+
+    /// Latest eligible draft, even when a newer non-draft exists in the thread.
+    async fn mail_draft_preview(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
+        Ok(load_email_thread_mail_projection::<ER>(ctx, self.thread_id)
+            .await?
+            .previews
+            .draft
+            .clone()
+            .map(Into::into))
+    }
+
+    /// Latest eligible sent message, without bodies.
+    async fn mail_sent_preview(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<graphql_email::GraphqlMailPreviewMessage>> {
+        Ok(load_email_thread_mail_projection::<ER>(ctx, self.thread_id)
+            .await?
+            .previews
+            .sent
+            .clone()
+            .map(Into::into))
     }
 
     /// A page of messages in this thread, newest first.

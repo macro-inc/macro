@@ -10,6 +10,8 @@ use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::model::AgentSessionId;
 use dashmap::DashMap;
 
+use super::engine::AgentIdentity;
+
 /// One entry of the conversation, in the shape
 /// [`agent::to_rig_messages`] round-trips.
 #[derive(Debug, Clone)]
@@ -27,6 +29,8 @@ pub struct SessionState {
     pub acp_session_id: Option<SessionId>,
     /// Model id turns run on; `session/set_config_option` moves it.
     pub model: String,
+    /// Who this agent is, snapshotted from the session's bot at attach.
+    pub identity: Option<AgentIdentity>,
     /// Instructions every turn runs under, snapshotted from the session row
     /// at attach. Nothing moves them: they are the session's system prompt,
     /// and a conversation whose system prompt changed halfway is one the
@@ -43,6 +47,7 @@ impl SessionState {
         Self {
             acp_session_id: None,
             model,
+            identity: None,
             instructions: None,
             history: Vec::new(),
         }

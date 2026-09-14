@@ -30,6 +30,7 @@ type QueryTarget =
   | 'callf'
   | 'fef'
   | 'ccf'
+  | 'asf'
   | 'remf'
   | 'propf';
 
@@ -99,7 +100,15 @@ const FIELD_CONFIG: Record<
   threadId: { target: 'ef', field: 'ThreadId' },
   emailLinkId: { target: 'ef', field: 'Owner' },
   emailSeen: { target: 'ef', field: 'Read' },
-  emailDone: { target: 'ef', field: 'NotificationState', notification: 'done' },
+  emailDone: {
+    target: 'ef',
+    field: 'InboxVisible',
+    formatValue: (value) => {
+      if (typeof value !== 'boolean')
+        throw new Error('Invalid mail done filter');
+      return !value;
+    },
+  },
   emailImportance: { target: 'ef', field: 'Importance' },
   emailProjectId: { target: 'ef', field: 'ProjectId' },
   emailSender: {
@@ -159,6 +168,9 @@ const FIELD_CONFIG: Record<
   foreignEntityIncludesMe: { target: 'fef', field: 'me', unit: true },
   crmCompanyId: { target: 'ccf', field: 'id' },
   crmCompanyHidden: { target: 'ccf', field: 'hidden' },
+  agentSessionId: { target: 'asf', field: 'id' },
+  agentSessionOwnerId: { target: 'asf', field: 'o' },
+  includeAgentSessions: { target: 'asf', field: 'inc', unit: true },
   reminderId: { target: 'remf', field: 'id' },
   reminderCompleted: { target: 'remf', field: 'comp' },
   reminderFired: { target: 'remf', field: 'fired' },
@@ -223,6 +235,7 @@ const emptyTargetAstLists = (): Record<QueryTarget, BackendAst[]> => ({
   callf: [],
   fef: [],
   ccf: [],
+  asf: [],
   remf: [],
   propf: [],
 });

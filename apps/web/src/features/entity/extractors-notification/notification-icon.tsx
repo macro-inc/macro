@@ -10,6 +10,8 @@ import ChatIcon from '@phosphor/chat.svg';
 import CheckIcon from '@phosphor/check.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FilesIcon from '@phosphor/files.svg';
+import QuestionIcon from '@phosphor/question.svg';
+import RobotIcon from '@phosphor/robot.svg';
 import UserPlusIcon from '@phosphor/user-plus.svg';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
@@ -57,6 +59,9 @@ function getNotificationIcon(
     .with('reminder', () => BellIcon)
     .with('calendar_event_reminder', () => CalendarBlankIcon)
     .with('inbox_reauth_required', () => EnvelopeIcon)
+    .with('agent_session_settled', () => RobotIcon)
+    .with('agent_session_waiting_for_input', () => QuestionIcon)
+    .with('agent_session_mentioned', () => AtIcon)
     .exhaustive();
 }
 

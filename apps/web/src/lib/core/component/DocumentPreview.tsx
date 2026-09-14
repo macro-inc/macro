@@ -231,6 +231,7 @@ function PopupIconButton(props: {
   return (
     <Tooltip label={props.tooltip}>
       <button
+        aria-label={props.tooltip}
         onClick={(e) => {
           e.stopPropagation();
           props.onClick();

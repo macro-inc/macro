@@ -29,7 +29,7 @@ const base = {
   failure50: 'rgb(from var(--color-failure) r g b / 0.5)',
 
   activeLine: 'rgb(from var(--color-edge) r g b / 0.3)',
-  selection: 'rgb(from var(--color-edge) r g b / 0.6)',
+  selection: 'rgb(from var(--color-ink) r g b / 0.1)',
   menuSelected: 'var(--color-hover)',
 
   searchMatch: 'rgb(from var(--color-accent) r g b / 0.2)',

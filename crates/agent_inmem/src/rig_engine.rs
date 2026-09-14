@@ -3,9 +3,10 @@
 //!
 //! Consumption mirrors the scheduled-action executor
 //! (`services/scheduled_action/src/outbound/inprocess_executor/agent_task.rs`):
-//! the full static toolset, the agent-session preamble, the static Macro
-//! prompt (immediately before any session instructions), and the owner's
-//! memory, with usage recorded per turn against the session owner.
+//! the full static toolset, the agent's name and handle, the agent-session
+//! preamble, the static Macro prompt (immediately before any session
+//! instructions), and the owner's memory, with usage recorded per turn
+//! against the session owner.
 //!
 //! User tools (`SendEmail`, `CreateCalendarEvent`) are the chat host's
 //! deferring ones, finished inside the turn: the turn's [`TurnRequest`]
@@ -35,7 +36,7 @@ use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use sqlx::PgPool;
 use tokio::sync::mpsc;
 
-use crate::domain::engine::{TurnEngine, TurnRequest};
+use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[cfg(test)]
@@ -119,6 +120,7 @@ async fn drive_turn(
     let TurnRequest {
         owner,
         model,
+        identity,
         instructions,
         messages,
         mcp_tools,
@@ -134,6 +136,7 @@ async fn drive_turn(
     let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
     let system_prompt = system_prompt(
         &tools.prompt,
+        identity.as_ref(),
         instructions.as_deref(),
         user_memory.as_deref(),
     );
@@ -205,21 +208,34 @@ async fn drive_turn(
     result
 }
 
-/// The turn's system prompt: the agent-session preamble, the static Macro
-/// prompt (how to use the product: mentions, tools, terminology), then the
-/// session's own instructions and the owner's memory when there are any.
+/// The turn's system prompt: the agent's identity, the agent-session
+/// preamble, the static Macro prompt (how to use the product: mentions,
+/// tools, terminology), then the session's own instructions and the owner's
+/// memory when there are any.
 ///
-/// The static Macro prompt sits immediately before `<session_instructions>`
-/// so it is the preamble the model reads as it takes in the caller's word —
-/// the same reason DCS puts `additional_instructions` after the standing
-/// prompt. Memory stays last so a remembered fact is never read as an
-/// instruction.
+/// Identity comes first so a named agent (even one with no instructions)
+/// knows who it is before reading anything else. The static Macro prompt
+/// sits immediately before `<session_instructions>` so it is the preamble
+/// the model reads as it takes in the caller's word — the same reason DCS
+/// puts `additional_instructions` after the standing prompt. Memory stays
+/// last so a remembered fact is never read as an instruction.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
+    identity: Option<&AgentIdentity>,
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> String {
-    let mut prompt = format!("{}\n{}", prompt::agent_session::PROMPT, tools_prompt);
+    let mut prompt = String::new();
+    if let Some(identity) = identity {
+        prompt.push_str(&prompt::agent_identity::render(
+            &identity.name,
+            &identity.handle,
+        ));
+        prompt.push('\n');
+    }
+    prompt.push_str(&prompt::agent_session::PROMPT.to_string());
+    prompt.push('\n');
+    prompt.push_str(&tools_prompt.to_string());
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.

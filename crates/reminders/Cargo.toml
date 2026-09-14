@@ -22,6 +22,7 @@ dispatch = ["dep:serde_json", "dep:tokio", "dep:tokio-util", "ports"]
 dispatch-sqs = ["dep:aws-sdk-sqs", "dispatch", "outbound"]
 inbound = [
   "dep:axum",
+  "dep:axum-extra",
   "dep:macro_authorization",
   "dep:model-error-response",
   "dep:utoipa",
@@ -39,6 +40,9 @@ anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
+# `query` brings `axum_extra::extract::Query`, whose deserializer collects
+# repeated query keys into a vector; `axum::extract::Query` keeps only one.
+axum-extra = { workspace = true, optional = true, features = ["query"] }
 chrono = { workspace = true, features = ["serde"] }
 chrono-tz = { workspace = true }
 cron = { workspace = true }

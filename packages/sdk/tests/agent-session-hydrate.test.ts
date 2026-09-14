@@ -83,4 +83,25 @@ describe('hydrateAgentSessionEvent', () => {
     expect(event.owner.id).toBe(identity.owner_id);
     expect(event.channel?.id).toBe(identity.origin.channel_id);
   });
+
+  test('mentioned hands out the author and everyone named', () => {
+    const event = hydrateAgentSessionEvent(client, {
+      event_type: 'agent_session.mentioned',
+      metadata: {
+        identity,
+        action_id: '01a00000-0000-7000-8000-000000000006',
+        mentioned_by: 'macro|owner@example.com',
+        mentioned: ['macro|reviewer@example.com', 'macro|lead@example.com'],
+      },
+    });
+    if (event.event_type !== 'agent_session.mentioned')
+      throw new Error(event.event_type);
+
+    expect(event.session.id).toBe(identity.session_id);
+    expect(event.mentionedBy?.id).toBe('macro|owner@example.com');
+    expect(event.mentioned.map((user) => user.id)).toEqual([
+      'macro|reviewer@example.com',
+      'macro|lead@example.com',
+    ]);
+  });
 });

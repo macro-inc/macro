@@ -257,7 +257,8 @@ enum ServiceCall {
         has_receipt: bool,
     },
     List {
-        entity: Option<(EntityType, String)>,
+        entity_types: Vec<EntityType>,
+        entity_ids: Vec<Uuid>,
         include_completed: bool,
         limit: Option<u32>,
         cursor: Option<ReminderCursor>,
@@ -313,14 +314,6 @@ fn receipt_id(receipt: &EntityAccessReceipt<OwnerAccessLevel>) -> Uuid {
         .expect("the extractor only mints receipts for a parsed uuid")
 }
 
-/// The entity named by a list filter, which is a read filter and so still
-/// carries the entity directly.
-fn entity_pair(entity: &Option<Entity<'static>>) -> Option<(EntityType, String)> {
-    entity
-        .as_ref()
-        .map(|entity| (entity.entity_type, entity.entity_id.to_string()))
-}
-
 /// The entity a create request attaches to, which the receipt carries now that
 /// `create_reminder` takes a receipt rather than an entity.
 fn receipt_entity_pair(
@@ -364,7 +357,8 @@ impl RemindersService for FakeRemindersService {
         filter: ReminderFilter,
     ) -> Result<ReminderPage, ReminderError> {
         self.record(ServiceCall::List {
-            entity: entity_pair(&filter.entity),
+            entity_types: filter.entity_types.clone(),
+            entity_ids: filter.entity_ids.clone(),
             include_completed: filter.include_completed,
             limit: filter.limit,
             cursor: filter.cursor,
@@ -701,13 +695,118 @@ async fn list_passes_filters_and_paging_through() {
     assert_eq!(
         service.calls(),
         vec![ServiceCall::List {
-            entity: Some((EntityType::Document, ACCESSIBLE_DOC.to_string())),
+            entity_types: vec![EntityType::Document],
+            entity_ids: vec![ACCESSIBLE_DOC.parse().expect("valid uuid")],
             include_completed: true,
             limit: Some(25),
             cursor: Some(cursor),
         }],
         "the cursor must survive the query string intact"
     );
+}
+
+#[tokio::test]
+async fn list_collects_repeated_entity_keys_into_both_dimensions() {
+    let service = FakeRemindersService::default();
+    let uri = format!(
+        "/?entityType=document&entityType=channel&entityId={ACCESSIBLE_DOC}&entityId={FORBIDDEN_DOC}"
+    );
+
+    let response = build_router(service.clone(), FakeEntityAccessService::default())
+        .oneshot(
+            authed(axum::http::Request::get(&uri))
+                .body(axum::body::Body::empty())
+                .expect("request should build"),
+        )
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        service.calls(),
+        vec![ServiceCall::List {
+            entity_types: vec![EntityType::Document, EntityType::Channel],
+            entity_ids: vec![
+                ACCESSIBLE_DOC.parse().expect("valid uuid"),
+                FORBIDDEN_DOC.parse().expect("valid uuid"),
+            ],
+            include_completed: false,
+            limit: None,
+            cursor: None,
+        }]
+    );
+}
+
+#[tokio::test]
+async fn a_list_filter_with_only_one_dimension_is_accepted() {
+    let service = FakeRemindersService::default();
+    let type_only = build_router(service.clone(), FakeEntityAccessService::default())
+        .oneshot(
+            authed(axum::http::Request::get("/?entityType=document"))
+                .body(axum::body::Body::empty())
+                .expect("request should build"),
+        )
+        .await
+        .expect("router should respond");
+    assert_eq!(type_only.status(), StatusCode::OK);
+
+    let id_only = build_router(service.clone(), FakeEntityAccessService::default())
+        .oneshot(
+            authed(axum::http::Request::get(format!(
+                "/?entityId={ACCESSIBLE_DOC}"
+            )))
+            .body(axum::body::Body::empty())
+            .expect("request should build"),
+        )
+        .await
+        .expect("router should respond");
+    assert_eq!(id_only.status(), StatusCode::OK);
+
+    assert_eq!(
+        service.calls(),
+        vec![
+            ServiceCall::List {
+                entity_types: vec![EntityType::Document],
+                entity_ids: Vec::new(),
+                include_completed: false,
+                limit: None,
+                cursor: None,
+            },
+            ServiceCall::List {
+                entity_types: Vec::new(),
+                entity_ids: vec![ACCESSIBLE_DOC.parse().expect("valid uuid")],
+                include_completed: false,
+                limit: None,
+                cursor: None,
+            },
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_list_filter_entity_id_that_is_not_a_uuid_is_400() {
+    for query in ["/?entityId=not-a-uuid", "/?entityId=%20%20"] {
+        let service = FakeRemindersService::default();
+        let response = build_router(service.clone(), FakeEntityAccessService::default())
+            .oneshot(
+                authed(axum::http::Request::get(query))
+                    .body(axum::body::Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("router should respond");
+
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "expected 400 for {query}"
+        );
+        assert_eq!(
+            read_json(response).await["message"],
+            "entityId must be a uuid"
+        );
+        assert!(service.calls().is_empty());
+    }
 }
 
 #[tokio::test]
@@ -741,22 +840,6 @@ async fn a_malformed_cursor_is_400() {
     let response = build_router(service.clone(), FakeEntityAccessService::default())
         .oneshot(
             authed(axum::http::Request::get("/?cursor=garbage"))
-                .body(axum::body::Body::empty())
-                .expect("request should build"),
-        )
-        .await
-        .expect("router should respond");
-
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    assert!(service.calls().is_empty());
-}
-
-#[tokio::test]
-async fn a_list_filter_with_only_an_entity_type_is_400() {
-    let service = FakeRemindersService::default();
-    let response = build_router(service.clone(), FakeEntityAccessService::default())
-        .oneshot(
-            authed(axum::http::Request::get("/?entityType=document"))
                 .body(axum::body::Body::empty())
                 .expect("request should build"),
         )
@@ -1010,7 +1093,8 @@ async fn an_oversized_limit_clamps_instead_of_failing_to_parse() {
     assert_eq!(
         service.calls(),
         vec![ServiceCall::List {
-            entity: None,
+            entity_types: Vec::new(),
+            entity_ids: Vec::new(),
             include_completed: false,
             limit: Some(999_999),
             cursor: None,

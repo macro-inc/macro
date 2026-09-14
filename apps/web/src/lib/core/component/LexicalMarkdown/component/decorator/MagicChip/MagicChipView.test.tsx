@@ -98,6 +98,25 @@ beforeEach(() => {
   onOpen.mockReset();
 });
 
+describe('Magic Chip inside an editor', () => {
+  it('collapses even when the editor stops delegated clicks', () => {
+    const collapse = vi.fn();
+    render(() => (
+      <div on:click={(event) => event.stopPropagation()}>
+        <MagicChipView
+          agentSessionId="session"
+          presentation={{ kind: 'settled', markdown: 'Latest answer' }}
+          onCollapse={collapse}
+        />
+      </div>
+    ));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse to mention' })
+    );
+    expect(collapse).toHaveBeenCalledOnce();
+  });
+});
+
 describe('MagicChipView', () => {
   it('reserves the answer height and reads the activity in the header while working', () => {
     const { container } = render(() => (
@@ -282,7 +301,6 @@ function asking(canAnswer: boolean, markdown = ''): MagicChipPresentation {
         },
       },
       canAnswer,
-      ownerName: 'Alice Owner',
     },
   };
 }
@@ -378,7 +396,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       />
     ));
     expect(header(view.container)?.textContent).toContain(
-      'Waiting for Alice Owner'
+      'Waiting for an editor'
     );
     // The composer is there to read, but cannot act for a viewer.
     expect(view.getByTestId('calendar-composer').dataset.canAct).toBe('false');
@@ -494,7 +512,6 @@ function askingQuestion(
         request,
       },
       canAnswer: options.canAnswer ?? true,
-      ownerName: 'Alice Owner',
     },
   };
 }
@@ -587,7 +604,7 @@ describe('MagicChipView asking a form', () => {
     ).toBe('false');
   });
 
-  it('a viewer who is not the owner sees the choices locked and no decisions', () => {
+  it('a viewer without edit access sees the choices locked and no decisions', () => {
     const view = render(() => (
       <MagicChipView
         agentSessionId="session"
@@ -597,7 +614,7 @@ describe('MagicChipView asking a form', () => {
       />
     ));
     expect(header(view.container)?.textContent).toContain(
-      'Waiting for Alice Owner'
+      'Waiting for an editor'
     );
     const red = view.getByRole('radio', { name: 'Red' }) as HTMLButtonElement;
     expect(red.disabled).toBe(true);

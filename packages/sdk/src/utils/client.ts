@@ -34,15 +34,15 @@ function userCredentialHeader(secret: string): CredentialHeader {
   return match(secret)
     .with(P.string.startsWith(BOT_TOKEN_PREFIX), () => {
       throw new Error(
-        "bot token passed as a user credential. Use auth: { type: 'bot', token } or MACRO_BOT_TOKEN."
+        "bot token passed as a user credential. Use auth: { type: 'bot', token } or MACRO_BOT_TOKEN.",
       );
     })
     .with(
       P.string.startsWith(USER_API_KEY_PREFIX),
-      (key): CredentialHeader => [USER_API_KEY_HEADER, key]
+      (key): CredentialHeader => [USER_API_KEY_HEADER, key],
     )
     .otherwise(
-      (token): CredentialHeader => ['Authorization', `Bearer ${token}`]
+      (token): CredentialHeader => ['Authorization', `Bearer ${token}`],
     );
 }
 
@@ -53,14 +53,14 @@ async function resolveToken(source: TokenSource): Promise<string> {
 export async function requestAuthHeaders(
   auth: MacroAuth,
   requestedAs?: string,
-  existing?: { hasBotScope?: boolean }
+  existing?: { hasBotScope?: boolean },
 ): Promise<ReadonlyArray<readonly [string, string]>> {
   return match(auth)
     .with({ type: 'bot' }, async (botAuth) => {
       const tok = await resolveToken(botAuth.token);
       if (!tok.startsWith(BOT_TOKEN_PREFIX)) {
         throw new Error(
-          "user API key passed as a bot token. Use auth: { type: 'user', apiKey } or MACRO_API_KEY."
+          "user API key passed as a bot token. Use auth: { type: 'user', apiKey } or MACRO_API_KEY.",
         );
       }
       const headers: Array<readonly [string, string]> = [
@@ -80,7 +80,7 @@ export async function requestAuthHeaders(
     .with({ type: 'user', apiKey: P.string }, ({ apiKey }) => {
       if (apiKey.startsWith(BOT_TOKEN_PREFIX)) {
         throw new Error(
-          "bot token passed as a user credential. Use auth: { type: 'bot', token } or MACRO_BOT_TOKEN."
+          "bot token passed as a user credential. Use auth: { type: 'bot', token } or MACRO_BOT_TOKEN.",
         );
       }
       return [[USER_API_KEY_HEADER, apiKey] as const];
@@ -133,7 +133,7 @@ export class MacroClient {
     this.requestedAs = opts.requestedAs;
     if (this.requestedAs && this.authConfig.type !== 'bot') {
       throw new Error(
-        'requestedAs() requires bot auth — a user token always acts as its own user'
+        'requestedAs() requires bot auth — a user token always acts as its own user',
       );
     }
     this.wsVerify = opts.wsVerify;
@@ -206,7 +206,7 @@ export class MacroClient {
       const headers = await requestAuthHeaders(
         this.authConfig,
         this.requestedAs,
-        { hasBotScope: request.headers.has('x-macro-bot-scope') }
+        { hasBotScope: request.headers.has('x-macro-bot-scope') },
       );
       for (const [name, value] of headers) {
         request.headers.set(name, value);
@@ -224,7 +224,7 @@ function resolveEnv(opts: MacroOpts): Env {
   if (!fromEnv) return 'prod';
   if (!(fromEnv in HOSTS)) {
     throw new Error(
-      `invalid MACRO_ENV "${fromEnv}" — expected local, dev, or prod`
+      `invalid MACRO_ENV "${fromEnv}" — expected local, dev, or prod`,
     );
   }
   return fromEnv as Env;
@@ -239,7 +239,7 @@ function resolveAuth(opts: MacroOpts): MacroAuth {
     typeof process !== 'undefined' ? process.env.MACRO_BOT_TOKEN : undefined;
   if (envApiKey && envBotToken) {
     throw new Error(
-      'both MACRO_API_KEY and MACRO_BOT_TOKEN are set — pass auth to new Macro() to pick one'
+      'both MACRO_API_KEY and MACRO_BOT_TOKEN are set — pass auth to new Macro() to pick one',
     );
   }
   if (envBotToken) return { type: 'bot', token: envBotToken };
@@ -249,7 +249,7 @@ function resolveAuth(opts: MacroOpts): MacroAuth {
       envApiKey ??
       (() => {
         throw new Error(
-          'no Macro credential. Set MACRO_API_KEY (API key or bearer token) or MACRO_BOT_TOKEN, or pass token/auth to new Macro().'
+          'no Macro credential. Set MACRO_API_KEY (API key or bearer token) or MACRO_BOT_TOKEN, or pass token/auth to new Macro().',
         );
       }),
   };

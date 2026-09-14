@@ -1127,6 +1127,17 @@
           "modifiedAt"
         ],
         "properties": {
+          "bot": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionBot",
+                "description": "Minimal identity of the session's bot, when available."
+              }
+            ]
+          },
           "botId": {
             "type": "string",
             "format": "uuid",
@@ -1244,6 +1255,7 @@
           "id",
           "name",
           "ownerId",
+          "canEdit",
           "botId",
           "model",
           "harness",
@@ -1262,6 +1274,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The bot running the agent."
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "Whether the caller may drive the session - prompt it, answer its\nquestions, stop it - rather than only watch. Edit access; the\ncreator owns the session, so a create response always says so."
           },
           "createdAt": {
             "type": "string",
@@ -1737,11 +1753,15 @@
       "SessionBot": {
         "type": "object",
         "description": "The agent behind a session, as much of it as rendering a message needs.",
-        "required": ["id", "name"],
+        "required": ["id", "name", "handle"],
         "properties": {
           "avatarUrl": {
             "type": ["string", "null"],
             "description": "Avatar, when it has one."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable `@` handle, without a leading `@`."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",

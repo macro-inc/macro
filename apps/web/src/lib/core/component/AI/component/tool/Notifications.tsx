@@ -21,6 +21,7 @@ const NOTIFICATION_TYPE_LABELS: Record<NotificationFilterType, string> = {
   github: 'GitHub',
   reminder: 'reminders',
   calendar: 'calendar events',
+  agent: 'agent sessions',
 };
 
 const formatList = (items: string[]) => {

@@ -35,6 +35,21 @@ their relative depths and order.
 
 ## Reference hover previews
 
+The `@` menu includes `Recent agent sessions` after Channels and before
+Companies. Search by session or persona name within the 500 most recently
+updated accessible sessions. Menu rows show the
+session title followed by a muted persona name, including `@Cursor` and
+`@macro(new)` for built-in personas. Names from the session API take precedence;
+older responses use the shared built-in name resolver or cached custom bots.
+Selecting one inserts an
+inline reference showing the shared agent icon and an underlined session title.
+Chips omit persona avatars and status. Click it (or select the node and press
+Enter) to open `/app/agent/<id>`.
+It references an existing session; it does not invoke the persona, attach its
+transcript to AI context, or grant access. Private/deleted sessions show an
+unavailable label. Mounted references refresh every 30 seconds while the tab is
+active to update titles and check access.
+
 Hover a document reference chip to open its preview without navigating. With
 `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
 batch, including task properties and viewer permission, without another fetch.
@@ -49,7 +64,9 @@ fetch cascade.
    press Enter (or click `Send`).
 3. While running, the button row shows an author chip (e.g. `Wolf (AI)`) and a `Stop` button
    (a11y text `Stop AI edit`). Edits stream directly into the document — there is no
-   accept/reject step.
+   accept/reject step. The editor can insert the same `@` mention chips a person can:
+   dates/times, people, documents, channels, agent sessions (including the expanded
+   Magic Chip card), and the other chip types.
 4. Completion signal: the `Stop` button disappears. Poll for that with `evaluate_script`;
    do not rely on `wait_for` text.
 
@@ -60,6 +77,10 @@ Below the editor: `Discussion` section with a `Leave a comment...` contenteditab
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
 user.
+
+Comments anchored to selected text open in a floating margin card on desktop and
+a `Comments` drawer on touch devices. New comments, replies, and edits use the
+composer surface on desktop; touch inputs use the drawer's background directly.
 
 ## Side panel
 

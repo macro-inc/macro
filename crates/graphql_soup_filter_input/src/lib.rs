@@ -809,6 +809,8 @@ enum GraphqlEmailLiteral {
     NotificationState(GraphqlNotificationState),
     /// The email thread read flag, independent of notification state.
     Read(bool),
+    /// Inbox visibility: false selects archived (done) mail, independently of notifications.
+    InboxVisible(bool),
     /// The shared option.
     Shared(GraphqlSharedEmailFilter),
     /// The calendar only option.
@@ -835,6 +837,7 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::Importance(importance) => EmailLiteral::Importance(importance),
             Self::NotificationState(state) => EmailLiteral::NotificationState(state.into()),
             Self::Read(read) => EmailLiteral::Read(read),
+            Self::InboxVisible(visible) => EmailLiteral::InboxVisible(visible),
             Self::Shared(shared) => EmailLiteral::Shared(shared.into_model()),
             Self::CalendarOnly(calendar_only) => EmailLiteral::CalendarOnly(calendar_only),
             Self::CreatedAt(date) => EmailLiteral::CreatedAt(date.into_ast()?),

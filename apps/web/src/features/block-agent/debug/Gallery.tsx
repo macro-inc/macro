@@ -479,7 +479,6 @@ function MagicChipAskingDemo(props: {
         request: props.request,
       },
       canAnswer: true,
-      ownerName: 'You',
     },
   };
   return (

@@ -10,6 +10,7 @@
  */
 
 import { toast } from '@core/component/Toast/Toast';
+import { markMessageSent } from '@core/util/message-send-motion';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { type Accessor, batch, createEffect } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -91,6 +92,8 @@ export function createComposerController(options: {
     setState('inflightPrompts', (count) => Math.max(0, count - 1));
     if (result === undefined || result.isErr()) {
       toast.failure('Message could not be sent');
+    } else {
+      markMessageSent(`agent:${sessionId}:${result.value.actionId}`);
     }
     // A 200 with status `queued` means the prompt waits in the session's
     // server-side queue; the gateway publishes the queue, so nothing more

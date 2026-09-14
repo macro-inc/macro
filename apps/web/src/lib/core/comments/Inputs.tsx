@@ -1,8 +1,10 @@
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import XIcon from '@phosphor/x.svg';
-import { Button, cn, SendButton } from '@ui';
+import { Button, ComposerSurface, SendButton } from '@ui';
 import { batch, createEffect, createSignal, Show, useContext } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { CommentsContext, ThreadContext } from './Thread';
 
 function EditBottomRow(props: {
@@ -17,6 +19,7 @@ function EditBottomRow(props: {
       <Button
         tooltip="Delete Draft"
         size="icon-sm"
+        class="size-7 rounded-full"
         variant="ghost"
         on:click={props.handleCancel}
       >
@@ -99,8 +102,9 @@ export function EditInput(props: {
   };
 
   return (
-    <div
-      class={cn('relative p-2 pb-12')}
+    <Dynamic
+      component={isTouchDevice() ? 'div' : ComposerSurface}
+      class="relative h-auto px-4 pt-2 pb-11 touch:px-3 touch:pb-12"
       on:click={(e) => {
         e.stopPropagation();
         focusEditor();
@@ -136,7 +140,7 @@ export function EditInput(props: {
         hasContent={editState().trim().length > 0}
         isSending={isSending()}
       />
-    </div>
+    </Dynamic>
   );
 }
 

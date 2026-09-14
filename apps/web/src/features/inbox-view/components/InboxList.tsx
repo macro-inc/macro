@@ -567,7 +567,7 @@ export function InboxList(props: InboxListProps) {
                             >
                               <div role="gridcell">
                                 <InboxListEntity
-                                  class="mx-0 w-full border-b border-edge touch:border-b-0"
+                                  class="mx-0 w-full border-b-[1px] border-thread-rail touch:border-b-0"
                                   cardClass="rounded-none px-4 py-3 mobile:pl-(--soup-row-padding-l)"
                                   entity={entityRow().entity}
                                   occurrenceKey={entityRow().id}

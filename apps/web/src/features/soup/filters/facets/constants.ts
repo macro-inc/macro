@@ -182,6 +182,12 @@ export const FILTER_TARGETS = {
     crmCompanyHidden: { backend: 'hidden', domain: [true, false] },
   },
 
+  asf: {
+    agentSessionId: { backend: 'id' },
+    agentSessionOwnerId: { backend: 'o' },
+    includeAgentSessions: { backend: 'inc', compile: 'unit' },
+  },
+
   // remf — reminders
   remf: {
     reminderId: { backend: 'id' },
@@ -301,6 +307,12 @@ type FilterTargetsMeta = {
     crmCompanyHidden: boolean;
   };
 
+  asf: {
+    agentSessionId: string[];
+    agentSessionOwnerId: string[];
+    includeAgentSessions: boolean;
+  };
+
   // remf — reminders
   remf: {
     reminderId: string[];
@@ -340,6 +352,7 @@ export const TARGETS: Target[] = [
   'callf',
   'fef',
   'ccf',
+  'asf',
   'remf',
   'propf',
 ];
@@ -363,6 +376,7 @@ export const ENTITY_TARGETS: EntityTarget[] = [
   'callf',
   'fef',
   'ccf',
+  'asf',
   'remf',
 ];
 
@@ -377,6 +391,7 @@ export const ENTITY_ID_BACKENDS: Record<EntityTarget, string> = {
   callf: 'CallId',
   fef: 'id',
   ccf: 'id',
+  asf: 'id',
   remf: 'id',
 };
 
@@ -391,6 +406,7 @@ export const ENTITY_ID_FIELDS: Record<EntityTarget, string> = {
   callf: 'callId',
   fef: 'foreignEntityRecordId',
   ccf: 'crmCompanyId',
+  asf: 'agentSessionId',
   remf: 'reminderId',
 };
 

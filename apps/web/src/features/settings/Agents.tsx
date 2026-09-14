@@ -32,6 +32,7 @@ import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
+import { useSearchParams } from '@solidjs/router';
 import { Avatar, Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
@@ -93,6 +94,14 @@ const MACRO_AGENT: AgentSummary = {
 /** Settings page for viewing and creating persistent agents. */
 export function Agents() {
   const [creating, setCreating] = createSignal(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const creatingFromLink = () => searchParams.createAgent === 'true';
+  const closeCreateAgent = () => {
+    setCreating(false);
+    if (creatingFromLink()) {
+      setSearchParams({ createAgent: undefined }, { replace: true });
+    }
+  };
   const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
   const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
   const channelsContext = useChannelsContext();
@@ -291,14 +300,14 @@ export function Agents() {
         </SettingsSection>
       </SettingsPage>
 
-      <Show when={creating()}>
+      <Show when={creating() || creatingFromLink()}>
         <AgentDialog
           connectedHarnesses={connectedHarnesses()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
           canMakePrivate
           pending={createAgentMutation.isPending}
-          onClose={() => setCreating(false)}
+          onClose={closeCreateAgent}
           onSave={createAgent}
         />
       </Show>

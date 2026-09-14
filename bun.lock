@@ -58,6 +58,7 @@
         "@solid-primitives/context": "^0.3.2",
         "@solid-primitives/keyed": "^1.5.3",
         "@solid-primitives/lifecycle": "^0.1.2",
+        "@solid-primitives/map": "^0.4.13",
         "@solid-primitives/memo": "^1.4.5",
         "@solid-primitives/platform": "^0.2.1",
         "@solid-primitives/promise": "^1.1.2",

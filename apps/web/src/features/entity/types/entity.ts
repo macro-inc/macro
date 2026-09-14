@@ -158,7 +158,17 @@ export type ChannelThreadEntity = EntityBase & {
 
 export type ChatEntity = EntityBase & {
   type: 'chat';
+  model?: string | null;
   projectId?: string;
+  properties?: SoupProperty[];
+};
+
+export type AgentSessionEntity = EntityBase & {
+  type: 'agent_session';
+  botId: string;
+  bot?: { id: string; name: string; avatarUrl?: string | null } | null;
+  threadId?: string | null;
+  status: string;
   properties?: SoupProperty[];
 };
 
@@ -390,6 +400,7 @@ export type CalendarEventEntity = EntityBase & {
 };
 
 export type EntityData =
+  | AgentSessionEntity
   | ChannelEntity
   | ChannelMessageEntity
   | ChannelThreadEntity
@@ -408,6 +419,7 @@ export type EntityData =
   | ForeignEntity;
 
 const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
+  'agent_session',
   'channel',
   'channel_message',
   'channel_thread',

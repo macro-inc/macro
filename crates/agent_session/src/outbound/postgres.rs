@@ -2,6 +2,7 @@
 //! repositories, the fold's log source, and the audience a streamed frame is
 //! addressed to.
 
+pub mod search;
 #[cfg(test)]
 mod test;
 
@@ -440,16 +441,19 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 previews.push(AgentSessionPreview::NoAccess(id));
                 continue;
             }
-            previews.push(AgentSessionPreview::Access(AgentSessionPreviewData {
-                id,
-                name: row.name,
-                owner_id: MacroUserIdStr::try_from(row.owner_id)
-                    .context("agent session has an unparseable owner")?,
-                bot_id: BotId::new_from_uuid(row.bot_id),
-                status: parse_status(&row.status, row.status_event_name)?,
-                created_at: row.created_at,
-                modified_at: row.modified_at,
-            }));
+            previews.push(AgentSessionPreview::Access(Box::new(
+                AgentSessionPreviewData {
+                    bot: None,
+                    id,
+                    name: row.name,
+                    owner_id: MacroUserIdStr::try_from(row.owner_id)
+                        .context("agent session has an unparseable owner")?,
+                    bot_id: BotId::new_from_uuid(row.bot_id),
+                    status: parse_status(&row.status, row.status_event_name)?,
+                    created_at: row.created_at,
+                    modified_at: row.modified_at,
+                },
+            )));
         }
         previews.extend(
             ids.iter()
@@ -586,11 +590,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             Some(bot) => SessionBot {
                 id,
                 name: bot.name,
+                handle: bot.handle,
                 avatar_url: bot.avatar_url,
             },
             None => SessionBot {
                 id,
                 name: "Agent".to_owned(),
+                handle: "agent".to_owned(),
                 avatar_url: None,
             },
         })
@@ -1130,6 +1136,25 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .into_iter()
             .map(TryInto::try_into)
             .collect::<anyhow::Result<Vec<_>>>()?)
+    }
+
+    async fn participants(
+        &self,
+        agent_session_id: AgentSessionId,
+    ) -> Result<Vec<MacroUserIdStr<'static>>> {
+        let users = sqlx::query_scalar!(
+            r#"
+            SELECT DISTINCT log.user_id AS "user_id!: MacroUserIdStr"
+            FROM agent_session_log AS log
+            WHERE log.agent_session_id = $1
+              AND log.user_id IS NOT NULL
+            "#,
+            agent_session_id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list agent session participants")?;
+        Ok(users)
     }
 }
 

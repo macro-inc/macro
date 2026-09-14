@@ -85,7 +85,10 @@ where
                     thread_id: Some(announcement.origin_thread_id),
                     attachments: Vec::new(),
                     nonce: None,
-                    notification_policy: PostMessageNotificationPolicy::default(),
+                    // The chip is a pointer, not news: the thread hears
+                    // about the session when it finishes or asks, through
+                    // the lifecycle notifications, not when it boots.
+                    notification_policy: PostMessageNotificationPolicy::Silent,
                     // Attributed to whoever mentioned the bot, so the reply
                     // reads as their agent answering.
                     triggered_by: Some(announcement.triggered_by.as_ref().to_owned()),

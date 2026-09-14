@@ -150,6 +150,7 @@ export type AgentSessionLogResponse = {
  * Clients deserialize this, so both derives are used.
  */
 export type AgentSessionPreviewData = {
+    bot?: null | SessionBot;
     /**
      * The bot running the agent.
      */
@@ -225,6 +226,12 @@ export type AgentSessionResponse = {
      * The bot running the agent.
      */
     botId: string;
+    /**
+     * Whether the caller may drive the session - prompt it, answer its
+     * questions, stop it - rather than only watch. Edit access; the
+     * creator owns the session, so a create response always says so.
+     */
+    canEdit: boolean;
     /**
      * When the session was created.
      */
@@ -656,6 +663,10 @@ export type SessionBot = {
      * Avatar, when it has one.
      */
     avatarUrl?: string | null;
+    /**
+     * Stable `@` handle, without a leading `@`.
+     */
+    handle: string;
     /**
      * The bot's id. A message it sent has `"bot|{id}"` as its sender.
      */

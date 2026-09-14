@@ -171,7 +171,8 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .map(|id| match sessions.get(id) {
                 None => AgentSessionPreview::DoesNotExist(*id),
                 Some(session) if session.owner_id != *viewer => AgentSessionPreview::NoAccess(*id),
-                Some(session) => AgentSessionPreview::Access(AgentSessionPreviewData {
+                Some(session) => AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
+                    bot: None,
                     id: *id,
                     name: session.name.clone(),
                     owner_id: session.owner_id.clone(),
@@ -179,7 +180,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
                     status: session.status.clone(),
                     created_at: session.created_at,
                     modified_at: session.modified_at,
-                }),
+                })),
             })
             .collect())
     }
@@ -253,6 +254,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(SessionBot {
             id,
             name: "Test Agent".to_owned(),
+            handle: "test-agent".to_owned(),
             avatar_url: None,
         })
     }
@@ -517,6 +519,25 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
         let _transaction = self.log_transaction.lock().unwrap();
         self.create_log(log)
+    }
+
+    async fn participants(
+        &self,
+        agent_session_id: AgentSessionId,
+    ) -> Result<Vec<MacroUserIdStr<'static>>> {
+        let logs = self.logs.lock().unwrap();
+        let mut users: Vec<MacroUserIdStr<'static>> = Vec::new();
+        for user in logs
+            .get(&agent_session_id)
+            .into_iter()
+            .flatten()
+            .filter_map(|row| row.entry.user_id.clone())
+        {
+            if !users.contains(&user) {
+                users.push(user);
+            }
+        }
+        Ok(users)
     }
 
     async fn create_fenced(

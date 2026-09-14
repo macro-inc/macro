@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"DocumentInstance\" (id, \"documentId\", sha)\n        SELECT 100 + ordinality, id, 'test' FROM unnest($1::text[]) WITH ORDINALITY AS ids(id, ordinality)\n        ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b135b9523b42eab1c92a7d5cc4a425a6ce84d6f64b77cd1143d6a5ec4a3bd920"
+}

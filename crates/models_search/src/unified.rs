@@ -25,6 +25,8 @@ use utoipa::ToSchema;
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema, JsonSchema, Eq, PartialEq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum UnifiedSearchIndex {
+    #[serde(rename = "agent_sessions")]
+    AgentSessions,
     Documents,
     Chats,
     Emails,
@@ -45,11 +47,18 @@ pub fn entity_filters_from_include(
     include: Vec<UnifiedSearchIndex>,
     base: EntityFilters,
 ) -> EntityFilters {
-    if include.is_empty() {
-        return base;
-    }
-    let exclude = vec![NIL_UUID.to_string()];
     let mut filters = base;
+    if include.is_empty() {
+        filters.agent_session_filters.include = true;
+        return filters;
+    }
+
+    let exclude = vec![NIL_UUID.to_string()];
+    if include.contains(&UnifiedSearchIndex::AgentSessions) {
+        filters.agent_session_filters.include = true;
+    } else {
+        filters.agent_session_filters.ids = exclude.clone();
+    }
     if !include.contains(&UnifiedSearchIndex::Documents) {
         filters.document_filters.document_ids = exclude.clone();
     }
@@ -119,6 +128,10 @@ pub fn is_searchable_association(assoc: &FileAssociation) -> bool {
 /// and expands file association prefixes (e.g. `assoc:code`) to concrete extensions.
 #[derive(Debug, Clone)]
 pub struct SearchEntityFilters {
+    /// Whether to include folded agent sessions.
+    pub should_include_agent_sessions: bool,
+    /// Agent-session filters.
+    pub agent_session_filters: item_filters::AgentSessionFilters,
     /// Whether to include documents in search results
     pub should_include_documents: bool,
     /// Whether to include chats in search results
@@ -171,6 +184,12 @@ fn expand_file_types_for_search(file_types: Vec<String>) -> Vec<String> {
 
 impl From<EntityFilters> for SearchEntityFilters {
     fn from(filters: EntityFilters) -> Self {
+        let mut agent_session_filters = filters.agent_session_filters;
+        let should_include_agent_sessions = (agent_session_filters.include
+            || !agent_session_filters.ids.is_empty()
+            || !agent_session_filters.owners.is_empty())
+            && !contains_nil_uuid(&agent_session_filters.ids);
+        strip_nil_uuids(&mut agent_session_filters.ids);
         let mut document_filters = filters.document_filters;
         let mut chat_filters = filters.chat_filters;
         let mut email_filters = filters.email_filters;
@@ -200,6 +219,8 @@ impl From<EntityFilters> for SearchEntityFilters {
         document_filters.file_types = expand_file_types_for_search(document_filters.file_types);
 
         Self {
+            should_include_agent_sessions,
+            agent_session_filters,
             should_include_documents,
             should_include_chats,
             should_include_emails,
@@ -230,11 +251,13 @@ pub enum UnifiedSearchResponseItem {
     Call(CallRecordSearchResponseItemWithMetadata),
     Company(crate::crm_company::CrmCompanySearchResponseItem),
     CalendarEvent(crate::calendar_event::CalendarEventSearchResponseItemWithMetadata),
+    AgentSession(crate::agent_session::AgentSessionSearchResponseItem),
 }
 
 impl UnifiedSearchResponseItem {
     pub fn entity_id(&self) -> Uuid {
         match self {
+            Self::AgentSession(item) => item.id,
             Self::Document(item) => item.extra.id,
             Self::Chat(item) => item.extra.id,
             Self::Email(item) => item.extra.id,
@@ -249,6 +272,7 @@ impl UnifiedSearchResponseItem {
     /// Get the updated_at timestamp for each item
     pub fn updated_at(&self) -> Option<DateTime<Utc>> {
         match self {
+            Self::AgentSession(item) => Some(item.updated_at),
             Self::Document(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Chat(item) => item.metadata.as_ref().map(|m| m.updated_at),
             Self::Email(item) => Some(item.updated_at),

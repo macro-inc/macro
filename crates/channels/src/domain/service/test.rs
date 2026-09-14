@@ -993,10 +993,16 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
             channel_id,
             PostMessageRequest {
                 content: "hello world".to_string(),
-                mentions: vec![SimpleMention {
-                    entity_type: "document".to_string(),
-                    entity_id: "doc-1".to_string(),
-                }],
+                mentions: vec![
+                    SimpleMention {
+                        entity_type: "document".to_string(),
+                        entity_id: "doc-1".to_string(),
+                    },
+                    SimpleMention {
+                        entity_type: "agent_session".to_string(),
+                        entity_id: "session-1".to_string(),
+                    },
+                ],
                 thread_id: None,
                 attachments: vec![NewChannelAttachment {
                     entity_type: "chat".to_string(),
@@ -1039,6 +1045,10 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
     drop(emitted);
 
     let shared = share.items.lock().unwrap();
+    assert!(shared.contains(&ReferencedShareItem::new(
+        "session-1",
+        ReferencedShareItemType::AgentSession
+    )));
     assert!(shared.contains(&ReferencedShareItem::new(
         "chat-1",
         ReferencedShareItemType::Chat

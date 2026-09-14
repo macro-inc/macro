@@ -26,7 +26,7 @@ import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button, cn, Surface, SendButton as UiSendButton } from '@ui';
+import { Button, ComposerSurface, cn, SendButton as UiSendButton } from '@ui';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
@@ -105,10 +105,11 @@ export function ChatInput(props: ChatInputComponentProps) {
   const lineSize = createElementSize(lineEl);
   const probeSize = createElementSize(probeEl);
   const compactSelector = () =>
-    !isTallVariant() &&
-    probeSize.width != null &&
-    lineSize.width != null &&
-    probeSize.width > lineSize.width;
+    isTouchDevice() ||
+    (!isTallVariant() &&
+      probeSize.width != null &&
+      lineSize.width != null &&
+      probeSize.width > lineSize.width);
   // Comfortable typing room to keep for the editor when deciding the selector
   // fits. The selector collapses while the body still has at least this much
   // room, so the body never gets squeezed into wrapping to make space for it.
@@ -223,7 +224,9 @@ export function ChatInput(props: ChatInputComponentProps) {
       ref={setAttachMenuAnchorRef}
       variant="ghost"
       size="icon-sm"
-      class="text-ink"
+      class="text-ink rounded-full size-7 touch:size-6"
+      label="Attach files"
+      aria-label="Attach files"
       onClick={() => setShowAttachMenu((prev) => !prev)}
     >
       <PaperclipIcon />
@@ -232,14 +235,15 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const StopButton = () => (
     <Button
-      variant="ghost"
+      variant={isTouchDevice() ? 'ghost' : 'strong'}
       size="icon-sm"
       label="Stop generating"
       hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
       class={cn(
-        'rounded-[11px] size-7.5 text-ink-extra-muted [&_svg]:stroke-[4px]',
-        'not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
+        'rounded-full size-7 touch:size-7.5 [&_svg]:stroke-[4px]',
+        isTouchDevice() &&
+          'text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5'
       )}
     >
@@ -247,17 +251,13 @@ export function ChatInput(props: ChatInputComponentProps) {
     </Button>
   );
 
-  // On mobile the send button is hidden while the input is empty. Collapse it
-  // (display:none) rather than just fading it, so it doesn't reserve width and
-  // offset the model selector from the right edge.
-  const sendHidden = () => isMobile() && isEmptyInput();
   const SendButton = () => (
     <UiSendButton
       tooltip={'Ask AI'}
       shortcut="enter"
       tooltipPlacement="top"
       disabled={!canSendMessage()}
-      class={sendHidden() ? 'hidden' : undefined}
+      class="touch:rounded-full"
       onClick={() => sendMessage()}
     />
   );
@@ -293,11 +293,21 @@ export function ChatInput(props: ChatInputComponentProps) {
     </Show>
   );
 
-  const isTallVariant = createMemo(() => props.variant === 'tall');
+  const isTallVariant = createMemo(
+    () => props.variant === 'tall' || isTouchDevice()
+  );
 
   return (
     <div class="relative">
-      <Surface class="rounded-xl bg-surface" depth={2} solid>
+      <ComposerSurface
+        class={cn(
+          'h-auto',
+          !isMultiline() &&
+            !hasAttachments() &&
+            !isTallVariant() &&
+            'touch:rounded-full'
+        )}
+      >
         <div
           onFocusOut={(e) => {
             const next = e.relatedTarget as Node | null;
@@ -336,8 +346,8 @@ export function ChatInput(props: ChatInputComponentProps) {
 
           <div
             ref={setLineEl}
-            class={cn('relative px-2 py-1.5', {
-              'flex flex-col px-3 py-2': isTallVariant(),
+            class={cn('relative px-2 py-1.5 touch:min-h-12.5 touch:py-[9px]', {
+              'flex flex-col px-2 py-2 touch:p-0': isTallVariant(),
             })}
           >
             {/* Invisible reference of the fully-expanded control row laid out
@@ -351,7 +361,7 @@ export function ChatInput(props: ChatInputComponentProps) {
                 inert
                 class="pointer-events-none invisible absolute flex w-max items-center gap-1"
               >
-                <div class="size-7.5 shrink-0" />
+                <div class="size-7 shrink-0" />
                 <div
                   class="shrink-0"
                   style={{ width: `${MIN_EDITOR_WIDTH}px` }}
@@ -361,15 +371,20 @@ export function ChatInput(props: ChatInputComponentProps) {
                   models={modelOptions()}
                   onSelect={() => {}}
                 />
-                <div class="size-7.5 shrink-0" />
+                <div class="size-7 shrink-0" />
               </div>
             </Show>
             <div
               id={CHAT_INPUT_TEXT_AREA_ID}
-              class={cn('text-sm sm:text-sm text-ink')}
+              class={cn(
+                'text-sm text-ink touch:px-3 touch:py-2',
+                !isTouchDevice() && (isMultiline() || isTallVariant()) && 'pl-2'
+              )}
               classList={{
                 'pl-8': !isMultiline() && !isTallVariant(),
-                'px-0 pb-8': isMultiline() && !isTallVariant(),
+                'pb-8 touch:pb-10': isMultiline() && !isTallVariant(),
+                'max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto':
+                  isMobile() && isMultiline(),
                 // While empty, the only thing rendered is the placeholder.
                 // `white-space` inherits, so this keeps it on one line (clipped)
                 // instead of wrapping into the single-line height. Typing clears
@@ -385,7 +400,9 @@ export function ChatInput(props: ChatInputComponentProps) {
             >
               <MarkdownShell
                 config={props.editor}
-                placeholder="Ask AI, @mention anything"
+                placeholder={
+                  isTouchDevice() ? 'Ask AI…' : 'Ask AI, @mention anything'
+                }
                 initialValue={props.initialValue}
                 autofocus={
                   !isMobile() &&
@@ -394,7 +411,7 @@ export function ChatInput(props: ChatInputComponentProps) {
                 }
               />
               <Show when={isTallVariant()}>
-                <div class="h-4" />
+                <div class="h-4 touch:hidden" />
               </Show>
               <Show when={isTallVariant()}>
                 <Attachments />
@@ -403,15 +420,24 @@ export function ChatInput(props: ChatInputComponentProps) {
 
             <div
               class={cn('contents', {
-                'flex justify-between items-center': isTallVariant(),
+                'flex justify-between items-center touch:h-8 touch:gap-2 touch:p-2 touch:mb-2':
+                  isTallVariant(),
               })}
             >
-              <div class={cn(!isTallVariant() && 'absolute left-2 bottom-1.5')}>
+              <div
+                class={cn(
+                  !isTallVariant() &&
+                    'absolute left-2 bottom-2 touch:bottom-[7px]'
+                )}
+              >
                 <LeftButton />
               </div>
 
               <div
-                class={cn(!isTallVariant() && 'absolute right-1.5 bottom-1.5')}
+                class={cn(
+                  !isTallVariant() &&
+                    'absolute right-2 bottom-2 touch:right-2 touch:bottom-[7px]'
+                )}
               >
                 <RightControls />
               </div>
@@ -419,7 +445,7 @@ export function ChatInput(props: ChatInputComponentProps) {
           </div>
         </div>
         <ConsentDialog />
-      </Surface>
+      </ComposerSurface>
     </div>
   );
 }

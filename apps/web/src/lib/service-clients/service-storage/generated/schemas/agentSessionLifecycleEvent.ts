@@ -8,6 +8,7 @@ import type { AgentSessionLifecycleEventOneOf } from './agentSessionLifecycleEve
 import type { AgentSessionLifecycleEventOneOfFive } from './agentSessionLifecycleEventOneOfFive';
 import type { AgentSessionLifecycleEventOneOfNine } from './agentSessionLifecycleEventOneOfNine';
 import type { AgentSessionLifecycleEventOneOfOnefive } from './agentSessionLifecycleEventOneOfOnefive';
+import type { AgentSessionLifecycleEventOneOfOnenine } from './agentSessionLifecycleEventOneOfOnenine';
 import type { AgentSessionLifecycleEventOneOfOneone } from './agentSessionLifecycleEventOneOfOneone';
 import type { AgentSessionLifecycleEventOneOfOneseven } from './agentSessionLifecycleEventOneOfOneseven';
 import type { AgentSessionLifecycleEventOneOfOnethree } from './agentSessionLifecycleEventOneOfOnethree';
@@ -31,4 +32,5 @@ export type AgentSessionLifecycleEvent =
   | AgentSessionLifecycleEventOneOfOneone
   | AgentSessionLifecycleEventOneOfOnethree
   | AgentSessionLifecycleEventOneOfOnefive
-  | AgentSessionLifecycleEventOneOfOneseven;
+  | AgentSessionLifecycleEventOneOfOneseven
+  | AgentSessionLifecycleEventOneOfOnenine;

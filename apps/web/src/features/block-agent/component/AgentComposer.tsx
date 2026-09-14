@@ -80,7 +80,7 @@ export function AgentComposer(props: {
           text={
             elicitation.canAnswer()
               ? 'The agent is waiting for your answer above. Messages sent now are queued.'
-              : `The agent is waiting for ${elicitation.ownerName()} to answer above. Messages sent now are queued.`
+              : 'The agent is waiting for an editor to answer above. Messages sent now are queued.'
           }
         />
       </Show>

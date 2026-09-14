@@ -29,7 +29,7 @@ import {
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
-import { CollapsedInput, cn, Surface } from '@ui';
+import { CollapsedInput, ComposerSurface } from '@ui';
 import { $getRoot } from 'lexical';
 import {
   type Accessor,
@@ -550,7 +550,7 @@ export function ChannelInput(props: ChannelInputProps) {
           onSend={() => void inputState.commands.send()}
         />
       </Show>
-      <Surface
+      <ComposerSurface
         onFocusOut={(e) => {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
@@ -558,17 +558,10 @@ export function ChannelInput(props: ChannelInputProps) {
           if (props.collapseOnFocusOut === false) return;
           collapsedInput.collapse();
         }}
-        class={cn(
-          'rounded-xl bg-surface touch:rounded-3xl touch:island',
-          isCollapsed() && 'hidden',
-          isTouchDevice() && 'bg-chrome'
-        )}
-        hideBorder={isTouchDevice()}
-        depth={isTouchDevice() ? 3 : 2}
-        solid
+        class={isCollapsed() ? 'hidden' : undefined}
       >
         {renderSurfaceContent()}
-      </Surface>
+      </ComposerSurface>
     </Input.Root>
   );
 }

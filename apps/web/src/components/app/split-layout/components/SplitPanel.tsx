@@ -187,38 +187,6 @@ export function SplitPanel(props: SplitPanelProps) {
     );
   });
 
-  /**
-   * This split is a preview controller with its viewer tucked flush against
-   * its right edge: paint above the viewer so the controller's card and
-   * shadow read as being in front.
-   */
-  const hasTuckedViewer = createMemo(() => {
-    return (
-      !isTouchDevice() &&
-      !props.handle.isSpotLight() &&
-      props.handle.isControllerSplit()
-    );
-  });
-
-  /**
-   * When either member of a tucked Preview Pair is active, the active member
-   * stays solid and its partner is dashed. Both retain the standard edge color.
-   */
-  const previewPairFocusStyling = createMemo(() => {
-    const manager = globalSplitManager();
-    if (!manager || isTouchDevice() || props.handle.isSpotLight()) return false;
-
-    const peerId = props.handle.isControllerSplit()
-      ? manager.viewerOf(props.split.id)
-      : props.handle.isViewerSplit()
-        ? manager.controllerOf(props.split.id)
-        : undefined;
-    if (!peerId || manager.getSplit(peerId)?.isSpotLight()) return false;
-
-    const activeId = manager.activeSplitId();
-    return activeId === props.split.id || activeId === peerId;
-  });
-
   const usesComposableLayout = () =>
     props.split.mount.kind === 'component' &&
     props.split.mount.meta.splitPanelLayout === 'composable';
@@ -337,25 +305,15 @@ export function SplitPanel(props: SplitPanelProps) {
           >
             <Panel
               class={cn(
-                'rounded-xl touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
+                'rounded-none touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
                 splitUnfocusedStyling() && 'split-panel-inactive',
                 {
                   'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
                   'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
-                  'border-solid!': previewPairFocusStyling() && props.active,
-                  'border-dashed!': previewPairFocusStyling() && !props.active,
-                  // Drawer look: both members square their seam corners. The
-                  // seam border always belongs to the Controller — the
-                  // Viewer's seam edge stays borderless so the line never
-                  // doubles, and keeping it on one fixed member regardless
-                  // of focus means switching focus can't shift layout by the
-                  // border width (the ! beats Surface's inline border
-                  // shorthand).
-                  'rounded-l-none border-l-0!': tuckedBehindController(),
-                  'rounded-r-none': hasTuckedViewer(),
                 }
               )}
               depth={isTouchDevice() ? 0 : 1}
+              hideBorder
             >
               <Show when={!usesComposableLayout()}>
                 <Panel.Header

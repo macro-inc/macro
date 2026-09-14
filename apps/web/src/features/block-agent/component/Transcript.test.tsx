@@ -3,9 +3,11 @@ import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentMessageTarget } from '../core/search-location';
 import { Transcript } from './Transcript';
 
 const session = vi.hoisted(() => ({
+  sessionId: () => 'session',
   messages: () => [] as FoldedMessage[],
   quoteSelection: vi.fn(),
   touch: false,
@@ -174,6 +176,88 @@ function mount(initial: FoldedMessage[]) {
 }
 
 describe('Transcript with the shared TanStack ThreadList', () => {
+  it('positions a cold-link target after the initial latest layout commits', async () => {
+    session.messages = () =>
+      Array.from({ length: 80 }, (_, turn) => message(turn));
+    const view = render(() => (
+      <Transcript searchTarget={{ messageTurn: 0, author: 'agent' }} />
+    ));
+    await settle();
+    await settle();
+    const scroller = view.container.querySelector<HTMLElement>(
+      '[data-channel-scroll]'
+    )!;
+    expect(scroller.scrollTop).toBe(0);
+    expect(
+      view.container.querySelector(
+        '[data-search-target="true"] [data-message="0:agent"]'
+      )
+    ).not.toBeNull();
+  });
+
+  it('waits for history then targets the folded author/turn, and allows repeat navigation', async () => {
+    const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
+    const [target, setTarget] = createSignal<AgentMessageTarget>({
+      messageTurn: 0,
+      author: 'user',
+    });
+    session.messages = messages;
+    const view = render(() => <Transcript searchTarget={target()} />);
+    await settle();
+    setMessages([
+      {
+        ...message(0),
+        author: { kind: 'user', userId: 'owner' },
+      } as FoldedMessage,
+      ...Array.from({ length: 80 }, (_, turn) => message(turn)),
+    ]);
+    await settle();
+    await settle();
+    const highlighted = () =>
+      view.container.querySelector('[data-search-target="true"]');
+    expect(
+      highlighted()?.querySelector('[data-message="0:user"]')
+    ).not.toBeNull();
+    setTarget({ messageTurn: 30, author: 'agent' });
+    await settle();
+    expect(
+      highlighted()?.querySelector('[data-message="30:agent"]')
+    ).not.toBeNull();
+    const scroller = view.container.querySelector<HTMLElement>(
+      '[data-channel-scroll]'
+    )!;
+    scroller.dispatchEvent(
+      new WheelEvent('wheel', { deltaY: 100, bubbles: true })
+    );
+    scroller.scrollTo({ top: 0 });
+    await settle();
+    expect(highlighted()).toBeNull();
+    setTarget({ messageTurn: 30, author: 'agent' });
+    await settle();
+    expect(
+      highlighted()?.querySelector('[data-message="30:agent"]')
+    ).not.toBeNull();
+    const offset = scroller.scrollTop;
+    setMessages((previous) => [...previous, message(80)]);
+    await settle();
+    expect(scroller.scrollTop).toBe(offset);
+  });
+
+  it('leaves latest navigation intact when a search target is absent from the log', async () => {
+    session.messages = () =>
+      Array.from({ length: 80 }, (_, turn) => message(turn));
+    const view = render(() => (
+      <Transcript searchTarget={{ messageTurn: 100, author: 'agent' }} />
+    ));
+    // ThreadList gives an unresolved initial element 1.5s before falling back.
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+    expect(
+      view.container.querySelector('[data-search-target="true"]')
+    ).toBeNull();
+    expect(
+      view.container.querySelector('[data-message="79:agent"]')
+    ).not.toBeNull();
+  });
   it('reveals the overlay on downward thumb drag and refreshes the unpinned thumb range', async () => {
     const view = mount(Array.from({ length: 50 }, (_, i) => message(i)));
     await settle();

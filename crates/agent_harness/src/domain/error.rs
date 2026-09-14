@@ -69,4 +69,7 @@ pub enum HarnessError {
     /// A bot's persisted agent runtime configuration could not be loaded.
     #[error("failed to resolve agent runtime configuration: {0}")]
     RuntimeDirectory(rootcause::Report),
+    /// Who a prompt mentions could not be resolved.
+    #[error("failed to resolve prompt mentions: {0}")]
+    Mentions(rootcause::Report),
 }

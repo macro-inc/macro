@@ -38,10 +38,11 @@ interface MessageCardProps {
 export function MessageCard(props: MessageCardProps) {
   return (
     <div class="shrink-0 flex justify-center w-full">
-      <div class="@container/message macro-message-width macro-message-padding w-full">
+      <div class="@container/message macro-message-width macro-message-padding mobile:px-0 w-full">
         <div
           class={cn(
             'relative p-4 rounded-lg bg-message border border-edge-muted outline-none',
+            'mobile:rounded-none mobile:border-0 mobile:border-t mobile:bg-transparent mobile:px-4 mobile:ring-0 mobile:shadow-none mobile:focus-visible:bg-hover',
             props.isSelected
               ? 'z-1 light-mode:shadow-lg light-mode:shadow-drop-shadow dark-mode:ring-1 dark-mode:ring-accent/40'
               : props.allowHover && 'hover:overlay-hover'

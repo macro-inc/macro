@@ -2,6 +2,7 @@ use super::*;
 use crate::domain::models::{NotifiedHydratableTypes, NotifiedPagePosition};
 use foreign_entity::domain::models::SourceId;
 use item_filters::ast::EntityFilterAst;
+use item_filters::ast::agent_session::AgentSessionLiteral;
 use item_filters::ast::chat::ChatLiteral;
 use item_filters::ast::document::DocumentLiteral;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -563,4 +564,139 @@ fn calendar_fold_renders_supported_literals() {
     assert!(sql.contains("NOT (EXISTS ("));
     assert!(sql.contains("un.state = 'done'"));
     assert_eq!(build_calendar_event_filter(None), "");
+}
+
+#[test]
+fn agent_sessions_are_opt_in_by_filter() {
+    let link_ids = [Uuid::from_u128(1)];
+    let sources = sources();
+    // Nothing said about agent sessions: none, whatever legs are active.
+    let types = included_types(&req(None, &link_ids, &sources, EVERYTHING));
+    assert!(!types.contains(&"agent_session"));
+
+    let include = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(filter_ast::Expr::val(
+            AgentSessionLiteral::Include,
+        ))),
+        ..EntityFilterAst::default()
+    };
+    let types = included_types(&req(Some(&include), &link_ids, &sources, EVERYTHING));
+    assert!(types.contains(&"agent_session"));
+
+    // Naming a session is an opt-in too; negating one is not.
+    let named = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(filter_ast::Expr::val(AgentSessionLiteral::Id(
+            Uuid::from_u128(9),
+        )))),
+        ..EntityFilterAst::default()
+    };
+    assert!(
+        included_types(&req(Some(&named), &link_ids, &sources, EVERYTHING))
+            .contains(&"agent_session")
+    );
+    let negated = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(filter_ast::Expr::is_not(filter_ast::Expr::val(
+            AgentSessionLiteral::Include,
+        )))),
+        ..EntityFilterAst::default()
+    };
+    assert!(
+        !included_types(&req(Some(&negated), &link_ids, &sources, EVERYTHING))
+            .contains(&"agent_session")
+    );
+}
+
+/// An agent session user-1 was notified about, plus one they cannot open.
+async fn seed_agent_sessions(pool: &Pool<Postgres>) -> anyhow::Result<(Uuid, Uuid)> {
+    const USER_2: &str = "macro|user-2@test.com";
+    let mine = Uuid::from_u128(0xa5e5_0001);
+    let theirs = Uuid::from_u128(0xa5e5_0002);
+    for (id, owner) in [(mine, USER_1), (theirs, USER_2)] {
+        sqlx::query(
+            r#"
+            INSERT INTO agent_session (
+                id, owner_id, bot_id, model, harness, repo_url, workspace, name,
+                status, status_event_name, created_at, modified_at
+            )
+            VALUES ($1, $2, $3, 'model', 'harness', NULL, '/workspace', 'Fix the flaky test',
+                    'event', 'acp_ready', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00')
+            "#,
+        )
+        .bind(id)
+        .bind(owner)
+        .bind(Uuid::from_u128(0xa9e7))
+        .execute(pool)
+        .await?;
+        sqlx::query(
+            r#"
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, 'agent_session', $2, 'user', 'owner')
+            "#,
+        )
+        .bind(id)
+        .bind(owner)
+        .execute(pool)
+        .await?;
+    }
+    // user-1 is notified about both: the second is the trap - a notification
+    // about a session they have no access to must never surface.
+    for (index, session) in [(0x51u128, mine), (0x52u128, theirs)] {
+        let notification_id = Uuid::from_u128(index);
+        sqlx::query(
+            r#"
+            INSERT INTO notification ("id", "notification_event_type", "event_item_id", "event_item_type", "service_sender", "created_at", "metadata")
+            VALUES ($1, 'agent_session_settled', $2, 'agent_session', 'test', '2024-06-01 10:21:00', '{}')
+            "#,
+        )
+        .bind(notification_id)
+        .bind(session.to_string())
+        .execute(pool)
+        .await?;
+        sqlx::query(
+            r#"
+            INSERT INTO user_notification ("user_id", "notification_id", "created_at", "sent", "state")
+            VALUES ($1, $2, '2024-06-01 10:21:00', TRUE, 'unseen')
+            "#,
+        )
+        .bind(USER_1)
+        .bind(notification_id)
+        .execute(pool)
+        .await?;
+    }
+    Ok((mine, theirs))
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("notified_at")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn agent_sessions_surface_when_opted_in_and_accessible(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let (mine, theirs) = seed_agent_sessions(&pool).await?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+
+    // Off by default: the feed is exactly what it was before agent sessions.
+    let page = notified_soup_page(&pool, req(None, &link_ids, &sources, EVERYTHING)).await?;
+    assert!(
+        !keys(&page)
+            .iter()
+            .any(|(entity_type, _)| *entity_type == EntityType::AgentSession)
+    );
+
+    let include = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(filter_ast::Expr::val(
+            AgentSessionLiteral::Include,
+        ))),
+        ..EntityFilterAst::default()
+    };
+    let page =
+        notified_soup_page(&pool, req(Some(&include), &link_ids, &sources, EVERYTHING)).await?;
+    let keys = keys(&page);
+    // The newest notification in the fixture is T20, so T21 leads the feed.
+    assert_eq!(keys[0], (EntityType::AgentSession, mine.to_string()));
+    assert!(!keys.contains(&(EntityType::AgentSession, theirs.to_string())));
+
+    Ok(())
 }

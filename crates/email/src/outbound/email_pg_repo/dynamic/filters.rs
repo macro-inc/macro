@@ -37,6 +37,7 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
             | EmailLiteral::Read(_)
+            | EmailLiteral::InboxVisible(_)
             | EmailLiteral::NotificationState(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
@@ -60,6 +61,7 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::CalendarOnly(_)
             | EmailLiteral::Importance(_)
             | EmailLiteral::Read(_)
+            | EmailLiteral::InboxVisible(_)
             | EmailLiteral::NotificationState(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
@@ -240,6 +242,10 @@ fn build_thread_literal_predicate(
         EmailLiteral::Property(lit) => build_thread_property_predicate(lit, thread_alias),
         EmailLiteral::Read(true) => SqlFragment::raw(format!("{thread_alias}.is_read = TRUE")),
         EmailLiteral::Read(false) => SqlFragment::raw(format!("{thread_alias}.is_read = FALSE")),
+        EmailLiteral::InboxVisible(visible) => SqlFragment::raw(format!(
+            "{thread_alias}.inbox_visible = {}",
+            if *visible { "TRUE" } else { "FALSE" }
+        )),
         // These literals are handled outside the thread/message predicate.
         EmailLiteral::NotificationState(state) => {
             let mut f = SqlFragment::raw(format!(

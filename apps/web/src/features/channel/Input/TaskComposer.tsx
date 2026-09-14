@@ -251,6 +251,7 @@ export function TaskComposer(props: {
     .withCode()
     .withMedia({ fileDrop: true })
     .withSelectionData()
+    .withFloatingFormatMenu()
     .withHistory()
     .onChange(setContent)
     .onEscape(() => {

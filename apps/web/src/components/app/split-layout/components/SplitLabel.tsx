@@ -228,6 +228,7 @@ export function SplitPermissionsBadge() {
 }
 
 export function BlockItemSplitLabel(props: {
+  icon?: JSX.Element;
   fallbackName?: string;
   name?: Accessor<string | undefined>;
   lockRename?: boolean;
@@ -270,7 +271,18 @@ export function BlockItemSplitLabel(props: {
     <SplitLabelContextMenu>
       <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
         <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
-          <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
+          <Show
+            when={props.icon}
+            fallback={
+              <EntityIcon
+                class="shrink-0"
+                targetType={targetType()}
+                size="xs"
+              />
+            }
+          >
+            {props.icon}
+          </Show>
           <Show when={props.badges}>{props.badges}</Show>
           <SplitLabel
             label={displayName() ?? ''}

@@ -7,13 +7,15 @@ export type PersonaOption = {
   botId?: string;
   name: string;
   handle: string;
+  description?: string;
   avatarUrl?: string;
   harness: string;
   defaultModel?: string;
+  ownerId?: string;
   /** Why this persona cannot be picked right now, when it cannot. */
   unavailableReason?: string;
-  /** Short form of `unavailableReason` for the card subtitle. */
-  unavailableLabel?: string;
+  /** An unavailable agent with a setup action remains clickable. */
+  connectLabel?: string;
 };
 
 /** A model the user can pin the session to instead of the persona default. */
@@ -57,6 +59,24 @@ export function modelDisplayName(
   available: readonly Pick<ModelOption, 'id' | 'name'>[]
 ): string {
   return available.find((model) => model.id === id)?.name ?? id;
+}
+
+/** Explains the selected runtime below the composer, independently of its model. */
+export function agentRuntimeDescription(
+  persona: PersonaOption | undefined,
+  ownerName?: string
+): string {
+  if (!persona) return '';
+  if (persona.harness === 'in-memory' || persona.harness === 'macro-inmem') {
+    return 'Starts quickly and runs in-memory. Great for workspace tasks';
+  }
+  if (persona.harness === 'cursor') {
+    return 'Bring in Cursor for some heavier coding work';
+  }
+  if (persona.harness === 'macrod') {
+    return `Do work locally using ${persona.name}${ownerName ? ` owned by ${ownerName}` : ''}`;
+  }
+  return `Runs using ${harnessDisplayName(persona.harness)}`;
 }
 
 /**
@@ -141,8 +161,8 @@ export function personaDefaultLabel(
   available: readonly ModelOption[]
 ): string {
   const defaultModel = persona?.defaultModel;
-  if (!defaultModel) return 'Agent default';
-  return `Agent default · ${modelDisplayName(defaultModel, available)}`;
+  if (!defaultModel) return 'default';
+  return `default (${modelDisplayName(defaultModel, available)})`;
 }
 
 /** Short label for the closed model pill. */
@@ -152,7 +172,5 @@ export function modelPillLabel(
   available: readonly ModelOption[]
 ): string {
   if (override) return modelDisplayName(override, available);
-  const defaultModel = persona?.defaultModel;
-  if (!defaultModel) return 'Default model';
-  return modelDisplayName(defaultModel, available);
+  return personaDefaultLabel(persona, available);
 }

@@ -17,6 +17,8 @@ use crate::domain::models::{
 const USER_A: &str = "macro|reminders-a@macro.com";
 const USER_B: &str = "macro|reminders-b@macro.com";
 const DAILY_9AM: &str = "0 0 9 * * *";
+const DOC_1: &str = "11111111-1111-4111-8111-111111111111";
+const DOC_2: &str = "22222222-2222-4222-8222-222222222222";
 
 fn user(id: &str) -> MacroUserIdStr<'_> {
     MacroUserIdStr::parse_from_str(id).expect("valid user id")
@@ -257,12 +259,20 @@ impl RemindersRepo for FakeRemindersRepo {
             .filter(|(owner, _)| owner == user_id.as_ref())
             .map(|(_, reminder)| reminder)
             .filter(|reminder| filter.include_completed || reminder.completed_at.is_none())
-            .filter(|reminder| match &filter.entity {
-                Some(entity) => {
-                    reminder.entity_type == Some(entity.entity_type)
-                        && reminder.entity_id.as_deref() == Some(entity.entity_id.as_ref())
-                }
-                None => true,
+            .filter(|reminder| {
+                filter.entity_types.is_empty()
+                    || reminder
+                        .entity_type
+                        .is_some_and(|entity_type| filter.entity_types.contains(&entity_type))
+            })
+            .filter(|reminder| {
+                filter.entity_ids.is_empty()
+                    || reminder.entity_id.as_deref().is_some_and(|entity_id| {
+                        filter
+                            .entity_ids
+                            .iter()
+                            .any(|wanted| wanted.to_string() == entity_id)
+                    })
             })
             .collect();
         found.sort_by_key(sort_key);
@@ -735,7 +745,7 @@ async fn lists_reminders_filtered_by_entity() {
         .create_reminder(
             &user(USER_A),
             create_request(once(future())),
-            Some(doc_receipt("doc-1")),
+            Some(doc_receipt(DOC_1)),
         )
         .await
         .expect("created");
@@ -745,7 +755,8 @@ async fn lists_reminders_filtered_by_entity() {
         .expect("created");
 
     let filter = ReminderFilter {
-        entity: Some(EntityType::Document.with_entity_string("doc-1".to_string())),
+        entity_types: vec![EntityType::Document],
+        entity_ids: vec![DOC_1.parse().expect("valid uuid")],
         ..Default::default()
     };
     let page = service
@@ -754,7 +765,7 @@ async fn lists_reminders_filtered_by_entity() {
         .expect("list should succeed");
 
     assert_eq!(page.reminders.len(), 1);
-    assert_eq!(page.reminders[0].entity_id.as_deref(), Some("doc-1"));
+    assert_eq!(page.reminders[0].entity_id.as_deref(), Some(DOC_1));
 }
 
 #[tokio::test]
@@ -1755,7 +1766,7 @@ async fn pages_within_an_entity_filter() {
             .create_reminder(
                 &user(USER_A),
                 create_request(once(remind_at)),
-                Some(doc_receipt("doc-1")),
+                Some(doc_receipt(DOC_1)),
             )
             .await
             .expect("created");
@@ -1765,14 +1776,14 @@ async fn pages_within_an_entity_filter() {
             .create_reminder(
                 &user(USER_A),
                 create_request(once(remind_at)),
-                Some(doc_receipt("doc-2")),
+                Some(doc_receipt(DOC_2)),
             )
             .await
             .expect("created");
     }
 
     let filter = || ReminderFilter {
-        entity: Some(EntityType::Document.with_entity_string("doc-1".to_string())),
+        entity_ids: vec![DOC_1.parse().expect("valid uuid")],
         limit: Some(2),
         ..Default::default()
     };
@@ -1789,7 +1800,7 @@ async fn pages_within_an_entity_filter() {
         for reminder in &page.reminders {
             assert_eq!(
                 reminder.entity_id.as_deref(),
-                Some("doc-1"),
+                Some(DOC_1),
                 "the filter must hold on every page"
             );
         }
@@ -1801,7 +1812,7 @@ async fn pages_within_an_entity_filter() {
         assert!(pages < 10, "paging should terminate");
     }
 
-    assert_eq!(seen.len(), 3, "all three doc-1 reminders, and only those");
+    assert_eq!(seen.len(), 3, "all three DOC_1 reminders, and only those");
     let unique: std::collections::HashSet<_> = seen.iter().collect();
     assert_eq!(unique.len(), 3);
 }

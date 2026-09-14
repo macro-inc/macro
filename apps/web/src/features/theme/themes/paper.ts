@@ -56,6 +56,7 @@ export const paperTheme: ThemeV3 = {
     success: 'var(--color-green)',
     warning: 'var(--color-yellow)',
     failure: 'var(--color-red)',
-    chrome: 'var(--color-surface-4)',
+    chrome:
+      'color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0))',
   },
 };

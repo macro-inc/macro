@@ -32,6 +32,7 @@ export * from './agentSessionLogEntryDtoAllOf';
 export * from './agentSessionLogEntryDtoAllOfUserId';
 export * from './agentSessionLogResponse';
 export * from './agentSessionPreviewData';
+export * from './agentSessionPreviewDataBot';
 export * from './agentSessionPreviewDto';
 export * from './agentSessionPreviewDtoOneOf';
 export * from './agentSessionPreviewDtoOneOfAllOf';

@@ -131,9 +131,10 @@ interface MarkdownTextareaProps {
   autoLinkMatchMode?: AutoLinkMatchMode;
   /**
    * Show a floating format toolbar (headings, lists, inline styles, links)
-   * over the current text selection, like the markdown block's popup.
+   * over the current text selection, like the markdown block's popup. Pass
+   * `{ extendedInlineFormats: true }` to also offer underline/super/subscript.
    */
-  floatingFormatMenu?: boolean;
+  floatingFormatMenu?: boolean | { extendedInlineFormats?: boolean };
 }
 
 export function MarkdownTextarea(props: MarkdownTextareaProps) {
@@ -350,6 +351,12 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           e.stopPropagation();
         }}
         on:click={(e) => {
+          // Embedded controls own focus and need Solid's delegated clicks.
+          if (
+            e.target instanceof Element &&
+            e.target.closest('[data-lexical-interactive]')
+          )
+            return;
           e.stopPropagation();
           editor.focus();
         }}
@@ -413,7 +420,13 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         <FloatingMenuGroup>
           <FloatingLinkMenu autoLinkMatchMode={props.autoLinkMatchMode} />
           <Show when={props.floatingFormatMenu}>
-            <FloatingFormatMenu portalScope={props.portalScope} />
+            <FloatingFormatMenu
+              portalScope={props.portalScope}
+              extendedInlineFormats={
+                typeof props.floatingFormatMenu === 'object' &&
+                props.floatingFormatMenu.extendedInlineFormats
+              }
+            />
           </Show>
         </FloatingMenuGroup>
       </div>

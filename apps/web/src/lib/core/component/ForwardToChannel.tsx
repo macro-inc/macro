@@ -279,16 +279,22 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
     return true;
   });
 
-  const blockName = useMaybeBlockAliasedName() ?? props.blockName;
-  const blockId = useMaybeBlockId() ?? props.blockId;
-  const itemType = () =>
-    blockName != null ? blockNameToItemType(blockName) : undefined;
+  const contextBlockName = useMaybeBlockAliasedName();
+  const contextBlockId = useMaybeBlockId();
+  // Explicit identity can differ from the enclosing block (e.g. a newly
+  // persisted agent session still mounted in its launcher placeholder).
+  const blockName = () => props.blockName ?? contextBlockName;
+  const blockId = () => props.blockId ?? contextBlockId;
+  const itemType = () => {
+    const name = blockName();
+    return name != null ? blockNameToItemType(name) : undefined;
+  };
 
   const asAttachment = () => {
     const type = itemType();
     return {
       entity_type: type ? itemTypeToReferenceEntityType(type) : 'unknown',
-      entity_id: blockId ?? '',
+      entity_id: blockId() ?? '',
     };
   };
 

@@ -11,6 +11,9 @@ use serde::de::Deserialize;
 use std::collections::BTreeMap;
 use thiserror::Error;
 
+#[cfg(test)]
+mod test;
+
 /// some tools need additional information
 #[derive(Debug)]
 pub enum ToolInfo {
@@ -40,7 +43,9 @@ pub enum ToolSetCreationError {
 #[derive(Debug, Error)]
 pub enum ToolSetError {
     /// Failed to deserialize the tool input (possibly an AI hallucination).
-    #[error("error deserializing tool call (possible hallucination)")]
+    /// The message carries the serde detail so a model reading it as a tool
+    /// result can correct the offending argument instead of retrying blindly.
+    #[error("error deserializing tool call (possible hallucination): {0}")]
     Deserialization(serde_json::Error),
     /// The requested tool was not found in the toolset.
     #[error("tool not in toolset")]

@@ -62,6 +62,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 utoipa = { workspace = true, optional = true }
 rootcause = { workspace = true }
+uuid = { workspace = true }
 sqlx = { workspace = true, features = ["json"], optional = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }

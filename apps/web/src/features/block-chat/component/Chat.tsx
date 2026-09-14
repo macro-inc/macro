@@ -34,7 +34,7 @@ import {
 import { registerToolHandler } from '@core/component/AI/signal/tool';
 import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
-import { parseModel } from '@core/component/AI/util/parse';
+import { resolveChatInputModel } from '@core/component/AI/util/parse';
 import {
   getChatInputStoredState,
   type StoredStuff,
@@ -51,6 +51,7 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
+import { markMessageSent } from '@core/util/message-send-motion';
 import { createRenameDssEntityMutation } from '@entity';
 import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -71,8 +72,7 @@ export function Chat(props: { data: ChatData }) {
   // to this one.
   const initialModel =
     peekPendingSend()?.model ??
-    loadedState.model ??
-    parseModel(props.data.chat.model);
+    resolveChatInputModel(props.data.chat.model, loadedState.model);
 
   return (
     <ChatInputProvider
@@ -197,6 +197,7 @@ function ChatInner(props: {
     const isFirstMessage = chat.messages().length === 0;
     const optimisticId = crypto.randomUUID();
 
+    markMessageSent(`chat:${optimisticId}`);
     chat.dispatch({
       type: 'send_started',
       optimisticMessage: {
@@ -362,7 +363,7 @@ function ChatInner(props: {
       </div>
       <Show when={!disabled()}>
         <FloatRegionOrInline region="accessory">
-          <div class="flex w-full justify-center pb-2 px-2 touch:pb-0 touch:px-(--mobile-chrome-gutter) touch:pointer-events-auto">
+          <div class="flex w-full justify-center pb-2.5 px-2 touch:pb-0 touch:px-(--mobile-chrome-gutter) touch:pointer-events-auto">
             <div class="w-3xl">
               <ChatInput
                 editor={editor}

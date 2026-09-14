@@ -240,6 +240,12 @@ export type AgentSessionLifecycleEvent = {
      */
     metadata: InputReceivedMetadata;
 } | {
+    event_type: 'agent_session.mentioned';
+    /**
+     * A prompt named other users who can open the session.
+     */
+    metadata: SessionMentionedMetadata;
+} | {
     event_type: 'agent_session.stopped';
     /**
      * The session's live actor is gone.
@@ -7422,6 +7428,12 @@ export type SessionDeletedMetadata = {
  */
 export type SessionIdentity = {
     /**
+     * Everyone with a stake in what happens next: the owner plus every user
+     * who has prompted or answered this session. Resolved by the emitter so
+     * a consumer fanning out never has to read the session's log.
+     */
+    audience?: Array<MacroUserIdStr>;
+    /**
      * Bot the session runs for.
      */
     bot_id: BotId;
@@ -7442,6 +7454,28 @@ export type SessionIdentity = {
      * User-facing session name at the time of the event.
      */
     session_name: string;
+};
+
+/**
+ * A prompt named other users who can open the session. Published when the
+ * prompt is accepted, not when it is answered: "come look at this" should
+ * not wait for the turn.
+ */
+export type SessionMentionedMetadata = {
+    /**
+     * The action carrying the prompt.
+     */
+    action_id: AgentActionId;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+    /**
+     * The users named, already narrowed to those who can open the session
+     * and never including the author.
+     */
+    mentioned: Array<MacroUserIdStr>;
+    mentioned_by?: null | MacroUserIdStr;
 };
 
 /**
@@ -8086,6 +8120,10 @@ export type SoupChatSoupPropertiesField = {
      * Whether the chat is persistent or not
      */
     isPersistent: boolean;
+    /**
+     * The last model selected for a sent message (`provider/model` id).
+     */
+    model?: string | null;
     /**
      * The name of the chat
      */
@@ -13191,7 +13229,16 @@ export type GetEntityPermissionResponse = GetEntityPermissionResponses[keyof Get
 export type ListFavoritesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Restrict to favorites whose entity is one of these types.
+         */
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session'>;
+        /**
+         * Restrict to favorites whose entity is one of these ids.
+         */
+        entityId?: Array<string>;
+    };
     url: '/favorites';
 };
 
@@ -14314,13 +14361,13 @@ export type ListRemindersData = {
     path?: never;
     query?: {
         /**
-         * The type of an entity in Macro
+         * Restrict to reminders attached to an entity of these types.
          */
-        entityType?: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session'>;
         /**
-         * Restrict to reminders attached to this entity id. Requires `entityType`.
+         * Restrict to reminders attached to these entity ids.
          */
-        entityId?: string;
+        entityId?: Array<string>;
         /**
          * Include reminders that have already fired.
          */

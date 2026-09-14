@@ -683,7 +683,7 @@ fn build_query(
 
     builder.push(
         r#"
-            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC
+            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC
             LIMIT 1
         ) AS lmp
         -- Step 3: Join to get the sender's details

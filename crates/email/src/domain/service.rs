@@ -15,13 +15,14 @@ mod entity_mutation;
 use crate::domain::{
     events::{EmailMacroEvent, ThreadProjectChangedMetadata},
     models::{
-        CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EmailThreadMetadata,
-        EnrichedEmailThreadPreview, GetEmailsRequest, Link, LinkLabel, ParsedMessage, ParsedThread,
-        SenderPolicy, Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
+        CreateDraftInput, CreatedDraft, EmailErr, EmailFilter, EmailThreadMailProjection,
+        EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest, Link, LinkLabel,
+        ParsedMessage, ParsedThread, SenderPolicy, Thread, UpdateThreadLabelsResult,
+        UpsertEmailFilterInput,
     },
     ports::{
         EmailContentService, EmailMessageEnqueuer, EmailRepo, EmailService,
-        EmailThreadMetadataService,
+        EmailThreadMailProjectionService, EmailThreadMetadataService,
     },
 };
 use crm::domain::service::CrmService;
@@ -524,6 +525,26 @@ where
         receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> Result<HashMap<Uuid, EmailThreadMetadata>, EmailErr> {
         self.get_email_thread_metadata_impl(receipts).await
+    }
+}
+
+impl<T, U, E, CS, Eam, B> EmailThreadMailProjectionService for EmailServiceImpl<T, U, E, CS, Eam, B>
+where
+    T: EmailRepo,
+    U: FrecencyQueryService,
+    E: EmailMessageEnqueuer,
+    CS: CrmService,
+    Eam: EntityAccessManagementService,
+    B: MacroEventBroker,
+    anyhow::Error: From<T::Err>,
+{
+    async fn get_email_thread_mail_projections(
+        &self,
+        viewer: macro_user_id::user_id::MacroUserIdStr<'static>,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<HashMap<Uuid, EmailThreadMailProjection>, EmailErr> {
+        self.get_email_thread_mail_projections_impl(viewer, receipts)
+            .await
     }
 }
 

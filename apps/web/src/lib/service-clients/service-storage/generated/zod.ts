@@ -8539,6 +8539,39 @@ export const getEntityPermissionResponse = zod
 /**
  * @summary List the caller's favorites.
  */
+export const listFavoritesQueryParams = zod.object({
+  entityType: zod
+    .array(
+      zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'reminder',
+          'skill',
+          'agent_session',
+        ])
+        .describe('The type of an entity in Macro')
+    )
+    .optional()
+    .describe('Restrict to favorites whose entity is one of these types.'),
+  entityId: zod
+    .array(zod.string())
+    .optional()
+    .describe('Restrict to favorites whose entity is one of these ids.'),
+});
+
 export const listFavoritesResponse = zod
   .object({
     favorites: zod
@@ -9943,6 +9976,12 @@ export const getItemsSoupResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -13904,6 +13943,12 @@ export const postItemsSoupResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -17306,6 +17351,12 @@ export const postItemsSoupAstResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -20970,6 +21021,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           isPersistent: zod
                             .boolean()
                             .describe('Whether the chat is persistent or not'),
+                          model: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The last model selected for a sent message (`provider\/model` id).'
+                            ),
                           name: zod.string().describe('The name of the chat'),
                           ownerId: zod
                             .string()
@@ -24370,6 +24427,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           isPersistent: zod
                             .boolean()
                             .describe('Whether the chat is persistent or not'),
+                          model: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The last model selected for a sent message (`provider\/model` id).'
+                            ),
                           name: zod.string().describe('The name of the chat'),
                           ownerId: zod
                             .string()
@@ -29108,35 +29171,35 @@ export const listRemindersQueryLimitMin = 0;
 
 export const listRemindersQueryParams = zod.object({
   entityType: zod
-    .enum([
-      'user',
-      'chat',
-      'channel',
-      'channel_message',
-      'document',
-      'project',
-      'email_thread',
-      'calendar_event',
-      'team',
-      'call',
-      'foreign_entity',
-      'static_file',
-      'crm_company',
-      'crm_contact',
-      'reminder',
-      'skill',
-      'agent_session',
-    ])
+    .array(
+      zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'reminder',
+          'skill',
+          'agent_session',
+        ])
+        .describe('The type of an entity in Macro')
+    )
     .optional()
-    .describe(
-      'Restrict to reminders attached to this entity type. Requires `entityId`.'
-    ),
+    .describe('Restrict to reminders attached to an entity of these types.'),
   entityId: zod
-    .string()
+    .array(zod.string())
     .optional()
-    .describe(
-      'Restrict to reminders attached to this entity id. Requires `entityType`.'
-    ),
+    .describe('Restrict to reminders attached to these entity ids.'),
   includeCompleted: zod
     .boolean()
     .optional()

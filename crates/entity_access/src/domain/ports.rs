@@ -8,6 +8,8 @@ use crate::domain::models::{
     CrmEntityAccess, EntityAccessReceipt, EntityPermission, RequiredPermission, TeamRole,
     UserTeamInfo, ViewAccessLevel,
 };
+#[cfg(feature = "explain_binary")]
+use crate::domain::models::{AccessExplanation, AccessGrant};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
 use std::{collections::HashMap, future::Future};
 use uuid::Uuid;
@@ -237,6 +239,37 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Option<UserTeamInfo>, AccessError>> + Send;
+}
+
+/// Repository that returns labeled grant paths instead of a collapsed level.
+#[cfg(feature = "explain_binary")]
+pub trait ExplainAccessRepository: Clone + Send + Sync + 'static {
+    /// List every grant path that gives `user_id` access to the entity.
+    ///
+    /// Returns an empty list when the user has no access. Unsupported entity
+    /// types are rejected by [`ExplainAccessService`], not here.
+    fn list_access_grants(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<AccessGrant>, AccessError>> + Send;
+}
+
+/// Service that explains how a user can reach an entity.
+#[cfg(feature = "explain_binary")]
+pub trait ExplainAccessService: Clone + Send + Sync + 'static {
+    /// Explain every grant path for `user_id` on the entity.
+    ///
+    /// Empty grants and `effective: None` mean no access. That is success.
+    /// [`AccessError::BadRequest`] is reserved for unsupported types and
+    /// malformed ids.
+    fn explain_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<AccessExplanation, AccessError>> + Send;
 }
 
 /// Service for checking entity access levels.
