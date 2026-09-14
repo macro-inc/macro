@@ -1,3 +1,5 @@
+import { queryClient } from '@queries/client';
+import { agentSessionKeys } from './keys';
 import type {
   AgentSessionRenamedEvent,
   AgentSessionUpdatedEvent,
@@ -20,35 +22,21 @@ export function subscribeAgentSessionRenamed(
   return () => renameListeners.delete(listener);
 }
 
-const updateListeners = new Map<string, Set<() => void>>();
-
-/** Refetch current state rather than applying potentially out-of-order deltas. */
-export function handleAgentSessionUpdated(
+/** Cancel stale snapshots before refetching the committed session metadata. */
+export async function handleAgentSessionUpdated(
   event: AgentSessionUpdatedEvent
-): void {
-  for (const listener of updateListeners.get(event.agentSessionId) ?? [])
-    listener();
+): Promise<void> {
+  const filters = {
+    queryKey: agentSessionKeys.detail(event.agentSessionId).queryKey,
+    exact: true,
+  };
+  await queryClient.cancelQueries(filters);
+  await queryClient.invalidateQueries(filters);
 }
 
 /** Recover session metadata updates missed while the gateway was disconnected. */
-export function invalidateAgentSessionMetadata(): void {
-  for (const listeners of updateListeners.values()) {
-    for (const listener of listeners) listener();
-  }
-}
-
-export function subscribeAgentSessionUpdated(
-  id: string,
-  listener: () => void
-): () => void {
-  let listeners = updateListeners.get(id);
-  if (!listeners) {
-    listeners = new Set();
-    updateListeners.set(id, listeners);
-  }
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-    if (listeners.size === 0) updateListeners.delete(id);
-  };
+export async function invalidateAgentSessionMetadata(): Promise<void> {
+  const filters = { queryKey: agentSessionKeys.detail._def };
+  await queryClient.cancelQueries(filters);
+  await queryClient.invalidateQueries(filters);
 }

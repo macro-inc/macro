@@ -104,7 +104,9 @@ is also recorded because
 automatic creation can finish after the agent stops. Repeated registration is
 idempotent. The PR URL is stored on the session row, independently of conversation
 history. Registration sends a session-update gateway notification so mounted
-chips reload the current link; reconnecting also refreshes it.
+chips reload the current link; reconnecting also refreshes it. Multiple chips
+for the same session share its metadata, and loading it leaves the surrounding
+editor visible.
 
 When Cursor opens a pull request, the chip header shows its GitHub link as soon
 as the run reports it, including after restoring a session. The link remains
