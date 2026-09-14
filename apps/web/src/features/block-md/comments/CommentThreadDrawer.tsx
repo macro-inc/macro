@@ -210,7 +210,7 @@ export function CommentThreadDrawer() {
       initialFocusEl={getCommentComposerInput() ?? undefined}
     >
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content
           aria-label="Comments"
           // Viewing a thread opens at a fixed half-screen height — short

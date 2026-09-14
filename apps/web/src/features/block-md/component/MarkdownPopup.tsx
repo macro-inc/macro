@@ -713,6 +713,7 @@ export function MarkdownPopup(props: {
         }
       >
         <GeneralizedPopup
+          class="z-action-menu"
           anchor={{
             ref: anchorRef()!,
             blockId: `${blockId}`,
@@ -793,7 +794,8 @@ export function MarkdownPopup(props: {
         )}
       </Show>
       <Show when={showPopup() && anchorRef()}>
-        <ScopedPortal scope="local">
+        {/* Touch menus must escape the split's isolation to sit above mobile chrome. */}
+        <ScopedPortal scope={isTouchDevice() ? 'global' : 'local'}>
           <PopupToolbar />
         </ScopedPortal>
       </Show>
@@ -862,7 +864,7 @@ export function MarkdownPopup(props: {
           preventScrollbarShift={false}
         >
           <MobileDrawer.Portal>
-            <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+            <MobileDrawer.Overlay />
             <MobileDrawer.Content aria-label="Edit with AI">
               <MobileDrawer.Handle class="pb-1" />
               <div class="flex items-center gap-2 px-4 pb-3">
