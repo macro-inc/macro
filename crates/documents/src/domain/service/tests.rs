@@ -2179,6 +2179,17 @@ impl crate::domain::ports::create::DocumentBytesUploadPort for RejectUnexpectedF
     }
 }
 
+impl crate::domain::ports::mentions::DocumentMentionTrackingPort for RejectUnexpectedFinalization {
+    async fn track_document_mentions(
+        &self,
+        _: &str,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        _: &str,
+    ) -> anyhow::Result<()> {
+        panic!("failed repository creation must not track mentions");
+    }
+}
+
 #[tokio::test]
 async fn creator_forwards_explicit_consent_and_stops_after_repository_failure() {
     use crate::domain::create::{
@@ -2218,6 +2229,7 @@ async fn creator_forwards_explicit_consent_and_stops_after_repository_failure() 
         let (service, event_broker) = make_test_service_with_event_broker(repo);
         let creator = DocumentCreator::new(
             service,
+            RejectUnexpectedFinalization,
             RejectUnexpectedFinalization,
             RejectUnexpectedFinalization,
         );

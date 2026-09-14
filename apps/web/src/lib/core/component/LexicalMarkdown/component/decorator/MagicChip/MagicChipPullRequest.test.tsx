@@ -1,12 +1,23 @@
 /** @vitest-environment jsdom */
+import { queryClient } from '@queries/client';
+import { handlePullRequestUpdated } from '@queries/storage/pr-mention-sync';
 import { storageServiceClient } from '@service-storage/client';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { err, ok } from 'neverthrow';
+import { err } from 'neverthrow';
 import { Suspense } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MagicChipPullRequest } from './MagicChipPullRequest';
+
+vi.mock('@queries/client', async () => {
+  const { QueryClient } = await import('@tanstack/solid-query');
+  return {
+    queryClient: new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    }),
+  };
+});
 
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getForeignEntityBySource: vi.fn() },
@@ -22,6 +33,7 @@ vi.mock(
 
 afterEach(() => {
   cleanup();
+  queryClient.clear();
   vi.useRealTimers();
   vi.clearAllMocks();
 });
@@ -65,7 +77,7 @@ it('keeps an already mounted chip current through late sync and merge', async ()
     typeof storageServiceClient.getForeignEntityBySource
   >;
   const entity: ForeignEntity = {
-    id: 'pr-entity',
+    id: '019f0000-0000-7000-8000-000000000001',
     foreignEntityId: 'macro-inc/macro/pull/6369',
     foreignEntitySource: 'github_pull_request',
     metadata: { status: 'open' },
@@ -77,9 +89,7 @@ it('keeps an already mounted chip current through late sync and merge', async ()
   lookup.mockResolvedValue(
     err([{ code: 'NOT_FOUND', message: 'Not synced' }]) as Awaited<Lookup>
   );
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+  const client = queryClient;
   const rendered = render(() => (
     <QueryClientProvider client={client}>
       <MagicChipPullRequest url="https://github.com/macro-inc/macro/pull/6369" />
@@ -89,13 +99,16 @@ it('keeps an already mounted chip current through late sync and merge', async ()
   // A webhook can arrive after the old ten-minute polling cutoff.
   await vi.advanceTimersByTimeAsync(11 * 60_000);
   expect(screen.getByRole('link')).toBeTruthy();
-  lookup.mockResolvedValue(ok(entity) as Awaited<Lookup>);
-  await vi.advanceTimersByTimeAsync(15_000);
+  expect(lookup).toHaveBeenCalledTimes(1);
+  await handlePullRequestUpdated(entity);
+  await vi.advanceTimersByTimeAsync(1);
   expect(screen.getByText('open')).toBeTruthy();
-  lookup.mockResolvedValue(
-    ok({ ...entity, metadata: { status: 'merged' } }) as Awaited<Lookup>
-  );
-  await vi.advanceTimersByTimeAsync(15_000);
+  await handlePullRequestUpdated({
+    ...entity,
+    metadata: { status: 'merged' },
+    updatedAt: '2026-09-11T00:01:00Z',
+  });
+  await vi.advanceTimersByTimeAsync(1);
   expect(screen.getByText('merged')).toBeTruthy();
   rendered.unmount();
   const calls = lookup.mock.calls.length;
