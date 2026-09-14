@@ -9,6 +9,8 @@ type GeneralizedPopupProps = ParentProps<{
     blockType: BlockName;
   };
   useBlockBoundary?: boolean;
+  /** Forwarded to the positioned container. */
+  class?: string;
   ref?: Ref<HTMLDivElement>;
 }>;
 
@@ -22,6 +24,7 @@ export function GeneralizedPopup(props: GeneralizedPopupProps) {
     <PopupPositioner
       anchor={props.anchor.ref}
       useBlockBoundary={props.useBlockBoundary}
+      class={props.class}
     >
       <div
         ref={props.ref}

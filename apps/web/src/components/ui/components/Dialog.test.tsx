@@ -64,6 +64,7 @@ function setup(props: Partial<Omit<DialogProps, 'children' | 'open'>> = {}) {
         >
           Close
         </Dialog.CloseButton>
+        <Button onClick={() => setOpen(false)}>Cancel</Button>
       </Dialog>
     </>
   ));
@@ -102,12 +103,19 @@ describe('responsive dialog', () => {
         document.getElementById(dialog.getAttribute('aria-describedby')!)
           ?.textContent
       ).toBe('Choose a display name.');
-      const close = screen.getByRole('button', { name: 'Close editor' });
-      setDisabled(true);
-      close.click();
-      expect(open()).toBe(true);
-      setDisabled(false);
-      fireEvent.click(close);
+      if (mode.drawer) {
+        expect(
+          screen.queryByRole('button', { name: 'Close editor' })
+        ).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      } else {
+        const close = screen.getByRole('button', { name: 'Close editor' });
+        setDisabled(true);
+        close.click();
+        expect(open()).toBe(true);
+        setDisabled(false);
+        fireEvent.click(close);
+      }
       expect(open()).toBe(false);
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     }
@@ -124,7 +132,7 @@ describe('responsive dialog', () => {
           screen.getByRole('textbox', { name: 'Name' })
         )
       );
-      fireEvent.click(screen.getByRole('button', { name: 'Close editor' }));
+      fireEvent.keyDown(document, { key: 'Escape' });
       await waitFor(() => expect(document.activeElement).toBe(trigger));
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     }
@@ -170,14 +178,14 @@ describe('responsive dialog', () => {
   it('honors cancellable autofocus callbacks', async () => {
     const onOpenAutoFocus = vi.fn((event: Event) => {
       event.preventDefault();
-      screen.getByRole('button', { name: 'Close editor' }).focus();
+      screen.getByRole('button', { name: 'Cancel' }).focus();
     });
     const onCloseAutoFocus = vi.fn((event: Event) => {
       event.preventDefault();
       screen.getByRole('button', { name: 'Return here' }).focus();
     });
     setup({ onOpenAutoFocus, onCloseAutoFocus });
-    const close = screen.getByRole('button', { name: 'Close editor' });
+    const close = screen.getByRole('button', { name: 'Cancel' });
     await waitFor(() => expect(document.activeElement).toBe(close));
     fireEvent.click(close);
     await waitFor(() =>

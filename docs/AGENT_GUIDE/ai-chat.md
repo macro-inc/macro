@@ -8,11 +8,30 @@
 
 ## Start a standalone chat
 
-On mobile, the Agents list has an AI composer directly above the bottom dock
-instead of a floating plus button. Type a prompt, optionally choose a model or
+On mobile, every screen has a single-line AI composer directly above the bottom
+dock. A labeled glass button beside it opens the current view's create action:
+**+ Email**, **+ Task**, **+ Document**, **+ Message**, or **+ Event**. Home’s
+**+ New** unfolds Email, Message, Document, Event, Task, and More above the button;
+More opens the full create menu in a glass bottom sheet. Other views show
+**+ New** for that full menu. The AI input narrows to fit the button, ending
+to the left of the navigation pill's right edge below. Agents has no separate
+create button; its AI input fills the row.
+The composer's compact height is 46px, matching the mobile chrome buttons,
+with a plus attachment control and centered text and actions. It expands for
+longer prompts while focused. Leaving the AI composer collapses a long draft to
+a single-line preview in the accessory row; tapping it expands the same editor
+with the full draft intact. Screens with an available composer or reply controls show those
+instead; opening mobile search shows scope pills in their place. When neither
+is available, the AI composer returns with its draft intact, including in
+documents without a comment composer. Type a
+prompt, optionally choose a model or
 attach context, and tap **Send** to create the chat and send its first message.
-The composer stays above the software keyboard; the list reserves space for it
-so its last row remains reachable.
+On touch devices, the accessory hides whenever an editable field outside its
+Ask AI composer is focused, including email recipients, subject, and body fields.
+It returns with the same draft when focus leaves that field. While typing in
+Ask AI itself, the composer stays above the software keyboard; the list reserves
+space for it so its last row remains reachable. This also follows focus when a
+hardware keyboard is attached.
 The area behind the composer is transparent, without a bottom gradient overlay.
 
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
@@ -285,13 +304,19 @@ Locally sent user messages in both AI implementations enter with a short upward
 slide and fade. History and remounted messages stay
 still; reduced-motion preferences disable the transition.
 
+On phones, the chat model control appears as a provider icon while the software
+keyboard is open. Its accessible name is `Choose model, <model name>`. It opens
+a `Select model` sheet with descriptions, a checkmark for the current choice,
+and a **Done** button. Selecting an available model updates the selection;
+locked models open the upgrade flow. The sheet stays open when the keyboard closes.
+
 The compact model menus use the standard menu text size and a 240px width
 (capped to the viewport), consistently in production chat and the agent input.
 
 Chat title icons follow the selected model's provider, including the agent
 system's live model. Soup rows use the model included in the list data, with a
 saved local draft selection taking precedence. Icons do not query chat transcripts.
-Rows without model data show the standard chat icon. Anthropic, OpenAI, and Google use their
+Rows without model data show the standard chat icon. Claude models use the Claude sunburst logo; OpenAI and Google use their
 provider logos; unknown providers in chat titles reserve the icon space.
 
 Both AI composers display their model trigger label at the input text size

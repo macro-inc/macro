@@ -84,6 +84,7 @@ vi.mock('@app/features/chat/SoupChatInput', () => ({
 
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import type { CreatableBlock } from '@app/features/command/types';
+import { mountGlobalFocusListener } from '@app/signal/focus';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { MobileViewsRow } from '@components/app/mobile/MobileViewsRow';
@@ -117,9 +118,70 @@ beforeEach(() => {
   mount = document.createElement('div');
   document.body.append(mount);
   FloatRegions.setMount('accessory', mount);
+  render(() => {
+    mountGlobalFocusListener();
+    return null;
+  });
 });
 
 describe('Mobile page action row', () => {
+  it.each(['input', 'textarea', 'contenteditable'] as const)(
+    'hides while an outside %s is focused and preserves the AI draft',
+    (kind) => {
+      render(() => <MobilePageActionRow />);
+      const draft = screen.getByRole('textbox', {
+        name: 'Chat draft',
+      }) as HTMLTextAreaElement;
+      draft.value = 'Keep this draft';
+      draft.focus();
+      setVirtualKeyboardVisible(true);
+      expect(screen.getByRole('textbox', { name: 'Chat draft' })).toBe(draft);
+
+      const external = document.createElement(
+        kind === 'contenteditable' ? 'div' : kind
+      );
+      if (kind === 'contenteditable') {
+        external.setAttribute('contenteditable', 'true');
+        external.tabIndex = 0;
+      }
+      document.body.append(external);
+      external.focus();
+      expect(document.activeElement).toBe(external);
+      expect(screen.queryByRole('textbox', { name: 'Chat draft' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+      // Focus also hides the bar with a hardware keyboard or before the virtual
+      // keyboard visibility signal arrives.
+      setVirtualKeyboardVisible(false);
+      expect(screen.queryByRole('textbox', { name: 'Chat draft' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'New email' })).toBeNull();
+
+      external.blur();
+      external.remove();
+      expect(screen.getByRole('textbox', { name: 'Chat draft' })).toBe(draft);
+      expect(draft.value).toBe('Keep this draft');
+      draft.focus();
+      expect(document.activeElement).toBe(draft);
+      expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+      expect(mocks.mountComposer).toHaveBeenCalledOnce();
+      expect(mocks.unmountComposer).not.toHaveBeenCalled();
+    }
+  );
+
+  it('starts hidden when another field is already focused and returns for a non-editable control', () => {
+    render(() => (
+      <>
+        <input aria-label="Email subject" />
+        <button type="button">Email options</button>
+      </>
+    ));
+    screen.getByRole('textbox', { name: 'Email subject' }).focus();
+    render(() => <MobilePageActionRow />);
+    expect(screen.queryByRole('textbox', { name: 'Chat draft' })).toBeNull();
+    screen.getByRole('button', { name: 'Email options' }).focus();
+    expect(screen.getByRole('textbox', { name: 'Chat draft' })).toBeTruthy();
+    expect(mocks.mountComposer).toHaveBeenCalledOnce();
+  });
+
   it('starts compact and yields to screen-specific controls, then returns', () => {
     const page = render(() => <MobilePageActionRow />);
     const draft = screen.getByRole('textbox', { name: 'Chat draft' });

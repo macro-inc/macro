@@ -24,9 +24,11 @@ vi.mock('@core/component/AI/component/input/ChatInput', () => ({
   ChatInput: (props: {
     onSend: (request: unknown) => void;
     variant?: string;
+    collapseOnBlur?: boolean;
   }) => (
     <button
       data-variant={props.variant}
+      data-collapse-on-blur={props.collapseOnBlur}
       onClick={() =>
         props.onSend({
           content: 'Summarize this document',
@@ -89,6 +91,7 @@ describe('SoupChatInput', () => {
     const send = screen.getByRole('button', { name: 'Send' });
     expect(container.contains(send)).toBe(true);
     expect(send.getAttribute('data-variant')).toBe('default');
+    expect(send.getAttribute('data-collapse-on-blur')).toBe('true');
     expect(screen.queryByRole('button', { name: /^New/ })).toBeNull();
   });
   it('creates and opens a chat with the first prompt, selected model, and attachments', async () => {

@@ -1343,7 +1343,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                 <Match when={showLoadError()}>
                   <div
                     ref={setEmptyStateRef}
-                    class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+                    class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
                     <LoadErrorPanel onRetry={retryLoad} />
                   </div>
@@ -1375,7 +1375,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                 <Match when={showEmptyState()}>
                   <div
                     ref={setEmptyStateRef}
-                    class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+                    class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
                     <EmptyState
                       listView={currentView()}
