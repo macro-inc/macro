@@ -1330,6 +1330,10 @@
             "type": "string",
             "description": "The user who created and owns the session."
           },
+          "pullRequestUrl": {
+            "type": ["string", "null"],
+            "description": "The session's linked pull request."
+          },
           "repoUrl": {
             "type": ["string", "null"],
             "description": "The repository the session works with, when one was stated."

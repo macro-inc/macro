@@ -271,6 +271,10 @@ export type AgentSessionResponse = {
      */
     ownerId: string;
     /**
+     * The session's linked pull request.
+     */
+    pullRequestUrl?: string | null;
+    /**
      * The repository the session works with, when one was stated.
      */
     repoUrl?: string | null;
