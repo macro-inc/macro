@@ -1,6 +1,7 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
+import { toast } from '@core/component/Toast/Toast';
 import {
   CURSOR_BOT_HANDLE,
   CURSOR_BOT_ID,
@@ -30,14 +31,7 @@ import {
   useCursorModelsQuery,
 } from '@queries/auth/cursor-api-key';
 import { useNavigate } from '@solidjs/router';
-import {
-  Button,
-  badgeTriggerClasses,
-  cn,
-  Dropdown,
-  SendButton,
-  Surface,
-} from '@ui';
+import { Button, badgeTriggerClasses, cn, Dropdown, Surface } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -58,6 +52,8 @@ import {
   personaDefaultLabel,
   shortlistModelOptions,
 } from './compose-agent-session-options';
+import { createSessionStartMode } from './create-session-start-mode';
+import { SessionStartToggle } from './SessionStartToggle';
 
 /**
  * Macro's own agent: the deployment's managed default. Sent without a
@@ -115,12 +111,16 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   const controlMutation = useAgentSessionControlMutation();
   const userId = useUserId();
   const recentAgents = createRecentAgentSelections(userId());
+  const startMode = createSessionStartMode(userId());
   const [prompt, setPrompt] = createSignal('');
   const [personaId, setPersonaId] = createSignal(MACRO_PERSONA_ID);
   const [modelOverride, setModelOverride] = createSignal('');
   const [submitting, setSubmitting] = createSignal(false);
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
+  const [submitMode, setSubmitMode] = createSignal<
+    'live' | 'background' | undefined
+  >();
   let appliedModel: string | undefined;
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
 
@@ -244,6 +244,8 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   const createSession = async () => {
     const persona = selectedPersona();
     if (submitting() || !persona || persona.unavailableReason) return;
+    const background = startMode.effective() === 'background';
+    setSubmitMode(background ? 'background' : 'live');
     setSubmitting(true);
     setError(undefined);
     const model = modelOverride();
@@ -285,6 +287,27 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
       return;
     } finally {
       setSubmitting(false);
+      setSubmitMode(undefined);
+    }
+    if (background) {
+      close();
+      toast.success('Session started in background', {
+        duration: 8000,
+        actions: [
+          {
+            label: 'Open session',
+            onClick: () =>
+              openWithSplit(
+                { type: 'agent', id },
+                {
+                  referredFrom: 'launcher',
+                  preferNewSplit: props.preferNewSplit,
+                }
+              ),
+          },
+        ],
+      });
+      return;
     }
     openSession(id);
   };
@@ -299,7 +322,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
     if (container) attachHotkeys(container);
   });
   registerHotkey({
-    hotkey: 'cmd+enter',
+    hotkey: ['enter', 'cmd+enter'],
     scopeId: hotkeyScope,
     description: 'Create agent session',
     keyDownHandler: () => {
@@ -422,16 +445,13 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
             </Suspense>
           </div>
 
-          <SendButton
-            type="button"
-            aria-label={
-              submitting() ? 'Starting…' : error() ? 'Retry' : 'Start session'
-            }
-            tooltip={error() ? 'Retry' : 'Start session'}
-            shortcut="cmd+enter"
+          <SessionStartToggle
+            mode={submitMode() ?? startMode.effective()}
             pending={submitting()}
+            error={!!error()}
             disabled={submitting() || !!selectedPersona()?.unavailableReason}
-            onClick={() => void createSession()}
+            onModeChange={startMode.setCommitted}
+            onStart={() => void createSession()}
           />
         </div>
       </Surface>

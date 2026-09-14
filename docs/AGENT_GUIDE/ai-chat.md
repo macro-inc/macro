@@ -66,10 +66,19 @@ While a default is unknown, the selector reads `default`. Changing agent resets
 the override. Tab order is selected agent row (and any connection action) →
 **Create agent** → prompt → model → **Start session**.
 Escape in the prompt first blurs to the dialog; a second Escape closes it.
-Press the arrow send button (labelled **Start session**) or `Cmd/Ctrl+Enter`;
-the button shows a spinner and is labelled **Starting…**
+The prompt footer’s start control is an iOS-style **Live / Background**
+toggle. **Live** (default) opens the new session; **Background** closes the
+composer and shows a bottom-right toast **Session started in background** with
+an **Open session** action. The circular arrow on the selected side starts that
+mode; the other label (or a drag across the control) switches modes. The choice
+persists per user in localStorage. Hover **Background** to see `Cmd` / `Ctrl`.
+Holding `Cmd`/`Ctrl` previews Background only while Live is selected; releasing
+restores Live. If Background is already selected, the modifier does nothing.
+`Enter` starts the selected mode (`Shift+Enter` still inserts a newline).
+`Cmd`/`Ctrl+Enter` starts in the background when Live is selected.
+The arrow shows a spinner and is labelled **Starting…**
 while the server creates the session, applies the model override, and accepts the
-first prompt. It then closes
+first prompt. Live mode then closes
 and opens the real `/app/agent/<uuid>` URL. It never navigates to a temporary
 `pending-…` URL. Creation failures keep the prompt in the modal and show **Retry**.
 If model setup or prompt delivery fails after creation, **Retry** reuses that

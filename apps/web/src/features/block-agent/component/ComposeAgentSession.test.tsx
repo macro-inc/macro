@@ -24,7 +24,12 @@ const cursorConnection = vi.hoisted(() => ({
   registered: true,
   isPlaceholderData: false,
 }));
-const hotkeys = vi.hoisted(() => ({ submit: (): boolean => false }));
+const hotkeys = vi.hoisted(() => ({
+  enter: (): boolean => false,
+  cmdEnter: (): boolean => false,
+}));
+const toasts = vi.hoisted(() => ({ success: vi.fn() }));
+const cmd = vi.hoisted(() => ({ held: false }));
 
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'test-user',
@@ -51,9 +56,24 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 }));
 vi.mock('@core/hotkey/hotkeys', () => ({
   useHotkeyDOMScope: () => [vi.fn(), 'test'],
-  registerHotkey: (options: { keyDownHandler: () => boolean }) => {
-    hotkeys.submit = options.keyDownHandler;
+  registerHotkey: (options: {
+    hotkey?: string | string[];
+    keyDownHandler: () => boolean;
+  }) => {
+    const keys = Array.isArray(options.hotkey)
+      ? options.hotkey
+      : [options.hotkey];
+    for (const key of keys) {
+      if (key === 'enter') hotkeys.enter = options.keyDownHandler;
+      if (key === 'cmd+enter') hotkeys.cmdEnter = options.keyDownHandler;
+    }
   },
+}));
+vi.mock('@core/hotkey/state', () => ({
+  pressedKeys: () => new Set(cmd.held ? ['cmd'] : []),
+}));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { success: (...args: unknown[]) => toasts.success(...args) },
 }));
 vi.mock('@queries/agents/agents', () => ({
   useAgentsQuery: () => ({
@@ -153,8 +173,11 @@ vi.mock('@ui', () => {
       SubTrigger: Container,
       SubContent: Container,
     }),
+    Tooltip: (props: { children?: import('solid-js').JSX.Element }) =>
+      props.children,
     badgeTriggerClasses: () => '',
-    cn: () => '',
+    cn: (...inputs: Array<string | false | undefined>) =>
+      inputs.filter(Boolean).join(' '),
   };
 });
 
@@ -168,6 +191,7 @@ let client: QueryClient;
 beforeEach(() => {
   cursorConnection.registered = true;
   cursorConnection.isPlaceholderData = false;
+  cmd.held = false;
   window.localStorage.clear();
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -248,7 +272,8 @@ describe('agent session creation', () => {
     );
     mount(true);
     fireEvent.click(screen.getByRole('button', { name: 'Start session' }));
-    hotkeys.submit();
+    hotkeys.enter();
+    hotkeys.cmdEnter();
     await waitFor(() =>
       expect(agentHarnessServiceClient.create).toHaveBeenCalledTimes(1)
     );
@@ -364,7 +389,7 @@ describe('agent session creation', () => {
       )
     ).toBeNull();
     expect(prompt.placeholder).toBe('What would you like Cursor to work on?');
-    hotkeys.submit();
+    hotkeys.enter();
     await waitFor(() => expect(navigation.open).toHaveBeenCalled());
     expect(agentHarnessServiceClient.create).toHaveBeenCalledWith({
       botId: CURSOR_BOT_ID,
@@ -381,7 +406,7 @@ describe('agent session creation', () => {
     fireEvent.click(
       screen.getByRole('button', { name: MODEL_PRETTYNAME[model] })
     );
-    hotkeys.submit();
+    hotkeys.enter();
     await screen.findByRole('alert');
     expect(navigation.open).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
@@ -426,7 +451,7 @@ describe('agent session creation', () => {
     fireEvent.click(
       screen.getByRole('button', { name: MODEL_PRETTYNAME[model] })
     );
-    hotkeys.submit();
+    hotkeys.enter();
     await screen.findByRole('alert');
     expect(agentHarnessServiceClient.control).toHaveBeenCalledTimes(1);
     expect(navigation.open).not.toHaveBeenCalled();
@@ -459,5 +484,88 @@ describe('agent session creation', () => {
       { referredFrom: 'launcher', preferNewSplit: false }
     );
     expect(agentHarnessServiceClient.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts in the background from the toggle without opening the session', async () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Background' }));
+    expect(
+      screen
+        .getByRole('group', { name: 'Session start mode' })
+        .getAttribute('data-session-start-mode')
+    ).toBe('background');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Start session in background' })
+    );
+    await waitFor(() => expect(toasts.success).toHaveBeenCalled());
+    expect(navigation.close).toHaveBeenCalledOnce();
+    expect(navigation.open).not.toHaveBeenCalled();
+    expect(toasts.success).toHaveBeenCalledWith(
+      'Session started in background',
+      expect.objectContaining({
+        actions: [
+          expect.objectContaining({
+            label: 'Open session',
+            onClick: expect.any(Function),
+          }),
+        ],
+      })
+    );
+    expect(
+      window.localStorage.getItem('agent-session-start-mode-v1:test-user')
+    ).toBe('background');
+    const open = toasts.success.mock.calls[0][1].actions[0]
+      .onClick as () => void;
+    open();
+    expect(navigation.open).toHaveBeenCalledWith(
+      { type: 'agent', id: sessionId },
+      { referredFrom: 'launcher', preferNewSplit: false }
+    );
+  });
+
+  it('restores a persisted background choice and starts in the background on enter', async () => {
+    window.localStorage.setItem(
+      'agent-session-start-mode-v1:test-user',
+      'background'
+    );
+    mount();
+    expect(
+      screen.getByRole('button', { name: 'Start session in background' })
+    ).toBeTruthy();
+    hotkeys.enter();
+    await waitFor(() => expect(toasts.success).toHaveBeenCalled());
+    expect(navigation.open).not.toHaveBeenCalled();
+    expect(navigation.close).toHaveBeenCalledOnce();
+  });
+
+  it('starts in the background on cmd+enter without persisting the toggle', async () => {
+    cmd.held = true;
+    mount();
+    expect(
+      screen
+        .getByRole('group', { name: 'Session start mode' })
+        .getAttribute('data-session-start-mode')
+    ).toBe('background');
+    hotkeys.cmdEnter();
+    await waitFor(() => expect(toasts.success).toHaveBeenCalled());
+    expect(navigation.open).not.toHaveBeenCalled();
+    expect(
+      window.localStorage.getItem('agent-session-start-mode-v1:test-user')
+    ).toBeNull();
+  });
+
+  it('ignores cmd when background is already the committed mode', async () => {
+    window.localStorage.setItem(
+      'agent-session-start-mode-v1:test-user',
+      'background'
+    );
+    cmd.held = true;
+    mount();
+    hotkeys.enter();
+    await waitFor(() => expect(toasts.success).toHaveBeenCalled());
+    expect(navigation.open).not.toHaveBeenCalled();
+    expect(
+      window.localStorage.getItem('agent-session-start-mode-v1:test-user')
+    ).toBe('background');
   });
 });
