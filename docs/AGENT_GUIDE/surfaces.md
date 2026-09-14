@@ -1350,3 +1350,24 @@ default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
 Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
+
+### Agent reasoning effort
+
+Open the model selector and hover a model to choose its reasoning effort in the
+submenu. Keyboard users open it with Right Arrow; touch users tap the model.
+Cursor and Macro's in-memory agent load the hovered model's own advertised
+choices. The selected label includes the effort, such as `Sonnet 5 · High`;
+there is no separate effort control in the input box. Models without effort
+support remain selectable through `Use <model>` (or a desktop click/Enter).
+Default keeps the model's existing behavior.
+
+In an open session, choosing a different model's effort confirms the model first,
+then validates and applies effort. Wait for the selector to become available
+again. If the model succeeds but effort is rejected, the new model remains
+selected with its confirmed effort; the error is shown and no unsupported
+setting is presented as accepted.
+
+New conversations confirm selected model and effort settings before sending the
+first message. If startup reports a rejected setting or timeout, the first prompt
+has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
+contracts and test coverage.

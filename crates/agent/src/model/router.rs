@@ -33,11 +33,11 @@ use rig_core::providers::{anthropic, gemini, openai};
 use rig_core::streaming::StreamedAssistantContent;
 use tracing::Instrument as _;
 
-use super::PredefinedModel;
 use super::anthropic::AnthropicModel;
 use super::gemini::GeminiModel;
 use super::openai::{OpenAiChatCompletionsModel, OpenAiResponsesModel};
 use super::types::Model;
+use super::{PredefinedModel, ReasoningEffort};
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, StreamBridge};
 use crate::stream::{ChatCompletionStream, StreamPart};
@@ -108,6 +108,7 @@ impl<'a> RoutedModel<'a> {
     /// config. Pure construction — no model call is made here.
     pub(crate) fn into_agent(
         self,
+        reasoning_effort: Option<ReasoningEffort>,
         handle: ToolServerHandle,
         system_prompt: &str,
         max_turns: usize,
@@ -116,7 +117,7 @@ impl<'a> RoutedModel<'a> {
     ) -> ProviderAgent {
         match self {
             RoutedModel::Anthropic(m) => {
-                let thinking = m.thinking_params();
+                let thinking = m.thinking_params(reasoning_effort);
                 ProviderAgent::Anthropic(build_agent(
                     m.completion(),
                     thinking,
@@ -140,7 +141,7 @@ impl<'a> RoutedModel<'a> {
                 ))
             }
             RoutedModel::OpenAiChatCompletions(m) => {
-                let thinking = m.thinking_params();
+                let thinking = m.thinking_params(reasoning_effort);
                 ProviderAgent::OpenAiChatCompletions(build_agent(
                     m.completion(),
                     thinking,
@@ -152,7 +153,7 @@ impl<'a> RoutedModel<'a> {
                 ))
             }
             RoutedModel::OpenAiResponses(m) => {
-                let thinking = m.thinking_params();
+                let thinking = m.thinking_params(reasoning_effort);
                 ProviderAgent::OpenAiResponses(build_agent(
                     m.completion(),
                     thinking,
@@ -395,24 +396,6 @@ impl ModelRouter {
             .base_url(base_url)
             .build()?;
         Ok(self.with_openai_client(provider, client))
-    }
-
-    /// Route + build the agent in one step, falling back to the default model on
-    /// an unroutable id. Tells `telemetry` which provider and model the session
-    /// actually runs on, so its spans report the routed model, not the
-    /// requested id.
-    pub(crate) fn agent(
-        &self,
-        model: &str,
-        handle: ToolServerHandle,
-        system_prompt: &str,
-        max_turns: usize,
-        max_tokens: u64,
-        telemetry: GenAiContext,
-    ) -> ProviderAgent {
-        let routed = self.route_or_default(model);
-        telemetry.set_model(routed.provider(), routed.model_name());
-        routed.into_agent(handle, system_prompt, max_turns, max_tokens, &telemetry)
     }
 
     /// Route a `provider/model` id to the provider that serves it.

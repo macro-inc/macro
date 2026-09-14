@@ -201,6 +201,18 @@ function partActivity(part: MessagePart): MagicChipActivity {
         label: 'Context compacted',
         busy: false,
       }))
+      .with(
+        { kind: 'control', control: { kind: 'set_config_option' } },
+        ({ outcome }) => ({
+          label:
+            outcome.kind === 'rejected'
+              ? 'Setting rejected'
+              : outcome.kind === 'pending'
+                ? 'Changing setting'
+                : 'Setting changed',
+          busy: false,
+        })
+      )
       .with({ kind: 'control', control: { kind: 'stop' } }, () => ({
         label: 'Stop requested',
         busy: false,

@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 
 /// Models advertised by shared test engines.
-pub(crate) const TEST_MODELS: &[&str] = &["test-model", "other-model"];
+pub(crate) const TEST_MODELS: &[&str] = &["anthropic/claude-sonnet-5", "other-model"];
 
 /// An engine that plays back a script of parts for every turn.
 pub(crate) struct ScriptedEngine {
@@ -20,6 +20,8 @@ pub(crate) struct ScriptedEngine {
 pub(crate) struct RecordedTurn {
     /// Model the turn was to run on.
     pub(crate) model: String,
+    /// Reasoning effort the turn was to use.
+    pub(crate) reasoning_effort: agent::ReasoningEffort,
     /// The conversation, flattened to text per message.
     pub(crate) messages: Vec<String>,
     /// Every image URL attached across the conversation, in order.
@@ -54,6 +56,7 @@ impl TurnEngine for ScriptedEngine {
             .expect("requests lock")
             .push(RecordedTurn {
                 model: request.model.clone(),
+                reasoning_effort: request.reasoning_effort,
                 messages: request
                     .messages
                     .iter()

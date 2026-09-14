@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::model::ReasoningEffort;
 use crate::model::types::Model;
 use rig_core::{client::CompletionClient, providers::openai};
 
@@ -57,7 +58,10 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
     /// else returns `None`, since sending it elsewhere 400s. `mini` / `nano`
     /// variants get a lower effort. `temperature` is never set (reasoning models
     /// reject it).
-    pub fn thinking_params(&self) -> Option<serde_json::Value> {
+    pub fn thinking_params(
+        &self,
+        reasoning_effort: Option<ReasoningEffort>,
+    ) -> Option<serde_json::Value> {
         let model = self.model.name().to_lowercase();
 
         let is_reasoning = model.contains("gpt-5")
@@ -69,11 +73,18 @@ impl<'a> OpenAiChatCompletionsModel<'a> {
             return None;
         }
 
-        let effort = if model.contains("mini") || model.contains("nano") {
-            "low"
-        } else {
-            "high"
-        };
+        let effort = reasoning_effort
+            .and_then(|effort| effort.explicit_for(&self.model.to_string()))
+            .map_or_else(
+                || {
+                    if model.contains("mini") || model.contains("nano") {
+                        "low"
+                    } else {
+                        "high"
+                    }
+                },
+                ReasoningEffort::as_str,
+            );
 
         Some(serde_json::json!({ "reasoning_effort": effort }))
     }
@@ -112,7 +123,10 @@ impl<'a> OpenAiResponsesModel<'a> {
 
     /// Best-effort reasoning config for OpenAI Responses models, or `None` if
     /// the model doesn't support it.
-    pub fn thinking_params(&self) -> Option<serde_json::Value> {
+    pub fn thinking_params(
+        &self,
+        reasoning_effort: Option<ReasoningEffort>,
+    ) -> Option<serde_json::Value> {
         let model = self.model.name().to_lowercase();
 
         let is_reasoning = model.contains("gpt-5")
@@ -124,11 +138,18 @@ impl<'a> OpenAiResponsesModel<'a> {
             return None;
         }
 
-        let effort = if model.contains("mini") || model.contains("nano") {
-            "low"
-        } else {
-            "high"
-        };
+        let effort = reasoning_effort
+            .and_then(|effort| effort.explicit_for(&self.model.to_string()))
+            .map_or_else(
+                || {
+                    if model.contains("mini") || model.contains("nano") {
+                        "low"
+                    } else {
+                        "high"
+                    }
+                },
+                ReasoningEffort::as_str,
+            );
 
         Some(serde_json::json!({
             "reasoning": {

@@ -1,5 +1,6 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 244
 expression: messages
 input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
 ---
@@ -129,6 +130,32 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
             1,
         ),
         author: User {
+            user_id: None,
+        },
+        request_id: Some(
+            AgentActionId(
+                111436d1-9126-4766-9b2d-6430e38f510a,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Control {
+                    control: SetConfigOption {
+                        config_id: "mode",
+                        value: "bypassPermissions",
+                    },
+                    outcome: Accepted,
+                },
+            ],
+        },
+        stop: None,
+        pending: false,
+    },
+    FoldedMessage {
+        id: TurnId(
+            2,
+        ),
+        author: User {
             user_id: Some(
                 macro|eric@example.com,
             ),
@@ -150,7 +177,7 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            1,
+            2,
         ),
         author: Agent,
         request_id: None,
@@ -744,7 +771,7 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            2,
+            3,
         ),
         author: User {
             user_id: None,
@@ -769,7 +796,33 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            3,
+            4,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: Some(
+            AgentActionId(
+                cfe33ce9-7db9-4865-9e67-dea14b35f54d,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Control {
+                    control: SetConfigOption {
+                        config_id: "effort",
+                        value: "medium",
+                    },
+                    outcome: Accepted,
+                },
+            ],
+        },
+        stop: None,
+        pending: false,
+    },
+    FoldedMessage {
+        id: TurnId(
+            5,
         ),
         author: User {
             user_id: Some(
@@ -793,7 +846,7 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            3,
+            5,
         ),
         author: Agent,
         request_id: None,

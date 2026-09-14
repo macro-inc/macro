@@ -5,6 +5,7 @@ use agent_changes::inbound::axum_router::{
     CaptureAttemptDto, CaptureOutcomeDto, ChangedFileDto, ChangesetDto, ChangesetSourceDto,
     FileChangeKindDto, GitRefDto,
 };
+use agent_harness::inbound::capability_discovery;
 use agent_harness::inbound::model_load::{
     self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
     ModelHarnessDto,
@@ -66,6 +67,7 @@ impl Modify for SecurityAddon {
         axum_router::get_agent_sandbox_size_handler,
         axum_router::put_agent_sandbox_size_handler,
         model_load::load_agent_models_handler,
+        capability_discovery::discover_agent_capabilities_handler,
         repositories::list_agent_repositories_handler,
         repositories::list_agent_repository_branches_handler,
         changes_router::get_agent_session_changes_handler,

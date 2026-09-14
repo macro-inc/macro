@@ -579,10 +579,15 @@ where
         &self,
         session_id: &SessionId,
     ) -> Result<Option<String>, SessionError> {
-        Ok(self
-            .effective_model(session_id)
-            .await?
-            .map(|model| model.id))
+        Ok(self.session_model(session_id).await?.map(|model| model.id))
+    }
+
+    /// The concrete model variant the session's next run will use.
+    pub async fn session_model(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Option<ModelChoice>, SessionError> {
+        self.effective_model(session_id).await
     }
 
     /// Choose the model a session's next run will use.
@@ -612,6 +617,72 @@ where
                 ))
             })?;
         session.state.lock().expect("session state poisoned").model = Some(model.default_choice());
+        Ok(())
+    }
+
+    /// Choose the reasoning effort for the session's next run.
+    ///
+    /// Cursor accepts only combinations returned by `GET /v1/models`, so the
+    /// selected effort is resolved to a variant that preserves every other
+    /// parameter of the current choice.
+    pub async fn set_reasoning_effort(
+        &self,
+        session_id: &SessionId,
+        effort: &str,
+    ) -> Result<(), SessionError> {
+        use crate::domain::model_options::REASONING_PARAMETER_IDS;
+
+        let session = self.session(session_id)?;
+        let current = self.effective_model(session_id).await?.ok_or_else(|| {
+            SessionError::Cursor(rootcause::report!(
+                "choose a concrete cursor model before setting reasoning effort"
+            ))
+        })?;
+        let models = self.models().await?;
+        let model = models
+            .iter()
+            .find(|model| model.id == current.id)
+            .ok_or_else(|| {
+                SessionError::Cursor(rootcause::report!(
+                    "current cursor model is no longer offered"
+                ))
+            })?;
+        let parameter_id = current
+            .params
+            .iter()
+            .find(|param| REASONING_PARAMETER_IDS.contains(&param.id.as_str()))
+            .map(|param| param.id.as_str())
+            .ok_or_else(|| {
+                SessionError::Cursor(rootcause::report!(
+                    "cursor model {} has no reasoning effort parameter",
+                    current.id
+                ))
+            })?;
+        let choice = model
+            .variants
+            .iter()
+            .find(|variant| {
+                variant
+                    .params
+                    .iter()
+                    .any(|param| param.id == parameter_id && param.value == effort)
+                    && super::model_options::model_params_match_except(
+                        &variant.params,
+                        &current.params,
+                        parameter_id,
+                    )
+            })
+            .map(|variant| ModelChoice {
+                id: model.id.clone(),
+                params: variant.params.clone(),
+            })
+            .ok_or_else(|| {
+                SessionError::Cursor(rootcause::report!(
+                    "cursor model {} has no compatible reasoning effort {effort}",
+                    current.id
+                ))
+            })?;
+        session.state.lock().expect("session state poisoned").model = Some(choice);
         Ok(())
     }
 

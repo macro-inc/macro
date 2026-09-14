@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses } from './types.gen';
+import type { CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -57,6 +57,21 @@ export class Sdk extends HeyApiClient {
         Sdk.__registry.set(this, args?.key);
     }
     
+    /**
+     * Probe one provider's ACP session configuration without persisting a session.
+     */
+    public discoverAgentCapabilitiesHandler<ThrowOnError extends boolean = false>(options: Options<DiscoverAgentCapabilitiesHandlerData, ThrowOnError>): RequestResult<DiscoverAgentCapabilitiesHandlerResponses, DiscoverAgentCapabilitiesHandlerErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<DiscoverAgentCapabilitiesHandlerResponses, DiscoverAgentCapabilitiesHandlerErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/agent-capabilities/discover',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
     /**
      * Probe one provider's model catalog without creating an agent session.
      */

@@ -1,5 +1,6 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 244
 expression: messages
 input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
 ---
@@ -3663,6 +3664,32 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         },
         request_id: Some(
             AgentActionId(
+                a3e2cbd5-6886-4a2b-a3d1-2ef1fac45288,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Control {
+                    control: SetConfigOption {
+                        config_id: "mode",
+                        value: "bypassPermissions",
+                    },
+                    outcome: Accepted,
+                },
+            ],
+        },
+        stop: None,
+        pending: false,
+    },
+    FoldedMessage {
+        id: TurnId(
+            7,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: Some(
+            AgentActionId(
                 482c3d39-c381-4809-874c-fe00bc757345,
             ),
         ),
@@ -3671,6 +3698,32 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                 Control {
                     control: SetModel {
                         model: "opus[1m]",
+                    },
+                    outcome: Accepted,
+                },
+            ],
+        },
+        stop: None,
+        pending: false,
+    },
+    FoldedMessage {
+        id: TurnId(
+            8,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: Some(
+            AgentActionId(
+                0937d42c-b2e1-49fe-bd3f-4914ae2075e2,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Control {
+                    control: SetConfigOption {
+                        config_id: "effort",
+                        value: "max",
                     },
                     outcome: Accepted,
                 },

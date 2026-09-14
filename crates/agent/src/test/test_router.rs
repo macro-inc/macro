@@ -1,6 +1,6 @@
-use crate::model::PredefinedModel;
 use crate::model::router::*;
 use crate::model::types::Model;
+use crate::model::{PredefinedModel, ReasoningEffort};
 use rig_core::providers::{anthropic, gemini, openai};
 
 fn test_router() -> ModelRouter {
@@ -109,4 +109,87 @@ fn google_provider_routes_to_native_gemini() {
 #[test]
 fn google_provider_without_a_client_is_unroutable() {
     assert!(test_router().route("google/gemini-3.8-flash").is_err());
+}
+
+#[test]
+fn selected_effort_is_mapped_to_each_provider_request_shape() {
+    let router = test_router();
+
+    let RoutedModel::Anthropic(anthropic) = router.route("anthropic/claude-sonnet-5").unwrap()
+    else {
+        panic!("sonnet should use the native Anthropic client");
+    };
+    let params = anthropic
+        .thinking_params(Some(ReasoningEffort::Low))
+        .expect("sonnet supports thinking and effort");
+    assert_eq!(params["thinking"]["type"], "adaptive");
+    assert_eq!(params["output_config"]["effort"], "low");
+
+    let RoutedModel::OpenAiResponses(openai) = router.route("openai/gpt-5.5").unwrap() else {
+        panic!("GPT-5.5 should use OpenAI Responses");
+    };
+    let params = openai
+        .thinking_params(Some(ReasoningEffort::Medium))
+        .expect("GPT-5.5 supports reasoning effort");
+    assert_eq!(params["reasoning"]["effort"], "medium");
+}
+
+#[test]
+fn unsupported_anthropic_models_do_not_receive_effort() {
+    let router = test_router();
+    let RoutedModel::Anthropic(haiku) = router.route("anthropic/claude-haiku-4-5").unwrap() else {
+        panic!("haiku should use the native Anthropic client");
+    };
+
+    let params = haiku
+        .thinking_params(Some(ReasoningEffort::Low))
+        .expect("haiku retains its thinking configuration");
+    assert!(params.get("output_config").is_none());
+}
+
+#[test]
+fn native_effort_profiles_preserve_defaults_and_provider_boundaries() {
+    let router = test_router();
+    let RoutedModel::OpenAiResponses(mini) = router.route("openai/gpt-5-mini").unwrap() else {
+        panic!("Responses");
+    };
+    assert_eq!(
+        mini.thinking_params(Some(ReasoningEffort::Default))
+            .unwrap()["reasoning"]["effort"],
+        "low"
+    );
+    assert_eq!(
+        mini.thinking_params(Some(ReasoningEffort::Minimal))
+            .unwrap()["reasoning"]["effort"],
+        "minimal"
+    );
+    assert!(ReasoningEffort::supported("compatible/gpt-5-mini").is_empty());
+    assert!(ReasoningEffort::supported("anthropic/claude-haiku-4-5").is_empty());
+    assert!(ReasoningEffort::supported("openai/unknown").is_empty());
+    for model in [
+        "anthropic/claude-sonnet-5",
+        "anthropic/claude-opus-5",
+        "openai/gpt-5.5",
+        "openai/gpt-5-mini",
+    ] {
+        for effort in ReasoningEffort::supported(model) {
+            let params = match router.route(model).unwrap() {
+                RoutedModel::Anthropic(model) => model.thinking_params(Some(*effort)).unwrap(),
+                RoutedModel::OpenAiResponses(model) => {
+                    model.thinking_params(Some(*effort)).unwrap()
+                }
+                _ => panic!("native model"),
+            };
+            if *effort != ReasoningEffort::Default {
+                let actual = if model.starts_with("anthropic/") {
+                    &params["output_config"]["effort"]
+                } else {
+                    &params["reasoning"]["effort"]
+                };
+                assert_eq!(actual, effort.as_str(), "{model}");
+            } else if model.starts_with("anthropic/") {
+                assert!(params.get("output_config").is_none());
+            }
+        }
+    }
 }

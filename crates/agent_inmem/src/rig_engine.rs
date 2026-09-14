@@ -125,6 +125,7 @@ async fn drive_turn(
     let TurnRequest {
         owner,
         model,
+        reasoning_effort,
         identity,
         instructions,
         messages,
@@ -184,6 +185,7 @@ async fn drive_turn(
     // rig's spans too would report each turn twice.
     let mut agent_loop = AgentLoop::new(base_context.recorder.clone())
         .with_model(&model)
+        .with_reasoning_effort(reasoning_effort)
         .with_genai_telemetry(false);
     if let Some(reviewer) = reviewer {
         agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(

@@ -19,7 +19,7 @@ use model_owner::Owner;
 use crate::domain::agent::{AgentState, serve};
 use crate::domain::engine::{AgentIdentity, TurnEngine};
 use crate::domain::mcp::DynMcpToolConnector;
-use crate::domain::replay::{FrameSource, replay_history};
+use crate::domain::replay::{FrameSource, replay_history, replay_reasoning_effort};
 use crate::domain::session::{SessionState, SessionStore};
 
 #[cfg(test)]
@@ -139,10 +139,19 @@ impl InMemAgentManager {
         if !self.store.contains_key(&facts.id) {
             // Loaded before taking the entry so the read never blocks the
             // map; `or_insert_with` still wins any race to create it.
-            let history = replay_history(self.frames.frames(facts.id).await);
+            let frames = self.frames.frames(facts.id).await;
+            let restored_effort = replay_reasoning_effort(&frames);
+            let reasoning_effort =
+                if agent::ReasoningEffort::supported(&facts.model).contains(&restored_effort) {
+                    restored_effort
+                } else {
+                    agent::ReasoningEffort::default()
+                };
+            let history = replay_history(frames);
             self.store.entry(facts.id).or_insert_with(|| SessionState {
                 acp_session_id: facts.acp_session_id.clone(),
                 model: facts.model.clone(),
+                reasoning_effort,
                 identity: facts.identity.clone(),
                 instructions: facts.instructions.clone(),
                 history,

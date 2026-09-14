@@ -292,6 +292,7 @@ impl SessionQueues {
                 Ok(())
             }
             AgentAction::SetModel(_)
+            | AgentAction::SetConfigOption(_)
             | AgentAction::Compact
             | AgentAction::Stop
             | AgentAction::RespondElicitation(_)

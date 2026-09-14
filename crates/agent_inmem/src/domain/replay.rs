@@ -15,16 +15,20 @@
 //! and a tool call is rebuilt under the display title it was streamed with,
 //! which for the Macro product toolset is the tool name itself.
 
+use agent::ReasoningEffort;
 use agent::types::AssistantMessagePart;
 use agent_client_protocol::schema::v1::{
     ContentBlock, PromptRequest, SessionNotification, SessionUpdate, ToolCallStatus,
 };
+use agent_client_protocol::schema::v1::{Response, SessionConfigKind, SessionConfigOption};
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::model::Message;
 use futures::future::BoxFuture;
+use std::collections::HashSet;
 
 use crate::domain::agent::close_dangling_tool_calls;
+use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, UserPrompt};
 
 #[cfg(test)]
@@ -102,6 +106,56 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
     }
     close_turn(&mut history, &mut open);
     history
+}
+
+/// Rebuild the last valid reasoning-effort selection from durable frames.
+#[must_use]
+pub fn replay_reasoning_effort(frames: &[Message]) -> ReasoningEffort {
+    let mut pending = HashSet::new();
+    let mut current = ReasoningEffort::default();
+    for frame in frames {
+        match frame {
+            Message::ToRuntime(ToRuntimeMessage::Acp(acp)) => {
+                if let RawJsonRpcMessage::Request(request) = &acp.0
+                    && matches!(
+                        request.method.as_ref(),
+                        "session/new"
+                            | "session/load"
+                            | "session/resume"
+                            | "session/set_config_option"
+                    )
+                {
+                    pending.insert(request.id.clone());
+                }
+            }
+            Message::ToServer(ToServerMessage::Acp(acp)) => match &acp.0 {
+                RawJsonRpcMessage::Response(Response::Result { id, result })
+                    if pending.remove(id) =>
+                {
+                    if let Some(options) = result.get("configOptions").and_then(|options| {
+                        serde_json::from_value::<Vec<SessionConfigOption>>(options.clone()).ok()
+                    }) {
+                        current = effort_from_options(&options);
+                    }
+                }
+                RawJsonRpcMessage::Response(Response::Error { id, .. }) => {
+                    pending.remove(id);
+                }
+                RawJsonRpcMessage::Notification(notification) => {
+                    if let Some(SessionNotification {
+                        update: SessionUpdate::ConfigOptionUpdate(update),
+                        ..
+                    }) = deserialize_params::<SessionNotification>(notification.params.as_ref())
+                    {
+                        current = effort_from_options(&update.config_options);
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+    current
 }
 
 /// Fold one `session/update` back into the open turn's parts.
@@ -215,4 +269,19 @@ fn deserialize_params<T: serde::de::DeserializeOwned>(
         }
         RawJsonRpcParams::Array(_) => None,
     }
+}
+
+fn effort_from_options(options: &[SessionConfigOption]) -> ReasoningEffort {
+    options
+        .iter()
+        .find_map(|option| {
+            if option.id.to_string() != REASONING_EFFORT_CONFIG_ID {
+                return None;
+            }
+            let SessionConfigKind::Select(select) = &option.kind else {
+                return None;
+            };
+            select.current_value.to_string().parse().ok()
+        })
+        .unwrap_or_default()
 }
