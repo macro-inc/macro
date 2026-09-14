@@ -332,6 +332,11 @@ saved local draft selection taking precedence. Icons do not query chat transcrip
 Rows without model data show the standard chat icon. Claude models use the Claude sunburst logo; OpenAI and Google use their
 provider logos; unknown providers in chat titles reserve the icon space.
 
+For a Macro agent session, changing the model must settle on the selected model
+and update the title's provider logo. Check this with an OpenAI override when
+starting a session and when changing an existing session before its first prompt.
+Reopening or resuming the session must retain that selection and logo.
+
 Both AI composers display their model trigger label at the input text size
 (15px), using the softer secondary text color. This includes the agent model
 catalog trigger and mobile model sheet trigger.
