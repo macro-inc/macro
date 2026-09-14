@@ -1,3 +1,4 @@
+import { Model } from '@core/component/AI/constant';
 import {
   cleanup,
   fireEvent,
@@ -12,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   pending: vi.fn(),
   rename: vi.fn(),
+  storeModel: vi.fn(),
+  sendBackground: vi.fn(),
+  background: false,
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -32,7 +36,8 @@ vi.mock('@core/component/AI/component/input/ChatInput', () => ({
       onClick={() =>
         props.onSend({
           content: 'Summarize this document',
-          model: 'claude-sonnet-5',
+          model: Model.gpt56,
+          metaKey: mocks.background,
           attachments: [{ entity_id: 'document-id', entity_type: 'document' }],
         })
       }
@@ -44,7 +49,7 @@ vi.mock('@core/component/AI/component/input/ChatInput', () => ({
 vi.mock('@core/component/AI/context', () => ({
   ChatInputProvider: (props: { children: unknown }) => props.children,
   useChatInputContext: () => ({
-    model: () => 'claude-sonnet-5',
+    model: () => Model.gpt56,
     attachments: {},
   }),
 }));
@@ -60,6 +65,7 @@ vi.mock('@core/component/AI/signal/pendingSend', () => ({
 vi.mock('@core/component/AI/util/storage', () => ({
   getSoupInputStoredModel: () => undefined,
   storeSoupInputModel: vi.fn(),
+  storeChatStateImmediate: mocks.storeModel,
 }));
 vi.mock('@core/constant/PaywallState', () => ({
   PaywallKey: {},
@@ -77,12 +83,18 @@ vi.mock('@entity', () => ({
 }));
 vi.mock('@queries/soup/cache', () => ({ invalidateAllSoup: vi.fn() }));
 vi.mock('@service-cognition/client', () => ({
-  cognitionApiServiceClient: { createChat: mocks.createChat },
+  cognitionApiServiceClient: {
+    createChat: mocks.createChat,
+    sendStreamChatMessage: mocks.sendBackground,
+  },
 }));
 
 import { SoupChatInput } from './SoupChatInput';
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.background = false;
+});
 afterEach(cleanup);
 
 describe('SoupChatInput', () => {
@@ -109,12 +121,36 @@ describe('SoupChatInput', () => {
     expect(mocks.createChat).toHaveBeenCalledTimes(1);
     expect(mocks.pending).toHaveBeenCalledWith({
       content: 'Summarize this document',
-      model: 'claude-sonnet-5',
+      model: Model.gpt56,
       attachments: [{ entity_id: 'document-id', entity_type: 'document' }],
     });
     expect(mocks.pending.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.replace.mock.invocationCallOrder[0]
     );
+    expect(mocks.storeModel).toHaveBeenCalledWith('new-chat', {
+      model: Model.gpt56,
+    });
+    expect(mocks.storeModel.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.rename.mock.invocationCallOrder[0]
+    );
+  });
+  it('records the selected provider for a background send without opening the chat', async () => {
+    mocks.background = true;
+    mocks.createChat.mockResolvedValue({
+      isErr: () => false,
+      value: { id: 'background-chat' },
+    });
+    render(() => <SoupChatInput />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(mocks.sendBackground).toHaveBeenCalled());
+    expect(mocks.storeModel).toHaveBeenCalledWith('background-chat', {
+      model: Model.gpt56,
+    });
+    expect(mocks.storeModel.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.sendBackground.mock.invocationCallOrder[0]
+    );
+    expect(mocks.pending).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
   it('does not navigate or queue a message when creation fails', async () => {
     mocks.createChat.mockResolvedValue({ isErr: () => true });
@@ -123,5 +159,6 @@ describe('SoupChatInput', () => {
     await waitFor(() => expect(mocks.createChat).toHaveBeenCalledTimes(1));
     expect(mocks.pending).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.storeModel).not.toHaveBeenCalled();
   });
 });

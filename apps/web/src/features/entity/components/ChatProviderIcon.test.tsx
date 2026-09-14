@@ -1,5 +1,4 @@
 import { Model } from '@core/component/AI/constant';
-import { resolveChatInputModel } from '@core/component/AI/util/parse';
 import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
@@ -50,20 +49,37 @@ describe('soup chat provider selection', () => {
     ).not.toBeNull();
   });
 
-  it.each(['gpt-4o', ''])(
-    'matches the composer default for unsupported server model %j',
-    async (model) => {
+  it.each(['openai/gpt-5.5', 'gpt-5.5', 'gpt-4o'])(
+    'keeps the OpenAI logo for historical server model %s',
+    (model) => {
       const { container } = render(() => (
         <ChatProviderIcon id={`unsupported-model-${model}`} model={model} />
       ));
-      expect(resolveChatInputModel(model)).toBe(Model.sonnet5);
-      await vi.waitFor(() =>
-        expect(
-          container.querySelector('[data-ai-provider="anthropic"] svg')
-        ).not.toBeNull()
-      );
+      expect(
+        container.querySelector('[data-ai-provider="openai"] svg')
+      ).not.toBeNull();
+      expect(
+        container.querySelector('[data-ai-provider="anthropic"]')
+      ).toBeNull();
     }
   );
+
+  it('preserves a historical stored provider when server metadata is missing or still has the default', () => {
+    storeChatStateImmediate('historical-draft', {
+      model: 'openai/gpt-5.5' as Model,
+    });
+    const [model, setModel] = createSignal<string>();
+    const { container } = render(() => (
+      <ChatProviderIcon id="historical-draft" model={model()} />
+    ));
+    expect(
+      container.querySelector('[data-ai-provider="openai"] svg')
+    ).not.toBeNull();
+    setModel(Model.sonnet5);
+    expect(
+      container.querySelector('[data-ai-provider="openai"] svg')
+    ).not.toBeNull();
+  });
 
   it('keeps supported OpenAI and Anthropic chats distinct', async () => {
     const { container } = render(() => (
@@ -103,9 +119,6 @@ describe('soup chat provider selection', () => {
       </>
     ));
     storeChatStateImmediate('selected-chat', { model: Model.sonnet5 });
-    expect(resolveChatInputModel(Model.gpt56, Model.sonnet5)).toBe(
-      Model.sonnet5
-    );
     expect(
       Array.from(container.querySelectorAll('[data-ai-provider]'), (el) =>
         el.getAttribute('data-ai-provider')
@@ -117,7 +130,7 @@ describe('soup chat provider selection', () => {
     ).toBeNull();
   });
 
-  it.each([undefined, null])(
+  it.each([undefined, null, '', 'unknown-provider/model'])(
     'shows the standard chat icon when the model is %s',
     async (model) => {
       const { container } = render(() => (

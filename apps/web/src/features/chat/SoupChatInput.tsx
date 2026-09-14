@@ -12,6 +12,7 @@ import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import {
   getSoupInputStoredModel,
+  storeChatStateImmediate,
   storeSoupInputModel,
 } from '@core/component/AI/util/storage';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -75,6 +76,9 @@ function SoupChatInputInner() {
       return;
     }
     const { id: chatId } = response.value;
+    // Give list/recent icons the sent model before the new chat loads or its
+    // server metadata refreshes, including when sending in the background.
+    storeChatStateImmediate(chatId, { model: request.model });
 
     // Rename via mutation for optimistic cache updates (history, preview, soup)
     const name = deriveChatName(request.content);

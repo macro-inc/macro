@@ -3,9 +3,10 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL, Model } from '../constant';
+import { resolveChatInputModel } from './parse';
 import {
-  getChatInputStoredModel,
   getChatInputStoredState,
+  getChatStoredModel,
   storeChatStateImmediate,
 } from './storage';
 
@@ -20,7 +21,7 @@ describe('chat input storage: model defaults', () => {
     const restored = getChatInputStoredState('chat-a');
     expect(restored.model).toBe(Model.gpt56);
     expect(restored.input).toBe('draft');
-    expect(getChatInputStoredModel('chat-a')).toBe(Model.gpt56);
+    expect(getChatStoredModel('chat-a')).toBe(Model.gpt56);
   });
 
   it('keeps each chat on its own remembered model', () => {
@@ -32,23 +33,35 @@ describe('chat input storage: model defaults', () => {
   });
 
   it('returns no stored model for a chat that has never been used', () => {
-    expect(getChatInputStoredModel('never-seen')).toBeUndefined();
+    expect(getChatStoredModel('never-seen')).toBeUndefined();
     expect(getChatInputStoredState('never-seen').model).toBeUndefined();
   });
 
-  it('defaults a draft without a model only when restoring composer state', () => {
+  it('lets the server model win when a saved draft has no model', () => {
     storeChatStateImmediate('input-only', { input: 'draft' });
-    expect(getChatInputStoredModel('input-only')).toBeUndefined();
-    expect(getChatInputStoredState('input-only').model).toBe(DEFAULT_MODEL);
-    expect(getChatInputStoredModel('input-only')).toBeUndefined();
+    const restored = getChatInputStoredState('input-only');
+    expect(restored.model).toBeUndefined();
+    expect(resolveChatInputModel(Model.gpt56, restored.model)).toBe(
+      Model.gpt56
+    );
+    expect(resolveChatInputModel(undefined, restored.model)).toBe(
+      DEFAULT_MODEL
+    );
+    expect(getChatStoredModel('input-only')).toBeUndefined();
   });
 
-  it('falls back to the default model when the persisted value is stale/unknown', () => {
-    // A model id that is no longer valid (e.g. left over from a previous build).
+  it('preserves a historical provider for icons without selecting an unavailable model', () => {
     storeChatStateImmediate('chat-c', {
-      model: 'anthropic/claude-opus-4-7' as Model,
+      model: 'openai/gpt-5.5' as Model,
     });
-    expect(getChatInputStoredModel('chat-c')).toBeUndefined();
-    expect(getChatInputStoredState('chat-c').model).toBe(DEFAULT_MODEL);
+    const restored = getChatInputStoredState('chat-c');
+    expect(restored.model).toBeUndefined();
+    expect(getChatStoredModel('chat-c')).toBe('openai/gpt-5.5');
+    expect(resolveChatInputModel(Model.gpt56, restored.model)).toBe(
+      Model.gpt56
+    );
+    expect(resolveChatInputModel(undefined, restored.model)).toBe(
+      DEFAULT_MODEL
+    );
   });
 });
