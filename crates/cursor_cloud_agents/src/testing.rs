@@ -563,7 +563,11 @@ impl SessionNotifier for RecordingNotifier {
 pub struct FixedChooser(pub Option<RepoUrl>, pub bool);
 
 impl RepositoryChooser for FixedChooser {
-    async fn choose(&self, _prompt: &str) -> Result<SessionIntent, rootcause::Report> {
+    async fn choose(
+        &self,
+        _prompt: &str,
+        _cwd: &std::path::Path,
+    ) -> Result<SessionIntent, rootcause::Report> {
         Ok(SessionIntent {
             repository: self.0.clone(),
             open_pull_request: self.1,

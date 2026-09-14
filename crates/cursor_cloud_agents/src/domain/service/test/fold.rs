@@ -191,7 +191,7 @@ async fn actual_live_backfill_keeps_older_answer_out_of_pending_or_cancelled_pro
             FixedChooser(None, false),
             journal.clone(),
         ));
-        let id = service.new_session(vec![]);
+        let id = service.new_session(Path::new(""), vec![]);
         service.session(&id).unwrap().state.lock().unwrap().agent =
             Some(CursorAgentId::new("agent"));
         let late_gate = if late {
@@ -389,7 +389,7 @@ fn conversation_texts(messages: &[FoldedMessage]) -> Vec<String> {
 #[tokio::test]
 async fn accepted_newer_run_survives_partial_crash_load_then_actual_sync_without_stealing_turn() {
     let (service, _, _) = service(None);
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     let session = service.session(&id).unwrap();
     service.ensure_journal(&id, &session).await.unwrap();
     service
@@ -521,7 +521,7 @@ async fn load_waiting_for_an_active_backfill_replays_one_copy_through_fold() {
         FixedChooser(None, false),
         journal.clone(),
     ));
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     service.session(&id).unwrap().state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
     cursor.script_run_listings(vec![RunListing {
         id: CursorRunId::new("R1"),

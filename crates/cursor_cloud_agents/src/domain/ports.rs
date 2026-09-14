@@ -41,10 +41,7 @@ pub trait CursorAgents: Sync {
     ///
     /// `open_pull_request` asks Cursor to push its work to a generated branch
     /// and open a pull request against the starting ref. It is a caller's
-    /// decision, not a property of the request shape, so it is a parameter:
-    /// today the caller answers "whenever there is a repository", and later a
-    /// classifier will answer from what the prompt actually asked for. It is
-    /// meaningless without a repository.
+    /// decision and has no effect without a repository.
     fn create_agent(
         &self,
         prompt: &str,
@@ -179,12 +176,14 @@ pub struct SessionIntent {
 /// deciding is this port's.
 pub trait RepositoryChooser: Send + Sync {
     /// The repository this prompt's work belongs to, if any, and whether it
-    /// wants a pull request.
+    /// wants a pull request. Standalone adapters resolve the session checkout
+    /// from `cwd`; hosted adapters choose from the prompt.
     ///
     /// An error is a failed prompt, not a reason to guess: a session pointed at
     /// the wrong repository is worse than a session that says it could not tell.
     fn choose(
         &self,
         prompt: &str,
+        cwd: &std::path::Path,
     ) -> impl Future<Output = Result<SessionIntent, rootcause::Report>> + Send;
 }

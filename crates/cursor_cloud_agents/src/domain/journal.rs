@@ -167,14 +167,6 @@ impl ReplayMachine {
                 if !outcome.is_terminal() {
                     return Ok(Vec::new());
                 }
-                if let Some(text) = &text
-                    && !state.text.is_empty()
-                    && !text.starts_with(&state.text)
-                {
-                    return Err(rootcause::report!(
-                        "Cursor final text diverged from the captured stream for {run}"
-                    ));
-                }
                 let git = value
                     .get("git")
                     .filter(|git| !git.is_null())
@@ -244,18 +236,10 @@ impl ReplayMachine {
                 ) {
                     return Err(rootcause::report!("nonterminal Cursor result for {run}"));
                 }
-                let mut updates = self.translator.push(CursorEvent::Result {
-                    run_id,
-                    status: status.clone(),
-                    text: None,
-                    duration_ms,
-                    git,
-                });
+                let mut updates = Vec::new();
                 if let Some(text) = text {
-                    // A result can omit artifacts present in the streamed
-                    // answer. Preserve that captured answer, and only append
-                    // text when the result supplies a missing suffix. Polls
-                    // validate prefix agreement before reaching this path.
+                    // Polling can overlap an interrupted stream. Only append the
+                    // missing suffix; divergent answers cannot safely be guessed.
                     if let Some(suffix) = text.strip_prefix(&state.text) {
                         if !suffix.is_empty() {
                             updates.extend(self.translator.push(CursorEvent::Assistant {
@@ -263,8 +247,19 @@ impl ReplayMachine {
                             }));
                         }
                         state.text = text;
+                    } else if !state.text.is_empty() {
+                        return Err(rootcause::report!(
+                            "Cursor final text diverged from the captured stream for {run}"
+                        ));
                     }
                 }
+                updates.extend(self.translator.push(CursorEvent::Result {
+                    run_id,
+                    status: status.clone(),
+                    text: None,
+                    duration_ms,
+                    git,
+                }));
                 state.terminal = Some(status);
                 updates.extend(self.translator.close_open_calls());
                 Ok(updates)

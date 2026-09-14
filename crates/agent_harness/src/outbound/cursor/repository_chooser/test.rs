@@ -64,7 +64,7 @@ async fn no_reachable_repository_chooses_none_without_asking_the_model() {
     );
 
     let intent = chooser
-        .choose("fix the login button")
+        .choose("fix the login button", std::path::Path::new(""))
         .await
         .expect("choose");
     assert_eq!(intent, SessionIntent::default());

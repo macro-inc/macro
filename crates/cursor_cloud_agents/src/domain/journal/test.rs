@@ -183,7 +183,7 @@ fn result_requires_a_known_terminal_status_before_completeness_or_tool_cleanup()
 }
 
 #[test]
-fn streamed_artifact_survives_shortened_result_and_pr_metadata_is_emitted_once() {
+fn streamed_answer_and_pr_metadata_are_not_duplicated() {
     let run = CursorRunId::new("artifact-run");
     let mut machine = ReplayMachine::default();
     let answer = "Added hi.\n<img src=\"/opt/cursor/artifacts/readme.webp\" />\nPR is up.";
@@ -200,7 +200,7 @@ fn streamed_artifact_survives_shortened_result_and_pr_metadata_is_emitted_once()
         id: None,
         data: serde_json::json!({
             "runId": run.as_str(), "status": "FINISHED",
-            "text": "Added hi.\nPR is up.",
+            "text": answer,
             "git": {"branches": [{"repoUrl": "github.com/macro-inc/macro", "branch": "readme-hi", "prUrl": "https://github.com/macro-inc/macro/pull/6369"}]}
         }).to_string(),
     });
@@ -237,4 +237,42 @@ fn polling_preserves_pr_metadata() {
             .any(|u| matches!(u, SessionUpdate::AgentMessageChunk(_)))
     );
     assert!(machine.push(Some(&run), &poll).unwrap().is_empty());
+}
+
+#[test]
+fn divergent_terminal_text_is_rejected_before_recording_a_pr() {
+    for polling in [false, true] {
+        let run = CursorRunId::new("divergent");
+        let mut machine = ReplayMachine::default();
+        machine
+            .push(
+                Some(&run),
+                &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: "captured answer".into(),
+                })),
+            )
+            .unwrap();
+        let git = serde_json::json!({"branches": [{
+            "repoUrl": "github.com/macro-inc/macro", "branch": "feature",
+            "prUrl": "https://github.com/macro-inc/macro/pull/12"
+        }]});
+        let input = if polling {
+            JournalInput::Poll(
+                serde_json::json!({
+                    "status": "FINISHED", "result": "different answer", "git": git,
+                })
+                .to_string(),
+            )
+        } else {
+            JournalInput::Sse(NativeRecord {
+                event: "result".into(), id: None,
+                data: serde_json::json!({
+                    "runId": run.as_str(), "status": "FINISHED", "text": "different answer", "git": git,
+                }).to_string(),
+            })
+        };
+        assert!(machine.push(Some(&run), &input).is_err());
+        assert_eq!(machine.terminal_status(&run), None);
+        assert_eq!(machine.pull_request_url(), None);
+    }
 }

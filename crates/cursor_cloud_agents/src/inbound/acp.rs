@@ -389,7 +389,7 @@ where
                 async move |request: NewSessionRequest, responder, connection| {
                     notifier.bind(connection.clone());
                     let mcp_servers = forwardable_mcp_servers(request.mcp_servers);
-                    let session = service.new_session(mcp_servers);
+                    let session = service.new_session(&request.cwd, mcp_servers);
                     let options = session_config_options(&service, &session).await;
                     responder.respond(NewSessionResponse::new(session).config_options(options))
                 }

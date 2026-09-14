@@ -21,8 +21,8 @@
 //!
 //! Environment:
 //! - `CURSOR_API_KEY` (required): a `crsr_…` user or service-account key.
-//! - `CURSOR_REPO`: repository override; otherwise resolved from the origin
-//!   remote of the directory the agent was started in.
+//! - `CURSOR_REPO`: repository override; otherwise resolved from the
+//!   session's `cwd` origin remote.
 //! - `CURSOR_REF`: starting ref for new agents (default `main`).
 //! - `CURSOR_MODEL`: model id (default: server default).
 //! - `CURSOR_API_BASE`: API base url (default `https://api.cursor.com`).
@@ -127,11 +127,7 @@ async fn main() -> ExitCode {
     };
 
     let override_repo = CursorRepo::new().and_then(|repo| repo.value().and_then(RepoUrl::parse));
-    // Resolved once, from where the client started this process: a session's
-    // `cwd` no longer reaches the choice, because the hosted harness decides
-    // per prompt and has no checkout to look at.
-    let chooser =
-        GitRepositoryChooser::new(override_repo, &std::env::current_dir().unwrap_or_default());
+    let chooser = GitRepositoryChooser { override_repo };
 
     // ACP has no capability field for "I will never ask permission", and a
     // client's gate silently not applying is the kind of thing a user only

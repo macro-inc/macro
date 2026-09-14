@@ -51,6 +51,7 @@ use agent_client_protocol::schema::v1::{
 use futures::StreamExt as _;
 use futures::pin_mut;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 /// How often the fallback poll asks after a run's outcome.
@@ -75,9 +76,6 @@ const STREAM_QUIET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs
 /// How long a prompt waits behind a run something else started (the same
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
-
-/// Recovery must yield the writer gate even if the provider keeps heartbeating.
-const BACKFILL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 #[derive(Clone, Copy)]
 struct IngestMode {
@@ -214,6 +212,8 @@ struct SessionState {
 /// A session shared between a streaming turn and a concurrent cancel.
 #[derive(Debug)]
 struct Session {
+    /// ACP working directory, used by the standalone repository chooser.
+    cwd: PathBuf,
     /// The model id this session was using before the process restarted, when
     /// it was restored and had one. An id rather than a [`ModelChoice`]: only
     /// the id is persisted, and its params must be re-resolved against the
@@ -289,10 +289,11 @@ where
     ///
     /// No repository is chosen here: a session's repository follows from what
     /// its first prompt asks for, and there is no prompt yet. `session/new`
-    /// carries a `cwd`, but for a hosted session that path names a directory
-    /// inside a sandbox that does not exist.
-    pub fn new_session(&self, mcp_servers: Vec<McpServer>) -> SessionId {
+    /// carries a `cwd`, which the standalone chooser uses to resolve its checkout.
+    /// Hosted sessions choose from the prompt and ignore that path.
+    pub fn new_session(&self, cwd: &Path, mcp_servers: Vec<McpServer>) -> SessionId {
         let session = Arc::new(Session {
+            cwd: cwd.to_path_buf(),
             restored_model_id: None,
             turn_gate: Arc::new(tokio::sync::Mutex::new(())),
             state: Mutex::new(SessionState {
@@ -652,7 +653,7 @@ where
                 // repository this session belongs to, and Cursor fixes an
                 // agent's repository at creation - so the decision is made
                 // here, before the agent exists, and never revisited.
-                match self.chooser.choose(prompt).await {
+                match self.chooser.choose(prompt, &session.cwd).await {
                     Ok(intent) => {
                         session.state.lock().expect("session state poisoned").repo =
                             intent.repository.clone();
@@ -928,6 +929,7 @@ where
         // hand over — the list belongs to the ACP client, and the client
         // restates it on `session/load`, which is where it re-enters.
         let session = Arc::new(Session {
+            cwd: PathBuf::new(),
             restored_model_id: model_id,
             turn_gate: Arc::new(tokio::sync::Mutex::new(())),
             state: Mutex::new(SessionState {
@@ -1363,35 +1365,6 @@ where
         agent: &CursorAgentId,
         current_run: Option<&CursorRunId>,
     ) -> Result<bool, SessionError> {
-        match tokio::time::timeout(
-            BACKFILL_TIMEOUT,
-            self.backfill_available_runs(session_id, session, agent, current_run),
-        )
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => {
-                // A cancelled append may have committed. Reload durable state
-                // before the next attempt instead of trusting its local cursor.
-                session
-                    .state
-                    .lock()
-                    .expect("session state poisoned")
-                    .journal_loaded = false;
-                Err(SessionError::Rejected(
-                    "Cursor history synchronization timed out. Please retry your message.".into(),
-                ))
-            }
-        }
-    }
-
-    async fn backfill_available_runs(
-        &self,
-        session_id: &SessionId,
-        session: &Session,
-        agent: &CursorAgentId,
-        current_run: Option<&CursorRunId>,
-    ) -> Result<bool, SessionError> {
         self.ensure_journal(session_id, session).await?;
         let last = session
             .state
@@ -1435,15 +1408,6 @@ where
             if current_run != Some(&listing.id)
                 && (pending.contains(&listing.id) || newer.contains(&listing.id))
             {
-                if !reconciled.contains(&listing.id)
-                    && matches!(listing.status, RunStatus::Creating)
-                {
-                    tracing::warn!(%session_id, %agent, run = %listing.id, status = ?listing.status,
-                        "Cursor history blocked by an unfinished run");
-                    return Err(SessionError::Rejected(
-                        "Cursor is still starting or running an earlier request. Stop that run, then retry your message.".into(),
-                    ));
-                }
                 runs.push(listing.id);
             }
         }

@@ -6,6 +6,7 @@ use crate::domain::model::{
 };
 use crate::testing::{CursorCall, FakeCursor, FixedChooser, RecordingNotifier};
 use agent_client_protocol::schema::v1::{SessionUpdate, StopReason, ToolCallStatus};
+use std::path::Path;
 
 type Service = CursorSessionService<FakeCursor, RecordingNotifier, FixedChooser>;
 
@@ -110,7 +111,7 @@ fn cancelled(run: &str) -> CursorEvent {
 #[tokio::test]
 async fn active_turn_is_reported_while_cursor_is_working() {
     let (service, _cursor, _notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
     let stored = service.session(&session).expect("session exists");
     let turn = stored.turn_gate.lock().await;
     assert!(service.has_active_turn());
@@ -123,7 +124,7 @@ async fn active_turn_is_reported_while_cursor_is_working() {
 async fn first_prompt_creates_the_agent_with_the_session_repo() {
     let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("valid repo");
     let (service, cursor, notifier) = service(Some(repo.clone()));
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new("/workspace"), Vec::new());
 
     let events = cursor.script_stream();
     events
@@ -157,7 +158,7 @@ async fn first_prompt_creates_the_agent_with_the_session_repo() {
 #[tokio::test]
 async fn second_prompt_follows_up_on_the_same_agent() {
     let (service, cursor, _notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     for run in 1..=2 {
         let events = cursor.script_stream();
@@ -181,7 +182,7 @@ async fn second_prompt_follows_up_on_the_same_agent() {
 #[tokio::test]
 async fn cancel_mid_turn_cancels_the_run_and_reports_cancelled() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     let turn = tokio::spawn({
@@ -220,7 +221,7 @@ async fn cancel_mid_turn_cancels_the_run_and_reports_cancelled() {
 #[tokio::test(start_paused = true)]
 async fn a_stop_still_delivers_a_finished_run_the_stream_never_reported() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     let turn = tokio::spawn({
@@ -269,7 +270,7 @@ async fn a_stop_still_delivers_a_finished_run_the_stream_never_reported() {
 #[tokio::test]
 async fn cancel_keeps_reading_until_the_result_frame() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     let turn = tokio::spawn({
@@ -315,7 +316,7 @@ async fn cancel_keeps_reading_until_the_result_frame() {
 #[tokio::test]
 async fn cancel_mid_tool_call_closes_it_as_failed() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     let turn = tokio::spawn({
@@ -366,7 +367,7 @@ async fn cancel_mid_tool_call_closes_it_as_failed() {
 #[tokio::test]
 async fn cancel_ends_a_prompt_waiting_on_a_busy_agent() {
     let (service, cursor, _notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     // First turn mints the agent, so the second takes the follow-up path.
     let events = cursor.script_stream();
@@ -406,7 +407,7 @@ async fn cancel_ends_a_prompt_waiting_on_a_busy_agent() {
 #[tokio::test(start_paused = true)]
 async fn a_stop_ends_the_fallback_poll_at_its_first_wait() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     // Plenty scripted, so what ends the poll is the stop and not the script.
     for _ in 0..10 {
@@ -462,7 +463,7 @@ async fn a_stop_ends_the_fallback_poll_at_its_first_wait() {
 #[tokio::test]
 async fn a_stop_before_the_run_exists_is_sent_once_it_does() {
     let (service, cursor, _notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let finish_creating = cursor.script_create_gate();
     let events = cursor.script_stream();
@@ -502,7 +503,7 @@ async fn a_stop_before_the_run_exists_is_sent_once_it_does() {
 #[tokio::test]
 async fn concurrent_prompt_on_an_active_turn_is_rejected() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     let turn = tokio::spawn({
@@ -546,7 +547,7 @@ async fn unknown_session_is_an_error() {
 #[tokio::test]
 async fn a_cancelled_result_reports_cancelled_without_a_client_cancel() {
     let (service, cursor, _notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     events
@@ -567,7 +568,7 @@ async fn a_cancelled_result_reports_cancelled_without_a_client_cancel() {
 #[tokio::test]
 async fn a_stream_error_falls_back_to_polling_the_result() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     events
@@ -597,7 +598,7 @@ async fn a_stream_error_falls_back_to_polling_the_result() {
 #[tokio::test(start_paused = true)]
 async fn a_turn_fails_when_the_stream_and_the_poll_both_fail() {
     let (service, cursor, _notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     events
@@ -621,7 +622,7 @@ async fn a_turn_fails_when_the_stream_and_the_poll_both_fail() {
 #[tokio::test]
 async fn an_error_run_status_fails_the_turn() {
     let (service, cursor, _notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     events
@@ -653,7 +654,7 @@ async fn an_error_run_status_fails_the_turn() {
 #[tokio::test]
 async fn an_unknown_terminal_status_fails_the_turn() {
     let (service, cursor, _notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     events
@@ -682,7 +683,7 @@ async fn an_unknown_terminal_status_fails_the_turn() {
 #[tokio::test(start_paused = true)]
 async fn a_stream_that_ends_without_a_result_fails_the_turn_when_polling_cannot_answer() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     events
@@ -708,7 +709,7 @@ async fn a_stream_that_ends_without_a_result_fails_the_turn_when_polling_cannot_
 #[tokio::test(start_paused = true)]
 async fn a_truncated_stream_is_finished_by_the_poll_without_repeating_text() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     events
@@ -750,7 +751,7 @@ async fn a_truncated_stream_is_finished_by_the_poll_without_repeating_text() {
 #[tokio::test]
 async fn a_cancelled_run_reports_cancelled_from_its_result() {
     let (service, cursor, _notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     events
@@ -789,7 +790,7 @@ async fn session_mcp_servers_reach_agent_creation() {
             value: "Bearer t".to_owned(),
         }],
     }];
-    let session = service.new_session(servers.clone());
+    let session = service.new_session(Path::new(""), servers.clone());
 
     let events = cursor.script_stream();
     events.send(finished("run-fake-1")).expect("stream open");
@@ -813,7 +814,7 @@ async fn session_mcp_servers_reach_agent_creation() {
 #[tokio::test]
 async fn a_session_without_mcp_servers_forwards_none() {
     let (service, cursor, _notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     events.send(finished("run-fake-1")).expect("stream open");
@@ -992,7 +993,7 @@ async fn new_sessions_never_collide_with_restored_ids() {
         None,
     );
 
-    let fresh = service.new_session(Vec::new());
+    let fresh = service.new_session(Path::new(""), Vec::new());
     assert_ne!(fresh, SessionId::new("cursor-acp-1"));
     assert!(service.has_session(&SessionId::new("cursor-acp-1")));
     assert!(service.has_session(&fresh));
@@ -1032,7 +1033,7 @@ async fn a_session_restored_without_an_agent_mints_one_on_the_next_prompt() {
 #[tokio::test(start_paused = true)]
 async fn a_prompt_waits_out_a_busy_agent() {
     let (service, cursor, _notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
     // First turn establishes the agent.
     let events = cursor.script_stream();
     events.send(finished("run-fake-1")).expect("stream open");
@@ -1061,7 +1062,7 @@ async fn a_prompt_waits_out_a_busy_agent() {
 #[tokio::test]
 async fn foreign_runs_are_captured_before_the_next_prompt_and_shown_by_its_reload() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
     let events = cursor.script_stream();
     events.send(finished("run-fake-1")).expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -1187,7 +1188,7 @@ async fn foreign_runs_are_captured_before_the_next_prompt_and_shown_by_its_reloa
 #[tokio::test]
 async fn sync_captures_foreign_runs_once_and_requires_one_load_to_show_them() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
     let events = cursor.script_stream();
     events.send(finished("run-fake-1")).expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -1488,7 +1489,7 @@ async fn restore_waits_for_session_load_before_recovering_runs() {
 #[tokio::test(start_paused = true)]
 async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
     let events = cursor.script_stream();
     events.send(finished("run-fake-1")).expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -1571,7 +1572,7 @@ async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
 #[tokio::test]
 async fn a_running_foreign_run_is_not_checkpointed_after_stream_fallback() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
     let initial = cursor.script_stream();
     initial.send(finished("run-fake-1")).expect("stream open");
     initial.send(CursorEvent::Done).expect("stream open");
@@ -1613,7 +1614,7 @@ async fn a_running_foreign_run_is_not_checkpointed_after_stream_fallback() {
 #[tokio::test(start_paused = true)]
 async fn a_quiet_stream_closes_the_turn_from_the_run_record() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
 
     let events = cursor.script_stream();
     events
@@ -1660,7 +1661,7 @@ async fn durable_multiturn_load_replays_full_history_and_supports_continuation()
         FixedChooser(None, false),
         journal.clone(),
     );
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     for (prompt, fixture) in [
         ("first prompt", "multi_turn_1.sse"),
         ("second prompt", "file_operations.sse"),
@@ -1769,7 +1770,7 @@ async fn append_failure_publishes_nothing_and_never_advances_delivery_or_retries
         FixedChooser(None, false),
         journal.clone(),
     );
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     let tx = cursor.script_stream();
     tx.send(CursorEvent::Assistant {
         text: "must never escape".into(),
@@ -1803,7 +1804,7 @@ async fn append_failure_publishes_nothing_and_never_advances_delivery_or_retries
 #[tokio::test]
 async fn partial_capture_reconnect_matches_the_prefix_without_duplicate_content() {
     let (service, cursor, notifier) = service(None);
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     let session = service.session(&id).unwrap();
     {
         let _gate = session.turn_gate.lock().await;
@@ -1918,7 +1919,7 @@ async fn incomplete_legacy_hydration_emits_nothing_and_cannot_enable_sync() {
 #[tokio::test]
 async fn load_guard_orders_continuation_after_the_queued_response() {
     let (service, cursor, _notifier) = service(None);
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     let guard = service.replay_session(&id).await.unwrap();
     let tx = cursor.script_stream();
     tx.send(finished("run-fake-1")).unwrap();
@@ -1940,7 +1941,7 @@ async fn load_guard_orders_continuation_after_the_queued_response() {
 #[tokio::test]
 async fn stream_unavailable_records_are_captured_before_retry() {
     let (service, cursor, _notifier) = service(None);
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     let first = cursor.script_stream();
     first
         .send(CursorEvent::Error {
@@ -1958,7 +1959,7 @@ async fn stream_unavailable_records_are_captured_before_retry() {
 #[tokio::test]
 async fn aborted_prompt_is_retained_in_load_history_without_remote_execution() {
     let (service, cursor, output) = service(None);
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     let session = service.session(&id).unwrap();
     {
         let _gate = session.turn_gate.lock().await;
@@ -1990,7 +1991,7 @@ async fn aborted_prompt_is_retained_in_load_history_without_remote_execution() {
 #[tokio::test]
 async fn terminal_poll_crash_is_reconciled_without_reopening_or_duplicating_tools() {
     let (service, cursor, output) = service(None);
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     let session = service.session(&id).unwrap();
     let run = CursorRunId::new("R");
     {
@@ -2088,7 +2089,7 @@ async fn terminal_poll_crash_is_reconciled_without_reopening_or_duplicating_tool
 #[tokio::test]
 async fn capture_backlog_includes_the_run_at_the_delivered_watermark_after_restart() {
     let (service, cursor, output) = service(None);
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     let session = service.session(&id).unwrap();
     let run = CursorRunId::new("cancelled-run");
     {
@@ -2175,7 +2176,7 @@ async fn capture_backlog_includes_the_run_at_the_delivered_watermark_after_resta
 #[tokio::test(start_paused = true)]
 async fn a_newly_accepted_run_waits_behind_a_failed_older_backfill() {
     let (service, cursor, output) = service(None);
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     let session = service.session(&id).unwrap();
     session.state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
     let gate = cursor.script_create_gate();
@@ -2323,7 +2324,7 @@ async fn model_resolution_precedes_intent_and_definite_rejection_aborts_it() {
         )
         .with_default_model(Some("model".into())),
     );
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     let gate = cursor.script_model_gate();
     cursor.script_rejection();
     let task = tokio::spawn({
@@ -2354,7 +2355,7 @@ mod fold;
 #[tokio::test]
 async fn cancellation_during_pre_prompt_recovery_never_executes_the_pending_prompt() {
     let (service, cursor, output) = service(None);
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     service.session(&id).unwrap().state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
     cursor.script_run_listings(vec![RunListing {
         id: CursorRunId::new("older"),
@@ -2446,7 +2447,7 @@ async fn actual_load_frames_restore_terminal_outcomes_and_leave_partial_tail_ope
         (None, None),
     ] {
         let (service, _, _) = service(None);
-        let id = service.new_session(vec![]);
+        let id = service.new_session(Path::new(""), vec![]);
         let session = service.session(&id).unwrap();
         service.ensure_journal(&id, &session).await.unwrap();
         let run = CursorRunId::new("run");
@@ -2525,7 +2526,7 @@ async fn actual_load_frames_restore_terminal_outcomes_and_leave_partial_tail_ope
 async fn an_unconnected_repository_reaches_the_client_as_an_instruction() {
     let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("an https remote");
     let (service, cursor, _output) = service(Some(repo));
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     cursor.script_repository_rejection();
 
     let error = service
@@ -2556,70 +2557,6 @@ async fn an_unconnected_repository_reaches_the_client_as_an_instruction() {
     );
 }
 
-#[tokio::test(start_paused = true)]
-async fn creating_foreign_run_releases_gate_and_rejects_followup_without_starting_work() {
-    let (service, cursor, _) = service(None);
-    let id = service.new_session(vec![]);
-    let session = service.session(&id).unwrap();
-    session.state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
-    cursor.script_run_listings(vec![RunListing {
-        id: CursorRunId::new("stalled"),
-        status: RunStatus::Creating,
-    }]);
-
-    service.sync_foreign_runs().await;
-    assert!(!service.has_active_turn());
-    let error = service.prompt(&id, "follow up").await.unwrap_err();
-    assert!(error.to_string().contains("earlier request"));
-    assert!(
-        !cursor
-            .calls()
-            .iter()
-            .any(|call| matches!(call, CursorCall::CreateRun(..)))
-    );
-    assert!(!service.has_active_turn());
-}
-
-#[tokio::test(start_paused = true)]
-async fn stalled_history_stream_times_out_and_can_be_recovered_on_next_sync() {
-    let (service, cursor, output) = service(None);
-    let id = service.new_session(vec![]);
-    let session = service.session(&id).unwrap();
-    session.state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
-    cursor.script_run_listings(vec![RunListing {
-        id: CursorRunId::new("foreign"),
-        status: RunStatus::Finished,
-    }]);
-    let stream = cursor.script_stream();
-    let heartbeats = tokio::spawn(async move {
-        loop {
-            if stream.send(CursorEvent::Heartbeat).is_err() {
-                break;
-            }
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        }
-    });
-    let started = tokio::time::Instant::now();
-    service.sync_foreign_runs().await;
-    assert_eq!(started.elapsed(), BACKFILL_TIMEOUT);
-    assert!(!service.has_active_turn());
-    assert!(output.reloads().is_empty());
-    assert!(!session.state.lock().unwrap().journal_loaded);
-    heartbeats.abort();
-
-    let recovered = cursor.script_stream();
-    recovered
-        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
-            text: "foreign question".into(),
-        }))
-        .unwrap();
-    recovered.send(finished("foreign")).unwrap();
-    recovered.send(CursorEvent::Done).unwrap();
-    service.sync_foreign_runs().await;
-    assert_eq!(output.reloads().len(), 1);
-    assert!(!service.has_active_turn());
-}
-
 #[tokio::test]
 async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambiguity() {
     struct UnavailableChooser;
@@ -2627,6 +2564,7 @@ async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambigu
         async fn choose(
             &self,
             _: &str,
+            _: &Path,
         ) -> Result<crate::domain::ports::SessionIntent, rootcause::Report> {
             Err(rootcause::report!("GitHub repository listing unavailable"))
         }
@@ -2638,7 +2576,7 @@ async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambigu
         UnavailableChooser,
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
     );
-    let id = service.new_session(vec![]);
+    let id = service.new_session(Path::new(""), vec![]);
     for _ in 0..2 {
         let error = service
             .prompt(&id, "update macro-inc/macro README")
@@ -2659,7 +2597,7 @@ async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambigu
 #[tokio::test]
 async fn native_pr_is_reported_to_the_host_without_cursor_metadata() {
     let (service, cursor, notifier) = service(None);
-    let session = service.new_session(Vec::new());
+    let session = service.new_session(Path::new(""), Vec::new());
     let events = cursor.script_stream();
     events
         .send(CursorEvent::Result {
@@ -2687,5 +2625,42 @@ async fn native_pr_is_reported_to_the_host_without_cursor_metadata() {
             .updates()
             .iter()
             .any(|(_, update)| matches!(update, SessionUpdate::SessionInfoUpdate(_)))
+    );
+}
+
+#[tokio::test]
+async fn repository_choice_receives_each_sessions_working_directory() {
+    #[derive(Default)]
+    struct RecordingChooser(Mutex<Vec<std::path::PathBuf>>);
+    impl RepositoryChooser for RecordingChooser {
+        async fn choose(
+            &self,
+            _prompt: &str,
+            cwd: &Path,
+        ) -> Result<crate::domain::ports::SessionIntent, rootcause::Report> {
+            self.0.lock().unwrap().push(cwd.to_path_buf());
+            Ok(crate::domain::ports::SessionIntent::default())
+        }
+    }
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        RecordingChooser::default(),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+    );
+    for cwd in ["/workspace/one", "/workspace/two"] {
+        let id = service.new_session(Path::new(cwd), vec![]);
+        let events = cursor.script_stream();
+        events.send(finished("run")).unwrap();
+        events.send(CursorEvent::Done).unwrap();
+        service.prompt(&id, "work here").await.unwrap();
+    }
+    assert_eq!(
+        *service.chooser.0.lock().unwrap(),
+        vec![
+            std::path::PathBuf::from("/workspace/one"),
+            std::path::PathBuf::from("/workspace/two")
+        ]
     );
 }

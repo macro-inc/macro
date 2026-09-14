@@ -87,13 +87,7 @@ Cursor sessions choose a repository from the mentioning user's linked GitHub App
 installations on their first prompt. A session without a repository can still use
 Macro and connected MCP tools, but cannot use the Git proxy. For a PR smoke test,
 link the GitHub account and App installation in the same environment first, then
-name the repository explicitly in a new session's prompt. Routine session-log
-writes should not surface as “Cursor journal writer fenced out”; that error is
-reserved for a journal whose ownership claim no longer matches.
-
-If a Cursor follow-up reports an earlier request is still starting, use Stop in the
-agent session before retrying. History synchronization yields after 30 seconds
-if the provider stalls, so follow-ups report an error instead of waiting forever.
+name the repository explicitly in a new session's prompt.
 
 PR status in an open Magic Chip updates from connection-gateway events after
 webhook sync. Reconnecting refreshes active PR lookups to recover missed updates.
@@ -112,8 +106,7 @@ idempotent, and the typed session event preserves the chip link through reloads.
 When Cursor opens a pull request, the chip header shows its GitHub link as soon
 as the run reports it, including after restoring a session. The link remains
 usable while the webhook mapping is loading or absent, then becomes a Macro PR
-entity link once synced. A final summary that omits a streamed artifact should
-leave the streamed answer intact and the chip marked Done.
+entity link once synced.
 
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's

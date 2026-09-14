@@ -153,7 +153,11 @@ where
     Sessions: AgentSessionRepo,
 {
     #[tracing::instrument(skip_all, err, fields(session = %self.session_id, owner = %self.owner))]
-    async fn choose(&self, prompt: &str) -> Result<SessionIntent, rootcause::Report> {
+    async fn choose(
+        &self,
+        prompt: &str,
+        _cwd: &std::path::Path,
+    ) -> Result<SessionIntent, rootcause::Report> {
         let candidates = self
             .repositories
             .for_user(&self.owner)
