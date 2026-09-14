@@ -145,16 +145,46 @@ export function ChannelMutedIndicator(props: {
 export function IncomingCallActions(props: {
   callId: string | undefined;
   channelId: string;
+  class?: string;
+  layout?: 'compact' | 'wide';
 }) {
+  const isWide = () => props.layout === 'wide';
+
   return (
     <Show when={props.callId}>
       {(callId) => (
-        <span class="flex shrink-0 items-center gap-1">
+        <span
+          class={cn(
+            'shrink-0 items-center',
+            isWide() ? 'grid w-full grid-cols-2 gap-2' : 'flex gap-1',
+            props.class
+          )}
+        >
+          <Button
+            variant="danger"
+            size={isWide() ? 'sm' : 'icon-xs'}
+            fullWidth={isWide()}
+            class={cn('rounded-md', isWide() && 'h-7 flex-1')}
+            label="Decline incoming call"
+            tooltipDisabled={isWide()}
+            onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              dismissIncomingCallEverywhere(callId());
+            }}
+          >
+            <XIcon class="size-3" />
+            <Show when={isWide()}>Decline</Show>
+          </Button>
           <Button
             variant="success"
-            size="icon-xs"
-            class="rounded-md"
+            size={isWide() ? 'sm' : 'icon-xs'}
+            fullWidth={isWide()}
+            class={cn('rounded-md', isWide() && 'h-7 flex-1')}
             label="Accept incoming call"
+            tooltipDisabled={isWide()}
             onPointerDown={(event) => event.stopPropagation()}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => {
@@ -167,21 +197,7 @@ export function IncomingCallActions(props: {
             }}
           >
             <PhoneIncomingIcon class="incoming-call-shake size-3" />
-          </Button>
-          <Button
-            variant="danger"
-            size="icon-xs"
-            class="rounded-md"
-            label="Decline incoming call"
-            onPointerDown={(event) => event.stopPropagation()}
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              dismissIncomingCallEverywhere(callId());
-            }}
-          >
-            <XIcon class="size-3" />
+            <Show when={isWide()}>Join</Show>
           </Button>
         </span>
       )}
@@ -275,7 +291,7 @@ export function ConversationCard(props: ConversationCardProps) {
       role="treeitem"
       tabIndex={-1}
       class={cn(
-        'relative h-20 w-full min-w-0 overflow-hidden px-2 py-2 text-left outline-none',
+        'relative min-h-20 w-full min-w-0 overflow-hidden px-2 py-4 text-left outline-none',
         props.selected && !isTouchDevice() && 'bg-active',
         !props.selected && !isTouchDevice() && props.focused && 'bg-hover',
         (!props.selected || isTouchDevice()) && 'bg-transparent',
@@ -308,13 +324,10 @@ export function ConversationCard(props: ConversationCardProps) {
             <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
               {props.channel.name}
             </span>
-            <ChannelMutedIndicator muted={props.muted} />
+            <ChannelMutedIndicator muted={props.muted} class="size-3.5" />
             <ChannelCallIndicator
               status={props.incomingCallId ? undefined : props.callStatus}
-            />
-            <IncomingCallActions
-              callId={props.incomingCallId}
-              channelId={props.channel.id}
+              class="size-3.5"
             />
             <Show when={latestRootMessage()?.createdAt}>
               {(createdAt) => (
@@ -356,12 +369,7 @@ export function ConversationCard(props: ConversationCardProps) {
               <Switch>
                 <Match when={latestRootMessage()}>
                   {(message) => (
-                    <div
-                      class={cn(
-                        'min-w-0 text-ink-muted',
-                        hasMessageMetadata() ? 'line-clamp-1' : 'line-clamp-2'
-                      )}
-                    >
+                    <div class="line-clamp-2 min-w-0 text-ink-muted">
                       <span class="inline-flex min-w-0 font-medium">
                         <span class="min-w-0 truncate">
                           <MessageSenderName id={props.senderId} />
@@ -388,6 +396,12 @@ export function ConversationCard(props: ConversationCardProps) {
               </Switch>
             </div>
           </Show>
+          <IncomingCallActions
+            callId={props.incomingCallId}
+            channelId={props.channel.id}
+            class="mt-3"
+            layout="wide"
+          />
         </div>
       </div>
     </div>
