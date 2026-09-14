@@ -1,7 +1,7 @@
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import { describe, expect, it } from 'vitest';
 import type { CalendarEvent } from '../types';
-import { eventEmailRecipients } from './event-email-recipients';
+import { eventEmailRecipients, guestEmails } from './guest-emails';
 
 function attendee(
   email: string,
@@ -42,40 +42,39 @@ function event(attendees: CalendarAttendee[]): CalendarEvent {
   };
 }
 
+describe('guestEmails', () => {
+  it('lists every guest, the viewer included, in guest-list order', () => {
+    expect(
+      guestEmails([
+        attendee('daniel@example.com'),
+        attendee('jacob@example.com', { isSelf: true }),
+        attendee('teo@example.com', { isOptional: true }),
+      ])
+    ).toEqual(['daniel@example.com', 'jacob@example.com', 'teo@example.com']);
+  });
+
+  it('lists an address once however it is cased or padded', () => {
+    expect(
+      guestEmails([
+        attendee('Daniel@Example.com'),
+        attendee(' daniel@example.com '),
+        attendee(''),
+      ])
+    ).toEqual(['Daniel@Example.com']);
+  });
+});
+
 describe('eventEmailRecipients', () => {
-  it('addresses every guest but the viewer, in guest-list order', () => {
+  it('addresses every guest but the viewer', () => {
     expect(
       eventEmailRecipients(
         event([
           attendee('daniel@example.com'),
           attendee('jacob@example.com', { isSelf: true }),
-          attendee('teo@example.com', { isOptional: true }),
-        ])
-      )
-    ).toEqual(['daniel@example.com', 'teo@example.com']);
-  });
-
-  it('keeps an organizer who is someone else', () => {
-    expect(
-      eventEmailRecipients(
-        event([
-          attendee('jacob@example.com', { isSelf: true }),
           attendee('organizer@example.com', { isOrganizer: true }),
         ])
       )
-    ).toEqual(['organizer@example.com']);
-  });
-
-  it('lists an address once however it is cased or padded', () => {
-    expect(
-      eventEmailRecipients(
-        event([
-          attendee('Daniel@Example.com'),
-          attendee(' daniel@example.com '),
-          attendee(''),
-        ])
-      )
-    ).toEqual(['Daniel@Example.com']);
+    ).toEqual(['daniel@example.com', 'organizer@example.com']);
   });
 
   it('is empty when the viewer is the only guest', () => {

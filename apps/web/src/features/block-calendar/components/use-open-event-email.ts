@@ -1,5 +1,5 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { eventEmailRecipients } from '@app/features/calendar/utils/event-email-recipients';
+import { eventEmailRecipients } from '@app/features/calendar/utils/guest-emails';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { triggerFocusInput } from '@core/directive/focusInput';

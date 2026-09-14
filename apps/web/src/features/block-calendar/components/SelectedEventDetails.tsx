@@ -8,11 +8,15 @@ import {
   type CalendarTimeFormat,
   reminderCalendarIdOf,
 } from '@app/features/calendar/types';
-import { eventEmailRecipients } from '@app/features/calendar/utils/event-email-recipients';
+import {
+  eventEmailRecipients,
+  guestEmails,
+} from '@app/features/calendar/utils/guest-emails';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { Popover } from '@kobalte/core/popover';
+import CopyIcon from '@phosphor/copy.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
 import LinkIcon from '@phosphor/link.svg';
@@ -25,7 +29,6 @@ import type { CalendarDeletionScope } from '@service-email/client';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import {
   Button,
-  cn,
   DeleteDialog,
   Layer,
   type ManagedDialogProps,
@@ -33,6 +36,7 @@ import {
 } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 import { copyCalendarEventMention } from '../copy-event-mention';
+import { copyGuestEmails } from '../copy-guest-emails';
 import { EventRsvpSection } from './EventRsvpSection';
 import { useOpenEventComposer } from './use-open-event-composer';
 import { useOpenEventEmail } from './use-open-event-email';
@@ -171,36 +175,46 @@ function EveryoneElseDeclinedNotice(props: {
 }
 
 /**
- * Starts an email to the event's other guests, styled like the calendar
- * header's `New event` text button. Hidden when there is nobody to write to.
- * The details close before the composer opens: closing hands focus back to
- * the calendar chip, and the composer's To field has to win that exchange.
+ * The guest-row actions Google Calendar users know: copy every guest's
+ * address, or start an email to the other guests (hidden when the viewer is
+ * the only one). Emailing closes the details first: closing hands focus back
+ * to the calendar chip, and the composer's To field has to win that exchange.
  */
-function SendEmailButton(props: {
+function EventGuestActions(props: {
   event: CalendarEvent;
-  size: 'sm' | 'md';
-  class?: string;
   closeDetails: () => void;
 }) {
   const openEventEmail = useOpenEventEmail();
 
   return (
-    <Show when={eventEmailRecipients(props.event).length > 0}>
+    <>
       <Button
+        label="Copy guest emails"
         variant="ghost"
-        size={props.size}
+        size="icon-sm"
         depth={3}
-        class={cn('rounded-lg px-2', props.class)}
-        onClick={() => {
-          const event = props.event;
-          props.closeDetails();
-          openEventEmail(event);
-        }}
+        class="rounded-md text-ink-muted [&_svg]:size-4"
+        onClick={() => copyGuestEmails(guestEmails(props.event.attendees))}
       >
-        <EnvelopeIcon class={props.size === 'sm' ? 'size-3.5' : 'size-4'} />
-        Send email
+        <CopyIcon />
       </Button>
-    </Show>
+      <Show when={eventEmailRecipients(props.event).length > 0}>
+        <Button
+          label="Email guests"
+          variant="ghost"
+          size="icon-sm"
+          depth={3}
+          class="rounded-md text-ink-muted [&_svg]:size-4"
+          onClick={() => {
+            const event = props.event;
+            props.closeDetails();
+            openEventEmail(event);
+          }}
+        >
+          <EnvelopeIcon />
+        </Button>
+      </Show>
+    </>
   );
 }
 
@@ -246,12 +260,6 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
               <CloseIcon />
             </MobileDrawer.Close>
             <div class="flex items-center gap-1">
-              <SendEmailButton
-                event={props.event}
-                size="md"
-                class="text-ink-extra-muted"
-                closeDetails={() => props.onOpenChange(false)}
-              />
               <Button
                 aria-label="Copy event"
                 variant="ghost"
@@ -300,7 +308,15 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                 defaultReminders={props.defaultReminders}
               />
             </div>
-            <EventAttendeesSection attendees={props.event.attendees} />
+            <EventAttendeesSection
+              attendees={props.event.attendees}
+              actions={
+                <EventGuestActions
+                  event={props.event}
+                  closeDetails={() => props.onOpenChange(false)}
+                />
+              }
+            />
             <EventRsvpSection event={props.event} buttonSize="md" />
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
@@ -490,12 +506,6 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
             <div class="w-fit min-w-[min(20rem,calc(100vw-2rem))] max-w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl glass bg-menu-glass text-ink">
               <Popover.Title class="sr-only">{props.event.title}</Popover.Title>
               <div class="flex items-center justify-end gap-1 px-2 pt-2">
-                <SendEmailButton
-                  event={props.event}
-                  size="sm"
-                  class="text-ink-muted"
-                  closeDetails={() => props.onOpenChange(false)}
-                />
                 <Button
                   aria-label="Copy event"
                   variant="ghost"
@@ -553,7 +563,15 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     defaultReminders={props.defaultReminders}
                   />
                 </div>
-                <EventAttendeesSection attendees={props.event.attendees} />
+                <EventAttendeesSection
+                  attendees={props.event.attendees}
+                  actions={
+                    <EventGuestActions
+                      event={props.event}
+                      closeDetails={() => props.onOpenChange(false)}
+                    />
+                  }
+                />
                 <EventRsvpSection event={props.event} />
               </div>
             </div>
