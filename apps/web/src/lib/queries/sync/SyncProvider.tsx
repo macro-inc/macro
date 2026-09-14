@@ -30,7 +30,6 @@ import {
 import { invalidateAllProperties } from '@queries/properties/tags';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import {
-  GITHUB_PULL_REQUEST_UPDATED,
   handlePullRequestUpdated,
   invalidatePullRequestMentions,
 } from '@queries/storage/pr-mention-sync';
@@ -72,7 +71,7 @@ export function QuerySyncProvider(props: SyncProviderProps) {
 
   createConnectionWebsocketEffect((data) => {
     match(data)
-      .with({ type: GITHUB_PULL_REQUEST_UPDATED }, () => {
+      .with({ type: 'github_pull_request_updated' }, () => {
         withParsedWebsocketPayload(data.type, data.data, (payload) => {
           void handlePullRequestUpdated(payload);
         });

@@ -3,9 +3,6 @@ import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { getForeignEntityResponse } from '@service-storage/generated/zod';
 import { pullRequestMentionKeys } from './keys';
 
-// Paired with crates/github/src/outbound/connection_gateway_realtime.rs.
-export const GITHUB_PULL_REQUEST_UPDATED = 'github_pull_request_updated';
-
 export async function handlePullRequestUpdated(
   payload: unknown
 ): Promise<void> {
