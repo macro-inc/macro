@@ -11,14 +11,22 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { UserMessageBubble } from '@ui';
-import { For, type JSX, Show } from 'solid-js';
+import { For, Index, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
-import { ActionLine, Thought, WorkingLine } from '../ui';
+import { segmentParts } from '../state/tool-groups';
+import {
+  ActionLine,
+  isToolActive,
+  Thought,
+  ToolGroup,
+  WorkingLine,
+} from '../ui';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
+import { type ToolUsePart, toolCallDetail, toolLabel } from './parts/shared';
 import { TextPart } from './parts/TextPart';
 import { ToolCallPart } from './parts/ToolCallPart';
 
@@ -55,6 +63,50 @@ function AgentMessagePart(props: {
     .with({ kind: 'control' }, (part) => <ControlPart part={part} />)
     .with({ kind: 'elicitation' }, (part) => <ElicitationPart part={part} />)
     .exhaustive();
+}
+
+/**
+ * A run of consecutive tool calls (see `segmentParts`), folded to one row
+ * that opens to the calls themselves, each at its original part index.
+ */
+function ToolGroupPart(props: {
+  message: FoldedMessage;
+  start: number;
+  /** Exclusive. */
+  end: number;
+  inFlight: boolean;
+}): JSX.Element {
+  const calls = () =>
+    props.message.parts
+      .slice(props.start, props.end)
+      .filter((part): part is ToolUsePart => part.kind === 'tool_use');
+  const active = () => calls().some((call) => isToolActive(call.status));
+
+  return (
+    <Show when={calls().at(-1)}>
+      {(latest) => (
+        <ToolGroup
+          count={calls().length}
+          active={active()}
+          latest={{
+            label: toolLabel(latest().name),
+            detail: toolCallDetail(latest()),
+          }}
+        >
+          <For each={calls()}>
+            {(part, offset) => (
+              <AgentMessagePart
+                part={part}
+                message={props.message}
+                index={props.start + offset()}
+                inFlight={props.inFlight}
+              />
+            )}
+          </For>
+        </ToolGroup>
+      )}
+    </Show>
+  );
 }
 
 /**
@@ -126,16 +178,35 @@ export function Message(props: { message: FoldedMessage }) {
       }
       fallback={
         <div class="flex flex-col gap-1 min-w-0">
-          <For each={props.message.parts}>
-            {(part, index) => (
-              <AgentMessagePart
-                part={part}
-                message={props.message}
-                index={index()}
-                inFlight={inFlight()}
-              />
+          {/* Segments are positional, and a run at the tail grows as calls
+              stream in — so rows are keyed by index, not by segment value,
+              and a group keeps its open state while it fills. */}
+          <Index each={segmentParts(props.message.parts)}>
+            {(segment) => (
+              <Show
+                when={segment().kind === 'tools'}
+                fallback={
+                  <Show when={props.message.parts[segment().start]}>
+                    {(part) => (
+                      <AgentMessagePart
+                        part={part()}
+                        message={props.message}
+                        index={segment().start}
+                        inFlight={inFlight()}
+                      />
+                    )}
+                  </Show>
+                }
+              >
+                <ToolGroupPart
+                  message={props.message}
+                  start={segment().start}
+                  end={segment().end}
+                  inFlight={inFlight()}
+                />
+              </Show>
             )}
-          </For>
+          </Index>
           {/* The turn is open with nothing to read yet — a dot and a rotating
               verb, so the wait reads as work rather than as a stall. */}
           <Show when={inFlight() && showsWorkingLine(props.message)}>

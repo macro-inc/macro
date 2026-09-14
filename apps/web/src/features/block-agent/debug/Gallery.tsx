@@ -36,6 +36,7 @@ import {
   TodoList,
   ToolCard,
   ToolErrorCard,
+  ToolGroup,
   ToolStatusTitle,
 } from '../ui';
 
@@ -632,6 +633,39 @@ export default function AgentUiGallery() {
             >
               <PierreDiff diffs={[FIXTURE_DIFF]} />
             </ToolCard>
+          </Item>
+
+          <Item label="ToolGroup (active / settled)">
+            <ToolGroup
+              count={3}
+              active={pulse()}
+              latest={{ label: 'Bash', detail: 'cargo test -p agent_fold' }}
+            >
+              <ToolCard
+                title="Read"
+                subtitle="crates/agent_fold/src/domain/fold.rs"
+                status="completed"
+              />
+              <ToolCard
+                title="Edit"
+                subtitle={FIXTURE_DIFF.path}
+                status="completed"
+              />
+              <ToolCard
+                title="Bash"
+                subtitle="cargo test -p agent_fold"
+                status={pulse() ? 'running' : 'completed'}
+              />
+            </ToolGroup>
+            <ToolGroup
+              count={2}
+              active={false}
+              latest={{ label: 'ReadContent' }}
+              defaultOpen
+            >
+              <ToolCard title="NameSearch" subtitle="fold" status="completed" />
+              <ToolCard title="ReadContent" status="completed" />
+            </ToolGroup>
           </Item>
 
           <Item label="Thought (active / settled)">
