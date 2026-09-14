@@ -1,3 +1,4 @@
+import { createListController } from '@app/components/list';
 import {
   CollapsibleSection,
   SearchBar,
@@ -7,6 +8,11 @@ import {
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import {
+  type EntityActionViewContext,
+  toEntityActionListState,
+} from '@app/features/next-soup/actions';
+import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import {
   favoriteSplitContent,
@@ -29,6 +35,7 @@ import SkillIcon from '@phosphor/sparkle.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
+import { Key } from '@solid-primitives/keyed';
 import { Button, cn, EmptyStatePanel, Scroll } from '@ui';
 import {
   createEffect,
@@ -53,6 +60,11 @@ const PAGES = [
   label: string;
   icon: typeof PlusIcon;
 }[];
+
+const AGENT_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
+  supportsMarkDone: false,
+  senderBucket: undefined,
+};
 
 function FavoriteRow(props: {
   favorite: Favorite;
@@ -211,6 +223,17 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const [loadMoreSentinel, setLoadMoreSentinel] =
     createSignal<HTMLDivElement>();
   let searchInput: HTMLInputElement | undefined;
+  const visibleConversations = () =>
+    forceEmptyState() ? [] : props.conversations;
+  const actionController = createListController({
+    items: visibleConversations,
+    getKey: (conversation) => conversation.id,
+    isSelectable: () => false,
+  });
+  const actionList = toEntityActionListState({
+    controller: actionController,
+    getEntity: (conversation) => conversation,
+  });
 
   const openSearch = () => {
     setSearchOpen(true);
@@ -340,15 +363,32 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           <div class="relative min-h-0 flex-1">
             <Scroll scrollRef={setScrollRoot}>
               <ViewSidebar.Nav aria-label="Recent agent chats">
-                <For each={forceEmptyState() ? [] : props.conversations}>
+                {/* Soup cache updates replace entity objects. Key rows by id so
+                    those updates preserve the list DOM and scroll position. */}
+                <Key each={visibleConversations()} by="id">
                   {(conversation) => (
-                    <ConversationRow
-                      conversation={conversation}
-                      active={props.selectedId === conversation.id}
-                      onOpen={() => props.onOpenConversation(conversation)}
-                    />
+                    <SoupEntityContextMenu
+                      entity={conversation()}
+                      list={actionList}
+                      selectedEntities={() => []}
+                      viewContext={AGENT_ACTION_VIEW_CONTEXT}
+                      class="block w-full"
+                      onOpenChange={(open) => {
+                        if (!open) return;
+                        actionController.focus.set(conversation().id, {
+                          reason: 'pointer',
+                          force: true,
+                        });
+                      }}
+                    >
+                      <ConversationRow
+                        conversation={conversation()}
+                        active={props.selectedId === conversation().id}
+                        onOpen={() => props.onOpenConversation(conversation())}
+                      />
+                    </SoupEntityContextMenu>
                   )}
-                </For>
+                </Key>
                 <Show when={!forceEmptyState() && props.loading}>
                   <p class="px-3 py-2 text-xs text-ink-muted">Loading chats…</p>
                 </Show>
