@@ -317,6 +317,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "axum-extra",
  "bot_id",
  "bots",
  "channels",

@@ -61,6 +61,7 @@ channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id" }
 axum = { workspace = true }
+axum-extra = { workspace = true, features = ["typed-header"] }
 aws-sdk-secretsmanager = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util" }
 macro_auth = { path = "../../crates/macro_auth" }

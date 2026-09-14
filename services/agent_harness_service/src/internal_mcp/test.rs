@@ -1,4 +1,6 @@
 use super::*;
+use agent_egress::domain::model::SessionToken;
+use axum::http::StatusCode;
 
 #[test]
 fn tool_schema_accepts_only_a_url() {

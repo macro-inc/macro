@@ -2,10 +2,7 @@
 
 use std::sync::Arc;
 
-use agent_egress::domain::model::SessionToken;
-use agent_session::domain::{
-    credentials::authenticate_session, model::AgentSession, ports::AgentSessionRepo,
-};
+use agent_session::domain::ports::AgentSessionRepo;
 use agent_session::{
     domain::pull_request::SessionPullRequests,
     inbound::toolset::{SessionToolContext, SetPullRequest},
@@ -13,8 +10,7 @@ use agent_session::{
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use axum::{
     Router,
-    extract::{Request, State},
-    http::StatusCode,
+    extract::Request,
     middleware::{self, Next},
     response::Response,
 };
@@ -28,6 +24,9 @@ use rmcp::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
     },
 };
+
+mod authenticated_session;
+use authenticated_session::AuthenticatedSession;
 
 #[cfg(test)]
 mod test;
@@ -62,26 +61,12 @@ pub fn router<A: AgentSessionRepo + 'static>(
     );
     Router::new()
         .nest_service("/mcp/internal", server)
-        .layer(middleware::from_fn_with_state(authority, authenticate::<A>))
+        .layer(middleware::from_fn_with_state(authority, authenticate))
 }
 
-async fn authenticate<A: AgentSessionRepo>(
-    State(authority): State<Arc<A>>,
-    mut request: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    let token = request
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|header| header.to_str().ok())
-        .and_then(|header| header.strip_prefix("Bearer "))
-        .filter(|token| !token.is_empty())
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-    let grant = authenticate_session(authority.as_ref(), &SessionToken::new(token).hash())
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
-    request.extensions_mut().insert(grant);
-    Ok(next.run(request).await)
+async fn authenticate(session: AuthenticatedSession, mut request: Request, next: Next) -> Response {
+    request.extensions_mut().insert(session);
+    next.run(request).await
 }
 
 struct InternalTools {
@@ -134,10 +119,10 @@ impl ServerHandler for InternalTools {
         request: CallToolRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
-        let grant = context
+        let AuthenticatedSession(grant) = context
             .extensions
             .get::<axum::http::request::Parts>()
-            .and_then(|parts| parts.extensions.get::<AgentSession>())
+            .and_then(|parts| parts.extensions.get::<AuthenticatedSession>())
             .ok_or_else(|| {
                 rmcp::ErrorData::invalid_request("Missing session authorization", None)
             })?;
