@@ -344,7 +344,9 @@ export function EventForm(props: EventFormProps) {
                 value={controller.customConfig()}
                 start={controller.startForRecurrence()}
                 allDay={state().allDay}
-                disabled={fieldIsDisabled('recurrence')}
+                disabled={
+                  fieldIsDisabled('recurrence') || editScope() === 'this_event'
+                }
                 onChange={controller.setCustomConfig}
               />
             </div>
