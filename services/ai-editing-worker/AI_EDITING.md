@@ -93,7 +93,9 @@ It exists for small, well-scoped inline edits where the supervisor's review
 loop costs more latency than it buys. The web inline selection popup sends
 `mode: "fast"` with `propagate: false`, so the ops come back in the response as
 one dump and are applied client-side into the user's undo stack. The whole-doc
-edit bar and the backend `EditDocument` tool stay on the supervised pipeline.
+edit bar stays on the supervised pipeline. The backend `EditDocument` tool
+(chat agents, MCP) exposes it as a `fast` boolean for one quick, contained
+edit; its default remains supervised.
 
 ### DocumentEditor and ops
 

@@ -35,13 +35,13 @@ const MODELS = {
     { provider: 'anthropic', model: 'claude-haiku-4-5' },
   ],
   // The fast path's single model: whole doc in, `runCode` out, no supervisor.
+  // Mirrors the chain the backend EditDocument tool sends for `fast: true`.
   // Benched on a real inline request (10k-token prompt, one runCode step):
-  // 3.5 Flash Lite 0.8-1.1 s, 3.8 Flash 1.5-5 s, 3.7 Flash 3.8-5.4 s (it
-  // spends ~450 thinking tokens even at `low`). Lite produced the same code as
-  // the larger models on a translation, a list-to-table, and a bold+divider+
-  // rewrite, so it leads; the others are provider-error fallbacks only.
+  // 3.8 Flash 1.5-5 s with no thinking tokens, 3.7 Flash 3.8-5.4 s (~450
+  // thinking tokens even at `low`), 3.5 Flash Lite 0.8-1.1 s with identical
+  // code on three requests. 3.8 leads for headroom on harder edits; Haiku is
+  // the provider-error fallback.
   fast: [
-    { provider: 'google', model: 'gemini-3.5-flash-lite' },
     { provider: 'google', model: 'gemini-3.8-flash' },
     { provider: 'anthropic', model: 'claude-haiku-4-5' },
   ],
