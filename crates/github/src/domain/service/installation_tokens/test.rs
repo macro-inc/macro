@@ -229,22 +229,6 @@ impl GithubSyncClient for FakeClient {
         unimplemented!("this service only ever mints scoped tokens")
     }
 
-    async fn generate_installation_wide_access_token(
-        &self,
-        _jwt: &AppJwt,
-        _installation_id: u64,
-        _permissions: &[(&str, &str)],
-    ) -> Result<GithubInstallationAccessToken, GithubError> {
-        unimplemented!("this service only ever mints scoped tokens")
-    }
-
-    async fn list_installation_repositories(
-        &self,
-        _access_token: &str,
-    ) -> Result<Vec<crate::domain::models::GithubRepository>, GithubError> {
-        unimplemented!("minting a token does not list repositories")
-    }
-
     async fn create_pr_comment(
         &self,
         _access_token: &str,

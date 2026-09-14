@@ -204,26 +204,6 @@ pub trait GithubSyncClient: Send + Sync + 'static {
         permissions: &[(&str, &str)],
     ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
 
-    /// Generates an installation access token carrying only `permissions`,
-    /// across every repository the installation covers.
-    ///
-    /// The installation-wide counterpart to
-    /// [`GithubSyncClient::generate_scoped_installation_access_token`]: use it
-    /// when the caller's question is about the installation itself rather than
-    /// one repository, and keep `permissions` as small as that question needs.
-    fn generate_installation_wide_access_token(
-        &self,
-        jwt: &AppJwt,
-        installation_id: u64,
-        permissions: &[(&str, &str)],
-    ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
-
-    /// Lists every repository an installation access token can reach.
-    fn list_installation_repositories(
-        &self,
-        access_token: &str,
-    ) -> impl Future<Output = Result<Vec<GithubRepository>, GithubError>> + Send;
-
     /// Posts a comment on a GitHub pull request (via the issues API).
     fn create_pr_comment(
         &self,
@@ -318,4 +298,14 @@ pub trait GithubSyncRealtime: Send + Sync + 'static {
         recipients: &[MacroUserIdStr<'static>],
         entity: &foreign_entity::domain::models::ForeignEntity,
     ) -> impl Future<Output = Result<(), GithubError>> + Send;
+}
+
+/// Lists repository metadata for an installation the caller is authorized to access.
+pub trait GithubRepositoryClient: Send + Sync + 'static {
+    /// Fetch the installation's repositories using metadata-only access.
+    fn repositories_for_installation(
+        &self,
+        jwt: &AppJwt,
+        installation_id: u64,
+    ) -> impl Future<Output = Result<Vec<GithubRepository>, GithubError>> + Send;
 }

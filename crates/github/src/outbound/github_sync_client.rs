@@ -382,34 +382,6 @@ impl GithubSyncClient for GithubSyncClientImpl {
         .await
     }
 
-    #[tracing::instrument(skip(self, jwt), err)]
-    async fn generate_installation_wide_access_token(
-        &self,
-        jwt: &AppJwt,
-        installation_id: u64,
-        permissions: &[(&str, &str)],
-    ) -> Result<GithubInstallationAccessToken, GithubError> {
-        self.mint_access_token(
-            jwt,
-            installation_id,
-            ScopedTokenRequest {
-                repositories: None,
-                permissions: permissions.iter().copied().collect(),
-            },
-        )
-        .await
-    }
-
-    #[tracing::instrument(skip(self, access_token), err)]
-    async fn list_installation_repositories(
-        &self,
-        access_token: &str,
-    ) -> Result<Vec<GithubRepository>, GithubError> {
-        fetch_installation_repositories(&self.client, access_token)
-            .await
-            .map_err(GithubError::Internal)
-    }
-
     #[tracing::instrument(skip(self, access_token, body), err)]
     async fn create_pr_comment(
         &self,
@@ -466,6 +438,29 @@ impl GithubSyncClient for GithubSyncClientImpl {
         access_token: &str,
     ) -> Result<Vec<EnrichedGithubPullRequest>, GithubError> {
         fetch_open_pull_requests_for_installation(&self.client, access_token)
+            .await
+            .map_err(GithubError::Internal)
+    }
+}
+
+impl crate::domain::ports::GithubRepositoryClient for GithubSyncClientImpl {
+    #[tracing::instrument(skip(self, jwt), err)]
+    async fn repositories_for_installation(
+        &self,
+        jwt: &AppJwt,
+        installation_id: u64,
+    ) -> Result<Vec<GithubRepository>, GithubError> {
+        let token = self
+            .mint_access_token(
+                jwt,
+                installation_id,
+                ScopedTokenRequest {
+                    repositories: None,
+                    permissions: [("metadata", "read")].into_iter().collect(),
+                },
+            )
+            .await?;
+        fetch_installation_repositories(&self.client, &token.token)
             .await
             .map_err(GithubError::Internal)
     }

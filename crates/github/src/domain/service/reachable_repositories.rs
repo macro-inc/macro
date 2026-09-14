@@ -24,16 +24,12 @@ use lru::LruCache;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::models::{GithubError, GithubRepository, app_jwt};
-use crate::domain::ports::{GithubSyncClient, GithubSyncRepo};
+use crate::domain::ports::{GithubRepositoryClient, GithubSyncRepo};
 
 use super::InstallationTokenConfig;
 
 #[cfg(test)]
 mod test;
-
-/// All a listing needs: the names of the repositories, and nothing that could
-/// read or change their contents.
-const LISTING_PERMISSIONS: &[(&str, &str)] = &[("metadata", "read")];
 
 /// How long a user's listing stands before it is fetched again.
 ///
@@ -64,7 +60,7 @@ struct CachedListing {
 impl<Installations, Client> ReachableRepositoriesService<Installations, Client>
 where
     Installations: GithubSyncRepo,
-    Client: GithubSyncClient,
+    Client: GithubRepositoryClient,
 {
     /// Build the service over the App's credentials, the installation records
     /// that say who owns which installation, and a GitHub client.
@@ -170,16 +166,8 @@ where
                         "installation id {installation_id} is not a number: {error}"
                     ))
                 })?;
-                let token = self
-                    .client
-                    .generate_installation_wide_access_token(
-                        &jwt,
-                        installation,
-                        LISTING_PERMISSIONS,
-                    )
-                    .await?;
                 self.client
-                    .list_installation_repositories(&token.token)
+                    .repositories_for_installation(&jwt, installation)
                     .await
             }
             .await;

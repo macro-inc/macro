@@ -5,7 +5,7 @@
 //! crate. This adapter only narrows its answer to what the harness asked for:
 //! a list of repository urls for one user.
 
-use github::domain::ports::{GithubSyncClient, GithubSyncRepo};
+use github::domain::ports::{GithubRepositoryClient, GithubSyncRepo};
 use github::domain::service::ReachableRepositoriesService;
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -20,7 +20,7 @@ pub struct GithubReachableRepositories<Installations, Client> {
 impl<Installations, Client> GithubReachableRepositories<Installations, Client>
 where
     Installations: GithubSyncRepo,
-    Client: GithubSyncClient,
+    Client: GithubRepositoryClient,
 {
     /// Wrap the `github` crate's listing service.
     pub fn new(repositories: ReachableRepositoriesService<Installations, Client>) -> Self {
@@ -32,7 +32,7 @@ impl<Installations, Client> ReachableRepositories
     for GithubReachableRepositories<Installations, Client>
 where
     Installations: GithubSyncRepo,
-    Client: GithubSyncClient,
+    Client: GithubRepositoryClient,
 {
     async fn for_user(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<String>> {
         let repositories = self

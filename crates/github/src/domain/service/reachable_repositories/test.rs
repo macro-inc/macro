@@ -1,8 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    AppJwt, EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser,
-    GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails, GithubSetupAccessToken,
-    GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference, TeamTaskReference,
+    AppJwt, GithubAppInstallationSource, GithubKey, MacroTaskId, ResolvedTeamTaskReference,
+    TeamTaskReference,
 };
 use std::collections::HashMap;
 use std::sync::Mutex as StdMutex;
@@ -156,16 +155,10 @@ impl GithubSyncRepo for FakeRepo {
     }
 }
 
-/// An installation id and the permissions a token was minted with.
-type MintedToken = (u64, Vec<(String, String)>);
-
-/// Serves a canned listing per installation and records what it was asked to
-/// mint, so a test can assert the scope of the tokens used to read them.
 struct FakeClient {
     repositories: HashMap<u64, Vec<GithubRepository>>,
     unavailable: Vec<u64>,
-    minted: StdMutex<Vec<MintedToken>>,
-    listed: StdMutex<Vec<String>>,
+    listed: StdMutex<Vec<u64>>,
 }
 
 impl FakeClient {
@@ -173,141 +166,28 @@ impl FakeClient {
         Self {
             repositories,
             unavailable: Vec::new(),
-            minted: StdMutex::default(),
             listed: StdMutex::default(),
         }
     }
-
-    /// The token handed out for an installation, and the one its listing is
-    /// looked up by.
-    fn token_for(installation_id: u64) -> String {
-        format!("ghs-{installation_id}")
-    }
 }
 
-impl GithubSyncClient for FakeClient {
-    async fn generate_installation_wide_access_token(
+impl GithubRepositoryClient for FakeClient {
+    async fn repositories_for_installation(
         &self,
         _jwt: &AppJwt,
         installation_id: u64,
-        permissions: &[(&str, &str)],
-    ) -> Result<GithubInstallationAccessToken, GithubError> {
-        self.minted.lock().expect("lock").push((
-            installation_id,
-            permissions
-                .iter()
-                .map(|(permission, level)| ((*permission).to_owned(), (*level).to_owned()))
-                .collect(),
-        ));
-
+    ) -> Result<Vec<GithubRepository>, GithubError> {
+        self.listed.lock().expect("lock").push(installation_id);
         if self.unavailable.contains(&installation_id) {
             return Err(GithubError::Internal(anyhow::anyhow!(
                 "installation unavailable"
             )));
         }
-        Ok(GithubInstallationAccessToken {
-            token: Self::token_for(installation_id),
-            expires_at: "2099-01-01T00:00:00Z".to_owned(),
-        })
-    }
-
-    async fn list_installation_repositories(
-        &self,
-        access_token: &str,
-    ) -> Result<Vec<GithubRepository>, GithubError> {
-        self.listed
-            .lock()
-            .expect("lock")
-            .push(access_token.to_owned());
-
-        let installation_id = access_token
-            .strip_prefix("ghs-")
-            .and_then(|id| id.parse::<u64>().ok())
-            .expect("a token this fake minted");
-
         Ok(self
             .repositories
             .get(&installation_id)
             .cloned()
             .unwrap_or_default())
-    }
-
-    async fn generate_scoped_installation_access_token(
-        &self,
-        _jwt: &AppJwt,
-        _installation_id: u64,
-        _repository: &str,
-        _permissions: &[(&str, &str)],
-    ) -> Result<GithubInstallationAccessToken, GithubError> {
-        unimplemented!("a listing spans the whole installation")
-    }
-
-    async fn get_repository_installation(
-        &self,
-        _jwt: &AppJwt,
-        _owner: &str,
-        _repository: &str,
-    ) -> Result<Option<u64>, GithubError> {
-        unimplemented!("installations come from our own records, not from GitHub")
-    }
-
-    async fn exchange_setup_code(
-        &self,
-        _client_id: &str,
-        _client_secret: &str,
-        _code: &str,
-    ) -> Result<GithubSetupAccessToken, GithubError> {
-        unimplemented!("listing repositories does not exchange setup codes")
-    }
-
-    async fn list_user_installations(
-        &self,
-        _access_token: &str,
-    ) -> Result<Vec<GithubUserInstallation>, GithubError> {
-        unimplemented!("ownership comes from our own records, not from GitHub")
-    }
-
-    async fn get_authenticated_user(
-        &self,
-        _access_token: &str,
-    ) -> Result<GithubAuthenticatedUser, GithubError> {
-        unimplemented!("listing repositories does not need a github user")
-    }
-
-    async fn generate_installation_access_token(
-        &self,
-        _jwt: &AppJwt,
-        _installation_id: u64,
-    ) -> Result<GithubInstallationAccessToken, GithubError> {
-        unimplemented!("a listing token carries only the permissions it needs")
-    }
-
-    async fn create_pr_comment(
-        &self,
-        _access_token: &str,
-        _owner: &str,
-        _repo: &str,
-        _pull_number: u64,
-        _body: &str,
-    ) -> Result<(), GithubError> {
-        unimplemented!("listing repositories does not comment")
-    }
-
-    async fn get_pull_request_details(
-        &self,
-        _access_token: &str,
-        _owner: &str,
-        _repo: &str,
-        _number: u64,
-    ) -> Result<GithubPullRequestDetails, GithubError> {
-        unimplemented!("listing repositories does not read pull requests")
-    }
-
-    async fn list_open_pull_requests(
-        &self,
-        _access_token: &str,
-    ) -> Result<Vec<EnrichedGithubPullRequest>, GithubError> {
-        unimplemented!("listing repositories does not list pull requests")
     }
 }
 
@@ -408,27 +288,6 @@ async fn a_repository_two_installations_both_cover_is_listed_once() {
     );
 }
 
-/// A listing token must not be able to read a line of anyone's code.
-#[tokio::test]
-async fn reads_the_listing_with_metadata_permission_only() {
-    let service = service(
-        vec![(
-            PERSONAL_INSTALLATION.to_owned(),
-            vec![GithubAppInstallationSource::User(user().to_string())],
-        )],
-        vec![],
-        HashMap::from([(42, vec![repository("owner", "personal")])]),
-    );
-
-    service.for_user(&user()).await.expect("listed");
-
-    let minted = service.client.minted.lock().expect("lock").clone();
-    assert_eq!(
-        minted,
-        vec![(42, vec![("metadata".to_owned(), "read".to_owned())])]
-    );
-}
-
 #[tokio::test]
 async fn a_second_call_is_served_from_the_cache() {
     let service = service(
@@ -478,7 +337,7 @@ async fn an_unavailable_installation_does_not_hide_working_repositories_or_cache
             vec![repository("macro-inc", "macro")]
         );
     }
-    assert_eq!(service.client.minted.lock().unwrap().len(), 4);
+    assert_eq!(service.client.listed.lock().unwrap().len(), 4);
 }
 
 #[tokio::test]

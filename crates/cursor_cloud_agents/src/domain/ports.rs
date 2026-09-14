@@ -4,9 +4,8 @@
 //! client ([`crate::api`]); [`SessionNotifier`] by whatever transport the
 //! session's updates travel over (the ACP stdio connection today, anything
 //! that can carry a `session/update` tomorrow); [`RepositoryChooser`] by
-//! whatever can read the prompt and the user's repositories - the git adapter
-//! in [`crate::outbound`] standalone, a classifier in the harness when the
-//! session belongs to a Macro user. Native records and polling bodies cross these
+//! a classifier for hosted Macro sessions or [`NoRepositoryChooser`] standalone.
+//! Native records and polling bodies cross these
 //! contracts for capture before decoding; HTTP I/O, SSE framing, JSON-RPC, and
 //! subprocesses remain outside the service.
 
@@ -176,8 +175,8 @@ pub struct SessionIntent {
 /// deciding is this port's.
 pub trait RepositoryChooser: Send + Sync {
     /// The repository this prompt's work belongs to, if any, and whether it
-    /// wants a pull request. Standalone adapters resolve the session checkout
-    /// from `cwd`; hosted adapters choose from the prompt.
+    /// wants a pull request. Hosted adapters choose from the prompt; standalone
+    /// sessions leave the repository unset.
     ///
     /// An error is a failed prompt, not a reason to guess: a session pointed at
     /// the wrong repository is worse than a session that says it could not tell.
@@ -186,4 +185,17 @@ pub trait RepositoryChooser: Send + Sync {
         prompt: &str,
         cwd: &std::path::Path,
     ) -> impl Future<Output = Result<SessionIntent, rootcause::Report>> + Send;
+}
+
+/// Leaves repository selection to Cursor in standalone sessions.
+pub struct NoRepositoryChooser;
+
+impl RepositoryChooser for NoRepositoryChooser {
+    async fn choose(
+        &self,
+        _prompt: &str,
+        _cwd: &std::path::Path,
+    ) -> Result<SessionIntent, rootcause::Report> {
+        Ok(SessionIntent::default())
+    }
 }
