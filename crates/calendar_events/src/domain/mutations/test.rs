@@ -1,12 +1,12 @@
 use super::*;
 use crate::domain::models::{
     ActorInboxes, AppliedGoogleGrant, CalendarAttendee, CalendarAttendeeInput,
-    CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventSource, CalendarLinkTokenIdentity,
-    CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, CalendarWatchRelease,
-    ConferenceChange, DisconnectedGoogleCalendar, EventStatus, EventTransparency, EventType,
-    EventVisibility, GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSource,
-    GoogleWatchChannel, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, ProviderCalendar,
-    StoredGoogleCalendar, VisibleCalendar,
+    CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventOverride, CalendarEventSource,
+    CalendarLinkTokenIdentity, CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus,
+    CalendarWatchRelease, ConferenceChange, DisconnectedGoogleCalendar, EventStart, EventStatus,
+    EventTransparency, EventType, EventVisibility, GoogleCalendarSyncSnapshot,
+    GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel, OutOfOfficeAutoDeclineMode,
+    OutOfOfficeProperties, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -418,6 +418,7 @@ struct FakeProvider {
     calls: Arc<Mutex<Vec<String>>>,
     rsvp_self_emails: Arc<Mutex<Vec<Vec<String>>>>,
     echo_attendees: Vec<CalendarAttendee>,
+    echo_overrides: Vec<CalendarEventOverride>,
     created_drafts: Arc<Mutex<Vec<CalendarEventDraft>>>,
     updated_patches: Arc<Mutex<Vec<CalendarEventPatch>>>,
 }
@@ -429,6 +430,7 @@ impl FakeProvider {
             calls: Arc::new(Mutex::new(Vec::new())),
             rsvp_self_emails: Arc::new(Mutex::new(Vec::new())),
             echo_attendees: Vec::new(),
+            echo_overrides: Vec::new(),
             created_drafts: Arc::new(Mutex::new(Vec::new())),
             updated_patches: Arc::new(Mutex::new(Vec::new())),
         }
@@ -437,6 +439,7 @@ impl FakeProvider {
     fn echo(&self, owner_id: &str) -> CalendarEventUpsert {
         let mut upsert = echo_upsert(owner_id);
         upsert.event.attendees = self.echo_attendees.clone();
+        upsert.overrides = self.echo_overrides.clone();
         upsert
     }
 
@@ -1633,6 +1636,117 @@ async fn occurrence_scoped_attendee_update_prefers_the_occurrence_rsvp_over_the_
         Some(AttendeeResponseStatus::Declined),
         "an occurrence-scoped edit keeps the guest's per-instance RSVP, not the series status"
     );
+}
+
+fn echo_override(
+    recurrence_id: &str,
+    attendees: Option<Vec<CalendarAttendee>>,
+) -> CalendarEventOverride {
+    let original_start = Utc.with_ymd_and_hms(2026, 8, 18, 20, 0, 0).unwrap();
+    CalendarEventOverride {
+        recurrence_id: recurrence_id.to_string(),
+        original_time: EventStart::Timed(original_start),
+        time: EventTime::Timed {
+            starts_at: original_start + Duration::hours(1),
+            ends_at: original_start + Duration::hours(2),
+            time_zone: None,
+        },
+        title: Some("Renamed occurrence".to_string()),
+        description: Some("Only this occurrence changed".to_string()),
+        location: None,
+        status: Some(EventStatus::Tentative),
+        attendees,
+    }
+}
+
+/// The provider echo of an occurrence-scoped edit is the series, whose
+/// master keeps the old content; the caller edited one instance, so the
+/// response must read as that instance while the series is what persists.
+#[tokio::test]
+async fn occurrence_scoped_update_answers_with_the_occurrence_not_the_series() {
+    let recurrence_id = "2026-08-18T20:00:00+00:00";
+    let mut provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    provider.echo_overrides = vec![
+        echo_override("2026-08-17T20:00:00+00:00", None),
+        echo_override(recurrence_id, None),
+    ];
+    let repo = FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+
+    let event = service(repo, provider, FakeTokens::ok())
+        .update_event(
+            "macro|user",
+            Uuid::now_v7(),
+            None,
+            CalendarEventPatch {
+                description: Some("Only this occurrence changed".to_string()),
+                ..CalendarEventPatch::default()
+            },
+            CalendarUpdateScope::ThisEvent {
+                recurrence_id: recurrence_id.to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    let expected = echo_override(recurrence_id, None);
+    assert_eq!(event.title, "Renamed occurrence");
+    assert_eq!(
+        event.description.as_deref(),
+        Some("Only this occurrence changed")
+    );
+    assert_eq!(event.status, EventStatus::Tentative);
+    assert_eq!(event.time, expected.time);
+    let persisted = upserts.lock().unwrap();
+    assert_eq!(
+        persisted[0].event.title, "Echo",
+        "the series master is stored untouched; only the response reads as the occurrence"
+    );
+    assert_eq!(persisted[0].overrides.len(), 2);
+}
+
+/// An occurrence-scoped RSVP is recorded on the exception, so the response
+/// must carry that occurrence's attendee list rather than the series answer.
+#[tokio::test]
+async fn occurrence_scoped_rsvp_answers_with_the_occurrence_attendees() {
+    let recurrence_id = "2026-08-18T20:00:00+00:00";
+    let mut series_self = echo_attendee("self@example.com", true);
+    series_self.response_status = AttendeeResponseStatus::Accepted;
+    let mut occurrence_self = series_self.clone();
+    occurrence_self.response_status = AttendeeResponseStatus::Declined;
+    let mut provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    provider.echo_attendees = vec![series_self];
+    provider.echo_overrides = vec![echo_override(recurrence_id, Some(vec![occurrence_self]))];
+
+    let event = service(
+        FakeRepo {
+            mutation_target: Some(mutation_target(false)),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .respond_to_event(
+        "macro|user",
+        Uuid::now_v7(),
+        None,
+        AttendeeResponseStatus::Declined,
+        CalendarRsvpScope::ThisEvent {
+            recurrence_id: recurrence_id.to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let own = event
+        .attendees
+        .iter()
+        .find(|attendee| attendee.is_self)
+        .expect("the requester stays on the occurrence's attendee list");
+    assert_eq!(own.response_status, AttendeeResponseStatus::Declined);
 }
 
 #[tokio::test]
