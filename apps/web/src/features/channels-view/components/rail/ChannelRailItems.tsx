@@ -266,6 +266,8 @@ function MessageSenderName(props: { id?: string }) {
 
 export function ConversationCard(props: ConversationCardProps) {
   const latestRootMessage = () => props.channel.latestRootMessage;
+  const hasMessageMetadata = () =>
+    Boolean(latestRootMessage()?.threadId || props.mentionedCurrentUser);
 
   return (
     <div
@@ -273,7 +275,7 @@ export function ConversationCard(props: ConversationCardProps) {
       role="treeitem"
       tabIndex={-1}
       class={cn(
-        'relative h-20 w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none',
+        'relative h-20 w-full min-w-0 overflow-hidden px-2 py-2 text-left outline-none',
         props.selected && !isTouchDevice() && 'bg-active',
         !props.selected && !isTouchDevice() && props.focused && 'bg-hover',
         (!props.selected || isTouchDevice()) && 'bg-transparent',
@@ -331,9 +333,7 @@ export function ConversationCard(props: ConversationCardProps) {
             </Show>
           </span>
           <Show when={props.showLatestMessage !== false}>
-            <Show
-              when={latestRootMessage()?.threadId || props.mentionedCurrentUser}
-            >
+            <Show when={hasMessageMetadata()}>
               <span class="flex min-w-0 items-center gap-2 text-xxs leading-4 text-ink-extra-muted">
                 <Show when={latestRootMessage()?.threadId}>
                   <span
@@ -356,7 +356,12 @@ export function ConversationCard(props: ConversationCardProps) {
               <Switch>
                 <Match when={latestRootMessage()}>
                   {(message) => (
-                    <div class="line-clamp-2 min-w-0 text-ink-muted">
+                    <div
+                      class={cn(
+                        'min-w-0 text-ink-muted',
+                        hasMessageMetadata() ? 'line-clamp-1' : 'line-clamp-2'
+                      )}
+                    >
                       <span class="inline-flex min-w-0 font-medium">
                         <span class="min-w-0 truncate">
                           <MessageSenderName id={props.senderId} />

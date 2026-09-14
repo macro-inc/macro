@@ -41,6 +41,7 @@ export function useChannelRailActivity(
 
   const notificationActivity = createMemo(() => {
     const unreadChannelIds = new Set<string>();
+    const unreadNotificationIds = new Set<string>();
     const unreadCounts: Record<ChannelsGroup, number> = {
       channels: 0,
       direct_messages: 0,
@@ -63,6 +64,7 @@ export function useChannelRailActivity(
         notification.entity_id
       );
       unreadChannelIds.add(notification.entity_id);
+      unreadNotificationIds.add(notification.id);
 
       const channel = channelsById().get(notification.entity_id);
       if (!channel) continue;
@@ -83,6 +85,7 @@ export function useChannelRailActivity(
     return {
       latestTargets,
       unreadChannelIds,
+      unreadNotificationIds,
       unreadCounts,
     };
   });
@@ -108,7 +111,12 @@ export function useChannelRailActivity(
       }
 
       const channel = channelsById().get(notification.entity_id);
-      if (channel) recordActivity(channel);
+      if (channel) {
+        recordActivity(channel, {
+          type: 'notification',
+          notificationId: notification.id,
+        });
+      }
     })
   );
 
@@ -171,7 +179,21 @@ export function useChannelRailActivity(
 
   const target = (group: ChannelsGroup): ChannelActivityTarget | undefined => {
     const recordedTarget = activityTargets[group];
-    if (recordedTarget) return recordedTarget;
+    if (recordedTarget?.source.type === 'call') return recordedTarget;
+    if (
+      recordedTarget?.source.type === 'notification' &&
+      notificationActivity().unreadNotificationIds.has(
+        recordedTarget.source.notificationId
+      )
+    ) {
+      return recordedTarget;
+    }
+    if (
+      recordedTarget?.source.type === 'message' &&
+      notificationActivity().unreadChannelIds.has(recordedTarget.channelId)
+    ) {
+      return recordedTarget;
+    }
 
     return notificationActivity().latestTargets[group];
   };
