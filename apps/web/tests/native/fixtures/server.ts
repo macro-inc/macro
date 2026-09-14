@@ -63,9 +63,11 @@ export function startFixtureServer(port = 0) {
       if (excludesMail(input)) {
         return { items: [], nextCursor: null };
       }
+      const signalTree = input.initial?.filters?.emailFilter?.tree;
       if (
         input.initial?.emailView !== 'INBOX' ||
-        !JSON.stringify(input.initial.filters).includes('"importance":true')
+        signalTree?.and?.left?.literal?.importance !== true ||
+        signalTree?.and?.right?.literal?.shared !== 'EXCLUDE'
       ) {
         throw new Error('Only the initial Signal view may be fetched online');
       }
