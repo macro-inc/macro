@@ -18,12 +18,11 @@ vi.mock('@ui', async (importOriginal) => {
       ),
       Content: Pass,
       Group: Pass,
-      Item: (props: {
-        children?: import('solid-js').JSX.Element;
-        role?: string;
-        'aria-checked'?: boolean | 'true' | 'false';
-        onSelect: () => void;
-      }) => (
+      Item: (
+        props: import('solid-js').JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
+          onSelect: () => void;
+        }
+      ) => (
         <button
           role={props.role}
           aria-checked={props['aria-checked']}
