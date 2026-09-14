@@ -197,12 +197,8 @@ const ChipHeader: Component<{
   >
     <button
       type="button"
-      class="flex min-w-0 items-center gap-1.5 rounded-md text-left text-ink-extra-muted"
-      classList={{
-        'hover:text-ink': Boolean(props.onOpen),
-        'flex-1': !props.header?.pullRequestUrl,
-        'flex-initial': Boolean(props.header?.pullRequestUrl),
-      }}
+      class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md text-left text-ink-extra-muted"
+      classList={{ 'hover:text-ink': Boolean(props.onOpen) }}
       data-message-reply-preview={props.preview}
       disabled={!props.onOpen}
       onClick={props.onOpen}
@@ -235,7 +231,7 @@ const ChipHeader: Component<{
     </button>
     <Show when={props.header?.pullRequestUrl}>
       {(url) => (
-        <div class="flex min-w-0 flex-1 justify-end overflow-hidden">
+        <div class="flex min-w-0 max-w-[40%] justify-end overflow-hidden">
           <MagicChipPullRequest url={url()} />
         </div>
       )}
