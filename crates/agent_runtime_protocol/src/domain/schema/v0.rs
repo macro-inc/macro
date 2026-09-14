@@ -153,11 +153,6 @@ pub enum ToServerMessage {
         #[specta(type = String)]
         event: SystemEvent,
     },
-    /// The pull request associated with this Macro session, independent of its harness.
-    PullRequestSet {
-        /// Canonical GitHub pull request URL.
-        url: String,
-    },
     /// An answer to a connection-level model probe.
     ModelProbeResponse {
         /// Raw options or a safe failure.

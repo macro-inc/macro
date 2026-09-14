@@ -107,6 +107,7 @@ impl SessionOpener for RecordingOpener {
         request: OpenExternalAgentSession,
     ) -> crate::domain::error::Result<AgentSession> {
         let session = AgentSession {
+            pull_request_url: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: request.owner.clone(),
@@ -140,6 +141,7 @@ impl SessionOpener for RecordingOpener {
             .as_ref()
             .map_or(BotId::TEST_B, |selected| selected.bot_id);
         let session = AgentSession {
+            pull_request_url: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: request.owner.clone(),

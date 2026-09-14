@@ -1,4 +1,8 @@
 import type { MagicChipDecoratorProps } from '@macro-inc/lexical-core';
+import {
+  handleAgentSessionUpdated,
+  invalidateAgentSessionMetadata,
+} from '@queries/agent-session/session-metadata-sync';
 import type {
   FoldedMessage,
   PendingElicitation,
@@ -100,6 +104,56 @@ describe('createMagicChipModel', () => {
       },
     });
     serviceClient.control.mockResolvedValue({ isErr: () => false });
+  });
+
+  it('reloads the session PR on gateway updates and reconnect without folding it', async () => {
+    const snapshot = (pullRequestUrl: string | null) => ({
+      isOk: () => true,
+      value: {
+        status: { kind: 'disconnected' },
+        harness: 'cursor',
+        model: '',
+        canEdit: true,
+        pullRequestUrl,
+      },
+    });
+    const first = 'https://github.com/org/repo/pull/1';
+    const second = 'https://github.com/org/repo/pull/2';
+    serviceClient.get.mockResolvedValue(snapshot(null));
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const dispose = createRoot((dispose) => {
+      model = createMagicChipModel(props);
+      return dispose;
+    });
+    await settle();
+    expect(model.header()?.pullRequestUrl).toBeUndefined();
+
+    let resolveStale!: (value: ReturnType<typeof snapshot>) => void;
+    serviceClient.get.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStale = resolve;
+      })
+    );
+    handleAgentSessionUpdated({ agentSessionId: 'session' });
+    serviceClient.get.mockResolvedValue(snapshot(first));
+    handleAgentSessionUpdated({ agentSessionId: 'session' });
+    await settle();
+    expect(model.header()?.pullRequestUrl).toBe(first);
+    resolveStale(snapshot(null));
+    await settle();
+    expect(model.header()?.pullRequestUrl).toBe(first);
+
+    sessionFold.acquireAgentSessionFold.mock.calls[0]![0].onReplace([]);
+    expect(model.header()?.pullRequestUrl).toBe(first);
+    serviceClient.get.mockResolvedValue(snapshot(second));
+    invalidateAgentSessionMetadata();
+    await settle();
+    expect(model.header()?.pullRequestUrl).toBe(second);
+    dispose();
+    const calls = serviceClient.get.mock.calls.length;
+    handleAgentSessionUpdated({ agentSessionId: 'session' });
+    invalidateAgentSessionMetadata();
+    expect(serviceClient.get).toHaveBeenCalledTimes(calls);
   });
 
   it('follows the latest turn and streaming updates without rewinding for late patches', async () => {

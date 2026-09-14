@@ -180,9 +180,6 @@ async fn run_server<H>(
                             acp_open = false;
                         }
                     }
-                    // Macro's session log consumes these application facts;
-                    // an ACP-only connection has no presentation for them.
-                    ToServerMessage::PullRequestSet { .. } => {}
                     ToServerMessage::ModelProbeResponse { .. } => {
                         tracing::warn!("dropping a model probe response without a probe waiter");
                     }

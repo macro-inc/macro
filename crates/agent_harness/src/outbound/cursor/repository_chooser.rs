@@ -70,7 +70,8 @@ pub struct HaikuRepositoryChooser<Repositories, Sessions> {
 #[derive(Debug, Deserialize)]
 struct ChoiceOutput {
     repository: Option<String>,
-    reason: String,
+    #[serde(rename = "reason")]
+    _reason: String,
 }
 
 impl<Repositories, Sessions> HaikuRepositoryChooser<Repositories, Sessions>
@@ -96,7 +97,27 @@ where
         }
     }
 
+    /// Repositories this owner can reach through Macro's GitHub App.
+    #[tracing::instrument(
+        name = "agent.repository_choice.reachable_repositories",
+        skip_all,
+        err,
+        fields(agent.session.id = %self.session_id)
+    )]
+    async fn reachable_repositories(&self) -> Result<Vec<String>, rootcause::Report> {
+        self.repositories
+            .for_user(&self.owner)
+            .await
+            .map_err(|error| rootcause::report!("could not list reachable repositories: {error}"))
+    }
+
     /// The five prior sessions, excluding the placeholder being initialized.
+    #[tracing::instrument(
+        name = "agent.repository_choice.recent_sessions",
+        skip_all,
+        err,
+        fields(agent.session.id = %self.session_id)
+    )]
     async fn recent_sessions(&self) -> Result<Vec<AgentSession>, rootcause::Report> {
         let recent = self
             .sessions
@@ -116,6 +137,16 @@ where
     }
 
     /// Ask the model, and hold it to the candidate list.
+    #[tracing::instrument(
+        name = "agent.repository_choice.decide",
+        skip_all,
+        err,
+        fields(
+            agent.session.id = %self.session_id,
+            agent.repository_choice.candidate_count = candidates.len(),
+            agent.repository_choice.recent_session_count = recent.len(),
+        )
+    )]
     async fn decide(
         &self,
         prompt: &str,
@@ -138,11 +169,6 @@ where
 
         let output: ChoiceOutput = serde_json::from_value(value)
             .map_err(|error| rootcause::report!("repository choice is not the schema: {error}"))?;
-        tracing::debug!(
-            repository = output.repository.as_deref().unwrap_or("none"),
-            reason = %output.reason,
-            "chose a repository for a cursor session"
-        );
         intent(candidates, output.repository.as_deref())
     }
 }
@@ -152,46 +178,74 @@ where
     Repositories: ReachableRepositories,
     Sessions: AgentSessionRepo,
 {
-    #[tracing::instrument(skip_all, err, fields(session = %self.session_id, owner = %self.owner))]
+    #[tracing::instrument(
+        name = "agent.repository_choice",
+        skip_all,
+        err,
+        fields(
+            agent.session.id = %self.session_id,
+            agent.repository_choice.candidate_count = tracing::field::Empty,
+            agent.repository_choice.recent_session_count = tracing::field::Empty,
+            agent.repository_choice.outcome = tracing::field::Empty,
+        )
+    )]
     async fn choose(
         &self,
         prompt: &str,
         _cwd: &std::path::Path,
     ) -> Result<SessionIntent, rootcause::Report> {
-        let candidates = self
-            .repositories
-            .for_user(&self.owner)
-            .await
-            .map_err(|error| {
-                rootcause::report!("could not list reachable repositories: {error}")
-            })?;
-
-        let chosen = if candidates.is_empty() {
-            // Nothing to choose between, and nothing a model could add. The
-            // session still runs; it just works on no repository.
-            tracing::info!(
-                "no github app installation is reachable for this user; the session works on no repository"
+        let mut had_candidates = false;
+        let result = async {
+            let candidates = self.reachable_repositories().await?;
+            had_candidates = !candidates.is_empty();
+            tracing::Span::current().record(
+                "agent.repository_choice.candidate_count",
+                candidates.len(),
             );
-            SessionIntent::default()
-        } else {
-            let recent = self.recent_sessions().await?;
-            self.decide(prompt, &candidates, &recent).await?
-        };
 
-        // Before the agent is minted, because the row is what the egress proxy
-        // pins git traffic to - and `None` is written too, so a session that
-        // chose nothing cannot reach whatever the row was stamped with at open.
-        self.sessions
-            .set_repo_url(
-                self.session_id,
-                chosen.repository.as_ref().map(ToString::to_string),
-            )
-            .await
-            .map_err(|error| {
-                rootcause::report!("could not record the session's repository: {error}")
-            })?;
+            let chosen = if candidates.is_empty() {
+                // Nothing to choose between, and nothing a model could add. The
+                // session still runs; it just works on no repository.
+                tracing::info!(
+                    "no github app installation is reachable for this user; the session works on no repository"
+                );
+                SessionIntent::default()
+            } else {
+                let recent = self.recent_sessions().await?;
+                tracing::Span::current().record(
+                    "agent.repository_choice.recent_session_count",
+                    recent.len(),
+                );
+                self.decide(prompt, &candidates, &recent).await?
+            };
 
-        Ok(chosen)
+            // Before the agent is minted, because the row is what the egress proxy
+            // pins git traffic to - and `None` is written too, so a session that
+            // chose nothing cannot reach whatever the row was stamped with at open.
+            self.sessions
+                .set_repo_url(
+                    self.session_id,
+                    chosen.repository.as_ref().map(ToString::to_string),
+                )
+                .await
+                .map_err(|error| {
+                    rootcause::report!("could not record the session's repository: {error}")
+                })?;
+
+            Ok(chosen)
+        }
+        .await;
+
+        tracing::Span::current().record(
+            "agent.repository_choice.outcome",
+            match &result {
+                Ok(chosen) if chosen.repository.is_some() => "selected",
+                Ok(_) if !had_candidates => "no_candidates",
+                Ok(_) => "none",
+                Err(_) => "failed",
+            },
+        );
+        result
     }
 }
 

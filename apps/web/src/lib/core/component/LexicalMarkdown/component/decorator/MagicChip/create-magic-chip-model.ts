@@ -12,15 +12,16 @@ import {
   type MagicChipData,
   type MagicChipStatus,
 } from '@macro-inc/lexical-core';
+import { fetchAgentSession } from '@queries/agent-session/session';
 import {
   acquireAgentSessionFold,
   subscribeAgentSessionLog,
 } from '@queries/agent-session/session-fold';
+import { subscribeAgentSessionUpdated } from '@queries/agent-session/session-metadata-sync';
 import type {
   FoldedMessage,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentSessionLogEntryDto,
   SessionStatusDto,
@@ -51,7 +52,11 @@ function magicChipStatus(
 }
 
 /** What the session row says about who runs it, until the fold says more. */
-type SessionIdentity = { harness: string; model: string };
+type SessionIdentity = {
+  harness: string;
+  model: string;
+  pullRequestUrl?: string | null;
+};
 
 /**
  * The persona as the header names it: the runtime's product name followed
@@ -109,17 +114,20 @@ export function createMagicChipModel(props: MagicChipData): {
     }
   );
 
+  let refreshVersion = 0;
   const refreshStatus = async () => {
+    const version = ++refreshVersion;
     statusPolls += 1;
-    const result = await agentHarnessServiceClient
-      .get(props.agentSessionId)
-      .catch(() => undefined);
-    if (!active) return;
+    const result = await fetchAgentSession(props.agentSessionId).catch(
+      () => undefined
+    );
+    if (!active || version !== refreshVersion) return;
     if (result?.isOk()) {
       setCanEdit(result.value.canEdit);
       setSession({
         harness: result.value.harness,
         model: result.value.model,
+        pullRequestUrl: result.value.pullRequestUrl,
       });
     }
     const status = result?.isOk()
@@ -132,6 +140,12 @@ export function createMagicChipModel(props: MagicChipData): {
       statusTimer = setTimeout(refreshStatus, STATUS_POLL_INTERVAL_MS);
     }
   };
+  const unsubscribeMetadata = subscribeAgentSessionUpdated(
+    props.agentSessionId,
+    () => {
+      void refreshStatus();
+    }
+  );
   void refreshStatus();
 
   void acquireAgentSessionFold({
@@ -171,6 +185,7 @@ export function createMagicChipModel(props: MagicChipData): {
     active = false;
     clearTimeout(statusTimer);
     unsubscribe();
+    unsubscribeMetadata();
     release?.();
   });
 
@@ -223,7 +238,7 @@ export function createMagicChipModel(props: MagicChipData): {
   const header = createMemo((): MagicChipHeader | undefined => {
     const agent = agentName(session()?.harness);
     const model = modelName(metadata(), session());
-    const pullRequestUrl = metadata()?.pullRequestUrl ?? undefined;
+    const pullRequestUrl = session()?.pullRequestUrl ?? undefined;
     return agent || model || pullRequestUrl
       ? { agent, model, pullRequestUrl }
       : undefined;

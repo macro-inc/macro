@@ -9,8 +9,8 @@ use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
     AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, Message, ReplicaAddress, ReplicaId,
-    SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, ReplicaAddress, ReplicaId, SandboxSize,
+    SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -129,6 +129,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let now = chrono::Utc::now();
         let session = AgentSession {
+            pull_request_url: None,
             id: params.id,
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: params.owner_id,
@@ -635,27 +636,7 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
             }
         }
         let session = log.agent_session_id;
-        let pull_request = if boundary.is_some() {
-            self.logs
-                .lock()
-                .unwrap()
-                .get(&session)
-                .and_then(|rows| {
-                    rows.iter().rev().find(|row| {
-                        matches!(
-                            &row.entry.content,
-                            Message::ToServer(ToServerMessage::PullRequestSet { .. })
-                        )
-                    })
-                })
-                .map(|row| row.entry.clone())
-        } else {
-            None
-        };
         let stored = self.create_log(log)?;
-        if let Some(pr) = pull_request {
-            self.create_log(pr)?;
-        }
         if let Some(boundary) = boundary {
             self.history_boundaries
                 .lock()
@@ -709,6 +690,7 @@ impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
 pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     let now = chrono::Utc::now();
     AgentSession {
+        pull_request_url: None,
         id,
         name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
         owner_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
@@ -743,6 +725,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
 #[derive(Debug, Clone, Default)]
 pub struct RecordingRealtime {
     published: Arc<Mutex<Vec<LogAppended>>>,
+    updated: Arc<Mutex<Vec<AgentSessionId>>>,
     down: bool,
 }
 
@@ -758,8 +741,14 @@ impl RecordingRealtime {
     pub fn down() -> Self {
         Self {
             published: Arc::default(),
+            updated: Arc::default(),
             down: true,
         }
+    }
+
+    /// Sessions whose persisted metadata changed.
+    pub fn updated(&self) -> Vec<AgentSessionId> {
+        self.updated.lock().unwrap().clone()
     }
 
     /// Everything published, in order.
@@ -773,6 +762,17 @@ impl RecordingRealtime {
 }
 
 impl AgentSessionRealtime for RecordingRealtime {
+    async fn publish_updated(
+        &self,
+        session: AgentSessionId,
+    ) -> std::result::Result<(), rootcause::Report> {
+        if self.down {
+            return Err(rootcause::report!("the connection gateway is down"));
+        }
+        self.updated.lock().unwrap().push(session);
+        Ok(())
+    }
+
     async fn publish(&self, event: LogAppended) -> std::result::Result<(), rootcause::Report> {
         if self.down {
             return Err(rootcause::report!("the connection gateway is down"));
@@ -855,33 +855,17 @@ impl crate::domain::pull_request::SessionPullRequestRepo for InMemoryAgentSessio
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
         url: &str,
-    ) -> Result<Option<StoredAgentSessionLog>> {
-        let _transaction = self.log_transaction.lock().unwrap();
-        if !self
-            .sessions
-            .lock()
-            .unwrap()
-            .get(&session)
-            .is_some_and(|stored| &stored.owner_id == owner)
-        {
-            return Err(AgentSessionError::Forbidden);
+    ) -> Result<bool> {
+        let mut sessions = self.sessions.lock().unwrap();
+        let stored = sessions
+            .get_mut(&session)
+            .filter(|stored| &stored.owner_id == owner)
+            .ok_or(AgentSessionError::Forbidden)?;
+        if stored.pull_request_url.as_deref() == Some(url) {
+            return Ok(false);
         }
-        let previous = self.logs.lock().unwrap().get(&session).and_then(|rows| {
-            rows.iter().rev().find_map(|row| match &row.entry.content {
-                Message::ToServer(ToServerMessage::PullRequestSet { url }) => Some(url.clone()),
-                _ => None,
-            })
-        });
-        if previous.as_deref() == Some(url) {
-            return Ok(None);
-        }
-        self.create_log(AgentSessionLog {
-            agent_session_id: session,
-            user_id: Some(owner.clone()),
-            content: Message::ToServer(ToServerMessage::PullRequestSet {
-                url: url.to_owned(),
-            }),
-        })
-        .map(Some)
+        stored.pull_request_url = Some(url.to_owned());
+        stored.modified_at = chrono::Utc::now();
+        Ok(true)
     }
 }

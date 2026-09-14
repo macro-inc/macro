@@ -1,7 +1,7 @@
 //! Cursor cloud agents, through this repository's `cursor_cloud_agents`
 //! translator (`agentInfo.name = "cursor-acp"`).
 //!
-//! Cursor's subagent tool is `task`, kind
+//! The translator writes no `_meta`. Cursor's subagent tool is `task`, kind
 //! `other`, with the Task-tool arguments in Cursor's own spelling:
 //!
 //! ```json

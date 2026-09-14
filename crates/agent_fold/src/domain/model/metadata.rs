@@ -67,9 +67,6 @@ pub struct SessionMetadata {
     /// nothing is pending, when the turn that asked has ended, or when the
     /// connection that asked is gone - the request id dies with it.
     pub pending_elicitation: Option<PendingElicitation>,
-    /// The session's PR, set by a provider adapter or its MCP tool.
-    /// Derived from durable `PullRequestSet` events; latest value wins.
-    pub pull_request_url: Option<String>,
 }
 
 /// One slash command the harness advertises.

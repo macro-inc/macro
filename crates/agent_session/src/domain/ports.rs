@@ -665,6 +665,14 @@ pub trait AgentSessionRealtime {
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 
+    /// Tell viewers to refetch changed session metadata.
+    fn publish_updated(
+        &self,
+        _session: AgentSessionId,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+
     /// Publish a user-facing name change to the session's viewers.
     fn publish_renamed(
         &self,

@@ -118,7 +118,16 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         })).await;
         assert!(called.get("error").is_none(), "{called}");
         assert_ne!(called["result"]["isError"], true, "{called}");
-        assert_eq!(repo.list_by_session(session.id).await.unwrap().len(), 1);
+        assert_eq!(
+            repo.get(session.id)
+                .await
+                .unwrap()
+                .pull_request_url
+                .as_deref(),
+            Some("https://github.com/org/repo/pull/1")
+        );
+        assert_eq!(repo.get(other.id).await.unwrap().pull_request_url, None);
+        assert!(repo.list_by_session(session.id).await.unwrap().is_empty());
         assert!(repo.list_by_session(other.id).await.unwrap().is_empty());
         repo.set_egress_token_hash(session.id, &SessionToken::new("rotated").hash())
             .await

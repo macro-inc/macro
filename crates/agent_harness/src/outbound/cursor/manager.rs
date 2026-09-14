@@ -231,6 +231,12 @@ where
     /// Built per session and dropped with it, rather than held on the manager:
     /// the key belongs to one user, and the sessions of two users must not be
     /// able to reach each other's Cursor accounts through a shared client.
+    #[tracing::instrument(
+        name = "cursor.client.resolve",
+        skip_all,
+        err,
+        fields(agent.session.id = %session.id)
+    )]
     async fn client_for(&self, session: &AgentSession) -> Result<(CursorClient, Option<String>)> {
         let config = self.keys.resolve(&session.owner_id).await?;
         let client = CursorClient::new(CursorConfig {
@@ -606,8 +612,11 @@ where
     }
 
     #[tracing::instrument(skip_all, err, fields(
-        session = %self.session_id,
-        mcp_servers = mcp_servers.len(),
+        agent.session.id = %self.session_id,
+        cursor.repository.configured = repo.is_some(),
+        cursor.pull_request.auto_create = open_pull_request && repo.is_some(),
+        cursor.model.configured = model.is_some(),
+        cursor.mcp_server.count = mcp_servers.len(),
     ))]
     async fn create_agent(
         &self,
@@ -645,6 +654,15 @@ where
         Ok((agent, run))
     }
 
+    #[tracing::instrument(
+        skip_all,
+        err,
+        fields(
+            agent.session.id = %self.session_id,
+            cursor.agent.id = %agent,
+            cursor.model.configured = model.is_some(),
+        )
+    )]
     async fn create_run(
         &self,
         agent: &CursorAgentId,

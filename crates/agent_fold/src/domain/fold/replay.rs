@@ -81,7 +81,6 @@ impl Replay {
         for entry in transaction.entries {
             state.step(entry);
         }
-        state.metadata.pull_request_url = committed.metadata.pull_request_url.clone();
         state.replaying = false;
         *committed = state;
         Outcome::Replaced
@@ -97,12 +96,6 @@ impl Replay {
             return Outcome::Staged;
         }
         self.session = Some(entry.agent_session_id);
-        if matches!(
-            &entry.content,
-            Message::ToServer(ToServerMessage::PullRequestSet { .. })
-        ) {
-            return Outcome::Changes(committed.step(entry));
-        }
         if let Message::ToServer(ToServerMessage::Event { event }) = &entry.content {
             if matches!(event, SystemEvent::AcpReady | SystemEvent::Disconnected) {
                 self.quarantined |=

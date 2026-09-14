@@ -1839,7 +1839,7 @@ async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
         repo.record_pull_request(session.id, &session.owner_id, url),
     );
     assert_eq!(
-        usize::from(first.unwrap().is_some()) + usize::from(second.unwrap().is_some()),
+        usize::from(first.unwrap()) + usize::from(second.unwrap()),
         1
     );
     let replica = ReplicaId::mint();
@@ -1863,14 +1863,24 @@ async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(log[0].id, initialization.id);
-    assert!(
-        matches!(&log.last().unwrap().entry.content, Message::ToServer(ToServerMessage::PullRequestSet { url: stored }) if stored == url)
+    assert_eq!(
+        log.len(),
+        2,
+        "registering a PR does not add protocol frames"
     );
-    assert!(
-        repo.record_pull_request(session.id, &session.owner_id, url)
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
             .await
             .unwrap()
-            .is_none()
+            .pull_request_url
+            .as_deref(),
+        Some(url)
+    );
+    assert!(
+        !repo
+            .record_pull_request(session.id, &session.owner_id, url)
+            .await
+            .unwrap()
     );
 }
 

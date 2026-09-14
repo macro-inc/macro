@@ -5,8 +5,9 @@ use std::pin::Pin;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{AgentSessionError, Result};
-use super::model::{AgentSessionId, LogAppended, StoredAgentSessionLog};
+use super::model::AgentSessionId;
 use super::ports::{AgentSessionRealtime, AgentSessionRepo};
+use tracing::Instrument;
 
 #[cfg(test)]
 mod test;
@@ -22,15 +23,15 @@ pub trait SessionPullRequests: Send + Sync {
     ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>>;
 }
 
-/// Atomic storage of a session's PR, serialized with history replacement.
+/// Persist the session's current PR independently of conversation history.
 pub trait SessionPullRequestRepo: Send + Sync {
-    /// Append only if the current URL differs, under the session row lock.
+    /// Update only if the current URL differs; return whether the row changed.
     fn record_pull_request(
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
         url: &str,
-    ) -> impl Future<Output = Result<Option<StoredAgentSessionLog>>> + Send;
+    ) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Session PR operations over the session store and its realtime publisher.
@@ -57,21 +58,49 @@ where
         owner: &'a MacroUserIdStr<'static>,
         url: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>> {
-        Box::pin(async move {
-            let stored = self.repo.get(session).await?;
-            if &stored.owner_id != owner {
-                return Err(AgentSessionError::Forbidden);
+        let span = tracing::info_span!(
+            "agent.session.set_pull_request",
+            agent.session.id = %session,
+            outcome = tracing::field::Empty,
+        );
+        Box::pin(
+            async move {
+                let result = async {
+                    let stored = self.repo.get(session).await?;
+                    if &stored.owner_id != owner {
+                        return Err(AgentSessionError::Forbidden);
+                    }
+                    let url = canonical_url(url)?;
+                    let changed = self.repo.record_pull_request(session, owner, &url).await?;
+                    tracing::Span::current()
+                        .record("outcome", if changed { "updated" } else { "unchanged" });
+                    if changed {
+                        // Persistence is authoritative; viewers refetch on reconnect.
+                        if let Err(error) = self.realtime.publish_updated(session).await {
+                            tracing::warn!(?error, "could not publish session metadata update");
+                        }
+                    }
+                    Ok(url)
+                }
+                .await;
+                if let Err(error) = &result {
+                    tracing::Span::current().record(
+                        "outcome",
+                        if matches!(
+                            error,
+                            AgentSessionError::Forbidden | AgentSessionError::InvalidPullRequestUrl
+                        ) {
+                            "rejected"
+                        } else {
+                            "failed"
+                        },
+                    );
+                    tracing::warn!(?error, "could not set session pull request");
+                }
+                result
             }
-            let url = canonical_url(url)?;
-            let Some(entry) = self.repo.record_pull_request(session, owner, &url).await? else {
-                return Ok(url);
-            };
-            // The durable event is authoritative; reconnect catches up if delivery fails.
-            self.realtime.publish(LogAppended { agent_session_id: session, entry }).await
-                .inspect_err(|error| tracing::warn!(error = ?error, %session, "could not publish session pull request"))
-                .ok();
-            Ok(url)
-        })
+            .instrument(span),
+        )
     }
 }
 

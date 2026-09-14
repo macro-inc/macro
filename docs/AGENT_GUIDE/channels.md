@@ -102,7 +102,9 @@ Every harness receives a shared prompt instruction to register PRs. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
 automatic creation can finish after the agent stops. Repeated registration is
-idempotent, and the typed session event preserves the chip link through reloads.
+idempotent. The PR URL is stored on the session row, independently of conversation
+history. Registration sends a session-update gateway notification so mounted
+chips reload the current link; reconnecting also refreshes it.
 
 When Cursor opens a pull request, the chip header shows its GitHub link as soon
 as the run reports it, including after restoring a session. The link remains

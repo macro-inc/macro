@@ -8,12 +8,18 @@ import {
   AGENT_SESSION_LOG_EVENT,
   AGENT_SESSION_QUEUE_EVENT,
   AGENT_SESSION_RENAMED_EVENT,
+  AGENT_SESSION_UPDATED_EVENT,
   type AgentSessionLogEvent,
   type AgentSessionQueueEvent,
   type AgentSessionRenamedEvent,
+  type AgentSessionUpdatedEvent,
 } from '@queries/agent-session/realtime-protocol';
 import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
-import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
+import {
+  handleAgentSessionRenamed,
+  handleAgentSessionUpdated,
+  invalidateAgentSessionMetadata,
+} from '@queries/agent-session/session-metadata-sync';
 import {
   handleCommsAttachment,
   handleCommsMessage,
@@ -64,6 +70,10 @@ function withParsedWebsocketPayload<T>(
 
 export function QuerySyncProvider(props: SyncProviderProps) {
   // Also cover the first connection: a lookup can finish before the socket opens.
+  ws.addEventListener(WebsocketEvent.Open, invalidateAgentSessionMetadata);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidateAgentSessionMetadata)
+  );
   ws.addEventListener(WebsocketEvent.Open, invalidatePullRequestMentions);
   onCleanup(() =>
     ws.removeEventListener(WebsocketEvent.Open, invalidatePullRequestMentions)
@@ -90,6 +100,13 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           data.type,
           data.data,
           handleAgentSessionLog
+        );
+      })
+      .with({ type: AGENT_SESSION_UPDATED_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionUpdatedEvent>(
+          data.type,
+          data.data,
+          handleAgentSessionUpdated
         );
       })
       .with({ type: AGENT_SESSION_RENAMED_EVENT }, () => {

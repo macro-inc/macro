@@ -473,6 +473,8 @@ pub struct AgentSessionResponse {
     /// The repository the session works with, when one was stated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repo_url: Option<String>,
+    /// The session's linked pull request.
+    pub pull_request_url: Option<String>,
     /// The directory the session's harness runs in on its runtime.
     pub workspace: String,
     /// Compute tier of the managed sandbox.
@@ -534,6 +536,7 @@ impl AgentSessionResponse {
             model: session.model,
             harness: session.harness,
             repo_url: session.repo_url,
+            pull_request_url: session.pull_request_url,
             workspace: session.workspace,
             sandbox_size: session.sandbox_size,
             instructions: session.instructions,

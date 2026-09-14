@@ -59,3 +59,8 @@ export function useAgentSessionExternalUrlQuery(
     };
   });
 }
+
+/** Load the persisted session metadata used by the Magic Chip. */
+export function fetchAgentSession(id: string) {
+  return agentHarnessServiceClient.get(id);
+}

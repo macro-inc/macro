@@ -1,7 +1,6 @@
 use super::*;
-use crate::domain::{model::Message, ports::AgentSessionLogRepo};
+use crate::domain::ports::AgentSessionLogRepo;
 use crate::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
-use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
 
 #[test]
 fn normalizes_pr_urls_and_rejects_non_pr_destinations() {
@@ -52,12 +51,16 @@ async fn persists_and_publishes_once_and_rejects_another_owner() {
         .set_pull_request(session.id, &session.owner_id, url)
         .await
         .unwrap();
-    let log = repo.list_by_session(session.id).await.unwrap();
-    assert_eq!(log.len(), 1);
-    assert!(
-        matches!(&log[0].entry.content, Message::ToServer(ToServerMessage::PullRequestSet { url: stored }) if stored == url)
+    assert!(repo.list_by_session(session.id).await.unwrap().is_empty());
+    assert_eq!(
+        repo.get(session.id)
+            .await
+            .unwrap()
+            .pull_request_url
+            .as_deref(),
+        Some(url)
     );
-    assert_eq!(realtime.published().len(), 1);
+    assert_eq!(realtime.updated(), [session.id]);
     service
         .set_pull_request(
             session.id,
@@ -66,5 +69,35 @@ async fn persists_and_publishes_once_and_rejects_another_owner() {
         )
         .await
         .unwrap();
-    assert_eq!(repo.list_by_session(session.id).await.unwrap().len(), 2);
+    assert!(repo.list_by_session(session.id).await.unwrap().is_empty());
+    assert_eq!(
+        repo.get(session.id)
+            .await
+            .unwrap()
+            .pull_request_url
+            .as_deref(),
+        Some("https://github.com/org/repo/pull/124")
+    );
+    assert_eq!(realtime.updated(), [session.id, session.id]);
+}
+
+#[tokio::test]
+async fn gateway_failure_does_not_undo_the_persisted_link() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_agent_session(AgentSessionId::new());
+    repo.insert_session(session.clone());
+    let service = SessionPullRequestService::new(repo.clone(), RecordingRealtime::down());
+    let url = "https://github.com/org/repo/pull/123";
+    service
+        .set_pull_request(session.id, &session.owner_id, url)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.get(session.id)
+            .await
+            .unwrap()
+            .pull_request_url
+            .as_deref(),
+        Some(url)
+    );
 }

@@ -53,12 +53,8 @@ export type ToServerMessage =
 /**  A runtime or agent lifecycle event. */
 ({ type: "event";
 /**  The event name. */
-event: string }) & { result?: never; url?: never } |
-/**  The pull request associated with this Macro session, independent of its harness. */
-({ type: "pullRequestSet";
-/**  Canonical GitHub pull request URL. */
-url: string }) & { event?: never; result?: never } |
+event: string }) & { result?: never } |
 /**  An answer to a connection-level model probe. */
 ({ type: "modelProbeResponse";
 /**  Raw options or a safe failure. */
-result: ModelProbeResult }) & { event?: never; url?: never };
+result: ModelProbeResult }) & { event?: never };

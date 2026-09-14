@@ -387,12 +387,6 @@ impl FoldState {
                 StepChange::metadata(changed)
             }
 
-            Message::ToServer(ToServerMessage::PullRequestSet { url }) => {
-                let changed = self.metadata.pull_request_url.as_ref() != Some(url);
-                self.metadata.pull_request_url = Some(url.clone());
-                StepChange::metadata(changed)
-            }
-
             // The wrapped protocol enums are `#[non_exhaustive]`.
             Message::ToServer(_) | Message::ToRuntime(_) => Vec::new(),
         }

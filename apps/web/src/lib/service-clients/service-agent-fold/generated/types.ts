@@ -753,11 +753,6 @@ export type SessionMetadata = {
    *  connection that asked is gone - the request id dies with it.
    */
   pendingElicitation: PendingElicitation | null;
-  /**
-   *  The session's PR, set by a provider adapter or its MCP tool.
-   *  Derived from durable `PullRequestSet` events; latest value wins.
-   */
-  pullRequestUrl: string | null;
 };
 
 /**
