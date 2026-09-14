@@ -1,4 +1,4 @@
-use crate::constants::SLOW_WEBSOCKET_OPERATION_THRESHOLD;
+use crate::constants::{SLOW_WEBSOCKET_OPERATION_THRESHOLD, WEBSOCKET_QUEUE_SEND_TIMEOUT};
 use crate::model::{
     connection::{Connection, StoredConnectionEntity},
     message::{Message, OutgoingMessage},
@@ -230,7 +230,7 @@ impl ConnectionManager {
         let started = tokio::time::Instant::now();
         let mut send = std::pin::pin!(sender.send(OutgoingMessage::Message(message)));
         let result = tokio::select! {
-            result = &mut send => result,
+            result = &mut send => Some(result),
             () = tokio::time::sleep(SLOW_WEBSOCKET_OPERATION_THRESHOLD) => {
                 let depth = max_capacity.saturating_sub(sender.capacity());
                 tracing::warn!(
@@ -239,18 +239,32 @@ impl ConnectionManager {
                     connection.queue.max_capacity = max_capacity,
                     "websocket outbound queue send is blocked"
                 );
-                send.await
+                // Diagnostics do not cancel the send, but they do not let it
+                // run forever either: past this the consumer is treated as
+                // gone rather than slow, because waiting on it is indistinguishable
+                // from being down to everyone publishing through here.
+                tokio::time::timeout(WEBSOCKET_QUEUE_SEND_TIMEOUT, send).await.ok()
             }
         };
         let wait = started.elapsed();
         span.record("connection.queue.wait_ms", wait.as_millis() as u64);
 
-        if let Err(err) = result {
-            self.remove_connection(id).await?;
-            anyhow::bail!("failed to send message: {}", err);
+        match result {
+            Some(Ok(())) => Ok(()),
+            Some(Err(err)) => {
+                self.remove_connection(id).await?;
+                anyhow::bail!("failed to send message: {}", err);
+            }
+            // The queue never made room. Dropping the connection also aborts
+            // its forwarder, which is the task that stopped draining.
+            None => {
+                self.remove_connection(id).await?;
+                anyhow::bail!(
+                    "outbound queue send timed out after {:?}",
+                    WEBSOCKET_QUEUE_SEND_TIMEOUT
+                );
+            }
         }
-
-        Ok(())
     }
 
     pub fn get_entries_by_entity<'a>(

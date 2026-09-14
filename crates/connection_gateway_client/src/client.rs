@@ -10,6 +10,16 @@ use model_entity::Entity;
 mod calendar;
 mod email;
 
+/// How long any one call to the connection gateway may take.
+///
+/// Delivery is best-effort for every caller - the gateway drops frames a
+/// consumer cannot take - so a caller gains nothing by waiting indefinitely,
+/// and some lose a great deal: an agent session's frame writer holds a
+/// one-minute budget per frame and tears the session down when it runs out.
+/// Comfortably above the gateway's own queue timeout, so its error arrives
+/// here rather than being pre-empted by ours.
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
 /// HTTP client for communicating with the connection gateway service.
 #[derive(Clone, Debug)]
 pub struct ConnectionGatewayClient {
@@ -36,6 +46,7 @@ impl ConnectionGatewayClient {
 
         let client = reqwest::Client::builder()
             .default_headers(headers)
+            .timeout(REQUEST_TIMEOUT)
             .build()
             .unwrap();
 
