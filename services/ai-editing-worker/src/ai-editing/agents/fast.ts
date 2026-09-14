@@ -12,7 +12,8 @@ import {
   createReadDocumentTool,
   createRunCodeTool,
   type DispatchEditTrace,
-  normalizeSnippets,
+  type SnippetPair,
+  snippetsToRecord,
   type Writer,
 } from '../tools';
 import { numberLines, serializeWithXml } from '../utils';
@@ -116,7 +117,6 @@ export async function fastEditor(
       tools: {
         runCode: createRunCodeTool({
           session,
-          snippetShape: 'pairs',
           doc: writer.doc,
           awarenessSource: writer.awarenessSource,
           params: opts.params,
@@ -155,13 +155,10 @@ export async function fastEditor(
     const codes: CoderRunCode[] = toolCalls
       .filter((call) => call.toolName === 'runCode')
       .map((call, i) => {
-        const input = call.input as {
-          code: string;
-          snippets?: Parameters<typeof normalizeSnippets>[0];
-        };
+        const input = call.input as { code: string; snippets?: SnippetPair[] };
         return {
           code: input.code,
-          snippets: normalizeSnippets(input.snippets),
+          snippets: snippetsToRecord(input.snippets),
           result: trace.runCodeResults[i],
         };
       });
