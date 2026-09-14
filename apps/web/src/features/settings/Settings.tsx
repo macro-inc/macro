@@ -27,6 +27,7 @@ import SignOutIcon from '@phosphor/sign-out.svg';
 import { useLocation } from '@solidjs/router';
 import { Button, cn, Layer, SideNav } from '@ui';
 import {
+  createMemo,
   createRenderEffect,
   createSignal,
   For,
@@ -47,7 +48,9 @@ import { Crm } from './Crm';
 import { Harness } from './Harness';
 import { MobileApp } from './MobileApp';
 import { Notifications } from './Notifications';
+import { SettingsSearch } from './SettingsSearch';
 import { Shortcuts } from './Shortcuts';
+import { buildSettingsSearchIndex, searchSettings } from './settingsSearch';
 import { Tags } from './Tags';
 import { Team } from './Team';
 
@@ -218,6 +221,15 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const tabItems = () =>
     flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }));
 
+  // Sidebar search over pages and the content inside them. The index is built
+  // from the available tabs so gated pages never show up as results.
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const searchIndex = createMemo(() => buildSettingsSearchIndex(flatTabs()));
+  const searchResults = createMemo(() =>
+    searchSettings(searchQuery(), searchIndex())
+  );
+  const searching = () => searchQuery().trim().length > 0;
+
   // "Back to app" — the close affordance for solo settings. Laid out like a nav row.
   const backToApp = () => (
     <button
@@ -322,24 +334,34 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 {moveToSplitButton()}
               </div>
             </Show>
-            <For each={groups()}>
-              {(group) => (
-                <SideNav.Group label={group.label}>
-                  <For each={group.items}>
-                    {(item) => (
-                      <SideNav.Item
-                        icon={item.icon}
-                        active={activeTabId() === item.tab}
-                        onSelect={() => handleTabChange(item.tab)}
-                        class="text-xs py-1.5"
-                      >
-                        {item.label}
-                      </SideNav.Item>
-                    )}
-                  </For>
-                </SideNav.Group>
-              )}
-            </For>
+            <SettingsSearch
+              query={searchQuery()}
+              onQueryChange={setSearchQuery}
+              results={searchResults()}
+              onSelect={(entry) => handleTabChange(entry.tab)}
+              onEscape={() => closeSettings()}
+            />
+            {/* While a query is typed the search results stand in for the groups. */}
+            <Show when={!searching()}>
+              <For each={groups()}>
+                {(group) => (
+                  <SideNav.Group label={group.label}>
+                    <For each={group.items}>
+                      {(item) => (
+                        <SideNav.Item
+                          icon={item.icon}
+                          active={activeTabId() === item.tab}
+                          onSelect={() => handleTabChange(item.tab)}
+                          class="text-xs py-1.5"
+                        >
+                          {item.label}
+                        </SideNav.Item>
+                      )}
+                    </For>
+                  </SideNav.Group>
+                )}
+              </For>
+            </Show>
             <div class="mt-auto border-t border-edge-muted pt-2">
               <button
                 type="button"
