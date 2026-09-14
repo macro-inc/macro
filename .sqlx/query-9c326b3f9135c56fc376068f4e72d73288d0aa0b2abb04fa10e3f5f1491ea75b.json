@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT 1 AS \"one!\"\n        FROM agent_session\n        WHERE id = $1 AND manager_fence = $2\n        FOR UPDATE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "one!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9c326b3f9135c56fc376068f4e72d73288d0aa0b2abb04fa10e3f5f1491ea75b"
+}

@@ -16,7 +16,7 @@ async fn owner_activation_failure_releases_reservation_without_starting_actor() 
     let fx = fixture();
     let reservation = fx.service.reserve_attach(fx.session).await.unwrap();
     let session = fx.repo.get(fx.session).await.unwrap();
-    let claim = claim_for_test(&fx.repo, fx.session).await;
+    let lock = lock_for_test(&fx.repo, fx.session).await;
     let called = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let observed = called.clone();
     let result = fx
@@ -24,14 +24,12 @@ async fn owner_activation_failure_releases_reservation_without_starting_actor() 
         .activate_reserved(
             session,
             RuntimeAttachment::solo(RejectOwner).on_activate(Box::new(move |actual| {
-                assert_eq!(actual.session, claim.session);
-                assert_eq!(actual.replica, claim.replica);
-                assert_eq!(actual.fence, claim.fence);
+                assert_eq!(actual, lock);
                 observed.store(true, std::sync::atomic::Ordering::SeqCst);
                 Err(TransportError::Client("stale attachment".into()).into())
             })),
             reservation,
-            claim,
+            lock,
         )
         .await;
     assert!(matches!(result, Err(AgentSessionError::Transport(_))));

@@ -1,85 +1,65 @@
-//! PostgreSQL native journal, fenced by the existing session management claim.
+//! PostgreSQL native journal, written under the session's lock.
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput};
 use crate::domain::model::CursorRunId;
 use agent_client_protocol::schema::v1::SessionId;
-use agent_session::domain::model::{AgentSessionId, ManagerFence, ReplicaId};
+use agent_session::domain::model::{AgentSessionId, SessionLock};
 use futures::future::BoxFuture;
 use sqlx::PgPool;
 use tracing::Instrument;
 
-/// Bound to exactly one authorized host session and its current management
-/// claim. A takeover updates the same locked row and invalidates this writer.
+/// Bound to exactly one host session and the lock its attach took. A
+/// takeover bumps the same locked row's token and invalidates this writer.
 #[derive(Debug)]
 pub struct PgCursorJournal {
     pool: PgPool,
     session: AgentSessionId,
-    replica: ReplicaId,
-    fence: std::sync::OnceLock<ManagerFence>,
+    lock: std::sync::OnceLock<SessionLock>,
 }
 impl PgCursorJournal {
     /// Construct an inactive journal. The attachment must activate it with
-    /// its actual acquired claim before any read, append or provider action.
-    pub fn new(pool: PgPool, session: AgentSessionId, replica: ReplicaId) -> Self {
+    /// the lock it actually acquired before any read, append or provider action.
+    pub fn new(pool: PgPool, session: AgentSessionId) -> Self {
         Self {
             pool,
             session,
-            replica,
-            fence: std::sync::OnceLock::new(),
+            lock: std::sync::OnceLock::new(),
         }
     }
-    /// Bind once to the exact generation acquired for this attachment.
-    /// Never infer or refresh authority from a database read.
-    pub fn activate(
-        &self,
-        session: AgentSessionId,
-        replica: ReplicaId,
-        fence: ManagerFence,
-    ) -> Result<(), rootcause::Report> {
-        if session != self.session || replica != self.replica {
+    /// Bind once to the exact lock acquired for this attachment. Never infer
+    /// or refresh authority from a database read.
+    pub fn activate(&self, lock: SessionLock) -> Result<(), rootcause::Report> {
+        if lock.session() != self.session {
             return Err(rootcause::report!(
                 "Cursor journal attachment identity mismatch"
             ));
         }
-        if self.fence.set(fence).is_err() && self.fence.get() != Some(&fence) {
+        if self.lock.set(lock).is_err() && self.lock.get() != Some(&lock) {
             return Err(rootcause::report!(
                 "Cursor journal attachment cannot be rebound"
             ));
         }
         Ok(())
     }
-    /// Its own span because its duration is the row-lock wait: the one
-    /// number that tells a contended row apart from a slow database or a
-    /// slow Cursor API when a journal write looks stuck.
-    #[tracing::instrument(name = "cursor.journal.lock_owner", skip_all)]
-    async fn lock_owner(
+    async fn hold_lock(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<(), rootcause::Report> {
-        // Dispatch fencing cannot stop an already-running stream or mirror
-        // poll. Hold the same row takeover updates until the journal commits;
-        // checking the claim before opening this transaction would race.
-        //
-        // A plain, blocking FOR UPDATE - never NOWAIT. This row is shared
-        // with writers that are not takeovers at all: the session actor's
-        // fenced log write locks it for every frame it stores, and during a
-        // streaming turn that write runs concurrently with the very append
-        // that produced the frame. Contention here is therefore routine and
-        // says nothing about the claim; only the fence comparison below does.
-        // Treating "someone else holds the row" as "fenced out" failed every
-        // streaming turn the moment its first text delta was logged. A
-        // superseding claim is still detected promptly: its single-statement
-        // transaction commits in milliseconds, after which this select
-        // re-reads the row and the fence no longer matches.
-        let expected = *self
-            .fence
+        // Dispatch checks cannot stop an already-running stream or mirror
+        // poll. Hold the same row a takeover updates until the journal
+        // commits; checking before opening this transaction would race.
+        let lock = self
+            .lock
             .get()
             .ok_or_else(|| rootcause::report!("Cursor journal attachment is not activated"))?;
-        let current = sqlx::query_scalar!("SELECT manager_fence FROM agent_session WHERE id = $1 AND manager_replica_id = $2 FOR UPDATE", self.session.as_uuid(), self.replica.as_uuid())
-            .fetch_optional(&mut **tx).await.map_err(|e| rootcause::report!(e))?
-            .ok_or_else(|| rootcause::report!("Cursor journal writer fenced out"))?;
-        if ManagerFence(current) != expected {
-            return Err(rootcause::report!("Cursor journal writer fenced out"));
-        }
+        sqlx::query_scalar!(
+            "SELECT 1 AS \"one!\" FROM agent_session WHERE id = $1 AND manager_fence = $2 FOR UPDATE",
+            self.session.as_uuid(),
+            lock.token(),
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|e| rootcause::report!(e))?
+        .ok_or_else(|| rootcause::report!("Cursor journal writer lost the session lock"))?;
         Ok(())
     }
 }
@@ -96,7 +76,7 @@ impl CursorJournal for PgCursorJournal {
             // A read is scoped by the bound host identity, never by a caller's
             // ACP ID, which is only unique within a transport.
             let mut tx = self.pool.begin().await.map_err(|e| rootcause::report!(e))?;
-            self.lock_owner(&mut tx).await?;
+            self.hold_lock(&mut tx).await?;
             let rows = sqlx::query!("SELECT sequence, run_id, input FROM cursor_journal_input WHERE agent_session_id = $1 ORDER BY sequence", self.session.as_uuid())
                 .fetch_all(&mut *tx).await.map_err(|e| rootcause::report!(e))?;
             tx.commit().await.map_err(|e| rootcause::report!(e))?;
@@ -127,7 +107,7 @@ impl CursorJournal for PgCursorJournal {
         );
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(|e| rootcause::report!(e))?;
-            self.lock_owner(&mut tx).await?;
+            self.hold_lock(&mut tx).await?;
             let high = sqlx::query_scalar!("SELECT COALESCE(MAX(sequence), 0) AS \"high!\" FROM cursor_journal_input WHERE agent_session_id = $1", self.session.as_uuid())
                 .fetch_one(&mut *tx).await.map_err(|e| rootcause::report!(e))?;
             if high != expected {

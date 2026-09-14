@@ -210,19 +210,13 @@ impl AgentSessionLogWriter for BlockingPromptLogs {
     }
 }
 
-/// Claim a session's management for a freshly minted replica, as
-/// `attach_session` does before activating.
-async fn claim_for_test(repo: &InMemoryAgentSessionRepo, session: AgentSessionId) -> SessionClaim {
-    match repo
-        .claim(session, ReplicaId::mint())
+/// Lock a session for a freshly minted replica, as `attach_session` does
+/// before activating.
+async fn lock_for_test(repo: &InMemoryAgentSessionRepo, session: AgentSessionId) -> SessionLock {
+    repo.try_lock(session, ReplicaId::mint())
         .await
-        .expect("claim for test")
-    {
-        ClaimOutcome::Claimed(claim) => claim,
-        ClaimOutcome::ManagedElsewhere(holder) => {
-            panic!("test session is unexpectedly managed by {holder}")
-        }
-    }
+        .expect("lock for test")
+        .expect("test session is unexpectedly managed by another replica")
 }
 
 fn owner_access(session: AgentSessionId) -> EntityAccessReceipt<OwnerAccessLevel> {
@@ -488,15 +482,19 @@ impl AgentSessionRepo for BlockingPromptLogs {
     }
 }
 
-/// Pure delegation: the lease semantics under test live in the shared
+/// Pure delegation: the lock semantics under test live in the shared
 /// in-memory store, and this wrapper only intercepts log writes.
-impl SessionOwnership for BlockingPromptLogs {
-    async fn claim(&self, session: AgentSessionId, replica: ReplicaId) -> Result<ClaimOutcome> {
-        self.repo.claim(session, replica).await
+impl SessionLocks for BlockingPromptLogs {
+    async fn try_lock(
+        &self,
+        session: AgentSessionId,
+        replica: ReplicaId,
+    ) -> Result<Option<SessionLock>> {
+        self.repo.try_lock(session, replica).await
     }
 
-    async fn release(&self, claim: &SessionClaim) -> Result<()> {
-        self.repo.release(claim).await
+    async fn unlock(&self, lock: &SessionLock) -> Result<()> {
+        self.repo.unlock(lock).await
     }
 
     async fn heartbeat(&self, replica: ReplicaId, address: Option<&ReplicaAddress>) -> Result<()> {
@@ -509,10 +507,10 @@ impl SessionOwnership for BlockingPromptLogs {
 }
 
 impl AgentSessionLogRepo for BlockingPromptLogs {
-    async fn create_fenced_with_boundary(
+    async fn create_locked(
         &self,
         log: AgentSessionLog,
-        claim: &SessionClaim,
+        lock: &SessionLock,
         boundary: Option<crate::domain::model::HistoryBoundary>,
     ) -> Result<StoredAgentSessionLog> {
         let fail = match self.fail_restore_log {
@@ -536,17 +534,7 @@ impl AgentSessionLogRepo for BlockingPromptLogs {
                 "injected restore log failure".into(),
             ));
         }
-        self.repo
-            .create_fenced_with_boundary(log, claim, boundary)
-            .await
-    }
-
-    async fn create_fenced(
-        &self,
-        log: AgentSessionLog,
-        claim: &SessionClaim,
-    ) -> Result<StoredAgentSessionLog> {
-        self.repo.create_fenced(log, claim).await
+        self.repo.create_locked(log, lock, boundary).await
     }
 
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
@@ -672,7 +660,7 @@ async fn close_claiming_an_attach_reservation_prevents_actor_start() {
         .await
         .expect("attach reserves before reading");
     let session = fx.repo.get(fx.session).await.expect("session exists");
-    let claim = claim_for_test(&fx.repo, fx.session).await;
+    let lock = lock_for_test(&fx.repo, fx.session).await;
     let (stopped, marker) = fx.service.begin_stop(fx.session, false);
 
     let result = fx
@@ -681,7 +669,7 @@ async fn close_claiming_an_attach_reservation_prevents_actor_start() {
             session,
             RuntimeAttachment::solo(PendingTransport),
             reservation,
-            claim,
+            lock,
         )
         .await;
     AgentSessionServiceImpl::<
@@ -714,7 +702,7 @@ async fn shutdown_prevents_a_reserved_attach_from_spawning() {
         .await
         .expect("attach reserves before reading");
     let session = fx.repo.get(fx.session).await.expect("session exists");
-    let claim = claim_for_test(&fx.repo, fx.session).await;
+    let lock = lock_for_test(&fx.repo, fx.session).await;
 
     fx.service.shutdown().await;
     let result = fx
@@ -723,7 +711,7 @@ async fn shutdown_prevents_a_reserved_attach_from_spawning() {
             session,
             RuntimeAttachment::solo(PendingTransport),
             reservation,
-            claim,
+            lock,
         )
         .await;
 
@@ -749,8 +737,8 @@ async fn close_does_not_remove_a_concurrent_delete_guard() {
 
 /// The cross-replica half of what `AlreadyConnected` guards in-process: a
 /// second service instance over the same store - two replicas, in production
-/// - cannot attach a session whose managing replica is live. Its claim comes
-/// back `ManagedElsewhere` and the attach refuses before touching the actor.
+/// - cannot attach a session whose managing replica is live. Its try-lock
+/// comes back empty and the attach refuses before touching the actor.
 #[tokio::test]
 async fn a_second_replica_cannot_attach_a_session_with_a_live_manager() {
     let fx = fixture();
@@ -848,7 +836,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
     let cancellation = CancellationToken::new();
     let marker = Arc::new(());
     let (stopped_tx, _) = watch::channel(false);
-    let claim = claim_for_test(&repo, session).await;
+    let lock = lock_for_test(&repo, session).await;
     let task = tokio::spawn(run_session(
         actor,
         Arc::downgrade(&active),
@@ -856,7 +844,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         stopped_tx,
         cancellation.clone(),
         repo.clone(),
-        claim,
+        lock,
         Arc::new(crate::domain::ports::NoOpTurnObserver),
     ));
 
@@ -928,7 +916,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
     let active = Arc::new(ActiveSessions::new());
     let cancellation = CancellationToken::new();
     let (stopped_tx, _) = watch::channel(false);
-    let claim = claim_for_test(&repo, session).await;
+    let lock = lock_for_test(&repo, session).await;
     let task = tokio::spawn(
         run_session(
             actor,
@@ -937,7 +925,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
             stopped_tx,
             cancellation.clone(),
             repo.clone(),
-            claim,
+            lock,
             Arc::new(crate::domain::ports::NoOpTurnObserver),
         )
         .with_current_subscriber(),
@@ -1372,7 +1360,7 @@ async fn shared_transport_copies_durable_initialization_before_load() {
     let (send, mut received) = mpsc::channel(8);
     let (_inbound, inbound) = mpsc::channel(8);
     let (_commands, commands) = mpsc::channel(8);
-    let claim = claim_for_test(&repo, first).await;
+    let lock = lock_for_test(&repo, first).await;
     let mut actor = SessionActor::new(
         first,
         Some("first-acp".into()),
@@ -1382,7 +1370,7 @@ async fn shared_transport_copies_durable_initialization_before_load() {
             outbound: send,
             inbound,
         },
-        LiveSessionLogWriter::fenced(repo.clone(), NoOpRealtime, claim),
+        LiveSessionLogWriter::locked(repo.clone(), NoOpRealtime, lock),
         commands,
         handshake.clone(),
         Arc::new(crate::domain::ports::NoOpTurnObserver),
@@ -1425,7 +1413,7 @@ async fn shared_transport_copies_durable_initialization_before_load() {
     let (send, mut received) = mpsc::channel(8);
     let (_inbound, inbound) = mpsc::channel(8);
     let (_commands, commands) = mpsc::channel(8);
-    let claim = claim_for_test(&repo, second).await;
+    let lock = lock_for_test(&repo, second).await;
     let mut actor = SessionActor::new(
         second,
         Some("second-acp".into()),
@@ -1435,7 +1423,7 @@ async fn shared_transport_copies_durable_initialization_before_load() {
             outbound: send,
             inbound,
         },
-        LiveSessionLogWriter::fenced(repo.clone(), NoOpRealtime, claim),
+        LiveSessionLogWriter::locked(repo.clone(), NoOpRealtime, lock),
         commands,
         handshake,
         Arc::new(crate::domain::ports::NoOpTurnObserver),
@@ -1502,18 +1490,18 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
     let repo = InMemoryAgentSessionRepo::new();
     let session = AgentSessionId::new();
     repo.insert_session(test_agent_session(session));
-    let claim = claim_for_test(&repo, session).await;
+    let lock = lock_for_test(&repo, session).await;
     // A prior committed boundary must survive both failure paths.
-    repo.create_fenced(any_event(session), &claim)
+    repo.create_locked(any_event(session), &lock, None)
         .await
         .unwrap();
     let previous = repo
-        .create_fenced(any_event(session), &claim)
+        .create_locked(any_event(session), &lock, None)
         .await
         .unwrap();
-    repo.create_fenced_with_boundary(
+    repo.create_locked(
         any_event(session),
-        &claim,
+        &lock,
         Some(HistoryBoundary {
             initialization_log_id: previous.id,
         }),
@@ -1540,7 +1528,7 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
             outbound: send,
             inbound,
         },
-        LiveSessionLogWriter::fenced(logs, NoOpRealtime, claim),
+        LiveSessionLogWriter::locked(logs, NoOpRealtime, lock),
         command_rx,
         handshake.clone(),
         Arc::new(crate::domain::ports::NoOpTurnObserver),
@@ -1704,7 +1692,7 @@ async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
     let active = Arc::new(ActiveSessions::new());
     let cancellation = CancellationToken::new();
     let (stopped_tx, _) = watch::channel(false);
-    let claim = claim_for_test(&repo, session).await;
+    let lock = lock_for_test(&repo, session).await;
     let task = tokio::spawn(
         run_session(
             actor,
@@ -1713,7 +1701,7 @@ async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
             stopped_tx,
             cancellation.clone(),
             repo.clone(),
-            claim,
+            lock,
             Arc::new(crate::domain::ports::NoOpTurnObserver),
         )
         .with_current_subscriber(),

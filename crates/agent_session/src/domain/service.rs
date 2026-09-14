@@ -51,14 +51,14 @@ use super::lifecycle::session_identity;
 use super::model::SessionBot;
 use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview, AgentSessionRenamed,
-    AuthorKind, ChannelSession, ClaimOutcome, CreateAgentSessionParams, LogAppended,
+    AuthorKind, ChannelSession, CreateAgentSessionParams, LogAppended,
     MAX_AGENT_SESSION_NAME_CHARS, MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId,
-    SandboxSize, SessionClaim, SessionLog, SessionManagement, StoredAgentSessionLog,
+    SandboxSize, SessionLock, SessionLog, SessionManagement, StoredAgentSessionLog,
 };
 use super::ports::{
     AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
     AgentSessionNameGenerator, AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
-    Appended, NoOpAgentSessionNameGenerator, NoOpToolCatalog, SessionOwnership, SessionToolCatalog,
+    Appended, NoOpAgentSessionNameGenerator, NoOpToolCatalog, SessionLocks, SessionToolCatalog,
     SessionTurnObserver,
 };
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
@@ -174,7 +174,7 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn mark_disconnected(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
     /// Where the session's live actor runs, from this instance's viewpoint:
-    /// unmanaged (claimable here), ours, or a live peer's - in which case
+    /// unmanaged (lockable here), ours, or a live peer's - in which case
     /// commands belong at the peer's address rather than in this process.
     fn management(
         &self,
@@ -293,8 +293,8 @@ pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGen
     /// the harness. Erased for the same reason as the observer.
     lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
     active: Arc<ActiveSessions>,
-    /// This service's identity in the session-management lease. Minted at
-    /// construction: a restarted process is a new replica, and its claims
+    /// This service's identity in the session locks. Minted at
+    /// construction: a restarted process is a new replica, and its locks
     /// are recovered by heartbeat staleness, never inherited.
     replica: ReplicaId,
     tasks: TaskTracker,
@@ -315,8 +315,8 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
     /// [`Self::with_tool_catalog`] swaps in a real one, since only a process
     /// with an in-process MCP client can list anything.
     ///
-    /// `replica` is this service's identity in the session-management lease.
-    /// A restarted process is a new replica whose claims are recovered by
+    /// `replica` is this service's identity in the session locks.
+    /// A restarted process is a new replica whose locks are recovered by
     /// heartbeat staleness, never inherited. A process with more than one
     /// attach-capable instance hands every instance the same id: commands
     /// forward to an address, and every instance in a process shares one.
@@ -408,10 +408,10 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         session: AgentSession,
         mut attachment: RuntimeAttachment<Connector>,
         reservation: AttachReservation,
-        claim: SessionClaim,
+        lock: SessionLock,
     ) -> Result<()>
     where
-        R: AgentSessionRepo + AgentSessionLogRepo + SessionOwnership + Clone,
+        R: AgentSessionRepo + AgentSessionLogRepo + SessionLocks + Clone,
         Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
         Connector: AgentConnector,
     {
@@ -428,7 +428,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             return Err(AgentSessionError::Disconnected(id));
         }
         if let Some(activate) = attachment.activation.take() {
-            activate(claim)?;
+            activate(lock)?;
         }
         active.commands = Some(commands.clone());
         active.transport_closed = attachment.closed.clone();
@@ -439,10 +439,10 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         // rather than the bare repository - see module docs. Its fold starts
         // empty and catches itself up on the stored log on the first frame,
         // which costs an attach nothing until the session actually says
-        // something. Fenced under the claim taken above: if another replica
-        // supersedes this one, the store rejects the next append and the
+        // something. Written under the lock taken above: if another replica
+        // takes the session over, the store rejects the next append and the
         // actor tears down through its ordinary log-failure path.
-        let logs = LiveSessionLogWriter::fenced(self.repo.clone(), self.realtime.clone(), claim);
+        let logs = LiveSessionLogWriter::locked(self.repo.clone(), self.realtime.clone(), lock);
         let actor = SessionActor::new(
             id,
             session.acp_session_id,
@@ -463,7 +463,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                 stopped_tx,
                 self.cancellation.clone(),
                 self.repo.clone(),
-                claim,
+                lock,
                 Arc::clone(&self.turn_observer),
             )
             .with_current_subscriber(),
@@ -603,7 +603,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
 
 impl<R, Folds, Rt, Namer> AgentSessionService for AgentSessionServiceImpl<R, Folds, Rt, Namer>
 where
-    R: AgentSessionRepo + AgentSessionLogRepo + SessionOwnership + Clone,
+    R: AgentSessionRepo + AgentSessionLogRepo + SessionLocks + Clone,
     Folds: FoldedMessageRepo + Clone + Send + Sync + 'static,
     Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
     Namer: AgentSessionNameGenerator + Clone,
@@ -754,36 +754,32 @@ where
     where
         Connector: AgentConnector,
     {
-        // Reservation first: it is the in-process exclusion, so no sibling
-        // attach of this instance can race us to the claim below - which
-        // matters because every successful claim bumps the fence, and bumping
-        // it under a live actor of our own would fence that actor out.
+        // Reservation first: it is the in-process exclusion, so a sibling
+        // attach of this instance is refused as `AlreadyConnected` before the
+        // store is asked anything.
         let reservation = self.reserve_attach(id).await?;
-        let claim = match self.repo.claim(id, self.replica).await? {
-            ClaimOutcome::Claimed(claim) => claim,
-            ClaimOutcome::ManagedElsewhere(holder) => {
-                tracing::info!(%id, %holder, "agent session is managed by another live replica");
-                return Err(AgentSessionError::ManagedElsewhere(id));
-            }
+        let Some(lock) = self.repo.try_lock(id, self.replica).await? else {
+            tracing::info!(%id, "agent session is managed by another live replica");
+            return Err(AgentSessionError::ManagedElsewhere(id));
         };
         let activated = async {
             let session = self.repo.get(id).await?;
-            self.activate_reserved(session, attachment, reservation, claim)
+            self.activate_reserved(session, attachment, reservation, lock)
                 .await
         }
         .await;
         if let Err(error) = activated {
-            // The actor that would have released this claim never started;
-            // free it here so another replica is not left waiting out our
-            // heartbeat to resume the session.
+            // The actor that would have unlocked this never started; unlock
+            // here so another replica is not left waiting out our heartbeat
+            // to resume the session.
             self.repo
-                .release(&claim)
+                .unlock(&lock)
                 .await
                 .inspect_err(|release_error| {
                     tracing::error!(
                         error = ?release_error,
                         %id,
-                        "failed to release an agent session claim after a failed attach"
+                        "failed to unlock an agent session after a failed attach"
                     );
                 })
                 .ok();
@@ -1042,12 +1038,12 @@ pub struct LiveSessionLogWriter<R, Rt> {
     repo: R,
     realtime: Rt,
     fold: Option<LifecycleFold>,
-    /// The management claim this writer appends under, when it has one. A
-    /// session actor always writes fenced; the unfenced constructor exists
+    /// The lock this writer appends under, when it has one. A session
+    /// actor always writes locked; the unlocked constructor exists
     /// for writers outside any live-management contest - `seed_jsonl`
     /// replaying a recording, and `mark_disconnected` recording that a
     /// runtime dropped before anything attached.
-    claim: Option<SessionClaim>,
+    lock: Option<SessionLock>,
 }
 
 impl<R, Rt> LiveSessionLogWriter<R, Rt> {
@@ -1062,18 +1058,18 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             repo,
             realtime,
             fold: None,
-            claim: None,
+            lock: None,
         }
     }
 
-    /// [`new`](Self::new), with every append conditioned on `claim` still
-    /// holding the session's current fence. What a live actor writes with.
-    pub fn fenced(repo: R, realtime: Rt, claim: SessionClaim) -> Self {
+    /// [`new`](Self::new), with every append checked against `lock` inside
+    /// the writing transaction. What a live actor writes with.
+    pub fn locked(repo: R, realtime: Rt, lock: SessionLock) -> Self {
         Self {
             repo,
             realtime,
             fold: None,
-            claim: Some(claim),
+            lock: Some(lock),
         }
     }
 }
@@ -1107,13 +1103,11 @@ where
 
         // Durable first: projections are rebuildable, but a frame omitted from
         // session history is not.
-        let stored = match &self.claim {
-            Some(claim) => {
-                self.repo
-                    .create_fenced_with_boundary(log.clone(), claim, boundary)
-                    .await?
-            }
-            None if boundary.is_some() => return Err(AgentSessionError::FencedOut(session)),
+        let stored = match &self.lock {
+            Some(lock) => self.repo.create_locked(log.clone(), lock, boundary).await?,
+            // Selecting a history boundary is a live actor's decision, and
+            // only a live actor holds the lock.
+            None if boundary.is_some() => return Err(AgentSessionError::LockLost(session)),
             None => AgentSessionLogRepo::create(&self.repo, log.clone()).await?,
         };
 
@@ -1334,23 +1328,23 @@ where
 }
 
 /// Step the actor until its machine stops, then release the registry entry
-/// and the session's management claim.
+/// and the session's lock.
 // One argument per fact the loop owns; a struct here would only move the
 // same list one level down.
 #[allow(clippy::too_many_arguments)]
-async fn run_session<Connector, Logs, Ownership>(
+async fn run_session<Connector, Logs, Locks>(
     mut actor: SessionActor<Connector, Logs>,
     active: std::sync::Weak<ActiveSessions>,
     marker: Arc<()>,
     stopped: watch::Sender<bool>,
     cancellation: CancellationToken,
-    ownership: Ownership,
-    claim: SessionClaim,
+    locks: Locks,
+    lock: SessionLock,
     turn_observer: Arc<dyn SessionTurnObserver>,
 ) where
     Connector: AgentConnector,
     Logs: AgentSessionLogWriter + AgentSessionRepo,
-    Ownership: SessionOwnership,
+    Locks: SessionLocks,
 {
     let stop_reason = loop {
         let input = tokio::select! {
@@ -1371,12 +1365,12 @@ async fn run_session<Connector, Logs, Ownership>(
 
     // Tear down the old transport before allowing another actor to attach.
     drop(actor);
-    // Give the claim back before announcing the stop: fence-conditioned, so
-    // if a successor already took over this quietly does nothing. Releasing
-    // here rather than waiting for heartbeat staleness is what lets another
+    // Unlock before announcing the stop: token-conditioned, so if a
+    // successor already took over this quietly does nothing. Unlocking here
+    // rather than waiting for heartbeat staleness is what lets another
     // replica resume this session immediately after a graceful stop.
-    if let Err(error) = ownership.release(&claim).await {
-        tracing::error!(error = ?error, %id, "failed to release an agent session claim");
+    if let Err(error) = locks.unlock(&lock).await {
+        tracing::error!(error = ?error, %id, "failed to unlock an agent session");
     }
     let _ = stopped.send(true);
     if let Some(active) = active.upgrade() {

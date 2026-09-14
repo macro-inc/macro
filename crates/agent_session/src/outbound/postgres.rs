@@ -9,13 +9,12 @@ mod test;
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
-    AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    ExternalSession, ManagerFence, Message, ReplicaAddress, ReplicaId, SandboxSize, SessionBot,
-    SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    AgentSessionPreviewData, ChannelSession, CreateAgentSessionParams, ExternalSession, Message,
+    ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionLock, SessionManager, SessionStatus,
+    StoredAgentSessionLog,
 };
 use crate::domain::ports::{
-    AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
-    SessionOwnership,
+    AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER, SessionLocks,
 };
 use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
@@ -122,6 +121,81 @@ fn cursor_run_checkpoint(message: &Message) -> Option<String> {
         .get("macroCursorRunCheckpoint")?
         .as_str()
         .map(str::to_owned)
+}
+
+/// Lock `session`'s row for the rest of `transaction` and check that `lock`
+/// is still its current lock. The single place a locked write is checked:
+/// every statement that follows in the same transaction is covered.
+async fn hold_lock(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    lock: &SessionLock,
+    session: AgentSessionId,
+) -> Result<()> {
+    if lock.session() != session {
+        return Err(AgentSessionError::LockLost(session));
+    }
+    let held = sqlx::query_scalar!(
+        r#"
+        SELECT 1 AS "one!"
+        FROM agent_session
+        WHERE id = $1 AND manager_fence = $2
+        FOR UPDATE
+        "#,
+        session.as_uuid(),
+        lock.token(),
+    )
+    .fetch_optional(&mut **transaction)
+    .await
+    .context("lock agent session row")?;
+    if held.is_none() {
+        return Err(AgentSessionError::LockLost(session));
+    }
+    Ok(())
+}
+
+/// Insert one log row and project any system event onto the session status.
+async fn append_log(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    log: &AgentSessionLog,
+) -> Result<(Uuid, DateTime<Utc>)> {
+    let (direction, content) = message_columns(&log.content)?;
+    let id = macro_uuid::generate_uuid_v7();
+    let created_at = sqlx::query_scalar!(
+        r#"
+        INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING created_at
+        "#,
+        id,
+        log.agent_session_id.as_uuid(),
+        log.user_id.as_ref().map(|user_id| user_id.as_ref()),
+        direction,
+        content,
+    )
+    .fetch_one(&mut **transaction)
+    .await
+    .context("failed to create agent session log entry")?;
+
+    if let Message::ToServer(ToServerMessage::Event { event }) = &log.content {
+        let status = SessionStatus::Event(event.clone());
+        let (status, status_event_name) = status_columns(&status);
+        sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET status = $2,
+                status_event_name = $3,
+                modified_at = now()
+            WHERE id = $1
+            "#,
+            log.agent_session_id.as_uuid(),
+            status,
+            status_event_name,
+        )
+        .execute(&mut **transaction)
+        .await
+        .context("failed to update agent session status from log entry")?;
+    }
+    Ok((id, created_at))
 }
 
 /// Record that `user_id` accessed the session in their history.
@@ -886,59 +960,16 @@ impl ExternalSessionRepo for PgAgentSessionRepo {
 
 impl AgentSessionLogRepo for PgAgentSessionRepo {
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
-        let event_status = match &log.content {
-            Message::ToServer(ToServerMessage::Event { event }) => {
-                Some(SessionStatus::Event(event.clone()))
-            }
-            _ => None,
-        };
-        let (direction, content) = message_columns(&log.content)?;
         let mut transaction = self
             .pool
             .begin()
             .await
             .context("begin agent session log create")?;
-        let id = macro_uuid::generate_uuid_v7();
-        let created_at = sqlx::query_scalar!(
-            r#"
-            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING created_at
-            "#,
-            id,
-            log.agent_session_id.as_uuid(),
-            log.user_id.as_ref().map(|user_id| user_id.as_ref()),
-            direction,
-            content,
-        )
-        .fetch_one(&mut *transaction)
-        .await
-        .context("failed to create agent session log entry")?;
-
-        if let Some(status) = event_status {
-            let (status, status_event_name) = status_columns(&status);
-            sqlx::query!(
-                r#"
-                UPDATE agent_session
-                SET status = $2,
-                    status_event_name = $3,
-                    modified_at = now()
-                WHERE id = $1
-                "#,
-                log.agent_session_id.as_uuid(),
-                status,
-                status_event_name,
-            )
-            .execute(&mut *transaction)
-            .await
-            .context("failed to update agent session status from log entry")?;
-        }
-
+        let (id, created_at) = append_log(&mut transaction, &log).await?;
         transaction
             .commit()
             .await
             .context("commit agent session log create")?;
-
         Ok(StoredAgentSessionLog {
             id,
             created_at,
@@ -946,73 +977,23 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         })
     }
 
-    async fn create_fenced(
+    async fn create_locked(
         &self,
         log: AgentSessionLog,
-        claim: &SessionClaim,
-    ) -> Result<StoredAgentSessionLog> {
-        self.create_fenced_with_boundary(log, claim, None).await
-    }
-
-    async fn create_fenced_with_boundary(
-        &self,
-        log: AgentSessionLog,
-        claim: &SessionClaim,
+        lock: &SessionLock,
         boundary: Option<crate::domain::model::HistoryBoundary>,
     ) -> Result<StoredAgentSessionLog> {
-        if claim.session != log.agent_session_id {
-            return Err(AgentSessionError::FencedOut(log.agent_session_id));
-        }
-        let event_status = match &log.content {
-            Message::ToServer(ToServerMessage::Event { event }) => {
-                Some(SessionStatus::Event(event.clone()))
-            }
-            _ => None,
-        };
-        let checkpoint = cursor_run_checkpoint(&log.content);
-        let (direction, content) = message_columns(&log.content)?;
         let mut transaction = self
             .pool
             .begin()
             .await
-            .context("begin fenced agent session log create")?;
+            .context("begin locked agent session log create")?;
+        // The one lock check for everything below: the session row stays
+        // locked through commit, and a takeover updates that same row, so it
+        // cannot supersede us between this check and the writes.
+        hold_lock(&mut transaction, lock, log.agent_session_id).await?;
 
-        // Hold the session row through commit. A takeover updates this same
-        // row, so it cannot supersede the claim between our check and append.
-        let locked_session = sqlx::query_scalar!(
-            r#"
-            SELECT id
-            FROM agent_session
-            WHERE id = $1 AND manager_replica_id = $2 AND manager_fence = $3
-            FOR UPDATE
-            "#,
-            log.agent_session_id.as_uuid(),
-            claim.replica.as_uuid(),
-            claim.fence.0,
-        )
-        .fetch_optional(&mut *transaction)
-        .await
-        .context("lock fenced agent session")?;
-        if locked_session.is_none() {
-            return Err(AgentSessionError::FencedOut(log.agent_session_id));
-        }
-
-        let id = macro_uuid::generate_uuid_v7();
-        let created_at = sqlx::query_scalar!(
-            r#"
-            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING created_at
-            "#,
-            id,
-            log.agent_session_id.as_uuid(),
-            log.user_id.as_ref().map(|user_id| user_id.as_ref()),
-            direction,
-            content,
-        )
-        .fetch_one(&mut *transaction)
-        .await
-        .context("failed to create fenced agent session log entry")?;
+        let (id, created_at) = append_log(&mut transaction, &log).await?;
 
         if let Some(boundary) = boundary {
             let updated = sqlx::query!(
@@ -1021,13 +1002,10 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
                 SET history_start_log_id = boundary.id
                 FROM agent_session_log AS boundary
                 WHERE session.id = $1
-                  AND session.manager_replica_id = $2 AND session.manager_fence = $3
-                  AND boundary.id = $4 AND boundary.agent_session_id = session.id
-                  AND (boundary.created_at, boundary.id) <= ($5, $6)
+                  AND boundary.id = $2 AND boundary.agent_session_id = session.id
+                  AND (boundary.created_at, boundary.id) <= ($3, $4)
                 "#,
                 log.agent_session_id.as_uuid(),
-                claim.replica.as_uuid(),
-                claim.fence.0,
                 boundary.initialization_log_id,
                 created_at,
                 id,
@@ -1042,55 +1020,32 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             }
         }
 
-        if let Some(run_id) = checkpoint {
+        if let Some(run_id) = cursor_run_checkpoint(&log.content) {
             let updated = sqlx::query!(
                 r#"
-                UPDATE external_agent_session AS external
+                UPDATE external_agent_session
                 SET last_run_id = $2,
                     updated_at = now()
-                FROM agent_session AS session
-                WHERE external.agent_session_id = $1
-                  AND session.id = external.agent_session_id
-                  AND session.manager_replica_id = $3
-                  AND session.manager_fence = $4
-                  AND external.provider = 'cursor'
+                WHERE agent_session_id = $1 AND provider = 'cursor'
                 "#,
                 log.agent_session_id.as_uuid(),
                 run_id,
-                claim.replica.as_uuid(),
-                claim.fence.0,
             )
             .execute(&mut *transaction)
             .await
-            .context("checkpoint cursor run with fenced log entry")?;
+            .context("checkpoint cursor run with locked log entry")?;
             if updated.rows_affected() == 0 {
-                return Err(AgentSessionError::FencedOut(log.agent_session_id));
+                return Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                    "agent session {} checkpointed a cursor run without a cursor external row",
+                    log.agent_session_id
+                )));
             }
-        }
-
-        if let Some(status) = event_status {
-            let (status, status_event_name) = status_columns(&status);
-            sqlx::query!(
-                r#"
-                UPDATE agent_session
-                SET status = $2,
-                    status_event_name = $3,
-                    modified_at = now()
-                WHERE id = $1
-                "#,
-                log.agent_session_id.as_uuid(),
-                status,
-                status_event_name,
-            )
-            .execute(&mut *transaction)
-            .await
-            .context("failed to update agent session status from fenced log entry")?;
         }
 
         transaction
             .commit()
             .await
-            .context("commit fenced agent session log create")?;
+            .context("commit locked agent session log create")?;
 
         Ok(StoredAgentSessionLog {
             id,
@@ -1158,14 +1113,19 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
     }
 }
 
-impl SessionOwnership for PgAgentSessionRepo {
-    async fn claim(&self, session: AgentSessionId, replica: ReplicaId) -> Result<ClaimOutcome> {
+impl SessionLocks for PgAgentSessionRepo {
+    async fn try_lock(
+        &self,
+        session: AgentSessionId,
+        replica: ReplicaId,
+    ) -> Result<Option<SessionLock>> {
         // One statement: the replica's heartbeat row is upserted in the CTE
-        // (a claim can never reference a replica the store has not seen),
-        // then the lease itself is a compare-and-swap - taken only from
-        // nobody, ourselves, or a stale holder, and every take bumps the
-        // fence so a superseded holder's fenced writes stop matching.
-        let fence = sqlx::query_scalar!(
+        // (a lock can never reference a replica the store has not seen),
+        // then the lock itself is a conditional update - taken only from
+        // nobody, ourselves, or a stale holder. A takeover bumps the token
+        // so the superseded holder's locked writes stop matching; re-locking
+        // our own session leaves it alone.
+        let token = sqlx::query_scalar!(
             r#"
             WITH replica AS (
                 INSERT INTO harness_replica (id, last_heartbeat_at)
@@ -1173,8 +1133,11 @@ impl SessionOwnership for PgAgentSessionRepo {
                 ON CONFLICT (id) DO UPDATE SET last_heartbeat_at = now()
             )
             UPDATE agent_session
-            SET manager_replica_id = $2,
-                manager_fence = manager_fence + 1,
+            SET manager_fence = CASE
+                    WHEN manager_replica_id = $2 THEN manager_fence
+                    ELSE manager_fence + 1
+                END,
+                manager_replica_id = $2,
                 modified_at = now()
             WHERE id = $1
               AND (
@@ -1194,58 +1157,53 @@ impl SessionOwnership for PgAgentSessionRepo {
         )
         .fetch_optional(&self.pool)
         .await
-        .context("failed to claim agent session management")?;
+        .context("failed to lock agent session")?;
 
-        if let Some(fence) = fence {
-            return Ok(ClaimOutcome::Claimed(SessionClaim {
-                session,
-                replica,
-                fence: ManagerFence(fence),
-            }));
+        if let Some(token) = token {
+            return Ok(Some(SessionLock::new(session, token)));
         }
 
-        // The swap matched nothing: either a live replica holds the lease, or
-        // the session row is gone. A deleted session reads as Unknown so the
+        // The update matched nothing: either a live replica holds the lock,
+        // or the session row is gone. A deleted session is an error so the
         // caller does not forward commands toward a row that no longer exists.
-        let holder = sqlx::query_scalar!(
-            r#"SELECT manager_replica_id FROM agent_session WHERE id = $1"#,
+        let exists = sqlx::query_scalar!(
+            r#"SELECT 1 AS "one!" FROM agent_session WHERE id = $1"#,
             session.as_uuid(),
         )
         .fetch_optional(&self.pool)
         .await
-        .context("failed to read the agent session manager")?;
-        match holder {
-            Some(Some(holder)) => Ok(ClaimOutcome::ManagedElsewhere(ReplicaId::from_uuid(holder))),
-            Some(None) | None => Err(AgentSessionError::Unknown(anyhow::anyhow!(
-                "agent session {session} claim matched nothing yet no live replica holds it"
+        .context("failed to read the agent session while locking")?;
+        match exists {
+            Some(_) => Ok(None),
+            None => Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                "agent session {session} lock matched nothing yet the session does not exist"
             ))),
         }
     }
 
-    async fn release(&self, claim: &SessionClaim) -> Result<()> {
-        // Conditional on both holder and fence: a release arriving after a
-        // successor claimed must not free the successor's lease, and a
-        // deleted session matches nothing, which is the asked-for state.
+    async fn unlock(&self, lock: &SessionLock) -> Result<()> {
+        // Conditional on the token: an unlock arriving after a successor took
+        // over must not free the successor's lock, and a deleted session
+        // matches nothing, which is the asked-for state.
         sqlx::query!(
             r#"
             UPDATE agent_session
             SET manager_replica_id = NULL,
                 modified_at = now()
-            WHERE id = $1 AND manager_replica_id = $2 AND manager_fence = $3
+            WHERE id = $1 AND manager_fence = $2
             "#,
-            claim.session.as_uuid(),
-            claim.replica.as_uuid(),
-            claim.fence.0,
+            lock.session().as_uuid(),
+            lock.token(),
         )
         .execute(&self.pool)
         .await
-        .context("failed to release agent session management")?;
+        .context("failed to unlock agent session")?;
         Ok(())
     }
 
     async fn heartbeat(&self, replica: ReplicaId, address: Option<&ReplicaAddress>) -> Result<()> {
         // COALESCE keeps a previously published address when a beat carries
-        // none, so a claim-created row filled in by one heartbeat is not
+        // none, so a lock-created row filled in by one heartbeat is not
         // blanked by the next.
         sqlx::query!(
             r#"
@@ -1263,8 +1221,8 @@ impl SessionOwnership for PgAgentSessionRepo {
         .context("failed to heartbeat harness replica")?;
         // Housekeeping on the writer that is already here: rows a week past
         // their last heartbeat are boots nothing can still reference usefully
-        // (their claims were stealable within seconds); the FK sets any
-        // stragglers' claims to NULL.
+        // (their locks were takeable within seconds); the FK sets any
+        // stragglers' locks to NULL.
         sqlx::query!(
             r#"DELETE FROM harness_replica WHERE last_heartbeat_at < now() - interval '7 days'"#,
         )

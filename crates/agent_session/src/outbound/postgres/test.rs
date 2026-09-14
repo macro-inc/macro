@@ -1107,7 +1107,7 @@ async fn deleting_a_session_cascades_its_external_row(pool: PgPool) {
 }
 
 /// Backdate a replica's heartbeat far past `REPLICA_STALE_AFTER`, so its
-/// claims read as up for grabs.
+/// locks read as up for grabs.
 async fn let_heartbeat_go_stale(pool: &PgPool, replica: ReplicaId) {
     sqlx::query!(
         r#"UPDATE harness_replica SET last_heartbeat_at = now() - interval '10 minutes' WHERE id = $1"#,
@@ -1118,16 +1118,11 @@ async fn let_heartbeat_go_stale(pool: &PgPool, replica: ReplicaId) {
     .expect("backdate replica heartbeat");
 }
 
-fn claimed(outcome: ClaimOutcome) -> SessionClaim {
-    match outcome {
-        ClaimOutcome::Claimed(claim) => claim,
-        ClaimOutcome::ManagedElsewhere(holder) => {
-            panic!("expected to claim, but {holder} manages the session")
-        }
-    }
+fn locked(outcome: Option<SessionLock>) -> SessionLock {
+    outcome.expect("expected to lock, but a live replica manages the session")
 }
 
-fn fenced_log(id: AgentSessionId) -> AgentSessionLog {
+fn locked_log(id: AgentSessionId) -> AgentSessionLog {
     AgentSessionLog {
         agent_session_id: id,
         user_id: None,
@@ -1156,18 +1151,31 @@ fn cursor_checkpoint_log(id: AgentSessionId, run: &str) -> AgentSessionLog {
     }
 }
 
+/// Locking a session we already hold is a no-op on the token, so an actor of
+/// ours writing under the first lock is never invalidated by our own re-lock.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn claiming_is_reentrant_and_every_claim_bumps_the_fence(pool: PgPool) {
+async fn locking_is_reentrant_and_only_a_takeover_bumps_the_token(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let replica = ReplicaId::mint();
 
-    let first = claimed(repo.claim(session.id, replica).await.expect("first claim"));
-    let second = claimed(repo.claim(session.id, replica).await.expect("second claim"));
+    let first = locked(
+        repo.try_lock(session.id, replica)
+            .await
+            .expect("first lock"),
+    );
+    let second = locked(
+        repo.try_lock(session.id, replica)
+            .await
+            .expect("second lock"),
+    );
 
-    assert_eq!(first.fence, ManagerFence(1));
-    assert_eq!(second.fence, ManagerFence(2));
+    assert_eq!(first, second);
+    assert_eq!(first.token(), 1);
+    repo.create_locked(locked_log(session.id), &first, None)
+        .await
+        .expect("the first lock still writes after a re-lock");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1178,11 +1186,14 @@ async fn a_live_holder_blocks_a_second_replica(pool: PgPool) {
     let holder = ReplicaId::mint();
     let contender = ReplicaId::mint();
 
-    claimed(repo.claim(session.id, holder).await.expect("claim"));
-    match repo.claim(session.id, contender).await.expect("contend") {
-        ClaimOutcome::ManagedElsewhere(seen) => assert_eq!(seen, holder),
-        ClaimOutcome::Claimed(_) => panic!("a live holder's claim was stolen"),
-    }
+    locked(repo.try_lock(session.id, holder).await.expect("lock"));
+    assert!(
+        repo.try_lock(session.id, contender)
+            .await
+            .expect("contend")
+            .is_none(),
+        "a live holder's lock was stolen"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1193,15 +1204,19 @@ async fn a_stale_holder_is_superseded(pool: PgPool) {
     let crashed = ReplicaId::mint();
     let successor = ReplicaId::mint();
 
-    claimed(repo.claim(session.id, crashed).await.expect("claim"));
+    locked(repo.try_lock(session.id, crashed).await.expect("lock"));
     let_heartbeat_go_stale(&pool, crashed).await;
 
-    let takeover = claimed(repo.claim(session.id, successor).await.expect("takeover"));
-    assert_eq!(takeover.fence, ManagerFence(2));
+    let takeover = locked(
+        repo.try_lock(session.id, successor)
+            .await
+            .expect("takeover"),
+    );
+    assert_eq!(takeover.token(), 2);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn release_frees_the_lease_but_never_a_successors(pool: PgPool) {
+async fn unlock_frees_the_lock_but_never_a_successors(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
@@ -1209,48 +1224,62 @@ async fn release_frees_the_lease_but_never_a_successors(pool: PgPool) {
     let successor = ReplicaId::mint();
     let third = ReplicaId::mint();
 
-    let superseded = claimed(repo.claim(session.id, crashed).await.expect("claim"));
+    let superseded = locked(repo.try_lock(session.id, crashed).await.expect("lock"));
     let_heartbeat_go_stale(&pool, crashed).await;
-    let current = claimed(repo.claim(session.id, successor).await.expect("takeover"));
+    let current = locked(
+        repo.try_lock(session.id, successor)
+            .await
+            .expect("takeover"),
+    );
 
-    // The superseded holder's release is a no-op: the successor still holds.
-    repo.release(&superseded).await.expect("stale release");
-    match repo.claim(session.id, third).await.expect("contend") {
-        ClaimOutcome::ManagedElsewhere(seen) => assert_eq!(seen, successor),
-        ClaimOutcome::Claimed(_) => panic!("a stale release freed the successor's lease"),
-    }
+    // The superseded holder's unlock is a no-op: the successor still holds.
+    repo.unlock(&superseded).await.expect("stale unlock");
+    assert!(
+        repo.try_lock(session.id, third)
+            .await
+            .expect("contend")
+            .is_none(),
+        "a stale unlock freed the successor's lock"
+    );
 
-    // The current holder's release frees it for anyone.
-    repo.release(&current).await.expect("current release");
-    claimed(repo.claim(session.id, third).await.expect("reclaim"));
+    // The current holder's unlock frees it for anyone.
+    repo.unlock(&current).await.expect("current unlock");
+    locked(repo.try_lock(session.id, third).await.expect("relock"));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_fenced_append_rejects_a_superseded_writer(pool: PgPool) {
+async fn a_locked_append_rejects_a_superseded_writer(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
     let zombie = ReplicaId::mint();
     let successor = ReplicaId::mint();
 
-    let old_claim = claimed(repo.claim(session.id, zombie).await.expect("claim"));
-    repo.create_fenced(fenced_log(session.id), &old_claim)
+    let old_lock = locked(repo.try_lock(session.id, zombie).await.expect("lock"));
+    repo.create_locked(locked_log(session.id), &old_lock, None)
         .await
-        .expect("the live holder's fenced append lands");
+        .expect("the live holder's locked append lands");
 
     let_heartbeat_go_stale(&pool, zombie).await;
-    let new_claim = claimed(repo.claim(session.id, successor).await.expect("takeover"));
+    let new_lock = locked(
+        repo.try_lock(session.id, successor)
+            .await
+            .expect("takeover"),
+    );
 
-    // The zombie wakes and writes under its superseded fence: rejected by the
-    // same statement that would have written, no matter how it got confused.
-    match repo.create_fenced(fenced_log(session.id), &old_claim).await {
-        Err(AgentSessionError::FencedOut(id)) => assert_eq!(id, session.id),
-        other => panic!("a superseded fence wrote anyway: {other:?}"),
+    // The zombie wakes and writes under its superseded lock: rejected in the
+    // same transaction that would have written, no matter how it got confused.
+    match repo
+        .create_locked(locked_log(session.id), &old_lock, None)
+        .await
+    {
+        Err(AgentSessionError::LockLost(id)) => assert_eq!(id, session.id),
+        other => panic!("a superseded lock wrote anyway: {other:?}"),
     }
 
-    repo.create_fenced(fenced_log(session.id), &new_claim)
+    repo.create_locked(locked_log(session.id), &new_lock, None)
         .await
-        .expect("the successor's fenced append lands");
+        .expect("the successor's locked append lands");
 
     let log = AgentSessionLogRepo::list_by_session(&repo, session.id)
         .await
@@ -1263,7 +1292,7 @@ async fn a_fenced_append_rejects_a_superseded_writer(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn cursor_checkpoint_advances_atomically_under_the_session_fence(pool: PgPool) {
+async fn cursor_checkpoint_advances_atomically_under_the_session_lock(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot_id, None, None)).await;
@@ -1272,9 +1301,9 @@ async fn cursor_checkpoint_advances_atomically_under_the_session_fence(pool: PgP
         .expect("external row");
     let zombie = ReplicaId::mint();
     let successor = ReplicaId::mint();
-    let old_claim = claimed(repo.claim(session.id, zombie).await.expect("claim"));
+    let old_lock = locked(repo.try_lock(session.id, zombie).await.expect("lock"));
 
-    repo.create_fenced(cursor_checkpoint_log(session.id, "run-1"), &old_claim)
+    repo.create_locked(cursor_checkpoint_log(session.id, "run-1"), &old_lock, None)
         .await
         .expect("live checkpoint");
     assert_eq!(
@@ -1286,13 +1315,21 @@ async fn cursor_checkpoint_advances_atomically_under_the_session_fence(pool: PgP
     );
 
     let_heartbeat_go_stale(&pool, zombie).await;
-    let new_claim = claimed(repo.claim(session.id, successor).await.expect("takeover"));
+    let new_lock = locked(
+        repo.try_lock(session.id, successor)
+            .await
+            .expect("takeover"),
+    );
     assert!(matches!(
-        repo.create_fenced(cursor_checkpoint_log(session.id, "run-stale"), &old_claim)
-            .await,
-        Err(AgentSessionError::FencedOut(_))
+        repo.create_locked(
+            cursor_checkpoint_log(session.id, "run-stale"),
+            &old_lock,
+            None
+        )
+        .await,
+        Err(AgentSessionError::LockLost(_))
     ));
-    repo.create_fenced(cursor_checkpoint_log(session.id, "run-2"), &new_claim)
+    repo.create_locked(cursor_checkpoint_log(session.id, "run-2"), &new_lock, None)
         .await
         .expect("successor checkpoint");
     assert_eq!(
@@ -1310,8 +1347,8 @@ async fn history_boundary_selects_initialization_and_keeps_raw_audit(pool: PgPoo
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
-    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
-    repo.create_fenced(fenced_log(session.id), &claim)
+    let lock = locked(repo.try_lock(session.id, ReplicaId::mint()).await.unwrap());
+    repo.create_locked(locked_log(session.id), &lock, None)
         .await
         .unwrap();
     assert_eq!(
@@ -1323,16 +1360,16 @@ async fn history_boundary_selects_initialization_and_keeps_raw_audit(pool: PgPoo
     );
     for expected_raw in [4_i64, 7] {
         let init = repo
-            .create_fenced(fenced_log(session.id), &claim)
+            .create_locked(locked_log(session.id), &lock, None)
             .await
             .unwrap();
-        repo.create_fenced(fenced_log(session.id), &claim)
+        repo.create_locked(locked_log(session.id), &lock, None)
             .await
             .unwrap();
         let response = repo
-            .create_fenced_with_boundary(
-                fenced_log(session.id),
-                &claim,
+            .create_locked(
+                locked_log(session.id),
+                &lock,
                 Some(crate::domain::model::HistoryBoundary {
                     initialization_log_id: init.id,
                 }),
@@ -1355,7 +1392,7 @@ async fn history_boundary_selects_initialization_and_keeps_raw_audit(pool: PgPoo
         assert_eq!(raw, Some(expected_raw));
     }
     // An ordinary append (including resume/error/disconnect) never changes the boundary.
-    repo.create_fenced(fenced_log(session.id), &claim)
+    repo.create_locked(locked_log(session.id), &lock, None)
         .await
         .unwrap();
     assert_eq!(
@@ -1379,21 +1416,21 @@ async fn history_boundary_selects_initialization_and_keeps_raw_audit(pool: PgPoo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn history_boundary_rejects_foreign_rows_and_stale_claims_atomically(pool: PgPool) {
+async fn history_boundary_rejects_foreign_rows_and_stale_locks_atomically(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let other = create_session(&repo, new_session(bot, None, None)).await;
     let replica = ReplicaId::mint();
-    let claim = claimed(repo.claim(session.id, replica).await.unwrap());
-    let foreign = AgentSessionLogRepo::create(&repo, fenced_log(other.id))
+    let lock = locked(repo.try_lock(session.id, replica).await.unwrap());
+    let foreign = AgentSessionLogRepo::create(&repo, locked_log(other.id))
         .await
         .unwrap();
     let boundary = crate::domain::model::HistoryBoundary {
         initialization_log_id: foreign.id,
     };
     assert!(
-        repo.create_fenced_with_boundary(fenced_log(session.id), &claim, Some(boundary))
+        repo.create_locked(locked_log(session.id), &lock, Some(boundary))
             .await
             .is_err()
     );
@@ -1404,20 +1441,21 @@ async fn history_boundary_rejects_foreign_rows_and_stale_claims_atomically(pool:
             .is_empty()
     );
     let init = repo
-        .create_fenced(fenced_log(session.id), &claim)
+        .create_locked(locked_log(session.id), &lock, None)
         .await
         .unwrap();
-    let current = claimed(repo.claim(session.id, replica).await.unwrap());
+    let_heartbeat_go_stale(&pool, replica).await;
+    let current = locked(repo.try_lock(session.id, ReplicaId::mint()).await.unwrap());
     let boundary = crate::domain::model::HistoryBoundary {
         initialization_log_id: init.id,
     };
     assert!(matches!(
-        repo.create_fenced_with_boundary(fenced_log(session.id), &claim, Some(boundary))
+        repo.create_locked(locked_log(session.id), &lock, Some(boundary))
             .await,
-        Err(AgentSessionError::FencedOut(_))
+        Err(AgentSessionError::LockLost(_))
     ));
     assert!(
-        repo.create_fenced_with_boundary(fenced_log(other.id), &current, Some(boundary))
+        repo.create_locked(locked_log(other.id), &current, Some(boundary))
             .await
             .is_err()
     );
@@ -1456,16 +1494,16 @@ async fn history_boundary_update_failure_rolls_back_response(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
-    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
+    let lock = locked(repo.try_lock(session.id, ReplicaId::mint()).await.unwrap());
     let init = repo
-        .create_fenced(fenced_log(session.id), &claim)
+        .create_locked(locked_log(session.id), &lock, None)
         .await
         .unwrap();
     sqlx::raw_sql("CREATE FUNCTION reject_history_boundary() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected boundary failure'; END $$; CREATE TRIGGER reject_history_boundary BEFORE UPDATE OF history_start_log_id ON agent_session FOR EACH ROW EXECUTE FUNCTION reject_history_boundary();").execute(&pool).await.unwrap();
     assert!(
-        repo.create_fenced_with_boundary(
-            fenced_log(session.id),
-            &claim,
+        repo.create_locked(
+            locked_log(session.id),
+            &lock,
             Some(crate::domain::model::HistoryBoundary {
                 initialization_log_id: init.id
             })
@@ -1497,26 +1535,26 @@ async fn history_boundary_insert_failure_keeps_previous_selection(pool: PgPool) 
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
-    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
+    let lock = locked(repo.try_lock(session.id, ReplicaId::mint()).await.unwrap());
     let init = repo
-        .create_fenced(fenced_log(session.id), &claim)
+        .create_locked(locked_log(session.id), &lock, None)
         .await
         .unwrap();
     let boundary = crate::domain::model::HistoryBoundary {
         initialization_log_id: init.id,
     };
-    repo.create_fenced_with_boundary(fenced_log(session.id), &claim, Some(boundary))
+    repo.create_locked(locked_log(session.id), &lock, Some(boundary))
         .await
         .unwrap();
     let next = repo
-        .create_fenced(fenced_log(session.id), &claim)
+        .create_locked(locked_log(session.id), &lock, None)
         .await
         .unwrap();
     sqlx::raw_sql("CREATE FUNCTION reject_history_append() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected append failure'; END $$; CREATE TRIGGER reject_history_append BEFORE INSERT ON agent_session_log FOR EACH ROW EXECUTE FUNCTION reject_history_append();").execute(&pool).await.unwrap();
     assert!(
-        repo.create_fenced_with_boundary(
-            fenced_log(session.id),
-            &claim,
+        repo.create_locked(
+            locked_log(session.id),
+            &lock,
             Some(crate::domain::model::HistoryBoundary {
                 initialization_log_id: next.id
             })
@@ -1548,12 +1586,12 @@ async fn history_boundary_readers_see_response_and_selection_together(pool: PgPo
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
     let session = create_session(&repo, new_session(bot, None, None)).await;
-    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
-    repo.create_fenced(fenced_log(session.id), &claim)
+    let lock = locked(repo.try_lock(session.id, ReplicaId::mint()).await.unwrap());
+    repo.create_locked(locked_log(session.id), &lock, None)
         .await
         .unwrap();
     let init = repo
-        .create_fenced(fenced_log(session.id), &claim)
+        .create_locked(locked_log(session.id), &lock, None)
         .await
         .unwrap();
     // Pause the update after the response INSERT, while its transaction is uncommitted.
@@ -1566,9 +1604,9 @@ async fn history_boundary_readers_see_response_and_selection_together(pool: PgPo
     let writer = repo.clone();
     let task = tokio::spawn(async move {
         writer
-            .create_fenced_with_boundary(
-                fenced_log(session.id),
-                &claim,
+            .create_locked(
+                locked_log(session.id),
+                &lock,
                 Some(crate::domain::model::HistoryBoundary {
                     initialization_log_id: init.id,
                 }),

@@ -34,7 +34,7 @@ use dashmap::DashMap;
 use tokio::sync::{Mutex, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
-use crate::domain::model::{AgentSessionId, SessionClaim};
+use crate::domain::model::{AgentSessionId, SessionLock};
 use crate::domain::session::HandshakeStatus;
 
 #[cfg(test)]
@@ -158,9 +158,13 @@ pub struct RuntimeAttachment<Connector> {
     pub(crate) closed: Option<CancellationToken>,
 }
 
-/// Activate attachment-owned resources with the exact acquired ownership claim.
+/// Bind attachment-owned resources to the lock the attach actually took.
+///
+/// Exists because an attachment is built before the session is locked; a
+/// resource that writes session-scoped rows (the Cursor journal) learns its
+/// lock here, once, before the actor starts.
 pub type AttachmentActivation =
-    Box<dyn FnOnce(SessionClaim) -> crate::domain::error::Result<()> + Send + Sync>;
+    Box<dyn FnOnce(SessionLock) -> crate::domain::error::Result<()> + Send + Sync>;
 
 impl<Connector> RuntimeAttachment<Connector> {
     /// A transport carrying exactly one session, so its handshake is its own.
@@ -178,7 +182,7 @@ impl<Connector> RuntimeAttachment<Connector> {
         }
     }
 
-    /// Run once after ownership acquisition, before the session actor starts.
+    /// Run once after the session is locked, before the session actor starts.
     #[must_use]
     pub fn on_activate(mut self, activation: AttachmentActivation) -> Self {
         self.activation = Some(activation);

@@ -98,38 +98,42 @@ pub enum SessionManagement {
     Peer(SessionManager),
 }
 
-/// A session's takeover counter, bumped by every successful claim.
+/// Proof that this replica holds a session's lock.
 ///
-/// Carried by the claim holder into each live-actor write; the store rejects
-/// writes whose fence has been superseded, so a stale holder is neutralized
-/// by the same statement that would have written (a fencing token).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ManagerFence(pub i64);
-
-/// Proof that this replica claimed a session's live management.
-///
-/// Obtained only from [`SessionOwnership::claim`](super::ports::SessionOwnership::claim);
+/// Obtained only from [`SessionLocks::try_lock`](super::ports::SessionLocks::try_lock);
 /// holding one is what entitles an actor to attach and write the session's
-/// log under its fence.
-#[derive(Debug, Clone, Copy)]
-pub struct SessionClaim {
-    /// The claimed session.
-    pub session: AgentSessionId,
-    /// The replica holding the claim.
-    pub replica: ReplicaId,
-    /// The fence this claim writes under.
-    pub fence: ManagerFence,
+/// log. The token is the session's takeover counter at the time of locking:
+/// every takeover bumps it, and every write under the lock is checked
+/// against it inside the writing transaction, so a holder that stalled past
+/// its heartbeat and was superseded has its writes rejected rather than
+/// interleaved. That check, not the lock itself, is what neutralizes a stale
+/// holder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionLock {
+    session: AgentSessionId,
+    token: i64,
 }
 
-/// What claiming a session yielded.
-#[derive(Debug, Clone, Copy)]
-pub enum ClaimOutcome {
-    /// This replica now manages the session.
-    Claimed(SessionClaim),
-    /// A replica with a fresh heartbeat already manages it. Until command
-    /// forwarding exists this surfaces as an error; with it, commands are
-    /// routed to the named replica instead.
-    ManagedElsewhere(ReplicaId),
+impl SessionLock {
+    /// Only a [`SessionLocks`](super::ports::SessionLocks) store mints these.
+    #[must_use]
+    pub(crate) fn new(session: AgentSessionId, token: i64) -> Self {
+        Self { session, token }
+    }
+
+    /// The locked session.
+    #[must_use]
+    pub fn session(&self) -> AgentSessionId {
+        self.session
+    }
+
+    /// The takeover counter this lock was taken at. Adapters that write
+    /// session-scoped rows compare it against the row inside their own
+    /// transaction; nothing else should read it.
+    #[must_use]
+    pub fn token(&self) -> i64 {
+        self.token
+    }
 }
 
 /// Display name assigned to a newly created agent session.
@@ -469,7 +473,7 @@ pub struct AgentSessionPreviewData {
 }
 
 /// Initialization selected by a matching successful load in the session machine.
-/// Persistence must append the response and select this row in one fenced transaction.
+/// Persistence must append the response and select this row in one locked transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HistoryBoundary {
     /// Initialization row in this session's log.

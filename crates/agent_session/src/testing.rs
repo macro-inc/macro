@@ -8,13 +8,13 @@ use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
-    AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, ReplicaAddress, ReplicaId, SandboxSize,
-    SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    AgentSessionPreviewData, ChannelSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME,
+    LogAppended, ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionLock, SessionManager,
+    SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
-    REPLICA_STALE_AFTER, SessionOwnership,
+    REPLICA_STALE_AFTER, SessionLocks,
 };
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-/// One session's lease state: the holding replica (if any) and the fence,
+/// One session's lock state: the holding replica (if any) and the token,
 /// which outlives the holder as in the real schema.
 type Lease = (Option<ReplicaId>, i64);
 
@@ -51,8 +51,8 @@ pub struct InMemoryAgentSessionRepo {
     session_reads: Arc<AtomicUsize>,
     /// Replica heartbeats and published addresses, mirroring `harness_replica`.
     replicas: Arc<Mutex<HashMap<ReplicaId, ReplicaRow>>>,
-    /// Session -> lease, mirroring the lease columns: release clears the
-    /// holder and leaves the counter.
+    /// Session -> (holder, token), mirroring the lock columns: unlock clears
+    /// the holder and leaves the counter.
     leases: Arc<Mutex<HashMap<AgentSessionId, Lease>>>,
 }
 
@@ -375,8 +375,12 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     }
 }
 
-impl SessionOwnership for InMemoryAgentSessionRepo {
-    async fn claim(&self, session: AgentSessionId, replica: ReplicaId) -> Result<ClaimOutcome> {
+impl SessionLocks for InMemoryAgentSessionRepo {
+    async fn try_lock(
+        &self,
+        session: AgentSessionId,
+        replica: ReplicaId,
+    ) -> Result<Option<SessionLock>> {
         if !self
             .sessions
             .lock()
@@ -384,7 +388,7 @@ impl SessionOwnership for InMemoryAgentSessionRepo {
             .contains_key(&session)
         {
             return Err(AgentSessionError::Unknown(anyhow::anyhow!(
-                "agent session {session} does not exist to claim"
+                "agent session {session} does not exist to lock"
             )));
         }
         let now = std::time::Instant::now();
@@ -397,32 +401,31 @@ impl SessionOwnership for InMemoryAgentSessionRepo {
             .leases
             .lock()
             .expect("in-memory lease store is not poisoned");
-        let (holder, fence) = leases.entry(session).or_insert((None, 0));
+        let (holder, token) = leases.entry(session).or_insert((None, 0));
         let holder_is_live = holder.filter(|holder| *holder != replica).filter(|holder| {
             replicas
                 .get(holder)
                 .is_some_and(|(beat, _)| now.duration_since(*beat) < REPLICA_STALE_AFTER)
         });
-        if let Some(holder) = holder_is_live {
-            return Ok(ClaimOutcome::ManagedElsewhere(holder));
+        if holder_is_live.is_some() {
+            return Ok(None);
+        }
+        // As in the real adapter: a takeover bumps the token, re-locking our
+        // own session does not.
+        if *holder != Some(replica) {
+            *token += 1;
         }
         *holder = Some(replica);
-        *fence += 1;
-        Ok(ClaimOutcome::Claimed(SessionClaim {
-            session,
-            replica,
-            fence: ManagerFence(*fence),
-        }))
+        Ok(Some(SessionLock::new(session, *token)))
     }
 
-    async fn release(&self, claim: &SessionClaim) -> Result<()> {
+    async fn unlock(&self, lock: &SessionLock) -> Result<()> {
         let mut leases = self
             .leases
             .lock()
             .expect("in-memory lease store is not poisoned");
-        if let Some((holder, fence)) = leases.get_mut(&claim.session)
-            && *holder == Some(claim.replica)
-            && *fence == claim.fence.0
+        if let Some((holder, token)) = leases.get_mut(&lock.session())
+            && *token == lock.token()
         {
             *holder = None;
         }
@@ -544,29 +547,21 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
         Ok(users)
     }
 
-    async fn create_fenced(
+    async fn create_locked(
         &self,
         log: AgentSessionLog,
-        claim: &SessionClaim,
-    ) -> Result<StoredAgentSessionLog> {
-        self.create_fenced_with_boundary(log, claim, None).await
-    }
-
-    async fn create_fenced_with_boundary(
-        &self,
-        log: AgentSessionLog,
-        claim: &SessionClaim,
+        lock: &SessionLock,
         boundary: Option<crate::domain::model::HistoryBoundary>,
     ) -> Result<StoredAgentSessionLog> {
         let _transaction = self.log_transaction.lock().unwrap();
         let leases = self.leases.lock().unwrap();
-        if claim.session != log.agent_session_id
+        if lock.session() != log.agent_session_id
             || !matches!(
-                leases.get(&log.agent_session_id), Some((holder, fence))
-                    if *holder == Some(claim.replica) && *fence == claim.fence.0
+                leases.get(&log.agent_session_id), Some((_, token))
+                    if *token == lock.token()
             )
         {
-            return Err(AgentSessionError::FencedOut(log.agent_session_id));
+            return Err(AgentSessionError::LockLost(log.agent_session_id));
         }
         if !self
             .sessions
@@ -574,7 +569,7 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
             .unwrap()
             .contains_key(&log.agent_session_id)
         {
-            return Err(AgentSessionError::FencedOut(log.agent_session_id));
+            return Err(AgentSessionError::LockLost(log.agent_session_id));
         }
         if let Some(boundary) = boundary {
             let logs = self.logs.lock().unwrap();
@@ -634,6 +629,14 @@ impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
             .map_err(|error| rootcause::report!(error))?;
         Ok(log.into_iter().map(|stored| stored.entry).collect())
     }
+}
+
+/// A lock with an arbitrary token, for adapter tests in other crates that
+/// write a session-scoped row and need a lock to write under. Production
+/// code only ever gets one from [`SessionLocks::try_lock`].
+#[must_use]
+pub fn session_lock_for_test(session: AgentSessionId, token: i64) -> SessionLock {
+    SessionLock::new(session, token)
 }
 
 /// A session fixture with the given id; every other field is a plausible

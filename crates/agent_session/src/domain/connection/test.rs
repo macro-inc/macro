@@ -15,18 +15,11 @@ const OTHER: AgentSessionId = AgentSessionId::TEST_B;
 
 #[test]
 fn mapping_an_attachment_preserves_activation_and_handshake() {
-    use crate::domain::model::{ManagerFence, ReplicaId};
-    let claim = SessionClaim {
-        session: OTHER,
-        replica: ReplicaId::from_uuid(macro_uuid::Uuid::from_u128(2)),
-        fence: ManagerFence(7),
-    };
+    let lock = SessionLock::new(OTHER, 7);
     let called = Arc::new(AtomicBool::new(false));
     let observed = called.clone();
     let attachment = RuntimeAttachment::solo(1).on_activate(Box::new(move |actual| {
-        assert_eq!(actual.session, claim.session);
-        assert_eq!(actual.replica, claim.replica);
-        assert_eq!(actual.fence, claim.fence);
+        assert_eq!(actual, lock);
         observed.store(true, Ordering::SeqCst);
         Ok(())
     }));
@@ -34,7 +27,7 @@ fn mapping_an_attachment_preserves_activation_and_handshake() {
     let mut mapped = attachment.map_transport(|n| n.to_string());
     assert_eq!(mapped.connector, "1");
     assert!(mapped.handshake.same_channel(&handshake));
-    mapped.activation.take().unwrap()(claim).unwrap();
+    mapped.activation.take().unwrap()(lock).unwrap();
     assert!(mapped.activation.is_none());
     assert!(called.load(Ordering::SeqCst));
 }

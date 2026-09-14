@@ -23,7 +23,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::SessionId;
-use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession, ReplicaId};
+use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession};
 use agent_session::domain::ports::{AgentSessionRepo, ExternalSessionRepo};
 use cursor_cloud_agents::api::{ApiKey, CursorClient, CursorConfig};
 use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
@@ -139,7 +139,6 @@ pub struct CursorContainerManager<Sessions, Keys> {
 enum JournalStorage {
     Postgres {
         pool: sqlx::PgPool,
-        replica: ReplicaId,
     },
     #[cfg(test)]
     Memory,
@@ -166,14 +165,13 @@ where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
     Keys: CursorApiKeys,
 {
-    /// Build a manager with required durable journal storage and replica identity.
+    /// Build a manager with required durable journal storage.
     pub fn new(
         keys: Keys,
         base_url: String,
         repo: CursorRepoUrl,
         sessions: Sessions,
         pool: sqlx::PgPool,
-        replica: ReplicaId,
         pending: PendingCommands,
     ) -> Self {
         Self {
@@ -181,7 +179,7 @@ where
             base_url,
             repo,
             sessions,
-            journal_storage: JournalStorage::Postgres { pool, replica },
+            journal_storage: JournalStorage::Postgres { pool },
             pending,
         }
     }
@@ -245,24 +243,19 @@ where
         let journal: Arc<dyn cursor_cloud_agents::domain::journal::CursorJournal> = match &self
             .journal_storage
         {
-            JournalStorage::Postgres { pool, replica } => {
+            JournalStorage::Postgres { pool } => {
                 let journal = Arc::new(
                     cursor_cloud_agents::outbound::postgres_journal::PgCursorJournal::new(
                         pool.clone(),
                         session_id,
-                        *replica,
                     ),
                 );
                 let activated = journal.clone();
-                owner_binding = Some(Box::new(move |claim| {
-                    activated
-                        .activate(claim.session, claim.replica, claim.fence)
-                        .map_err(|e| {
-                            agent_runtime_protocol::domain::ports::TransportError::Client(
-                                e.to_string(),
-                            )
+                owner_binding = Some(Box::new(move |lock| {
+                    activated.activate(lock).map_err(|e| {
+                        agent_runtime_protocol::domain::ports::TransportError::Client(e.to_string())
                             .into()
-                        })
+                    })
                 }));
                 journal
             }

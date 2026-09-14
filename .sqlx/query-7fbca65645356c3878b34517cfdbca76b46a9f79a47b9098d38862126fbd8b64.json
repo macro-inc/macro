@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE agent_session AS session\n                SET history_start_log_id = boundary.id\n                FROM agent_session_log AS boundary\n                WHERE session.id = $1\n                  AND boundary.id = $2 AND boundary.agent_session_id = session.id\n                  AND (boundary.created_at, boundary.id) <= ($3, $4)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7fbca65645356c3878b34517cfdbca76b46a9f79a47b9098d38862126fbd8b64"
+}

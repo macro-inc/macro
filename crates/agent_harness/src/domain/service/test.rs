@@ -2280,19 +2280,16 @@ impl crate::domain::ports::CommandForwarder for RecordingForwarder {
     }
 }
 
-/// Claim a session for a fabricated peer replica.
-async fn claim_as_peer(
-    repo: &InMemoryAgentSessionRepo,
-    session: AgentSessionId,
-) -> agent_session::domain::model::SessionClaim {
-    use agent_session::domain::model::{ClaimOutcome, ReplicaId};
-    use agent_session::domain::ports::SessionOwnership as _;
+/// Lock a session for a fabricated peer replica, returning the peer.
+async fn lock_as_peer(repo: &InMemoryAgentSessionRepo, session: AgentSessionId) -> ReplicaId {
+    use agent_session::domain::ports::SessionLocks as _;
     let peer = ReplicaId::mint();
     repo.heartbeat(peer, None).await.expect("peer heartbeats");
-    match repo.claim(session, peer).await.expect("peer claims") {
-        ClaimOutcome::Claimed(claim) => claim,
-        ClaimOutcome::ManagedElsewhere(_) => panic!("nobody else should hold the test session"),
-    }
+    repo.try_lock(session, peer)
+        .await
+        .expect("peer locks")
+        .expect("nobody else should hold the test session");
+    peer
 }
 
 /// A command for a session a live peer manages goes through the command bus
@@ -2304,7 +2301,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
     let session = agent_session::testing::test_agent_session(AgentSessionId::new());
     let id = session.id;
     repo.insert_session(session);
-    let claim = claim_as_peer(&repo, id).await;
+    let peer = lock_as_peer(&repo, id).await;
     let forwarder = RecordingForwarder::default();
     let service = AgentHarnessService::new(
         AgentSessionServiceImpl::new(
@@ -2344,7 +2341,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
     assert!(matches!(
         forwarder.calls.lock().unwrap()[0],
         (crate::domain::ports::CommandTarget::Replica(replica), session)
-            if replica == claim.replica && session == id
+            if replica == peer && session == id
     ));
     assert!(
         repo.get(id).await.is_ok(),

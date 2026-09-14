@@ -421,7 +421,7 @@ Every replayed ACP frame is appended to `agent_session_log`, including repeated
 conversation content. Only a matching, valid, successfully persisted load
 response selects a new effective-history window, starting at that connection's
 initialization. The selection is atomic with the response under the session's
-ownership fence. The raw audit history is retained; the product log endpoint
+lock. The raw audit history is retained; the product log endpoint
 reads the selected indexed range. Generic server and browser folds stage load
 updates separately and replace visible history only on success. Failed or
 incomplete loads preserve the committed conversation; resume does not replace it.
@@ -454,13 +454,12 @@ replacement. Operators should account for this retention limitation before
 rollout. The delivered-run watermark remains separate from journal capture
 progress, and local journal sequence numbers are not remote SSE resume tokens.
 
-The journal's atomic owner fence is not a second ownership authority. The
-session service acquires the claim and binds that exact generation once through
-`activate_reserved` and `RuntimeAttachment::on_activate`, which receives the typed
-`SessionClaim` before actor startup. Container providers return attachments;
-transport mapping preserves the callback and shared handshake. Physical
-transports carry frames only. The journal never
-claims ownership or refreshes its fence from a database read.
+The journal's lock check is not a second ownership authority. The session
+service takes the lock and binds that exact `SessionLock` once through
+`activate_reserved` and `RuntimeAttachment::on_activate` before actor startup.
+Container providers return attachments; transport mapping preserves the callback
+and shared handshake. Physical transports carry frames only. The journal never
+takes the lock itself or refreshes its token from a database read.
 
 The browser forwards the effective-history snapshot and buffered/live durable
 rows to Rust `LogIngestion` through WASM `snapshot` and `push_rows`. Ingestion
@@ -472,22 +471,24 @@ The ID set stays bounded by snapshot size. `FoldMachine` remains append-only;
 raw recording consumers retain the existing `extend` and `push` API.
 
 Routing new commands away from a stale replica does not stop its existing work.
-`PgAgentSessionRepo::claim` can take over when the old replica's heartbeat is
+`SessionLocks::try_lock` can take over when the old replica's heartbeat is
 stale, without notifying its process. `activate_reserved` gives the actor a
-fenced ACP log writer; the next rejected append stops that actor. `run_session`
+locked ACP log writer; the next rejected append stops that actor. `run_session`
 then drops its transport, and the pipe pump closes asynchronously. Independently,
 `CursorContainerManager::serve_session` awaits `sync_foreign_runs` inside its
 timer branch: pipe cancellation is not polled again until that await finishes.
 A provider response can therefore reach the native journal after takeover even
 with no new command dispatched to the old replica.
 
-`PgCursorJournal::lock_owner` checks the bound replica/generation while holding
-the `agent_session` row lock through journal commit. Takeover updates that same
-row: either the old append commits before takeover, or it fails after takeover.
-The existing `SessionClaim` is a token, not a transaction-bound storage capability;
-the existing fenced ACP writer only covers ACP log appends. Wrapping a simple
-journal with a preflight ownership check would lose this atomicity. Retain the
-small storage fence rather than introduce a new generic transaction wrapper.
+`PgCursorJournal::hold_lock` checks the bound lock token while holding the
+`agent_session` row lock through journal commit, the same one-statement check
+the ACP log adapter's `hold_lock` makes at the top of every locked append.
+Takeover updates that same row: either the old append commits before takeover,
+or it fails after takeover. A `SessionLock` is a token, not a transaction-bound
+storage capability, and domain ports cannot carry a transaction, so each
+Postgres adapter that writes session-scoped rows runs the check inside its own
+transaction. A preflight ownership check outside the transaction would lose
+this atomicity.
 
 Native SSE records contain only event name, original data, and provider ID.
 Scripted providers emit the same wire-shaped records through the production

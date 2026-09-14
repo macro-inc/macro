@@ -1,8 +1,14 @@
 use super::*;
 use uuid::Uuid;
 
+/// Only the lock store mints locks; the test plays that role via the
+/// crate-visible constructor re-exported for adapters' tests.
+fn lock(session: AgentSessionId, token: i64) -> SessionLock {
+    agent_session::testing::session_lock_for_test(session, token)
+}
+
 #[sqlx::test(migrations = false)]
-async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
+async fn append_is_ordered_locked_and_session_scoped(pool: PgPool) {
     sqlx::raw_sql(
         "CREATE TABLE agent_session(id uuid PRIMARY KEY, manager_replica_id uuid, manager_fence bigint NOT NULL);
          CREATE TABLE agent_session_log(id uuid PRIMARY KEY, agent_session_id uuid NOT NULL REFERENCES agent_session(id));
@@ -15,28 +21,26 @@ async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
     .await
     .unwrap();
     let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
-    let replica = ReplicaId::from_uuid(Uuid::from_u128(2));
-    let other = ReplicaId::from_uuid(Uuid::from_u128(3));
+    let other_session = AgentSessionId::new_from_uuid(Uuid::from_u128(3));
+    let replica = Uuid::from_u128(2);
     sqlx::query!(
         "INSERT INTO agent_session (id, manager_replica_id, manager_fence) VALUES ($1, $2, 1)",
         session.as_uuid(),
-        replica.as_uuid()
+        replica
     )
     .execute(&pool)
     .await
     .unwrap();
-    let journal = PgCursorJournal::new(pool.clone(), session, replica);
+    let journal = PgCursorJournal::new(pool.clone(), session);
     let id = SessionId::new("acp");
     assert!(
         journal.read(&id).await.is_err(),
         "cannot operate before attachment activation"
     );
-    assert!(journal.activate(session, other, ManagerFence(1)).is_err());
-    journal.activate(session, replica, ManagerFence(1)).unwrap();
-    let stale_before_io = PgCursorJournal::new(pool.clone(), session, replica);
-    stale_before_io
-        .activate(session, replica, ManagerFence(1))
-        .unwrap();
+    assert!(journal.activate(lock(other_session, 1)).is_err());
+    journal.activate(lock(session, 1)).unwrap();
+    let stale_before_io = PgCursorJournal::new(pool.clone(), session);
+    stale_before_io.activate(lock(session, 1)).unwrap();
     assert!(journal.read(&id).await.unwrap().is_empty());
     journal
         .append(&id, 0, None, &JournalInput::HistoryComplete)
@@ -66,11 +70,11 @@ async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
         timestamped, 2,
         "appends get a database timestamp by default"
     );
-    let foreign = PgCursorJournal::new(pool.clone(), session, other);
-    foreign.activate(session, other, ManagerFence(1)).unwrap();
+    let foreign = PgCursorJournal::new(pool.clone(), session);
+    foreign.activate(lock(session, 7)).unwrap();
     assert!(
         foreign.read(&id).await.is_err(),
-        "must not adopt another replica's fence"
+        "a lock with the wrong token is not the session's lock"
     );
     sqlx::query!(
         "UPDATE agent_session SET manager_fence = 2 WHERE id = $1",
@@ -100,15 +104,11 @@ async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
             .is_err()
     );
     assert!(
-        stale_before_io
-            .activate(session, replica, ManagerFence(2))
-            .is_err(),
+        stale_before_io.activate(lock(session, 2)).is_err(),
         "cannot rebind old connection"
     );
-    let successor = PgCursorJournal::new(pool.clone(), session, replica);
-    successor
-        .activate(session, replica, ManagerFence(2))
-        .unwrap();
+    let successor = PgCursorJournal::new(pool.clone(), session);
+    successor.activate(lock(session, 2)).unwrap();
     assert_eq!(successor.read(&id).await.unwrap().len(), 2);
     successor
         .append(&id, 2, Some(&run), &JournalInput::Reconciled)
