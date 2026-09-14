@@ -16,6 +16,9 @@ use gh_workflow::{
 
 use crate::workflows::{runners, steps, vars, web_artifact_paths::WEB_ARTIFACT_PATHS};
 
+#[cfg(test)]
+mod test;
+
 const PREVIEW_BUCKET: &str = "macro-preview-assets-dev";
 
 /// Build the workflow.
@@ -50,10 +53,12 @@ fn deploy() -> Job {
                 .pull_requests(Level::Write),
         )
         .add_step(checkout())
-        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::mount_web_build_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build())
+        .add_step(steps::show_sccache_stats())
         .add_step(configure_aws_credentials())
         .add_step(get_or_create_preview_id())
         .add_step(validate_bucket_name())
