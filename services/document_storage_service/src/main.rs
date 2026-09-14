@@ -1405,6 +1405,10 @@ async fn run() -> anyhow::Result<()> {
                 document_service,
                 markdown_initializer,
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
+                documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker::new(
+                    db.clone(),
+                    lexical_client.clone(),
+                ),
             ),
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
         },

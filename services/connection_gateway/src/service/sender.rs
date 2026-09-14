@@ -7,7 +7,7 @@ use crate::model::message::Message;
 use crate::model::sender::MessageReceipt;
 use crate::service::redis::MessageWithConnection;
 use anyhow::Result;
-use futures::future::try_join_all;
+use futures::future::join_all;
 use model_entity::Entity;
 use redis::aio::MultiplexedConnection;
 use std::collections::HashMap;
@@ -146,12 +146,20 @@ async fn send_messages_to_connections(
         }
     });
 
-    let local_results = try_join_all(local_send_futures).await.unwrap_or_default();
-    let remote_results = try_join_all(remote_send_futures).await.unwrap_or_default();
+    // Independent per connection, so they are joined rather than tried: one
+    // connection refusing a message is now an ordinary outcome (a saturated
+    // queue is ejected), and it must not cancel delivery to the healthy
+    // connections beside it or discard the receipts they produced.
+    let local_results = join_all(local_send_futures).await;
+    let remote_results = join_all(remote_send_futures).await;
 
     let mut receipts: HashMap<String, MessageReceipt> = HashMap::new();
 
-    for delivery in local_results.into_iter().chain(remote_results.into_iter()) {
+    for delivery in local_results
+        .into_iter()
+        .chain(remote_results.into_iter())
+        .filter_map(std::result::Result::ok)
+    {
         if let Some(receipt) = receipts.get_mut(&delivery.user_id) {
             receipt.delivery_count += 1;
             receipt.active = receipt.active || delivery.active;

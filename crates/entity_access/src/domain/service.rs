@@ -245,7 +245,8 @@ where
             | EntityType::CalendarEvent
             // A reminder belongs to a user, so a team-scoped bot never reaches one.
             | EntityType::Reminder
-            | EntityType::Skill => {
+            | EntityType::Skill
+            | EntityType::ScheduledAction => {
                 Err(AccessError::BadRequest("Unsupported bot entity type"))
             }
         }
@@ -438,7 +439,8 @@ where
             EntityType::Team
             | EntityType::User
             | EntityType::ChannelMessage
-            | EntityType::Skill => Ok(None),
+            | EntityType::Skill
+            | EntityType::ScheduledAction => Ok(None),
         }
     }
 

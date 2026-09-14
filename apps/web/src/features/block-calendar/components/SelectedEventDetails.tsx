@@ -8,10 +8,16 @@ import {
   type CalendarTimeFormat,
   reminderCalendarIdOf,
 } from '@app/features/calendar/types';
+import {
+  eventEmailRecipients,
+  guestEmails,
+} from '@app/features/calendar/utils/guest-emails';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { Popover } from '@kobalte/core/popover';
+import CopyIcon from '@phosphor/copy.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
 import ExclamationIcon from '@phosphor/exclamation-mark.svg';
 import LinkIcon from '@phosphor/link.svg';
 import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
@@ -30,8 +36,10 @@ import {
 } from '@ui';
 import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
 import { copyCalendarEventMention } from '../copy-event-mention';
+import { copyGuestEmails } from '../copy-guest-emails';
 import { EventRsvpSection } from './EventRsvpSection';
 import { useOpenEventComposer } from './use-open-event-composer';
+import { useOpenEventEmail } from './use-open-event-email';
 
 interface SelectedEventDetailsProps {
   anchor: Accessor<HTMLElement | undefined>;
@@ -166,6 +174,50 @@ function EveryoneElseDeclinedNotice(props: {
   );
 }
 
+/**
+ * The guest-row actions Google Calendar users know: copy every guest's
+ * address, or start an email to the other guests (hidden when the viewer is
+ * the only one). Emailing closes the details first: closing hands focus back
+ * to the calendar chip, and the composer's To field has to win that exchange.
+ */
+function EventGuestActions(props: {
+  event: CalendarEvent;
+  closeDetails: () => void;
+}) {
+  const openEventEmail = useOpenEventEmail();
+
+  return (
+    <>
+      <Button
+        label="Copy guest emails"
+        variant="ghost"
+        size="icon-sm"
+        depth={3}
+        class="rounded-md text-ink-muted [&_svg]:size-4"
+        onClick={() => copyGuestEmails(guestEmails(props.event.attendees))}
+      >
+        <CopyIcon />
+      </Button>
+      <Show when={eventEmailRecipients(props.event).length > 0}>
+        <Button
+          label="Email guests"
+          variant="ghost"
+          size="icon-sm"
+          depth={3}
+          class="rounded-md text-ink-muted [&_svg]:size-4"
+          onClick={() => {
+            const event = props.event;
+            props.closeDetails();
+            openEventEmail(event);
+          }}
+        >
+          <EnvelopeIcon />
+        </Button>
+      </Show>
+    </>
+  );
+}
+
 function EventDetailsDrawer(props: EventDetailsOverlayProps) {
   const openEventComposer = useOpenEventComposer();
   const deleteDialog = useDeleteEventDialog({
@@ -256,7 +308,15 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                 defaultReminders={props.defaultReminders}
               />
             </div>
-            <EventAttendeesSection attendees={props.event.attendees} />
+            <EventAttendeesSection
+              attendees={props.event.attendees}
+              actions={
+                <EventGuestActions
+                  event={props.event}
+                  closeDetails={() => props.onOpenChange(false)}
+                />
+              }
+            />
             <EventRsvpSection event={props.event} buttonSize="md" />
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
@@ -503,7 +563,15 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                     defaultReminders={props.defaultReminders}
                   />
                 </div>
-                <EventAttendeesSection attendees={props.event.attendees} />
+                <EventAttendeesSection
+                  attendees={props.event.attendees}
+                  actions={
+                    <EventGuestActions
+                      event={props.event}
+                      closeDetails={() => props.onOpenChange(false)}
+                    />
+                  }
+                />
                 <EventRsvpSection event={props.event} />
               </div>
             </div>

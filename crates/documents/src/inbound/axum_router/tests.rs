@@ -61,7 +61,7 @@ use crate::{
     },
     outbound::{
         document_bytes_upload::ReqwestDocumentBytesUploader,
-        markdown_init::LexicalSyncMarkdownInitializer,
+        markdown_init::LexicalSyncMarkdownInitializer, mention_tracker::LexicalCommsMentionTracker,
     },
 };
 
@@ -840,6 +840,7 @@ fn test_router() -> (
             ),
         ),
         ReqwestDocumentBytesUploader::default(),
+        LexicalCommsMentionTracker::new(pool.clone(), lexical_client.clone()),
     );
     let state = DocumentRouterState {
         service: document_service.clone(),

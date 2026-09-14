@@ -1,11 +1,14 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { isMutedItem } from '@entity/utils/notification';
+import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
+import type { ChannelsSourceScope } from '../../../queries';
 import type { ChannelsGroup, ChannelsQueryScope } from '../../../types';
 import {
   domIdForRow,
   rowKeyForChannel,
+  rowKeyForFavorite,
   rowKeyForSection,
   useChannelsRail,
 } from '../ChannelsRailContext';
@@ -31,6 +34,39 @@ export function useChannelRailItemState(channelId: Accessor<string>) {
       unread: rail.channelActivity.unreadChannelIds().has(id),
       callStatus: rail.channelActivity.callStatuses().get(id),
       incomingCallId: rail.channelActivity.incomingCallIds().get(id),
+    };
+  });
+}
+
+export function useChannelRailFavoriteItemState(favorite: Accessor<Favorite>) {
+  const rail = useChannelsRail();
+
+  return createMemo(() => {
+    const current = favorite();
+    const rowId = rowKeyForFavorite(current);
+
+    return {
+      domId: domIdForRow(rail.railId, rowId),
+      selected:
+        current.entityType === 'channel' &&
+        rail.selectedChannelId() === current.entityId,
+      focused: rail.list.focus.key() === rowId,
+    };
+  });
+}
+
+export function useChannelRailFavoritesState() {
+  const rail = useChannelsRail();
+
+  return createMemo(() => {
+    const rowId = rowKeyForSection('favorites');
+
+    return {
+      items: rail.favorites(),
+      open: rail.isGroupOpen('favorites'),
+      focused: rail.list.focus.key() === rowId,
+      containsFocus: rail.list.focus.item()?.group === 'favorites',
+      domId: domIdForRow(rail.railId, rowId),
     };
   });
 }
@@ -69,7 +105,9 @@ export function useChannelRailScopeState(scope: Accessor<ChannelsQueryScope>) {
   });
 }
 
-export function useChannelRailVirtualizer(scope: Accessor<ChannelsQueryScope>) {
+export function useChannelRailVirtualizer(
+  scope: Accessor<ChannelsSourceScope>
+) {
   const rail = useChannelsRail();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   let unregister: (() => void) | undefined;

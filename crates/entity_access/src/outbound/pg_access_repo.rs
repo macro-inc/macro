@@ -319,8 +319,10 @@ impl AccessRepository for PgAccessRepository {
             | EntityType::CrmCompany
             | EntityType::CrmContact
             | EntityType::Skill
-            // Reminders are user-owned, never reachable through a team scope.
-            | EntityType::Reminder => {
+            // Reminders and scheduled actions are user-owned, never reachable
+            // through a team scope.
+            | EntityType::Reminder
+            | EntityType::ScheduledAction => {
                 return Err(AccessError::BadRequest(
                     "Unsupported entity type for team item access",
                 ));

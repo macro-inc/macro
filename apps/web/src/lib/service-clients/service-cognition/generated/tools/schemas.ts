@@ -2530,6 +2530,7 @@ export const ListNotifications = z.object({
             'crm_contact',
             'reminder',
             'skill',
+            'scheduled_action',
           ]),
           id: z.string(),
         })

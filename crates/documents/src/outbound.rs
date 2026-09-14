@@ -6,6 +6,8 @@ pub mod document_bytes_upload;
 pub mod editing_worker_client;
 #[cfg(feature = "markdown_init")]
 pub mod markdown_init;
+#[cfg(feature = "document_create_adapters")]
+pub mod mention_tracker;
 #[cfg(feature = "outbound")]
 pub mod pg_document_repo;
 #[cfg(feature = "outbound")]

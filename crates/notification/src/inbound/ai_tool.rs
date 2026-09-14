@@ -90,6 +90,7 @@ pub enum NotificationEntityType {
     CrmContact,
     Reminder,
     Skill,
+    ScheduledAction,
 }
 
 impl From<NotificationEntityType> for EntityType {
@@ -111,6 +112,7 @@ impl From<NotificationEntityType> for EntityType {
             NotificationEntityType::CrmContact => Self::CrmContact,
             NotificationEntityType::Reminder => Self::Reminder,
             NotificationEntityType::Skill => Self::Skill,
+            NotificationEntityType::ScheduledAction => Self::ScheduledAction,
         }
     }
 }

@@ -596,4 +596,67 @@ describe('useUpdateCalendarEventMutation', () => {
       startsAt: '2026-08-05T09:00:00Z',
     });
   });
+
+  it('scopes an optimistic edit to the targeted occurrence, or widens to the series', async () => {
+    const keys = [
+      '2026-08-04T09:00:00Z',
+      '2026-08-05T09:00:00Z',
+      '2026-08-06T09:00:00Z',
+    ];
+    const occurrence = (key: string): CalendarOccurrenceItem =>
+      ({
+        event: {
+          id: 'event-4',
+          title: 'Standup',
+          description: 'series notes',
+          recurrenceLines: ['RRULE:FREQ=DAILY'],
+          time: { kind: 'timed', startsAt: key, endsAt: key },
+          attendees: [],
+        },
+        occurrence: {
+          eventId: 'event-4',
+          occurrenceKey: key,
+          recurrenceId: key,
+          time: { kind: 'timed', startsAt: key, endsAt: key },
+        },
+      }) as unknown as CalendarOccurrenceItem;
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: keys.map(occurrence), syncStatus: 'ready' }
+    );
+    updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-4' }));
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const descriptionAt = (key: string) =>
+      viewportData(viewportA)?.items.find(
+        (item) => item.occurrence.occurrenceKey === key
+      )?.event.description;
+
+    await update.mutateAsync({
+      eventId: 'event-4',
+      scope: 'this_event',
+      recurrenceId: keys[1],
+      occurrenceKey: keys[1],
+      patch: { description: 'this day only' },
+    });
+
+    expect(descriptionAt(keys[0])).toBe('series notes');
+    expect(descriptionAt(keys[1])).toBe('this day only');
+    expect(descriptionAt(keys[2])).toBe('series notes');
+    expect(updateCalendarEventMock).toHaveBeenCalledWith('event-4', {
+      description: 'this day only',
+      calendarId: undefined,
+      scope: 'this_event',
+      recurrenceId: keys[1],
+    });
+
+    await update.mutateAsync({
+      eventId: 'event-4',
+      scope: 'all',
+      patch: { description: 'shared notes' },
+    });
+
+    expect(descriptionAt(keys[0])).toBe('shared notes');
+    expect(descriptionAt(keys[1])).toBe('shared notes');
+    expect(descriptionAt(keys[2])).toBe('shared notes');
+  });
 });

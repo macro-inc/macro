@@ -264,6 +264,11 @@ the copy Macro's alerts fire from and whose guest list and join link Macro recor
 editor only lets them be changed there. Answering an invitation likewise addresses the
 primary copy. The details popover and the editor act on the displayed copy, so editing or
 deleting it targets that calendar's event at Google.
+As in Google Calendar, the guests row of the details popover (a bottom sheet on phones)
+carries `Copy guest emails` and `Email guests` icon buttons. Copying puts every guest's
+address on the clipboard, comma-separated. Emailing opens a new email addressed to every
+guest but you — in a split beside the calendar on desktop, as the full-screen composer on
+touch devices — and is hidden when you are the only guest.
 
 With the `enable-calendar-team-ooo` flag on, teammates' Google Calendar out-of-office events
 overlay the grid as read-only chips titled `<name>: <event title>`. The side panel's

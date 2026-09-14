@@ -37,7 +37,7 @@ import { useChannelCalls } from './rail/hooks/useChannelCalls';
 import { useChannelRailActivity } from './rail/hooks/useChannelRailActivity';
 
 const MOBILE_CHANNEL_TABS: PillTabItem<ChannelsQueryScope>[] = [
-  { value: 'recents', label: 'Recents' },
+  { value: 'recents', label: 'Recent' },
   { value: 'channels', label: 'Channels' },
   { value: 'direct_messages', label: 'DMs' },
 ];

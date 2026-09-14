@@ -535,7 +535,8 @@ export type NotificationEntityType =
   | 'crm_company'
   | 'crm_contact'
   | 'reminder'
-  | 'skill';
+  | 'skill'
+  | 'scheduled_action';
 /**
  * Channel-access change to apply to a bot.
  */

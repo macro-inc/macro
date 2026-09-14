@@ -153,20 +153,31 @@ a channel cached away from its latest page, and a delta longer than one page use
 
 ## Chat navigation rail
 
-On desktop, the Chat rail has `Browse` and `Recents` tabs. Browse contains
-independently paginated `Channels` and `DMs` sections; collapsing a section
-does not discard its loaded pages. Recents has its own pagination cursor.
-Each list is virtualized, so offscreen conversations may not exist in the DOM.
+On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
+optional `Favorites` section above the independently paginated `Channels` and
+`DMs` sections. It appears when the user has channel favorites and only lists
+channels. Channel favorites open in the channel preview.
+The search action beside the tabs opens a search field below them and replaces
+the active tab contents with matching channels and direct messages from one
+activity-ordered source. Search results use compact rows on `All` and
+conversation cards on `Recent`. Switching tabs preserves the active search and
+query, then scrolls the results to the selected channel when present or to the
+start. Closing search restores the active tab and applies the same scroll
+behavior to its lists. An empty result uses the standard search empty state
+artwork and wraps long queries.
+Collapsing a section does not discard its loaded pages. Recent has its own
+pagination cursor. Each list is virtualized, so offscreen conversations may not
+exist in the DOM.
 Rows and section headers act on primary-button mousedown, so the selection
 and highlight change before the click completes; a normal click still works.
 
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances
 into the appended rows. If the section has no next page, navigation proceeds
-to the next section. `[` and `]` jump between the Channels and DMs section
-headers.
+to the next section. `[` and `]` jump between the visible Favorites, Channels,
+and DMs section headers.
 
-On touch layouts, the `Recents`, `Channels`, and `DMs` pill tabs each retain
+On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
 their own loaded pages and load more as their active list approaches the end.
 
 ## Channel tabs

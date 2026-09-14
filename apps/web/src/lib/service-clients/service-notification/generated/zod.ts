@@ -155,6 +155,7 @@ export const listTypedNotificationsResponse = zod
                 'reminder',
                 'skill',
                 'agent_session',
+                'scheduled_action',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -1732,6 +1733,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'reminder',
                 'skill',
                 'agent_session',
+                'scheduled_action',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -3303,6 +3305,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'reminder',
                 'skill',
                 'agent_session',
+                'scheduled_action',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -4879,6 +4882,7 @@ export const getTypedNotificationByIdResponse = zod
         'reminder',
         'skill',
         'agent_session',
+        'scheduled_action',
       ])
       .describe('The type of an entity in Macro'),
   })
