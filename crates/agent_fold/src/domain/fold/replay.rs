@@ -23,7 +23,6 @@ pub(super) struct Replay {
     quarantined: bool,
     replay_session: Option<String>,
     pending_open: Option<(RequestId, Opening)>,
-    has_pull_request_event: bool,
 }
 
 #[derive(Debug)]
@@ -82,9 +81,7 @@ impl Replay {
         for entry in transaction.entries {
             state.step(entry);
         }
-        if self.has_pull_request_event {
-            state.metadata.pull_request_url = committed.metadata.pull_request_url.clone();
-        }
+        state.metadata.pull_request_url = committed.metadata.pull_request_url.clone();
         state.replaying = false;
         *committed = state;
         Outcome::Replaced
@@ -104,7 +101,6 @@ impl Replay {
             &entry.content,
             Message::ToServer(ToServerMessage::PullRequestSet { .. })
         ) {
-            self.has_pull_request_event = true;
             return Outcome::Changes(committed.step(entry));
         }
         if let Message::ToServer(ToServerMessage::Event { event }) = &entry.content {

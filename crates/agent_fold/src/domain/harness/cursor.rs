@@ -37,13 +37,6 @@
 //! steps into the subagent's children and takes the closing prose as its
 //! answer, so the transcript reads like the child had streamed.
 //!
-//! Older logs announced PRs in `session_info_update` metadata. Retain this
-//! reader for those logs; new PRs use the shared `PullRequestSet` event:
-//!
-//! ```json
-//! { "cursor": { "pullRequestUrl": "https://github.com/org/repo/pull/1" } }
-//! ```
-//!
 //! Every shape is a serde type below and read by deserializing, never by
 //! walking `Value`s. A field the types do not name is ignored; a frame they
 //! cannot read is "no information", same as every reader. Proto oneofs are
@@ -64,23 +57,6 @@ use crate::domain::model::{
 
 /// Reader for Cursor's conventions.
 pub struct Cursor;
-
-/// Legacy Cursor PR metadata, retained for previously recorded sessions.
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SessionInfoMeta {
-    #[serde(default)]
-    pull_request_url: Option<String>,
-}
-
-/// The pull request a `session_info_update` announces, when its `_meta`
-/// carries Cursor's namespace with one.
-#[must_use]
-pub(crate) fn pull_request_url(meta: Option<&super::Meta>) -> Option<String> {
-    super::namespaced::<SessionInfoMeta>(meta, "cursor")?
-        .pull_request_url
-        .filter(|url| !url.is_empty())
-}
 
 impl HarnessReader for Cursor {
     fn announces(&self, name: &str) -> bool {
