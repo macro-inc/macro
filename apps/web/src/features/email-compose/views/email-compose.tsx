@@ -154,7 +154,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
           preventScrollbarShift={false}
         >
           <MobileDrawer.Portal>
-            <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+            <MobileDrawer.Overlay />
             <MobileDrawer.Content aria-label="Draft options">
               <MobileDrawer.Handle />
               <MobileDrawer.Section class="mb-3">

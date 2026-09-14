@@ -353,10 +353,11 @@ export type ControlStatusDto = 'sent' | 'queued';
 export type CreateAgentSessionRequest = {
     /**
      * Bot the session runs for. On a managed request this optionally selects
-     * a persisted persona the user owns or may use through team membership;
-     * omitting it uses the deployment's default coding persona. On an
-     * external request, bot callers may omit it (their own identity is used)
-     * and must not name another bot; user callers must supply a bot they own.
+     * a persisted persona the user owns, may use through team membership, or
+     * can `@` mention in a shared channel; omitting it uses the deployment's
+     * default coding persona. On an external request, bot callers may omit it
+     * (their own identity is used) and must not name another bot; user callers
+     * must supply a bot they own.
      */
     botId?: string | null;
     /**

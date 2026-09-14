@@ -1,6 +1,7 @@
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   emailToMacroId,
   getDisplayName,
@@ -285,12 +286,17 @@ function ScrollableAttendeeList(props: { attendees: CalendarAttendee[] }) {
 
   return (
     <div class="relative min-w-0 flex-1">
-      <div ref={setScrollContainer} class="max-h-40 overflow-y-auto pr-4">
+      <div
+        ref={setScrollContainer}
+        class="max-h-40 overflow-y-auto pr-4 mobile:max-h-none mobile:overflow-visible mobile:pr-0"
+      >
         <div class="flex flex-col gap-3">
           <CalendarAttendeeList attendees={props.attendees} />
         </div>
       </div>
-      <ScrollIndicators scrollRef={scrollContainer} appearance="gradient" />
+      <Show when={!isMobile()}>
+        <ScrollIndicators scrollRef={scrollContainer} appearance="gradient" />
+      </Show>
     </div>
   );
 }

@@ -1408,7 +1408,7 @@
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns or may use through team membership;\nomitting it uses the deployment's default coding persona. On an\nexternal request, bot callers may omit it (their own identity is used)\nand must not name another bot; user callers must supply a bot they own."
+            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona. On an external request, bot callers may omit it\n(their own identity is used) and must not name another bot; user callers\nmust supply a bot they own."
           },
           "instructions": {
             "type": ["string", "null"],

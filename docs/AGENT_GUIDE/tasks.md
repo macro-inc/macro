@@ -10,7 +10,8 @@ sidebar has a collapsible `Tags` section listing every personal and team tag, wi
 carrying it (the same selection as the `Tags` group of the `Filter` menu); clicking it again
 clears it, and switching tabs clears it like any other filter. On mobile, the tabs
 are pills and the leading sliders button opens one drawer containing Sort, Group, and
-Filters (including Tags). Mobile intentionally omits the search and create controls.
+Filters (including Tags). The mobile bottom dock has the Ask AI input, a separate **+ Task**
+button, and Search.
 
 New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced task features`,
 `How we use tasks at Macro`).
@@ -18,7 +19,9 @@ New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced tas
 ## Create a task
 
 On touch devices, task creation opens in a bottom sheet with a drag handle and
-scrollable, keyboard-aware content. Desktop uses the centered composer dialog.
+scrollable, keyboard-aware content. Its glass pane has broad screen-scaled
+corners, an 8px outer inset, and a blurred backdrop, matching the create and
+filter sheets. Desktop uses the centered composer dialog.
 
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus

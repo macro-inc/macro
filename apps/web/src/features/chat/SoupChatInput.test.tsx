@@ -13,9 +13,7 @@ const mocks = vi.hoisted(() => ({
   pending: vi.fn(),
   rename: vi.fn(),
 }));
-vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
-  FloatRegionOrInline: (props: { children: unknown }) => props.children,
-}));
+
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
 }));
@@ -23,8 +21,14 @@ vi.mock('@core/component/AI/component/input/buildChatEditor', () => ({
   buildChatEditor: () => ({ withMentions: () => ({}) }),
 }));
 vi.mock('@core/component/AI/component/input/ChatInput', () => ({
-  ChatInput: (props: { onSend: (request: unknown) => void }) => (
+  ChatInput: (props: {
+    onSend: (request: unknown) => void;
+    variant?: string;
+    collapseOnBlur?: boolean;
+  }) => (
     <button
+      data-variant={props.variant}
+      data-collapse-on-blur={props.collapseOnBlur}
       onClick={() =>
         props.onSend({
           content: 'Summarize this document',
@@ -76,15 +80,20 @@ vi.mock('@service-cognition/client', () => ({
   cognitionApiServiceClient: { createChat: mocks.createChat },
 }));
 
-import type { CreatableBlock } from '@app/features/command/types';
-import { mobilePageCreateAction } from '@components/app/mobile/mobile-page-create-action';
-import { TOKENS } from '@core/hotkey/tokens';
 import { SoupChatInput } from './SoupChatInput';
 
-afterEach(cleanup);
 beforeEach(() => vi.clearAllMocks());
+afterEach(cleanup);
 
-describe('Agents list composer', () => {
+describe('SoupChatInput', () => {
+  it('renders the compact chat input inline without page actions', () => {
+    const { container } = render(() => <SoupChatInput />);
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect(container.contains(send)).toBe(true);
+    expect(send.getAttribute('data-variant')).toBe('default');
+    expect(send.getAttribute('data-collapse-on-blur')).toBe('true');
+    expect(screen.queryByRole('button', { name: /^New/ })).toBeNull();
+  });
   it('creates and opens a chat with the first prompt, selected model, and attachments', async () => {
     mocks.createChat.mockResolvedValue({
       isErr: () => false,
@@ -114,36 +123,5 @@ describe('Agents list composer', () => {
     await waitFor(() => expect(mocks.createChat).toHaveBeenCalledTimes(1));
     expect(mocks.pending).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalled();
-  });
-  it('replaces the Agents floating create button without removing other page actions', () => {
-    const blocks: CreatableBlock[] = [
-      {
-        label: 'Mail draft',
-        description: 'Create email',
-        blockName: 'email',
-        hotkeyToken: TOKENS.create.email,
-        hotkey: 'e',
-        keyDownHandler: vi.fn(() => true),
-      },
-      {
-        label: 'Task',
-        description: 'Create task',
-        blockName: 'task',
-        hotkeyToken: TOKENS.create.task,
-        hotkey: 't',
-        keyDownHandler: vi.fn(() => true),
-      },
-    ];
-
-    expect(mobilePageCreateAction('agents', blocks)).toBeUndefined();
-    expect(mobilePageCreateAction('mail', blocks)).toEqual({
-      label: 'New mail draft',
-      run: blocks[0].keyDownHandler,
-    });
-    expect(mobilePageCreateAction('tasks', blocks)).toEqual({
-      label: 'New task',
-      run: blocks[1].keyDownHandler,
-    });
-    expect(mobilePageCreateAction('mail', [])).toBeUndefined();
   });
 });

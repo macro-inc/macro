@@ -21,6 +21,10 @@ Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote)
 text and inline mention chips (tasks, docs, channels, skills, …) by the title
 shown on the chip.
 
+On touch devices, the text-selection menu (Copy, Cut, Comment, Share, and other
+available actions) appears above the floating header, comment input, and bottom
+dock. It stays anchored to the selection while the document scrolls.
+
 On a touch device, swipe a list item right to indent one level (Apple Notes
 style) or left to outdent. Nested children move with the parent. The first
 item can indent too, even in a single-item list. Vertical scrolling and taps
@@ -72,11 +76,27 @@ fetch cascade.
 
 ## Comments (Discussion)
 
-Below the editor: `Discussion` section with a `Leave a comment...` contenteditable, buttons
+On desktop, below the editor: `Discussion` section with a `Leave a comment...` contenteditable, buttons
 `Attach images`, `Format`, and `Send comment` (disabled until text exists). Click the
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
-user.
+user. On mobile, the new-comment composer is docked above the navigation bar,
+replacing Ask AI and New when commenting is available in documents and tasks.
+When the comment composer is unavailable, the default Ask AI row appears instead.
+Tap `Leave a comment...`
+to expand the channel-style input; use Send comment to submit (Enter inserts a
+newline on mobile). Submitting clears and unfocuses the mobile input, returning
+it to its compact state and dismissing the keyboard. The compact input's plus
+opens the native photo library in the iOS app, with a file-picker fallback when
+unavailable; browsers use the file picker. Cancelling adds no images.
+While the main document editor is focused with the virtual keyboard
+open, the floating comment input is hidden; dismissing the keyboard or leaving
+the document editor restores it with any unsent draft intact. Comments remain in the
+Discussion section, and collapsing that section does not hide the docked composer.
+On touch devices, the Discussion section is hidden until it contains a comment;
+the floating **Leave a comment...** input remains available. If the discussion
+becomes empty again, the section disappears. Desktop keeps the empty section
+and inline input.
 
 Comments anchored to selected text open in a floating margin card on desktop and
 a `Comments` drawer on touch devices. New comments, replies, and edits use the

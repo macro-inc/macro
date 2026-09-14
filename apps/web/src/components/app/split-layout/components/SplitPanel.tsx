@@ -4,6 +4,7 @@ import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
+import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { BlockOpenTrackingDelayContext } from '@core/context/blockOpenTracking';
@@ -387,6 +388,11 @@ export function SplitPanel(props: SplitPanelProps) {
                 </Show>
               </Panel.Body>
             </Panel>
+            <Show when={isTouchDevice()}>
+              <Suspense>
+                <MobilePageActionRow />
+              </Suspense>
+            </Show>
           </div>
         </SplitDrawerGroup>
       </SplitPanelContext.Provider>
