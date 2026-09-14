@@ -175,3 +175,18 @@ fn display_lists_each_grant() {
     assert!(rendered.contains("effective: view"));
     assert!(rendered.contains("public_link view"));
 }
+
+#[test]
+fn display_lists_bot_typed_entity_access_grant() {
+    let grant = AccessGrant::EntityAccess {
+        source_type: EntityAccessSourceType::Bot,
+        source_id: "bot|00000000-0000-0000-0000-000000000123".to_string(),
+        access_level: AccessLevel::Owner,
+        granted_from_project_id: None,
+    };
+
+    assert_eq!(
+        grant.to_string(),
+        "entity_access bot bot|00000000-0000-0000-0000-000000000123 owner"
+    );
+}
