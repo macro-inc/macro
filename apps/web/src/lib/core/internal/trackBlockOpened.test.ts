@@ -35,11 +35,10 @@ describe('track', () => {
   });
 
   it('POSTs document history for markdown documents', () => {
-    const client = (() => null) as Accessor<QueryClient>;
     track({
       itemId: 'doc-1',
       blockName: 'md',
-      client,
+      client: unusedClient,
     });
     expect(mutate).toHaveBeenCalledWith({
       itemId: 'doc-1',
