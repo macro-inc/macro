@@ -33,7 +33,8 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
           href={props.url}
           target="_blank"
           rel="noreferrer"
-          class="inline-flex min-w-0 shrink-0 items-center gap-1 rounded-xs px-1 py-0.5 text-ink-muted hover:bg-hover hover:text-ink"
+          title={reference() ? prDisplayName(reference()!) : 'Pull request'}
+          class="inline-flex min-w-0 max-w-full items-center gap-1 rounded-xs px-1 py-0.5 text-ink-muted hover:bg-hover hover:text-ink"
           data-magic-chip-pull-request={props.url}
           onClick={(event) => event.stopPropagation()}
         >
@@ -47,7 +48,7 @@ export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
       {(entity) => (
         <PullRequestEntityLink
           entity={entity()}
-          class="shrink-0 text-ink-muted hover:text-ink"
+          class="max-w-full text-ink-muted hover:text-ink"
         />
       )}
     </Show>

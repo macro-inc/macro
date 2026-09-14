@@ -113,7 +113,8 @@ editor visible.
 When Cursor opens a pull request, the chip header shows its GitHub link as soon
 as the run reports it, including after restoring a session. The link remains
 usable while the webhook mapping is loading or absent, then becomes a Macro PR
-entity link once synced.
+entity link once synced. On narrow chips, long PR names truncate with an
+ellipsis; hover the link to inspect the full title.
 
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's
