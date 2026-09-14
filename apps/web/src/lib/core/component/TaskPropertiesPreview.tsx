@@ -23,7 +23,10 @@ const TASK_PREVIEW_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
 ];
 
-type TaskPreviewProps = { taskId: string; taskName?: string };
+type TaskPreviewProps = {
+  taskId: string;
+  taskName?: string;
+};
 
 /** Status, priority, and assignee editors; GraphQL previews own their data. */
 export function TaskPropertiesPreview(

@@ -27,6 +27,8 @@ export type {
 } from './components/Button';
 export { Button, buttonClasses, buttonVariants } from './components/Button';
 export { ButtonGroup } from './components/ButtonGroup';
+export { Card, type CardProps } from './components/Card';
+export { Item, type ItemProps } from './components/Item';
 export type {
   CalendarMonthMenuProps,
   CalendarMonthSelectorProps,

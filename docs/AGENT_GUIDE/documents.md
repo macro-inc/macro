@@ -50,11 +50,34 @@ unavailable label. Mounted references refresh every 30 seconds while the tab is
 active to update titles and check access.
 
 Hover a document reference chip to open its preview without navigating. With
-`ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
+the preview open, the compact header shows a tinted icon, title, and author/time
+byline. Click the title to open the document; the Reference actions ellipsis menu contains copy
+link, split, embed/collapse, AI, and delete actions when applicable. The preview
+stays open while this menu is active. Images use an inset frame and task chips
+appear below the header. Long titles wrap in place without a full-name tooltip.
+
+With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
 batch, including task properties and viewer permission, without another fetch.
 Explicit refreshes may revalidate that batch, but requests must settle while the
 pointer stays over the same reference; cache updates must not cause a continuous
 fetch cascade.
+
+## Embedded document cards
+
+Document cards use a compact icon/title row and an actions menu. Full previews
+sit inside an inset surface; the author's display name and update time appear
+under the title as a byline. Task property chips align with the icon's left edge.
+Long titles wrap. The tinted icon and menu are centered on the title row, with
+the byline in its own row below the title. Full embeds have a 320px minimum
+card height and a smaller rounded inset frame.
+Metadata-only references omit the preview, and tasks retain status, priority,
+and assignee controls. Use the title to open the referenced document and the
+actions menu to copy its link, convert it to an inline mention, or delete the card.
+Click the card frame to select its editor node; controls and embedded content
+handle their own clicks. Full embeds remain vertically resizable and scroll
+inside the inset preview. When verifying, check a canvas embed, a metadata-only
+reference, and an editable task, including resize, menu actions, and keyboard
+access to the title and property controls.
 
 ## AI edit
 
