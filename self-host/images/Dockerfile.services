@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1
+#
+# Every Rust service binary in one image. Each compose service runs a different
+# binary out of /app/out, exactly as the local dev stack does with its
+# bind-mounted build directory — so a self-hosted deployment and a developer's
+# stack run the same artifacts the same way.
+#
+# The binaries are built ahead of this by `nix build .#local-stack-binaries`
+# and staged into the build context; see
+# .github/workflows/push_self_host_images.yml.
+FROM debian:trixie-slim
+
+ARG BIN_DIR=bin
+ARG MACRO_VERSION=dev
+
+LABEL org.opencontainers.image.title="Macro services" \
+      org.opencontainers.image.source="https://github.com/macro-inc/macro" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.version="${MACRO_VERSION}"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates dumb-init curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# An unprivileged runtime user. Package installation and the copy below still
+# run as root; only the service processes drop to this account.
+RUN groupadd --system --gid 10001 macro \
+    && useradd --system --uid 10001 --gid macro --home-dir /app --shell /usr/sbin/nologin macro
+
+WORKDIR /app
+COPY ${BIN_DIR}/ /app/out/
+# Binaries stay owned by root and world-executable: the service user runs them
+# but must not be able to rewrite them.
+RUN chmod 0755 /app/out/*
+
+# Services listen here; only the reverse proxy is published to the host.
+# Above 1024, so binding needs no privileges.
+ENV PORT=8080
+EXPOSE 8080
+
+USER macro
+
+# No default CMD: compose supplies `command: ["/app/out/<binary>"]` per service.
+ENTRYPOINT ["dumb-init", "--"]
