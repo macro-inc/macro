@@ -20,7 +20,7 @@ async function saveMarkdownDocument(
   });
   if (result.isErr()) {
     console.error('error on markdown save');
-    return;
+    throw new Error('Unable to save markdown document');
   }
   await refetchHistory();
 }
