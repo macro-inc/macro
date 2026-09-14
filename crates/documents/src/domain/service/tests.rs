@@ -2184,6 +2184,7 @@ async fn creator_forwards_explicit_consent_and_stops_after_repository_failure() 
     use crate::domain::create::{
         DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
     };
+    use crate::domain::ports::mentions::NoOpDocumentMentionTracker;
 
     for (subtype, expected_share) in [
         (MarkdownSubtype::Note, false),
@@ -2220,6 +2221,7 @@ async fn creator_forwards_explicit_consent_and_stops_after_repository_failure() 
             service,
             RejectUnexpectedFinalization,
             RejectUnexpectedFinalization,
+            NoOpDocumentMentionTracker,
         );
         let result = creator
             .create_markdown_text(
