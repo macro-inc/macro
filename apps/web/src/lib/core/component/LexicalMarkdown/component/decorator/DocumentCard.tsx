@@ -352,6 +352,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const DocumentInfo = (props: {
     item: AccessiblePreviewItem;
     blockName: string;
+    blockParams: DocumentCardDecoratorProps['blockParams'];
   }) => {
     return (
       <Card.Header class="shrink-0 py-2.5">
@@ -377,7 +378,11 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
           </Item.Icon>
           <Item.Content class="col-start-2 row-start-1">
             <Item.Title>
-              <BlockLink id={props.item.id} blockOrFileName={props.blockName}>
+              <BlockLink
+                id={props.item.id}
+                blockOrFileName={props.blockName}
+                params={props.blockParams}
+              >
                 <span
                   role="link"
                   tabIndex={0}
@@ -491,7 +496,11 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
               taskId={props.blockName === 'task' ? item().id : undefined}
               previewProperties={documentProperties()}
             >
-              <DocumentInfo item={item()} blockName={props.blockName} />
+              <DocumentInfo
+                item={item()}
+                blockName={props.blockName}
+                blockParams={props.blockParams}
+              />
               <Show when={props.blockName === 'task'}>
                 <Card.Body
                   class="shrink-0 pt-2 pl-9 [&>div]:px-0 [&>div]:pb-0"
