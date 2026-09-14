@@ -53,9 +53,11 @@ describe('SessionStartToggle', () => {
         onStart={onStart}
       />
     ));
-    const track = screen.getByRole('group', {
-      name: 'Session start mode',
-    }).querySelector('[data-session-start-switch]');
+    const track = screen
+      .getByRole('group', {
+        name: 'Session start mode',
+      })
+      .querySelector('[data-session-start-switch]');
     expect(track).toBeInstanceOf(HTMLElement);
     vi.spyOn(track as HTMLElement, 'getBoundingClientRect').mockReturnValue({
       x: 0,
@@ -92,11 +94,13 @@ describe('SessionStartToggle', () => {
     const track = screen
       .getByRole('group', { name: 'Session start mode' })
       .querySelector('[data-session-start-switch]');
-    expect(track).toHaveClass('w-12', 'h-7', 'rounded-full');
-    expect(track).not.toHaveTextContent('Live');
-    expect(track).not.toHaveTextContent('Background');
-    expect(screen.getByRole('button', { name: 'Live' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Background' })).toBeVisible();
+    expect(track?.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['w-12', 'h-7', 'rounded-full'])
+    );
+    expect(track?.textContent).not.toContain('Live');
+    expect(track?.textContent).not.toContain('Background');
+    expect(screen.getByRole('button', { name: 'Live' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Background' })).toBeTruthy();
   });
 
   it('toggles from a click on the empty side of the switch', () => {

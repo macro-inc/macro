@@ -226,7 +226,7 @@ describe('agent session creation', () => {
   it('autofocuses the prompt when the composer opens', async () => {
     mount();
     const prompt = screen.getByRole('textbox', { name: 'Task for the agent' });
-    await waitFor(() => expect(prompt).toHaveFocus());
+    await waitFor(() => expect(document.activeElement).toBe(prompt));
   });
 
   it('keeps Create agent outside the slider and opens the new-agent form', () => {
