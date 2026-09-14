@@ -605,6 +605,8 @@ export type GraphqlEntityType =
   | 'EMAIL_THREAD'
   /** Foreign entity. */
   | 'FOREIGN_ENTITY'
+  /** Initiative entity. */
+  | 'INITIATIVE'
   /** Project entity. */
   | 'PROJECT'
   /** Reminder entity. */

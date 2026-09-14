@@ -4110,6 +4110,7 @@ export const getCollabSurfaceResponse = zod
         'skill',
         'agent_session',
         'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity.'),
@@ -4161,6 +4162,7 @@ export const ensureCollabSurfaceBody = zod
         'skill',
         'agent_session',
         'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity access derives from.'),
@@ -4193,6 +4195,7 @@ export const ensureCollabSurfaceResponse = zod
         'skill',
         'agent_session',
         'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity.'),
@@ -8565,6 +8568,7 @@ export const listFavoritesQueryParams = zod.object({
           'skill',
           'agent_session',
           'scheduled_action',
+          'initiative',
         ])
         .describe('The type of an entity in Macro')
     )
@@ -8624,6 +8628,7 @@ export const listFavoritesResponse = zod
                 'skill',
                 'agent_session',
                 'scheduled_action',
+                'initiative',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -8671,6 +8676,7 @@ export const addFavoriteBody = zod
         'skill',
         'agent_session',
         'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the entity to favorite.'),
@@ -8719,6 +8725,7 @@ export const addFavoriteResponse = zod
         'skill',
         'agent_session',
         'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the favorited entity.'),
@@ -8764,6 +8771,7 @@ export const reorderFavoritesBody = zod
                 'skill',
                 'agent_session',
                 'scheduled_action',
+                'initiative',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -8802,6 +8810,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'skill',
       'agent_session',
       'scheduled_action',
+      'initiative',
     ])
     .describe('The type of the favorited entity.'),
   entity_id: zod.string().describe('The id of the favorited entity.'),
@@ -12296,6 +12305,7 @@ export const getItemsSoupResponse = zod
                                 'skill',
                                 'agent_session',
                                 'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -16264,6 +16274,7 @@ export const postItemsSoupResponse = zod
                                 'skill',
                                 'agent_session',
                                 'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -19675,6 +19686,7 @@ export const postItemsSoupAstResponse = zod
                                 'skill',
                                 'agent_session',
                                 'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -23442,6 +23454,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'skill',
                                       'agent_session',
                                       'scheduled_action',
+                                      'initiative',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -26849,6 +26862,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'skill',
                                       'agent_session',
                                       'scheduled_action',
+                                      'initiative',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -29206,6 +29220,7 @@ export const listRemindersQueryParams = zod.object({
           'skill',
           'agent_session',
           'scheduled_action',
+          'initiative',
         ])
         .describe('The type of an entity in Macro')
     )
@@ -29288,6 +29303,7 @@ export const listRemindersResponse = zod
                     'skill',
                     'agent_session',
                     'scheduled_action',
+                    'initiative',
                   ])
                   .describe('The type of an entity in Macro'),
               ])
@@ -29375,6 +29391,7 @@ export const createReminderBody = zod
             'skill',
             'agent_session',
             'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -29459,6 +29476,7 @@ export const getReminderResponse = zod
             'skill',
             'agent_session',
             'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -29603,6 +29621,7 @@ export const updateReminderResponse = zod
             'skill',
             'agent_session',
             'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])
