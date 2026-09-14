@@ -144,6 +144,12 @@ Checkpoint v13 restarts older scans to populate native indexes without wiping
 queued work. A background network failure does not hide a usable current-query
 cached Mail page; server-reported GraphQL errors still surface.
 
+Native filter evaluation requires a full native app update, not just an OTA
+frontend update. Older binaries retain their previous unsupported-filter fallback
+while Shared Mail network backfill continues. The temporary compatibility guard
+can be removed once a full native release includes the filter command and OTA
+delivery excludes older binaries.
+
 For Linux desktop automation, see the [native E2E guide](../../apps/web/tests/native/README.md).
 The first scenario covers Signal → Noise → All after disconnecting both native
 HTTP and WebSockets. iOS shares the native cache code but is not yet covered by
