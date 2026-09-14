@@ -153,11 +153,11 @@ a channel cached away from its latest page, and a delta longer than one page use
 
 ## Chat navigation rail
 
-On desktop, the Chat rail has `Browse` and `Recents` tabs. Browse contains an
+On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
 channels. Channel favorites open in the channel preview.
-Collapsing a section does not discard its loaded pages. Recents has its own
+Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
 Rows and section headers act on primary-button mousedown, so the selection
@@ -169,7 +169,7 @@ into the appended rows. If the section has no next page, navigation proceeds
 to the next section. `[` and `]` jump between the visible Favorites, Channels,
 and DMs section headers.
 
-On touch layouts, the `Recents`, `Channels`, and `DMs` pill tabs each retain
+On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
 their own loaded pages and load more as their active list approaches the end.
 
 ## Channel tabs

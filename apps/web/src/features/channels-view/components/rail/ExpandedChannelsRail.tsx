@@ -50,8 +50,8 @@ import {
 } from './hooks/useChannelRailState';
 
 const CHANNEL_TABS = [
-  { value: 'browse', label: 'Browse' },
-  { value: 'recents', label: 'Recents' },
+  { value: 'browse', label: 'All' },
+  { value: 'recents', label: 'Recent' },
 ];
 
 type GroupConfig = {
@@ -237,7 +237,6 @@ function ExpandedHeader() {
       <div class="px-4">
         <Tabs
           aria-label="Chat sidebar views"
-          fullWidth
           list={CHANNEL_TABS}
           value={rail.tab()}
           onChange={selectTab}

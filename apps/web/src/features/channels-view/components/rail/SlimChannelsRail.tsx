@@ -55,10 +55,10 @@ import {
   useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
 
-function BrowseTabLabel() {
+function AllTabLabel() {
   return (
     <>
-      <span class="sr-only">Browse</span>
+      <span class="sr-only">All</span>
       <span aria-hidden="true" class="[&_svg]:size-4">
         <ChatsIcon />
       </span>
@@ -66,10 +66,10 @@ function BrowseTabLabel() {
   );
 }
 
-function RecentsTabLabel() {
+function RecentTabLabel() {
   return (
     <>
-      <span class="sr-only">Recents</span>
+      <span class="sr-only">Recent</span>
       <span aria-hidden="true" class="[&_svg]:size-4">
         <ChatTextIcon />
       </span>
@@ -78,8 +78,8 @@ function RecentsTabLabel() {
 }
 
 const SLIM_CHANNEL_TABS = [
-  { value: 'browse', label: BrowseTabLabel },
-  { value: 'recents', label: RecentsTabLabel },
+  { value: 'browse', label: AllTabLabel },
+  { value: 'recents', label: RecentTabLabel },
 ];
 
 type GroupConfig = {
