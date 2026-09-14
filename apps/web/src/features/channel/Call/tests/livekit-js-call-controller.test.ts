@@ -214,6 +214,65 @@ describe('LiveKit call session ownership', () => {
     expect(harness.options.clearOptimisticJoin).not.toHaveBeenCalled();
   });
 
+  it('continues a newer join when an earlier leave clears the old room during teardown', async () => {
+    await harness.controller.connect(token());
+    const oldRoom = harness.room();
+    const leaveTeardown = Promise.withResolvers<void>();
+    const joinTeardown = Promise.withResolvers<void>();
+    roomMocks.disconnect
+      .mockImplementationOnce(() => leaveTeardown.promise)
+      .mockImplementationOnce(() => joinTeardown.promise);
+
+    const leaving = harness.controller.disconnect();
+    const joining = harness.controller.connect(token('call-2'));
+    leaveTeardown.resolve();
+    await leaving;
+    expect(harness.room()).toBeNull();
+
+    joinTeardown.resolve();
+    await joining;
+
+    expect(harness.room()).not.toBeNull();
+    expect(harness.room()).not.toBe(oldRoom);
+    expect(harness.state.activeCallId).toBe('call-2');
+    expect(harness.state.connectionState).toBe(ConnectionState.Connected);
+  });
+
+  it('does not resume an older join when a newer leave clears the room', async () => {
+    await harness.controller.connect(token());
+    const joinTeardown = Promise.withResolvers<void>();
+    roomMocks.disconnect.mockImplementationOnce(() => joinTeardown.promise);
+
+    const joining = harness.controller.connect(token('call-2'));
+    await harness.controller.disconnect();
+    joinTeardown.resolve();
+    await joining;
+
+    expect(harness.room()).toBeNull();
+    expect(harness.state.connectionState).toBe(ConnectionState.Disconnected);
+    expect(roomMocks.connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let an older join replace a newer join after both await the same room', async () => {
+    await harness.controller.connect(token());
+    const olderTeardown = Promise.withResolvers<void>();
+    const newerTeardown = Promise.withResolvers<void>();
+    roomMocks.disconnect
+      .mockImplementationOnce(() => olderTeardown.promise)
+      .mockImplementationOnce(() => newerTeardown.promise);
+
+    const olderJoin = harness.controller.connect(token('call-2'));
+    const newerJoin = harness.controller.connect(token('call-3'));
+    olderTeardown.resolve();
+    await olderJoin;
+    newerTeardown.resolve();
+    await newerJoin;
+
+    expect(harness.state.activeCallId).toBe('call-3');
+    expect(harness.state.connectionState).toBe(ConnectionState.Connected);
+    expect(roomMocks.connect).toHaveBeenCalledTimes(2);
+  });
+
   it('reuses duplicate joins but gives a new call in the same channel its own room', async () => {
     await harness.controller.connect(token());
     const firstRoom = harness.room();

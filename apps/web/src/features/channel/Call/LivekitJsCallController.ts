@@ -45,6 +45,7 @@ export function createLivekitJsCallController(
 ) {
   let stopReceiverStatsSampling: (() => void) | null = null;
   let disposed = false;
+  let connectGeneration = 0;
 
   function isCurrentRoom(room: Room) {
     return !disposed && options.room() === room;
@@ -156,13 +157,17 @@ export function createLivekitJsCallController(
       return;
     }
 
+    const generation = ++connectGeneration;
+
     // If switching channels, or if a previous disconnected room instance is
     // still hanging around after a failed reconnect, tear it down and build a
     // fresh Room. This gives retry/auto-rejoin the same clean slate as a manual
     // leave + join.
     if (existingRoom) {
       await existingRoom.disconnect();
-      if (!isCurrentRoom(existingRoom)) return;
+      // An earlier leave may have cleared this room while we waited. The
+      // latest join should still proceed; only a newer request supersedes it.
+      if (disposed || generation !== connectGeneration) return;
       destroyRoom(existingRoom);
     }
 
@@ -185,7 +190,8 @@ export function createLivekitJsCallController(
 
     try {
       await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
-      if (!isCurrentRoom(targetRoom)) return;
+      if (!isCurrentRoom(targetRoom) || generation !== connectGeneration)
+        return;
       options.clearOptimisticJoin();
     } catch (e) {
       console.error('failed to connect to LiveKit room', e);
@@ -220,6 +226,7 @@ export function createLivekitJsCallController(
   }
 
   async function disconnect() {
+    connectGeneration += 1;
     const room = options.room();
     if (!room) return;
 
@@ -236,6 +243,7 @@ export function createLivekitJsCallController(
   }
 
   function disconnectBeforeUnload() {
+    connectGeneration += 1;
     const room = options.room();
     if (!room) return;
 
