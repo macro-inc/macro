@@ -370,7 +370,7 @@ describe('agent session creation', () => {
     expect(macro.queryByText('coding')).toBeNull();
     expect(cursor.getByText('@cursor')).toBeTruthy();
     expect(cursor.queryByText('coding')).toBeNull();
-    const reviewer = within(screen.getByRole('radio', { name: /Reviewer/ }));
+    const reviewer = within(screen.getByRole('radio', { name: /^Reviewer/ }));
     const coder = within(screen.getByRole('radio', { name: /Coder/ }));
     expect(reviewer.getByText('@reviewer')).toBeTruthy();
     expect(reviewer.queryByText('coding')).toBeNull();
