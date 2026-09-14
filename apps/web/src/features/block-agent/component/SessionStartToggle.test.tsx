@@ -53,27 +53,78 @@ describe('SessionStartToggle', () => {
         onStart={onStart}
       />
     ));
-    const group = screen.getByRole('group', { name: 'Session start mode' });
-    vi.spyOn(group, 'getBoundingClientRect').mockReturnValue({
+    const track = screen.getByRole('group', {
+      name: 'Session start mode',
+    }).querySelector('[data-session-start-switch]');
+    expect(track).toBeInstanceOf(HTMLElement);
+    vi.spyOn(track as HTMLElement, 'getBoundingClientRect').mockReturnValue({
       x: 0,
       y: 0,
       top: 0,
       left: 0,
       bottom: 28,
-      right: 200,
-      width: 200,
+      right: 48,
+      width: 48,
       height: 28,
       toJSON: () => ({}),
     });
 
-    fireEvent.mouseDown(group, { button: 0, clientX: 20 });
-    fireEvent.mouseMove(group, {
+    fireEvent.mouseDown(track as HTMLElement, { button: 0, clientX: 8 });
+    fireEvent.mouseMove(track as HTMLElement, {
       button: 0,
-      clientX: 20 + SESSION_START_TOGGLE_DRAG_THRESHOLD,
+      clientX: 8 + SESSION_START_TOGGLE_DRAG_THRESHOLD,
     });
-    fireEvent.mouseMove(group, { button: 0, clientX: 160 });
-    fireEvent.mouseUp(group, { button: 0, clientX: 160 });
+    fireEvent.mouseMove(track as HTMLElement, { button: 0, clientX: 40 });
+    fireEvent.mouseUp(track as HTMLElement, { button: 0, clientX: 40 });
 
+    expect(onModeChange).toHaveBeenCalledWith('background');
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it('keeps Live and Background outside a compact iOS switch', () => {
+    render(() => (
+      <SessionStartToggle
+        mode="live"
+        onModeChange={vi.fn()}
+        onStart={vi.fn()}
+      />
+    ));
+    const track = screen
+      .getByRole('group', { name: 'Session start mode' })
+      .querySelector('[data-session-start-switch]');
+    expect(track).toHaveClass('w-12', 'h-7', 'rounded-full');
+    expect(track).not.toHaveTextContent('Live');
+    expect(track).not.toHaveTextContent('Background');
+    expect(screen.getByRole('button', { name: 'Live' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Background' })).toBeVisible();
+  });
+
+  it('toggles from a click on the empty side of the switch', () => {
+    const onModeChange = vi.fn();
+    const onStart = vi.fn();
+    render(() => (
+      <SessionStartToggle
+        mode="live"
+        onModeChange={onModeChange}
+        onStart={onStart}
+      />
+    ));
+    const track = screen
+      .getByRole('group', { name: 'Session start mode' })
+      .querySelector('[data-session-start-switch]') as HTMLElement;
+    vi.spyOn(track, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      bottom: 28,
+      right: 48,
+      width: 48,
+      height: 28,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.click(track, { button: 0, clientX: 40 });
     expect(onModeChange).toHaveBeenCalledWith('background');
     expect(onStart).not.toHaveBeenCalled();
   });

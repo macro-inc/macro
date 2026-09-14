@@ -16,7 +16,7 @@ export function SessionStartToggle(props: {
   onModeChange: (mode: SessionStartMode) => void;
   onStart: () => void;
 }) {
-  let root: HTMLDivElement | undefined;
+  let switchEl: HTMLDivElement | undefined;
   let pointerStartX = 0;
   let dragging = false;
   let tracking = false;
@@ -32,7 +32,7 @@ export function SessionStartToggle(props: {
     clientX: number,
     target: EventTarget | null
   ): SessionStartMode => {
-    const el = (root ?? target) as HTMLElement | undefined;
+    const el = (switchEl ?? target) as HTMLElement | undefined;
     const rect = el?.getBoundingClientRect();
     if (!rect) return props.mode;
     return sessionStartModeFromPointer(clientX, rect);
@@ -84,32 +84,31 @@ export function SessionStartToggle(props: {
     if (mode !== props.mode) props.onModeChange(mode);
   };
 
+  const onTrackClick = (event: MouseEvent) => {
+    if (ignoreClickAfterDrag(event) || props.disabled) return;
+    const next = modeFromPoint(event.clientX, event.currentTarget);
+    if (next !== props.mode) props.onModeChange(next);
+  };
+
   const start = (event: MouseEvent) => {
+    event.stopPropagation();
     if (ignoreClickAfterDrag(event) || props.disabled) return;
     props.onStart();
   };
 
-  const sideClass = (active: boolean) =>
+  const labelClass = (active: boolean) =>
     cn(
-      'relative z-10 flex h-full min-w-0 flex-1 items-center text-[11px] font-medium leading-none transition-colors duration-150',
+      'shrink-0 text-[11px] font-medium leading-none transition-colors duration-150',
       active ? 'text-ink' : 'text-ink-muted hover:text-ink'
     );
 
   return (
     <div
-      ref={root}
       role="group"
       aria-label="Session start mode"
       data-session-start-mode={props.mode}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
-      onPointerUp={onUp}
-      onPointerCancel={onUp}
-      onMouseDown={onDown}
-      onMouseMove={onMove}
-      onMouseUp={onUp}
       class={cn(
-        'relative isolate flex h-7 w-[13.25rem] shrink-0 select-none items-stretch rounded-full bg-ink-muted/15 p-0.5 touch-none',
+        'flex h-7 shrink-0 select-none items-center gap-1.5',
         props.disabled && 'opacity-60'
       )}
     >
@@ -118,58 +117,66 @@ export function SessionStartToggle(props: {
         tabIndex={-1}
         disabled={props.disabled}
         aria-pressed={props.mode === 'live'}
-        class={cn(
-          sideClass(props.mode === 'live'),
-          'justify-start pr-1',
-          background() ? 'pl-2.5' : 'pl-8'
-        )}
+        class={labelClass(props.mode === 'live')}
         onClick={selectMode('live')}
       >
         Live
       </button>
+
+      <div
+        ref={switchEl}
+        data-session-start-switch
+        class={cn(
+          'relative isolate h-7 w-12 shrink-0 rounded-full p-0.5 transition-colors duration-200 ease-out touch-none',
+          background() ? 'bg-accent' : 'bg-ink-muted/40'
+        )}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        onMouseDown={onDown}
+        onMouseMove={onMove}
+        onMouseUp={onUp}
+        onClick={onTrackClick}
+      >
+        <button
+          type="button"
+          disabled={props.disabled}
+          aria-label={startLabel()}
+          class={cn(
+            'absolute top-0.5 left-0.5 z-20 flex size-6 items-center justify-center rounded-full bg-surface text-ink shadow-sm transition-transform duration-200 ease-out',
+            '[&_svg]:size-3.5 [&_svg]:stroke-[4px]',
+            background() && 'translate-x-5',
+            !props.disabled && 'active:scale-95'
+          )}
+          onClick={start}
+        >
+          <Show
+            when={!props.pending}
+            fallback={<SpinnerIcon class="animate-spin" />}
+          >
+            <ArrowUp />
+          </Show>
+        </button>
+      </div>
 
       <Tooltip
         label="Background"
         shortcut="cmd"
         placement="top"
         disabled={props.disabled}
-        class="min-w-0 flex-1"
       >
         <button
           type="button"
           tabIndex={-1}
           disabled={props.disabled}
           aria-pressed={props.mode === 'background'}
-          class={cn(
-            sideClass(props.mode === 'background'),
-            'w-full justify-end pl-1',
-            background() ? 'pr-8' : 'pr-2.5'
-          )}
+          class={labelClass(props.mode === 'background')}
           onClick={selectMode('background')}
         >
           Background
         </button>
       </Tooltip>
-
-      <button
-        type="button"
-        disabled={props.disabled}
-        aria-label={startLabel()}
-        class={cn(
-          'absolute top-0.5 left-0.5 z-20 flex size-6 items-center justify-center rounded-full bg-ink text-surface shadow-sm transition-transform duration-200 ease-out',
-          '[&_svg]:size-3.5 [&_svg]:stroke-[4px]',
-          background() && 'translate-x-[calc(100%-1.75rem)]',
-          !props.disabled && 'active:scale-95'
-        )}
-        onClick={start}
-      >
-        <Show
-          when={!props.pending}
-          fallback={<SpinnerIcon class="animate-spin" />}
-        >
-          <ArrowUp />
-        </Show>
-      </button>
     </div>
   );
 }

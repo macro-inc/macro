@@ -1,5 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useCanAutofocusSplitContent,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -14,6 +17,7 @@ import {
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { idToDisplayName } from '@core/user/util';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
@@ -123,6 +127,10 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   >();
   let appliedModel: string | undefined;
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
+  let promptRef: HTMLTextAreaElement | undefined;
+  const canAutofocusSplitContent = useCanAutofocusSplitContent();
+  const shouldAutofocusPrompt = () =>
+    canAutofocusSplitContent && !isTouchDevice();
 
   // The two first-party agents lead, then the user's own personas.
   const personas = createMemo<PersonaOption[]>(() => [
@@ -320,6 +328,12 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
     splitPanel.handle.setDisplayName('New agent session');
     const container = containerRef();
     if (container) attachHotkeys(container);
+    if (!shouldAutofocusPrompt()) return;
+    const focusPrompt = () => promptRef?.focus({ preventScroll: true });
+    focusPrompt();
+    // Dialog focus-on-open can run after this mount; reclaim the prompt.
+    queueMicrotask(focusPrompt);
+    requestAnimationFrame(focusPrompt);
   });
   registerHotkey({
     hotkey: ['enter', 'cmd+enter'],
@@ -391,8 +405,12 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
         solid
       >
         <textarea
+          ref={(el) => {
+            promptRef = el;
+          }}
           rows={3}
           aria-label="Task for the agent"
+          autofocus={shouldAutofocusPrompt()}
           class="ph-no-capture min-h-20 w-full flex-1 resize-none bg-transparent px-4 pt-4 pb-2 text-sm/6 text-ink outline-none placeholder:text-ink-placeholder touch:text-base"
           placeholder={`What would you like ${selectedPersona()?.name ?? MACRO_AGENT_NAME} to work on?`}
           value={prompt()}

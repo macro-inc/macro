@@ -46,6 +46,7 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: navigation.open }),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  useCanAutofocusSplitContent: () => true,
   useSplitPanelOrThrow: () => ({
     handle: {
       close: navigation.close,
@@ -222,6 +223,12 @@ function enterPrompt() {
 }
 
 describe('agent session creation', () => {
+  it('autofocuses the prompt when the composer opens', async () => {
+    mount();
+    const prompt = screen.getByRole('textbox', { name: 'Task for the agent' });
+    await waitFor(() => expect(prompt).toHaveFocus());
+  });
+
   it('keeps Create agent outside the slider and opens the new-agent form', () => {
     mount();
     const createAgent = screen.getByRole('button', { name: 'Create agent' });

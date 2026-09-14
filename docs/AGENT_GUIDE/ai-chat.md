@@ -50,8 +50,8 @@ and arrow send button, with a three-line editing area. It names the
 current selection:
 `What would you like Macro to work on?` becomes
 `What would you like Cursor to work on?` when Cursor is selected. Its aria-label
-is `Task for the agent`. The dialog's default autofocus lands on the selected
-agent row, its first tabbable control.
+is `Task for the agent`. Autofocus lands on that prompt so you can type
+immediately; skip it on touch so the keyboard does not jump up unsolicited.
 The prompt and agent strip share the same surface layer and background.
 A centered caption below the prompt describes the selected runtime: Macro
 shows “Starts quickly and runs in-memory. Great for workspace tasks”; Cursor
@@ -66,12 +66,14 @@ While a default is unknown, the selector reads `default`. Changing agent resets
 the override. Tab order is selected agent row (and any connection action) →
 **Create agent** → prompt → model → **Start session**.
 Escape in the prompt first blurs to the dialog; a second Escape closes it.
-The prompt footer’s start control is an iOS-style **Live / Background**
-toggle. **Live** (default) opens the new session; **Background** closes the
-composer and shows a bottom-right toast **Session started in background** with
-an **Open session** action. The circular arrow on the selected side starts that
-mode; the other label (or a drag across the control) switches modes. The choice
-persists per user in localStorage. Hover **Background** to see `Cmd` / `Ctrl`.
+The prompt footer’s start control is a compact iOS-style switch with **Live**
+and **Background** labels outside the track. **Live** (default, muted track)
+opens the new session; **Background** (accent track) closes the composer and
+shows a bottom-right toast **Session started in background** with an **Open
+session** action. The circular arrow on the knob starts the selected mode; a
+label, the empty side of the switch, or a drag across the switch changes mode.
+The choice persists per user in localStorage. Hover **Background** to see
+`Cmd` / `Ctrl`.
 Holding `Cmd`/`Ctrl` previews Background only while Live is selected; releasing
 restores Live. If Background is already selected, the modifier does nothing.
 `Enter` starts the selected mode (`Shift+Enter` still inserts a newline).
