@@ -464,7 +464,8 @@ export function createDispatchTool(opts: DispatchToolOptions) {
         if (onCoderResult) {
           const codes = result.steps
             .flatMap((step) => step.toolCalls)
-            .filter((call) => call.toolName === 'runCode')
+            // Schema-rejected calls never ran and carry the model's raw input.
+            .filter((call) => call.toolName === 'runCode' && !call.invalid)
             .map((call, i) => {
               const input = call.input as {
                 code: string;

@@ -1,11 +1,14 @@
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { toast } from '@core/component/Toast/Toast';
 import clickOutside from '@core/directive/clickOutside';
 import { TOKENS } from '@core/hotkey/tokens';
 import { AnimatedStarIcon } from '@icon/wide-star';
-import { cancelAiEdit, requestAiEdit } from '@service-ai-editing/client';
+import {
+  cancelAiEdit,
+  requestAiEdit,
+  toastAiEditResult,
+} from '@service-ai-editing/client';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
@@ -44,9 +47,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
       documentId: props.documentId,
       prompt: value,
     })
-      .then((result) => {
-        if (result === 'failed') toast.failure('AI edit failed');
-      })
+      .then(toastAiEditResult)
       .finally(() => setEditing(false));
   };
 

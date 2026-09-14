@@ -47,16 +47,13 @@ export type FastEditorOptions = {
  * Errors and `NO CHANGE` replies don't match, so the model still gets its
  * retry; a wrong-but-successful edit is the trade for that round trip.
  */
-export const hasCleanEdit = ({
-  steps,
-}: {
-  steps: ReadonlyArray<{
-    toolResults: ReadonlyArray<{ toolName: string; output: unknown }>;
-  }>;
-}): boolean => {
-  const last = steps.at(-1);
-  if (!last) return false;
-  const results = last.toolResults.filter((r) => r.toolName === 'runCode');
+type StepLike = {
+  toolResults: ReadonlyArray<{ toolName: string; output: unknown }>;
+};
+
+/** Every `runCode` in this step came back `ok` with a `CHANGED` report. */
+export function stepHasCleanEdit(step: StepLike): boolean {
+  const results = step.toolResults.filter((r) => r.toolName === 'runCode');
   return (
     results.length > 0 &&
     results.every(
@@ -66,6 +63,15 @@ export const hasCleanEdit = ({
         r.output.includes('CHANGED')
     )
   );
+}
+
+export const hasCleanEdit = ({
+  steps,
+}: {
+  steps: ReadonlyArray<StepLike>;
+}): boolean => {
+  const last = steps.at(-1);
+  return last !== undefined && stepHasCleanEdit(last);
 };
 
 export function buildFastPrompt(request: string, document: string): string {
@@ -147,7 +153,11 @@ export async function fastEditor(
     });
 
     tracker.add(model as { modelId: string }, result.totalUsage);
-    const toolCalls = result.steps.flatMap((step) => step.toolCalls);
+    // A call the schema rejected never executed and has no result to pair
+    // with; its raw input is whatever the model sent, not our shape.
+    const toolCalls = result.steps
+      .flatMap((step) => step.toolCalls)
+      .filter((call) => !call.invalid);
     const blocked = toolCalls.find((call) => call.toolName === 'reportBlocked');
     const clarification = (blocked?.input as { message: string } | undefined)
       ?.message;
@@ -169,6 +179,16 @@ export async function fastEditor(
     span.setAttr('steps.count', result.steps.length);
     span.setAttr('run_code.count', codes.length);
     span.setAttr('edit.blocked', blocked !== undefined);
+
+    // Hitting the step cap with nothing but errors or NO CHANGE replies is a
+    // failed edit, not a quiet success; say so rather than returning no ops.
+    if (blocked === undefined && !result.steps.some(stepHasCleanEdit)) {
+      throw new Error(
+        `fast edit made no change in ${result.steps.length} step(s): ${
+          trace.runCodeResults.at(-1)?.split('\n')[0] ?? 'no runCode call'
+        }`
+      );
+    }
 
     return {
       text: result.text || 'Applied edits.',

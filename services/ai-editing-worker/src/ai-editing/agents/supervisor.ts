@@ -1,6 +1,6 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { hasToolCall, stepCountIs, streamText } from 'ai';
-import type { ResolvedModels } from '../../run-edit';
+import type { SupervisedModels } from '../../run-edit';
 import type { LexicalSession } from '../ai-toolkit';
 import { INTERPRET_SYSTEM, SUPERVISOR_SYSTEM } from '../prompts';
 import { TokenTracker } from '../token-tracker';
@@ -17,7 +17,7 @@ export type { RunAgentOptions } from './types';
 export async function supervisor(
   session: LexicalSession,
   request: string,
-  models: ResolvedModels,
+  models: SupervisedModels,
   opts: RunAgentOptions
 ) {
   const serialize = (sess: LexicalSession) =>

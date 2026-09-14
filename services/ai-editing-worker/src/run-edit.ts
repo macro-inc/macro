@@ -41,11 +41,22 @@ export type Models = {
   coding: Model;
 };
 
-export type ResolvedModels = {
+/** The three roles of the supervised pipeline. */
+export type SupervisedModels = {
   supervisor: LanguageModel;
   interpret: LanguageModel;
+  /** Fresh fallback chain per coder, so one coder's fallback state does not
+   *  leak into a sibling running in parallel. */
   coding: () => LanguageModel;
-  /** The single model the fast path runs on; required when `mode` is `fast`. */
+};
+
+/**
+ * Only the pipeline the request runs is resolved, so a request never touches
+ * a provider it will not call: a supervised edit must not fail because the
+ * fast chain's key is missing, and vice versa.
+ */
+export type ResolvedModels = {
+  supervised?: SupervisedModels;
   fast?: LanguageModel;
 };
 
@@ -168,12 +179,17 @@ export async function runEditSession(
       intent,
       interpretDurationMs,
       clarification,
-    } = await (args.mode === 'fast'
-      ? runFast()
-      : supervisor(workspace.session, args.prompt, args.models, {
-          ...shared,
-          interpret: args.interpret,
-        }));
+    } = await (args.mode === 'fast' ? runFast() : runSupervised());
+
+    async function runSupervised() {
+      const models = args.models.supervised;
+      if (!models)
+        throw new Error('supervised mode requires models.supervised');
+      return supervisor(workspace.session, args.prompt, models, {
+        ...shared,
+        interpret: args.interpret,
+      });
+    }
 
     async function runFast() {
       const model = args.models.fast;

@@ -173,6 +173,40 @@ describe('fastEditor', () => {
     expect(serializeWithXml(session)).toContain('fixed');
   });
 
+  it('fails loudly when the step cap is hit without a successful edit', async () => {
+    const session = createEditingSession();
+    loadMarkdown(session, 'hello world');
+    // Every call references a snippet it never supplies, so every reply is an
+    // error and no step ever reports CHANGED.
+    const model = new MockLanguageModelV3({
+      modelId: 'fast-mock',
+      doGenerate: async () => ({
+        content: [
+          runCodeCall('call', {
+            code: "editor.setText('nope', snippets.text)",
+            snippets: {},
+          }),
+        ],
+        finishReason: { unified: 'tool-calls' as const, raw: undefined },
+        usage,
+        warnings: [],
+      }),
+    });
+
+    await expect(
+      fastEditor(session, 'fix it', model, {
+        borrowWriter: async () => ({
+          doc: new Doc(session),
+          awarenessSource: mockAwarenessSource(),
+          release: () => {},
+        }),
+        runner: () => [],
+        maxSteps: 2,
+        sleep: async () => {},
+      })
+    ).rejects.toThrow(/made no change in 2 step\(s\)/);
+  });
+
   it('surfaces reportBlocked as a clarification and stops', async () => {
     const session = createEditingSession();
     loadMarkdown(session, 'hello world');

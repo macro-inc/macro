@@ -38,17 +38,14 @@ const {
   })
   .option('supervisor-model', {
     type: 'string',
-    demandOption: true,
     describe: 'provider:model for the supervisor',
   })
   .option('interpret-model', {
     type: 'string',
-    demandOption: true,
     describe: 'provider:model for the interpret pass',
   })
   .option('coding-model', {
     type: 'string',
-    demandOption: true,
     describe: 'provider:model for the coding agents',
   })
   .option('mode', {
@@ -139,9 +136,13 @@ const res = await fetch(`${workerUrl}/edit`, {
     documentId,
     prompt,
     models: {
-      supervisor: [parseModel(supervisorModelFlag)],
-      interpret: [parseModel(interpretModelFlag)],
-      coding: [parseModel(codingModelFlag)],
+      supervisor: supervisorModelFlag
+        ? [parseModel(supervisorModelFlag)]
+        : undefined,
+      interpret: interpretModelFlag
+        ? [parseModel(interpretModelFlag)]
+        : undefined,
+      coding: codingModelFlag ? [parseModel(codingModelFlag)] : undefined,
       fast: fastModelFlag ? [parseModel(fastModelFlag)] : undefined,
     },
     mode,

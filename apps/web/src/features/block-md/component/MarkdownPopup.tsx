@@ -71,6 +71,7 @@ import {
   cancelAiEdit,
   hasActiveAiEdit,
   requestAiEdit,
+  toastAiEditResult,
 } from '@service-ai-editing/client';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, Toolbar } from '@ui';
@@ -365,9 +366,7 @@ export function MarkdownPopup(props: {
       mode: 'fast',
       onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
     })
-      .then((result) => {
-        if (result === 'failed') toast.failure('AI edit failed');
-      })
+      .then(toastAiEditResult)
       .finally(() => {
         setAiEditLocation(null);
         setAiEditRunning(false);
