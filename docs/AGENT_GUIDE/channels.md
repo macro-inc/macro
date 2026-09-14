@@ -100,7 +100,9 @@ new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
 model supplies only the URL. The tool records the link, not the GitHub PR itself.
-Every harness receives a shared prompt instruction to register PRs. Cursor
+The shared Macro system instructions ask agents to register PRs when
+`macro_internal.set_pull_request` is available. The instruction is not prepended
+to individual user messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
 automatic creation can finish after the agent stops. Repeated registration is

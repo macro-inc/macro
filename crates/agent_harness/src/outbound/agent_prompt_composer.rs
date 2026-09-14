@@ -1,4 +1,4 @@
-//! Compose shared agent instructions and channel context for every harness.
+//! Compose channel context for every harness.
 
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::AgentContextMessage;
@@ -35,14 +35,9 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
                 .collect::<Vec<_>>()
         });
 
-        let context = self
-            .lexical
+        self.lexical
             .compose_agent_context(prompt_markdown, messages.as_deref())
             .await
-            .map_err(|error| HarnessError::PromptComposition(rootcause::report!(error).into()))?;
-
-        Ok(format!(
-            "When you create or start working on a pull request, register its URL with Macro using macro_internal.set_pull_request.\n\n{context}"
-        ))
+            .map_err(|error| HarnessError::PromptComposition(rootcause::report!(error).into()))
     }
 }
