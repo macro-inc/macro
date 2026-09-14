@@ -26,6 +26,8 @@
 <br />
 
 Macro is the all-in-one workspace for you and your team. It unifies email + messages + docs + tasks + agents + CRM into a single fast interface with shared team-level memory. Everything in your workspace is @linked and searchable so your team (and your agents) never have to switch tools.
+
+Start with [sign up](https://macro.com/app), [docs](https://docs.macro.com), or a [demo](https://cal.com/team/macro/macro-demo-call).
  
 <br />
 
