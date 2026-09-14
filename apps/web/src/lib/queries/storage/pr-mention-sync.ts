@@ -1,27 +1,21 @@
 import { queryClient } from '@queries/client';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
-import { z } from 'zod';
+import { getForeignEntityResponse } from '@service-storage/generated/zod';
 import { pullRequestMentionKeys } from './keys';
 
 // Paired with crates/github/src/outbound/connection_gateway_realtime.rs.
 export const GITHUB_PULL_REQUEST_UPDATED = 'github_pull_request_updated';
 
-const pullRequestEntitySchema = z.object({
-  id: z.string().uuid(),
-  foreignEntityId: z.string(),
-  foreignEntitySource: z.literal('github_pull_request'),
-  metadata: z.unknown(),
-  storedForId: z.string(),
-  storedForAuthEntity: z.string(),
-  createdAt: z.string().datetime({ offset: true }),
-  updatedAt: z.string().datetime({ offset: true }),
-});
-
 export async function handlePullRequestUpdated(
   payload: unknown
 ): Promise<void> {
-  const parsed = pullRequestEntitySchema.safeParse(payload);
-  if (!parsed.success) return;
+  const parsed = getForeignEntityResponse.safeParse(payload);
+  if (
+    !parsed.success ||
+    parsed.data.foreignEntitySource !== 'github_pull_request'
+  ) {
+    return;
+  }
   const entity: ForeignEntity = parsed.data;
   const keys = [
     pullRequestMentionKeys.foreignEntity(entity.id).queryKey,
