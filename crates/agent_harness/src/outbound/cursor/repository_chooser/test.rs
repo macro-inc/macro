@@ -82,7 +82,6 @@ fn a_repository_outside_the_candidates_is_refused() {
     let error = intent(
         &candidates(),
         Some("https://github.com/someone-else/secrets"),
-        true,
     )
     .expect_err("a non-candidate is refused");
     assert!(
@@ -94,13 +93,9 @@ fn a_repository_outside_the_candidates_is_refused() {
 }
 
 #[test]
-fn a_candidate_is_taken_with_its_pull_request_decision() {
-    let chosen = intent(
-        &candidates(),
-        Some("https://github.com/macro-inc/infra"),
-        true,
-    )
-    .expect("a candidate is taken");
+fn a_selected_repository_enables_automatic_pull_requests() {
+    let chosen = intent(&candidates(), Some("https://github.com/macro-inc/infra"))
+        .expect("a candidate is taken");
     assert_eq!(
         chosen.repository.as_ref().map(RepoUrl::as_str),
         Some("https://github.com/macro-inc/infra")
@@ -110,7 +105,7 @@ fn a_candidate_is_taken_with_its_pull_request_decision() {
 
 #[test]
 fn no_repository_means_no_pull_request() {
-    let chosen = intent(&candidates(), None, true).expect("no repository is an answer");
+    let chosen = intent(&candidates(), None).expect("no repository is an answer");
     assert_eq!(chosen, SessionIntent::default());
 }
 

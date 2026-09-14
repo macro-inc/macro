@@ -83,19 +83,23 @@ impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Acc
     }
 }
 
-/// Serve the sandbox-facing egress proxy on its own listener.
+/// Serve session egress and Macro Internal MCP on the existing egress listener.
 ///
-/// No CORS layer and no Swagger: nothing browses this. Its only client is a
-/// sandbox, and its only credential is a session token.
+/// Both authenticate session credentials; internal tools also serve external
+/// runtimes. No browser-facing CORS layer or Swagger is needed.
 pub async fn serve_egress<Service>(
     service: std::sync::Arc<Service>,
+    internal_mcp: Router,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
 where
     Service: EgressService + 'static,
 {
-    let app = egress_app(EgressRouterState::new(service));
+    let app = egress_app(EgressRouterState::new(service)).merge(mount_at_root_and_prefix(
+        internal_mcp,
+        EGRESS_GATEWAY_PATH_PREFIX,
+    ));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await

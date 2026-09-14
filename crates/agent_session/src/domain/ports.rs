@@ -272,6 +272,13 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         ids: &[AgentSessionId],
     ) -> impl Future<Output = Result<Vec<AgentSessionPreview>>> + Send;
 
+    /// Replace the session credential when attaching an external runtime.
+    fn set_egress_token_hash(
+        &self,
+        id: AgentSessionId,
+        hash: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// The session a sandbox's egress token stands for, if any still does.
     ///
     /// `egress_token_hash` is the SHA-256 hex of the token as presented, never

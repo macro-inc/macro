@@ -9,3 +9,5 @@ mod sandbox_size;
 pub mod search;
 pub mod service;
 pub mod session;
+
+pub mod credentials;

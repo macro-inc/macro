@@ -182,14 +182,6 @@ where
             request.headers_mut().insert(name.clone(), value.clone());
         }
 
-        if matches!(target, EgressTarget::McpServer(McpDestination::Macro)) {
-            let mut credential = http::HeaderValue::from_str(token.as_str())
-                .map_err(|_| EgressError::Unauthenticated("invalid session token"))?;
-            credential.set_sensitive(true);
-            request
-                .headers_mut()
-                .insert(crate::domain::model::MACRO_SESSION_TOKEN_HEADER, credential);
-        }
         let mut response = self.forward.forward(request).await?;
         sanitize_response_headers(response.headers_mut());
 

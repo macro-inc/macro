@@ -310,6 +310,7 @@ dependencies = [
  "agent_session",
  "agent_trigger",
  "ai_tools",
+ "ai_toolset",
  "ai_usage",
  "anyhow",
  "aws-sdk-kms",
@@ -350,6 +351,7 @@ dependencies = [
  "pipedream_mcp",
  "rdkafka",
  "redis",
+ "rmcp",
  "rootcause",
  "secretsmanager_client",
  "serde",
@@ -10313,8 +10315,6 @@ dependencies = [
 name = "mcp_service"
 version = "0.1.0"
 dependencies = [
- "agent_egress",
- "agent_session",
  "ai_tools",
  "ai_toolset",
  "ai_usage",

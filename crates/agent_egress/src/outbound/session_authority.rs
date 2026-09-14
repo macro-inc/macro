@@ -15,9 +15,8 @@
 //! digest also keeps the comparison in the index rather than in a Rust `==`
 //! over secret-derived bytes.
 
-use agent_runtime_protocol::domain::schema::v0::SystemEvent;
-use agent_session::domain::model::SessionStatus;
 use agent_session::domain::ports::AgentSessionRepo;
+use agent_session::domain::{credentials::authenticate_session, error::AgentSessionError};
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{McpServerListing, McpServerSlug, RepoSlug, SessionGrant, SessionToken};
@@ -45,38 +44,17 @@ where
 {
     #[tracing::instrument(skip_all, err)]
     async fn authorize(&self, token: &SessionToken) -> Result<SessionGrant, EgressError> {
-        // A lookup that failed is a refusal too - this decides whether a
-        // credential gets spent, and the safe answer when we cannot tell is no
-        // - but a refusal of a different kind from a token we do not know, and
-        // the sandbox should retry one and not the other.
-        let session = self
-            .sessions
-            .find_by_egress_token_hash(&token.hash())
+        let session = authenticate_session(&self.sessions, &token.hash())
             .await
-            .inspect_err(|error| {
-                tracing::error!(error = ?error, "could not look up a session by its token");
-            })
-            .map_err(|error| {
-                EgressError::Internal(rootcause::report!(
-                    "could not look up a session by its token: {error}"
-                ))
-            })?
-            // No row is the ordinary refusal: a token we never minted, or one
-            // whose session has since been deleted. Both are the same fact
-            // from here, and neither is worth telling the sandbox apart.
-            .ok_or(EgressError::Unauthenticated("unknown session token"))?;
-
-        // `SessionStatus` has no "closed" of its own; a disconnected transport
-        // is what a closed session looks like from the row. Anything else -
-        // including an event name this build does not know - is a running
-        // session, because a session that has not been told to stop is one
-        // whose sandbox may still be mid-tool-call.
-        if matches!(
-            session.status,
-            SessionStatus::Disconnected | SessionStatus::Event(SystemEvent::Disconnected)
-        ) {
-            return Err(EgressError::SessionClosed);
-        }
+            .map_err(|error| match error {
+                AgentSessionError::Forbidden => {
+                    EgressError::Unauthenticated("unknown session token")
+                }
+                AgentSessionError::Disconnected(_) => EgressError::SessionClosed,
+                error => EgressError::Internal(rootcause::report!(
+                    "could not authenticate session: {error}"
+                )),
+            })?;
 
         // A repository is optional for MCP-only sessions. The domain service
         // requires one only for git requests; a malformed stored URL still

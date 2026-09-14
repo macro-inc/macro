@@ -92,7 +92,26 @@ where
                             session_id,
                         )));
                     };
-                    self.sessions.attach_session(session_id, attachment).await?;
+                    let egress = self
+                        .egress
+                        .provision(
+                            session_id,
+                            &session.owner_id,
+                            session.repo_url.as_deref().unwrap_or_default(),
+                            &AgentMcpServers::Selected {
+                                servers: Vec::new(),
+                            },
+                        )
+                        .await?;
+                    self.sessions
+                        .set_egress_token_hash(session_id, &egress.session_token_hash)
+                        .await?;
+                    self.sessions
+                        .attach_session(
+                            session_id,
+                            attachment.mcp_servers(vec![egress.sandbox.internal_mcp_server()]),
+                        )
+                        .await?;
                 }
                 self.sessions
                     .send_action(session_id, actor, action, id)

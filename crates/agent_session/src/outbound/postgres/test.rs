@@ -1873,3 +1873,38 @@ async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
             .is_none()
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rotating_a_session_credential_revokes_the_previous_one(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    repo.set_egress_token_hash(session.id, "first-token-hash")
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.find_by_egress_token_hash("first-token-hash")
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        session.id
+    );
+    repo.set_egress_token_hash(session.id, "second-token-hash")
+        .await
+        .unwrap();
+    assert!(
+        repo.find_by_egress_token_hash("first-token-hash")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        repo.find_by_egress_token_hash("second-token-hash")
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        session.id
+    );
+}

@@ -40,7 +40,7 @@ mod test;
 /// stale session cannot outvote the prompt itself.
 const RECENT_SESSIONS: usize = 5;
 
-static SYSTEM_PROMPT: &str = r#"You decide, for a coding-agent session that is about to start, which GitHub repository the task belongs to and whether the work should ship as a pull request.
+static SYSTEM_PROMPT: &str = r#"You decide, for a coding-agent session that is about to start, which GitHub repository the task belongs to.
 
 Pick exactly one candidate repository only when the prompt clearly belongs to it:
 - it names the repository
@@ -51,8 +51,6 @@ Answer null for the repository when:
 - the prompt is a question, an investigation, or a request for an explanation
 - nothing in the prompt points at any repository
 - several candidates fit equally well
-
-Set open_pull_request to true only when the prompt asks for a code change and you chose a repository. A session with no repository never opens a pull request.
 
 When in doubt, choose no repository: a session pointed at the wrong repository is worse than a session that works without one.
 
@@ -72,7 +70,6 @@ pub struct HaikuRepositoryChooser<Repositories, Sessions> {
 #[derive(Debug, Deserialize)]
 struct ChoiceOutput {
     repository: Option<String>,
-    open_pull_request: bool,
     reason: String,
 }
 
@@ -143,15 +140,10 @@ where
             .map_err(|error| rootcause::report!("repository choice is not the schema: {error}"))?;
         tracing::debug!(
             repository = output.repository.as_deref().unwrap_or("none"),
-            open_pull_request = output.open_pull_request,
             reason = %output.reason,
             "chose a repository for a cursor session"
         );
-        intent(
-            candidates,
-            output.repository.as_deref(),
-            output.open_pull_request,
-        )
+        intent(candidates, output.repository.as_deref())
     }
 }
 
@@ -245,16 +237,12 @@ fn choice_schema(candidates: &[String]) -> DynamicSchema {
         schema: json!({
             "type": "object",
             "additionalProperties": false,
-            "required": ["repository", "open_pull_request", "reason"],
+            "required": ["repository", "reason"],
             "properties": {
                 "repository": {
                     "type": ["string", "null"],
                     "enum": allowed,
                     "description": "One of the candidate repository urls, or null when none clearly fits."
-                },
-                "open_pull_request": {
-                    "type": "boolean",
-                    "description": "True only for a code change with a chosen repository."
                 },
                 "reason": {
                     "type": "string",
@@ -273,7 +261,6 @@ fn choice_schema(candidates: &[String]) -> DynamicSchema {
 fn intent(
     candidates: &[String],
     repository: Option<&str>,
-    open_pull_request: bool,
 ) -> Result<SessionIntent, rootcause::Report> {
     let Some(chosen) = repository else {
         return Ok(SessionIntent::default());
@@ -287,6 +274,6 @@ fn intent(
         .ok_or_else(|| rootcause::report!("chose {chosen}, which is not a repository url"))?;
     Ok(SessionIntent {
         repository: Some(repository),
-        open_pull_request,
+        open_pull_request: true,
     })
 }

@@ -668,6 +668,18 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         Ok(())
     }
 
+    async fn set_egress_token_hash(&self, id: AgentSessionId, hash: &str) -> Result<()> {
+        sqlx::query!(
+            "UPDATE agent_session SET egress_token_hash = $2 WHERE id = $1",
+            id.as_uuid(),
+            hash
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to rotate session credential")?;
+        Ok(())
+    }
+
     async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
         let result = sqlx::query!(
             r#"

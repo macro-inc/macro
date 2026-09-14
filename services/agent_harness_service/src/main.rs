@@ -13,6 +13,7 @@ mod bots_directory;
 mod config;
 mod containers;
 mod harness_bindings;
+mod internal_mcp;
 mod model_providers;
 mod runtime_commands;
 mod trigger;
@@ -438,6 +439,24 @@ async fn run() -> anyhow::Result<()> {
             GithubSyncClientImpl::default(),
         ),
     ));
+    let session_pull_requests: Arc<dyn agent_session::domain::pull_request::SessionPullRequests> =
+        Arc::new(
+            agent_session::domain::pull_request::SessionPullRequestService::new(
+                session_repo.clone(),
+                ConnectionGatewayAgentSessionRealtime::new(
+                    connection_gateway.clone(),
+                    session_repo.clone(),
+                ),
+            ),
+        );
+    let internal_mcp = internal_mcp::router(
+        Arc::new(session_repo.clone()),
+        session_pull_requests.clone(),
+        url::Url::parse(&egress_base_url)?
+            .host_str()
+            .context("egress URL needs a host")?
+            .to_owned(),
+    );
     let cursor_manager = CursorContainerManager::new(
         cursor_keys.clone(),
         CURSOR_API_BASE_URL.to_owned(),
@@ -450,15 +469,7 @@ async fn run() -> anyhow::Result<()> {
         },
         pending_commands.clone(),
     )
-    .with_pull_requests(Arc::new(
-        agent_session::domain::pull_request::SessionPullRequestService::new(
-            session_repo.clone(),
-            ConnectionGatewayAgentSessionRealtime::new(
-                connection_gateway.clone(),
-                session_repo.clone(),
-            ),
-        ),
-    ));
+    .with_pull_requests(session_pull_requests);
     // Fixed system agents retain their deployment defaults. User/team agents
     // are resolved from agent_configs for every trigger so newly-created or
     // edited agents require no service restart.
@@ -741,7 +752,9 @@ async fn run() -> anyhow::Result<()> {
 
     let egress_port = config.egress_port;
     let egress_http = tokio::spawn(async move {
-        if let Err(error) = api::serve_egress(egress, egress_port, shutdown_signal()).await {
+        if let Err(error) =
+            api::serve_egress(egress, internal_mcp, egress_port, shutdown_signal()).await
+        {
             tracing::error!(error = ?error, "agent harness service egress stopped");
         }
     });

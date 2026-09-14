@@ -5,7 +5,7 @@ use std::pin::Pin;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{AgentSessionError, Result};
-use super::model::{AgentSessionId, LogAppended, SessionStatus, StoredAgentSessionLog};
+use super::model::{AgentSessionId, LogAppended, StoredAgentSessionLog};
 use super::ports::{AgentSessionRealtime, AgentSessionRepo};
 
 #[cfg(test)]
@@ -20,14 +20,6 @@ pub trait SessionPullRequests: Send + Sync {
         owner: &'a MacroUserIdStr<'static>,
         url: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>>;
-
-    /// Resolve an authenticated session tool invocation. Cursor supplies its PR
-    /// through its adapter and does not expose this tool to its agent.
-    fn tool_session<'a>(
-        &'a self,
-        token_hash: &'a str,
-        owner: &'a MacroUserIdStr<'static>,
-    ) -> Pin<Box<dyn Future<Output = Result<AgentSessionId>> + Send + 'a>>;
 }
 
 /// Atomic storage of a session's PR, serialized with history replacement.
@@ -79,33 +71,6 @@ where
                 .inspect_err(|error| tracing::warn!(error = ?error, %session, "could not publish session pull request"))
                 .ok();
             Ok(url)
-        })
-    }
-
-    fn tool_session<'a>(
-        &'a self,
-        token_hash: &'a str,
-        owner: &'a MacroUserIdStr<'static>,
-    ) -> Pin<Box<dyn Future<Output = Result<AgentSessionId>> + Send + 'a>> {
-        Box::pin(async move {
-            let session = self
-                .repo
-                .find_by_egress_token_hash(token_hash)
-                .await?
-                .ok_or(AgentSessionError::Forbidden)?;
-            if &session.owner_id != owner || session.harness == "cursor" {
-                return Err(AgentSessionError::Forbidden);
-            }
-            if matches!(
-                session.status,
-                SessionStatus::Disconnected
-                    | SessionStatus::Event(
-                        agent_runtime_protocol::domain::schema::v0::SystemEvent::Disconnected
-                    )
-            ) {
-                return Err(AgentSessionError::Disconnected(session.id));
-            }
-            Ok(session.id)
         })
     }
 }

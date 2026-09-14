@@ -463,6 +463,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_acp_session_id(id, acp_session_id).await
     }
 
+    async fn set_egress_token_hash(&self, id: AgentSessionId, hash: &str) -> Result<()> {
+        self.repo.set_egress_token_hash(id, hash).await
+    }
+
     async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
         self.repo.set_repo_url(id, repo_url).await
     }

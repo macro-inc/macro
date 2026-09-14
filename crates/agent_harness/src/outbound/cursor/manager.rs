@@ -587,6 +587,12 @@ where
 /// the database does not know about. The name and url are fetched with a
 /// follow-up `get_agent` — one extra call per session lifetime — and are
 /// cosmetic: if the fetch fails the row is still written with the id alone.
+fn cursor_prompt(prompt: &str) -> String {
+    format!(
+        "{prompt}\n\nWhen you create or start working on a PR, register its URL with Macro using macro_internal.set_pull_request."
+    )
+}
+
 struct RecordingCursor<Sessions> {
     client: CursorClient,
     session_id: AgentSessionId,
@@ -619,7 +625,13 @@ where
     ) -> std::result::Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         let (agent, run) = self
             .client
-            .create_agent(prompt, repo, open_pull_request, mcp_servers, model)
+            .create_agent(
+                &cursor_prompt(prompt),
+                repo,
+                open_pull_request,
+                mcp_servers,
+                model,
+            )
             .await?;
         let summary = self
             .client
@@ -651,7 +663,9 @@ where
         prompt: &str,
         model: Option<&ModelChoice>,
     ) -> std::result::Result<CursorRunId, rootcause::Report> {
-        self.client.create_run(agent, prompt, model).await
+        self.client
+            .create_run(agent, &cursor_prompt(prompt), model)
+            .await
     }
 
     async fn list_models(&self) -> std::result::Result<Vec<CursorModel>, rootcause::Report> {

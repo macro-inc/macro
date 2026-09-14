@@ -138,6 +138,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
         params: CreateAgentSessionParams,
     ) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// Rotate the credential provided to an authenticated runtime attachment.
+    fn set_egress_token_hash(
+        &self,
+        id: AgentSessionId,
+        hash: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
@@ -640,6 +647,10 @@ where
             .ok();
         publish_renamed_lifecycle(&self.repo, &self.lifecycle_publisher, id).await;
         Ok(())
+    }
+
+    async fn set_egress_token_hash(&self, id: AgentSessionId, hash: &str) -> Result<()> {
+        self.repo.set_egress_token_hash(id, hash).await
     }
 
     async fn get_session(&self, id: AgentSessionId) -> Result<AgentSession> {
@@ -1189,6 +1200,10 @@ where
         ids: &[AgentSessionId],
     ) -> Result<Vec<AgentSessionPreview>> {
         self.repo.preview(viewer, ids).await
+    }
+
+    async fn set_egress_token_hash(&self, id: AgentSessionId, hash: &str) -> Result<()> {
+        self.repo.set_egress_token_hash(id, hash).await
     }
 
     async fn find_by_egress_token_hash(

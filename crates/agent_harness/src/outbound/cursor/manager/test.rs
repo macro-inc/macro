@@ -143,6 +143,10 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never sets models")
     }
 
+    async fn set_egress_token_hash(&self, _id: AgentSessionId, _hash: &str) -> SessionResult<()> {
+        unimplemented!("this adapter does not rotate credentials")
+    }
+
     async fn set_repo_url(
         &self,
         id: AgentSessionId,
@@ -272,7 +276,8 @@ async fn fake_cursor_api() -> (
                     async move { axum::Json(serde_json::json!({"items": items})) }
                 }
             })
-            .post(move || {
+            .post(move |axum::Json(body): axum::Json<serde_json::Value>| {
+                assert!(body["prompt"]["text"].as_str().unwrap().contains("macro_internal.set_pull_request"));
                 follow_ups.fetch_add(1, SeqCst);
                 async { axum::Json(serde_json::json!({"id":"run-test-2"})) }
             })
@@ -626,8 +631,8 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
                 },
                 {
                     "type": "http",
-                    "name": "google_sheets",
-                    "url": "https://egress.test/mcp/google_sheets",
+                    "name": "macro_internal",
+                    "url": "https://egress.test/mcp/internal",
                     "headers": [{"name": "Authorization", "value": "Bearer test-session-token"}],
                 },
             ],
@@ -653,6 +658,12 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
     }
 
     let body = created.lock().expect("create log poisoned")[0].clone();
+    assert!(
+        body["prompt"]["text"]
+            .as_str()
+            .unwrap()
+            .contains("macro_internal.set_pull_request")
+    );
     assert_eq!(
         body["mcpServers"],
         serde_json::json!([
@@ -663,9 +674,9 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
                 "headers": { "Authorization": "Bearer test-session-token" },
             },
             {
-                "name": "google_sheets",
+                "name": "macro_internal",
                 "type": "http",
-                "url": "https://egress.test/mcp/google_sheets",
+                "url": "https://egress.test/mcp/internal",
                 "headers": { "Authorization": "Bearer test-session-token" },
             },
         ])

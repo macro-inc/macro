@@ -47,8 +47,7 @@ async fn main() -> anyhow::Result<()> {
                 tools.toolset,
                 context.tool_context.clone(),
                 item_base_url.clone(),
-            )
-            .with_session_tools(context.session_pull_requests.clone()))
+            ))
         },
         Arc::new(LocalSessionManager::default()),
         {

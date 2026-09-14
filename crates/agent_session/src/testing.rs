@@ -303,6 +303,17 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(())
     }
 
+    async fn set_egress_token_hash(&self, id: AgentSessionId, hash: &str) -> Result<()> {
+        self.get(id).await?;
+        let mut hashes = self
+            .egress_token_hashes
+            .lock()
+            .expect("token store poisoned");
+        hashes.retain(|_, session| *session != id);
+        hashes.insert(hash.to_owned(), id);
+        Ok(())
+    }
+
     async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
         let mut sessions = self
             .sessions

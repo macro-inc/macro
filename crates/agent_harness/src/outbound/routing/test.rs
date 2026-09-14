@@ -183,6 +183,10 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never sets models")
     }
 
+    async fn set_egress_token_hash(&self, _id: AgentSessionId, _hash: &str) -> SessionResult<()> {
+        unimplemented!("this adapter does not rotate credentials")
+    }
+
     async fn set_repo_url(
         &self,
         _id: AgentSessionId,

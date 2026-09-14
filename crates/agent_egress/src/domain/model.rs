@@ -793,9 +793,6 @@ pub fn ensure_method_allowed(method: &Method) -> Result<(), EgressError> {
 /// rest are hop-by-hop headers, which by definition describe the connection
 /// that just ended, not the one about to begin - `host` most of all, since a
 /// forwarded `host` sends the upstream a name that isn't its own.
-/// Session credential sent only to Macro's own MCP server for session tools.
-pub const MACRO_SESSION_TOKEN_HEADER: &str = "x-macro-agent-session-token";
-
 const STRIPPED_REQUEST_HEADERS: &[HeaderName] = &[
     header::AUTHORIZATION,
     header::COOKIE,
@@ -852,14 +849,12 @@ const STRIPPED_SCOPING_PREFIX: &str = "x-pd-";
 /// identifies the server's session, `last-event-id` resumes a dropped event
 /// stream, and `accept` is how a client asks for one.
 pub fn sanitize_request_headers(headers: &mut HeaderMap) {
-    headers.remove(MACRO_SESSION_TOKEN_HEADER);
     strip(headers, STRIPPED_REQUEST_HEADERS);
     strip_scoping(headers);
 }
 
 /// Drop everything the sandbox must not see.
 pub fn sanitize_response_headers(headers: &mut HeaderMap) {
-    headers.remove(MACRO_SESSION_TOKEN_HEADER);
     strip(headers, STRIPPED_RESPONSE_HEADERS);
     strip_scoping(headers);
 }

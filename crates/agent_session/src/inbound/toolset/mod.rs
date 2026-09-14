@@ -1,9 +1,7 @@
-//! Session-bound tools exposed to sandboxed agents.
+//! Macro Internal MCP tools for agent sessions.
 
+mod context;
 mod set_pull_request;
 
-pub use set_pull_request::SetPullRequest;
-
-use crate::domain::{model::AgentSessionId, pull_request::SessionPullRequests};
-mod context;
 pub use context::SessionToolContext;
+pub use set_pull_request::SetPullRequest;

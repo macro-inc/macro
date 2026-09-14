@@ -95,16 +95,19 @@ If a Cursor follow-up reports an earlier request is still starting, use Stop in 
 agent session before retrying. History synchronization yields after 30 seconds
 if the provider stalls, so follow-ups report an error instead of waiting forever.
 
-PR status in an open Magic Chip refreshes every 15 seconds while the app is
-focused, including after the initial webhook sync. A late webhook does not
-require reloading the page.
+PR status in an open Magic Chip updates from connection-gateway events after
+webhook sync. Reconnecting refreshes active PR lookups to recover missed updates.
+A late webhook does not require reloading the page.
 
-Sandboxed coding agents can call Macro's `set_pull_request` MCP tool after
-`gh pr create`, or to associate an existing PR with the current session. The tool
-accepts only the GitHub URL; the calling session comes from authentication.
-Repeating the URL leaves the link unchanged, and setting another URL replaces it.
-Cursor uses its returned PR URL automatically and does not expose this tool.
-Both paths should show the same chip link, including after a history reload.
+Coding agents use `macro_internal.set_pull_request` to register an existing or
+new GitHub PR with their session. Macro Internal MCP is hosted by the harness
+service at `/mcp/internal` on its egress listener, separately from workspace MCP.
+Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
+model supplies only the URL. The tool records the link, not the GitHub PR itself.
+Cursor enables automatic PR creation when a repository is selected and receives
+a short instruction to register PRs. Its returned URL is also recorded because
+automatic creation can finish after the agent stops. Repeated registration is
+idempotent, and the typed session event preserves the chip link through reloads.
 
 When Cursor opens a pull request, the chip header shows its GitHub link as soon
 as the run reports it, including after restoring a session. The link remains
