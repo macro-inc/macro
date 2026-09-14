@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n            SELECT 1 FROM \"Document\" WHERE $2 = 'document' AND id = $1 AND \"deletedAt\" IS NOT NULL\n            UNION ALL\n            SELECT 1 FROM \"Project\" WHERE $2 = 'project' AND id = $1 AND \"deletedAt\" IS NOT NULL\n            UNION ALL\n            SELECT 1 FROM \"Chat\" WHERE $2 = 'chat' AND id = $1 AND \"deletedAt\" IS NOT NULL\n        ) AS \"deleted!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "deleted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f0a958d1d92f196a2b6b7d5d75ce322ad79745abe807537a2d8c6c703fd6c7a6"
+}

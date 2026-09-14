@@ -521,6 +521,7 @@ fn share_permission(
         id: String::new(),
         link_share: Some(link_share),
         link_share_access_level: Some(permission_access_level(access_level)),
+        team_share_access_level: None,
         owner: spec.user_id(owner_key),
         channel_share_permissions: None,
     }
@@ -625,6 +626,7 @@ async fn seed_documents(
                     link_share_access_level: document
                         .link_share_access_level
                         .map(permission_access_level),
+                    team_share_access_level: None,
                     owner: owner_id.clone(),
                     channel_share_permissions: None,
                 },
@@ -725,6 +727,7 @@ async fn seed_tasks(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
                     id: String::new(),
                     link_share: None,
                     link_share_access_level: None,
+                    team_share_access_level: None,
                     owner: owner_id.clone(),
                     channel_share_permissions: None,
                 },

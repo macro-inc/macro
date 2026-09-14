@@ -20,6 +20,8 @@ use predicate_index::{PredicateExpr, RangeBound};
 
 use super::*;
 
+mod channels;
+
 fn request() -> SoupFlatRequest {
     SoupFlatRequest {
         sort: SoupIndexSort::UpdatedAt,

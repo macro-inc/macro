@@ -93,21 +93,25 @@ impl InMemoryAgentSessionRepo {
 
     /// Seed log entries, in the order they should be read back.
     ///
-    /// Each is stamped as it lands, the way the real table's `created_at`
-    /// default does.
+    /// Give seeded frames strictly increasing timestamps: an in-memory loop
+    /// can outrun the clock, and UUIDv7 suffixes do not preserve insertion order
+    /// when the production `(created_at, id)` reader breaks timestamp ties.
     pub fn extend_log(&self, entries: impl IntoIterator<Item = AgentSessionLog>) {
         let mut logs = self
             .logs
             .lock()
             .expect("in-memory log store is not poisoned");
         for entry in entries {
-            logs.entry(entry.agent_session_id)
-                .or_default()
-                .push(StoredAgentSessionLog {
-                    id: macro_uuid::generate_uuid_v7(),
-                    created_at: chrono::Utc::now(),
-                    entry,
-                });
+            let rows = logs.entry(entry.agent_session_id).or_default();
+            let now = chrono::Utc::now();
+            let created_at = rows.last().map_or(now, |last| {
+                now.max(last.created_at + chrono::Duration::microseconds(1))
+            });
+            rows.push(StoredAgentSessionLog {
+                id: macro_uuid::generate_uuid_v7(),
+                created_at,
+                entry,
+            });
         }
     }
 }
@@ -254,6 +258,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(SessionBot {
             id,
             name: "Test Agent".to_owned(),
+            handle: "test-agent".to_owned(),
             avatar_url: None,
         })
     }

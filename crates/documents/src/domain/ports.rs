@@ -16,6 +16,9 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts,
+};
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 use super::content::DocumentContent;
@@ -137,23 +140,27 @@ pub trait DocumentRepo: Send + Sync + 'static {
     /// Always inserts a `Document` row. Email-attachment linking and SHA reuse
     /// belong on [`DocumentRepo::import_email_attachment_document`].
     ///
-    /// `share_permission` is the pre-resolved initial share permission — the
+    /// `share_permission` is the pre-resolved initial link permission — the
     /// repository persists it verbatim and carries no share-policy of its own.
+    /// Canonical team state starts NULL; `args.share_with_team` initializes explicit
+    /// task consent from the persisted owner's team inside the same transaction and
+    /// fails with `BadRequest` when that owner has no team.
     fn create_document(
         &self,
         args: CreateDocumentRepoArgs,
         share_permission: SharePermissionV2,
-    ) -> impl Future<Output = Result<DocumentMetadata, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<DocumentMetadata, DocumentError>> + Send;
 
     /// Import an email attachment: link it to a reusable live email document
     /// owned by the same user (matching latest-instance sha), or insert a new
     /// document and link it. Concurrent first-time creates for the same
     /// `(owner, sha)` are serialized so two imports cannot insert duplicates.
+    /// Imports never initialize team consent.
     fn import_email_attachment_document(
         &self,
         args: ImportEmailAttachmentRepoArgs,
         share_permission: SharePermissionV2,
-    ) -> impl Future<Output = Result<EmailImportRepoOutcome, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<EmailImportRepoOutcome, DocumentError>> + Send;
 
     /// Get the link-share preference of the user's team, or `None` when the
     /// user is not on a team.
@@ -175,7 +182,7 @@ pub trait DocumentRepo: Send + Sync + 'static {
     fn edit_document(
         &self,
         args: EditDocumentRepoArgs,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Update a document's `updatedAt` timestamp.
     fn update_document_modified(
@@ -227,25 +234,26 @@ pub trait DocumentRepo: Send + Sync + 'static {
         task_short_id: &str,
     ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 
-    /// Share a document with the given team.
-    fn share_with_team(
+    /// Load persisted ownership, membership and explicit sharing facts for policy.
+    ///
+    /// A document whose canonical state is still NULL but whose owner's team holds a
+    /// legacy direct grant is adopted first, so the facts describe that grant.
+    fn get_team_share_facts(
         &self,
-        team_id: &uuid::Uuid,
         document_id: &str,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<TeamShareFacts, DocumentError>> + Send;
 
-    /// Get the team-share state of a document, resolved against the owner's team.
+    /// Get explicit team-share state, never inferred from inherited grants.
     fn get_team_share(
         &self,
         document_id: &str,
-    ) -> impl Future<Output = Result<DocumentTeamShare, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<DocumentTeamShare, DocumentError>> + Send;
 
-    /// Grant or revoke the document owner's team's access on the document.
+    /// Apply an owner-authorized update after rechecking its facts atomically.
     fn set_team_share(
         &self,
-        document_id: &str,
-        share: bool,
-    ) -> impl Future<Output = Result<DocumentTeamShare, Self::Err>> + Send;
+        command: AuthorizedTeamShareCommand,
+    ) -> impl Future<Output = Result<DocumentTeamShare, DocumentError>> + Send;
 
     /// Get document metadata at a specific version ID.
     fn get_document_metadata_at_version(

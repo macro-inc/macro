@@ -16,7 +16,6 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
-  enableAgentSessionComposer,
   enableChatV3Agents,
   enableReminders,
   enableSnippets,
@@ -419,7 +418,7 @@ export function runCreateAction(
       openStandaloneReminderComposer();
       return;
     case 'agent': {
-      if (isFeatureEnabled(enableAgentSessionComposer)) {
+      if (isFeatureEnabled(enableChatV3Agents)) {
         createComponent({
           componentId: 'agent-session-compose',
           asPopover: true,

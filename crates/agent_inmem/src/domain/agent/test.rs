@@ -1024,3 +1024,5 @@ async fn ask_without_form_support_explains_instead_of_asking() {
         spoken(&notifications)
     );
 }
+
+mod telemetry;

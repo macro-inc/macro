@@ -45,6 +45,7 @@ export { Thought, type ThoughtProps } from './Thought';
 export { TodoList } from './TodoList';
 export { ToolCard, type ToolCardProps } from './ToolCard';
 export { ToolErrorCard, type ToolErrorCardProps } from './ToolErrorCard';
+export { ToolGroup, type ToolGroupProps } from './ToolGroup';
 export {
   ToolStatusTitle,
   type ToolStatusTitleProps,

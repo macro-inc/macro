@@ -267,7 +267,7 @@ function SlimGroupSection(props: { config: GroupConfig }) {
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
-  const { state: section, clearVisibleActivity } = useChannelRailSectionState(
+  const { state: section } = useChannelRailSectionState(
     () => props.config.group
   );
   const pagination = useChannelRailVirtualizer(() => props.config.group);
@@ -317,7 +317,6 @@ function SlimGroupSection(props: { config: GroupConfig }) {
         class="flex min-h-0 w-full flex-col items-center gap-0.5"
         activityTargetId={section().targetId}
         activityTooltip
-        onActivityVisible={clearVisibleActivity}
       >
         <Switch>
           <Match when={forceEmptyState()}>{null}</Match>

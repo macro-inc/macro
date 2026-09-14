@@ -119,6 +119,9 @@ vi.mock('@core/util/url', () => ({
 vi.mock('@service-cognition/client', () => ({
   cognitionApiServiceClient: { getChatPermissions: mocks.getChatPermissions },
 }));
+vi.mock('@queries/team/teams', () => ({
+  useCurrentTeamQuery: () => ({ isSuccess: false, data: undefined }),
+}));
 vi.mock('@solidjs/router', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('./LoginButton', () => ({ openLoginModal: vi.fn() }));
 vi.mock('@kobalte/core/dialog', () => {

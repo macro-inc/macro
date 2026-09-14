@@ -32,6 +32,7 @@ members = [
   "crates/entity_mutation",
   "crates/favorites",
   "crates/foreign_entity",
+  "crates/genai_telemetry",
   "crates/generic_email_domains",
   "crates/gmail_client",
   "crates/graphql_activity",

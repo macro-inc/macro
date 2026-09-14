@@ -224,7 +224,7 @@ impl GraphqlLinkShare {
     }
 }
 
-/// Shared link/channel share-policy update.
+/// Shared link, explicit team, and channel share-policy update.
 #[derive(InputObject)]
 pub struct EntitySharePolicyInput {
     /// Link-sharing audience. Omit to leave unchanged or pass null to disable link sharing.
@@ -232,6 +232,10 @@ pub struct EntitySharePolicyInput {
     /// Link access level. Omit to leave unchanged or pass null to reset it to the default level
     /// when a link share exists.
     pub link_share_access_level: MaybeUndefined<GraphqlEntityAccessLevel>,
+    /// Explicit team access level. Omit to leave unchanged or pass null to disable team sharing,
+    /// independently of link sharing. Only the actual owner may change this setting;
+    /// enabling it requires the owner to belong to a team. OWNER is not an allowed level.
+    pub team_share_access_level: MaybeUndefined<GraphqlEntityAccessLevel>,
     /// Channel access entries to add, remove, or replace.
     pub channel_share_permissions: Option<Vec<ChannelSharePolicyInput>>,
 }
@@ -246,6 +250,10 @@ impl EntitySharePolicyInput {
                 .into(),
             link_share_access_level: self
                 .link_share_access_level
+                .map_value(GraphqlEntityAccessLevel::into_model)
+                .into(),
+            team_share_access_level: self
+                .team_share_access_level
                 .map_value(GraphqlEntityAccessLevel::into_model)
                 .into(),
             channel_share_permissions: self.channel_share_permissions.map(|entries| {
@@ -263,7 +271,7 @@ impl EntitySharePolicyInput {
 pub struct UpdateEntitySharePolicyInput {
     /// Entity whose share policy should change.
     pub entity: EntityRefInput,
-    /// New link/channel policy values.
+    /// New link, explicit team, and channel policy values.
     pub policy: EntitySharePolicyInput,
 }
 
@@ -536,7 +544,7 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
         ))
     }
 
-    /// Update link and channel share policies across supported entity kinds.
+    /// Update link, explicit team, and channel share policies across supported entity kinds.
     async fn update_entity_share_policies(
         &self,
         ctx: &Context<'_>,

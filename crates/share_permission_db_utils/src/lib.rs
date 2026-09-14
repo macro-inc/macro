@@ -1,5 +1,7 @@
 //! Small SQL helpers for `SharePermission` and `ChannelSharePermission` rows.
 
+pub mod team_share;
+
 use anyhow::Context;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::access_level::AccessLevel;

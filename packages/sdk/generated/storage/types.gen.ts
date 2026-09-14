@@ -4727,7 +4727,7 @@ export type DocumentSyncContentUpdatedMetadata = {
  */
 export type DocumentTeamShareResponse = {
     /**
-     * Whether the document is currently shared with the owner's team.
+     * Whether explicit team sharing is enabled; inherited team access does not count.
      */
     sharedWithTeam: boolean;
     /**
@@ -7661,6 +7661,7 @@ export type SharePermissionV2 = {
      * The owner of the item
      */
     owner: string;
+    teamShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -9379,6 +9380,7 @@ export type UpdateSharePermissionRequestV2 = {
     channelSharePermissions?: Array<UpdateChannelSharePermission> | null;
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
+    teamShareAccessLevel?: null | AccessLevel;
 };
 
 /**
@@ -13107,9 +13109,19 @@ export type SetDocumentTeamShareData = {
 };
 
 export type SetDocumentTeamShareErrors = {
+    /**
+     * Owner has no team
+     */
     400: ErrorResponse;
+    /**
+     * Acting identity is absent or is not the actual owner
+     */
     401: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * Sharing facts changed or an untracked grant conflicts
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 

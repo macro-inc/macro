@@ -1004,6 +1004,7 @@ async fn patch_chat_sets_team_share_and_defaults_explicit_null_level_to_view(poo
         UpdateSharePermissionRequestV2 {
             link_share: Some(Some(LinkShare::Team)),
             link_share_access_level: Some(None),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )
@@ -1028,6 +1029,7 @@ async fn patch_chat_defaults_explicit_null_level_for_existing_link_share(pool: P
         UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )
@@ -1038,6 +1040,7 @@ async fn patch_chat_defaults_explicit_null_level_for_existing_link_share(pool: P
         UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(None),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )
@@ -1062,6 +1065,7 @@ async fn patch_chat_disables_link_sharing_and_clears_both_levels(pool: Pool<Post
         UpdateSharePermissionRequestV2 {
             link_share: Some(None),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )

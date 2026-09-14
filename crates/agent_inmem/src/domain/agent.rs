@@ -38,8 +38,9 @@ use ai_tools::user_tool_review::{
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
 
-use crate::domain::engine::{TurnEngine, TurnRequest};
+use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
 use crate::domain::user_input::{
@@ -91,6 +92,8 @@ struct TurnInput {
     messages: Vec<ChatMessage>,
     /// Model the turn runs on.
     model: String,
+    /// Who this agent is, for the engine's system prompt.
+    identity: Option<AgentIdentity>,
     /// The session's instructions, for the engine's system prompt.
     instructions: Option<String>,
 }
@@ -198,11 +201,13 @@ impl AgentState {
             || TurnInput {
                 messages: messages_for_turn(&[], prompt),
                 model: String::new(),
+                identity: None,
                 instructions: None,
             },
             |state| TurnInput {
                 messages: messages_for_turn(&state.history, prompt),
                 model: state.model.clone(),
+                identity: state.identity.clone(),
                 instructions: state.instructions.clone(),
             },
         )
@@ -548,6 +553,13 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     if let Err(error) = state.expect_session(&request.session_id) {
                         return responder.respond_with_error(error);
                     }
+                    let span = tracing::info_span!(
+                        parent: None,
+                        "agent.acp.prompt",
+                        agent.session.id = %state.session_id,
+                        gen_ai.conversation.id = %state.session_id,
+                    );
+                    genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
                     let prompt = prompt_text(&request);
                     if prompt.trim() == COMPACT_COMMAND {
                         state.clear_history();
@@ -581,6 +593,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                                 let _ = responder.respond(PromptResponse::new(stop));
                                 Ok(())
                             }
+                            .instrument(span)
                         })?;
                         return Ok(());
                     }
@@ -598,6 +611,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             let _ = responder.respond(PromptResponse::new(stop));
                             Ok(())
                         }
+                        .instrument(span)
                     })?;
                     Ok(())
                 }
@@ -658,6 +672,7 @@ async fn run_turn(
     let TurnInput {
         messages,
         model,
+        identity,
         instructions,
     } = state.turn_input(&prompt);
     let awaiting = Arc::new(AwaitingUser::default());
@@ -665,6 +680,7 @@ async fn run_turn(
     let mut parts = state.engine.run_turn(TurnRequest {
         owner: state.owner.clone(),
         model,
+        identity,
         instructions,
         messages,
         mcp_tools: state.current_mcp_tools(),

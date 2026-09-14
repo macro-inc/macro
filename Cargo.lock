@@ -100,10 +100,13 @@ dependencies = [
  "async-trait",
  "attachment",
  "futures",
+ "genai_telemetry",
  "macro_env_var",
  "macro_user_id",
  "model-entity",
  "non_empty",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "prompt",
  "regex",
  "rig-agent",
@@ -116,6 +119,8 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "workspace-hack",
 ]
@@ -379,6 +384,7 @@ dependencies = [
  "chat",
  "dashmap",
  "futures",
+ "genai_telemetry",
  "http 1.4.0",
  "http-body-util",
  "macro_user_id",
@@ -386,6 +392,8 @@ dependencies = [
  "mcp_select",
  "mcp_toolset",
  "memory",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "prompt",
  "rig-agent",
  "rmcp",
@@ -398,6 +406,8 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -441,6 +451,7 @@ dependencies = [
  "dashmap",
  "entity_access",
  "entity_access_db_utils",
+ "genai_telemetry",
  "harness_id",
  "macro_authorization",
  "macro_db_migrator",
@@ -452,6 +463,8 @@ dependencies = [
  "model-entity",
  "model_user",
  "non_empty",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "rootcause",
  "serde",
  "serde_json",
@@ -463,6 +476,8 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -712,13 +727,19 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-macros",
+ "genai_telemetry",
  "macro_user_id",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "schemars 1.2.1",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "workspace-hack",
 ]
@@ -6897,6 +6918,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "genai_telemetry"
+version = "0.1.0"
+dependencies = [
+ "macro_env_var",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "serde_json",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "workspace-hack",
+]
+
+[[package]]
 name = "generator"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10843,13 +10878,17 @@ dependencies = [
 name = "models_permissions"
 version = "0.1.0"
 dependencies = [
+ "macro_user_id",
+ "model-entity",
  "model_file_type",
  "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
  "strum 0.27.2",
+ "thiserror 2.0.18",
  "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -12485,6 +12524,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "url",
  "utoipa",
@@ -14430,6 +14470,8 @@ dependencies = [
 name = "search_processing_service"
 version = "0.1.0"
 dependencies = [
+ "agent_fold",
+ "agent_session",
  "anyhow",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -15163,8 +15205,11 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",
+ "model-entity",
  "models_permissions",
+ "rootcause",
  "sqlx",
+ "thiserror 2.0.18",
  "tokio",
  "workspace-hack",
 ]

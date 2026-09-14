@@ -6,6 +6,7 @@
 #![deny(missing_docs)]
 
 pub mod about_macro;
+pub mod agent_identity;
 pub mod agent_session;
 pub mod channel_mention;
 pub mod citations;
@@ -230,6 +231,13 @@ mod tests {
         assert!(instructions.contains("<m-user-mention>"));
         assert!(instructions.contains("\"expanded\":true"));
         assert!(instructions.contains("\"blockName\":\"skill\""));
+    }
+
+    #[test]
+    fn agent_identity_names_the_agent_before_the_session_preamble() {
+        let identity = agent_identity::render("Grunk", "grunk");
+        assert!(identity.starts_with("# Identity\n"));
+        assert!(identity.contains("You are Grunk (@grunk)."));
     }
 
     #[test]
