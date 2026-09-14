@@ -197,8 +197,12 @@ const ChipHeader: Component<{
   >
     <button
       type="button"
-      class="flex min-w-0 flex-initial items-center gap-1.5 rounded-md text-left text-ink-extra-muted"
-      classList={{ 'hover:text-ink': Boolean(props.onOpen) }}
+      class="flex min-w-0 items-center gap-1.5 rounded-md text-left text-ink-extra-muted"
+      classList={{
+        'hover:text-ink': Boolean(props.onOpen),
+        'flex-1': !props.header?.pullRequestUrl,
+        'flex-initial': Boolean(props.header?.pullRequestUrl),
+      }}
       data-message-reply-preview={props.preview}
       disabled={!props.onOpen}
       onClick={props.onOpen}
