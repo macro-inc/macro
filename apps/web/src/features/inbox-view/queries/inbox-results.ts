@@ -1,9 +1,10 @@
 import {
   dateBucket,
+  deduplicateItems,
   groupSoupEntities,
   type SoupGroup,
 } from '@app/features/soup/collection';
-import type { DateValue } from '@core/util/date';
+import { compareDateDesc, type DateValue } from '@core/util/date';
 import type { EntityData, WithNotification } from '@entity';
 import { homeDateBucket } from './home-date-buckets';
 import {
@@ -44,41 +45,52 @@ export function groupInboxEntitiesByDate(
   });
 }
 
-/** Merge notification recency with Activity's own-touch projection. `sortTs`
- * is the Home row's display/grouping timestamp; source stamps stay intact. */
+const latestTimestamp = (
+  first: DateValue | null | undefined,
+  second: DateValue | null | undefined
+) => (compareDateDesc(first, second) <= 0 ? first : second);
+
+/** Content freshness and Home ordering are independent: keep the newest
+ * payload, both source stamps, and the notification source's metadata. */
 export function mergeHomeEntities(
   notifications: WithNotification<EntityData>[],
   recents: WithNotification<EntityData>[],
   context: InboxOrderContext
 ): WithNotification<EntityData>[] {
-  const key = (entity: EntityData) => `${entity.type}:${entity.id}`;
-  const rows = new Map(
-    notifications.map((entity) => [
-      key(entity),
-      { ...entity, sortTs: inboxGroupTimestamp(entity, context) },
-    ])
-  );
-
-  for (const recent of recents) {
-    // Optimistic inserts from other users must never enter own activity.
-    if (!recent.touchedAt) continue;
-    const notification = rows.get(key(recent));
-    const sortTs =
-      notification?.sortTs &&
-      new Date(notification.sortTs).getTime() >
-        new Date(recent.touchedAt).getTime()
-        ? notification.sortTs
-        : recent.touchedAt;
-    rows.set(key(recent), {
-      ...(notification ?? recent),
-      touchedAt: recent.touchedAt,
-      sortTs,
-    });
-  }
-
-  return [...rows.values()].sort(
+  return deduplicateItems<WithNotification<EntityData>>(
+    [
+      ...notifications.map((entity) => ({
+        ...entity,
+        sortTs: inboxGroupTimestamp(entity, context),
+      })),
+      // Cache inserts from other users are not the viewer's own activity.
+      ...recents
+        .filter((entity) => entity.touchedAt)
+        .map((entity) => ({
+          ...entity,
+          sortTs: entity.touchedAt,
+        })),
+    ],
+    {
+      getKey: (entity) => `${entity.type}:${entity.id}`,
+      resolveConflict: (existing, incoming) => ({
+        ...(compareDateDesc(
+          incoming.updatedAt ?? incoming.createdAt,
+          existing.updatedAt ?? existing.createdAt
+        ) < 0
+          ? incoming
+          : existing),
+        notifications: existing.notifications ?? incoming.notifications,
+        notifiedAt: latestTimestamp(existing.notifiedAt, incoming.notifiedAt),
+        touchedAt: latestTimestamp(existing.touchedAt, incoming.touchedAt),
+        sortTs: latestTimestamp(existing.sortTs, incoming.sortTs),
+      }),
+    }
+  ).sort(
     (a, b) =>
-      new Date(b.sortTs ?? 0).getTime() - new Date(a.sortTs ?? 0).getTime()
+      compareDateDesc(a.sortTs, b.sortTs) ||
+      a.type.localeCompare(b.type) ||
+      a.id.localeCompare(b.id)
   );
 }
 

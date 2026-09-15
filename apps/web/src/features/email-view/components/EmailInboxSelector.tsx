@@ -90,20 +90,6 @@ function InboxAvatar(props: {
   );
 }
 
-function AllInboxesIcon(props: { class?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      class={cn(
-        'flex size-5 shrink-0 items-center justify-center',
-        props.class
-      )}
-    >
-      <TrayIcon class="size-4" />
-    </span>
-  );
-}
-
 /**
  * The inbox list at the top of the Email sidebar: `All inboxes` (with a
  * `Connect another account` button beside it) followed by one row per inbox.
@@ -125,7 +111,9 @@ export function EmailInboxList(props: { class?: string }) {
             class="min-w-0 flex-1"
             {...pressHandlers(selection.selectAll)}
           >
-            <AllInboxesIcon />
+            <ViewSidebar.Icon>
+              <TrayIcon class="size-4" />
+            </ViewSidebar.Icon>
             <span class="truncate">All inboxes</span>
           </ViewSidebar.Item>
           <Show when={selection.canAddInbox()}>
@@ -151,12 +139,9 @@ export function EmailInboxList(props: { class?: string }) {
               }
               {...pressHandlers(() => selection.select(option.id))}
             >
-              <span
-                aria-hidden="true"
-                class="flex size-5 shrink-0 items-center justify-center"
-              >
+              <ViewSidebar.Icon>
                 <InboxAvatar option={option} size="sm" class="size-5" />
-              </span>
+              </ViewSidebar.Icon>
               <span class="truncate">{option.label}</span>
             </ViewSidebar.Item>
           )}

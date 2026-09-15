@@ -19,7 +19,7 @@ import { createEffect } from 'solid-js';
 import { replaceHomeComposerDraft } from './home-composer-selection';
 
 export const HomeChatInput = (props: {
-  variant?: 'default' | 'tall' | 'home';
+  variant?: 'default' | 'tall';
   class?: string;
   placeholder?: string;
   autoFocusOnMount?: boolean;

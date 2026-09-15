@@ -64,19 +64,28 @@ starting pane; it does not create a chat. Email and Tasks have matching top pill
 for **New email** and **New task**.
 
 Channel thread replies remain separate Home entries from their parent channel,
-using the same single-line desktop pills and reply arrow icon, labeled with the
-sender and channel (for example, **Peter in #battlefield**). Selecting a
+using single-line rows and a reply arrow icon on desktop and touch devices, labeled
+with the sender and channel (for example, **Peter in #battlefield**). Channel names
+prefer the current channel cache, then a matching thread notification's name,
+then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
 
 Items in the 256px desktop rail use single-line pills with 16px icons: profile photos for
 DMs, model logos for AI chats (Claude sunburst or ChatGPT knot), and regular
-Phosphor icons for other items. There are no title tooltips, and timestamps are
+Phosphor icons for other items, using the same glyphs as entity rows elsewhere:
+articles for documents, checklists for tasks, hashes for channels, envelopes for
+email, sparkles for agents, folders for projects, and alarms for reminders.
+There are no title tooltips, and timestamps are
 visible only while hovering the row. An unread
 dot remains visible. Click a row to preview it; `j`/`k` navigate and update the
 preview, and Shift-click opens a split.
 
-On desktop, before selecting a row, the main pane shows a centered chat composer
-under “What should we get done in Macro?”. Type in “Type @ to reference / for skills”, use the paperclip button for
+On desktop, before selecting a row, the main pane shows a centered single-line chat
+composer under “What should we get done in Macro?”. Attachment, text, model, and
+send controls share one row; longer prompts expand the input as needed.
+Home uses the shared app font and composer theme tokens; suggestion text and
+hover states use the same semantic colors as other app surfaces.
+Type in “Type @ to reference / for skills”, use the attachment button for
 attachments and the model menu to choose a model, then press Enter or Send to
 create and open an AI chat. The input stays 32px above the vertical center as suggestions load. Up to three cached AI
 suggestions appear below the
@@ -98,12 +107,19 @@ of the original design (48.75px single-line height); the Home composer is at mos
 shrinks to the available pane width; suggestion text truncates while Open stays
 visible. Plain channel messages use a compact row;
 multiline messages, formatting, and attachments retain a full-width editor and
-footer. Mobile composer styling and send behavior are unchanged.
+footer. Switching between compact and expanded layouts keeps the same editor and
+draft. Mobile composer styling and send behavior are unchanged.
 
 Sections are Last few minutes (under five minutes), Last hour, This evening
 (6pm onward), This afternoon (noon–6pm), This morning (6am–noon), Earlier today,
 Yesterday, and the existing older-date groups. These use local time and refresh
-every 30 seconds without a new action. Load more reaches older items. A failed
+every 30 seconds without a new action. Scrolling near the bottom automatically
+loads older items. Home buffers older rows until both notification and own-activity
+pages have loaded through their timestamp, then advances the shallower feed first.
+Rows tied at a page boundary appear together, so loading another page does not
+insert older history above already displayed rows. Live actions and refreshes
+can still reorder rows. Short or fully filtered pages continue loading until the list
+fills or there are no more results. A failed
 source shows a retry notice while the other source stays usable. Document typing
 alone is not yet attributed by Activity; Home reflects the actions the existing
 Activity system records.
@@ -138,7 +154,7 @@ sidebar has a full-width `New task` action, a collapsible list of task favorites
 and a collapsible list of tags. Selecting a tag filters the current task view;
 selecting it again clears that tag filter. Favorite rows open their tasks.
 The desktop `Create` → `Task` modal uses the rounded composer surface, circular
-icon controls, and a pill-shaped `Create Task` button inset 7.5px from the edges.
+icon controls, and a pill-shaped `Create Task` button with 16px outer padding.
 The mobile task drawer retains its existing layout.
 
 ## Email — `/app/component/mail`
@@ -220,8 +236,9 @@ Replies appear inline on desktop and in a composer drawer on touch devices.
 Desktop draft bodies and app-controlled message text use 15px, matching channels.
 HTML messages with preserved sender typography retain their explicit sizes.
 Desktop reply actions sit together at the bottom right: discard, attach, schedule,
-then Send, with circular hover backgrounds and a 7.5px inset. Standalone compose
-groups its controls there too, including Formatting. Touch layouts are unchanged.
+then Send, with circular hover backgrounds inside the card's 16px padding.
+Standalone compose uses one right-aligned row inside its 16px content padding:
+delete, attach, format, schedule, and send. Touch compose uses its header toolbar.
 `R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
 or the latest message when none is selected. `F` opens a forward and focuses To.
 While an editable field is focused, Escape is handled by that field before the
@@ -373,6 +390,10 @@ Board/List views, `Company` create button. Requires a team ("Join a team to enab
 
 ## Activity — `/app/component/activity`
 
+Requires authentication and the `enable-activity-feed` flag. Direct navigation and
+restored splits wait for flags to load; when disabled, they redirect to Home
+(`/app/component/inbox`) without loading the activity feed.
+
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)
 over a wrapping row of pill chips (entity icon, name, action count; click opens the entity,
@@ -502,4 +523,8 @@ The mobile new-email composer nests the channel-style Send button inside its
 top-right glass toolbar, with an even 5px inset on the top, bottom, and right.
 The toolbar is 46px tall; attachment and schedule controls align with Send.
 
-Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Existing task-mode drafts can still return through Back to message. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
+Channel, email, Markdown, and composer body text use `text-base`: 15px at the
+default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
+Desktop and mobile share this scale, with accessibility text scaling preserved.
+
+Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.

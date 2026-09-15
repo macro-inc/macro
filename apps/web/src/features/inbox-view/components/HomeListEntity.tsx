@@ -1,5 +1,4 @@
 import { useUserId } from '@core/context/user';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { Entity, MaybeEntityRow } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
@@ -17,10 +16,8 @@ type HomeListEntityProps = BaseListEntityProps & {
 
 /** One compact, single-line Home item; the list owns focus and activation. */
 export function HomeListEntity(props: HomeListEntityProps) {
-  const desktopThread = () =>
-    !isTouchDevice() && props.entity.type === 'channel_thread'
-      ? props.entity
-      : undefined;
+  const threadEntity = () =>
+    props.entity.type === 'channel_thread' ? props.entity : undefined;
   const unread = () => unreadFilterFn(props.entity);
 
   return (
@@ -43,7 +40,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
           data-home-item
         >
           <Show
-            when={desktopThread()}
+            when={threadEntity()}
             fallback={<HomeEntityIcon entity={props.entity} />}
           >
             <span class="flex size-5 shrink-0 items-center justify-center">
@@ -57,7 +54,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
             )}
           >
             <Show
-              when={desktopThread()}
+              when={threadEntity()}
               fallback={
                 <Show
                   when={props.channelName}

@@ -1,7 +1,6 @@
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { HomeRecommendedActions } from './components/home-recommended-actions';
-import styles from './components/home-start.module.css';
 import { HomeStartLayout } from './components/home-start-layout';
 import { HomeChatInput } from './home-chat-input';
 
@@ -13,10 +12,9 @@ export function InboxStart() {
         <HomeStartLayout
           composer={
             <HomeChatInput
-              variant="tall"
+              variant="default"
               autoFocusOnMount={false}
               placeholder="Work on anything"
-              class={styles.composer}
             />
           }
           suggestions={<HomeRecommendedActions />}

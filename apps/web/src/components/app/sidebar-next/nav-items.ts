@@ -38,7 +38,7 @@ export type SidebarNextNavItem = SidebarItem & {
  * `text-ink-muted` colours the glyph.
  *
  * The labels are new but every destination is an existing view id, so the
- * `hotkeyToken`s are the ones `GoToHotkeys` already registers — `g i` still
+ * `hotkeyToken`s are the ones `GoToHotkeys` already registers — `g h`
  * reaches Home, `g f` still reaches Drive. `GoToHotkeys` is mounted from
  * `Layout` off `buildSidebarLinks` and is independent of which sidebar renders,
  * so the shortcuts work unchanged; these tokens only label the tooltips.
@@ -50,7 +50,7 @@ const SIDEBAR_NEXT_NAV_ITEMS = [
     href: LIST_VIEW_PATHS.inbox,
     icon: HouseIcon,
     iconActive: HouseFillIcon,
-    hotkey: 'i',
+    hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {

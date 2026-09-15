@@ -44,7 +44,7 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
   `Settings (Ctrl ;)`, `Log out`.
 
 With the new app views enabled, the outer sidebar is an icon rail. Its tooltips
-appear after two seconds of hover, including when moving between rail items. Home,
+use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
 item. Home uses Signal; Email uses Important across all linked inboxes.
 Noise does not light either dot. These are presence indicators, not counts; they
@@ -62,6 +62,10 @@ These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
 sidebar layout default to 256px; manually resized Chat widths remain saved.
+
+Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
+inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
+with regular-weight labels and consistent icon spacing.
 
 ## Favorites
 
@@ -181,7 +185,9 @@ category, Esc closes. The category strip and footer have transparent backgrounds
 - `Ctrl/Cmd+K` — jump to anything by name.
 - `c` then `d`/`t`/`e`/`m`/`a` — create doc / task / email / channel / AI chat.
   Single-letter shortcuts only work when no editor has focus; press `Escape` first.
-- `/` — search everything. `j`/`k` — move in lists. `e` — mark done. `g` then `i` — inbox.
+- `/` — search everything. `j`/`k` — move in lists. `e` — mark done.
+- `g` then `h` — Home (inbox); `g` then `i` remains an alias. Assistant is
+  available through its sidebar link or the `Go to Assistant` command.
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.

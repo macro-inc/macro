@@ -1,10 +1,8 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
-import PaperclipIcon from '@phosphor/paperclip.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import FormatIcon from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
-import { type JSX, Show } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { InputActionButton } from './ActionButton';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { useInput, useInputCommands } from './context';
@@ -39,9 +37,7 @@ export function AttachFilesAction() {
         label="Attach files"
         onClick={() => fileInputRef?.click()}
       >
-        <Show when={isTouchDevice()} fallback={<PaperclipIcon />}>
-          <PlusIcon />
-        </Show>
+        <PlusIcon />
       </InputActionButton>
     </>
   );

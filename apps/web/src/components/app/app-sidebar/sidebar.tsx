@@ -133,7 +133,7 @@ export interface SidebarItem {
   icon?: Component<
     JSX.SvgSVGAttributes<SVGSVGElement> & { triggerAnimation?: boolean }
   >;
-  hotkey: ValidHotkey;
+  hotkey?: ValidHotkey | ValidHotkey[];
   hotkeyToken: HotkeyToken;
   standaloneHotkey?: boolean;
   hiddenFromSidebar?: boolean;
@@ -191,7 +191,7 @@ const SIDEBAR_LINKS = [
     label: 'Home',
     href: LIST_VIEW_PATHS.inbox,
     icon: AnimatedHomeIcon,
-    hotkey: 'i',
+    hotkey: ['h', 'i'],
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {
@@ -396,7 +396,7 @@ const resetGoToHotkeysState = () => {
 /**
  * Hosts the always-on global shortcuts that must keep working even on
  * full-cover routes like solo settings: the "g" leader key with its per-link
- * "go to" nav hotkeys (e.g. "g i" for inbox), plus Send Invites. Rendered
+ * "go to" nav hotkeys (e.g. "g h" for Home), plus Send Invites. Rendered
  * unconditionally from `Layout` — unlike `AppSidebar`, which unmounts on those
  * routes — so none of them go dead there.
  */
@@ -462,7 +462,7 @@ export const GoToHotkeys = () => {
   });
 
   const registeredGoToKeys = () =>
-    new Set<ValidHotkey>(links().map((link) => link.hotkey));
+    new Set<ValidHotkey>(links().flatMap((link) => link.hotkey ?? []));
 
   // When the go to command scope is active, we want to prevent
   // other default hotkeys from running. So doing "g" + some key
@@ -1028,7 +1028,6 @@ const DASHBOARD_LINK: SidebarItem = {
   label: 'Assistant',
   href: '/home',
   icon: AnimatedHomeIcon,
-  hotkey: 'h',
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
@@ -1870,9 +1869,11 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
       onMouseEnter={() => setIsHovering(true)}
       label={`Go to ${props.label}`}
       hotkey={
-        props.standaloneHotkey
-          ? props.hotkeyToken
-          : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
+        props.hotkey
+          ? props.standaloneHotkey
+            ? props.hotkeyToken
+            : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
+          : undefined
       }
       tooltipDisabled={props.sidebarState !== 'slim' || props.id === 'calendar'}
       onMouseLeave={() => setIsHovering(false)}
@@ -1987,6 +1988,7 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
 
       <Show
         when={
+          props.hotkey &&
           isHovering() &&
           !props.hotkeyVisible &&
           !(isActive() && props.trailingWhenActive !== undefined)
@@ -2010,7 +2012,7 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
           </div>
         </div>
       </Show>
-      <Show when={props.hotkeyVisible}>
+      <Show when={props.hotkey && props.hotkeyVisible}>
         <div
           class={cn(
             'text-xs size-4 rounded-xs flex items-center justify-center overflow-hidden bg-accent/10 border border-accent/30 text-accent',

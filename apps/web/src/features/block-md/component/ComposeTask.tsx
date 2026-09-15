@@ -1,4 +1,3 @@
-import composerStyles from '@app/components/ui/components/chat-composer.module.css';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
@@ -809,19 +808,11 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   return (
     <div
-      class={cn(
-        'portal-scope flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4',
-        !isTouchDevice() && splitPanel.handle.isPopover() && 'p-[7.5px]'
-      )}
+      class="portal-scope flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4"
       tabIndex={-1}
       ref={setContainerRef}
     >
-      <div
-        class={cn(
-          'flex items-center gap-1',
-          !isTouchDevice() && composerStyles.actions
-        )}
-      >
+      <div class="flex items-center gap-1">
         <div class="flex-1 flex items-center">
           <Show when={splitPanel?.handle.isPopover()}>
             <Button
@@ -829,7 +820,7 @@ export function ComposeTask(props: ComposeTaskProps) {
               disabled={isCreating()}
               tabIndex={-1}
               tooltip="Continue editing in split"
-              size="icon-sm"
+              size="icon-composer"
             >
               <ArrowsOutIcon />
             </Button>
@@ -843,7 +834,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             size="sm"
             variant="outline"
             depth={3}
-            class={cn('bg-surface px-3', !isTouchDevice() && 'rounded-full')}
+            class="bg-surface px-3"
           >
             Clear Draft
           </Button>
@@ -853,18 +844,13 @@ export function ComposeTask(props: ComposeTaskProps) {
             onMouseDown={handleClose}
             tabIndex={-1}
             tooltip="Close"
-            size="icon-sm"
+            size="icon-composer"
           >
             <XIcon />
           </Button>
         </Show>
       </div>
-      <div
-        class={cn(
-          'flex-1 min-h-0 flex flex-col overflow-hidden',
-          !isTouchDevice() && splitPanel.handle.isPopover() && 'px-[8.5px]'
-        )}
-      >
+      <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
         <div class="shrink-0 flex gap-2 items-start px-2 mb-4">
           <Show when={tagLayoutMode() === 'title'}>
             <div class={COMPOSER_TITLE_LINE_CLASS}>
@@ -984,12 +970,7 @@ export function ComposeTask(props: ComposeTaskProps) {
         </div>
       </Show>
 
-      <div
-        class={cn(
-          'shrink-0 flex justify-between items-end gap-2',
-          !isTouchDevice() && composerStyles.actions
-        )}
-      >
+      <div class="shrink-0 flex justify-between items-end gap-2">
         <input
           ref={(el) => {
             attachInputRef = el;
@@ -1004,7 +985,7 @@ export function ComposeTask(props: ComposeTaskProps) {
           onMouseDown={() => attachInputRef?.click()}
           tabIndex={-1}
           tooltip="Attach image or video"
-          size="icon-sm"
+          size="icon-composer"
         >
           <PaperclipIcon />
         </Button>

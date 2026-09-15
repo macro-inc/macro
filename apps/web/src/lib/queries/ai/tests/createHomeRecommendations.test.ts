@@ -13,6 +13,45 @@ afterEach(() => {
 });
 
 describe('Home recommendation loading', () => {
+  it('keeps the original timeout when projection updates leave it waiting', async () => {
+    vi.useFakeTimers();
+    const [status, setStatus] = createSignal<'cold' | 'loading' | 'refreshing'>(
+      'cold'
+    );
+    vi.mocked(createAIProjection).mockReturnValue({
+      data: () => undefined,
+      isGenerating: () => ['cold', 'loading', 'refreshing'].includes(status()),
+      error: () => undefined,
+      refresh: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ReturnType<typeof createAIProjection>);
+
+    let dispose!: () => void;
+    const recommendations = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createHomeRecommendations();
+    });
+    try {
+      await vi.advanceTimersByTimeAsync(15_000);
+      setStatus('loading');
+      await vi.advanceTimersByTimeAsync(15_000);
+      setStatus('refreshing');
+      await vi.advanceTimersByTimeAsync(14_999);
+      expect(recommendations.isLoading()).toBe(true);
+      expect(recommendations.hasError()).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(recommendations.isLoading()).toBe(false);
+      expect(recommendations.hasError()).toBe(true);
+
+      setStatus('loading');
+      expect(recommendations.isLoading()).toBe(false);
+      expect(recommendations.hasError()).toBe(true);
+    } finally {
+      dispose();
+    }
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('stops a stalled shimmer, allows retry, and accepts a late result', async () => {
     vi.useFakeTimers();
     const [data, setData] = createSignal<HomeRecommendations>();

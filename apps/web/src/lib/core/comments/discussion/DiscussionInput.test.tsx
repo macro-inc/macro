@@ -47,7 +47,12 @@ vi.mock('@channel/Input/Input', () => {
   return {
     Input: {
       Root: Slot,
-      Layout: Slot,
+      Layout: Object.assign(Slot, {
+        Body: Slot,
+        Editor: Slot,
+        ActionsLeft: Slot,
+        ActionsRight: Slot,
+      }),
       EditorShell: Slot,
       Editor: Slot,
       Footer: Slot,

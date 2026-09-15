@@ -1,10 +1,9 @@
-import composerStyles from '@app/components/ui/components/chat-composer.module.css';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { cn, Dialog, Panel } from '@ui';
+import { cn, composerSurfaceClasses, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -185,12 +184,10 @@ function PopoverSplitModal(props: {
           open={props.popover.isOpen}
           onOpenChange={onOpenChange}
           contentRef={attachPanel}
-          class={cn(
-            isTaskComposer() && [
-              composerStyles.surface,
-              'glass-input rounded-xl!',
-            ]
-          )}
+          class={composerSurfaceClasses({
+            enabled: isTaskComposer(),
+            class: 'rounded-xl',
+          })}
         >
           <Panel
             depth={2}

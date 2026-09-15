@@ -1,5 +1,6 @@
 import type { EntityData, WithNotification } from '@entity';
 import { describe, expect, it, vi } from 'vitest';
+import { getHomePagination } from './home-pagination';
 import { buildInboxQuery } from './inbox-query';
 import {
   groupInboxEntitiesByDate,
@@ -259,5 +260,185 @@ describe('Home activity and notifications', () => {
 
   it('rejects cache inserts without a recorded own touch', () => {
     expect(mergeHomeEntities([], [freshEmail], signal)).toEqual([]);
+  });
+
+  it('uses fresher content without losing notification metadata or own activity', () => {
+    const notifications = () => [];
+    const notified = { ...staleTaskFreshComment, notifications };
+    const edited = {
+      ...recent('task', '2026-09-01T12:00:00Z'),
+      name: 'Renamed',
+    };
+    const [row] = mergeHomeEntities([notified], [edited], signal);
+    expect(row.name).toBe('Renamed');
+    expect(row.updatedAt).toBe(edited.updatedAt);
+    expect(row.sortTs).toBe(notified.notifiedAt);
+    expect(row.notifications).toBe(notifications);
+    expect(row.touchedAt).toBe(edited.touchedAt);
+    expect(notified.name).toBe(staleTaskFreshComment.name);
+    expect(edited.sortTs).toBeUndefined();
+  });
+
+  it('keeps the freshest content and timestamps across overlapping pages', () => {
+    const newest = {
+      ...recent('task', '2026-09-02T18:00:00Z'),
+      name: 'Latest',
+    };
+    const older = {
+      ...recent('task', '2026-09-01T12:00:00Z'),
+      updatedAt: '2026-08-01T12:00:00Z',
+    };
+    for (const recents of [
+      [newest, older],
+      [older, newest],
+    ]) {
+      const [row] = mergeHomeEntities([staleTaskFreshComment], recents, signal);
+      expect(row.name).toBe('Latest');
+      expect(row.touchedAt).toBe(newest.touchedAt);
+      expect(row.notifiedAt).toBe(staleTaskFreshComment.notifiedAt);
+      expect(row.sortTs).toBe(newest.touchedAt);
+    }
+  });
+
+  it('keeps the latest notification across duplicate notification pages', () => {
+    const older = {
+      ...staleTaskFreshComment,
+      notifiedAt: '2026-08-01T12:00:00Z',
+    };
+    expect(
+      mergeHomeEntities([staleTaskFreshComment, older], [], signal)[0]
+        .notifiedAt
+    ).toBe(staleTaskFreshComment.notifiedAt);
+  });
+
+  it('orders timestamp ties by entity identity, independently of source order', () => {
+    const a = recent('a', '2026-09-02T18:00:00Z');
+    const b = recent('b', '2026-09-02T18:00:00Z');
+    expect(mergeHomeEntities([], [b, a], signal).map((row) => row.id)).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(mergeHomeEntities([], [a, b], signal).map((row) => row.id)).toEqual([
+      'a',
+      'b',
+    ]);
+  });
+});
+
+describe('Home pagination', () => {
+  const signal = { tab: 'signal' as const, capabilities };
+  const entity = (id: string, day: number): EntityData => ({
+    type: 'chat',
+    id,
+    name: id,
+    ownerId: 'alice',
+    updatedAt: new Date(2026, 8, day),
+    notifiedAt: new Date(2026, 8, day),
+    touchedAt: new Date(2026, 8, day),
+  });
+  const page = (entities: EntityData[], hasMore = true, isLoading = false) => ({
+    entities,
+    hasMore,
+    isLoading,
+  });
+  const visible = (
+    notifications: ReturnType<typeof page>,
+    activity: ReturnType<typeof page>
+  ) => {
+    const { cutoff } = getHomePagination(notifications, activity, signal);
+    return mergeHomeEntities(notifications.entities, activity.entities, signal)
+      .filter((row) => new Date(row.sortTs ?? 0).getTime() > cutoff)
+      .map((row) => row.id);
+  };
+
+  it('buffers older rows and advances only the shallower feed', () => {
+    const notifications = page([entity('n9', 9), entity('n1', 1)]);
+    const activity = page([entity('a10', 10), entity('a8', 8)]);
+    expect(visible(notifications, activity)).toEqual(['a10', 'n9']);
+    expect(getHomePagination(notifications, activity, signal)).toMatchObject({
+      loadNotifications: false,
+      loadActivity: true,
+    });
+
+    activity.entities.push(entity('a7', 7), entity('a6', 6));
+    expect(visible(notifications, activity)).toEqual(['a10', 'n9', 'a8', 'a7']);
+    activity.hasMore = false;
+    expect(visible(notifications, activity)).toEqual([
+      'a10',
+      'n9',
+      'a8',
+      'a7',
+      'a6',
+    ]);
+    expect(getHomePagination(notifications, activity, signal)).toMatchObject({
+      loadNotifications: true,
+      loadActivity: false,
+    });
+    notifications.hasMore = false;
+    expect(visible(notifications, activity)).toEqual([
+      'a10',
+      'n9',
+      'a8',
+      'a7',
+      'a6',
+      'n1',
+    ]);
+  });
+
+  it('holds boundary ties until all rows at that timestamp are loaded', () => {
+    const notifications = page([entity('z', 9)]);
+    const activity = page([entity('b', 9)]);
+    expect(visible(notifications, activity)).toEqual([]);
+    expect(getHomePagination(notifications, activity, signal)).toMatchObject({
+      loadNotifications: true,
+      loadActivity: true,
+    });
+    notifications.entities.push(entity('a', 9), entity('n8', 8));
+    activity.entities.push(entity('a8', 8));
+    expect(visible(notifications, activity)).toEqual(['a', 'b', 'z']);
+  });
+
+  it('waits for both initial pages before exposing rows', () => {
+    const notifications = page([entity('old', 1)], false);
+    const activity = page([], false, true);
+    expect(visible(notifications, activity)).toEqual([]);
+    activity.isLoading = false;
+    activity.entities = [entity('new', 10)];
+    expect(visible(notifications, activity)).toEqual(['new', 'old']);
+  });
+
+  it('advances empty pages and ignores unstamped optimistic inserts', () => {
+    const notifications = page([entity('n9', 9)]);
+    const activity = page([
+      { ...entity('unstamped', 1), touchedAt: undefined },
+    ]);
+    expect(visible(notifications, activity)).toEqual([]);
+    expect(getHomePagination(notifications, activity, signal)).toMatchObject({
+      cutoff: Infinity,
+      loadActivity: true,
+    });
+    activity.entities = [];
+    expect(
+      getHomePagination(notifications, activity, signal).loadActivity
+    ).toBe(true);
+  });
+
+  it('releases the available source when the other source is exhausted or failed', () => {
+    expect(visible(page([], false), page([entity('a9', 9)], false))).toEqual([
+      'a9',
+    ]);
+  });
+
+  it('uses content ordering when notification sorting is disabled', () => {
+    const notifications = page([
+      { ...entity('n', 9), updatedAt: new Date(2026, 8, 1) },
+    ]);
+    const activity = page([entity('a', 8)]);
+    expect(
+      getHomePagination(notifications, activity, {
+        ...signal,
+        capabilities: withoutNotifiedSort.capabilities,
+      })
+    ).toMatchObject({ loadActivity: true, loadNotifications: false });
   });
 });

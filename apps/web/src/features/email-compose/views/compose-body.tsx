@@ -2,7 +2,6 @@ import { EmailAttachmentPill } from '@app/features/email-message/components/atta
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Telemetry } from '@macro-inc/observability';
 import { cn, Scroll } from '@ui';
 import type { LexicalEditor } from 'lexical';
@@ -119,10 +118,7 @@ export function ComposeBody(props: {
               scrollRef={props.mobileScrollRef}
               initialHtml={ctx.initialHtml()}
               initialValue={ctx.initialMarkdown?.()}
-              class={cn(
-                'text-sm wrap-break-word text-ink h-auto overflow-visible',
-                !isTouchDevice() && 'text-[15px]'
-              )}
+              class="text-base wrap-break-word text-ink h-auto overflow-visible"
               editable={() => !ctx.disabled()}
               placeholder="Use `@` to reference files"
               watermark={

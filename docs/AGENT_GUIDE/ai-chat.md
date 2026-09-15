@@ -143,8 +143,9 @@ and expand with longer drafts. The new agent editor supports context via `@`
 mentions; its existing attachment capabilities are unchanged. Stop and queued
 message controls remain available.
 
-User messages in both AI systems appear in right-aligned, filled gray bubbles
-with rounded corners, including on mobile. Long prompts wrap within the bubble;
+User messages in both AI systems appear in right-aligned bubbles with rounded
+corners, including on mobile. In dark mode, their fill and text follow the active
+theme; Macro Dark uses a dark gray fill and white text. Long prompts wrap within the bubble;
 production chat retains its Show more/Show less and editing controls.
 
 ## Waiting for a response

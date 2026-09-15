@@ -412,7 +412,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
           rows={3}
           aria-label="Task for the agent"
           autofocus={shouldAutofocusPrompt()}
-          class="ph-no-capture min-h-20 w-full flex-1 resize-none bg-transparent px-4 pt-4 pb-2 text-sm/6 text-ink outline-none placeholder:text-ink-placeholder touch:text-base"
+          class="ph-no-capture min-h-20 w-full flex-1 resize-none bg-transparent px-4 pt-4 pb-2 text-base/6 text-ink outline-none placeholder:text-ink-placeholder"
           placeholder={`What would you like ${selectedPersona()?.name ?? MACRO_AGENT_NAME} to work on?`}
           value={prompt()}
           disabled={submitting()}

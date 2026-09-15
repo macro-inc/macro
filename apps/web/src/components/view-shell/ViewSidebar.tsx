@@ -51,7 +51,10 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       {...rest}
-      class={cn('min-h-0 min-w-0 flex-1 overflow-auto px-4 pb-5', local.class)}
+      class={cn(
+        'min-h-0 min-w-0 flex-1 overflow-auto px-1.5 pb-5',
+        local.class
+      )}
       data-view-sidebar-content=""
     >
       {local.children}
@@ -59,23 +62,10 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
   );
 }
 
-function CompactContent(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['class']);
-  return (
-    <Content
-      {...rest}
-      class={cn(
-        'px-1.5 [&_nav]:gap-1 [&_[data-view-sidebar-item]]:border-0 [&_[data-view-sidebar-item]:hover]:bg-none [&_[data-view-sidebar-item]]:h-8 [&_[data-view-sidebar-item]]:gap-2 [&_[data-view-sidebar-item]]:px-2.5 [&_[data-view-sidebar-item]]:py-0 [&_[data-view-sidebar-item]]:font-normal [&_[data-view-sidebar-item]>span[aria-hidden]]:size-5 touch:[&_[data-view-sidebar-item]]:h-11',
-        local.class
-      )}
-    />
-  );
-}
-
 function Nav(props: JSX.HTMLAttributes<HTMLElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   return (
-    <nav {...rest} class={cn('flex min-w-0 flex-col gap-0.5', local.class)}>
+    <nav {...rest} class={cn('flex min-w-0 flex-col gap-1', local.class)}>
       {local.children}
     </nav>
   );
@@ -99,13 +89,28 @@ function Item(props: NavRowProps) {
       type={local.type ?? 'button'}
       active={local.active}
       aria-current={ariaCurrent()}
-      data-view-sidebar-item=""
       class={cn(
-        'h-9 gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink-muted transition-none not-disabled:hover:bg-hover not-disabled:hover:text-ink',
+        'h-8 gap-2 rounded-xl border-0 px-2.5 py-0 text-sm font-normal text-ink-muted transition-none not-disabled:hover:bg-hover not-disabled:hover:text-ink touch:h-11',
         local.active && 'bg-active text-ink not-disabled:hover:bg-active',
         local.class
       )}
     />
+  );
+}
+
+function Icon(props: JSX.HTMLAttributes<HTMLSpanElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+  return (
+    <span
+      {...rest}
+      aria-hidden="true"
+      class={cn(
+        'flex size-5 shrink-0 items-center justify-center',
+        local.class
+      )}
+    >
+      {local.children}
+    </span>
   );
 }
 
@@ -114,7 +119,7 @@ export const ViewSidebar = Object.assign(Root, {
   Header,
   Title,
   Content,
-  CompactContent,
   Nav,
   Item,
+  Icon,
 });

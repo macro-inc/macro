@@ -1,4 +1,3 @@
-import composerStyles from '@app/components/ui/components/chat-composer.module.css';
 import { EmailAttachmentPill } from '@app/features/email-message/components/attachment-pill';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
@@ -294,7 +293,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           onSelect: handleAddAttachments,
         }))
       }
-      size="icon-sm"
+      size="icon-composer"
       tooltip="Attach"
     >
       <Paperclip />
@@ -306,10 +305,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       class={cn(
         'relative flex flex-col flex-1 max-w-full min-h-0',
         isMobileDrawer() && 'min-h-full overflow-y-scroll overscroll-y-none',
-        props.unframed ? 'rounded-lg' : 'rounded-xl bg-menu-glass glass-input',
-        props.unframed &&
-          !composeContext.presentation.isTouch() &&
-          'overflow-visible'
+        props.unframed ? 'rounded-lg' : 'rounded-xl bg-menu-glass glass-input'
       )}
       style={props.unframed ? { 'background-color': 'transparent' } : undefined}
       hideBorder={props.unframed}
@@ -415,9 +411,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           <MarkdownShell
             config={editorConfig}
             class={cn(
-              'ph-no-capture cursor-text wrap-break-word text-ink h-auto overflow-visible',
-              isMobileDrawer() ? 'text-[17px] leading-6' : 'text-sm',
-              !composeContext.presentation.isTouch() && 'text-[15px]',
+              'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible',
               // Quoted thread collapses behind the "⋯" pill below
               // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
               // variants turn the underscore in .macro_quote into a space)
@@ -532,68 +526,39 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               />
             )}
           </Show>
-          {/* Keep the footer intrinsic-height so it cannot overlap the signature.
-              Desktop inline replies offset the card's 16px padding to 7.5px. */}
+          {/* Keep the footer intrinsic-height so it cannot overlap the signature. */}
           <div
             ref={bottomBarRef}
-            class={cn(
-              'shrink-0 flex flex-row w-full justify-between items-end space-x-2 px-0 pb-0 pt-1.5',
-              !composeContext.presentation.isTouch() &&
-                props.unframed &&
-                'w-auto -mx-[8.5px] -mb-[8.5px]',
-              !composeContext.presentation.isTouch() && [
-                composerStyles.actions,
-                'justify-end items-center space-x-0 gap-[3.75px]',
-              ]
-            )}
+            class="shrink-0 flex items-center justify-end gap-1 pt-1.5"
           >
-            <div
-              class={cn(
-                'flex flex-row items-center gap-1',
-                !composeContext.presentation.isTouch() &&
-                  'flex-row-reverse gap-[3.75px]'
-              )}
+            <Button
+              onClick={deleteDraftAndReset}
+              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
+              size="icon-composer"
             >
-              <div class="relative flex">
-                <AttachButton />
-              </div>
-
-              <Button
-                onclick={deleteDraftAndReset}
-                tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-                size="icon-sm"
-              >
-                <Trash />
-              </Button>
-            </div>
-
-            <div class="flex flex-row items-center gap-1">
-              <Show
-                when={
-                  composeContext.presentation.scheduleEnabled &&
-                  !sendActionHidden()
-                }
-              >
-                <EmailDateSelector
-                  mobile={composeContext.presentation.isMobile()}
-                  sendTime={form.sendTime() ?? null}
-                  onSendTimeChange={handleSendTimeChange}
-                  disabled={scheduleSendDisabled()}
-                  disablePortal={composeContext.presentation.isTouch()}
-                />
-              </Show>
-              <SendButton
-                class={
-                  !composeContext.presentation.isTouch()
-                    ? composerStyles.sendButton
-                    : undefined
-                }
-                disabled={sendActionDisabled()}
-                pending={isSending()}
-                hidden={sendActionHidden()}
-                onClick={() => sendEmail()}
+              <Trash />
+            </Button>
+            <AttachButton />
+            <Show
+              when={
+                composeContext.presentation.scheduleEnabled &&
+                !sendActionHidden()
+              }
+            >
+              <EmailDateSelector
+                mobile={false}
+                sendTime={form.sendTime() ?? null}
+                onSendTimeChange={handleSendTimeChange}
+                disabled={scheduleSendDisabled()}
               />
-            </div>
+            </Show>
+            <SendButton
+              appearance="composer"
+              disabled={sendActionDisabled()}
+              pending={isSending()}
+              hidden={sendActionHidden()}
+              onClick={() => sendEmail()}
+            />
           </div>
         </Show>
       </div>

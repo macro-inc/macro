@@ -1,12 +1,11 @@
 import { focusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { type Accessor, type JSX, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
-import styles from './chat-composer.module.css';
+import { composerSurfaceClasses } from './ComposerSurface';
 import { Layer } from './Layer';
 import { SendButton } from './SendButton';
 
@@ -28,7 +27,6 @@ export type CollapsedInputProps = {
    */
   disabled?: boolean;
   class?: string;
-  appearance?: 'default' | 'chat';
   /**
    * Target of the real input this trigger stands in for. Focused via the
    * `focusInput` directive when the trigger is clicked, so the iOS virtual
@@ -55,17 +53,17 @@ export function CollapsedInput(props: CollapsedInputProps) {
     <Layer depth={3} data-collapsed-input>
       <div
         data-composer-collapsed
-        class={cn(
-          'rounded-xl w-full h-12.5 island flex min-w-0 items-center gap-1.5 px-2',
-          !isTouchDevice() &&
-            props.appearance === 'chat' &&
-            cn('glass-input', styles.chat),
-          props.class
-        )}
+        class={composerSurfaceClasses({
+          class: cn(
+            'w-full h-[48.75px] flex min-w-0 items-center gap-[5.625px] px-[7.5px] touch:rounded-xl touch:h-12.5 touch:island touch:gap-1.5 touch:px-2',
+            props.class
+          ),
+        })}
       >
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon-composer"
+          class="not-touch:light-mode:text-composer-ink"
           aria-label="Attach files"
           label="Attach files"
           onClick={() => props.onAttach?.()}
@@ -75,8 +73,8 @@ export function CollapsedInput(props: CollapsedInputProps) {
         <button
           type="button"
           class={cn(
-            'min-w-0 flex-1 overflow-hidden rounded-sm px-1.5 text-left text-sm outline-none',
-            'flex h-8 items-center text-ink focus-visible:bg-active'
+            'min-w-0 flex-1 overflow-hidden rounded-sm px-1.5 text-left text-base outline-none',
+            'flex h-8 items-center text-ink focus-visible:bg-active not-touch:h-[30px] not-touch:px-[5.625px] not-touch:leading-[24.375px]'
           )}
           ref={attachFocusInput}
           onClick={() => props.onOpen?.()}
@@ -85,7 +83,7 @@ export function CollapsedInput(props: CollapsedInputProps) {
           <Show
             when={hasText()}
             fallback={
-              <span class="truncate text-ink-placeholder">
+              <span class="truncate text-ink-placeholder not-touch:text-composer-placeholder">
                 {props.placeholder ?? 'Message'}
               </span>
             }
@@ -118,6 +116,7 @@ export function CollapsedInput(props: CollapsedInputProps) {
         </Show>
         <Show when={!isMobile() || !props.disabled}>
           <SendButton
+            appearance="composer"
             pending={props.pending}
             disabled={props.disabled || props.pending}
             onPointerDown={(event) => {

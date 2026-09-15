@@ -112,7 +112,7 @@ export function EditInput(props: {
     >
       <MarkdownTextarea
         autoLinkMatchMode="common-tlds"
-        class="text-sm wrap-break-word text-ink"
+        class="text-base wrap-break-word text-ink"
         editable={() => true}
         onChange={(value) => {
           setEditState(value);
@@ -160,7 +160,7 @@ export function NewReplyInput(props: {
         when={props.isEditing}
         fallback={
           <div
-            class="cursor-default p-2 text-sm text-ink-placeholder"
+            class="cursor-default p-2 text-base text-ink-placeholder"
             on:click={(e) => {
               e.stopPropagation();
               props.setEditing(true);

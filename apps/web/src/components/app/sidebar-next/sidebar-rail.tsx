@@ -8,7 +8,6 @@ import {
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
 import { useActiveCallsQuery } from '@queries/call/call';
-import { TooltipGroup } from '@ui';
 import { For } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
@@ -68,35 +67,33 @@ export const SidebarRail = (props: SidebarRailProps) => {
   };
 
   return (
-    <TooltipGroup openDelay={2000} skipDelayDuration={0}>
-      <div
-        {...hotkeyScopeNeutralAttribute}
-        data-ui="sidebar-rail"
-        class="[&_*]:transition-none relative flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-hidden border-r border-edge-muted bg-surface px-2.5 pb-3 pt-3"
-      >
-        <SidebarRailCreateButton />
-        <SearchRailButton />
+    <div
+      {...hotkeyScopeNeutralAttribute}
+      data-ui="sidebar-rail"
+      class="relative flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-hidden border-r border-edge-muted bg-surface px-2.5 pb-3 pt-3"
+    >
+      <SidebarRailCreateButton />
+      <SearchRailButton />
 
-        <nav class="shrink-0 pt-5">
-          <ul class="flex flex-col items-center gap-2">
-            <For each={visibleNavItems(gates())}>
-              {(item) => (
-                <li class="flex">
-                  <ListNav
-                    item={item}
-                    unread={hasUnread(item.id)}
-                    activeCall={item.id === 'channels' && hasActiveCall()}
-                  />
-                </li>
-              )}
-            </For>
-          </ul>
-        </nav>
+      <nav class="shrink-0 pt-5">
+        <ul class="flex flex-col items-center gap-2">
+          <For each={visibleNavItems(gates())}>
+            {(item) => (
+              <li class="flex">
+                <ListNav
+                  item={item}
+                  unread={hasUnread(item.id)}
+                  activeCall={item.id === 'channels' && hasActiveCall()}
+                />
+              </li>
+            )}
+          </For>
+        </ul>
+      </nav>
 
-        <div class="min-h-0 flex-1" />
+      <div class="min-h-0 flex-1" />
 
-        <FooterActions />
-      </div>
-    </TooltipGroup>
+      <FooterActions />
+    </div>
   );
 };

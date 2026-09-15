@@ -3,7 +3,7 @@ import { ChatInputProvider } from '@core/component/AI/context';
 import { HomeRecommendedActions } from '../../home/components/home-recommended-actions';
 import { HomeChatInput } from '../../home/home-chat-input';
 
-/** Desktop Home's idle pane shares the full chat composer and send flow. */
+/** Desktop Home's idle pane uses the single-line chat composer and send flow. */
 export function HomeChatStart() {
   return (
     <ChatInputProvider>
@@ -13,7 +13,7 @@ export function HomeChatStart() {
             What should we get done in Macro?
           </h1>
           <HomeChatInput
-            variant="home"
+            variant="default"
             placeholder="Type @ to reference / for skills"
             autoFocusOnMount={false}
           />

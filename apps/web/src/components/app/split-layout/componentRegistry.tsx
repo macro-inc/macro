@@ -1,4 +1,5 @@
 import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
+import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { AgentsView } from '@app/features/agents-view/views/AgentsView';
 import { ComposeAgentSession } from '@app/features/block-agent/component/ComposeAgentSession';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
@@ -316,7 +317,27 @@ function TrackedMyActivityView() {
   return <MyActivityView onOpen={openEntityInSplit} />;
 }
 
-registerComponent('activity', withAuth(TrackedMyActivityView));
+function MyActivityViewWrapper() {
+  const activityFeedEnabled = useActivityFeedFlag();
+  const posthog = usePosthog();
+
+  // Wait for flags before replacing a bookmarked or restored activity split.
+  // While disabled, never mount the feed or issue its queries.
+  return (
+    <Show
+      when={activityFeedEnabled()}
+      fallback={
+        <Show when={posthog.flagsLoaded()}>
+          <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
+        </Show>
+      }
+    >
+      <TrackedMyActivityView />
+    </Show>
+  );
+}
+
+registerComponent('activity', withAuth(MyActivityViewWrapper));
 
 registerComponent(
   'reminders',

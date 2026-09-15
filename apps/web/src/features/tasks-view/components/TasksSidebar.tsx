@@ -38,18 +38,14 @@ export function TasksNavigation(props: { onNavigate?: () => void }) {
         {(item) => (
           <ViewSidebar.Item
             active={state.tab === item.id}
-            class="font-normal"
             onClick={() => {
               setTab(item.id);
               props.onNavigate?.();
             }}
           >
-            <span
-              aria-hidden="true"
-              class="flex size-5 shrink-0 items-center justify-center"
-            >
+            <ViewSidebar.Icon>
               <Dynamic component={item.icon} class="size-4" />
-            </span>
+            </ViewSidebar.Icon>
             <span class="truncate">{item.label}</span>
           </ViewSidebar.Item>
         )}
@@ -67,16 +63,12 @@ function FavoriteRow(props: {
   return (
     <FavoriteContextMenu favorite={props.favorite} triggerClass="block">
       <ViewSidebar.Item
-        class="font-normal"
         title={name()}
         onClick={(event) => props.onOpen(props.favorite, event)}
       >
-        <span
-          aria-hidden="true"
-          class="flex size-5 shrink-0 items-center justify-center"
-        >
+        <ViewSidebar.Icon>
           <FavoriteIcon favorite={props.favorite} class="size-4" />
-        </span>
+        </ViewSidebar.Icon>
         <span class="truncate">{name()}</span>
       </ViewSidebar.Item>
     </FavoriteContextMenu>
@@ -161,7 +153,7 @@ export function TasksSidebar() {
         }
       />
 
-      <ViewSidebar.CompactContent class="flex flex-col gap-6">
+      <ViewSidebar.Content class="flex flex-col gap-6">
         <TasksNavigation />
 
         <TaskFavorites
@@ -176,7 +168,7 @@ export function TasksSidebar() {
           open={isSidebarSectionOpen('tags')}
           onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
         />
-      </ViewSidebar.CompactContent>
+      </ViewSidebar.Content>
     </ViewSidebar.Root>
   );
 }

@@ -6,7 +6,6 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import { EmailMessageBody } from '@app/features/email-message/views/email-message-body';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { VideoPreview } from '@core/component/VideoPreview';
-import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { EmailMessageAction } from '../components/message-actions';
@@ -123,12 +122,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
               </div>
             }
           />
-          <div
-            class={cn(
-              'ph-no-capture text-sm text-ink pr-4 mobile:pr-0',
-              !props.isTouch && 'text-[15px]'
-            )}
-          >
+          <div class="ph-no-capture text-base text-ink pr-4 mobile:pr-0">
             <EmailMessageBody
               message={props.message}
               isPersonal={props.isPersonal}

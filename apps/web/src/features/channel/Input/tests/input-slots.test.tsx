@@ -357,9 +357,13 @@ describe('Input slots', () => {
       })()
     );
 
-    expect(container.querySelector('[data-input-actions]')).toBeTruthy();
-    expect(container.querySelector('[data-input-actions-left]')).toBeTruthy();
-    expect(container.querySelector('[data-input-actions-right]')).toBeTruthy();
+    const layout = container.querySelector('[data-input-layout]');
+    expect(
+      container.querySelector('[data-input-actions-left]')?.parentElement
+    ).toBe(layout);
+    expect(
+      container.querySelector('[data-input-actions-right]')?.parentElement
+    ).toBe(layout);
 
     await user.click(screen.getByRole('button', { name: 'Send message' }));
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');

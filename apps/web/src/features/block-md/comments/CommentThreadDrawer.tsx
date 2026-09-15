@@ -35,7 +35,7 @@ import { createMemo, createSignal, Show, useContext } from 'solid-js';
  * spans would win over the parent's select-none, so the theme must not
  * stamp it. Typing areas opt back in via the drawer's contenteditable rule.
  */
-const drawerCommentTheme = createTheme({ root: 'text-sm' });
+const drawerCommentTheme = createTheme({ root: 'text-base' });
 
 /**
  * Focus target for the drawer's opening focus pass: the draft composer's

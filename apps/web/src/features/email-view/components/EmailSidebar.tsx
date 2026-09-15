@@ -39,12 +39,9 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
         props.onNavigate?.();
       })}
     >
-      <span
-        aria-hidden="true"
-        class="flex size-5 shrink-0 items-center justify-center"
-      >
+      <ViewSidebar.Icon>
         <Dynamic component={TAB_ICONS[props.item.id]} class="size-4" />
-      </span>
+      </ViewSidebar.Icon>
       <span class="truncate">{props.item.label}</span>
     </ViewSidebar.Item>
   );
@@ -93,11 +90,11 @@ export function EmailSidebar() {
         onCreate={() => composeEmail()}
       />
 
-      <ViewSidebar.CompactContent class="flex flex-col gap-6">
+      <ViewSidebar.Content class="flex flex-col gap-6">
         <EmailInboxList />
 
         <EmailNavigation />
-      </ViewSidebar.CompactContent>
+      </ViewSidebar.Content>
     </ViewSidebar.Root>
   );
 }

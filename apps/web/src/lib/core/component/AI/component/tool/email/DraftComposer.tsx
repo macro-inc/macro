@@ -8,7 +8,6 @@
  * knows how to edit the draft and what Send means.
  */
 
-import composerStyles from '@app/components/ui/components/chat-composer.module.css';
 import { SignaturePreview } from '@app/features/email-compose/components/signature-preview';
 import { ComposeProvider } from '@app/features/email-compose/context/compose-context';
 import { decodeBase64Utf8 } from '@app/features/email-compose/core/decode-base64';
@@ -35,7 +34,7 @@ import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { useEmailLinksQuery, useEmailSignature } from '@queries/email/link';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn } from '@ui';
+import { cn, composerSurfaceClasses } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { createMemo, createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import type { UserToolReviewSink } from '../user-tool-review';
@@ -281,11 +280,9 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
         <ComposeLayout
           bodyDebugName={`chat-compose:${props.debugName}`}
           class={cn(
-            'flex flex-col w-full text-xs rounded-lg p-4 bg-surface',
-            !isTouchDevice() && [
-              'relative glass-input border border-edge-muted',
-              composerStyles.surface,
-            ],
+            'relative flex flex-col w-full text-xs p-4',
+            isTouchDevice() && 'rounded-lg bg-surface',
+            composerSurfaceClasses(),
             uiDisabled() &&
               '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
           )}
