@@ -142,7 +142,7 @@ pub async fn get_team_scope_source_ids(
 #[cfg_attr(
     not(test),
     cached(
-        time = 30,
+        time = 10,
         result = true,
         key = "String",
         convert = r#"{format!("{}:{}", entity_type.as_ref(), entity_id)}"#
