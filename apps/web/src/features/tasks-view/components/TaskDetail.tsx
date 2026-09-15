@@ -16,31 +16,30 @@ import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import {
+  ShareDialogContext,
+  ShareTrigger,
+} from '@core/component/TopBar/ShareButton';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button } from '@ui';
-import { createResource, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  createResource,
+  createSignal,
+  ErrorBoundary,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { TASK_TABS } from '../constants';
-import { loadTaskDocument } from '../queries/task-document';
+import {
+  loadTaskDocument,
+  type TaskDocumentData,
+} from '../queries/task-document';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskDetailTarget } from '../types';
-
-const LOADING_PERMISSIONS = {
-  canComment: false,
-  canEdit: false,
-  isOwner: false,
-};
-
-function TaskBreadcrumbLabel(props: { taskName: string }) {
-  return (
-    <>
-      <EntityIcon targetType="task" size="xs" class="shrink-0" />
-      <span class="truncate">{props.taskName}</span>
-    </>
-  );
-}
 
 function TaskViewBreadcrumbItem() {
   const { state, closeTask } = useTasksView();
@@ -88,7 +87,8 @@ function TaskBreadcrumbItem(props: {
         </div>
       }
     >
-      <TaskBreadcrumbLabel taskName={taskName()} />
+      <EntityIcon targetType="task" size="xs" class="shrink-0" />
+      <span class="truncate">{taskName()}</span>
     </ViewBreadcrumbs.Item>
   );
 }
@@ -111,7 +111,13 @@ function TaskDetailTopBar(props: { documentId: string }) {
   );
 }
 
-function TaskDetailBodyState(props: { error?: boolean; onRetry?: () => void }) {
+function TaskDetailBodyState(props: {
+  error?: unknown;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  const errorText = () => String(props.error);
+
   return (
     <div class="grid size-full place-items-center text-ink-muted">
       <Switch
@@ -119,11 +125,14 @@ function TaskDetailBodyState(props: { error?: boolean; onRetry?: () => void }) {
           <SpinnerIcon aria-label="Loading task" class="size-5 animate-spin" />
         }
       >
-        <Match when={props.error}>
-          <div class="flex flex-col items-center gap-3">
-            <span>This task couldn’t be loaded.</span>
-            <Button variant="outline" size="sm" onClick={props.onRetry}>
-              Try again
+        <Match when={props.error !== undefined}>
+          <div class="flex max-w-xl flex-col items-center gap-3 px-6 text-center">
+            <span>This task couldn’t be displayed.</span>
+            <pre class="max-h-48 max-w-full overflow-auto whitespace-pre-wrap text-left text-failure text-xs">
+              {errorText()}
+            </pre>
+            <Button variant="outline" size="sm" onClick={props.onAction}>
+              {props.actionLabel ?? 'Reset'}
             </Button>
           </div>
         </Match>
@@ -132,83 +141,118 @@ function TaskDetailBodyState(props: { error?: boolean; onRetry?: () => void }) {
   );
 }
 
-export function TaskDetail(props: { task: TaskDetailTarget }) {
+function TaskDetailDocument(props: {
+  task: TaskDetailTarget;
+  data: TaskDocumentData;
+  shareOpen: boolean;
+  onShareOpenChange: (open: boolean) => void;
+}) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
-  const [document, { refetch }] = createResource(
-    () => props.task.id,
-    loadTaskDocument
-  );
   const fallbackName = () => props.task.fallbackName ?? 'New Task';
-  const data = () => document.latest;
-  const documentSource = () => {
-    const loaded = data();
-    return loaded
-      ? ({ type: 'sync', source: loaded.source } as const)
-      : ({ type: 'loading' } as const);
-  };
-  const permissions = () => data()?.permissions ?? LOADING_PERMISSIONS;
 
   return (
     <MarkdownDocument
       documentId={props.task.id}
       kind="task"
-      documentSource={documentSource()}
-      permissions={permissions()}
-      persistedName={data()?.metadata.documentName}
+      documentSource={{ type: 'sync', source: props.data.source }}
+      permissions={props.data.permissions}
+      persistedName={props.data.metadata.documentName}
       fallbackName={fallbackName()}
     >
-      <ModalsProvider>
+      <ModalsProvider
+        shareOpen={props.shareOpen}
+        onShareOpenChange={props.onShareOpenChange}
+      >
         <OldOverlay />
-        <ViewBreadcrumbs.Root>
-          <TaskViewBreadcrumbItem />
-          <SidePanel.Root>
-            <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-              <TaskDetailTopBar documentId={props.task.id} />
-              <div class="relative min-h-0 min-w-0 flex-1">
-                <Switch fallback={<TaskDetailBodyState />}>
+        <TaskBreadcrumbItem
+          documentId={props.task.id}
+          fallbackName={fallbackName()}
+        />
+        <SidePanel.Layout headerToggle={false}>
+          <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
+            <MarkdownSidePanelSections />
+          </Show>
+          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <div class="absolute top-1.5 right-4 z-action-menu flex justify-end">
+              <FindAndReplace hotkeyScope={panel.splitHotkeyScope} />
+            </div>
+            <DocumentDebouncedNotificationReadMarker
+              notificationSource={notificationSource}
+              documentId={props.task.id}
+            />
+            <MarkdownDocumentContent
+              hotkeyScope={panel.splitHotkeyScope}
+              doInitialSync={props.data.doInitialSync}
+              loadCachedSnapshot={() =>
+                loadMarkdownCachedSnapshot(props.task.id)
+              }
+            />
+          </div>
+        </SidePanel.Layout>
+      </ModalsProvider>
+    </MarkdownDocument>
+  );
+}
+
+export function TaskDetail(props: { task: TaskDetailTarget }) {
+  const [document, { refetch }] = createResource(
+    () => props.task.id,
+    loadTaskDocument
+  );
+  const [shareOpen, setShareOpen] = createSignal(false);
+
+  return (
+    <ShareDialogContext.Provider
+      value={{
+        isOpen: shareOpen,
+        open: () => setShareOpen(true),
+        close: () => setShareOpen(false),
+      }}
+    >
+      <ViewBreadcrumbs.Root>
+        <TaskViewBreadcrumbItem />
+        <SidePanel.Root>
+          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <TaskDetailTopBar documentId={props.task.id} />
+            <div class="relative min-h-0 min-w-0 flex-1">
+              <Suspense fallback={<TaskDetailBodyState />}>
+                <Switch>
                   <Match when={document.error}>
-                    <TaskDetailBodyState error onRetry={() => refetch()} />
+                    {(error) => (
+                      <TaskDetailBodyState
+                        error={error()}
+                        actionLabel="Try again"
+                        onAction={() => void refetch()}
+                      />
+                    )}
                   </Match>
-                  <Match when={data()}>
-                    {(loaded) => (
-                      <Suspense fallback={<TaskDetailBodyState />}>
-                        <TaskBreadcrumbItem
-                          documentId={props.task.id}
-                          fallbackName={fallbackName()}
+                  <Match when={document()}>
+                    {(data) => (
+                      <ErrorBoundary
+                        fallback={(error, reset) => (
+                          <TaskDetailBodyState
+                            error={error}
+                            actionLabel="Reset"
+                            onAction={reset}
+                          />
+                        )}
+                      >
+                        <TaskDetailDocument
+                          task={props.task}
+                          data={data()}
+                          shareOpen={shareOpen()}
+                          onShareOpenChange={setShareOpen}
                         />
-                        <SidePanel.Layout headerToggle={false}>
-                          <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
-                            <MarkdownSidePanelSections />
-                          </Show>
-                          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-                            <div class="absolute top-1.5 right-4 z-action-menu flex justify-end">
-                              <FindAndReplace
-                                hotkeyScope={panel.splitHotkeyScope}
-                              />
-                            </div>
-                            <DocumentDebouncedNotificationReadMarker
-                              notificationSource={notificationSource}
-                              documentId={props.task.id}
-                            />
-                            <MarkdownDocumentContent
-                              hotkeyScope={panel.splitHotkeyScope}
-                              doInitialSync={loaded().doInitialSync}
-                              loadCachedSnapshot={() =>
-                                loadMarkdownCachedSnapshot(props.task.id)
-                              }
-                            />
-                          </div>
-                        </SidePanel.Layout>
-                      </Suspense>
+                      </ErrorBoundary>
                     )}
                   </Match>
                 </Switch>
-              </div>
+              </Suspense>
             </div>
-          </SidePanel.Root>
-        </ViewBreadcrumbs.Root>
-      </ModalsProvider>
-    </MarkdownDocument>
+          </div>
+        </SidePanel.Root>
+      </ViewBreadcrumbs.Root>
+    </ShareDialogContext.Provider>
   );
 }
