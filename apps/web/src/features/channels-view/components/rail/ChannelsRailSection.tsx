@@ -1,4 +1,3 @@
-import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
@@ -37,11 +36,6 @@ function SectionScrollArea(props: {
           {props.children}
         </div>
       </Scroll>
-      <ScrollIndicators
-        scrollRef={scrollRoot}
-        appearance="gradient"
-        gradientColor="panel"
-      />
       <Show when={activity.direction()}>
         {(direction) => (
           <Tooltip
