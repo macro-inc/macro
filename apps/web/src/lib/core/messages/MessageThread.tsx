@@ -18,7 +18,9 @@ import {
   useAddReactionMutation,
   useRemoveReactionMutation,
 } from '@queries/messages/reactions';
+import { useMessageSubscription } from '@queries/messages/subscription';
 import { useMessageThreadQuery } from '@queries/messages/thread-replies';
+import { useMessageTimelineByIdsQuery } from '@queries/messages/timeline';
 import type {
   MessageListItem,
   MessageParent,
@@ -216,6 +218,26 @@ export function MessageThreadById(
         data={threadListItem(query.data!)}
         expanded={props.expanded ?? true}
       />
+    </Show>
+  );
+}
+
+/** Reference discovery selects roots; live data and lazy replies remain in the common caches. */
+export function MessageThreadFromSource(
+  props: ThreadOptions & { parent: MessageParent; rootId: string }
+) {
+  useMessageSubscription(() => props.parent);
+  const query = useMessageTimelineByIdsQuery(
+    () => props.parent,
+    () => [props.rootId]
+  );
+  const root = () =>
+    query.isSuccess
+      ? query.data.find((item) => item.id === props.rootId)
+      : undefined;
+  return (
+    <Show when={root()}>
+      {(data) => <MessageThread {...props} data={data()} />}
     </Show>
   );
 }
