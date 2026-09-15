@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { CodexConnection } from './CodexConnection';
 
@@ -159,7 +160,7 @@ describe('Codex connection', () => {
       screen
         .getByRole('button', { name: 'Save Codex settings' })
         .hasAttribute('disabled')
-    ).toBe(false);
+    ).toBe(true);
     expect(screen.queryByLabelText('Branch')).toBeNull();
     fireEvent.change(screen.getByLabelText('Cloud environment'), {
       target: { value: 'env-1' },
@@ -192,5 +193,62 @@ describe('Codex connection', () => {
         .getByRole('button', { name: 'Connect with ChatGPT' })
         .hasAttribute('disabled')
     ).toBe(true);
+  });
+
+  it('marks selections unsaved until the server confirms them and preserves failed edits', () => {
+    const props = base();
+    const [connection, setConnection] = createSignal({
+      connected: true,
+      environmentId: null as string | null,
+      branch: 'main',
+    });
+    const [error, setError] = createSignal<string>();
+    render(() => (
+      <CodexConnection
+        {...props}
+        connection={connection()}
+        error={error()}
+        environments={[
+          {
+            id: 'env-1',
+            repositories: [
+              {
+                fullName: 'example/repo',
+                cloneUrl: 'https://github.com/example/repo.git',
+                defaultBranch: 'main',
+              },
+            ],
+          },
+        ]}
+      />
+    ));
+    const save = screen.getByRole('button', { name: 'Save Codex settings' });
+    expect(save.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(screen.getByLabelText('Cloud environment'), {
+      target: { value: 'env-1' },
+    });
+    expect(screen.getByRole('status').textContent).toContain('Unsaved changes');
+    expect(save.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(save);
+    setError('Could not save Codex settings.');
+    expect(screen.getByRole('status').textContent).toContain('Unsaved changes');
+    expect(save.hasAttribute('disabled')).toBe(false);
+    expect(
+      (screen.getByLabelText('Cloud environment') as HTMLSelectElement).value
+    ).toBe('env-1');
+    setError(undefined);
+    setConnection({ connected: true, environmentId: 'env-1', branch: 'main' });
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(save.hasAttribute('disabled')).toBe(true);
+
+    fireEvent.input(screen.getByLabelText('Branch'), {
+      target: { value: 'release' },
+    });
+    expect(screen.getByRole('status').textContent).toContain('Unsaved changes');
+    fireEvent.input(screen.getByLabelText('Branch'), {
+      target: { value: ' main ' },
+    });
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(save.hasAttribute('disabled')).toBe(true);
   });
 });

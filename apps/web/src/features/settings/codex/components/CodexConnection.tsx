@@ -33,6 +33,10 @@ export function CodexConnection(props: {
   const selectedEnvironment = () =>
     environment() ?? props.connection?.environmentId ?? '';
   const selectedBranch = () => branch() ?? props.connection?.branch ?? '';
+  const hasChanges = () =>
+    selectedEnvironment() !== (props.connection?.environmentId ?? '') ||
+    (!!selectedEnvironment() &&
+      selectedBranch().trim() !== (props.connection?.branch ?? '').trim());
   const connected = () => props.connection?.connected === true;
   const loginPending = () => props.login?.status === 'pending';
   return (
@@ -182,7 +186,7 @@ export function CodexConnection(props: {
               <p class="text-xs text-ink-extra-muted">
                 Automatic chooses a repository and its default branch from your
                 prompt. If Codex cannot confidently choose, select an
-                environment here and try again.
+                environment here, save your settings, then try again.
               </p>
               <Show when={props.environmentsLoading}>
                 <p role="status" class="text-xs text-ink-muted">
@@ -253,7 +257,13 @@ export function CodexConnection(props: {
                   />
                 </label>
                 <p class="text-xs text-ink-muted">
-                  New @codex sessions use this environment and branch.
+                  Save to use this environment and branch for new @codex
+                  sessions.
+                </p>
+              </Show>
+              <Show when={hasChanges()}>
+                <p role="status" class="text-xs text-ink-muted">
+                  Unsaved changes. Save before starting a new @codex session.
                 </p>
               </Show>
               <div class="flex gap-2">
@@ -264,6 +274,7 @@ export function CodexConnection(props: {
                   depth={3}
                   disabled={
                     props.pending ||
+                    !hasChanges() ||
                     (!!selectedEnvironment() && !selectedBranch().trim())
                   }
                   onClick={() =>

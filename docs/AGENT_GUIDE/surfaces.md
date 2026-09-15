@@ -408,10 +408,12 @@ page displays pending, expired, failed, and retryable error states; **Cancel
 sign-in** cancels the attempt. Connected accounts default to **Automatic (from
 your prompt)** under **Cloud environment**, with no branch field. Automatic
 selection uses the prompt and repository metadata. If Codex cannot choose
-confidently, select an environment here and try again. Manual options show their
-repositories and offer the primary repository default in the editable **Branch**
-field. Choose **Save Codex settings** to save either mode for the signed-in user;
-these choices apply to new sessions. **Disconnect** in the Codex row (accessible
+confidently, select an environment here, save the settings, then try again.
+Manual options show their repositories and offer the primary repository default in the editable **Branch**
+field. Changed selections display **Unsaved changes** until the server confirms
+them. Choose **Save Codex settings** to save either mode for the signed-in user.
+The button is disabled when the displayed settings already match the saved settings.
+These choices apply to new sessions. **Disconnect** in the Codex row (accessible
 name **Disconnect ChatGPT**) removes the connection. The UI never asks for an
 OAuth token.
 
