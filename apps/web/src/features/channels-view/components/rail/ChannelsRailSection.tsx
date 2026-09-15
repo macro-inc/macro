@@ -111,7 +111,7 @@ function CollapsibleSectionHeader(props: {
   return (
     <div
       class={cn(
-        'group/section-header flex w-full items-center rounded-xl text-xs font-medium uppercase tracking-wide text-ink-extra-muted transition-colors hover:text-ink-muted',
+        'group/section-header flex w-full items-center rounded-xl text-xs font-normal uppercase tracking-wide text-ink-extra-muted transition-colors hover:text-ink-muted',
         props.focused && 'bg-hover text-ink-muted',
         !props.focused && props.focusWithin && 'text-ink-muted',
         props.class
