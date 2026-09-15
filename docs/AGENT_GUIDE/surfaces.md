@@ -164,7 +164,7 @@ Task navigation uses `My Tasks`, `All Tasks`, and `Created by me`. The desktop
 sidebar has a full-width `New task` action, a collapsible list of task favorites,
 and a collapsible list of tags. Selecting a tag filters the current task view;
 selecting it again clears that tag filter. Favorite rows open their tasks.
-The desktop `Create` → `Task` modal uses the rounded composer surface, circular
+The desktop `Create` → `Task` modal uses the standard dialog panel, circular
 icon controls, and a pill-shaped `Create Task` button with 16px outer padding.
 The mobile task drawer retains its existing layout.
 

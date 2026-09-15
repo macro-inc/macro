@@ -3,7 +3,7 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { cn, composerSurfaceClasses, Dialog, Panel } from '@ui';
+import { Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -53,9 +53,6 @@ function PopoverSplitModal(props: {
   popover: PopoverSplitData;
   onClose: () => void;
 }) {
-  const isTaskComposer = () =>
-    props.popover.content.type === 'component' &&
-    props.popover.content.id === 'task-compose';
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [displayName, setDisplayName] = createSignal(props.popover.content.id);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
@@ -184,19 +181,8 @@ function PopoverSplitModal(props: {
           open={props.popover.isOpen}
           onOpenChange={onOpenChange}
           contentRef={attachPanel}
-          class={composerSurfaceClasses({
-            enabled: isTaskComposer(),
-            class: 'rounded-xl',
-          })}
         >
-          <Panel
-            depth={2}
-            hideBorder={isTaskComposer()}
-            class={cn(
-              'rounded-xl bg-dialog *:max-h-[75vh]',
-              isTaskComposer() && 'rounded-[inherit] bg-transparent'
-            )}
-          >
+          <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
             <Content />
           </Panel>
         </Dialog>
