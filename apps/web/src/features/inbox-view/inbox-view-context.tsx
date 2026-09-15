@@ -39,14 +39,14 @@ export const [InboxViewProvider, useInboxView] = createAssertedContextProvider<
   InboxViewProviderProps
 >('InboxView', (props) => {
   const panel = useSplitPanelOrThrow();
-  // Home is always the unfiltered Signal feed, including on restored entries.
-  const initialTab = 'signal';
+  const initial = props.initialState ?? {};
+  const initialTab = initial.tab ?? 'signal';
   const [state, setState] = makePersistedState(
     createStore<InboxViewState>({
       tab: initialTab,
-      search: '',
-      groupBy: 'date',
-      facets: {},
+      search: initial.search ?? '',
+      groupBy: initial.groupBy ?? defaultGroupBy(initialTab),
+      facets: normalizeFacetSelection(initial.facets),
     }),
     createInboxViewPersistence({
       handle: panel.handle,

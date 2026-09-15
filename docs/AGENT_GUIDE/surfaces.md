@@ -54,7 +54,7 @@ it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove r
 
 ## Home — `/app/component/inbox`
 
-With the new app views enabled, Home is an unfiltered Signal feed merging
+With the new app views enabled, Home defaults to an unfiltered Signal feed merging
 notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
 action. On desktop, there are no Signal/Noise tabs or filter menu. A **Home** heading
@@ -62,6 +62,10 @@ labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, a
 **Agents** sidebar headings. The full-width **New chat** plus pill below the heading clears the preview and returns to the Home
 starting pane; it does not create a chat. Email and Tasks have matching top pills
 for **New email** and **New task**.
+
+The Inbox provider honors an explicit initial tab, search, grouping, and facet
+selection. Returning through split history still resets the view to the unfiltered
+Signal defaults.
 
 Channel thread replies remain separate Home entries from their parent channel,
 using single-line rows and a reply arrow icon on desktop and touch devices, labeled

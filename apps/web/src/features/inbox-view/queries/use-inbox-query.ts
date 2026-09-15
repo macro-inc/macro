@@ -267,16 +267,19 @@ export function useInboxDataSource(
     if (state.tab !== 'signal' || search.isSearching()) return undefined;
     return getHomePagination(
       {
-        entities: rawEntities(),
+        oldestFetchedTimestamp: query.isLoading
+          ? undefined
+          : query.data?.oldestFetchedTimestamp,
         hasMore: query.hasNextPage && !query.error,
         isLoading: query.isLoading,
       },
       {
-        entities: recentEntities(),
+        oldestFetchedTimestamp: recentQuery.isLoading
+          ? undefined
+          : recentQuery.data?.oldestFetchedTimestamp,
         hasMore: recentQuery.hasNextPage && !recentQuery.error,
         isLoading: recentQuery.isLoading,
-      },
-      viewContext()
+      }
     );
   });
 

@@ -1,6 +1,7 @@
 import type { EmailEntity, EntityData } from '@entity/types/entity';
 import type { SoupAstItemsQuery } from '@queries/soup/items';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
+import { soupPageTimestamp } from '@queries/soup/page-timestamp';
 import { createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,13 +57,14 @@ function email(id: string, day: number): EmailEntity {
 function makeQuery(initial: EntityData[], hasMore = true) {
   const [entities, setEntities] = createSignal(initial);
   const [more, setMore] = createSignal(hasMore);
+  const [oldestFetchedTimestamp, setOldestFetchedTimestamp] = createSignal<number>();
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<Error | null>(null);
   const fetchNextPage = vi.fn(async () => {});
   const query: SoupAstItemsQuery = {
     get data() {
       if (loading()) throw new Error('Read pending query data');
-      return { entities: entities(), groups: undefined };
+      return { entities: entities(), groups: undefined, oldestFetchedTimestamp: oldestFetchedTimestamp() ?? soupPageTimestamp(entities(), 'touched_by_me') };
     },
     get isLoading() {
       return loading();

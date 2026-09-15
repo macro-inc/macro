@@ -1,4 +1,5 @@
 import type { EntityData, WithNotification } from '@entity';
+import { soupPageTimestamp } from '@queries/soup/page-timestamp';
 import { describe, expect, it, vi } from 'vitest';
 import { getHomePagination } from './home-pagination';
 import { buildInboxQuery } from './inbox-query';
@@ -340,12 +341,15 @@ describe('Home pagination', () => {
     entities,
     hasMore,
     isLoading,
+    get oldestFetchedTimestamp() {
+      return soupPageTimestamp(this.entities, 'touched_by_me');
+    },
   });
   const visible = (
     notifications: ReturnType<typeof page>,
     activity: ReturnType<typeof page>
   ) => {
-    const { cutoff } = getHomePagination(notifications, activity, signal);
+    const { cutoff } = getHomePagination(notifications, activity);
     return mergeHomeEntities(notifications.entities, activity.entities, signal)
       .filter((row) => new Date(row.sortTs ?? 0).getTime() > cutoff)
       .map((row) => row.id);
@@ -355,7 +359,7 @@ describe('Home pagination', () => {
     const notifications = page([entity('n9', 9), entity('n1', 1)]);
     const activity = page([entity('a10', 10), entity('a8', 8)]);
     expect(visible(notifications, activity)).toEqual(['a10', 'n9']);
-    expect(getHomePagination(notifications, activity, signal)).toMatchObject({
+    expect(getHomePagination(notifications, activity)).toMatchObject({
       loadNotifications: false,
       loadActivity: true,
     });
@@ -370,7 +374,7 @@ describe('Home pagination', () => {
       'a7',
       'a6',
     ]);
-    expect(getHomePagination(notifications, activity, signal)).toMatchObject({
+    expect(getHomePagination(notifications, activity)).toMatchObject({
       loadNotifications: true,
       loadActivity: false,
     });
@@ -389,7 +393,7 @@ describe('Home pagination', () => {
     const notifications = page([entity('z', 9)]);
     const activity = page([entity('b', 9)]);
     expect(visible(notifications, activity)).toEqual([]);
-    expect(getHomePagination(notifications, activity, signal)).toMatchObject({
+    expect(getHomePagination(notifications, activity)).toMatchObject({
       loadNotifications: true,
       loadActivity: true,
     });
@@ -413,13 +417,13 @@ describe('Home pagination', () => {
       { ...entity('unstamped', 1), touchedAt: undefined },
     ]);
     expect(visible(notifications, activity)).toEqual([]);
-    expect(getHomePagination(notifications, activity, signal)).toMatchObject({
+    expect(getHomePagination(notifications, activity)).toMatchObject({
       cutoff: Infinity,
       loadActivity: true,
     });
     activity.entities = [];
     expect(
-      getHomePagination(notifications, activity, signal).loadActivity
+      getHomePagination(notifications, activity).loadActivity
     ).toBe(true);
   });
 
@@ -435,10 +439,7 @@ describe('Home pagination', () => {
     ]);
     const activity = page([entity('a', 8)]);
     expect(
-      getHomePagination(notifications, activity, {
-        ...signal,
-        capabilities: withoutNotifiedSort.capabilities,
-      })
+      getHomePagination({ ...notifications, oldestFetchedTimestamp: soupPageTimestamp(notifications.entities, 'updated_at') }, activity)
     ).toMatchObject({ loadActivity: true, loadNotifications: false });
   });
 });

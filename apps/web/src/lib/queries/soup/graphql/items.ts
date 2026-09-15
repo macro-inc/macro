@@ -46,6 +46,7 @@ import {
   untrack,
 } from 'solid-js';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
+import { soupPageTimestamp } from '../page-timestamp';
 import { mapSoupPageToEntityList } from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
 import { isCachedMailView, materializeMailView } from './mail-view';
@@ -476,18 +477,22 @@ export function createGraphqlSoupAstItemsQuery(
         recordAuthority('network');
         finishStaleFallback('network');
       },
-      select: ({ pages }) => ({
-        records: pages.flatMap((page) => page.user.soup.items),
-        data: {
-          entities: pages.flatMap((page) =>
+      select: ({ pages }) => {
+        const entities = pages.flatMap((page) =>
             mapSoupPageToEntityList(mapGraphqlSoupPage(page), {
               instructionsIdQuery,
               showSupportedForeignEntities,
             })
-          ),
-          groups: undefined,
-        },
-      }),
+        );
+        return {
+          records: pages.flatMap((page) => page.user.soup.items),
+          data: {
+            entities,
+            groups: undefined,
+            oldestFetchedTimestamp: soupPageTimestamp(entities, args().params.sort_method),
+          },
+        };
+      },
     };
   });
 
@@ -586,7 +591,13 @@ export function createGraphqlSoupAstItemsQuery(
   );
 
   return {
-    data: displayData,
+    data: () => {
+      const data = displayData();
+      return data && {
+        ...data,
+        oldestFetchedTimestamp: query.data?.data.oldestFetchedTimestamp,
+      };
+    },
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
