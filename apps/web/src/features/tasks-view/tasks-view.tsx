@@ -3,7 +3,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createSignal, onMount, Show, Suspense } from 'solid-js';
+import { createSignal, Match, onMount, Suspense, Switch } from 'solid-js';
 import { TaskDetail } from './components/TaskDetail';
 import { TasksHeader, TasksTopBar } from './components/TasksHeader';
 import { TasksSidebar } from './components/TasksSidebar';
@@ -44,27 +44,24 @@ function TasksViewRoot() {
               <TasksSidebar />
             </ViewShell.Aside>
             <ViewShell.Main>
-              <Show
-                keyed
-                when={selectedTask()}
-                fallback={
-                  <>
-                    <TasksTopBar />
-                    <ViewShell.Header>
-                      <TasksHeader
-                        onSearchEscape={() => listElement()?.focus()}
-                      />
-                    </ViewShell.Header>
-                    <ViewShell.Content>
-                      <Suspense fallback={<TasksListFallback />}>
-                        <TaskList ref={setListElement} />
-                      </Suspense>
-                    </ViewShell.Content>
-                  </>
-                }
-              >
-                {(task) => <TaskDetail task={task} />}
-              </Show>
+              <Switch>
+                <Match when={selectedTask()}>
+                  {(task) => <TaskDetail task={task()} />}
+                </Match>
+                <Match when={!selectedTask()}>
+                  <TasksTopBar />
+                  <ViewShell.Header>
+                    <TasksHeader
+                      onSearchEscape={() => listElement()?.focus()}
+                    />
+                  </ViewShell.Header>
+                  <ViewShell.Content>
+                    <Suspense fallback={<TasksListFallback />}>
+                      <TaskList ref={setListElement} />
+                    </Suspense>
+                  </ViewShell.Content>
+                </Match>
+              </Switch>
             </ViewShell.Main>
           </ViewShell.Root>
         </SplitPanel.Body>
