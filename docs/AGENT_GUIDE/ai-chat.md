@@ -149,6 +149,11 @@ production chat retains its Show more/Show less and editing controls.
 
 ## Waiting for a response
 
+On desktop, email drafts embedded in chat use the same rounded, elevated surface
+as email blocks: an opaque background, subtle border and shadow, and a raised
+rim in dark mode. The recipients, subject, body, and send controls stay inside
+that card. Touch-device styling is unchanged.
+
 The reliable completion signal is the disappearance of the `Stop generating` button — poll
 with `evaluate_script`. Do not wait on response text: the page displays
 `Time to first token: N s` and doc content that easily false-matches `wait_for` patterns.

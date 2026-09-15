@@ -64,10 +64,11 @@ starting pane; it does not create a chat. Email and Tasks have matching top pill
 for **New email** and **New task**.
 
 Channel thread replies remain separate Home entries from their parent channel,
-with the notification-style sender, message, and reply previews. Selecting a
+using the same single-line desktop pills and reply arrow icon, labeled with the
+sender and channel (for example, **Peter in #battlefield**). Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
 
-Other items in the 256px desktop rail use single-line pills with 16px icons: profile photos for
+Items in the 256px desktop rail use single-line pills with 16px icons: profile photos for
 DMs, model logos for AI chats (Claude sunburst or ChatGPT knot), and regular
 Phosphor icons for other items. There are no title tooltips, and timestamps are
 visible only while hovering the row. An unread

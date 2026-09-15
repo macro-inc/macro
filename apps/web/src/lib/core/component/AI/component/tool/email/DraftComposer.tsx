@@ -8,6 +8,7 @@
  * knows how to edit the draft and what Send means.
  */
 
+import composerStyles from '@app/components/ui/components/chat-composer.module.css';
 import { SignaturePreview } from '@app/features/email-compose/components/signature-preview';
 import { ComposeProvider } from '@app/features/email-compose/context/compose-context';
 import { decodeBase64Utf8 } from '@app/features/email-compose/core/decode-base64';
@@ -29,6 +30,7 @@ import {
   enableEmailSignatures,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { useEmailLinksQuery, useEmailSignature } from '@queries/email/link';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
@@ -280,6 +282,10 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
           bodyDebugName={`chat-compose:${props.debugName}`}
           class={cn(
             'flex flex-col w-full text-xs rounded-lg p-4 bg-surface',
+            !isTouchDevice() && [
+              'relative glass-input border border-edge-muted',
+              composerStyles.surface,
+            ],
             uiDisabled() &&
               '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
           )}
