@@ -20,10 +20,10 @@ import {
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
 import { Button, Dialog, Panel } from '@ui';
-import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
+import { createSignal, For, onMount, Show } from 'solid-js';
 import { CodexHarness } from './codex/views/CodexHarness';
 import { HarnessPairingDialog } from './HarnessPairingDialog';
-import { ConnectAction, StatusDot } from './integration-ui';
+import { ConnectAction, HarnessIcon, StatusDot } from './integration-ui';
 import { SettingsCard, SettingsPage } from './primitives';
 
 const BYOA_DOCS_URL = 'https://docs.macro.com/AI/bring-your-own';
@@ -535,13 +535,5 @@ function HarnessRemoveDialog(props: {
         </Panel.Footer>
       </Panel>
     </Dialog>
-  );
-}
-
-function HarnessIcon(props: { children: JSX.Element }) {
-  return (
-    <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-ink/4 text-ink-muted [&_svg]:size-5">
-      {props.children}
-    </div>
   );
 }

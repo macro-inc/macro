@@ -401,7 +401,8 @@ can remain loading until the 10-second discovery timeout; use Retry after reconn
 `Harness` configures Cursor, Codex, and paired macrod runtimes. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 
-Under **Codex**, choose **Connect with ChatGPT**, copy the displayed device code,
+The Codex row uses the OpenAI logo and the same icon, button, and status styling
+as Cursor. Under **Codex**, choose **Connect with ChatGPT**, copy the displayed device code,
 and use **Continue to ChatGPT** to finish sign-in in the provider tab. The Macro
 page displays pending, expired, failed, and retryable error states; **Cancel
 sign-in** cancels the attempt. Connected accounts default to **Automatic (from
@@ -410,8 +411,9 @@ selection uses the prompt and repository metadata. If Codex cannot choose
 confidently, select an environment here and try again. Manual options show their
 repositories and offer the primary repository default in the editable **Branch**
 field. Choose **Save Codex settings** to save either mode for the signed-in user;
-these choices apply to new sessions. **Disconnect ChatGPT** removes the
-connection. The UI never asks for an OAuth token.
+these choices apply to new sessions. **Disconnect** in the Codex row (accessible
+name **Disconnect ChatGPT**) removes the connection. The UI never asks for an
+OAuth token.
 
 The Codex section and its auth/config requests were exercised in Chromium with
 mocked backend responses on 2026-09-15. Provider login and a full deployed Macro

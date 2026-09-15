@@ -1,5 +1,8 @@
+import OpenAiIcon from '@core/component/AI/assets/openai.svg';
+import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
+import { HarnessIcon } from '../../integration-ui';
 import type { CodexConnectionDisplay, CodexLoginDisplay } from '../core/types';
 
 export function CodexConnection(props: {
@@ -34,6 +37,9 @@ export function CodexConnection(props: {
   const loginPending = () => props.login?.status === 'pending';
   return (
     <section class="flex gap-4 px-6 py-5" aria-label="Codex connection">
+      <HarnessIcon>
+        <OpenAiIcon />
+      </HarnessIcon>
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2">
           <h2 class="text-sm font-medium text-ink">Codex</h2>
@@ -44,7 +50,7 @@ export function CodexConnection(props: {
           </Show>
         </div>
         <p class="mt-1 text-sm text-ink-muted">
-          Connect ChatGPT to run Codex cloud sessions in Macro.
+          Use your ChatGPT account to run Codex cloud sessions in Macro.
         </p>
         <Show when={props.error}>
           <p role="alert" class="mt-3 text-sm text-negative">
@@ -54,7 +60,7 @@ export function CodexConnection(props: {
         <Show
           when={!props.loading}
           fallback={
-            <p class="mt-3 text-sm text-ink-muted">Loading Codex connection…</p>
+            <p class="mt-4 text-xs text-ink-muted">Loading Codex connection…</p>
           }
         >
           <Show
@@ -77,29 +83,37 @@ export function CodexConnection(props: {
                         </p>
                       </Show>
                       <Button
+                        type="button"
                         variant="outline"
                         size="sm"
+                        depth={3}
+                        class="gap-2"
                         disabled={props.pending}
                         onClick={props.onConnect}
                       >
+                        <OpenAiIcon class="size-4" aria-hidden="true" />
                         Connect with ChatGPT
                       </Button>
+                      <p class="text-xs text-ink-extra-muted">
+                        You'll finish sign-in on ChatGPT.
+                      </p>
                     </>
                   }
                 >
                   <p class="text-sm text-ink">
                     Open ChatGPT and enter this code to connect your account.
                   </p>
-                  <code class="ph-no-capture select-all rounded-md bg-input px-3 py-2 text-lg font-medium tracking-widest">
+                  <code class="ph-no-capture select-all rounded-md border border-edge-muted bg-input px-4 py-2.5 text-lg font-medium tracking-widest text-ink">
                     {props.login?.userCode}
                   </code>
                   <a
-                    class="text-sm text-accent underline"
+                    class="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"
                     href={props.login?.verificationUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
                     Continue to ChatGPT
+                    <ArrowUpRightIcon class="size-3.5" aria-hidden="true" />
                   </a>
                   <p role="status" class="text-xs text-ink-muted">
                     Waiting for sign-in… Code expires{' '}
@@ -109,8 +123,10 @@ export function CodexConnection(props: {
                     .
                   </p>
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
+                    depth={3}
                     disabled={props.pending}
                     onClick={props.onCancel}
                   >
@@ -121,7 +137,7 @@ export function CodexConnection(props: {
             }
           >
             <Show when={props.connection?.email ?? props.connection?.accountId}>
-              <p class="mt-3 text-sm text-ink-muted">
+              <p class="mt-1 text-xs text-ink-extra-muted break-all">
                 {props.connection?.email ?? props.connection?.accountId}
               </p>
             </Show>
@@ -163,7 +179,7 @@ export function CodexConnection(props: {
                   </For>
                 </select>
               </label>
-              <p class="text-xs text-ink-muted">
+              <p class="text-xs text-ink-extra-muted">
                 Automatic chooses a repository and its default branch from your
                 prompt. If Codex cannot confidently choose, select an
                 environment here and try again.
@@ -202,7 +218,7 @@ export function CodexConnection(props: {
                   props.environments.length === 0
                 }
               >
-                <p class="text-xs text-ink-muted">
+                <p class="text-xs text-ink-extra-muted">
                   Create a cloud environment in Codex, then retry.
                   <a
                     href="https://chatgpt.com/codex"
@@ -242,8 +258,10 @@ export function CodexConnection(props: {
               </Show>
               <div class="flex gap-2">
                 <Button
+                  type="button"
                   variant="outline"
                   size="sm"
+                  depth={3}
                   disabled={
                     props.pending ||
                     (!!selectedEnvironment() && !selectedBranch().trim())
@@ -259,19 +277,28 @@ export function CodexConnection(props: {
                 >
                   Save Codex settings
                 </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  disabled={props.pending}
-                  onClick={() => {
-                    setEnvironment(undefined);
-                    setBranch(undefined);
-                    props.onDisconnect();
-                  }}
-                >
-                  Disconnect ChatGPT
-                </Button>
               </div>
+            </div>
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p class="flex-1 basis-56 text-xs text-ink-extra-muted">
+                Existing cloud sessions keep running after disconnecting.
+              </p>
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                depth={3}
+                class="shrink-0"
+                aria-label="Disconnect ChatGPT"
+                disabled={props.pending}
+                onClick={() => {
+                  setEnvironment(undefined);
+                  setBranch(undefined);
+                  props.onDisconnect();
+                }}
+              >
+                Disconnect
+              </Button>
             </div>
           </Show>
         </Show>
