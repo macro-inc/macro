@@ -1,0 +1,28 @@
+---
+source: crates/codex_cloud_agents/src/inbound/acp/test.rs
+assertion_line: 34
+expression: updates
+---
+[
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "hello"
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": " world"
+    }
+  },
+  {
+    "sessionUpdate": "agent_thought_chunk",
+    "content": {
+      "type": "text",
+      "text": "thinking"
+    }
+  }
+]

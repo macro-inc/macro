@@ -21,6 +21,7 @@ members = [
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
   "crates/coding_agent_worker",
+  "crates/codex_cloud_agents",
   "crates/collab_surface",
   "crates/complete_graph",
   "crates/cowlike",
