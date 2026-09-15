@@ -6,7 +6,7 @@ export const CHANNELS_MIN_RAIL_WIDTH = 224;
 export const CHANNELS_MAX_RAIL_WIDTH = 420;
 
 export const CHANNELS_DEFAULT_SORT_BY = {
-  channels: 'created_at',
+  channels: 'updated_at',
   direct_messages: 'updated_at',
 } satisfies Record<ChannelsGroup, ChannelListSort>;
 

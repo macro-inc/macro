@@ -152,21 +152,24 @@ function SlimFavoriteItem(props: { favorite: Favorite }) {
         role="treeitem"
         tabIndex={-1}
         class={cn(
-          'flex size-10 items-center justify-center rounded-full text-left outline-none transition-colors',
-          item().selected && !isTouchDevice() && 'bg-active text-ink',
-          (!item().selected || isTouchDevice()) && 'text-ink-muted',
+          'relative flex size-10 items-center justify-center rounded-full text-left outline-none transition-colors',
+          item().selected && 'text-ink',
+          !item().selected && 'text-ink-muted',
+          !item().selected && !isTouchDevice() && item().focused && 'text-ink',
           !item().selected &&
             !isTouchDevice() &&
-            item().focused &&
-            'bg-hover text-ink',
-          !item().selected &&
-            !isTouchDevice() &&
-            !item().focused &&
             'hover:bg-hover hover:text-ink'
         )}
         aria-current={item().selected ? 'page' : undefined}
         onClick={() => rail.activateRow(rowKeyForFavorite(props.favorite))}
       >
+        <span
+          aria-hidden="true"
+          class={cn(
+            'absolute -left-3 top-1/2 z-1 h-3 w-1 -translate-y-1/2 rounded-r-full bg-ink transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
+            item().selected ? 'scale-y-100 opacity-100' : 'scale-y-90 opacity-0'
+          )}
+        />
         <SlimFavoriteAvatar
           favorite={props.favorite}
           displayName={displayName}
@@ -200,7 +203,7 @@ function SlimFavoritesSection() {
     <Show when={section().items.length > 0}>
       <CollapsibleSection.Root open={section().open} class="items-center">
         <CollapsibleSection.Header
-          focused={section().focused}
+          focused={false}
           focusWithin={section().containsFocus}
           class="h-10 justify-center"
         >
@@ -283,16 +286,15 @@ function SlimChannelItem(props: { channel: ChannelEntity }) {
           role="treeitem"
           tabIndex={-1}
           class={cn(
-            'flex size-10 items-center justify-center rounded-full text-left outline-none',
-            item().selected && !isTouchDevice() && 'bg-active text-ink',
-            (!item().selected || isTouchDevice()) && 'text-ink-muted',
+            'relative flex size-10 items-center justify-center rounded-full text-left outline-none',
+            item().selected && 'text-ink',
+            !item().selected && 'text-ink-muted',
             !item().selected &&
               !isTouchDevice() &&
               item().focused &&
-              'bg-hover text-ink',
+              'text-ink',
             !item().selected &&
               !isTouchDevice() &&
-              !item().focused &&
               'hover:bg-hover hover:text-ink'
           )}
           aria-current={item().selected ? 'page' : undefined}
@@ -301,6 +303,15 @@ function SlimChannelItem(props: { channel: ChannelEntity }) {
             rail.activateRow(rowKeyForChannel(props.channel.id));
           }}
         >
+          <span
+            aria-hidden="true"
+            class={cn(
+              'absolute -left-3 top-1/2 z-1 h-3 w-1 -translate-y-1/2 rounded-r-full bg-ink transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
+              item().selected
+                ? 'scale-y-100 opacity-100'
+                : 'scale-y-90 opacity-0'
+            )}
+          />
           <span class="relative">
             <SlimChannelAvatar channel={props.channel} />
             <Show
@@ -523,7 +534,7 @@ function SlimBrowseConversations() {
 
 function SlimBrowse() {
   return (
-    <div class="flex h-full min-h-0 flex-col gap-2 px-2">
+    <div class="flex h-full min-h-0 flex-col gap-2">
       <SlimFavoritesSection />
       <div class="min-h-0 flex-1">
         <SlimBrowseConversations />
