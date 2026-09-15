@@ -51,6 +51,7 @@ export function decodeEntityType(
     .with('EMAIL_THREAD', () => 'email-thread' as const)
     .with('CHANNEL', () => 'channel' as const)
     .with('USER', () => 'user' as const)
+    .with('AGENT_SESSION', () => 'agent-session' as const)
     .otherwise((raw) => ({ kind: 'unsupported' as const, raw }));
 }
 

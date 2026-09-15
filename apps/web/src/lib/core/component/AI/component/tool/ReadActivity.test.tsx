@@ -140,6 +140,22 @@ describe('ReadActivity renderer', () => {
     const { container } = renderTool([
       {
         actorId: 'macro|user@example.com',
+        entityType: 'team',
+        entityId: 'team-raw-id',
+        action: { type: 'created' },
+        occurredAt: '2026-08-19T17:30:00Z',
+      },
+    ]);
+
+    expect(screen.getByRole('button', { name: /1 activity/i })).toBeTruthy();
+    expect(container.textContent).toContain('Created');
+    expect(container.textContent).not.toContain('team-raw-id');
+  });
+
+  it('renders an agent session as a named entity', () => {
+    const { container } = renderTool([
+      {
+        actorId: 'macro|user@example.com',
         entityType: 'agent_session',
         entityId: 'agent-session-raw-id',
         action: { type: 'created' },
@@ -148,7 +164,7 @@ describe('ReadActivity renderer', () => {
     ]);
 
     expect(screen.getByRole('button', { name: /1 activity/i })).toBeTruthy();
-    expect(container.textContent).toContain('Created');
+    expect(container.textContent).toContain('Launch plan');
     expect(container.textContent).not.toContain('agent-session-raw-id');
   });
 

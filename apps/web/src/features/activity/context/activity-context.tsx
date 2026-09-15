@@ -1,3 +1,4 @@
+import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
@@ -8,17 +9,19 @@ import {
   firstPartyBotName,
   getBotDisplayName,
 } from '@queries/channel/message-sender';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import {
   type Accessor,
   createContext,
+  createMemo,
   getOwner,
   type JSX,
   runWithOwner,
   useContext,
 } from 'solid-js';
+import type { ActivityDisplayEntityType } from '../core/event';
 
 /** Resolved display for one referenced entity: name, icon, and link target. */
 export type EntityDisplay = {
@@ -64,7 +67,7 @@ export type ActivityContext = {
   /** Name, icon, and link target for a referenced entity. */
   entityDisplay: (
     entityId: Accessor<string>,
-    entityType: Accessor<EntityType>
+    entityType: Accessor<ActivityDisplayEntityType>
   ) => EntityDisplay;
   /** The property definition behind a property-changed row, when known. */
   propertyDefinition: (
@@ -107,8 +110,13 @@ function appActivityContext(): ActivityContext {
       if (!list || list.isPending) return undefined;
       return getBotDisplayName(`bot|${id}`, undefined, list.data ?? []);
     },
-    entityDisplay: (entityId, entityType) =>
-      usePropertyEntityDisplay(entityId, entityType),
+    entityDisplay: (entityId, entityType) => {
+      const type = entityType();
+      if (type === 'AGENT_SESSION') {
+        return agentSessionEntityDisplay(entityId);
+      }
+      return usePropertyEntityDisplay(entityId, () => type);
+    },
     propertyDefinition: (propertyId) => {
       const definitions = useAllProperties();
       return () => {
@@ -116,5 +124,29 @@ function appActivityContext(): ActivityContext {
         return id ? definitions().find((def) => def.id === id) : undefined;
       };
     },
+  };
+}
+
+function agentSessionEntityDisplay(entityId: Accessor<string>): EntityDisplay {
+  const previewWrapper = () =>
+    useItemPreview(() => ({
+      id: entityId(),
+      type: 'agent_session' as const,
+    }))[0];
+  const preview = createMemo(() => previewWrapper()?.());
+  return {
+    name: () => {
+      const item = preview();
+      if (!item || item.loading) return 'Loading...';
+      if (isAccessiblePreviewItem(item)) return item.name;
+      return 'Agent session';
+    },
+    icon: () => <CoreEntityIcon targetType="agent" size="xs" />,
+    isLoading: () => {
+      const item = preview();
+      return !item || item.loading;
+    },
+    blockOrFileType: () => 'agent',
+    linkParams: () => undefined,
   };
 }

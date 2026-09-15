@@ -442,6 +442,7 @@ dependencies = [
 name = "agent_session"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent",
  "agent-client-protocol",
  "agent_fold",

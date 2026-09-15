@@ -1,7 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { soupPage } from '../tests/wire';
+import { buildEntityActivityInput } from './entity-query';
 import { createdEvent } from './fixtures';
 import { selectEntityActivity } from './select-entity-activity';
+
+const NIL = '00000000-0000-0000-0000-000000000000';
+
+describe('buildEntityActivityInput', () => {
+  it('opts agent sessions into Soup by id', () => {
+    expect(
+      buildEntityActivityInput('AGENT_SESSION', 'session-1')
+    ).toMatchObject({
+      initial: {
+        limit: 1,
+        filters: {
+          documentFilter: { literal: { id: NIL } },
+          agentSessionFilter: { literal: { id: 'session-1' } },
+        },
+      },
+    });
+  });
+
+  it('does not issue a lookup for users', () => {
+    expect(buildEntityActivityInput('USER', 'user-1')).toBeUndefined();
+  });
+});
 
 describe('selectEntityActivity', () => {
   it('returns entity-missing when the soup page omits the entity', () => {
