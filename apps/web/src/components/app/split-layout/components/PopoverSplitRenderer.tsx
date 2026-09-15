@@ -186,7 +186,10 @@ function PopoverSplitModal(props: {
           onOpenChange={onOpenChange}
           contentRef={attachPanel}
           class={cn(
-            isTaskComposer() && [composerStyles.surface, 'glass-input']
+            isTaskComposer() && [
+              composerStyles.surface,
+              'glass-input rounded-xl!',
+            ]
           )}
         >
           <Panel
