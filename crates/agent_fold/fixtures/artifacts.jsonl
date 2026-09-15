@@ -1,0 +1,6 @@
+{"direction":"to_server","content":{"type":"event","event":"acp_ready"}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"prompt-1","method":"session/prompt","params":{"sessionId":"s1","prompt":[{"type":"text","text":"walk me through the new settings page"}]}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Recorded a walkthrough."}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"tool_call","toolCallId":"tc-shot","kind":"execute","status":"completed","title":"capture","rawInput":{"command":"capture --walkthrough"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"prompt-1","result":{"stopReason":"end_turn"}}}
+{"direction":"to_server","content":{"type":"artifacts","artifacts":[{"key":"walkthrough/settings.png@1","uri":"https://macro.com/api/agent-artifacts/a1","name":"settings.png","mimeType":"image/png","sizeBytes":20481},{"key":"walkthrough/settings.mp4@1","uri":"https://macro.com/api/agent-artifacts/a2","name":"settings.mp4","mimeType":"video/mp4","sizeBytes":1048576}]}}

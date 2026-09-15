@@ -3,6 +3,11 @@
 /// A hand-shaped complete turn with prose, tools, permission, and a clean stop.
 pub const TURN: &str = include_str!("../../fixtures/turn.jsonl");
 
+/// A hand-shaped turn whose walkthrough files the Agent Service collected
+/// after the turn ended: prose, a tool call, a clean stop, then one
+/// `artifacts` frame carrying a screenshot and a recording.
+pub const ARTIFACTS: &str = include_str!("../../fixtures/artifacts.jsonl");
+
 /// A hand-shaped Claude Code turn calling Macro tools over MCP - a read, a
 /// user tool (`SendEmail`) the user later edits and sends, and a failed call -
 /// with the MCP `CallToolResult` envelope around every output.

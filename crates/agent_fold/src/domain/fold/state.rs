@@ -387,6 +387,12 @@ impl FoldState {
                 StepChange::metadata(changed)
             }
 
+            // Files the agent produced outside the conversation, collected
+            // by the Agent Service after the turn ended.
+            Message::ToServer(ToServerMessage::Artifacts { artifacts }) => {
+                StepChange::message(self.attach_artifacts(artifacts))
+            }
+
             // The wrapped protocol enums are `#[non_exhaustive]`.
             Message::ToServer(_) | Message::ToRuntime(_) => Vec::new(),
         }

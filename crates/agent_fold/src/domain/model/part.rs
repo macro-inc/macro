@@ -98,6 +98,37 @@ pub enum MessagePart {
         #[serde(rename = "toolOutcome")]
         tool_outcome: Option<UserToolOutcome>,
     },
+    /// Files the agent produced outside the conversation - a walkthrough's
+    /// screenshots and recordings - collected after its turn ended.
+    Artifacts {
+        /// The files, in the order they were collected.
+        items: Vec<ArtifactItem>,
+    },
+}
+
+/// One file in an [`MessagePart::Artifacts`] part.
+///
+/// The protocol's `Artifact` minus its `key`: that key exists so a collector
+/// can tell whether it has already reported a file, and the fold neither
+/// dedupes nor has anywhere to put it - a reader renders what the log says
+/// was collected. Dropping it here keeps it out of the TypeScript too.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactItem {
+    /// A permanent Macro-hosted URL a browser can load directly.
+    pub uri: String,
+    /// What to call the file when showing it, usually its file name.
+    pub name: String,
+    /// The file's media type, which is what decides how it renders.
+    pub mime_type: String,
+    /// The file's size, for showing alongside a file the client cannot
+    /// render inline.
+    ///
+    /// Declared to TypeScript as a plain `number`: specta refuses to export
+    /// a `u64` at all, and a JSON number is a double, which is exact well
+    /// past any size this can carry.
+    #[specta(type = u32)]
+    pub size_bytes: u64,
 }
 
 impl MessagePart {

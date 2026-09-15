@@ -1,0 +1,18 @@
+---
+source: crates/agent_fold/src/domain/test/artifacts.rs
+expression: artifacts_part(parts)
+---
+[
+    ArtifactItem {
+        uri: "https://macro.com/api/agent-artifacts/a1",
+        name: "settings.png",
+        mime_type: "image/png",
+        size_bytes: 20481,
+    },
+    ArtifactItem {
+        uri: "https://macro.com/api/agent-artifacts/a2",
+        name: "settings.mp4",
+        mime_type: "video/mp4",
+        size_bytes: 1048576,
+    },
+]

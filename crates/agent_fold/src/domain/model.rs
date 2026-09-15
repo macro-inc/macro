@@ -48,7 +48,7 @@ pub use elicitation::{
 };
 pub use event::{FoldEvent, OwnedFoldEvent};
 pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata};
-pub use part::{Control, ControlOutcome, MessagePart, StopReason};
+pub use part::{ArtifactItem, Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
 pub use plan::{PlanEntry, PlanEntryPriority, PlanEntryStatus};
 pub use signal::TurnSignal;

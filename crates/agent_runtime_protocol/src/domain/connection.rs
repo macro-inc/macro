@@ -183,6 +183,11 @@ async fn run_server<H>(
                     ToServerMessage::ModelProbeResponse { .. } => {
                         tracing::warn!("dropping a model probe response without a probe waiter");
                     }
+                    // Only the Agent Service writes these, straight into the
+                    // log; nothing upstream of this relay can produce one.
+                    ToServerMessage::Artifacts { .. } => {
+                        tracing::warn!("dropping an artifacts frame sent by a runtime");
+                    }
                 }
             }
             message = acp.rx.next(), if acp_open => {

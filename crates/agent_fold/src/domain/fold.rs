@@ -57,6 +57,8 @@ use crate::domain::log::{AgentSessionId, AgentSessionLog};
 use crate::domain::model::{FoldEvent, FoldedMessage, SessionMetadata, TurnId};
 use crate::domain::ports::{FoldMachine, FoldSession, LogRepo};
 
+/// Files the agent produced outside the conversation.
+mod artifacts;
 /// Config-option and session-info bookkeeping.
 mod config;
 /// Prose and reasoning chunks, and adding parts to the agent message.

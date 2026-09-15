@@ -32,6 +32,10 @@ pub(crate) enum FoldError {
     /// A response arrived for a request id the fold was not tracking.
     #[error("response arrived for a request id the fold was not tracking")]
     UncorrelatedResponse,
+    /// Collected files arrived before any turn had been opened, so there is
+    /// no agent message - and no turn id free - to attach them to.
+    #[error("artifacts arrived before any turn was opened")]
+    ArtifactsBeforeAnyTurn,
     /// A `session/update` this fold does not know what to do with - an
     /// unmodelled variant, or a frame whose params would not deserialize.
     #[error("session/update frame not understood by this fold: {kind}")]
