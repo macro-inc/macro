@@ -257,8 +257,11 @@ impl ReplayMachine {
                     if key.is_some_and(|key| !self.seen.insert(key)) {
                         return Ok(output);
                     }
-                    // Prose deltas are provisional. The presentation adapter only
-                    // exposes them to clients that can replace text by item identity.
+                    if event.method == "item/agentMessage/delta" {
+                        // Persisted fragments remain available for diagnosis, but their
+                        // arrival order is not a reliable order for visible text.
+                        return Ok(output);
+                    }
                     if event.method == "item/completed"
                         && event.params["item"]["type"].as_str() == Some("agentMessage")
                         && let Some(text) = event.params["item"]["text"].as_str()

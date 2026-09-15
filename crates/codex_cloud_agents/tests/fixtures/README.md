@@ -23,13 +23,10 @@ appear once, with three headings, thirteen list items, inline code, and no
 synthetic correction or final-output wrappers. That browser check uses the
 recorded snapshot, not a new live cloud task.
 
-The same recording also has a replacement-enabled ACP/fold snapshot. It checks
-every fold prefix, final corrected prose, and repeated replacement loads. A
-controlled live runtime test holds a prompt open until the client has received
-and folded provisional text, then verifies that a terminal snapshot replaces it.
-The WASM/browser check verifies that corrected text keeps the same message and
-text-container DOM nodes. Standard ACP clients without the replacement
-capability continue to receive complete messages.
+A controlled runtime test holds a prompt open after an incomplete text delta
+and a thought event. It verifies that thinking remains live while no assistant
+text is emitted, then releases a terminal snapshot and checks that the completed
+answer appears once and matches reloaded history.
 
 `reported_gitkeep_message.md` is transcribed from the user's rendered message,
 not a raw provider recording. Its ACP snapshot verifies that the native and
@@ -49,6 +46,5 @@ Only session, request, and text-key identifiers were normalized. Timestamps,
 initialization, session creation, and the subsequent reload were omitted; text
 and text-update order are unchanged. No credentials, private paths, or original
 session identifiers are included. The live run's reloaded final text matched
-its live answer exactly. `live_stream.rs` folds every retained prefix through
-`agent_fold`, checks all updates were visible before completion, and asserts that
-one corrected text part contains the final answer without duplication.
+its live answer exactly. This is an archived recording of the removed text
+replacement experiment, not the current ACP protocol or an active streaming test.

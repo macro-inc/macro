@@ -85,7 +85,8 @@ cropped at the chip's height with a fade at its foot; clicking it expands it in 
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
 
-`@codex` appears when the mentioning user has connected ChatGPT and saved a
+`@codex` requires both `enable-chat-v3-agents` and `enable-codex-agents`.
+It appears when the mentioning user has connected ChatGPT and saved a
 cloud environment in Settings → Harness. New sessions use that environment on
 `main`; there is no automatic repository selection. Follow-up mentions continue the same agent session. When
 the provider URL arrives, the session header offers **Open in Codex**. Codex

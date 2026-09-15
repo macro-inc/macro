@@ -1,3 +1,5 @@
+import { useCodexAgentsAccess } from '@core/codex/flag';
+import { isCodexBotId } from '@core/constant/codexAgent';
 import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useCodexStatusQuery } from '@queries/auth/codex';
@@ -30,9 +32,19 @@ export function availableBotMentionUsers(
       (agent.harness !== 'cursor' || cursorConnected) &&
       (agent.harness !== 'codex-cloud' || codexConnected)
   );
+  const codexBotIds = new Set(
+    agents
+      .filter((agent) => agent.harness === 'codex-cloud')
+      .map((agent) => agent.bot.id)
+  );
   const seen = new Set<string>();
 
   return [...channelBots, ...globalAgents.map((agent) => agent.bot)]
+    .filter(
+      (bot) =>
+        codexConnected ||
+        (!isCodexBotId(`bot|${bot.id}`) && !codexBotIds.has(bot.id))
+    )
     .map(mentionUser)
     .filter((user) => {
       if (seen.has(user.id)) return false;
@@ -54,14 +66,16 @@ export function useChannelBotMentionUsers(
   const channelBots = useChannelBotsQuery(channelId);
   const agents = useAgentsQuery();
   const cursorStatus = useCursorApiKeyStatusQuery();
-  const codexStatus = useCodexStatusQuery();
+  const canUseCodex = useCodexAgentsAccess();
+  const codexStatus = useCodexStatusQuery(canUseCodex);
 
   return createMemo(() =>
     availableBotMentionUsers(
       channelBots.isSuccess ? channelBots.data : [],
       agents.isSuccess ? agents.data : [],
       cursorStatus.isSuccess ? cursorStatus.data.registered : false,
-      codexStatus.isSuccess &&
+      canUseCodex() &&
+        codexStatus.isSuccess &&
         codexStatus.data.connected &&
         !!codexStatus.data.environmentId?.trim()
     )

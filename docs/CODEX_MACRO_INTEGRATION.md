@@ -13,8 +13,8 @@ is required before it is available in a shared environment.
    `main`. Repositories must already be configured in Codex on the web.
 4. Choose Codex in the agent composer or mention `@codex` in a channel. The first
    prompt creates a remote task; later messages continue the same task. Macro
-   displays incremental assistant text, live command activity and a link to the cloud task.
-   Streamed text is provisional; completed provider text replaces it in place.
+   displays completed assistant messages, live command activity and a link to the cloud task.
+   Incomplete assistant text fragments are withheld.
 5. **Stop** requests cancellation at the provider. Disconnect in Harness settings
    removes Macro's credentials; reconnecting creates a new connection identity.
 
@@ -82,7 +82,7 @@ per-user PostgreSQL connection and journal, never those local credentials.
 | --- | --- |
 | Launch | Requires a saved environment, then creates a cloud task on `main`. |
 | Follow-up | Continues the existing task using its latest assistant turn. |
-| Streaming | Uses per-turn SSE for provisional keyed text, replaces it with completed text, and reconciles final turn state. |
+| Streaming | Uses per-turn SSE for tools/status and completed messages; final snapshots recover completed text. No partial assistant text streaming. |
 | Stop | Requests remote cancellation; terminal state comes from provider evidence. |
 | Load | Replaces history from the native journal and observes an unfinished turn; no `session/resume`. |
 | Commands | Translates exposed command events to ACP tool activity. |
@@ -152,6 +152,12 @@ even if the saved environment changes. Standalone demo target configuration is
 independent of this hosted setup.
 
 ## Configuration and rollout
+
+Codex UI entry points require both `enable-chat-v3-agents` and the separate
+`enable-codex-agents` PostHog flag. The Codex flag has no development-on default.
+For local testing, set `VITE_ENABLE_CHAT_V3_AGENTS=true` and
+`VITE_ENABLE_CODEX_AGENTS=true`. These are frontend rollout flags; connection
+ownership and session authorization remain enforced by the backend.
 
 Apply the three additive migrations before releasing the services:
 

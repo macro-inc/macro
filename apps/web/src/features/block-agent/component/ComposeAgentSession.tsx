@@ -3,6 +3,7 @@ import {
   useCanAutofocusSplitContent,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { useCodexAgentsAccess } from '@core/codex/flag';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -105,8 +106,10 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   const navigate = useNavigate();
   const agentsQuery = useAgentsQuery();
   const cursorStatus = useCursorApiKeyStatusQuery();
-  const codexStatus = useCodexStatusQuery();
+  const canUseCodex = useCodexAgentsAccess();
+  const codexStatus = useCodexStatusQuery(canUseCodex);
   const codexReady = () =>
+    canUseCodex() &&
     codexStatus.isSuccess &&
     codexStatus.data.connected &&
     !!codexStatus.data.environmentId?.trim();
@@ -145,77 +148,83 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
 
   // First-party agents lead, then saved personas the caller can start —
   // their own, team-shared, and selected-channel personas they can `@`.
-  const personas = createMemo<PersonaOption[]>(() => [
-    {
-      id: MACRO_PERSONA_ID,
-      name: MACRO_AGENT_NAME,
-      handle: MACRO_AGENT_HANDLE,
-      harness: 'in-memory',
-      defaultModel: macroDefaults.isSuccess
-        ? (macroDefaults.data.currentModel ?? undefined)
-        : undefined,
-    },
-    {
-      id: CURSOR_BOT_ID,
-      botId: CURSOR_BOT_ID,
-      name: CURSOR_BOT_NAME,
-      handle: CURSOR_BOT_HANDLE,
-      harness: 'cursor',
-      defaultModel: cursorStatus.isSuccess
-        ? (cursorStatus.data.defaultModelId ??
-          (cursorDefaults.isSuccess
-            ? (cursorDefaults.data.currentModel ?? undefined)
-            : undefined))
-        : undefined,
-      unavailableReason: cursorConnected()
-        ? undefined
-        : 'Connect Cursor in Settings → Harness',
-      connectLabel: cursorNeedsConnection() ? 'Connect Cursor' : undefined,
-    },
-    {
-      id: CODEX_BOT_ID,
-      botId: CODEX_BOT_ID,
-      name: CODEX_BOT_NAME,
-      handle: CODEX_BOT_HANDLE,
-      harness: 'codex-cloud',
-      unavailableReason: codexReady()
-        ? undefined
-        : 'Connect ChatGPT, then choose and save an environment in Settings → Harness',
-      connectLabel:
-        codexStatus.isSuccess && !codexStatus.isPlaceholderData && !codexReady()
-          ? 'Set up Codex'
-          : undefined,
-    },
-    ...(agentsQuery.isSuccess ? agentsQuery.data : [])
-      // Only runtimes Macro provisions can be started from here; a persona on
-      // a registered macrod daemon opens its own sessions.
-      .filter((agent) => isManagedHarness(agent.harness))
-      .map((agent) => ({
-        id: agent.bot.id,
-        botId: agent.bot.id,
-        name: agent.bot.name,
-        handle: agent.bot.handle,
-        description: agent.bot.description ?? undefined,
-        avatarUrl: agent.bot.avatar_url ?? undefined,
-        harness: agent.harness,
-        unavailableReason:
-          agent.harness === 'codex-cloud' && !codexReady()
-            ? 'Connect ChatGPT, then choose and save an environment in Settings → Harness'
+  const personas = createMemo<PersonaOption[]>(() =>
+    (
+      [
+        {
+          id: MACRO_PERSONA_ID,
+          name: MACRO_AGENT_NAME,
+          handle: MACRO_AGENT_HANDLE,
+          harness: 'in-memory',
+          defaultModel: macroDefaults.isSuccess
+            ? (macroDefaults.data.currentModel ?? undefined)
             : undefined,
-        connectLabel:
-          agent.harness === 'codex-cloud' &&
-          codexStatus.isSuccess &&
-          !codexStatus.isPlaceholderData &&
-          !codexReady()
-            ? `Set up ${agent.bot.name}`
+        },
+        {
+          id: CURSOR_BOT_ID,
+          botId: CURSOR_BOT_ID,
+          name: CURSOR_BOT_NAME,
+          handle: CURSOR_BOT_HANDLE,
+          harness: 'cursor',
+          defaultModel: cursorStatus.isSuccess
+            ? (cursorStatus.data.defaultModelId ??
+              (cursorDefaults.isSuccess
+                ? (cursorDefaults.data.currentModel ?? undefined)
+                : undefined))
             : undefined,
-        defaultModel: agent.default_model,
-        ownerId:
-          agent.bot.owner?.type === 'user'
-            ? agent.bot.owner.user_id
-            : (agent.bot.created_by ?? undefined),
-      })),
-  ]);
+          unavailableReason: cursorConnected()
+            ? undefined
+            : 'Connect Cursor in Settings → Harness',
+          connectLabel: cursorNeedsConnection() ? 'Connect Cursor' : undefined,
+        },
+        {
+          id: CODEX_BOT_ID,
+          botId: CODEX_BOT_ID,
+          name: CODEX_BOT_NAME,
+          handle: CODEX_BOT_HANDLE,
+          harness: 'codex-cloud',
+          unavailableReason: codexReady()
+            ? undefined
+            : 'Connect ChatGPT, then choose and save an environment in Settings → Harness',
+          connectLabel:
+            codexStatus.isSuccess &&
+            !codexStatus.isPlaceholderData &&
+            !codexReady()
+              ? 'Set up Codex'
+              : undefined,
+        },
+        ...(agentsQuery.isSuccess ? agentsQuery.data : [])
+          // Only runtimes Macro provisions can be started from here; a persona on
+          // a registered macrod daemon opens its own sessions.
+          .filter((agent) => isManagedHarness(agent.harness))
+          .map((agent) => ({
+            id: agent.bot.id,
+            botId: agent.bot.id,
+            name: agent.bot.name,
+            handle: agent.bot.handle,
+            description: agent.bot.description ?? undefined,
+            avatarUrl: agent.bot.avatar_url ?? undefined,
+            harness: agent.harness,
+            unavailableReason:
+              agent.harness === 'codex-cloud' && !codexReady()
+                ? 'Connect ChatGPT, then choose and save an environment in Settings → Harness'
+                : undefined,
+            connectLabel:
+              agent.harness === 'codex-cloud' &&
+              codexStatus.isSuccess &&
+              !codexStatus.isPlaceholderData &&
+              !codexReady()
+                ? `Set up ${agent.bot.name}`
+                : undefined,
+            defaultModel: agent.default_model,
+            ownerId:
+              agent.bot.owner?.type === 'user'
+                ? agent.bot.owner.user_id
+                : (agent.bot.created_by ?? undefined),
+          })),
+      ] satisfies PersonaOption[]
+    ).filter((persona) => persona.harness !== 'codex-cloud' || canUseCodex())
+  );
   const selectedPersona = () =>
     personas().find((persona) => persona.id === personaId()) ?? personas()[0];
   const runtimeDescription = () => {

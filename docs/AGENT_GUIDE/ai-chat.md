@@ -61,20 +61,18 @@ clicking it closes the composer and opens Settings → Harness without creating
 a session. It is keyboard-accessible; arrow navigation focuses it without
 activating it. Connected Cursor remains a selectable agent. Setup navigation
 is disabled while a session is being created or its setup is being retried.
+Codex composer choices and its Settings → Harness section require both
+`enable-chat-v3-agents` and `enable-codex-agents`.
 Codex shows **Set up Codex** until ChatGPT is connected and a cloud environment
 is saved in Settings → Harness. New sessions use the saved environment and
 always start from `main`. The composer hides model overrides for
 Codex because this harness does not expose model selection. Codex assistant
-text updates incrementally as provider fragments arrive. The text is provisional:
-completed messages and final snapshots correct it in place, including missing
-or reordered fragments. Tool activity and thinking also update during the turn.
-Codex file citations render as inline code
-with the path and line range, such as `.gitkeep:1` or `src/main.rs:2-12`;
-they do not link to a local file or a guessed remote revision.
-A recorded two-turn Codex conversation is covered by live/replay fold snapshots.
-Chromium verification with the production conversation renderer and WASM fold
-confirmed that partial text updates to corrected Markdown in the same message
-and text-container nodes, without appending a duplicate answer. Setup navigation,
+text appears when the provider supplies a completed message or final snapshot.
+Incomplete text fragments are withheld; tool activity and thinking still update
+during the turn. Codex file citations render as inline code with the path and
+line range, such as `.gitkeep:1` or `src/main.rs:2-12`; they do not link to a local
+file or a guessed remote revision. A recorded two-turn Codex conversation is
+covered by ACP/fold snapshots and checked with the production Markdown renderer. Setup navigation,
 selection, and the create/prompt payloads were verified in Chromium with mocked
 app navigation and backend state; no remote session was created by that check.
 Each row shows its `@handle` beneath the name. There are no coding tags;

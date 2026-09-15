@@ -189,37 +189,19 @@ A separate ChatGPT completion engine in the same bundle uses
 handoff. No call path connects those mechanisms to the WHAM remote task page;
 their presence does not establish a Codex task resume surface.
 
-#### Macro text replacement
+#### Macro completed-message policy
 
-Macro advertises `clientCapabilities._meta["macro.textReplace"] = true`.
-The Codex ACP adapter then emits ordinary `agent_message_chunk` updates with
-`_meta: {"macro.textReplace": {"id": "<item-id>"}}`. Their text is a full
-snapshot of a turn-local text part. The fold inserts that part once and replaces
-it at the same position on later updates; empty text clears provisional content.
-The durable event log remains append-only.
+Macro withholds incomplete assistant text fragments. Completed provider messages
+and final snapshots supply the answer through ordinary ACP message chunks.
+Tools, status and thinking remain live. The experimental text replacement
+capability and its fold support have been removed.
 
-Incoming deltas update provisional text. Full completions replace it and later
-deltas for completed items are ignored. Final poll fragments are combined in
-one stable provisional slot; repeated fragments replace by their synthetic ID.
-Terminal completion clears any remaining unverified text. Cancellation/failure
-also clear incomplete text while keeping completed messages. Clients that do not
-advertise this capability receive completed messages through ordinary ACP append
-semantics. This is protocol negotiation, not a claim that standard ACP itself
-supports replacing assistant prose.
-
-Provider fragments can still be missing, bursty, or reordered while a turn runs.
-This implementation offers provisional incremental text with correction, not
-guaranteed lossless token delivery. Establishing the latter requires observed
-sequence/offset metadata, cumulative in-progress snapshots with an overlap
-boundary, or a stronger upstream contract.
-
-A read-only live task on the test repository verified this path on 2026-09-15:
-236 keyed text updates arrived, beginning 19.94 seconds after submission. The
-last provisional text contained 1,007 characters; a non-prefix completion
-replaced it with the full 1,357-character answer at 25.34 seconds. The prompt
-ended at 37.25 seconds. Replaying the session reproduced the final answer
-exactly. No tool calls were observed. These are timings from one task, not a
-latency guarantee.
+The archived `live_text_replacement.jsonl` recording documents why provisional
+text was unsuitable: 236 updates ended with a 1,007-character incomplete message
+before a completion supplied the full 1,357-character answer. Rendering those
+fragments produced visibly missing words until the final correction.
+The active regression replays actual missing-delta records through ACP and the
+fold and verifies complete answers without correction wrappers or duplication.
 
 #### Citation rendering
 

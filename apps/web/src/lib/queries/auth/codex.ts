@@ -16,9 +16,10 @@ const invalidateConnection = async () => {
     }),
   ]);
 };
-export function useCodexStatusQuery() {
+export function useCodexStatusQuery(enabled: () => boolean = () => true) {
   return useQuery(() => ({
     queryKey: authKeys.codexStatus.queryKey,
+    enabled: enabled(),
     queryFn: () => throwOnErr(codexClient.status),
     placeholderData: {
       connected: false,

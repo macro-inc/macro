@@ -1,3 +1,4 @@
+import { useCodexAgentsAccess } from '@core/codex/flag';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';
@@ -41,6 +42,7 @@ function lastConnectedText(harness: RegisteredHarness): string {
 
 /** Settings UI for choosing and configuring the available agent harnesses. */
 export function Harness() {
+  const canUseCodex = useCodexAgentsAccess();
   const [cursorApiKey, setCursorApiKey] = createSignal('');
   const cursorStatus = useCursorApiKeyStatusQuery();
   const saveCursorApiKey = useSaveCursorApiKey();
@@ -360,7 +362,9 @@ export function Harness() {
           </div>
         </section>
 
-        <CodexHarness />
+        <Show when={canUseCodex()}>
+          <CodexHarness />
+        </Show>
 
         <section class="flex gap-4 px-6 py-5">
           <HarnessIcon>

@@ -205,9 +205,9 @@ impl CloudRuntime for Runtime {
             return Ok(Box::pin(
                 futures::stream::iter(vec![
                     Ok(NativeRecord::from_event(CloudEvent {
-                        id: format!("{turn}-live-text"),
+                        id: format!("{turn}-partial"),
                         method: "item/agentMessage/delta".into(),
-                        params: json!({"itemId":message,"delta":"Live partial answer"}),
+                        params: json!({"itemId":message,"delta":"Incomplete answer"}),
                     })),
                     Ok(NativeRecord::from_event(event)),
                 ])
@@ -315,18 +315,11 @@ impl Client {
         }
     }
     async fn initialize(&mut self, log: &mut Vec<AgentSessionLog>) -> Value {
-        self.initialize_with_replacement(log, false).await
-    }
-    async fn initialize_with_replacement(
-        &mut self,
-        log: &mut Vec<AgentSessionLog>,
-        enabled: bool,
-    ) -> Value {
         self.call(
             log,
             1,
             "initialize",
-            json!({"protocolVersion":1,"clientCapabilities":{"_meta":{"macro.textReplace":enabled}}}),
+            json!({"protocolVersion":1,"clientCapabilities":{}}),
         )
         .await
         .pop()
@@ -432,20 +425,11 @@ fn assert_turns(messages: &[FoldedMessage], turns: usize) {
 
 #[tokio::test]
 async fn recorded_missing_deltas_replay_restores_both_answers_once() {
-    assert_recorded_missing_deltas(false).await;
-}
-
-#[tokio::test]
-async fn recorded_missing_deltas_streaming_replay_replaces_both_answers_once() {
-    assert_recorded_missing_deltas(true).await;
-}
-
-async fn assert_recorded_missing_deltas(replace: bool) {
     let runtime = Runtime::default();
     let journal = Journal::default();
     let mut client = Client::new(runtime.clone(), journal.clone());
     let mut log = vec![];
-    client.initialize_with_replacement(&mut log, replace).await;
+    client.initialize(&mut log).await;
     let session = client.session(&mut log).await;
     let recording: Vec<JournalEntry> =
         serde_json::from_str(include_str!("fixtures/missing_live_deltas.json")).unwrap();
@@ -457,16 +441,12 @@ async fn assert_recorded_missing_deltas(replace: bool) {
     drop(client);
 
     let mut client = Client::new(runtime.clone(), journal);
-    client.initialize_with_replacement(&mut log, replace).await;
+    client.initialize(&mut log).await;
     let loaded = client.load(&mut log, &session, 3).await;
     assert!(loaded.last().unwrap().get("result").is_some());
     let messages = assert_fold(&log);
     assert_turns(&messages, 2);
-    if replace {
-        insta::assert_json_snapshot!("recorded_missing_deltas_streaming_replay", messages);
-    } else {
-        insta::assert_json_snapshot!("recorded_missing_deltas_replay", messages);
-    }
+    insta::assert_json_snapshot!("recorded_missing_deltas_replay", messages);
     let serialized = serde_json::to_string(&messages).unwrap();
     assert!(!serialized.contains("Final provider output"));
     assert!(!serialized.contains("Corrected provider message"));
@@ -493,11 +473,11 @@ async fn assert_recorded_missing_deltas(replace: bool) {
 }
 
 #[tokio::test]
-async fn live_text_is_visible_before_completion_and_snapshot_replaces_it() {
+async fn partial_answer_is_withheld_while_working_and_final_snapshot_appears_once() {
     let runtime = Runtime::default();
     let mut client = Client::new(runtime.clone(), Journal::default());
     let mut log = Vec::new();
-    client.initialize_with_replacement(&mut log, true).await;
+    client.initialize(&mut log).await;
     let session = client.session(&mut log).await;
     client
         .send(
@@ -515,16 +495,19 @@ async fn live_text_is_visible_before_completion_and_snapshot_replaces_it() {
             .unwrap();
         let frame: Value = serde_json::from_str(&line).unwrap();
         assert!(frame.get("id").is_none(), "prompt must still be running");
+        assert_ne!(
+            frame["params"]["update"]["sessionUpdate"],
+            "agent_message_chunk"
+        );
         log.push(entry(false, frame.clone()));
-        if frame["params"]["update"]["content"]["text"] == "Live partial answer" {
+        if frame["params"]["update"]["sessionUpdate"] == "agent_thought_chunk" {
             break;
         }
     }
-    assert!(runtime.0.lock().unwrap().holding);
     assert!(
-        serde_json::to_string(&assert_fold(&log))
+        !serde_json::to_string(&assert_fold(&log))
             .unwrap()
-            .contains("Live partial answer")
+            .contains("Incomplete answer")
     );
     {
         let mut calls = runtime.0.lock().unwrap();
@@ -535,7 +518,7 @@ async fn live_text_is_visible_before_completion_and_snapshot_replaces_it() {
     let messages = assert_fold(&log);
     assert_turns(&messages, 1);
     let text = serde_json::to_string(&messages).unwrap();
-    assert!(!text.contains("Live partial answer"));
+    assert!(!text.contains("Incomplete answer"));
     assert_eq!(text.matches("Snapshot answer").count(), 1);
     client.load(&mut log, &session, 4).await;
     assert_eq!(assert_fold(&log), messages);

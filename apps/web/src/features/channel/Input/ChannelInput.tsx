@@ -1,3 +1,4 @@
+import { useCodexAgentsAccess } from '@core/codex/flag';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
@@ -271,7 +272,8 @@ export function ChannelInput(props: ChannelInputProps) {
 
   const canUseCursor = useCursorAgentsAccess();
   const cursorApiKey = useCursorApiKeyStatusQuery();
-  const codexStatus = useCodexStatusQuery();
+  const canUseCodex = useCodexAgentsAccess();
+  const codexStatus = useCodexStatusQuery(canUseCodex);
 
   // Macro AI and Macro Coder (flag-gated) are mentionable in every channel,
   // and any bot added to the channel is mentionable too. All are surfaced
@@ -281,6 +283,7 @@ export function ChannelInput(props: ChannelInputProps) {
     const cursorEnabled =
       canUseCursor() && (cursorApiKey.data?.registered ?? false);
     const codexEnabled =
+      canUseCodex() &&
       codexStatus.isSuccess &&
       codexStatus.data.connected &&
       !!codexStatus.data.environmentId?.trim();

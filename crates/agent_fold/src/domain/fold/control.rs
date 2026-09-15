@@ -40,7 +40,6 @@ impl FoldState {
             agent: None,
             permission_positions: HashMap::new(),
             plan_position: None,
-            text_positions: HashMap::new(),
             expects_reply: false,
         });
         Some(Changed::new(message))

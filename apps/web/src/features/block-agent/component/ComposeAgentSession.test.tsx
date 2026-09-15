@@ -1,3 +1,8 @@
+const codexAccess = vi.hoisted(() => ({ enabled: true }));
+vi.mock('@core/codex/flag', () => ({
+  useCodexAgentsAccess: () => () => codexAccess.enabled,
+}));
+
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { CODEX_BOT_ID } from '@core/constant/codexAgent';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
@@ -241,6 +246,7 @@ const failure = err([
 let client: QueryClient;
 
 beforeEach(() => {
+  codexAccess.enabled = true;
   codexConnection.connected = false;
   codexConnection.environmentId = null;
   cursorConnection.registered = true;
@@ -276,6 +282,16 @@ function enterPrompt() {
 }
 
 describe('agent session creation', () => {
+  it('hides built-in and saved Codex personas when the rollout is disabled', () => {
+    codexAccess.enabled = false;
+    codexConnection.connected = true;
+    codexConnection.environmentId = 'env-saved';
+    mount();
+    expect(screen.queryByText('Codex')).toBeNull();
+    expect(screen.queryByText('Codex Reviewer')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Set up Codex/ })).toBeNull();
+  });
+
   it('opens setup for a custom Codex persona without creating a session', () => {
     mount();
     fireEvent.click(

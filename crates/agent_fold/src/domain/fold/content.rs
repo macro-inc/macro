@@ -32,15 +32,7 @@ impl FoldState {
         if text.is_empty() {
             return None;
         }
-        let trailing_is_keyed = self.turn.as_ref().is_some_and(|turn| {
-            turn.agent.is_some_and(|message| {
-                turn.text_positions
-                    .values()
-                    .any(|&position| position + 1 == self.messages[message].parts.len())
-            })
-        });
-        if !trailing_is_keyed
-            && let Some((message, parts)) = self.agent_parts_mut()
+        if let Some((message, parts)) = self.agent_parts_mut()
             && let MessagePart::Text { text: existing } = parts.last_mut()
         {
             existing.push_str(&text);
@@ -48,25 +40,6 @@ impl FoldState {
         }
         self.push_agent_part(MessagePart::Text { text })
             .map(|(changed, _)| changed)
-    }
-
-    /// Upsert a complete prose snapshot without moving its original part.
-    pub(super) fn replace_text(&mut self, key: String, text: String) -> Option<Changed> {
-        if let Some(turn) = &self.turn
-            && let Some(&position) = turn.text_positions.get(&key)
-            && let Some(message) = turn.agent
-            && let Some(MessagePart::Text { text: existing }) =
-                self.messages[message].parts.get_mut(position)
-        {
-            if *existing == text {
-                return None;
-            }
-            *existing = text;
-            return Some(Changed::updated(message));
-        }
-        let (changed, position) = self.push_agent_part(MessagePart::Text { text })?;
-        self.open_turn().text_positions.insert(key, position);
-        Some(changed)
     }
 
     /// Append agent reasoning, extending the trailing thought part when there
@@ -122,6 +95,3 @@ impl FoldState {
         Some((message, &mut self.messages[message].parts))
     }
 }
-
-#[cfg(test)]
-mod test;

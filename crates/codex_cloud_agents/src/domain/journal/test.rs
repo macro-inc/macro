@@ -60,7 +60,7 @@ fn live_and_serialized_replay_preserve_native_unknown_records_and_suppress_dupli
     assert!(encoded.contains("future-event"));
     let restored: Vec<JournalEntry> = serde_json::from_str(&encoded).unwrap();
     assert_eq!(reduce(&entries), reduce(&restored));
-    assert_eq!(reduce(&entries).len(), 3);
+    assert_eq!(reduce(&entries).len(), 2);
 }
 #[test]
 fn missing_history_and_sequence_gaps_fail_closed() {
@@ -183,7 +183,7 @@ fn native_answer_recovered_after_snapshot_terminal_replaces_the_fallback() {
 }
 
 #[test]
-fn missing_and_reordered_deltas_retain_authoritative_completion_live_and_replay() {
+fn missing_and_reordered_deltas_never_corrupt_completed_message_live_or_replay() {
     let inputs = vec![
         JournalInput::HistoryComplete,
         native(
@@ -223,8 +223,8 @@ fn missing_and_reordered_deltas_retain_authoritative_completion_live_and_replay(
         .map(|(index, input)| entry(index as i64 + 1, input))
         .collect();
     let output = reduce(&entries);
-    assert_eq!(output.len(), 4);
-    assert_eq!(output[2]["params"]["item"]["text"], "My name is Codex.");
+    assert_eq!(output.len(), 1);
+    assert_eq!(output[0]["params"]["item"]["text"], "My name is Codex.");
     let replay: Vec<JournalEntry> =
         serde_json::from_str(&serde_json::to_string(&entries).unwrap()).unwrap();
     assert_eq!(reduce(&replay), output);
@@ -269,8 +269,7 @@ fn terminal_poll_preserves_multiple_equal_messages_once_across_repeated_reads() 
             machine
                 .push(&entry(index as i64 + 1, input))
                 .unwrap()
-                .iter()
-                .all(|event| event.method == "item/agentMessage/delta")
+                .is_empty()
         );
     }
     let output = machine.finish();
@@ -332,7 +331,7 @@ fn recorded_two_turn_conversation_has_identical_complete_live_and_replayed_answe
     );
     for output in [&live_output, &replay_output] {
         assert!(
-            output
+            !output
                 .iter()
                 .any(|event| event.method == "item/agentMessage/delta")
         );
@@ -347,7 +346,7 @@ fn recorded_two_turn_conversation_has_identical_complete_live_and_replayed_answe
 }
 
 #[test]
-fn cancelled_and_failed_turns_end_provisional_text_without_synthesizing_a_completion() {
+fn cancelled_and_failed_turns_do_not_publish_unverified_fragments() {
     for status in ["cancelled", "failed"] {
         let mut machine = ReplayMachine::default();
         for (index, input) in [
@@ -366,8 +365,7 @@ fn cancelled_and_failed_turns_end_provisional_text_without_synthesizing_a_comple
                 machine
                     .push(&entry(index as i64 + 1, input))
                     .unwrap()
-                    .iter()
-                    .all(|event| event.method == "item/agentMessage/delta")
+                    .is_empty()
             );
         }
         let output = machine.finish();

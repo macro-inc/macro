@@ -11,38 +11,15 @@ use std::sync::{Arc, Mutex};
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
 mod citations;
-mod prose;
 
 struct Sink {
     connection: ConnectionTo<Client>,
     session: SessionId,
     replay: bool,
     text: Mutex<HashMap<String, String>>,
-    prose: Mutex<prose::Prose>,
-    replace_text: bool,
 }
 impl SessionSink for Sink {
     fn emit(&self, event: &CloudEvent) -> Result<(), rootcause::Report> {
-        if self.replace_text {
-            for update in self
-                .prose
-                .lock()
-                .expect("prose projection poisoned")
-                .project(event)
-            {
-                self.connection
-                    .send_notification(SessionNotification::new(self.session.clone(), update))
-                    .map_err(|_| rootcause::report!("ACP client disconnected"))?;
-            }
-            if matches!(
-                event.method.as_str(),
-                "item/agentMessage/delta" | "item/started" | "item/completed"
-            ) && (event.method == "item/agentMessage/delta"
-                || event.params["item"]["type"].as_str() == Some("agentMessage"))
-            {
-                return Ok(());
-            }
-        }
         if event.method == "session/turn_complete" {
             if self.replay {
                 use agent_runtime_protocol::domain::turn::{TurnCompleteNotification, TurnOutcome};
@@ -214,19 +191,12 @@ fn project(event: &CloudEvent, text: &mut HashMap<String, String>) -> Vec<Sessio
         _ => Vec::new(),
     }
 }
-fn sink(
-    connection: ConnectionTo<Client>,
-    session: SessionId,
-    replay: bool,
-    replace_text: bool,
-) -> Sink {
+fn sink(connection: ConnectionTo<Client>, session: SessionId, replay: bool) -> Sink {
     Sink {
         connection,
         session,
         replay,
         text: Mutex::new(HashMap::new()),
-        prose: Mutex::new(prose::Prose::default()),
-        replace_text,
     }
 }
 fn error(error: rootcause::Report) -> Error {
@@ -268,26 +238,16 @@ where
     W: tokio::io::AsyncWrite + Send + 'static,
 {
     let metadata_service = service.clone();
-    let replace_text = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let connection = Agent
         .builder()
         .name("codex-cloud-acp")
         .on_receive_request(
-            {
-              let replace_text = replace_text.clone();
-              async move |request: InitializeRequest, responder, _connection| {
-                replace_text.store(
-                    request.client_capabilities.meta.as_ref()
-                        .and_then(|meta| meta.get(agent_runtime_protocol::domain::text_replace::TEXT_REPLACE_META_KEY))
-                        .and_then(serde_json::Value::as_bool) == Some(true),
-                    std::sync::atomic::Ordering::SeqCst,
-                );
+            async move |request: InitializeRequest, responder, _connection| {
                 responder.respond(
                     InitializeResponse::new(request.protocol_version.min(ProtocolVersion::V1))
                         .agent_info(Implementation::new("codex_acp", env!("CARGO_PKG_VERSION")))
                         .agent_capabilities(AgentCapabilities::default().load_session(true)),
                 )
-              }
             },
             on_receive_request!(),
         )
@@ -312,7 +272,6 @@ where
         .on_receive_request(
             {
                 let service = service.clone();
-                let replace_text = replace_text.clone();
                 async move |request: LoadSessionRequest, responder, connection| {
                     let reload = reload.clone();
                     if !request.mcp_servers.is_empty() {
@@ -321,7 +280,7 @@ where
                             "MCP servers are not supported by this cloud adapter",
                         ));
                     }
-                    let notifier = sink(connection.clone(), request.session_id.clone(), true, replace_text.load(std::sync::atomic::Ordering::SeqCst));
+                    let notifier = sink(connection.clone(), request.session_id.clone(), true);
                     let service = service.clone();
                     connection.spawn(async move {
                         let recovery = match service
@@ -350,14 +309,13 @@ where
         .on_receive_request(
             {
                 let service = service.clone();
-                let replace_text = replace_text.clone();
                 async move |request: PromptRequest, responder, connection| {
                     let _text = match prompt_text(request.prompt.clone()) {
                         Ok(text) => text,
                         Err(e) => return responder.respond_with_error(e),
                     };
                     let service = service.clone();
-                    let notifier = sink(connection.clone(), request.session_id.clone(), false, replace_text.load(std::sync::atomic::Ordering::SeqCst));
+                    let notifier = sink(connection.clone(), request.session_id.clone(), false);
                     connection.spawn(async move {
                         match service
                             .prompt(&request.session_id.to_string(), request.prompt, &notifier)
