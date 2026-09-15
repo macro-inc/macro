@@ -101,6 +101,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/stream/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_access/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/github/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/initiative/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/referral/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/chat/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/memory/.env

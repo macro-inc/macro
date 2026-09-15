@@ -1,0 +1,2 @@
+-- Seed data for initiative repository tests. Outbound adapters land in a
+-- later task and will load this fixture then.
