@@ -1,18 +1,4 @@
 //! Writes to `entity` that ride the caller's transaction.
-//!
-//! These are the public write API of the crate and the only sanctioned way
-//! to change the table from outside it (CS-27). Every helper:
-//!
-//! - takes `&mut Transaction<'_, Postgres>` because the caller is mid-write on
-//!   its own resource table and both rows must commit or roll back together;
-//! - never commits;
-//! - writes exactly the column(s) it is named for, mirroring what the caller's
-//!   resource row did, so no helper hides a coupled side effect;
-//! - reports what it did as a value, and treats "no such row" as an outcome,
-//!   not an error (see [`WriteOutcome`]).
-//!
-//! Spans skip the record: an `Owner::User` is an email address, and the id
-//! plus kind are enough to find the row.
 
 #[cfg(test)]
 mod test;
@@ -27,13 +13,7 @@ use crate::domain::models::{
     EntityRegistryError, EntityRegistryResult, InsertOutcome, NewEntityRecord, WriteOutcome,
 };
 
-/// Register `record`. Idempotent: `ON CONFLICT (id) DO NOTHING` (CS-02).
-///
-/// Owner columns are bound through the crate's single owner encoder. Both
-/// already satisfy the `owner_id` CHECK by construction of [`crate::Owner`].
-///
-/// A no-op conflict still holds the conflicting row's lock until the
-/// caller commits, as with `upsert_owner_grant`.
+/// Register `record`. Idempotent: `ON CONFLICT (id) DO NOTHING`.
 #[tracing::instrument(
     skip_all,
     fields(entity.id = %record.id, entity.kind = %record.entity_type),
@@ -68,9 +48,7 @@ pub async fn insert_entity(
     }
 }
 
-/// Set `deleted_at = at`. Last write wins, mirroring the resource row's own
-/// `SET "deletedAt" = NOW()`, so the two never disagree after any call
-/// sequence. Does not touch `updated_at` (neither does the resource).
+/// Set `deleted_at = at`. Last write wins.
 #[tracing::instrument(skip(tx), err)]
 pub async fn mark_deleted(
     tx: &mut Transaction<'_, Postgres>,
@@ -108,8 +86,7 @@ pub async fn clear_deleted(
     )
 }
 
-/// Set `updated_at = at`, mirroring the resource's `updatedAt` so
-/// owner-scoped listings can order by recency without joining resource tables.
+/// Set `updated_at = at`.
 #[tracing::instrument(skip(tx), err)]
 pub async fn touch_updated(
     tx: &mut Transaction<'_, Postgres>,
@@ -129,8 +106,7 @@ pub async fn touch_updated(
     )
 }
 
-/// Remove the row. Call beside `entity_access_db_utils::delete_entity_access_rows`
-/// when the resource is hard-deleted.
+/// Remove the row.
 #[tracing::instrument(skip(tx), err)]
 pub async fn delete_entity(
     tx: &mut Transaction<'_, Postgres>,

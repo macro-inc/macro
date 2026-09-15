@@ -10,16 +10,6 @@ use rootcause::Report;
 use uuid::Uuid;
 
 /// The entity kinds the `entity` table accepts: its CHECK constraint as a type.
-///
-/// An enum rather than a newtype over [`EntityType`] so callers can match
-/// exhaustively; adding a sixth registered kind is a compile error at every
-/// site that branches on it. The string spelling is *derived* from
-/// [`EntityType`] (see [`RegisteredEntityType::as_str`]), so this type owns
-/// only the allow-list, which is exactly what the CHECK owns.
-///
-/// Widening is free (`EntityType::from(kind)`); narrowing is the single
-/// fallible step (`RegisteredEntityType::try_from(ty)`), and it happens at
-/// the caller that holds a wide type, never inside a write.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RegisteredEntityType {
     /// `project`
@@ -35,8 +25,7 @@ pub enum RegisteredEntityType {
 }
 
 impl RegisteredEntityType {
-    /// Every registered kind, in CHECK order. Tests insert one row per
-    /// element so allow-list/CHECK drift fails a test, not a production write.
+    /// Every registered kind.
     pub const ALL: [Self; 5] = [
         Self::Project,
         Self::Document,
@@ -45,8 +34,7 @@ impl RegisteredEntityType {
         Self::ScheduledAction,
     ];
 
-    /// The stored spelling, taken from [`EntityType`]'s strum `snake_case`
-    /// form so there is one source of truth for the string.
+    /// The stored spelling.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         EntityType::from(self).into()
@@ -92,17 +80,13 @@ impl std::fmt::Display for RegisteredEntityType {
 }
 
 /// One row of the registry: who owns the resource `id`, and its lifecycle stamps.
-///
-/// Cannot describe a row the table cannot hold: the kind is
-/// [`RegisteredEntityType`] and the owner is a parsed [`Owner`], so the
-/// `entity_type` and `owner_id` CHECKs are already true of any value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityRecord {
-    /// The resource's id. Not a foreign key; resource tables are not referenced.
+    /// The resource's id.
     pub id: Uuid,
     /// The kind of resource.
     pub entity_type: RegisteredEntityType,
-    /// The recorded owner. Effective access lives in `entity_access`, not here.
+    /// The recorded owner.
     pub owner: Owner,
     /// When the row was registered (or the resource's own `createdAt` if backfilled).
     pub created_at: DateTime<Utc>,
@@ -122,13 +106,9 @@ impl EntityRecord {
 
 /// Input to `insert_entity`.
 ///
-/// Nothing here needs validating at construction: [`Uuid`], the kind enum and
-/// [`Owner`] already carry every invariant the table checks.
-///
 /// `None` timestamps take the database clock. Inside one transaction that
 /// is the same instant the caller's own `DEFAULT now()` columns received,
-/// so a create path passes nothing and the two rows agree. A backfill
-/// passes the resource row's stamps via [`NewEntityRecord::with_timestamps`].
+/// so a create path passes nothing and the two rows agree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NewEntityRecord {
     /// The resource's id.
@@ -157,9 +137,6 @@ impl NewEntityRecord {
     }
 
     /// Narrow a wide [`EntityType`] at the caller that holds it.
-    ///
-    /// The write path takes [`RegisteredEntityType`] only; this is the
-    /// convenience for adapters that still carry the 19-variant type.
     pub fn try_new(
         id: Uuid,
         entity_type: EntityType,
@@ -183,14 +160,10 @@ impl NewEntityRecord {
     }
 }
 
-/// What `insert_entity` did. Makes `ON CONFLICT (id) DO NOTHING` visible
-/// in the signature.
+/// What `insert_entity` did.
 ///
 /// `AlreadyRegistered` means a row with this id existed; it does **not**
-/// mean that row matches the input. The registry does not compare, because
-/// an id reused with a different owner or kind is a caller bug, and a
-/// second `SELECT` on every create is the wrong place to pay for it.
-/// Reconciliation (T2.8) is where such rows surface.
+/// mean that row matches the input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InsertOutcome {
     /// A new row was written.
@@ -201,10 +174,8 @@ pub enum InsertOutcome {
 
 /// What an id-targeted write did.
 ///
-/// `NotFound` is an outcome, not an error: during dual-write rollout a
-/// resource created before the registry existed has no row until backfill,
-/// and its soft delete must not roll back because of that. Callers that
-/// want strictness check the value.
+/// `NotFound` is an outcome, not an error. Callers that want strictness check
+/// the value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WriteOutcome {
     /// Exactly one row matched and was written.
@@ -214,10 +185,6 @@ pub enum WriteOutcome {
 }
 
 /// Row counts for one kind, split by liveness.
-///
-/// Both come from one index scan (`entity_type_idx` is not partial) via
-/// `count(*) FILTER (...)`, so offering both costs nothing and lets
-/// reconciliation take the total while dashboards take `live`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct EntityTypeCount {
     /// Rows with `deleted_at IS NULL`.
@@ -234,16 +201,11 @@ impl EntityTypeCount {
     }
 }
 
-/// Failure kinds of the registry. The report carries the cause and the row id.
-///
-/// There is no "unsupported type" variant: [`RegisteredEntityType`] makes
-/// that unrepresentable at the write, so the only failures are the store
-/// failing or a stored row failing to parse back into domain types.
+/// Failure kinds of the registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum EntityRegistryError {
-    /// A stored row could not be decoded into an [`EntityRecord`]: its
-    /// `entity_type` or `owner_id` is outside what the table's CHECKs allow,
-    /// which should be impossible. The attached id says which row.
+    /// A stored row could not be decoded into an [`EntityRecord`].
+    /// The attached id says which row.
     #[error("entity row is corrupt")]
     CorruptRow,
     /// The database failed. The attached cause is the driver error.

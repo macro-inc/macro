@@ -9,15 +9,6 @@
 //! [`NewEntityRecord::try_new`] when the caller holds a wide
 //! [`model_entity::EntityType`].
 //!
-//! # Architecture
-//!
-//! - **domain**: registry records, outcomes, and the read port.
-//! - **outbound** (feature `postgres`): transactional write helpers and the
-//!   pool-backed repository.
-//!
-//! There is no inbound module and no domain service: callers invoke the helpers
-//! and the read port directly.
-//!
 //! ```
 //! use entity_registry::{NewEntityRecord, Owner, RegisteredEntityType};
 //! use model_entity::EntityType;
@@ -40,7 +31,6 @@ pub use domain::models::{
     NewEntityRecord, RegisteredEntityType, UnregisteredEntityType, WriteOutcome,
 };
 pub use domain::ports::EntityRegistryRepository;
-/// Re-exported because it appears in every write input and every record.
 pub use model_owner::Owner;
 
 #[cfg(feature = "postgres")]

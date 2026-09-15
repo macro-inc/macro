@@ -6,6 +6,7 @@ mod test;
 use chrono::{DateTime, Utc};
 use model_entity::EntityType;
 use model_owner::{Owner, OwnerType};
+use rootcause::Report;
 use rootcause::prelude::*;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -16,8 +17,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::EntityRegistryRepository;
 
-/// Reads `entity` through a pool. Constructed by the composition root and
-/// handed to domain services (teams, reconciliation) as the port.
+/// Reads `entity` through a pool.
 #[derive(Debug, Clone)]
 pub struct PgEntityRegistryRepository {
     pool: PgPool,
@@ -31,12 +31,6 @@ impl PgEntityRegistryRepository {
     }
 }
 
-/// One `entity` row as stored, before the boundary parse.
-///
-/// `owner_type` arrives typed (`model_owner::OwnerType` is the sqlx type
-/// `entity_owner_type`); `owner_id` and `entity_type` arrive as text and are
-/// parsed in [`EntityRow::into_record`], the single place stored bytes
-/// become domain values.
 struct EntityRow {
     id: Uuid,
     entity_type: String,
@@ -48,19 +42,15 @@ struct EntityRow {
 }
 
 impl EntityRow {
-    /// Validate at the boundary, trust inside. A row the CHECKs should have
-    /// rejected fails as `CorruptRow` with the id attached.
     fn into_record(self) -> EntityRegistryResult<EntityRecord> {
         let id = self.id;
-        // Never attach owner_id: a user principal is an email address.
-        let owner = Owner::parse(self.owner_type, &self.owner_id)
-            .map_err(|_| report!(EntityRegistryError::CorruptRow).attach(id))?;
+        let owner = Owner::parse(self.owner_type, &self.owner_id).map_err(|_| corrupt_row(id))?;
         let entity_type = self
             .entity_type
             .parse::<EntityType>()
-            .map_err(|_| report!(EntityRegistryError::CorruptRow).attach(id))?;
-        let entity_type = RegisteredEntityType::try_from(entity_type)
-            .map_err(|_| report!(EntityRegistryError::CorruptRow).attach(id))?;
+            .map_err(|_| corrupt_row(id))?;
+        let entity_type =
+            RegisteredEntityType::try_from(entity_type).map_err(|_| corrupt_row(id))?;
         Ok(EntityRecord {
             id,
             entity_type,
@@ -70,6 +60,10 @@ impl EntityRow {
             deleted_at: self.deleted_at,
         })
     }
+}
+
+fn corrupt_row(id: Uuid) -> Report<EntityRegistryError> {
+    report!(EntityRegistryError::CorruptRow).attach(id)
 }
 
 impl EntityRegistryRepository for PgEntityRegistryRepository {
@@ -164,12 +158,12 @@ impl EntityRegistryRepository for PgEntityRegistryRepository {
         .context(EntityRegistryError::Infrastructure)?;
 
         Ok(EntityTypeCount {
-            live: as_count(row.live)?,
-            deleted: as_count(row.deleted)?,
+            live: as_count(row.live),
+            deleted: as_count(row.deleted),
         })
     }
 }
 
-fn as_count(value: i64) -> EntityRegistryResult<u64> {
-    u64::try_from(value).map_err(|_| report!(EntityRegistryError::CorruptRow))
+fn as_count(value: i64) -> u64 {
+    u64::try_from(value).unwrap_or(0)
 }

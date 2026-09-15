@@ -1,4 +1,4 @@
-//! Domain models and ports. No sqlx, no transport, no `crate::outbound`.
+//! Domain models and ports.
 
 pub mod models;
 pub mod ports;
