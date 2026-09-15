@@ -590,11 +590,11 @@ function SlimSortDropdown(props: { group: ChannelsGroup; label: string }) {
   };
 
   return (
-    <Dropdown placement="bottom-end">
+    <Dropdown placement="right-start">
       <Dropdown.Trigger
-        variant="outline"
+        variant="ghost"
         size="sm"
-        class="h-7 min-w-28 justify-between gap-1 rounded-lg bg-surface px-2 text-xs font-normal"
+        class="h-7 min-w-28 justify-between gap-1 rounded-lg px-2 text-xs font-normal"
         aria-label={`Sort ${props.label.toLowerCase()}`}
       >
         <span class="truncate">{selected()?.label}</span>
@@ -650,7 +650,7 @@ function SlimRailSettings() {
                 <For each={SLIM_GROUPS}>
                   {(config) => (
                     <section class="flex flex-col gap-1">
-                      <h3 class="px-2 text-xs font-normal text-ink">
+                      <h3 class="px-2 text-xs font-normal text-ink-extra-muted">
                         {config.label}
                       </h3>
                       <div class="flex h-8 items-center justify-between gap-3 px-2">
