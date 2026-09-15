@@ -203,8 +203,12 @@ artwork and wraps long queries.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
-Rows and section headers act on primary-button mousedown, so the selection
-and highlight change before the click completes; a normal click still works.
+Compact channel and DM rows in All have the same height. Section headings place
+their caret immediately after the title and reveal it on hover; hovering only
+undims the heading text, while keyboard-focusing the heading with Arrow keys or
+`j` / `k` gives it a background. Rows and section headers act on primary-button
+mousedown, so the selection and highlight change before the click completes; a
+normal click still works.
 
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances

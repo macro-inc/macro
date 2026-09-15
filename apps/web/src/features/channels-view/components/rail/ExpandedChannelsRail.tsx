@@ -24,7 +24,7 @@ import {
 } from 'solid-js';
 import { Virtualizer } from 'virtua/solid';
 import type { ChannelsGroup } from '../../types';
-import { channelMentionsUser, isDirectMessage } from '../../utils';
+import { channelMentionsUser } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import {
   ChannelAvatar,
@@ -151,8 +151,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         role="treeitem"
         tabIndex={-1}
         class={cn(
-          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none',
-          isDirectMessage(props.channel) ? 'min-h-10 py-2' : 'h-8',
+          'relative flex h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none',
           item().selected && !isTouchDevice() && 'bg-active text-ink',
           (!item().selected || isTouchDevice()) && 'text-ink-muted',
           !item().selected &&
@@ -210,17 +209,18 @@ function ExpandedFavoritesSection() {
             type="button"
             role="treeitem"
             tabIndex={-1}
-            class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none"
+            class="relative flex h-full min-w-0 flex-1 items-center gap-1 rounded-xl px-2 text-left outline-none"
             aria-expanded={section().open}
             onClick={() => rail.activateRow(rowKeyForSection('favorites'))}
           >
+            <span class="min-w-0 truncate">Favorites</span>
             <CaretDownIcon
               class={cn(
-                'size-3 shrink-0 transition-transform',
+                'size-3 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
+                section().focused && 'opacity-100',
                 !section().open && '-rotate-90'
               )}
             />
-            <span class="min-w-0 truncate">Favorites</span>
           </button>
         </CollapsibleSection.Header>
         <CollapsibleSection.Content
@@ -415,27 +415,28 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
       <CollapsibleSection.Header
         focused={section().focused}
         focusWithin={section().containsFocus}
-        class="h-9 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
+        class="h-9"
       >
         <button
           id={section().domId}
           type="button"
           role="treeitem"
           tabIndex={-1}
-          class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none"
+          class="relative flex h-full min-w-0 flex-1 items-center gap-1 rounded-xl px-2 text-left outline-none"
           aria-expanded={section().open}
           onMouseDown={(event) => {
             if (!isPrimaryMouseDown(event)) return;
             rail.activateRow(rowKeyForSection(props.config.group));
           }}
         >
+          <span class="min-w-0 truncate">{props.config.label}</span>
           <CaretDownIcon
             class={cn(
-              'size-3 shrink-0 transition-transform',
+              'size-3 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
+              section().focused && 'opacity-100',
               !section().open && '-rotate-90'
             )}
           />
-          <span class="min-w-0 truncate">{props.config.label}</span>
           <Show when={section().unreadCount > 0}>
             <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none tabular-nums text-accent-contrast">
               {section().unreadCount}
@@ -472,7 +473,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
               ref={pagination.registerVirtualizer}
               data={section().items}
               scrollRef={scrollRoot()}
-              itemSize={props.config.group === 'channels' ? 34 : 42}
+              itemSize={34}
               bufferSize={240}
               keepMounted={section().keepMounted}
               onScroll={pagination.loadMoreNearEnd}

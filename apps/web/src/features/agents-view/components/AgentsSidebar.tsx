@@ -123,8 +123,8 @@ function AgentFavorites(props: {
     <Show when={favorites().length > 0}>
       <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
         <CollapsibleSection.Trigger class="text-xs">
-          <CollapsibleSection.Indicator class="order-first ml-0" />
-          <span class="truncate">Favorites</span>
+          <span class="min-w-0 truncate">Favorites</span>
+          <CollapsibleSection.Indicator />
         </CollapsibleSection.Trigger>
         <CollapsibleSection.Content>
           <ViewSidebar.Nav aria-label="Favorite agent chats">
