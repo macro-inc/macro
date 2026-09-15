@@ -24,6 +24,11 @@ pub(crate) async fn revert_delete_chat(
     .await
     .context("unable to update chat")?;
 
+    let chat_uuid = macro_uuid::string_to_uuid(chat_id)?;
+    entity_registry_db_utils::clear_deleted(tx, chat_uuid)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+
     sqlx::query!(
         r#"
         INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")

@@ -1,6 +1,7 @@
 use model::IDWithTimeStamps;
 use sqlx::{Postgres, Transaction};
 
+// TODO(ownership-v2): no live callers; dual-write belongs on create_chat_v2 and T2.8 reconciliation.
 #[tracing::instrument(skip(transaction))]
 pub async fn create_empty_chat(
     transaction: &mut Transaction<'_, Postgres>,

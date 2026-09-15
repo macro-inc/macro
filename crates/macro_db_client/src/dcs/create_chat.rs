@@ -66,15 +66,27 @@ pub async fn create_chat_v2(
         append_attachment_to_chat(&mut transaction, attachment).await?;
     }
 
+    let chat_uuid = macro_uuid::string_to_uuid(&chat.id)?;
     entity_access_db_utils::insert_entity_access_row(
         &mut transaction,
-        &macro_uuid::string_to_uuid(&chat.id).unwrap(),
+        &chat_uuid,
         EntityType::Chat,
         user_id.as_ref(),
         entity_access_db_utils::EntityAccessSourceType::User,
         AccessLevel::Owner,
     )
     .await?;
+
+    entity_registry_db_utils::insert_entity(
+        &mut transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            chat_uuid,
+            entity_registry_db_utils::RegisteredEntityType::Chat,
+            model_owner::Owner::User(user_id.clone()),
+        ),
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("{e}"))?;
 
     transaction.commit().await.map_err(|e| {
         tracing::error!(error=?e, "create_chat transaction error");
