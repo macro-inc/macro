@@ -143,7 +143,7 @@ from the actual provider capture. Raw-response events and internal reasoning
 were excluded. This is live-origin schema/order evidence with synthetic content,
 not an unaltered transcript.
 
-## Final rebuilt executable smoke
+## Standalone executable smoke before hosted integration
 
 After the account-binding and replay fixes were built, the final executable
 passed another stdio `initialize` and explicit `session/load` against the existing
@@ -157,3 +157,24 @@ Task/turn receipts remained present and `uncertain_write` was false. Journal byt
 were unchanged by the read. Every stdout line was JSON-RPC, the one diagnostic
 line went to stderr, and closing stdin exited successfully with code zero. This
 smoke created no provider task or follow-up turn.
+
+## Hosted integration follow-up
+
+The subsequent Macro integration advertises `loadSession: true`. Its tests cover
+replaying a durable journal, observing an unfinished saved turn without another
+launch, deterministic Macro-session ACP identity, and rejection after account or
+connection generation changes. A PostgreSQL journal adds manager-fence checks on
+reads and writes. The initialize snapshot was updated for that capability change.
+
+Six integration tests pass actual served ACP bytes through the shared fold. They
+cover repeated replacement, incomplete/failed loads retaining existing history,
+cancellation outcomes, immediate same-task follow-up, snapshot-only answers, and
+silent recovery of late historical output without creating another assistant
+turn. The native journal preserves unknown and malformed provider records before
+decoding; PostgreSQL tests verify sequence contention, ownership fencing, and
+independence from metadata checkpoints. There is no decoded-history compatibility
+reader and no advertised `session/resume` method.
+
+See [the Macro integration](CODEX_MACRO_INTEGRATION.md) for connection settings,
+hosted storage, configuration, and rollout. These later regression tests do not
+replace the live provider observations recorded above.

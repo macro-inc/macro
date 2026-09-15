@@ -24,6 +24,7 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
         &self,
         prompt_markdown: &str,
         messages: Option<&[PriorChannelMessage]>,
+        include_internal_tools: bool,
     ) -> Result<String> {
         let messages = messages.map(|messages| {
             messages
@@ -41,6 +42,9 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
             .await
             .map_err(|error| HarnessError::PromptComposition(rootcause::report!(error).into()))?;
 
+        if !include_internal_tools {
+            return Ok(context);
+        }
         Ok(format!(
             "When you create or start working on a pull request, register its URL with Macro using macro_internal.set_pull_request.\n\n{context}"
         ))

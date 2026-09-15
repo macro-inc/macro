@@ -168,7 +168,7 @@ where
                 RoutedTransport::InMem(
                     self.inmem()
                         .manager
-                        .attach(facts, Some(command.egress.session_token))
+                        .attach(facts, command.egress.map(|egress| egress.session_token))
                         .await,
                 ),
             )),

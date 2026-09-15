@@ -250,12 +250,15 @@ dependencies = [
  "agent_trigger",
  "ai_usage",
  "anyhow",
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "bot_id",
  "channel_sender",
  "channels",
  "chrono",
+ "codex_cloud_agents",
+ "codex_connection",
  "cursor_api_key",
  "cursor_cloud_agents",
  "dashmap",
@@ -294,6 +297,7 @@ dependencies = [
  "tracing-opentelemetry",
  "url",
  "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -321,6 +325,8 @@ dependencies = [
  "bot_id",
  "bots",
  "channels",
+ "codex_cloud_agents",
+ "codex_connection",
  "connection_gateway_client",
  "contacts",
  "cursor_api_key",
@@ -1598,6 +1604,8 @@ dependencies = [
  "calendar_events",
  "channels",
  "chrono",
+ "codex_cloud_agents",
+ "codex_connection",
  "comms_db_client",
  "connection_gateway_client",
  "contacts",
@@ -3653,6 +3661,9 @@ name = "codex_cloud_agents"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "agent_fold",
+ "agent_runtime_protocol",
+ "agent_session",
  "axum",
  "base64 0.22.1",
  "clap",
@@ -3662,9 +3673,31 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "sqlx",
  "tempfile",
  "tokio",
  "tokio-util",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "codex_connection"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "async-trait",
+ "aws-sdk-kms",
+ "chrono",
+ "codex_cloud_agents",
+ "macro_db_migrator",
+ "macro_user_id",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
  "uuid",
  "zeroize",
 ]

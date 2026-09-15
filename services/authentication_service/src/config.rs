@@ -53,6 +53,8 @@ maybe_env_vars! {
     /// process environment because `MacroConfig` does not fall back to it
     /// when `APP_SECRETS_JSON` is present.
     pub struct CursorApiKeyKmsKeyId;
+    /// Dedicated CMK for encrypted Codex OAuth envelopes, injected by infrastructure.
+    pub struct CodexOauthKmsKeyId;
     pub struct GaMeasurementId;
     pub struct GaApiSecret;
     pub struct MetaPixelId;
@@ -110,6 +112,8 @@ pub struct Config {
     /// read through [`Config::cursor_api_key_kms_key_id`], which refuses an
     /// absent or blank value at startup.
     pub cursor_api_key_kms_key_id: CursorApiKeyKmsKeyId,
+    /// Dedicated Codex envelope encryption CMK; absent deployments return 503 for Codex.
+    pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Stripe secret key
     pub stripe_secret_key: StripeSecretKey,
     /// The port to listen for HTTP requests on.
@@ -192,6 +196,19 @@ impl Config {
                 .as_ref()
                 .and_then(CursorApiKeyKmsKeyId::value),
         )
+    }
+
+    /// Resolve the dedicated CMK, including Pulumi-injected process environment.
+    pub(crate) fn codex_oauth_kms_key_id(&self) -> Option<String> {
+        let process = CodexOauthKmsKeyId::new();
+        nonblank_value(self.codex_oauth_kms_key_id.value())
+            .or_else(|| {
+                process
+                    .as_ref()
+                    .and_then(CodexOauthKmsKeyId::value)
+                    .and_then(|value| nonblank_value(Some(value)))
+            })
+            .map(str::to_owned)
     }
 
     /// Resolves Microsoft credentials, enforcing that all values are configured together.

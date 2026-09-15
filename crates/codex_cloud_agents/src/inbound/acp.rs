@@ -1,7 +1,7 @@
 //! ACP v1 transport and cloud event projection.
 use crate::domain::acp_session::{Outcome, SessionService, SessionSink, SessionStore};
-use crate::domain::cloud::{CloudConversation, CloudEvent};
-use crate::domain::{CredentialStore, OAuth};
+use crate::domain::cloud::CloudEvent;
+use crate::domain::runtime::CloudRuntime;
 use agent_client_protocol::schema::{ProtocolVersion, v1::*};
 use agent_client_protocol::{
     Agent, ByteStreams, Client, ConnectionTo, on_receive_notification, on_receive_request,
@@ -18,6 +18,26 @@ struct Sink {
 }
 impl SessionSink for Sink {
     fn emit(&self, event: &CloudEvent) -> Result<(), rootcause::Report> {
+        if event.method == "session/turn_complete" {
+            if self.replay {
+                use agent_runtime_protocol::domain::turn::{TurnCompleteNotification, TurnOutcome};
+                let outcome = match event.params["status"].as_str() {
+                    Some("completed") => TurnOutcome::Finished,
+                    Some("cancelled") => TurnOutcome::Cancelled,
+                    Some("failed") => TurnOutcome::Failed {
+                        message: "cloud assistant turn failed".into(),
+                    },
+                    _ => return Err(rootcause::report!("unknown terminal journal outcome")),
+                };
+                self.connection
+                    .send_notification(TurnCompleteNotification {
+                        session_id: self.session.clone(),
+                        outcome,
+                    })
+                    .map_err(|_| rootcause::report!("ACP client disconnected"))?;
+            }
+            return Ok(());
+        }
         if event.method == "user/message" && !self.replay {
             return Ok(());
         }
@@ -32,6 +52,32 @@ impl SessionSink for Sink {
         Ok(())
     }
 }
+struct RecoverySink {
+    session: SessionId,
+    reload: Option<tokio::sync::mpsc::UnboundedSender<SessionId>>,
+    changed: std::sync::atomic::AtomicBool,
+}
+impl SessionSink for RecoverySink {
+    fn emit(&self, _: &CloudEvent) -> Result<(), rootcause::Report> {
+        self.changed
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
+    }
+    fn recovered(&self) -> Result<bool, rootcause::Report> {
+        if !self.changed.load(std::sync::atomic::Ordering::SeqCst) {
+            return Ok(false);
+        }
+        if let Some(reload) = &self.reload {
+            reload
+                .send(self.session.clone())
+                .map_err(|_| rootcause::report!("ACP host disconnected during recovery"))?;
+            Ok(true)
+        } else {
+            eprintln!("Recovered Codex history is available through session/load");
+            Ok(false)
+        }
+    }
+}
 fn chunk(text: &str) -> ContentChunk {
     ContentChunk::new(ContentBlock::Text(TextContent::new(text)))
 }
@@ -43,9 +89,12 @@ fn project(event: &CloudEvent, text: &mut HashMap<String, String>) -> Vec<Sessio
         .unwrap_or("")
         .to_owned();
     match event.method.as_str() {
-        "user/message" => vec![SessionUpdate::UserMessageChunk(chunk(
-            p["text"].as_str().unwrap_or(""),
-        ))],
+        "user/message" => {
+            text.clear();
+            vec![SessionUpdate::UserMessageChunk(chunk(
+                p["text"].as_str().unwrap_or(""),
+            ))]
+        }
         "item/agentMessage/delta" => {
             if text.contains_key(&format!("done:{item_id}")) {
                 return Vec::new();
@@ -180,14 +229,14 @@ fn prompt_text(blocks: Vec<ContentBlock>) -> Result<String, Error> {
 /// terminal, filesystem, model selection and interactive approvals are unsupported.
 /// # Errors
 /// Returns SDK transport errors; individual operation errors are ACP responses.
-pub async fn serve<P, S, J, R, W>(
-    service: Arc<SessionService<P, S, J>>,
+pub async fn serve<Runtime, J, R, W>(
+    service: Arc<SessionService<Runtime, J>>,
     reader: R,
     writer: W,
+    reload: Option<tokio::sync::mpsc::UnboundedSender<SessionId>>,
 ) -> Result<(), Error>
 where
-    P: OAuth + CloudConversation + 'static,
-    S: CredentialStore + Send + Sync + 'static,
+    Runtime: CloudRuntime + 'static,
     J: SessionStore + 'static,
     R: tokio::io::AsyncRead + Send + 'static,
     W: tokio::io::AsyncWrite + Send + 'static,
@@ -200,7 +249,7 @@ where
                 responder.respond(
                     InitializeResponse::new(request.protocol_version.min(ProtocolVersion::V1))
                         .agent_info(Implementation::new("codex_acp", env!("CARGO_PKG_VERSION")))
-                        .agent_capabilities(AgentCapabilities::default().load_session(false)),
+                        .agent_capabilities(AgentCapabilities::default().load_session(true)),
                 )
             },
             on_receive_request!(),
@@ -215,7 +264,7 @@ where
                             "MCP servers are not supported by this cloud adapter",
                         ));
                     }
-                    match service.new_session() {
+                    match service.new_session().await {
                         Ok(id) => responder.respond(NewSessionResponse::new(SessionId::new(id))),
                         Err(e) => responder.respond_with_error(error(e)),
                     }
@@ -227,19 +276,35 @@ where
             {
                 let service = service.clone();
                 async move |request: LoadSessionRequest, responder, connection| {
+                    let reload = reload.clone();
                     if !request.mcp_servers.is_empty() {
                         return responder.respond_with_error(Error::new(
                             -32602,
                             "MCP servers are not supported by this cloud adapter",
                         ));
                     }
-                    match service.replay(
-                        &request.session_id.to_string(),
-                        &sink(connection.clone(), request.session_id, true),
-                    ) {
-                        Ok(()) => responder.respond(LoadSessionResponse::new()),
-                        Err(e) => responder.respond_with_error(error(e)),
-                    }
+                    let notifier = sink(connection.clone(), request.session_id.clone(), true);
+                    let service = service.clone();
+                    connection.spawn(async move {
+                        let recovery = match service
+                            .prepare_recovery(&request.session_id.to_string(), &notifier)
+                            .await
+                        {
+                            Ok(recovery) => recovery,
+                            Err(e) => return responder.respond_with_error(error(e)),
+                        };
+                        responder.respond(LoadSessionResponse::new())?;
+                        let capture = RecoverySink {
+                            session: request.session_id.clone(),
+                            reload,
+                            changed: std::sync::atomic::AtomicBool::new(false),
+                        };
+                        service
+                            .finish_recovery(&request.session_id.to_string(), recovery, &capture)
+                            .await
+                            .map(|_| ())
+                            .map_err(error)
+                    })
                 }
             },
             on_receive_request!(),
@@ -248,7 +313,7 @@ where
             {
                 let service = service.clone();
                 async move |request: PromptRequest, responder, connection| {
-                    let text = match prompt_text(request.prompt) {
+                    let _text = match prompt_text(request.prompt.clone()) {
                         Ok(text) => text,
                         Err(e) => return responder.respond_with_error(e),
                     };
@@ -256,7 +321,7 @@ where
                     let notifier = sink(connection.clone(), request.session_id.clone(), false);
                     connection.spawn(async move {
                         match service
-                            .prompt(&request.session_id.to_string(), text, &notifier)
+                            .prompt(&request.session_id.to_string(), request.prompt, &notifier)
                             .await
                         {
                             Ok(outcome) => {

@@ -2,9 +2,7 @@
 
 use super::{OpenAi, decode};
 use crate::domain::Credentials;
-use crate::domain::cloud::{
-    CloudId, CloudTasks, CreatedTask, Launch, TaskSnapshot, TurnId, TurnSnapshot,
-};
+use crate::domain::cloud::{CloudId, CloudTasks, CreatedTask, Launch, TaskSnapshot, TurnId};
 use serde::Deserialize;
 
 mod conversation;
@@ -12,6 +10,7 @@ mod stream;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
 use serde_json::Value;
 
 impl CloudTasks for OpenAi {
@@ -55,8 +54,8 @@ impl CloudTasks for OpenAi {
                     "task observation failed (network/timeout); remote work may still be running"
                 )
             })?;
-        let body: Value = decode(response, "read task details").await?;
-        project(task, &body)
+        let body = super::native_body(response, "read task details").await?;
+        TaskSnapshot::from_native(task, &body)
     }
 }
 
@@ -73,64 +72,9 @@ struct CreateResponse {
     assistant_turn_id: Option<String>,
 }
 
+#[cfg(test)]
 fn project(task: &CloudId, body: &Value) -> Result<TaskSnapshot, rootcause::Report> {
-    if body.pointer("/task/id").and_then(Value::as_str) != Some(task.as_str()) {
-        return Err(rootcause::report!(
-            "task details identity mismatch or unexpected response shape"
-        ));
-    }
-    let turns = [
-        "current_user_turn",
-        "current_assistant_turn",
-        "current_diff_task_turn",
-    ]
-    .into_iter()
-    .filter_map(|source| {
-        let turn = body.get(source)?.as_object()?;
-        let items = turn.get("output_items").and_then(Value::as_array);
-        let messages = items
-            .into_iter()
-            .flatten()
-            .filter(|item| item.get("type").and_then(Value::as_str) == Some("message"))
-            .flat_map(|item| {
-                item.get("content")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-            })
-            .filter(|block| block.get("content_type").and_then(Value::as_str) == Some("text"))
-            .filter_map(|block| block.get("text").and_then(Value::as_str).map(str::to_owned))
-            .collect();
-        let output_types = items
-            .into_iter()
-            .flatten()
-            .filter_map(|item| item.get("type").and_then(Value::as_str).map(str::to_owned))
-            .collect();
-        let has_diff = items
-            .into_iter()
-            .flatten()
-            .any(|item| item.get("diff").is_some() || item.get("output_diff").is_some());
-        Some(TurnSnapshot {
-            source: source.to_owned(),
-            id: turn.get("id").and_then(Value::as_str).map(str::to_owned),
-            messages,
-            output_types,
-            has_diff,
-        })
-    })
-    .collect();
-    Ok(TaskSnapshot {
-        task_id: task.clone(),
-        title: body
-            .pointer("/task/title")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
-        assistant_status: body
-            .pointer("/current_assistant_turn/turn_status")
-            .and_then(Value::as_str)
-            .map(str::to_owned),
-        turns,
-    })
+    TaskSnapshot::from_native(task, &body.to_string())
 }
 
 fn receipt(body: CreateResponse) -> Result<CreatedTask, rootcause::Report> {

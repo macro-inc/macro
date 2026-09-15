@@ -1,6 +1,5 @@
-//! Driven adapters for the standalone probe.
+//! Cloud transport and persistence adapters.
 
-pub mod json_store;
 pub mod openai;
-/// Private local session journal for the standalone ACP server.
-pub mod session_store;
+#[cfg(feature = "postgres")]
+pub mod postgres_journal;

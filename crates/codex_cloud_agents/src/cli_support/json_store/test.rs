@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::Secret;
+use codex_cloud_agents::domain::Secret;
 use std::os::unix::fs::{PermissionsExt as _, symlink};
 
 fn credentials() -> Credentials {
@@ -53,7 +53,7 @@ fn lock_excludes_second_command_and_releases_on_drop() {
     let first = JsonStore::open(&directory).unwrap();
     assert!(JsonStore::open(&directory).is_err());
     drop(first);
-    assert!(JsonStore::open(&directory).is_ok());
+    JsonStore::open(&directory).expect("dropping the first store releases its lock immediately");
 }
 
 #[test]
@@ -86,4 +86,25 @@ fn refuses_credential_symlink_and_withholds_corrupt_file_contents() {
     std::fs::write(&path, "secret-marker invalid JSON").unwrap();
     let error = store.load().err().unwrap().to_string();
     assert!(!error.contains("secret-marker"));
+}
+
+#[test]
+fn drop_releases_lock_even_while_a_duplicate_descriptor_survives() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().join("state");
+    let first = JsonStore::open(&directory).unwrap();
+    // A clone shares the open-file description just as fork inheritance does,
+    // reproducing the lifetime race without forking a multithreaded test process.
+    let inherited = first.lock.try_clone().unwrap();
+    assert!(JsonStore::open(&directory).is_err());
+    drop(first);
+    let second =
+        JsonStore::open(&directory).expect("store drop unlocks despite the surviving duplicate");
+    drop(inherited);
+    assert!(
+        JsonStore::open(&directory).is_err(),
+        "the old descriptor must not release the new owner's lock"
+    );
+    drop(second);
+    JsonStore::open(&directory).expect("the second owner releases its lock");
 }

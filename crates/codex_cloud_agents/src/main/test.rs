@@ -14,10 +14,7 @@ fn cli_definition_and_documented_login_invocation_are_valid() {
     assert_eq!(args.state_dir, PathBuf::from("/tmp/private-probe"));
     assert!(matches!(args.command, Command::Login));
     let defaults = Args::try_parse_from(["codex-cloud-probe", "login"]).unwrap();
-    assert_eq!(
-        defaults.state_dir,
-        PathBuf::from(codex_cloud_agents::DEFAULT_STATE_DIR)
-    );
+    assert_eq!(defaults.state_dir, PathBuf::from(DEFAULT_STATE_DIR));
 }
 
 #[tokio::test]

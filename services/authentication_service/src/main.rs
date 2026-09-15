@@ -438,6 +438,25 @@ async fn main() -> anyhow::Result<()> {
         notification_ingress: notification_ingress_service.clone(),
     };
 
+    let codex_connection = if let Some(key_id) = config.codex_oauth_kms_key_id() {
+        let cipher = Arc::new(codex_connection::outbound::cipher::EnvelopeCipher::new(
+            aws_sdk_kms::Client::new(&aws_config),
+            key_id,
+        )?);
+        let repository = Arc::new(
+            codex_connection::outbound::postgres::PostgresRepository::new(db.clone(), cipher),
+        );
+        let provider = codex_cloud_agents::outbound::openai::OpenAi::new()
+            .map_err(|_| anyhow::anyhow!("failed to initialize Codex OAuth client"))?;
+        Some(
+            Arc::new(codex_connection::domain::ConnectionServiceImpl::new(
+                repository, provider,
+            )) as Arc<dyn codex_connection::domain::ConnectionService>,
+        )
+    } else {
+        None
+    };
+
     let server_result = api::setup_and_serve(
         ApiContext {
             db,
@@ -445,6 +464,7 @@ async fn main() -> anyhow::Result<()> {
             auth_client: Arc::new(auth_client),
             microsoft_token_cipher,
             cursor_api_key_cipher,
+            codex_connection,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),

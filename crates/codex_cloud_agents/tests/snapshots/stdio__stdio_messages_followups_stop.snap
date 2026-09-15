@@ -1,5 +1,6 @@
 ---
 source: crates/codex_cloud_agents/tests/stdio.rs
+assertion_line: 334
 expression: "normalize(&json!({\"initialize\":init,\"new\":new,\"first\":first,\"followup\":second,\"stop\":stopped}),\n&session)"
 ---
 {
@@ -9,7 +10,7 @@ expression: "normalize(&json!({\"initialize\":init,\"new\":new,\"first\":first,\
     "result": {
       "protocolVersion": 1,
       "agentCapabilities": {
-        "loadSession": false,
+        "loadSession": true,
         "promptCapabilities": {
           "image": false,
           "audio": false,

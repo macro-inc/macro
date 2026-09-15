@@ -370,6 +370,9 @@ impl ContainerManager for DaytonaContainerManager {
             egress,
             ..
         } = command;
+        let egress = egress.ok_or_else(|| {
+            HarnessError::Container("sandbox runtime requires egress configuration".into())
+        })?;
         // `ANTHROPIC_API_KEY` is what activates opencode's `anthropic`
         // provider — with `enabled_providers` pinned in
         // `container/opencode.json`, it is the sandbox's only model source.

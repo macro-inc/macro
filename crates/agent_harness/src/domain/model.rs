@@ -64,6 +64,8 @@ pub enum AgentKind {
     SandboxedCoder,
     /// A Cursor cloud agent, served over an in-process ACP pipe.
     Cursor,
+    /// A per-owner Codex cloud conversation served over ACP.
+    CodexCloud,
     /// The in-process (in-memory) "macro(new)" bot, served by `agent_inmem`.
     InMemory,
     /// The bot's operator hosts the runtime and dials the gateway; no
@@ -79,6 +81,8 @@ impl AgentKind {
             Self::SandboxedCoder
         } else if bot == bot_id::CURSOR_BOT_ID {
             Self::Cursor
+        } else if bot == bot_id::CODEX_BOT_ID {
+            Self::CodexCloud
         } else if bot == bot_id::MACRO_NEW_BOT_ID {
             Self::InMemory
         } else {
@@ -91,6 +95,7 @@ impl AgentKind {
     pub fn from_harness(harness: &str) -> Self {
         match harness {
             "cursor" => Self::Cursor,
+            "codex-cloud" => Self::CodexCloud,
             "in-memory" | "macro-inmem" => Self::InMemory,
             // Registered macrod harnesses are the deliberate external case:
             // the agent's `harness_id` names whose daemon serves it.
@@ -330,12 +335,12 @@ pub struct SpawnContainer {
     pub kind: AgentKind,
     /// Compute tier to request from the provider.
     pub size: SandboxSize,
-    /// How the sandbox reaches anything outside itself.
+    /// How the sandbox reaches anything outside itself; absent for provider-managed cloud work.
     ///
     /// Carries the repository implicitly: the sandbox clones from the proxy,
     /// which reads the repository off the session's own grant, so no provider
     /// needs to be told what it is.
-    pub egress: SandboxEgress,
+    pub egress: Option<SandboxEgress>,
 }
 
 /// Everything a sandbox needs to make an authenticated outbound call, and

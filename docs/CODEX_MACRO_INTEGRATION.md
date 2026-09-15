@@ -1,185 +1,177 @@
-# Proposed `@codex` integration
+# Codex cloud in Macro
 
-Status: design sketch, 2026-09-15. This does not register a bot or deploy an integration.
-Read alongside [the feasibility scope](CODEX_CLOUD_ACP_PLAN.md),
-[Cursor comparison](CODEX_CURSOR_ACP_COMPARISON.md), and
-[live probes](CODEX_CLOUD_LIVE_PROBES.md). The companion reports distinguish source-backed operations from live observations.
+Macro's global `@codex` bot runs tasks in the user's Codex cloud environment.
+The implementation is in this branch; deploying the services, schema and web app
+is required before it is available in a shared environment.
 
-## Desktop bundle discovery
+## User flow
 
-The verified official desktop package `26.908.70816` adds concrete source evidence
-beyond the CLI client: follow-up task submission, task cancellation, turn/history
-reads, and a per-turn SSE endpoint requesting `thread_event` and `log` items.
-See [desktop transport findings](CODEX_DESKTOP_TRANSPORT.md). Live probes verified OAuth access to SSE, follow-up submission on the same task,
-and remote cancellation. Five assistant text deltas were received while the
-follow-up was still running. SSE closed without a captured terminal event on cancel,
-so task/turn status must resolve stream EOF. Full event translation and recovery fidelity still need tests. The gates below describe what must be proven,
-not a claim that these operations are absent. Final-only observations apply to the
-older task-details polling path, not the newly discovered SSE transport.
+1. Open **Settings → Harness → Codex** and choose **Connect with ChatGPT**.
+2. Open the official verification page and enter the displayed device code.
+   Macro polls the owner-bound attempt until it completes, expires or is cancelled.
+3. Select a cloud environment and branch and save the configuration. Repositories
+   must already be configured in Codex on the web.
+4. Choose Codex in the agent composer or mention `@codex` in a channel. The first
+   prompt creates a remote task; later messages continue the same task. Macro
+   displays streamed assistant text, command activity and a link to the cloud task.
+5. **Stop** requests cancellation at the provider. Disconnect in Harness settings
+   removes Macro's credentials; reconnecting creates a new connection identity.
 
-## Product behavior
+Deleting a Macro session removes its local mapping; use **Stop** first to cancel
+running cloud work. Disconnecting credentials also does not cancel remote tasks.
 
-A globally discoverable `@codex` bot opens a Macro agent session. The session owner
-connects their ChatGPT account and selects a Codex cloud environment and branch.
-Macro submits the prompt, displays a provider link and progress state, and delivers
-whatever assistant text and artifacts the provider exposes. OpenAI runs the work
-in its cloud environment. No Macro sandbox is provisioned for this runtime.
+The login uses the source-backed Codex device authorization flow. The provider
+identifies its registered OAuth client as Codex. Macro does not have a separately
+registered OpenAI OAuth client. This is device authorization through a browser,
+not a redirect/callback OAuth flow.
 
-The global bot is an identity, not a shared subscription. Every session resolves
-its owner's connection. Another participant must not silently substitute their
-credentials or cause work on the owner's account without the existing session
-write/control authorization checks.
+## Ownership and storage
 
-Initial polling UX: queued/running/completed status, final answer, and provider link.
-Updated target after desktop discovery: incremental assistant text from the verified
-SSE route, same-task follow-up and remote cancellation, with a durable event journal.
-Do not promise terminal streaming, interactive approvals, or continuous text before
-those capabilities are observed. The initial completed test and two additional bounded probes exposed text only at
-completion, including a prompt explicitly requesting progress messages. A recovered
-shell failure appeared as final prose, not structured tool events.
-A provider output item saying a PR exists should become a verified structured
-artifact only when its URL and metadata are actually returned and validated;
-assistant prose is not authoritative evidence that a PR was created.
+The global bot has stable ID `00000000-0000-0000-0000-00000000c0de` and runtime slug
+`codex-cloud`. It does not own a shared subscription. The runtime resolves the
+Macro session owner's connection before each provider operation and retains the
+existing session write/control authorization rules.
 
-## Existing code to extend
+`crates/codex_connection` owns login attempts, refresh, disconnect and environment
+selection. Its domain service uses replaceable OAuth, repository and cipher ports.
+The authentication service exposes user-authenticated `/codex` routes; credentials
+are never included in API responses. Only the service composition roots construct
+the OpenAI, PostgreSQL and KMS adapters.
 
-| Concern | Existing anchor | Proposed change |
-| --- | --- | --- |
-| Global identity | `crates/bot_id/src/lib.rs`, `SYSTEM_BOTS` | Add a stable `CODEX_BOT_ID`, name `Codex`, handle `codex`, `has_agent: true`. No bots-table seed row: system identities already live in code. |
-| Runtime classification | `crates/agent_harness/src/domain/model.rs`, `AgentKind` | Add `CodexCloud`; resolve fixed identity and persisted `codex-cloud` harness slug consistently. |
-| Trigger policy | `crates/agent_trigger/src/domain/service.rs` | Reuse global system-agent availability and user/session authorization. Verify mention/reply behavior explicitly. |
-| Composition | `services/agent_harness_service/src/main.rs` | Register fixed runtime and wire a Codex manager plus connection service. |
-| Provider routing | `crates/agent_harness/src/outbound/routing.rs` | Route spawn/resume/token/teardown consistently to Codex; reject sandbox resize. Avoid repurposing the Cursor branch. |
-| ACP transport | `crates/agent_harness/src/outbound/cursor/pipe.rs` | Extract only the provider-neutral in-process pipe if reusable; implement Codex semantics independently. |
-| Durable provider mapping | `crates/agent_session/src/domain/model.rs`, `ExternalSession` | Store provider `codex-cloud`, cloud task ID, title and web URL. Persist environment, branch and connection identity in an explicit owned configuration. |
-| Account settings | `apps/web/src/features/settings/Harness.tsx` | Add connect/disconnect, connected account/workspace metadata, environment selection, and actionable expired-login states. |
-| Mention identity | `apps/web/src/lib/core/constant/cursorAgent.ts`, `features/channel/macroAi.ts`, `features/channel/Input/ChannelInput.tsx` | Add Codex identity and gated mention entry using the existing pattern. |
-| Session composer | `apps/web/src/features/block-agent/component/ComposeAgentSession.tsx` | Add Codex selection and environment/branch input; hide unsupported model/tool options. |
-| Names and provider links | `apps/web/src/lib/queries/bots/first-party-bot-name.ts`, `features/block-agent/context/AgentSessionContext.tsx` | Resolve Codex display name; render provider links by stored provider rather than a Cursor-only identity check. |
+The `codex_connections` table stores an encrypted JSON envelope keyed by Macro
+user ID. A fresh AES-256-GCM data key protects each write; KMS protects that key.
+Both KMS encryption context and AES authenticated data bind the state to its owner,
+purpose and version. A PostgreSQL row lock serializes login exchange and refresh
+across replicas. Rotated credentials are saved before another provider operation.
 
-Do not copy Cursor's API-key storage implementation literally: OAuth rotation,
-expiry and account binding require a connection service. Also do not enable
-`OwnerConnections` MCP transport merely because Cursor accepts it. Codex cloud MCP
-configuration from our task-creation surface has not been demonstrated.
+The long-lived connection payload contains the access token and refresh token,
+plus account identity and expiry metadata. Pending authorization additionally
+holds the device authorization ID and user code; finishing or cancelling the
+attempt clears those values. ChatGPT passwords and browser cookies are not used.
 
-## Connection boundary
+`codex_cloud_sessions` stores task/turn identity, account and connection generation,
+environment, branch and uncertain-write state. `codex_journal_input` separately
+appends original prompts, raw SSE records, polling observations and lifecycle facts
+in session sequence order, before translating them into ACP output. Both tables
+belong to the Macro session and cascade on deletion. Reads and writes check its
+activated manager fence under the same row lock used by takeover; appends also
+compare the expected sequence. Old attachments cannot adopt a newer generation.
+The environment and branch recorded at creation remain attached to that session.
 
-Proposed owning domain: a Codex connection service with ports for credential
-storage, encryption and OpenAI OAuth. The harness calls the service for its session
-owner; it must not construct or import the connection crate's outbound adapters.
-The service composition root owns database and encryption wiring.
+The adapter advertises `session/load`, without `session/resume`. Macro's existing
+ACP fold replaces history only after a successful load. Replay uses the same
+native-input reducer as live delivery, validates the complete candidate before
+publishing, and refuses incomplete history or uncertain submissions. It never
+retries a cloud launch during recovery.
 
-- Start with the demonstrated device-code flow for hosted Macro. A signed-in Macro
-  user starts an expiring login attempt, completes OpenAI verification, and checks
-  attempt status. Bind attempts to that user and never expose returned tokens.
-- Browser PKCE with a localhost callback is source-backed for a local binary.
-  It does not establish that the shared Codex client accepts a Macro HTTPS callback.
-  Treat branded OAuth registration and hosted browser callbacks as separate work.
-- Store encrypted access/refresh credentials per Macro user and connection identity;
-  keep expiry and safe account/workspace display metadata separately. The prototype's
-  local plaintext JSON remains a development adapter, not the production store.
-- Serialize refresh rotation across replicas with a lease or versioned compare-and-swap;
-  persist the rotated token before use. Pin sessions to the connection/account identity.
-  Reconnecting another account must not silently retarget an existing session.
-- Disconnect removes local authorization to make new provider requests. It does not
-  mean the provider revoked the token or stopped an already-running task.
-- Environment discovery and selection run under that same connection. Revalidate
-  visibility at launch; a repository label alone is not a stable environment ID.
-- Surface missing connection, expired authorization and unavailable environments as
-  actionable user states, not generic provisioning failures.
+Recovery records historical provider events silently and requests Macro's generic
+history replacement. New prompts wait until that load succeeds. Replay places
+late records inside their original turn and reconciles fallback text before
+closing the turn, so late history does not create another assistant response.
 
-## Runtime and persistence
+The standalone `codex_acp` and `codex-cloud-probe` binaries retain their private
+local JSON configuration for Zed/probe use. Those stores and fixed paths are
+private demo-binary helpers, not exported library adapters. They support one
+current format, without compatibility readers. Hosted Macro sessions use the
+per-user PostgreSQL connection and journal, never those local credentials.
 
-```mermaid
-flowchart TD
-    A[User mentions @codex] --> B[Existing trigger and session authorization]
-    B --> C[Persist Macro session and owner]
-    C --> D[Codex cloud runtime manager]
-    D --> E[Owner connection service]
-    D --> F[Codex ACP adapter]
-    F --> G[Cloud task API]
-    G --> H[Snapshot observations]
-    H --> I[Durable observation journal]
-    I --> J[ACP updates and Macro session UI]
-```
+## Runtime capabilities
 
-The diagram is proposed architecture, not implemented behavior. Keep the existing
-probe's domain and HTTP adapter as the source of demonstrated operations. Add
-provider ports only for operations actually observed in source and verified with
-fixtures/live tests; do not invent a wire endpoint to satisfy an ACP method.
-
-Persist a launch intent before submission, then the returned task mapping before
-acknowledging successful creation. If the provider accepted a task but the response
-was lost, record an unknown outcome and require reconciliation; do not blindly
-retry. A local intent ID alone does not give provider-side idempotency.
-
-Use a replica ownership fence and append journal records before client delivery.
-Checkpoint the task ID, turn ID, terminal state and delivered output identity.
-Snapshot polling at one-second intervals is suitable for the current experiment;
-production needs configurable intervals, bounded concurrency, transient-read
-backoff and account-level rate limits. Never apply a read-retry policy to creation.
-
-Normalize duplicate source fields by turn ID: the observed final response repeated
-the same turn under `current_assistant_turn` and `current_diff_task_turn`. A journal
-must not emit two answers. Preserve snapshot text replacements as revisions, not
-invented append-only deltas. If text becomes incrementally available, only derive
-an appended suffix when stable identity and an exact prefix comparison support it.
-
-On worker restart, recover the mapping and resume reads. Do not launch another task
-because the in-process ACP pipe was lost. Resume and replay are distinct: restoring
-observation is possible with a task ID, while complete historical conversation replay
-requires retained journal data or an actual provider history surface.
-
-## ACP and product release gates
-
-Version boundary: the current Cursor integration uses `schema::v1` from the pinned
-ACP dependency. Design against that deployed protocol first; do not silently adopt
-newer ACP lifecycle requirements or treat current web documentation as the pinned
-implementation. The comparison report covers the version differences.
-
-The original single-prompt experiment can map `session/new` to local session allocation,
-`session/prompt` to create-and-poll, and final text to `session/update`. The newly verified desktop transport now supplies continuation and cancellation;
-full compatibility still depends on correct adapter implementation and tests.
-
-| Feature | First integration policy |
+| Surface | Behavior |
 | --- | --- |
-| Initialization | Advertise only implemented and tested capabilities. |
-| Text prompts | Supported by observed task creation; select environment and branch first. |
-| Final assistant text | Supported by completed task snapshots; deduplicate repeated turn fields. |
-| Status | Show observed state; avoid presenting synthetic status as model-authored text. |
-| Follow-up | Live verified using the desktop-derived follow-up body. Persist task and parent turn; test ordering and ambiguous submission recovery. |
-| Cancellation | Live verified remote cancel and terminal cancelled state. Wire ACP cancellation to it, with race/timeout tests. |
-| Reconnect/load | Local journal replay plus provider mapping; advertise only after crash/replay tests. |
-| Tools/terminal/permissions | SSE event families are available; inventory structured tool payloads and permission response support before advertising interactive controls. |
-| Models/modes | Do not copy Cursor's model picker without a Codex discovery/selection surface. |
-| Images, embedded context, MCP | Explicitly reject or omit unsupported inputs; do not silently drop content. |
-| Sandbox management | Provider-managed; no Macro resize/exec/preview controls unless a separate surface is verified. |
+| Launch | Creates a Codex cloud task from the selected environment and branch. |
+| Follow-up | Continues the existing task using its latest assistant turn. |
+| Streaming | Uses the source-backed per-turn SSE route and reconciles final turn state. |
+| Stop | Requests remote cancellation; terminal state comes from provider evidence. |
+| Load | Replaces history from the native journal and observes an unfinished turn; no `session/resume`. |
+| Commands | Translates exposed command events to ACP tool activity. |
+| Elicitation/approval | Unsupported; requests cancellation and reports the limitation. |
+| Models, Macro MCP, sandbox resize | Not advertised for this runtime. |
 
-If follow-up or remote cancellation has no accessible surface, ship a clearly
-bounded cloud-task experience rather than treating an incomplete ACP adapter as a
-normal interactive agent. This remains useful: users can start work and receive
-results in Macro, with the web link for provider-only controls.
+Cloud execution happens in OpenAI's sandbox. See
+[desktop transport evidence](CODEX_DESKTOP_TRANSPORT.md),
+[live probe results](CODEX_CLOUD_LIVE_PROBES.md) and
+[ACP verification](CODEX_ACP_VERIFICATION.md) for the tested protocol surfaces.
+These endpoints were discovered from client source and verified experimentally;
+they are not a documented third-party Codex cloud API contract.
 
-## Implementation slices and tests
+## Repository selection follow-up
 
-1. **Connection service:** per-owner isolation, login expiry/cancellation, token
-   rotation races, account changes, disconnect behavior, and redaction. Schema
-   migrations must use `sqlx migrate add`; no migrations are included in this sketch.
-2. **Cloud adapter:** fixture tests for each verified request and response; unknown
-   statuses, final-only text, duplicate turns, output revisions, missing fields,
-   transient reads, ambiguous creation and malformed artifact URLs.
-3. **Durable manager:** crash before/after creation acknowledgment, atomic mapping,
-   competing replica fences, restart during polling, replay without duplicate answer,
-   credentials expiring mid-task, and zero accidental re-creation on resume.
-4. **Global bot wiring:** stable identity resolution, mention-to-runtime routing,
-   missing-account message, per-owner credential lookup, cross-user session controls,
-   and consistent spawn/resume/teardown dispatch.
-5. **Frontend:** gated mention/composer entries, connection and environment states,
-   provider links, terminal failure and unsupported controls. Exercise in a browser
-   and update the relevant `docs/AGENT_GUIDE` pages with the implementation.
-6. **Release:** compare actual behavior against ACP obligations, run affected package
-   tests and `just check`, then an end-to-end cloud test on the disposable repository.
+The current implementation uses the environment and branch saved in Harness
+settings. To add automatic selection, extract the decision logic from
+`agent_harness::outbound::cursor::HaikuRepositoryChooser` and supply candidates
+from the owner's Codex environments instead of Macro's GitHub installations.
+Reuse prompt and recent-session context; keep provider-specific resolution small.
 
-No production code, bot identity, database changes, or frontend flows are introduced
-by this document. The live experiments and compatibility review determine the final
-release boundary.
+The desktop's environment response includes `repos` and `repo_map`, with
+`repository_full_name`, `clone_url`, and `default_branch` for each repository.
+The current transport intentionally exposes only environment ID and label; add
+that safe repository subset before enabling automatic selection. Do not infer
+repository identity from a display label. The cloned CLI's
+`cloud-tasks/src/env_detect.rs` also lists environments by repository and returns
+a list, so a repository is not a unique environment key.
+
+Keep environment IDs as launch targets. An explicit selection wins; an ambiguous
+model choice or multiple environments for one repository needs a picker or an
+explicit saved default. Codex needs a configured environment, so Cursor's
+no-repository fallback cannot be copied. Preserve the chosen target throughout
+the session. Automatic selection is a follow-up, not part of this implementation.
+
+## Configuration and rollout
+
+Apply the three additive migrations before releasing the services:
+
+- `20260910144347_codex_connections.sql`
+- `20260910144348_codex_cloud_session_journal.sql`
+- `20260910144349_codex_cloud_native_inputs.sql`
+
+The authentication stack owns a dedicated rotating KMS key with alias
+`alias/authentication-service-codex-oauth-<stack>`. Its key policy grants the auth
+and harness roles `kms:GenerateDataKey` and `kms:Decrypt`. The existing harness
+role output supplies the principal; the shared stable alias avoids adding a
+reverse stack dependency. Deploy the authentication stack before the updated
+harness stack so the alias and grants exist before use.
+
+Both services read `CODEX_OAUTH_KMS_KEY_ID` through typed configuration. Pulumi
+injects the key ARN into authentication and the alias into the harness; it is a
+resource identifier, not a user credential. It can also be supplied through the
+normal Doppler configuration. Missing configuration keeps unrelated service
+features running and makes Codex report that its connection service is unavailable.
+
+LocalStack provisions `alias/macro-local-codex-oauth`; the local runner injects
+that alias into both services. Existing keys and credentials are retained when
+local resources are reprovisioned. No deployment-wide ChatGPT tokens are needed.
+
+## Verification
+
+Run affected package tests from the repository root inside Nix with
+`SQLX_OFFLINE` unset and an explicitly selected local `DATABASE_URL`. Include
+`codex_cloud_agents --features postgres`, `codex_connection`, `agent_harness`,
+`bot_id` and `xtask_local`, plus the authentication/harness service checks.
+Refresh root SQLx metadata with the workspace prepare helper, including tests.
+
+Frontend tests cover device-login states, environment configuration, disconnect,
+composer gating and channel mentions. Browser verification uses a separate
+Chromium page with mocked new authentication routes when the shared dev backend
+has not yet deployed them. That verifies rendering and interactions; a real
+account login and cloud run through the deployed Macro stack remains a distinct
+release check. Keep real credentials out of fixtures and snapshots.
+
+### Results for this implementation
+
+- Connection lifecycle: 9 tests, including PostgreSQL concurrency and owner isolation.
+- Cloud/ACP: 51 library, 17 private CLI and 4 stdio tests, including recorded snapshots,
+  restart without relaunch, immediate follow-up after load, and ownership takeover.
+  Six served ACP-to-fold tests cover replacement, cancellation, incomplete loads,
+  and late historical records remaining in the original turn.
+- Harness: 204 package tests plus service suites and named/channel-triggered Codex
+  startup tests that forbid sandbox provisioning and MCP injection.
+- Authentication: 102 existing service tests and 4 new HTTP/DTO tests.
+- Frontend: 42 tests; mocked Chromium settings, composer and account-switch flows.
+- Local runner: 95 tests. Infrastructure type check, root `just check`, workspace
+  SQLx preparation with tests, and Codex crate clippy with warnings denied passed.
+
+The full web TypeScript check still reports two existing scroll-deferral errors
+outside the changed files. The default local database had an unrelated missing
+migration in its recorded history; schema and SQLx tests used a separate local
+database migrated from the complete repository history.

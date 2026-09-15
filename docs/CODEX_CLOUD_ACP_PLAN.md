@@ -1,31 +1,25 @@
 # Codex cloud sessions through Macro and ACP
 
-Status: feasibility work in progress, 2026-09-15. Source and documentation review
-complete; direct device login succeeded and an authenticated cloud environment
-request initially returned `[]`. After environment setup, our binary successfully
-created a read-only cloud task and observed `in_progress` snapshots. Initial running
-snapshots exposed no output items. Completion and streaming are under investigation;
-remote cancellation has not been probed. This document scopes the proof of concept and the production
-integration separately. It does not assert that unknown provider operations work.
+Status: implemented in this branch, 2026-09-15; not deployed. This document keeps
+the original feasibility scope and acceptance criteria. For current implementation,
+configuration and rollout, read [the Macro integration](CODEX_MACRO_INTEGRATION.md).
 
-Implementation update: the first authentication probe now exists in
-[`crates/codex_cloud_agents`](../crates/codex_cloud_agents/README.md). Per the
-requested direction, it implements OAuth directly in our own binary and writes
-our own private JSON file; it does not use the Codex subprocess baseline proposed
-below. Login/status/environment discovery, explicit task launch, snapshot inspection
-and bounded snapshot polling are built with 25 passing tests. Live task creation and status reads
-have succeeded against an environment in the connected workspace. Snapshot polling is not proof
-of streaming support; the task/streaming probes remain pending.
+Our own [`codex-cloud-probe` and `codex_acp` binaries](../crates/codex_cloud_agents/README.md)
+implement OAuth directly and store private local JSON credentials. Live probes
+verified task creation, SSE text/tool events, same-task follow-ups and remote
+cancellation. Recorded-provider and byte-stream snapshots cover the standalone
+adapter; [verification evidence](CODEX_ACP_VERIFICATION.md) separates those tests
+from provider observations.
 
-Standalone implementation update: `codex_acp` now serves ACP v1 over stdio with
-hardcoded test environment and separate direct-OAuth credentials. SSE text/tool
-updates, follow-ups, remote cancellation and private session journals are built.
-48 tests, including recorded-provider and byte-stream snapshots, pass; live stdio
-message/follow-up/cancel and final rebuilt-binary replay were verified. Automatic
-load capability and structured elicitation replies remain unadvertised/unsupported.
-See [Zed setup](../crates/codex_cloud_agents/ACP.md) and
-[verification evidence](CODEX_ACP_VERIFICATION.md). Macro bot integration below
-remains a design, not deployed behavior.
+The hosted integration adds a global `@codex` bot, ChatGPT device authorization in
+Harness settings, per-user encrypted credentials, environment/branch selection,
+and PostgreSQL session journals with manager fencing. `session/load` is advertised
+and tested for replay and observation without relaunch; immediate follow-ups wait
+for recovery. Structured elicitation replies remain unsupported. Earlier references
+below to polling-only limitations describe the initial investigation, before the
+Desktop transport and live SSE probes.
+
+See [Zed setup](../crates/codex_cloud_agents/ACP.md) for the standalone binary.
 
 ## 1. Product outcome
 

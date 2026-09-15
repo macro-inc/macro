@@ -207,6 +207,9 @@ impl ContainerManager for LocalContainerManager {
             egress,
             ..
         } = command;
+        let egress = egress.ok_or_else(|| {
+            HarnessError::Container("sandbox runtime requires egress configuration".into())
+        })?;
 
         if !self
             .docker

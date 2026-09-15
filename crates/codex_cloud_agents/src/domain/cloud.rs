@@ -8,6 +8,13 @@ use serde::Serialize;
 #[serde(transparent)]
 pub struct CloudId(String);
 
+impl<'de> serde::Deserialize<'de> for CloudId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::new(<String as serde::Deserialize>::deserialize(deserializer)?)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
 impl CloudId {
     /// Accept only an opaque alphanumeric identifier with hyphens/underscores.
     pub fn new(value: String) -> Result<Self, rootcause::Report> {
@@ -66,8 +73,11 @@ pub struct CreatedTask {
 }
 
 /// A projected task-details snapshot, not a complete conversation history.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct TaskSnapshot {
+    /// Original successful provider response for native journaling; omitted from CLI output.
+    #[serde(skip)]
+    pub native: Option<String>,
     /// Exact requested task.
     pub task_id: CloudId,
     /// Provider title, when present.
@@ -89,7 +99,7 @@ impl TaskSnapshot {
 }
 
 /// Output available in one current turn at the time of a read.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub struct TurnSnapshot {
     /// Source field, such as `current_assistant_turn`.
     pub source: String,
@@ -156,6 +166,13 @@ impl<Provider: OAuth + CloudTasks, Store: CredentialStore> Probe<Provider, Store
 #[serde(transparent)]
 pub struct TurnId(String);
 
+impl<'de> serde::Deserialize<'de> for TurnId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::new(<String as serde::Deserialize>::deserialize(deserializer)?)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
 impl TurnId {
     /// Validate an opaque turn ID before placing it in a URL.
     pub fn new(value: String) -> Result<Self, rootcause::Report> {
@@ -186,9 +203,13 @@ pub struct CloudEvent {
     pub params: serde_json::Value,
 }
 
+mod native;
+mod snapshot;
+pub use native::NativeRecord;
+
 /// Owned event subscription; dropping it stops local observation only.
 pub type CloudEventStream =
-    std::pin::Pin<Box<dyn futures::Stream<Item = Result<CloudEvent, rootcause::Report>> + Send>>;
+    std::pin::Pin<Box<dyn futures::Stream<Item = Result<NativeRecord, rootcause::Report>> + Send>>;
 
 /// Continuation and observation capabilities evidenced by the official desktop client.
 pub trait CloudConversation: CloudTasks {

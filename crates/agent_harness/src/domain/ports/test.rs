@@ -77,7 +77,7 @@ async fn container_session_runs_and_logs_end_to_end() {
             session_id: id,
             kind: AgentKind::SandboxedCoder,
             size: agent_session::domain::model::SandboxSize::Default,
-            egress: test_egress(),
+            egress: Some(test_egress()),
         })
         .await
         .unwrap();

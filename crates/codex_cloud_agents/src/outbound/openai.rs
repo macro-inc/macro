@@ -144,10 +144,10 @@ impl OAuth for OpenAi {
     }
 }
 
-async fn decode<T: DeserializeOwned>(
+async fn response_body(
     mut response: Response,
     operation: &str,
-) -> Result<T, rootcause::Report> {
+) -> Result<zeroize::Zeroizing<Vec<u8>>, rootcause::Report> {
     let status = response.status();
     if !status.is_success() {
         // Never include provider bodies: error payloads can echo credentials.
@@ -166,8 +166,22 @@ async fn decode<T: DeserializeOwned>(
         }
         bytes.extend_from_slice(&chunk);
     }
+    Ok(bytes)
+}
+
+async fn decode<T: DeserializeOwned>(
+    response: Response,
+    operation: &str,
+) -> Result<T, rootcause::Report> {
+    let bytes = response_body(response, operation).await?;
     serde_json::from_slice(&bytes)
         .map_err(|_| rootcause::report!("{operation}: unexpected response shape (body withheld)"))
+}
+
+async fn native_body(response: Response, operation: &str) -> Result<String, rootcause::Report> {
+    let bytes = response_body(response, operation).await?;
+    String::from_utf8(bytes.to_vec())
+        .map_err(|_| rootcause::report!("{operation}: response was not UTF-8 (body withheld)"))
 }
 
 #[derive(Deserialize)]

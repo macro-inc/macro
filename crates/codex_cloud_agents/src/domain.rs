@@ -11,6 +11,8 @@ mod test;
 pub mod acp_session;
 /// Cloud task commands and observations used by the feasibility probe.
 pub mod cloud;
+/// Native append-only inputs and deterministic replay.
+pub mod journal;
 
 /// An opaque secret. It deliberately has no Debug or Display implementation.
 #[derive(Serialize, Deserialize)]
@@ -38,7 +40,7 @@ impl Drop for Secret {
     }
 }
 
-/// Local probe credentials. Not compatible with or stored in Codex's auth.json.
+/// ChatGPT OAuth credentials, kept private by the chosen credential adapter.
 #[derive(Serialize, Deserialize)]
 pub struct Credentials {
     /// Format version, checked on load.
@@ -55,7 +57,7 @@ pub struct Credentials {
 }
 
 impl Credentials {
-    /// Reject malformed local state before using any credential.
+    /// Reject malformed credential state before provider use.
     pub fn validate(&self) -> Result<(), rootcause::Report> {
         if self.version != 1
             || self.expires_at == 0
@@ -224,3 +226,6 @@ impl<Provider: OAuth, Store: CredentialStore> Probe<Provider, Store> {
 pub fn unix_now() -> Result<u64, rootcause::Report> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
 }
+
+/// Authenticated cloud operation port for local and hosted runtimes.
+pub mod runtime;

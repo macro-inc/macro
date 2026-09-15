@@ -162,6 +162,7 @@ type PromptCompositionCall = (String, Option<Vec<PriorChannelMessage>>);
 struct PromptComposerMock {
     calls: Arc<Mutex<Vec<PromptCompositionCall>>>,
     failure: Arc<Mutex<Option<String>>>,
+    internal_tools: Arc<Mutex<Vec<bool>>>,
 }
 
 impl PromptComposerMock {
@@ -169,6 +170,7 @@ impl PromptComposerMock {
         Self {
             calls: Arc::default(),
             failure: Arc::new(Mutex::new(Some(message.to_owned()))),
+            internal_tools: Arc::default(),
         }
     }
 
@@ -182,7 +184,12 @@ impl AgentPromptComposer for PromptComposerMock {
         &self,
         prompt_markdown: &str,
         messages: Option<&[PriorChannelMessage]>,
+        include_internal_tools: bool,
     ) -> crate::domain::error::Result<String> {
+        self.internal_tools
+            .lock()
+            .unwrap()
+            .push(include_internal_tools);
         self.calls.lock().unwrap().push((
             prompt_markdown.to_owned(),
             messages.map(|messages| messages.to_vec()),
@@ -353,12 +360,21 @@ fn harness_with_mentions(
         prompt_composer,
         EgressProvisionerMock::new(),
         NoPeers,
-        SessionDefaults {
+        HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
-        },
+        })
+        .with_bot(
+            bot_id::CODEX_BOT_ID,
+            SessionDefaults {
+                bot_id: bot_id::CODEX_BOT_ID,
+                model: String::new(),
+                harness: "codex-cloud".into(),
+                repo_url: String::new(),
+            },
+        ),
         lifecycle.clone(),
         crate::domain::pending::PendingCommands::new(),
         mentions,
@@ -485,7 +501,7 @@ async fn disconnected_session(
             session_id: id,
             kind: AgentKind::SandboxedCoder,
             size: agent_session::domain::model::SandboxSize::Default,
-            egress: test_egress(),
+            egress: Some(test_egress()),
         })
         .await
         .expect("the original sandbox should exist");
@@ -2847,4 +2863,90 @@ mod lifecycle_events {
         );
         assert_eq!(events.len(), 5, "nothing follows deleted: {events:#?}");
     }
+}
+
+#[tokio::test]
+async fn codex_named_session_opens_without_mcp_or_sandbox_defaults() {
+    let (service, repo, containers, _, _) = harness();
+    service.inner.egress.forbid();
+    let open = service.open_managed_session(OpenManagedSession {
+        owner: sender(),
+        instructions: None,
+        prompt: Some("inspect".into()),
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: bot_id::CODEX_BOT_ID,
+            profile: None,
+        }),
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    let session = opened.unwrap();
+    assert_eq!(session.harness, "codex-cloud");
+    assert!(session.repo_url.is_none());
+    assert_eq!(
+        repo.get(session.id).await.unwrap().mcp_servers,
+        AgentMcpServers::Selected {
+            servers: Vec::new()
+        }
+    );
+    let requests = container.agent().received_requests();
+    let ClientRequest::NewSessionRequest(request) = &requests[1] else {
+        panic!("expected session/new")
+    };
+    assert!(request.mcp_servers.is_empty());
+    assert_eq!(
+        *service.inner.prompt_composer.internal_tools.lock().unwrap(),
+        [false]
+    );
+}
+
+#[tokio::test]
+async fn codex_channel_mention_opens_without_egress_or_mcp() {
+    let (service, repo, containers, announcer, _) = harness();
+    service.inner.egress.forbid();
+    let mut command = open_command();
+    command.bot_id = bot_id::CODEX_BOT_ID;
+    command.runtime = AgentRuntimeConfig {
+        kind: AgentKind::CodexCloud,
+        model: String::new(),
+        harness: "codex-cloud".into(),
+        instructions: String::new(),
+        mcp_servers: AgentMcpServers::Selected {
+            servers: Vec::new(),
+        },
+    };
+    command.origin.content = "@codex inspect the repository".into();
+    let id = AgentSessionId::new();
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.unwrap();
+    let stored = repo.get(id).await.unwrap();
+    assert_eq!(stored.bot_id, bot_id::CODEX_BOT_ID);
+    assert_eq!(stored.harness, "codex-cloud");
+    assert!(stored.repo_url.is_none());
+    assert_eq!(announcer.announced()[0].bot_id, bot_id::CODEX_BOT_ID);
+    let requests = container.agent().received_requests();
+    let ClientRequest::NewSessionRequest(request) = &requests[1] else {
+        panic!("expected session/new")
+    };
+    assert!(request.mcp_servers.is_empty());
+    assert_eq!(
+        *service.inner.prompt_composer.internal_tools.lock().unwrap(),
+        [false]
+    );
 }

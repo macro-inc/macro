@@ -1,6 +1,7 @@
 //! Byte-stream protocol regressions: exercise the same framing used by Zed.
 use codex_cloud_agents::domain::acp_session::{SessionService, SessionStore, StoredSession};
 use codex_cloud_agents::domain::cloud::*;
+use codex_cloud_agents::domain::journal::{JournalEntry, JournalInput};
 use codex_cloud_agents::domain::*;
 use codex_cloud_agents::inbound::acp::serve;
 use serde_json::{Value, json};
@@ -13,13 +14,42 @@ use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStrea
 
 type Result<T> = std::result::Result<T, rootcause::Report>;
 #[derive(Clone, Default)]
-struct Journal(Arc<Mutex<HashMap<String, StoredSession>>>);
+struct Journal(
+    Arc<Mutex<HashMap<String, StoredSession>>>,
+    Arc<Mutex<HashMap<String, Vec<JournalEntry>>>>,
+);
 impl SessionStore for Journal {
-    fn load(&self, id: &str) -> Result<Option<StoredSession>> {
+    async fn load(&self, id: &str) -> Result<Option<StoredSession>> {
         Ok(self.0.lock().unwrap().get(id).cloned())
     }
-    fn save(&self, id: &str, state: &StoredSession) -> Result<()> {
+    async fn save(&self, id: &str, state: &StoredSession) -> Result<()> {
         self.0.lock().unwrap().insert(id.into(), state.clone());
+        Ok(())
+    }
+    async fn read(&self, id: &str) -> std::result::Result<Vec<JournalEntry>, rootcause::Report> {
+        Ok(self.1.lock().unwrap().get(id).cloned().unwrap_or_default())
+    }
+    async fn append(
+        &self,
+        id: &str,
+        expected: i64,
+        turn: Option<&TurnId>,
+        input: &JournalInput,
+    ) -> std::result::Result<JournalEntry, rootcause::Report> {
+        let mut journals = self.1.lock().unwrap();
+        let entries = journals.entry(id.to_owned()).or_default();
+        if entries.len() as i64 != expected {
+            return Err(rootcause::report!("stale sequence"));
+        }
+        let entry = JournalEntry {
+            sequence: expected + 1,
+            turn: turn.cloned(),
+            input: input.clone(),
+        };
+        entries.push(entry.clone());
+        Ok(entry)
+    }
+    async fn validate(&self) -> Result<()> {
         Ok(())
     }
 }
@@ -82,6 +112,7 @@ impl Provider {
             "in_progress"
         };
         Ok(TaskSnapshot {
+            native: None,
             task_id: CloudId::new("task-test".into())?,
             title: Some("Test".into()),
             assistant_status: Some(status.into()),
@@ -153,24 +184,29 @@ impl CloudConversation for Provider {
                 serde_json::from_str(include_str!("fixtures/recorded_cloud_turn.json")).unwrap();
             let calls = self.0.clone();
             return Ok(Box::pin(
-                futures::stream::iter(events.into_iter().map(Ok)).chain(futures::stream::once(
-                    async move {
-                        calls.done.store(true, Ordering::SeqCst);
-                        Ok(CloudEvent {
-                            id: "fixture-end".into(),
-                            method: "turn/completed".into(),
-                            params: json!({}),
-                        })
-                    },
-                )),
+                futures::stream::iter(
+                    events
+                        .into_iter()
+                        .map(|event| Ok(NativeRecord::from_event(event.clone()))),
+                )
+                .chain(futures::stream::once(async move {
+                    calls.done.store(true, Ordering::SeqCst);
+                    Ok(NativeRecord::from_event(CloudEvent {
+                        id: "fixture-end".into(),
+                        method: "turn/completed".into(),
+                        params: json!({}),
+                    }))
+                })),
             ));
         }
         if self.0.input_request.load(Ordering::SeqCst) {
-            return Ok(Box::pin(futures::stream::iter(vec![Ok(CloudEvent {
-                id: format!("{id}-input"),
-                method: "item/tool/requestUserInput".into(),
-                params: json!({"requestId":"question-1","questions":[{"id":"choice","question":"Choose a branch"}]}),
-            })])));
+            return Ok(Box::pin(futures::stream::iter(vec![Ok(
+                NativeRecord::from_event(CloudEvent {
+                    id: format!("{id}-input"),
+                    method: "item/tool/requestUserInput".into(),
+                    params: json!({"requestId":"question-1","questions":[{"id":"choice","question":"Choose a branch"}]}),
+                }),
+            )])));
         }
         let event = CloudEvent {
             id: format!("{id}-delta"),
@@ -184,21 +220,25 @@ impl CloudConversation for Provider {
         };
         if self.0.hold.load(Ordering::SeqCst) {
             return Ok(Box::pin(
-                futures::stream::iter(vec![Ok(event)]).chain(futures::stream::pending()),
+                futures::stream::iter(vec![Ok(NativeRecord::from_event(event.clone()))])
+                    .chain(futures::stream::pending()),
             ));
         }
         let calls = self.0.clone();
         Ok(Box::pin(
-            futures::stream::iter(vec![Ok(event.clone()), Ok(event), Ok(complete)]).chain(
-                futures::stream::once(async move {
-                    calls.done.store(true, Ordering::SeqCst);
-                    Ok(CloudEvent {
-                        id: format!("done-{}", calls.turn.load(Ordering::SeqCst)),
-                        method: "turn/completed".into(),
-                        params: json!({}),
-                    })
-                }),
-            ),
+            futures::stream::iter(vec![
+                Ok(NativeRecord::from_event(event.clone())),
+                Ok(NativeRecord::from_event(event.clone())),
+                Ok(NativeRecord::from_event(complete)),
+            ])
+            .chain(futures::stream::once(async move {
+                calls.done.store(true, Ordering::SeqCst);
+                Ok(NativeRecord::from_event(CloudEvent {
+                    id: format!("done-{}", calls.turn.load(Ordering::SeqCst)),
+                    method: "turn/completed".into(),
+                    params: json!({}),
+                }))
+            })),
         ))
     }
 }
@@ -257,7 +297,7 @@ fn harness(provider: Provider, journal: Journal) -> Client {
     let (read, write) = tokio::io::split(client);
     let (agent_read, agent_write) = tokio::io::split(agent);
     let server = tokio::spawn(async move {
-        let _ = serve(service, agent_read, agent_write).await;
+        let _ = serve(service, agent_read, agent_write, None).await;
     });
     Client {
         read: BufReader::new(read),

@@ -105,7 +105,10 @@ impl ContainerManager for NamespaceContainerManager {
         command: SpawnContainer,
     ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         let mut env = Vec::new();
-        env.extend(command.egress.environment());
+        let egress = command.egress.ok_or_else(|| {
+            HarnessError::Container("sandbox runtime requires egress configuration".into())
+        })?;
+        env.extend(egress.environment());
         let container = ContainerSpec {
             image_ref: self.image_ref.clone(),
             env,

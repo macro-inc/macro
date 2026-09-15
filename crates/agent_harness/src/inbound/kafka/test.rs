@@ -21,6 +21,7 @@ fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
         model: "configured-model".to_owned(),
         harness: match kind {
             AgentKind::Cursor => "cursor",
+            AgentKind::CodexCloud => "codex-cloud",
             AgentKind::InMemory => "in-memory",
             AgentKind::SandboxedCoder => "opencode",
             AgentKind::External => "byoa",

@@ -81,7 +81,15 @@ async fn conversation_routes_payloads_and_replay_match_desktop_contract() {
     let turn = created.assistant_turn_id.unwrap();
     let mut stream = provider.stream(&auth, &task, &turn).await.unwrap();
     assert_eq!(
-        stream.next().await.unwrap().unwrap().method,
+        stream
+            .next()
+            .await
+            .unwrap()
+            .unwrap()
+            .decode()
+            .unwrap()
+            .unwrap()
+            .method,
         "turn/completed"
     );
     assert!(stream.next().await.is_none());

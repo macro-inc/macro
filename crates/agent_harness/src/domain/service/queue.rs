@@ -598,7 +598,12 @@ where
         // what they typed rather than the composed payload.
         let mut composed = entry.action.clone();
         if let Err(error) = self
-            .compose_action(&mut composed, entry.actor.as_ref(), entry.announce.as_ref())
+            .compose_action(
+                session_id,
+                &mut composed,
+                entry.actor.as_ref(),
+                entry.announce.as_ref(),
+            )
             .await
         {
             self.queues.requeue_front(session_id, entry);

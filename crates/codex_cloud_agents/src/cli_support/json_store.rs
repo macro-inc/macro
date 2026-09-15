@@ -1,11 +1,12 @@
 //! Private JSON credential file with atomic writes and a command-lifetime lock.
 
-use crate::domain::{CredentialStore, Credentials};
+use codex_cloud_agents::domain::{CredentialStore, Credentials};
 use std::fs::{File, OpenOptions};
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 
 #[cfg(test)]
+#[path = "json_store/test.rs"]
 mod test;
 
 const AUTH_FILE: &str = "credentials.json";
@@ -14,7 +15,7 @@ const MAX_FILE: u64 = 1024 * 1024;
 /// Single-user local store. The file lock prevents competing refresh writers.
 pub struct JsonStore {
     directory: PathBuf,
-    _lock: File,
+    lock: File,
 }
 
 impl JsonStore {
@@ -42,8 +43,17 @@ impl JsonStore {
         })?;
         Ok(Self {
             directory: directory.to_owned(),
-            _lock: lock,
+            lock,
         })
+    }
+}
+
+impl Drop for JsonStore {
+    fn drop(&mut self) {
+        // Closing only this descriptor does not release a flock while a forked
+        // child or duplicated descriptor retains the same open-file description.
+        // Explicit unlock ends the store's ownership before File closes below.
+        let _ = self.lock.unlock();
     }
 }
 

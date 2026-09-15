@@ -1,6 +1,6 @@
 //! Desktop 26.908.70816 WHAM continuation, cancellation and turn subscription.
 
-use super::{CreateResponse, project, receipt, stream};
+use super::{CreateResponse, receipt, stream};
 use crate::domain::Credentials;
 use crate::domain::cloud::{
     CloudConversation, CloudEventStream, CloudId, CreatedTask, TaskSnapshot, TurnId,
@@ -84,16 +84,16 @@ impl CloudConversation for OpenAi {
             .send()
             .await
             .map_err(|_| rootcause::report!("turn observation failed (network/timeout)"))?;
-        let body: Value = decode(response, "read turn").await?;
-        if body.pointer("/turn/id").and_then(Value::as_str) != Some(turn.as_str()) {
+        let body = crate::outbound::openai::native_body(response, "read turn").await?;
+        let snapshot = TaskSnapshot::from_native(task, &body)?;
+        if !snapshot.turns.iter().any(|item| {
+            item.source == "current_assistant_turn" && item.id.as_deref() == Some(turn.as_str())
+        }) {
             return Err(rootcause::report!(
                 "turn identity mismatch or unexpected response shape"
             ));
         }
-        project(
-            task,
-            &serde_json::json!({"task":body.get("task"), "current_assistant_turn":body.get("turn"), "current_user_turn":body.get("user_turn")}),
-        )
+        Ok(snapshot)
     }
 
     async fn stream(

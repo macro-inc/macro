@@ -72,10 +72,14 @@ stdout is reserved for JSON-RPC. See the official
 - Structured elicitation/approval replies, MCP forwarding, images/audio, model
   selection and local filesystem/terminal execution are not supported. The cloud
   agent executes commands in its own environment without a local permission gate.
-- `loadSession` is not advertised yet: fully resuming observation after a process
-  restart is not implemented. Start a new Zed thread for a new session. A cloud
-  task can continue after the local process exits; closing the process is not a
-  remote cancellation request.
+- `loadSession` replays the durable journal and resumes observation of the saved
+  turn without launching work. A prompt sent immediately after loading waits for
+  recovery before continuing the same task. A cloud task can continue after the
+  local process exits; closing the process is not a remote cancellation request.
+- Hosted Macro captures recovered history silently and requests replacement
+  through its existing load mechanism. The standalone binary has no host reload
+  channel; it reports on stderr when another `session/load` is needed to view
+  recovered history. Neither adapter advertises `session/resume`.
 - One process owns this credential state at a time. Starting a second ACP process
   against the same fixed directory fails explicitly rather than racing refresh.
 

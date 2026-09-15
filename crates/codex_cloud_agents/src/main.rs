@@ -3,7 +3,11 @@
 use clap::{Parser, Subcommand};
 use codex_cloud_agents::domain::cloud::{CloudId, Launch};
 use codex_cloud_agents::domain::{Probe, unix_now};
-use codex_cloud_agents::outbound::{json_store::JsonStore, openai::OpenAi};
+use codex_cloud_agents::outbound::openai::OpenAi;
+use json_store::JsonStore;
+#[path = "cli_support/json_store.rs"]
+mod json_store;
+const DEFAULT_STATE_DIR: &str = "/home/wolf/.local/state/macro-codex-probe";
 use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -19,7 +23,7 @@ mod test;
 )]
 struct Args {
     /// Private directory for credentials.json (separate from ~/.codex).
-    #[arg(long, default_value = codex_cloud_agents::DEFAULT_STATE_DIR)]
+    #[arg(long, default_value = DEFAULT_STATE_DIR)]
     state_dir: PathBuf,
     #[command(subcommand)]
     command: Command,
