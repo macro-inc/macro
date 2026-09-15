@@ -2664,3 +2664,202 @@ async fn repository_choice_receives_each_sessions_working_directory() {
         ]
     );
 }
+
+/// Drive a turn whose run Cursor never finishes: the stream dies, and every
+/// poll after it answers `RUNNING`, exactly as the provider behaved when it
+/// wedged a run's record at `RUNNING` with a frozen `updatedAt`.
+/// Answers with the wedged run's id, which Cursor keeps listing as `RUNNING`.
+async fn wedge_a_run(
+    service: &Arc<Service>,
+    cursor: &FakeCursor,
+    session: &SessionId,
+) -> CursorRunId {
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "partial work".to_owned(),
+        })
+        .expect("stream open");
+    drop(events);
+    for _ in 0..=POLL_ATTEMPTS {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+    service
+        .prompt(session, "do the thing")
+        .await
+        .expect_err("a run that never ends cannot close its turn");
+    let Some(run) = cursor.calls().into_iter().find_map(|call| match call {
+        CursorCall::RunResult(_, run) => Some(run),
+        _ => None,
+    }) else {
+        panic!("the wedged turn should have polled its run");
+    };
+    cursor.script_run_listings(vec![RunListing {
+        id: run.clone(),
+        status: RunStatus::Running,
+    }]);
+    run
+}
+
+/// Giving up on a run still going is not a provider failure, and must not
+/// reach the person who prompted as one: an `AcpError` renders the whole
+/// report, source location and all, which is what shipped to a user.
+#[tokio::test(start_paused = true)]
+async fn a_run_that_never_ends_is_reported_in_words_the_prompter_can_act_on() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "partial work".to_owned(),
+        })
+        .expect("stream open");
+    drop(events);
+    for _ in 0..=POLL_ATTEMPTS {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+
+    let error = service
+        .prompt(&session, "do the thing")
+        .await
+        .expect_err("the turn cannot close on a run that never ends");
+    let SessionError::Rejected(message) = &error else {
+        panic!("a run still going is not a Cursor failure: {error:?}");
+    };
+    // The decorations a report carries would be read as part of the sentence.
+    assert!(
+        !message.contains("├"),
+        "leaked report decoration: {message}"
+    );
+    assert!(
+        !message.contains(".rs:"),
+        "leaked source location: {message}"
+    );
+    assert!(
+        message.contains("still working"),
+        "must say what actually happened: {message}"
+    );
+}
+
+/// The turn gave up, but the journal still has to record that it did - the
+/// projection reads `Interrupted` to tell an abandoned run from a live one,
+/// and the busy-agent release reads it to know which run it may cancel.
+#[tokio::test(start_paused = true)]
+async fn giving_up_on_an_unfinished_run_is_still_journalled_as_interrupted() {
+    use crate::outbound::memory_journal::MemoryJournal;
+    let journal = Arc::new(MemoryJournal::default());
+    let cursor = FakeCursor::new();
+    let service = Arc::new(CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        FixedChooser(None, false),
+        journal.clone(),
+    ));
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    wedge_a_run(&service, &cursor, &session).await;
+
+    let entries = journal.read(&session).await.expect("journal readable");
+    assert!(
+        entries
+            .iter()
+            .any(|e| matches!(e.input, JournalInput::Interrupted(_))),
+        "an abandoned turn must leave its record"
+    );
+    assert!(
+        !entries.iter().any(|e| e.input == JournalInput::Reconciled),
+        "nothing terminal was observed, so nothing may be reconciled"
+    );
+}
+
+/// The regression that killed sessions: one run Cursor never finished made
+/// every later prompt fail, because recovery insisted on reconciling it
+/// first and a run still going has no terminal fact to reconcile against.
+#[tokio::test(start_paused = true)]
+async fn an_unfinished_run_does_not_block_the_next_prompt() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    // Cursor goes on listing that run as RUNNING, which is the whole problem.
+    let stuck = wedge_a_run(&service, &cursor, &session).await;
+    let before = cursor.calls().len();
+
+    // The next prompt answers normally instead of dying on recovery.
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "the next answer".to_owned(),
+        })
+        .expect("stream open");
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-2"),
+            status: RunStatus::Finished,
+            text: None,
+            duration_ms: None,
+            git: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    drop(events);
+
+    let stop = service
+        .prompt(&session, "try again")
+        .await
+        .expect("an unfinished earlier run must not fail a new prompt");
+    assert_eq!(stop, StopReason::EndTurn);
+    // And it was left alone rather than recovered slowly: nothing this prompt
+    // did touched the wedged run.
+    assert!(
+        !cursor.calls()[before..].iter().any(|call| matches!(
+            call,
+            CursorCall::RunResult(_, run) if run == &stuck
+        )),
+        "the wedged run should not have been re-read by the next prompt"
+    );
+}
+
+/// A wedged run holds the agent's single run slot forever, so waiting out
+/// `agent_busy` only fails the prompt slower. The run this session already
+/// abandoned is cancelled to get the slot back.
+#[tokio::test(start_paused = true)]
+async fn a_busy_agent_is_freed_by_cancelling_the_run_this_session_abandoned() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let abandoned = wedge_a_run(&service, &cursor, &session).await;
+
+    // The wedged run still holds the slot; one release frees it.
+    cursor.script_create_run_errors(1, "agent_busy");
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-3"),
+            status: RunStatus::Finished,
+            text: None,
+            duration_ms: None,
+            git: None,
+        })
+        .expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    drop(events);
+
+    service
+        .prompt(&session, "try again")
+        .await
+        .expect("the prompt proceeds once the abandoned run lets go");
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CancelRun(_, run) if run == &abandoned)),
+        "the abandoned run should have been cancelled to free the agent"
+    );
+}
