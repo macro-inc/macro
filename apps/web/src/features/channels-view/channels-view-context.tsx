@@ -38,6 +38,48 @@ export type ChannelsViewContext = {
   setRailMode: (mode: Exclude<ChannelsRailMode, 'auto'>) => void;
 };
 
+function createInitialState(
+  initial: ChannelsViewStateOptions
+): ChannelsViewState {
+  return {
+    tab: initial.tab ?? 'browse',
+    mobileTab:
+      initial.mobileTab ?? (initial.tab === 'recents' ? 'recents' : 'channels'),
+    selectedChannelId: initial.selectedChannelId,
+    expandedGroups: {
+      favorites: initial.expandedGroups?.favorites ?? true,
+      channels: initial.expandedGroups?.channels ?? true,
+      direct_messages: initial.expandedGroups?.direct_messages ?? true,
+    },
+    sortBy: {
+      channels: initial.sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
+      direct_messages:
+        initial.sortBy?.direct_messages ??
+        CHANNELS_DEFAULT_SORT_BY.direct_messages,
+    },
+    slimGroups: {
+      channels:
+        initial.slimGroups?.channels ?? CHANNELS_DEFAULT_SLIM_GROUPS.channels,
+      direct_messages:
+        initial.slimGroups?.direct_messages ??
+        CHANNELS_DEFAULT_SLIM_GROUPS.direct_messages,
+    },
+    asideWidth: clampChannelsRailWidth(
+      initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
+    ),
+    railMode: initial.railMode ?? 'auto',
+  };
+}
+
+function shouldRestorePreferences(initial: ChannelsViewStateOptions): boolean {
+  return (
+    initial.asideWidth === undefined &&
+    initial.railMode === undefined &&
+    initial.sortBy === undefined &&
+    initial.slimGroups === undefined
+  );
+}
+
 export const [ChannelsViewProvider, useChannelsView] =
   createAssertedContextProvider<ChannelsViewContext, ChannelsViewProviderProps>(
     'ChannelsView',
@@ -46,47 +88,13 @@ export const [ChannelsViewProvider, useChannelsView] =
       const userId = useUserId();
       const initial = props.initialState ?? {};
       const [state, setState] = makePersistedState(
-        createStore<ChannelsViewState>({
-          tab: initial.tab ?? 'browse',
-          mobileTab:
-            initial.mobileTab ??
-            (initial.tab === 'recents' ? 'recents' : 'channels'),
-          selectedChannelId: initial.selectedChannelId,
-          expandedGroups: {
-            favorites: initial.expandedGroups?.favorites ?? true,
-            channels: initial.expandedGroups?.channels ?? true,
-            direct_messages: initial.expandedGroups?.direct_messages ?? true,
-          },
-          sortBy: {
-            channels:
-              initial.sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
-            direct_messages:
-              initial.sortBy?.direct_messages ??
-              CHANNELS_DEFAULT_SORT_BY.direct_messages,
-          },
-          slimGroups: {
-            channels:
-              initial.slimGroups?.channels ??
-              CHANNELS_DEFAULT_SLIM_GROUPS.channels,
-            direct_messages:
-              initial.slimGroups?.direct_messages ??
-              CHANNELS_DEFAULT_SLIM_GROUPS.direct_messages,
-          },
-          asideWidth: clampChannelsRailWidth(
-            initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
-          ),
-          railMode: initial.railMode ?? 'auto',
-        }),
+        createStore(createInitialState(initial)),
         createChannelsViewPersistence({
           handle: panel.handle,
           userId,
           restoreEntryState: props.initialState === undefined,
           restoreLocalState: props.initialState === undefined,
-          restorePreferences:
-            initial.asideWidth === undefined &&
-            initial.railMode === undefined &&
-            initial.sortBy === undefined &&
-            initial.slimGroups === undefined,
+          restorePreferences: shouldRestorePreferences(initial),
         })
       );
 
