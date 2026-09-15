@@ -1,11 +1,13 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_uuid::Uuid;
 use model_entity::EntityType;
+use model_owner::{Owner, OwnerType};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
 use sqlx::Row as _;
+use sqlx::types::chrono::{DateTime, Utc};
 use sqlx::{Pool, Postgres, Transaction};
 
 use super::*;
@@ -152,6 +154,8 @@ struct EntityAccessRow {
     source_type: String,
     access_level: AccessLevel,
     granted_from_project_id: Option<String>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 }
 
 async fn insert_entity_access_for_test(
@@ -202,7 +206,9 @@ async fn fetch_entity_access_rows(
             source_id,
             source_type::text AS source_type,
             access_level,
-            granted_from_project_id
+            granted_from_project_id,
+            created_at,
+            updated_at
         FROM entity_access
         WHERE entity_id = $1 AND entity_type = $2
         ORDER BY source_type, source_id, granted_from_project_id NULLS FIRST
@@ -215,6 +221,8 @@ async fn fetch_entity_access_rows(
         source_type: r.get("source_type"),
         access_level: r.get("access_level"),
         granted_from_project_id: r.get("granted_from_project_id"),
+        created_at: r.get("created_at"),
+        updated_at: r.get("updated_at"),
     })
     .fetch_all(pool)
     .await
@@ -709,4 +717,154 @@ async fn remove_non_owner_user_entity_access_preserves_non_user_inherited_and_ot
     assert_eq!(other_type_rows[0].source_id, "macro|other-type@test.com");
     assert_eq!(other_type_rows[0].access_level, AccessLevel::View);
     assert!(other_type_rows[0].granted_from_project_id.is_none());
+}
+
+const OWNER_TEAM_ID: Uuid = Uuid::from_u128(0x0000000a_0000_0000_0000_00000000000a);
+const BOT_PRINCIPAL: &str = "bot|0000000b-0000-0000-0000-00000000000b";
+
+fn user_owner() -> Owner {
+    Owner::User(MacroUserIdStr::try_from_email("owner@macro.com").unwrap())
+}
+
+async fn grant_owner_committed(pool: &Pool<Postgres>, entity_id: &Uuid, owner: &Owner) {
+    let mut tx = pool.begin().await.unwrap();
+    upsert_owner_grant(&mut tx, entity_id, EntityType::Document, owner)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn owner_grant_twice_is_a_no_op(pool: Pool<Postgres>) {
+    let entity_id = Uuid::from_u128(0x0a01);
+    grant_owner_committed(&pool, &entity_id, &user_owner()).await;
+    grant_owner_committed(&pool, &entity_id, &user_owner()).await;
+
+    let rows = fetch_entity_access_rows(&pool, &entity_id, EntityType::Document).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].access_level, AccessLevel::Owner);
+    assert!(rows[0].granted_from_project_id.is_none());
+    assert_eq!(rows[0].updated_at, rows[0].created_at);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn owner_grant_raises_direct_edit_to_owner_and_leaves_other_principals(pool: Pool<Postgres>) {
+    let entity_id = Uuid::from_u128(0x0a02);
+    let owner = user_owner();
+    let mut tx = pool.begin().await.unwrap();
+    insert_entity_access_for_test(
+        &mut tx,
+        &entity_id,
+        EntityType::Document,
+        &owner.principal_id(),
+        EntityAccessSourceType::User,
+        AccessLevel::Edit,
+        None,
+    )
+    .await;
+    insert_entity_access_for_test(
+        &mut tx,
+        &entity_id,
+        EntityType::Document,
+        "macro|viewer@macro.com",
+        EntityAccessSourceType::User,
+        AccessLevel::View,
+        None,
+    )
+    .await;
+    tx.commit().await.unwrap();
+
+    let before = fetch_entity_access_rows(&pool, &entity_id, EntityType::Document).await;
+    let before_owner = before
+        .iter()
+        .find(|row| row.source_id == owner.principal_id())
+        .unwrap();
+    let before_updated_at = before_owner.updated_at;
+
+    grant_owner_committed(&pool, &entity_id, &owner).await;
+
+    let rows = fetch_entity_access_rows(&pool, &entity_id, EntityType::Document).await;
+    assert_eq!(rows.len(), 2, "updated in place, not duplicated");
+    let owner_row = rows
+        .iter()
+        .find(|row| row.source_id == owner.principal_id())
+        .unwrap();
+    assert_eq!(owner_row.access_level, AccessLevel::Owner);
+    assert!(owner_row.granted_from_project_id.is_none());
+    assert!(owner_row.updated_at > before_updated_at);
+    let viewer_row = rows
+        .iter()
+        .find(|row| row.source_id == "macro|viewer@macro.com")
+        .unwrap();
+    assert_eq!(viewer_row.access_level, AccessLevel::View);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("upsert_test_data"))
+)]
+async fn owner_grant_leaves_project_inherited_rows_untouched(pool: Pool<Postgres>) {
+    let owner = user_owner();
+    let root = ROOT_PROJECT_ID.to_string();
+    let mut tx = pool.begin().await.unwrap();
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Document,
+        &owner.principal_id(),
+        EntityAccessSourceType::User,
+        AccessLevel::Edit,
+        Some(&root),
+    )
+    .await;
+    tx.commit().await.unwrap();
+
+    grant_owner_committed(&pool, &DOC_ROOT_ID, &owner).await;
+    grant_owner_committed(&pool, &DOC_ROOT_ID, &owner).await;
+
+    let rows = fetch_entity_access_rows(&pool, &DOC_ROOT_ID, EntityType::Document).await;
+    assert_eq!(rows.len(), 2, "inherited row and direct row coexist");
+    let inherited = rows
+        .iter()
+        .find(|row| row.granted_from_project_id.is_some())
+        .unwrap();
+    assert_eq!(
+        inherited.granted_from_project_id.as_deref(),
+        Some(root.as_str())
+    );
+    assert_eq!(inherited.access_level, AccessLevel::Edit);
+    assert_eq!(inherited.updated_at, inherited.created_at);
+    let direct = rows
+        .iter()
+        .find(|row| row.granted_from_project_id.is_none())
+        .unwrap();
+    assert_eq!(direct.access_level, AccessLevel::Owner);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn owner_grant_maps_user_bot_and_team_to_their_access_source(pool: Pool<Postgres>) {
+    let cases = [
+        (user_owner(), "user", "macro|owner@macro.com".to_owned()),
+        (
+            Owner::parse(OwnerType::Bot, BOT_PRINCIPAL).unwrap(),
+            "bot",
+            BOT_PRINCIPAL.to_owned(),
+        ),
+        (
+            Owner::Team(OWNER_TEAM_ID),
+            "team",
+            OWNER_TEAM_ID.to_string(),
+        ),
+    ];
+    for (i, (owner, expected_source_type, expected_source_id)) in cases.into_iter().enumerate() {
+        let entity_id = Uuid::from_u128(0x0a10 + i as u128);
+        grant_owner_committed(&pool, &entity_id, &owner).await;
+
+        let rows = fetch_entity_access_rows(&pool, &entity_id, EntityType::Document).await;
+        assert_eq!(rows.len(), 1, "{owner:?}");
+        assert_eq!(rows[0].source_type, expected_source_type, "{owner:?}");
+        assert_eq!(rows[0].source_id, expected_source_id, "{owner:?}");
+        assert_eq!(rows[0].access_level, AccessLevel::Owner);
+        assert!(rows[0].granted_from_project_id.is_none());
+    }
 }

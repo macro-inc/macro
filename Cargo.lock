@@ -6271,6 +6271,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "model-entity",
+ "model_owner",
  "models_entity_access_management",
  "models_permissions",
  "serde",
