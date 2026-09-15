@@ -390,7 +390,7 @@ async fn main() -> anyhow::Result<()> {
     // indexing.
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway_client),
+        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway_client.clone()),
         NotificationChannelSender::new(notification_ingress_service.clone()),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
@@ -398,8 +398,38 @@ async fn main() -> anyhow::Result<()> {
     let channel_event_dispatcher = SpawnedChannelEventDispatcher::new(channel_side_effects);
     let channel_service = ChannelServiceImpl::with_dependencies(
         PgChannelsRepo::new(db.clone()),
-        channel_event_dispatcher,
+        channel_event_dispatcher.clone(),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service_impl.clone()),
+    );
+    // The welcome message goes through the shared message service so it gets the
+    // same persistence and delivery as every other channel message.
+    let channel_messages: Arc<dyn messages::domain::api::MessageCommands> = Arc::new(
+        messages::domain::service::MessageService::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::domain::effects::MessageEffects::new(
+                messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
+                messages::domain::ports::NoMessageEventPublisher,
+                channels::domain::message_delivery::ChannelMessageDelivery::new(
+                    PgChannelsRepo::new(db.clone()),
+                    channel_event_dispatcher,
+                    PgChannelReferenceSharePermissions::new(
+                        db.clone(),
+                        entity_access_service_impl.clone(),
+                    ),
+                    messages::outbound::connection_gateway::ConnectionGatewayMessages(
+                        connection_gateway_client,
+                    ),
+                ),
+            ),
+        )
+        .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
+            PgChannelsRepo::new(db.clone()),
+        ))
+        .with_references(
+            messages::outbound::entity_access_audience::EntityAccessMessageReferences(
+                (*entity_access_service_impl).clone(),
+            ),
+        ),
     );
 
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
@@ -501,6 +531,7 @@ async fn main() -> anyhow::Result<()> {
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
             channel_service: Arc::new(channel_service),
+            channel_messages,
             favorites_service: Arc::new(favorites_service),
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),

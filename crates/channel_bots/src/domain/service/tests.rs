@@ -8,18 +8,188 @@ use channels::domain::models::{
     ResolvedChannelMessage, Sender, ThreadReply,
 };
 use channels::domain::ports::{
-    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelService,
+    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
+    ChannelService,
 };
 use chrono::{TimeZone as _, Utc};
+use entity_access::domain::models::{
+    BotReceiptScope, Entity, EntityAccessReceipt, EntityPermission, EntityType, ParticipantRole,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::{
+    models::{Message, MessageParent, ThreadPatch, ThreadState},
+    ports::{MessageError, MessagePatch},
+    service::MessageWrite,
+};
 use models_pagination::{CreatedAt, Query};
 use uuid::Uuid;
 
 use super::*;
 use crate::domain::{
     models::{BotEvent, BotTrigger},
-    ports::{AgentResponder, UserTimeZones},
+    ports::{AgentResponder, ConversationAccess, UserTimeZones},
 };
+
+/// Mints Macro AI write capabilities for whichever user asked.
+struct GrantingAccess;
+
+#[async_trait]
+impl ConversationAccess for GrantingAccess {
+    async fn bot_write(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        parent: &MessageParent,
+    ) -> Result<EntityAccessReceipt<MessageWrite>, rootcause::Report> {
+        Ok(EntityAccessReceipt::try_new_bot(
+            bot_id::MACRO_AI_BOT_ID.into_storage_id(),
+            BotReceiptScope::User {
+                acting_user: user.clone(),
+            },
+            Entity {
+                entity_id: parent.entity_id(),
+                entity_type: EntityType::Channel,
+            },
+            EntityPermission::ChannelRole {
+                role: ParticipantRole::Member,
+            },
+        )?)
+    }
+}
+
+/// Records the shared message writes the handler makes.
+struct RecordingMessages {
+    thinking_deleted: bool,
+    posted: Mutex<Vec<(EntityAccessReceipt<MessageWrite>, PostMessage)>>,
+    patched: Mutex<Vec<(EntityAccessReceipt<MessageWrite>, Uuid, MessagePatch)>>,
+}
+
+impl RecordingMessages {
+    fn new(thinking_deleted: bool) -> Self {
+        Self {
+            thinking_deleted,
+            posted: Mutex::new(Vec::new()),
+            patched: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn posted_policies(&self) -> Vec<PostMessageNotificationPolicy> {
+        self.posted
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, input)| input.notification_policy)
+            .collect()
+    }
+
+    fn patched_contents(&self) -> Vec<String> {
+        self.patched
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|(_, _, patch)| patch.content.clone())
+            .collect()
+    }
+
+    fn patched_policies(&self) -> Vec<PatchMessageNotificationPolicy> {
+        self.patched
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, _, patch)| patch.notification_policy)
+            .collect()
+    }
+}
+
+fn shared_message(access: &EntityAccessReceipt<MessageWrite>, content: &str) -> Message {
+    Message {
+        id: Uuid::new_v4(),
+        parent: MessageParent::parse("channel", &access.entity().entity_id).unwrap(),
+        thread_id: None,
+        sender_id: Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID),
+        imported_author: None,
+        bot_profile: None,
+        mentions: Vec::new(),
+        triggered_by: access
+            .acting_user_id()
+            .map(|user| user.as_ref().to_string()),
+        content: content.to_string(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        edited_at: None,
+        deleted_at: None,
+        attachments: Vec::new(),
+        reactions: Vec::new(),
+    }
+}
+
+#[async_trait]
+impl MessageCommands for RecordingMessages {
+    async fn post(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        input: PostMessage,
+    ) -> Result<Message, MessageError> {
+        let message = shared_message(&access, &input.content);
+        self.posted.lock().unwrap().push((access, input));
+        Ok(message)
+    }
+    async fn patch(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        input: MessagePatch,
+    ) -> Result<Message, MessageError> {
+        if self.thinking_deleted {
+            return Err(MessageError::NotFound);
+        }
+        let message = shared_message(&access, input.content.as_deref().unwrap_or_default());
+        self.patched.lock().unwrap().push((access, id, input));
+        Ok(message)
+    }
+    async fn delete(
+        &self,
+        _: EntityAccessReceipt<MessageWrite>,
+        _: Uuid,
+        _: Option<String>,
+    ) -> Result<Message, MessageError> {
+        unimplemented!()
+    }
+    async fn react(
+        &self,
+        _: EntityAccessReceipt<MessageWrite>,
+        _: Uuid,
+        _: String,
+        _: bool,
+        _: Option<String>,
+    ) -> Result<Message, MessageError> {
+        unimplemented!()
+    }
+    async fn typing(
+        &self,
+        _: EntityAccessReceipt<MessageWrite>,
+        _: Option<Uuid>,
+        _: bool,
+        _: Option<String>,
+    ) -> Result<(), MessageError> {
+        unimplemented!()
+    }
+    async fn patch_thread(
+        &self,
+        _: EntityAccessReceipt<MessageWrite>,
+        _: Uuid,
+        _: ThreadPatch,
+    ) -> Result<ThreadState, MessageError> {
+        unimplemented!()
+    }
+    async fn delete_thread(
+        &self,
+        _: EntityAccessReceipt<MessageWrite>,
+        _: Uuid,
+        _: Option<String>,
+    ) -> Result<ThreadState, MessageError> {
+        unimplemented!()
+    }
+}
 
 /// Time zone fake with a fixed answer.
 struct FixedTimeZones(Option<&'static str>);
@@ -141,26 +311,9 @@ impl AgentResponder for TestResponder {
     }
 }
 
-/// Channel service fake for the post-thinking-then-patch flow. Posting always
-/// succeeds; patching either records the content or reports the message as
-/// missing (deleted while the agent ran).
-struct MutationChannelService {
-    thinking_deleted: bool,
-    posted_policies: Mutex<Vec<PostMessageNotificationPolicy>>,
-    patched: Mutex<Vec<String>>,
-    patched_policies: Mutex<Vec<PatchMessageNotificationPolicy>>,
-}
-
-impl MutationChannelService {
-    fn new(thinking_deleted: bool) -> Self {
-        Self {
-            thinking_deleted,
-            posted_policies: Mutex::new(Vec::new()),
-            patched: Mutex::new(Vec::new()),
-            patched_policies: Mutex::new(Vec::new()),
-        }
-    }
-}
+/// Channel service fake for the post-thinking-then-patch flow: reads return no
+/// context and the legacy write methods are never reached.
+struct MutationChannelService;
 
 impl ChannelService for MutationChannelService {
     async fn set_channel_picture(
@@ -249,47 +402,20 @@ impl ChannelService for MutationChannelService {
         &self,
         _actor: Sender,
         _channel_id: Uuid,
-        req: PostMessageRequest,
+        _req: PostMessageRequest,
     ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
-        self.posted_policies
-            .lock()
-            .unwrap()
-            .push(req.notification_policy);
-        async move {
-            Ok(PostMessageResponse {
-                id: Uuid::new_v4().to_string(),
-                nonce: None,
-            })
-        }
+        async move { unimplemented!("replies go through the shared message commands") }
     }
 
     fn patch_message(
         &self,
         _actor: Sender,
-        _actor_role: ParticipantRole,
+        _actor_role: channels::domain::models::ParticipantRole,
         _channel_id: Uuid,
         _message_id: Uuid,
-        req: PatchMessageRequest,
+        _req: PatchMessageRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
-        self.patched_policies
-            .lock()
-            .unwrap()
-            .push(req.notification_policy);
-        if !self.thinking_deleted {
-            self.patched
-                .lock()
-                .unwrap()
-                .extend(req.content.clone().into_iter());
-        }
-        let thinking_deleted = self.thinking_deleted;
-        async move {
-            if thinking_deleted {
-                return Err(ChannelMutationErr::NotFound(
-                    "message not found".to_string(),
-                ));
-            }
-            Ok(())
-        }
+        async move { unimplemented!("replies go through the shared message commands") }
     }
 }
 
@@ -392,9 +518,12 @@ fn bot_event(
 #[tokio::test]
 async fn handle_patches_thinking_message_with_reply() {
     let channel_id = Uuid::new_v4();
-    let channels = Arc::new(MutationChannelService::new(false));
+    let channels = Arc::new(MutationChannelService);
+    let messages = Arc::new(RecordingMessages::new(false));
     let handler = MacroAiHandler::new(
         channels.clone(),
+        messages.clone(),
+        Arc::new(GrantingAccess),
         Arc::new(FixedResponder("the answer")),
         eastern_time_zones(),
     );
@@ -411,15 +540,23 @@ async fn handle_patches_thinking_message_with_reply() {
         .unwrap();
 
     assert_eq!(
-        channels.posted_policies.lock().unwrap().clone(),
+        messages.posted_policies(),
         vec![PostMessageNotificationPolicy::Silent]
     );
+    let posted = messages.posted.lock().unwrap();
     assert_eq!(
-        channels.patched.lock().unwrap().clone(),
-        vec!["the answer".to_string()]
+        posted[0].0.acting_user_id().map(|user| user.as_ref()),
+        Some("macro|teo@example.com")
     );
+    assert_eq!(posted[0].0.entity().entity_id, channel_id.to_string());
     assert_eq!(
-        channels.patched_policies.lock().unwrap().clone(),
+        posted[0].1.attribution,
+        messages::domain::models::MessageAttribution::ActingUser
+    );
+    drop(posted);
+    assert_eq!(messages.patched_contents(), vec!["the answer".to_string()]);
+    assert_eq!(
+        messages.patched_policies(),
         vec![PatchMessageNotificationPolicy::NotifyAsPostedMessage]
     );
 }
@@ -427,9 +564,12 @@ async fn handle_patches_thinking_message_with_reply() {
 #[tokio::test]
 async fn handle_drops_reply_when_thinking_message_was_deleted() {
     let channel_id = Uuid::new_v4();
-    let channels = Arc::new(MutationChannelService::new(true));
+    let channels = Arc::new(MutationChannelService);
+    let messages = Arc::new(RecordingMessages::new(true));
     let handler = MacroAiHandler::new(
         channels.clone(),
+        messages.clone(),
+        Arc::new(GrantingAccess),
         Arc::new(FixedResponder("the answer")),
         eastern_time_zones(),
     );
@@ -445,7 +585,8 @@ async fn handle_drops_reply_when_thinking_message_was_deleted() {
         .await
         .unwrap();
 
-    assert!(channels.patched.lock().unwrap().is_empty());
+    assert!(messages.patched.lock().unwrap().is_empty());
+    assert_eq!(messages.posted.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -468,8 +609,11 @@ async fn top_level_prompt_marks_trigger_inline_in_channel_context() {
         ],
         thread_replies: Vec::new(),
     });
+    let messages = Arc::new(RecordingMessages::new(false));
     let handler = MacroAiHandler::new(
         channels.clone(),
+        messages.clone(),
+        Arc::new(GrantingAccess),
         Arc::new(TestResponder),
         eastern_time_zones(),
     );
@@ -542,8 +686,11 @@ async fn thread_prompt_puts_thread_first_and_demotes_channel_noise() {
             "@macro can you make a task out of this?",
         )],
     });
+    let messages = Arc::new(RecordingMessages::new(false));
     let handler = MacroAiHandler::new(
         channels.clone(),
+        messages.clone(),
+        Arc::new(GrantingAccess),
         Arc::new(TestResponder),
         eastern_time_zones(),
     );
@@ -614,8 +761,11 @@ async fn inferred_thread_prompt_does_not_claim_a_mention() {
             thread_reply(trigger_id, "macro|alice@example.com", "it fires twice"),
         ],
     });
+    let messages = Arc::new(RecordingMessages::new(false));
     let handler = MacroAiHandler::new(
         channels.clone(),
+        messages.clone(),
+        Arc::new(GrantingAccess),
         Arc::new(TestResponder),
         eastern_time_zones(),
     );
@@ -653,8 +803,11 @@ async fn thread_prompt_includes_trigger_when_reply_fetch_fails_to_return_it() {
         )],
         thread_replies: Vec::new(),
     });
+    let messages = Arc::new(RecordingMessages::new(false));
     let handler = MacroAiHandler::new(
         channels.clone(),
+        messages.clone(),
+        Arc::new(GrantingAccess),
         Arc::new(TestResponder),
         eastern_time_zones(),
     );
@@ -679,7 +832,14 @@ async fn prompt_carries_the_current_time_in_the_users_zone() {
         around_messages: Vec::new(),
         thread_replies: Vec::new(),
     });
-    let handler = MacroAiHandler::new(channels, Arc::new(TestResponder), eastern_time_zones());
+    let messages = Arc::new(RecordingMessages::new(false));
+    let handler = MacroAiHandler::new(
+        channels,
+        messages.clone(),
+        Arc::new(GrantingAccess),
+        Arc::new(TestResponder),
+        eastern_time_zones(),
+    );
     let event = mention_event(
         Uuid::new_v4(),
         Uuid::new_v4(),
@@ -702,8 +862,11 @@ async fn prompt_says_the_time_zone_is_unknown_without_a_calendar() {
         around_messages: Vec::new(),
         thread_replies: Vec::new(),
     });
+    let messages = Arc::new(RecordingMessages::new(false));
     let handler = MacroAiHandler::new(
         channels,
+        messages.clone(),
+        Arc::new(GrantingAccess),
         Arc::new(TestResponder),
         Arc::new(FixedTimeZones(None)),
     );

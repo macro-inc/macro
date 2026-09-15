@@ -120,6 +120,50 @@ pub async fn get_document_access(
                         AND thread_access.source_id = ANY($2)
                   )
               )
+
+            UNION ALL
+            -- Source 4: a file attached to a document discussion is visible to
+            -- current viewers of that document. Removing the attachment, the
+            -- discussion, or the parent grant removes this path; it never
+            -- shares the parent itself.
+            SELECT 'view' AS access_level
+            FROM comms_attachments a
+            JOIN comms_messages m ON m.id = a.message_id
+            JOIN comms_message_threads mt ON mt.root_id = COALESCE(m.thread_id, m.id)
+            JOIN "Document" parent_doc
+              ON m.parent_entity_type = 'document' AND parent_doc.id = m.parent_entity_id
+            LEFT JOIN "DocumentPermission" dp ON dp."documentId" = parent_doc.id
+            LEFT JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
+            WHERE a.entity_type = 'document'
+              AND a.entity_id = $3
+              AND m.deleted_at IS NULL
+              AND mt.deleted_at IS NULL
+              AND parent_doc."deletedAt" IS NULL
+              AND (
+                  parent_doc.owner = $4
+                  OR EXISTS (
+                      SELECT 1
+                      FROM entity_access pa
+                      WHERE pa.entity_type = 'document'
+                        AND pa.entity_id::text = parent_doc.id
+                        AND pa.source_id = ANY($2)
+                  )
+                  OR (
+                      sp."linkShareAccessLevel" IS NOT NULL
+                      AND (
+                          sp."linkShare" = 'PUBLIC'
+                          OR (
+                              sp."linkShare" = 'TEAM'
+                              AND EXISTS (
+                                  SELECT 1
+                                  FROM team_user tu
+                                  WHERE tu.user_id = parent_doc.owner
+                                    AND tu.team_id::text = ANY($2)
+                              )
+                          )
+                      )
+                  )
+              )
         ) AS combined_access
         "#,
         document_id,
@@ -288,4 +332,70 @@ async fn explain_document_email_attachments(
             })
         })
         .collect())
+}
+
+/// Historical document ids are not UUIDs and cannot occur in `entity_access`
+/// rows. Their ownership, link grants, channel grants, and project grants still
+/// live in the ordinary document and share tables.
+#[tracing::instrument(err, skip(pool, source_ids))]
+pub async fn get_legacy_document_access(
+    pool: &PgPool,
+    document_id: &str,
+    source_ids: &SourceIds,
+    user_id: Option<&MacroUserId<Lowercase<'_>>>,
+) -> Result<Option<AccessLevel>, sqlx::Error> {
+    let levels = sqlx::query_scalar!(
+        r#"
+        WITH RECURSIVE parent_projects AS (
+            SELECT p.id, p."parentId", p."userId"
+            FROM "Project" p
+            JOIN "Document" d ON d."projectId" = p.id
+            WHERE d.id = $1 AND d."deletedAt" IS NULL AND p."deletedAt" IS NULL
+            UNION
+            SELECT p.id, p."parentId", p."userId"
+            FROM "Project" p
+            JOIN parent_projects child ON p.id = child."parentId"
+            WHERE p."deletedAt" IS NULL
+        ), document_permissions AS (
+            SELECT d.owner, sp.id, sp."linkShare", sp."linkShareAccessLevel"
+            FROM "Document" d
+            LEFT JOIN "DocumentPermission" dp ON dp."documentId" = d.id
+            LEFT JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
+            WHERE d.id = $1 AND d."deletedAt" IS NULL
+        )
+        SELECT 'owner'::text AS "level!" FROM document_permissions WHERE owner = $2
+        UNION ALL
+        SELECT "linkShareAccessLevel"::text FROM document_permissions p
+        WHERE "linkShareAccessLevel" IS NOT NULL
+          AND (
+              "linkShare" = 'PUBLIC'
+              OR (
+                  "linkShare" = 'TEAM'
+                  AND EXISTS (
+                      SELECT 1 FROM team_user t
+                      WHERE t.user_id = p.owner AND t.team_id::text = ANY($3)
+                  )
+              )
+          )
+        UNION ALL
+        SELECT c.access_level::text FROM document_permissions p
+        JOIN "ChannelSharePermission" c ON c.share_permission_id = p.id
+        WHERE c.channel_id = ANY($3)
+        UNION ALL
+        SELECT 'edit'::text FROM parent_projects WHERE "userId" = $2
+        UNION ALL
+        SELECT a.access_level::text FROM entity_access a
+        JOIN parent_projects p ON a.entity_id::text = p.id
+        WHERE a.entity_type = 'project' AND a.source_id = ANY($3)
+        "#,
+        document_id,
+        user_id.map(AsRef::as_ref),
+        &source_ids.0,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(levels
+        .iter()
+        .filter_map(|level| AccessLevel::from_str(level).ok())
+        .max())
 }
