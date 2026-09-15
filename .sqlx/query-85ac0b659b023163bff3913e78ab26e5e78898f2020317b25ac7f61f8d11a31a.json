@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO comms_messages (id, channel_id, sender_id, content, thread_id)\n        VALUES ($1, $2, $3, $4, $5)\n        RETURNING\n            id,\n            channel_id,\n            sender_id,\n            content,\n            created_at,\n            updated_at,\n            thread_id,\n            edited_at as \"edited_at: chrono::DateTime<chrono::Utc>\",\n            deleted_at as \"deleted_at: chrono::DateTime<chrono::Utc>\"\n        ",
+  "query": "\n        INSERT INTO comms_messages (id, channel_id, sender_id, content, thread_id)\n        VALUES ($1, $2, $3, $4, $5)\n        RETURNING\n            id,\n            channel_id AS \"channel_id!\",\n            sender_id,\n            content,\n            created_at,\n            updated_at,\n            thread_id,\n            edited_at as \"edited_at: chrono::DateTime<chrono::Utc>\",\n            deleted_at as \"deleted_at: chrono::DateTime<chrono::Utc>\"\n        ",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "channel_id",
+        "name": "channel_id!",
         "type_info": "Uuid"
       },
       {
@@ -60,7 +60,7 @@
     },
     "nullable": [
       false,
-      false,
+      true,
       false,
       false,
       false,
@@ -70,5 +70,5 @@
       true
     ]
   },
-  "hash": "61246005cb69889a67ac46d2032f4fe9c1da7b19594f1b7dc59f2ed0a613dec1"
+  "hash": "85ac0b659b023163bff3913e78ab26e5e78898f2020317b25ac7f61f8d11a31a"
 }

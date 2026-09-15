@@ -16,7 +16,7 @@ pub async fn get_messages(
         r#"
         SELECT
             id,
-            channel_id,
+            channel_id AS "channel_id!",
             sender_id,
             content,
             created_at,
@@ -72,7 +72,7 @@ pub async fn get_channel_messages(
     let messages = sqlx::query!(
         r#"
         SELECT
-            channel_id,
+            channel_id AS "channel_id!",
             id
         FROM comms_messages
         WHERE
