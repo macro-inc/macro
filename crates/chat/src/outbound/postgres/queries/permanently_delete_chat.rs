@@ -1,9 +1,6 @@
-//! Permanently delete a chat and all associated data.
-
 use model_entity::EntityType;
 use sqlx::{Postgres, Transaction};
 
-/// Hard-delete a chat: remove pins, history, permissions, access, and the chat row.
 #[tracing::instrument(err, skip(tx))]
 pub(crate) async fn permanently_delete_chat(
     tx: &mut Transaction<'_, Postgres>,
@@ -23,7 +20,6 @@ pub(crate) async fn permanently_delete_chat(
     .execute(tx.as_mut())
     .await?;
 
-    // Delete share permission (cascades ChatPermission)
     sqlx::query!(
         r#"
         DELETE FROM "SharePermission"

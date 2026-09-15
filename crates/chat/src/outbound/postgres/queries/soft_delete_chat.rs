@@ -1,9 +1,6 @@
-//! Soft-delete a chat.
-
 use chrono::Utc;
 use sqlx::{Postgres, Transaction};
 
-/// Soft-delete a chat: remove pins and history, then set `deletedAt`.
 #[tracing::instrument(err, skip(tx))]
 pub(crate) async fn soft_delete_chat(
     tx: &mut Transaction<'_, Postgres>,

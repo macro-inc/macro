@@ -7,7 +7,6 @@ use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{Pool, Postgres};
 
-// this has types that should not become dependencies of macro_db_client
 #[tracing::instrument(skip(db))]
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix")]
 pub async fn create_chat_v2(
@@ -22,8 +21,6 @@ pub async fn create_chat_v2(
     is_persistent: bool,
 ) -> anyhow::Result<String> {
     let mut transaction: sqlx::Transaction<'_, Postgres> = db.begin().await?;
-    // move this as a standalone query to macro_db_client/dcs/create_empty_chat
-    // create a row in chat table
     let chat = sqlx::query_as!(
         IDWithTimeStamps,
         r#"
@@ -49,7 +46,6 @@ pub async fn create_chat_v2(
         })
         .collect::<Vec<_>>();
 
-    // create row in chat permissions
     crate::share_permission::create::create_chat_permission(
         &mut transaction,
         &chat.id,
@@ -57,11 +53,9 @@ pub async fn create_chat_v2(
     )
     .await?;
 
-    // tracking
     upsert_user_history(&mut transaction, user_id.copied(), &chat.id, "chat").await?;
     upsert_item_last_accessed(&mut transaction, &chat.id, "chat").await?;
 
-    // add attachment rows
     for attachment in attachments {
         append_attachment_to_chat(&mut transaction, attachment).await?;
     }
