@@ -11,7 +11,6 @@ use rootcause::prelude::*;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::bind_owner;
 use crate::domain::models::{
     EntityRecord, EntityRegistryError, EntityRegistryResult, EntityTypeCount, RegisteredEntityType,
 };
@@ -115,7 +114,8 @@ impl EntityRegistryRepository for PgEntityRegistryRepository {
         owner: &Owner,
         entity_type: Option<RegisteredEntityType>,
     ) -> EntityRegistryResult<Vec<EntityRecord>> {
-        let (owner_type, owner_id) = bind_owner(owner);
+        let owner_type = owner.owner_type();
+        let owner_id = owner.principal_id();
         let entity_type = entity_type.map(RegisteredEntityType::as_str);
         sqlx::query_as!(
             EntityRow,

@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
+use entity_registry::{InsertOutcome, NewEntityRecord, RegisteredEntityType, WriteOutcome};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use model_owner::{Owner, OwnerType};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::{clear_deleted, delete_entity, insert_entity, mark_deleted, touch_updated};
-use crate::domain::models::{InsertOutcome, NewEntityRecord, RegisteredEntityType, WriteOutcome};
 
 fn user_owner() -> Owner {
     Owner::parse(OwnerType::User, "macro|hutch@macro.com").unwrap()

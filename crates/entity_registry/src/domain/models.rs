@@ -104,7 +104,7 @@ impl EntityRecord {
     }
 }
 
-/// Input to `insert_entity`.
+/// Input to `entity_registry_db_utils::insert_entity`.
 ///
 /// `None` timestamps take the database clock. Inside one transaction that
 /// is the same instant the caller's own `DEFAULT now()` columns received,
@@ -160,7 +160,7 @@ impl NewEntityRecord {
     }
 }
 
-/// What `insert_entity` did.
+/// What `entity_registry_db_utils::insert_entity` did.
 ///
 /// `AlreadyRegistered` means a row with this id existed; it does **not**
 /// mean that row matches the input.

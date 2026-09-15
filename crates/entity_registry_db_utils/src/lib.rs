@@ -1,17 +1,25 @@
-//! Writes to `entity` that ride the caller's transaction.
+#![deny(missing_docs)]
+//! Transactional writes to the `entity` table.
+//!
+//! Other crates call these helpers from inside their own resource-row
+//! transactions. The helpers never commit. Reads go through
+//! `entity_registry::EntityRegistryService`.
 
 #[cfg(test)]
 mod test;
 
 use chrono::{DateTime, Utc};
+use entity_registry::{
+    EntityRegistryError, EntityRegistryResult, InsertOutcome, NewEntityRecord, WriteOutcome,
+};
+use model_owner::{Owner, OwnerType};
 use rootcause::prelude::*;
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
-use super::bind_owner;
-use crate::domain::models::{
-    EntityRegistryError, EntityRegistryResult, InsertOutcome, NewEntityRecord, WriteOutcome,
-};
+fn bind_owner(owner: &Owner) -> (OwnerType, String) {
+    (owner.owner_type(), owner.principal_id())
+}
 
 /// Register `record`. Idempotent: `ON CONFLICT (id) DO NOTHING`.
 #[tracing::instrument(

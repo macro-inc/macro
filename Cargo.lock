@@ -6336,6 +6336,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "entity_registry_db_utils"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "entity_registry",
+ "macro_db_migrator",
+ "model_owner",
+ "rootcause",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "enum-as-inner"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -5,11 +5,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{EntityRow, PgEntityRegistryRepository};
-use crate::domain::models::{
-    EntityRegistryError, InsertOutcome, NewEntityRecord, RegisteredEntityType, WriteOutcome,
-};
+use crate::domain::models::{EntityRegistryError, NewEntityRecord, RegisteredEntityType};
 use crate::domain::ports::EntityRegistryRepository;
-use crate::outbound::pg_entity_tx::{insert_entity, mark_deleted};
 
 fn user_owner() -> Owner {
     Owner::parse(OwnerType::User, "macro|hutch@macro.com").unwrap()
@@ -30,12 +27,36 @@ fn ts(rfc3339: &str) -> DateTime<Utc> {
 }
 
 async fn insert_committed(pool: &PgPool, record: NewEntityRecord) {
-    let mut tx = pool.begin().await.unwrap();
-    assert_eq!(
-        insert_entity(&mut tx, record).await.unwrap(),
-        InsertOutcome::Inserted
-    );
-    tx.commit().await.unwrap();
+    let owner_type = record.owner.owner_type();
+    let owner_id = record.owner.principal_id();
+    sqlx::query!(
+        r#"
+        INSERT INTO entity (id, entity_type, owner_type, owner_id, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, now()), COALESCE($6::timestamptz, now()))
+        "#,
+        record.id,
+        record.entity_type.as_str(),
+        owner_type as _,
+        owner_id,
+        record.created_at,
+        record.updated_at,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn mark_deleted_committed(pool: &PgPool, id: Uuid, at: DateTime<Utc>) {
+    sqlx::query!(
+        r#"
+        UPDATE entity SET deleted_at = $2 WHERE id = $1
+        "#,
+        id,
+        at,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -53,14 +74,7 @@ async fn get_returns_live_and_soft_deleted_rows_and_none_for_unknown(pool: PgPoo
         NewEntityRecord::new(deleted_id, RegisteredEntityType::Document, owner.clone()),
     )
     .await;
-    let mut tx = pool.begin().await.unwrap();
-    assert_eq!(
-        mark_deleted(&mut tx, deleted_id, ts("2024-01-01T00:00:00Z"))
-            .await
-            .unwrap(),
-        WriteOutcome::Applied
-    );
-    tx.commit().await.unwrap();
+    mark_deleted_committed(&pool, deleted_id, ts("2024-01-01T00:00:00Z")).await;
 
     let repo = PgEntityRegistryRepository::new(pool);
     let live = repo.get(live_id).await.unwrap().unwrap();
@@ -157,11 +171,7 @@ async fn list_owned_by_filters_by_kind_and_skips_soft_deleted(pool: PgPool) {
         NewEntityRecord::new(deleted_chat, RegisteredEntityType::Chat, owner.clone()),
     )
     .await;
-    let mut tx = pool.begin().await.unwrap();
-    mark_deleted(&mut tx, deleted_chat, ts("2024-01-01T00:00:00Z"))
-        .await
-        .unwrap();
-    tx.commit().await.unwrap();
+    mark_deleted_committed(&pool, deleted_chat, ts("2024-01-01T00:00:00Z")).await;
 
     let repo = PgEntityRegistryRepository::new(pool);
     let chats = repo
@@ -254,11 +264,7 @@ async fn count_by_type_splits_live_and_deleted(pool: PgPool) {
         NewEntityRecord::new(Uuid::from_u128(4), RegisteredEntityType::Document, owner),
     )
     .await;
-    let mut tx = pool.begin().await.unwrap();
-    mark_deleted(&mut tx, Uuid::from_u128(3), ts("2024-01-01T00:00:00Z"))
-        .await
-        .unwrap();
-    tx.commit().await.unwrap();
+    mark_deleted_committed(&pool, Uuid::from_u128(3), ts("2024-01-01T00:00:00Z")).await;
 
     let repo = PgEntityRegistryRepository::new(pool);
     let chats = repo

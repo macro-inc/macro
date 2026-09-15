@@ -1,9 +1,10 @@
 #![deny(missing_docs)]
 //! Owning crate for the `entity` table: one recorded owner per in-scope resource.
 //!
-//! Effective access lives in `entity_access`, not here. Writes ride the
-//! caller's transaction so a resource row and its registry row commit or roll
-//! back together. Reads go through [`EntityRegistryRepository`].
+//! Effective access lives in `entity_access`, not here. Reads go through
+//! [`EntityRegistryService`], backed by [`EntityRegistryRepository`].
+//! Transactional writes live in `entity_registry_db_utils` so other crates can
+//! join them to their own resource-row transactions.
 //!
 //! [`RegisteredEntityType`] is the table CHECK as a type. Use
 //! [`NewEntityRecord::try_new`] when the caller holds a wide
@@ -30,12 +31,9 @@ pub use domain::models::{
     EntityRecord, EntityRegistryError, EntityRegistryResult, EntityTypeCount, InsertOutcome,
     NewEntityRecord, RegisteredEntityType, UnregisteredEntityType, WriteOutcome,
 };
-pub use domain::ports::EntityRegistryRepository;
+pub use domain::ports::{EntityRegistryRepository, EntityRegistryService};
+pub use domain::service::EntityRegistryServiceImpl;
 pub use model_owner::Owner;
 
 #[cfg(feature = "postgres")]
 pub use outbound::pg_entity_registry_repo::PgEntityRegistryRepository;
-#[cfg(feature = "postgres")]
-pub use outbound::pg_entity_tx::{
-    clear_deleted, delete_entity, insert_entity, mark_deleted, touch_updated,
-};
