@@ -125,6 +125,18 @@ where
             .fetch_one(executor)
             .await?
         }
+        "initiative" => {
+            let item_id = macro_uuid::string_to_uuid(item_id)?;
+            sqlx::query_scalar!(
+                r#"
+                SELECT share_permission_id as "share_permission_id!"
+                FROM initiative WHERE id = $1::uuid
+                "#,
+                item_id,
+            )
+            .fetch_one(executor)
+            .await?
+        }
         _ => anyhow::bail!("unsupported item type {item_type}"),
     };
 
