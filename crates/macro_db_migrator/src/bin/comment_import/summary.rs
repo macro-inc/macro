@@ -34,6 +34,26 @@ pub struct Warnings {
 }
 
 impl Summary {
+    /// Add a committed batch to the run.
+    pub fn absorb(&mut self, batch: Self) {
+        self.documents += batch.documents;
+        self.batches += batch.batches;
+        self.comment_mappings_allocated += batch.comment_mappings_allocated;
+        self.thread_mappings_allocated += batch.thread_mappings_allocated;
+        self.messages_inserted += batch.messages_inserted;
+        self.messages_updated += batch.messages_updated;
+        self.messages_tombstoned += batch.messages_tombstoned;
+        self.threads_written += batch.threads_written;
+        self.threads_tombstoned += batch.threads_tombstoned;
+        self.anchors_linked += batch.anchors_linked;
+        self.notifications_remapped += batch.notifications_remapped;
+        self.pdf_payloads_remapped += batch.pdf_payloads_remapped;
+        self.warnings.unmapped_notifications += batch.warnings.unmapped_notifications;
+        self.warnings.unmapped_pdf_comment_ids += batch.warnings.unmapped_pdf_comment_ids;
+        self.warnings.invalid_mark_ids += batch.warnings.invalid_mark_ids;
+        self.warnings.root_order_drift += batch.warnings.root_order_drift;
+    }
+
     /// True when the run changed nothing.
     pub fn is_noop(&self) -> bool {
         self.comment_mappings_allocated == 0
