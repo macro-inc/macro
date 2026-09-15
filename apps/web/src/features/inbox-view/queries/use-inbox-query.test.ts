@@ -85,7 +85,7 @@ function makeQuery(initial: EntityData[], hasMore = true) {
     refresh: vi.fn(async () => {}),
     resetToInitialPage: vi.fn(),
   };
-  return { query, setEntities, setMore, setLoading, setError, fetchNextPage };
+  return { query, setEntities, setMore, setLoading, setError, fetchNextPage, setOldestFetchedTimestamp };
 }
 
 let dispose: (() => void) | undefined;
@@ -120,6 +120,17 @@ describe('Home data source', () => {
   afterEach(() => {
     dispose?.();
     vi.useRealTimers();
+  });
+
+  it('does not treat older cache-only rows as fetched page coverage', async () => {
+    const notifications = makeQuery([email('n9', 9), email('n1', 1)]);
+    const activity = makeQuery([email('a10', 10), email('a8', 8), email('cached', 2)]);
+    activity.setOldestFetchedTimestamp(new Date(2026, 8, 8).getTime());
+    const { source } = mount(notifications, activity);
+    expect(ids(source)).toEqual(['a10', 'n9']);
+    await source.loadMore();
+    expect(activity.fetchNextPage).toHaveBeenCalledOnce();
+    expect(notifications.fetchNextPage).not.toHaveBeenCalled();
   });
 
   it('pages the shallower source and appends history without moving existing rows', async () => {

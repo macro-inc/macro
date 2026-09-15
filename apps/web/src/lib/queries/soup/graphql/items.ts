@@ -443,6 +443,7 @@ export function createGraphqlSoupAstItemsQuery(
     ServerProjection
   >(() => {
     const firstInput = firstPageInput();
+    const sortMethod = args().params.sort_method;
     const queryOptions = options();
     const showSupportedForeignEntities =
       queryOptions.showSupportedForeignEntities;
@@ -489,7 +490,7 @@ export function createGraphqlSoupAstItemsQuery(
           data: {
             entities,
             groups: undefined,
-            oldestFetchedTimestamp: soupPageTimestamp(entities, args().params.sort_method),
+            oldestFetchedTimestamp: soupPageTimestamp(entities, sortMethod),
           },
         };
       },
@@ -591,13 +592,13 @@ export function createGraphqlSoupAstItemsQuery(
   );
 
   return {
-    data: () => {
+    data: createMemo(() => {
       const data = displayData();
       return data && {
         ...data,
         oldestFetchedTimestamp: query.data?.data.oldestFetchedTimestamp,
       };
-    },
+    }),
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
