@@ -75,10 +75,12 @@ pub async fn get_channel_messages(
             channel_id AS "channel_id!",
             id
         FROM comms_messages
-        WHERE
+        WHERE channel_id IS NOT NULL
+        AND (
             $3::bool IS NULL
             OR ($3 AND deleted_at IS NOT NULL)
             OR (NOT $3 AND deleted_at IS NULL)
+        )
         ORDER BY created_at ASC
         LIMIT $1
         OFFSET $2

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            channel_id AS \"channel_id!\",\n            id\n        FROM comms_messages\n        WHERE channel_id IS NOT NULL\n        AND (\n            $3::bool IS NULL\n            OR ($3 AND deleted_at IS NOT NULL)\n            OR (NOT $3 AND deleted_at IS NULL)\n        )\n        ORDER BY created_at ASC\n        LIMIT $1\n        OFFSET $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "3bbe68003b14d2d9157fc8b2cadeae7ee3feaf10c4ca09c1aad337daf9bf524f"
+}

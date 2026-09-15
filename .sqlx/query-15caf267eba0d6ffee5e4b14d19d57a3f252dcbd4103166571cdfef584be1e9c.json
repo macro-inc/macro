@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT channel_id AS \"channel_id!\" FROM comms_messages WHERE id = $1",
+  "query": "SELECT channel_id FROM comms_messages WHERE id = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "channel_id!",
+        "name": "channel_id",
         "type_info": "Uuid"
       }
     ],
@@ -18,5 +18,5 @@
       true
     ]
   },
-  "hash": "505f6dc3fc1a3788be6fa23e26b57ca9ad5bd14b88a1f281c0c0e3e81cf99256"
+  "hash": "15caf267eba0d6ffee5e4b14d19d57a3f252dcbd4103166571cdfef584be1e9c"
 }

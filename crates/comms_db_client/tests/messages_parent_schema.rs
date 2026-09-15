@@ -1,4 +1,5 @@
 use comms_db_client::messages::create_message::{CreateMessageOptions, create_message};
+use comms_db_client::messages::get_messages::get_channel_messages;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
@@ -368,6 +369,21 @@ async fn create_message_channel_reply_path_is_unchanged(
     assert_eq!(parent_columns(&pool, reply.id).await?, channel_parent(CH1));
     assert_eq!(thread_rows(&pool, root.id).await?, 1);
     assert_eq!(thread_rows(&pool, reply.id).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("channels"))
+)]
+async fn channel_message_backfill_scan_skips_document_rows(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let channel_root = insert_channel_root(&pool, CH1).await?;
+    insert_document_root(&pool, DOC).await?;
+
+    let messages = get_channel_messages(&pool, 10, 0, None).await?;
+    assert_eq!(messages, vec![(CH1, channel_root)]);
     Ok(())
 }
 
