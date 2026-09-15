@@ -63,6 +63,24 @@ pub(crate) const MAX_SSE_PAYLOAD: NonZeroUsize = match NonZeroUsize::new(16 * 10
 /// choose between.
 pub const CURSOR_API_BASE_URL: &str = "https://api.cursor.com";
 
+macro_env_var::maybe_env_vars! {
+    /// Overrides [`CURSOR_API_BASE_URL`] when set. Only a local stack sets
+    /// it, to point every Cursor call at a stand-in server; deployed
+    /// environments leave it unset and talk to Cursor.
+    pub struct CursorApiBaseUrl;
+}
+
+/// The Cursor API base url this process should call: the
+/// `CURSOR_API_BASE_URL` override when set, else the one real
+/// [`CURSOR_API_BASE_URL`].
+#[must_use]
+pub fn cursor_api_base_url() -> String {
+    CursorApiBaseUrl::new()
+        .map(|url| url.trim_end_matches('/').to_owned())
+        .filter(|url| !url.is_empty())
+        .unwrap_or_else(|| CURSOR_API_BASE_URL.to_owned())
+}
+
 /// A Cursor API key that never prints itself and does not outlive its client.
 ///
 /// The key used to be a bare `String` in a `Debug`-deriving config, so a

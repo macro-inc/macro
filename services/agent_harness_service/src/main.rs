@@ -93,7 +93,7 @@ use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
 use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
-use cursor_cloud_agents::api::CURSOR_API_BASE_URL;
+use cursor_cloud_agents::api::cursor_api_base_url;
 use github::domain::service::{
     InstallationTokenConfig, InstallationTokenService, ReachableRepositoriesService,
 };
@@ -460,7 +460,7 @@ async fn run() -> anyhow::Result<()> {
     );
     let cursor_manager = CursorContainerManager::new(
         cursor_keys.clone(),
-        CURSOR_API_BASE_URL.to_owned(),
+        cursor_api_base_url(),
         session_repo.clone(),
         reachable_repositories,
         ai_usage::pg_recorder(pool.clone()),
@@ -757,7 +757,7 @@ async fn run() -> anyhow::Result<()> {
     let model_service = Arc::new(AgentModelsServiceImpl::new(
         VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
         InMemoryModels::new(Some(inmem_model_engine), config.inmem_model.clone()),
-        CursorModels::new(cursor_keys, CURSOR_API_BASE_URL.to_owned()),
+        CursorModels::new(cursor_keys, cursor_api_base_url()),
         macrod_models,
         model_probe_timeout,
     ));
