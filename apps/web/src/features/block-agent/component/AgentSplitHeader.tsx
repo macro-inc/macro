@@ -71,7 +71,7 @@ export function AgentSplitHeader(props: {
           : session.status.kind,
     };
   };
-  useBlockEntityCommands(entity);
+  useBlockEntityCommands({ resolveEntity: entity });
   const [shareOpen, setShareOpen] = createSignal(false);
   const shareContext = {
     isOpen: shareOpen,

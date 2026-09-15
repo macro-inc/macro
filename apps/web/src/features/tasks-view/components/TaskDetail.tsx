@@ -1,4 +1,5 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FindAndReplace } from '@block-md/component/FindAndReplace';
 import {
   MarkdownDocument,
@@ -22,6 +23,7 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
+import { buildEntityData } from '@entity';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button } from '@ui';
@@ -60,19 +62,38 @@ function TaskViewBreadcrumbItem() {
 function TaskBreadcrumbItem(props: {
   documentId: string;
   fallbackName: string;
+  ownerId: string;
+  projectId?: string;
 }) {
   const { closeTask } = useTasksView();
+  const panel = useSplitPanelOrThrow();
   const { displayName } = useMarkdownName();
   const { permissions, state: documentState } = useMarkdownDocument();
   const { fileOperations, menuTools } = useMarkdownDocumentTools();
+
   const taskName = () => displayName() ?? props.fallbackName;
+
   const focusTask = () => documentState.editor.md.editor?.focus();
+
   const menuPermissions = () => {
     if (permissions.isOwner()) return Permissions.OWNER;
     if (permissions.canEdit()) return Permissions.CAN_EDIT;
     if (permissions.canComment()) return Permissions.CAN_COMMENT;
     return Permissions.CAN_VIEW;
   };
+
+  useBlockEntityCommands({
+    id: props.documentId,
+    scopeId: panel.splitHotkeyScope,
+    resolveEntity: () =>
+      buildEntityData({
+        id: props.documentId,
+        name: taskName(),
+        blockName: 'task',
+        ownerId: props.ownerId,
+        projectId: props.projectId,
+      }),
+  });
 
   return (
     <ViewBreadcrumbs.Item id={`task:${props.documentId}`} order={1}>
@@ -197,6 +218,8 @@ function TaskDetailDocument(props: {
         <TaskBreadcrumbItem
           documentId={props.task.id}
           fallbackName={fallbackName()}
+          ownerId={props.data.metadata.owner}
+          projectId={props.data.metadata.projectId ?? undefined}
         />
         <SidePanel.Layout headerToggle={false}>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
