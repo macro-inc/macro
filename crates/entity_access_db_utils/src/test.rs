@@ -229,6 +229,19 @@ async fn fetch_entity_access_rows(
     .unwrap()
 }
 
+fn grants(rows: &[EntityAccessRow]) -> Vec<(&str, &str, AccessLevel, Option<&str>)> {
+    rows.iter()
+        .map(|row| {
+            (
+                row.source_type.as_str(),
+                row.source_id.as_str(),
+                row.access_level,
+                row.granted_from_project_id.as_deref(),
+            )
+        })
+        .collect()
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../fixtures", scripts("upsert_test_data"))
@@ -717,6 +730,211 @@ async fn remove_non_owner_user_entity_access_preserves_non_user_inherited_and_ot
     assert_eq!(other_type_rows[0].source_id, "macro|other-type@test.com");
     assert_eq!(other_type_rows[0].access_level, AccessLevel::View);
     assert!(other_type_rows[0].granted_from_project_id.is_none());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("upsert_test_data"))
+)]
+async fn delete_user_entity_access_rows_removes_targeted_direct_grants_only(pool: Pool<Postgres>) {
+    let initiative_id = Uuid::from_u128(0x0b01);
+    let other_initiative_id = Uuid::from_u128(0x0b02);
+    let root_project_id = ROOT_PROJECT_ID.to_string();
+    let owner = MacroUserIdStr::try_from_email("owner@macro.com").unwrap();
+    let alice = MacroUserIdStr::try_from_email("alice@macro.com").unwrap();
+    let bob = MacroUserIdStr::try_from_email("bob@macro.com").unwrap();
+    let carol = MacroUserIdStr::try_from_email("carol@macro.com").unwrap();
+
+    let mut tx = pool.begin().await.unwrap();
+    for (user, access_level, granted_from_project_id) in [
+        (&owner, AccessLevel::Owner, None),
+        (&alice, AccessLevel::Edit, None),
+        (&bob, AccessLevel::View, None),
+        (&bob, AccessLevel::Edit, Some(root_project_id.as_str())),
+        (&carol, AccessLevel::View, None),
+    ] {
+        insert_entity_access_for_test(
+            &mut tx,
+            &initiative_id,
+            EntityType::Initiative,
+            user.as_ref(),
+            EntityAccessSourceType::User,
+            access_level,
+            granted_from_project_id,
+        )
+        .await;
+    }
+    insert_entity_access_for_test(
+        &mut tx,
+        &initiative_id,
+        EntityType::Initiative,
+        BOT_PRINCIPAL,
+        EntityAccessSourceType::Bot,
+        AccessLevel::Edit,
+        None,
+    )
+    .await;
+    for (source_id, source_type, access_level) in [
+        ("team-1", EntityAccessSourceType::Team, AccessLevel::Edit),
+        (
+            "channel-1",
+            EntityAccessSourceType::Channel,
+            AccessLevel::Comment,
+        ),
+    ] {
+        insert_entity_access_for_test(
+            &mut tx,
+            &initiative_id,
+            EntityType::Initiative,
+            source_id,
+            source_type,
+            access_level,
+            None,
+        )
+        .await;
+    }
+    insert_entity_access_for_test(
+        &mut tx,
+        &other_initiative_id,
+        EntityType::Initiative,
+        alice.as_ref(),
+        EntityAccessSourceType::User,
+        AccessLevel::Edit,
+        None,
+    )
+    .await;
+    insert_entity_access_for_test(
+        &mut tx,
+        &initiative_id,
+        EntityType::Document,
+        alice.as_ref(),
+        EntityAccessSourceType::User,
+        AccessLevel::Edit,
+        None,
+    )
+    .await;
+
+    delete_user_entity_access_rows(
+        &mut tx,
+        &initiative_id,
+        EntityType::Initiative,
+        &[owner.clone(), alice.clone(), bob.clone()],
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    let rows = fetch_entity_access_rows(&pool, &initiative_id, EntityType::Initiative).await;
+    assert_eq!(
+        grants(&rows),
+        vec![
+            ("bot", BOT_PRINCIPAL, AccessLevel::Edit, None),
+            ("channel", "channel-1", AccessLevel::Comment, None),
+            ("team", "team-1", AccessLevel::Edit, None),
+            (
+                "user",
+                "macro|bob@macro.com",
+                AccessLevel::Edit,
+                Some(root_project_id.as_str()),
+            ),
+            ("user", "macro|carol@macro.com", AccessLevel::View, None),
+            ("user", "macro|owner@macro.com", AccessLevel::Owner, None),
+        ]
+    );
+
+    let other_entity_rows =
+        fetch_entity_access_rows(&pool, &other_initiative_id, EntityType::Initiative).await;
+    assert_eq!(
+        grants(&other_entity_rows),
+        vec![("user", "macro|alice@macro.com", AccessLevel::Edit, None)]
+    );
+
+    let other_type_rows =
+        fetch_entity_access_rows(&pool, &initiative_id, EntityType::Document).await;
+    assert_eq!(
+        grants(&other_type_rows),
+        vec![("user", "macro|alice@macro.com", AccessLevel::Edit, None)]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_user_entity_access_rows_without_user_ids_keeps_every_row(pool: Pool<Postgres>) {
+    let initiative_id = Uuid::from_u128(0x0b03);
+    let owner = MacroUserIdStr::try_from_email("owner@macro.com").unwrap();
+    let alice = MacroUserIdStr::try_from_email("alice@macro.com").unwrap();
+
+    let mut tx = pool.begin().await.unwrap();
+    for (user, access_level) in [(&owner, AccessLevel::Owner), (&alice, AccessLevel::Edit)] {
+        insert_entity_access_for_test(
+            &mut tx,
+            &initiative_id,
+            EntityType::Initiative,
+            user.as_ref(),
+            EntityAccessSourceType::User,
+            access_level,
+            None,
+        )
+        .await;
+    }
+
+    delete_user_entity_access_rows(&mut tx, &initiative_id, EntityType::Initiative, &[])
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let rows = fetch_entity_access_rows(&pool, &initiative_id, EntityType::Initiative).await;
+    assert_eq!(
+        grants(&rows),
+        vec![
+            ("user", "macro|alice@macro.com", AccessLevel::Edit, None),
+            ("user", "macro|owner@macro.com", AccessLevel::Owner, None),
+        ]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_user_entity_access_rows_keeps_team_and_channel_grants_that_share_a_targeted_user_id(
+    pool: Pool<Postgres>,
+) {
+    let initiative_id = Uuid::from_u128(0x0b04);
+    let alice = MacroUserIdStr::try_from_email("alice@macro.com").unwrap();
+
+    let mut tx = pool.begin().await.unwrap();
+    for (source_type, access_level) in [
+        (EntityAccessSourceType::User, AccessLevel::Edit),
+        (EntityAccessSourceType::Team, AccessLevel::Edit),
+        (EntityAccessSourceType::Channel, AccessLevel::Comment),
+    ] {
+        insert_entity_access_for_test(
+            &mut tx,
+            &initiative_id,
+            EntityType::Initiative,
+            alice.as_ref(),
+            source_type,
+            access_level,
+            None,
+        )
+        .await;
+    }
+
+    delete_user_entity_access_rows(
+        &mut tx,
+        &initiative_id,
+        EntityType::Initiative,
+        &[alice.clone()],
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    let rows = fetch_entity_access_rows(&pool, &initiative_id, EntityType::Initiative).await;
+    assert_eq!(
+        grants(&rows),
+        vec![
+            ("channel", alice.as_ref(), AccessLevel::Comment, None),
+            ("team", alice.as_ref(), AccessLevel::Edit, None),
+        ]
+    );
 }
 
 const OWNER_TEAM_ID: Uuid = Uuid::from_u128(0x0000000a_0000_0000_0000_00000000000a);

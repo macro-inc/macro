@@ -5,6 +5,7 @@ import { ComposeAgentSession } from '@app/features/block-agent/component/Compose
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
+import { DriveView } from '@app/features/drive-view/drive-view';
 import { EmailCompose } from '@app/features/email-compose/email-compose';
 import { EmailView } from '@app/features/email-view/email-view';
 import { GettingStarted } from '@app/features/getting-started';
@@ -445,6 +446,7 @@ registerComponent(
   'documents',
   withAuth((params: DocumentsComponentParams = {}) => {
     usePageViewTracking('documents');
+    const newAppViews = useNewAppViews();
     const user = useUserContext();
     const preset = getViewPreset('documents', undefined, {
       userId: user.userId(),
@@ -459,12 +461,24 @@ registerComponent(
       params.initialClientFilters
     );
     return (
-      <SoupView
-        viewName="Files"
-        initialFilters={initialFilters}
-        initialClientFilters={initialClientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
+      <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+        <Show
+          when={newAppViews.enabled()}
+          fallback={
+            <SoupView
+              viewName="Files"
+              initialFilters={initialFilters}
+              initialClientFilters={initialClientFilters}
+              initialGroupBy={preset?.groupBy}
+            />
+          }
+        >
+          <DriveView
+            initialFilters={params.initialFilters}
+            initialClientFilters={params.initialClientFilters}
+          />
+        </Show>
+      </Show>
     );
   })
 );

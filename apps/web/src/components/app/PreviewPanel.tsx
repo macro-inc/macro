@@ -110,7 +110,9 @@ function PreviewPanelContent(
   const [attachHotkeys, previewHotkeyScope] =
     useHotkeyDOMScope('preview-panel');
 
-  const blockInstance = createMemo(() => {
+  const blockInstance = createMemo<
+    ReturnType<BlockOrchestrator['createBlockInstance']> | undefined
+  >((previous) => {
     const entity = props.selectedEntity;
 
     const target = match(entity)
@@ -199,6 +201,13 @@ function PreviewPanelContent(
         aliasContext: undefined,
       }));
 
+    if (previous?.type === target.blockType && previous.id === target.blockId) {
+      return previous;
+    }
+    if (props.orchestrator.isBlockMounted(target.blockType, target.blockId)) {
+      return undefined;
+    }
+
     return props.orchestrator.createBlockInstance(
       target.blockType,
       target.blockId,
@@ -214,6 +223,7 @@ function PreviewPanelContent(
       () => props.selectedEntity,
       (entity) => {
         setInteractedWith(false);
+        if (!blockInstance()) return;
         if (
           entity.type === 'channel' ||
           entity.type === 'channel_message' ||
@@ -313,7 +323,16 @@ function PreviewPanelContent(
             onFocusOut={props.onFocusOut}
           >
             <Suspense>
-              <Dynamic component={blockInstance().element} />
+              <Show
+                when={blockInstance()}
+                fallback={
+                  <div class="flex size-full items-center justify-center text-sm text-ink-muted">
+                    Content already open.
+                  </div>
+                }
+              >
+                {(instance) => <Dynamic component={instance().element} />}
+              </Show>
             </Suspense>
           </PreviewPanelContext>
         </SplitPanelContext.Provider>

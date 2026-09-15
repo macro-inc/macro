@@ -379,7 +379,7 @@ function Header(props: JSX.HTMLAttributes<HTMLElement>) {
     <header
       {...rest}
       class={cn(
-        'shrink-0 border-b border-edge touch:border-b-0 px-4 py-4 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)]',
+        'shrink-0 px-4 py-4 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)]',
         local.class
       )}
       data-view-shell-header=""

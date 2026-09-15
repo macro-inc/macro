@@ -50,7 +50,9 @@ files`, `Format`, a `Task` switch (turns the message into a task), `Send message
 
 Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
 an existing thread reply, it inserts a one-line reply-target reference into the composer;
-clicking the reference navigates back to that reply. If text in the message is
+clicking the reference navigates back to that reply. References to the current
+channel navigate in place, including inside the preview panel, without opening
+another split. If text in the message is
 browser-selected before `Reply` is clicked, the reference previews only the selected text.
 Clicking `Reply` again for a message already referenced anywhere in the draft keeps
 the existing reference and draft unchanged, even if a different text selection is used.
@@ -110,7 +112,10 @@ new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
 model supplies only the URL. The tool records the link, not the GitHub PR itself.
-Harnesses with Macro Internal MCP receive a shared instruction to register PRs. Cursor
+The shared Macro system instructions ask agents to register PRs when
+`macro_internal.set_pull_request` is available. Macro Internal MCP also advertises
+this guidance in its server instructions. It is not prepended to individual user
+messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
 automatic creation can finish after the agent stops. Repeated registration is
@@ -124,13 +129,14 @@ When Cursor or Codex reports a pull request, the chip header shows its GitHub
 link. Codex links can arrive after the assistant finishes; a session-update event
 refreshes mounted chips without a new conversation message. Codex checks provider
 PR metadata every 20 seconds while attached. Viewing a disconnected Codex session
-restores observation without starting a task; refresh requires its original
+reads saved history; sending a message reattaches the runtime. Refresh requires its original
 ChatGPT connection to remain connected. The link remains
 usable while the webhook mapping is loading or absent, then becomes a Macro PR
-entity link once synced. Codex delayed-link discovery, duplicate and changed
-metadata updates, and opening the exact PR URL were verified in Chromium with
-mocked session snapshots and realtime invalidation. This UI check does not prove
-live provider discovery; backend tests separately cover reattachment and delayed
+entity link once synced. On narrow chips, long PR names truncate with an
+ellipsis; hover the link to inspect the full title. Codex delayed-link discovery,
+duplicate and changed metadata updates, and opening the exact PR URL were verified
+in Chromium with mocked session snapshots and realtime invalidation. This UI check
+does not prove live provider discovery; backend tests separately cover delayed
 provider metadata.
 
 When the agent stops to ask a question the question takes the area in the passage's
@@ -206,7 +212,8 @@ a channel cached away from its latest page, and a delta longer than one page use
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
-channels. Channel favorites open in the channel preview.
+channels. Channel favorites open in the channel preview. Shift-clicking a
+favorite, channel, or DM opens that conversation in a new split instead.
 The search action beside the tabs opens a search field below them and replaces
 the active tab contents with matching channels and direct messages from one
 activity-ordered source. Search results use compact rows on `All` and
@@ -218,8 +225,19 @@ artwork and wraps long queries.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
-Rows and section headers act on primary-button mousedown, so the selection
-and highlight change before the click completes; a normal click still works.
+Channels and DMs each have a sort action before their create action. They can be
+sorted by last viewed, last updated, or date created, and each choice persists
+independently as a user preference.
+In slim mode, Favorites remains a separate collapsible section, while Channels
+and DMs render in one continuous list without section headings. The gear action
+in the footer controls whether each group appears and exposes the same
+independently persisted sort choices.
+Compact channel and DM rows in All have the same height. Section headings place
+their caret immediately after the title and reveal it on hover or while the
+section is collapsed; hovering only undims the heading text, while
+keyboard-focusing the heading with Arrow keys or `j` / `k` gives it a background.
+Clicking a section heading toggles it without moving the keyboard highlight;
+keyboard activation still toggles the highlighted section.
 
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances

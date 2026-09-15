@@ -15,9 +15,13 @@ note: |-
   `files` in each ts-/tsx-feature-* rule.
 files:
   - apps/web/src/features/activity/components/**
+  - apps/web/src/features/drive-view/components/**
   - apps/web/src/features/activity/queries/**
+  - apps/web/src/features/drive-view/queries/**
   - apps/web/src/features/activity/primitives/**
+  - apps/web/src/features/drive-view/primitives/**
   - apps/web/src/features/activity/views/**
+  - apps/web/src/features/drive-view/views/**
   - apps/web/src/features/email-message/components/**
   - apps/web/src/features/email-message/queries/**
   - apps/web/src/features/email-message/primitives/**

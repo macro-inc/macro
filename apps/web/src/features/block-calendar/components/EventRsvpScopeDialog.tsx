@@ -1,10 +1,10 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
-import { RadioGroup } from '@kobalte/core/radio-group';
+import { RadioGroup as KobalteRadioGroup } from '@kobalte/core/radio-group';
 import CheckIcon from '@phosphor/check.svg';
 import CloseIcon from '@phosphor/x.svg';
 import type { CalendarRsvpScope } from '@service-email/client';
-import { Button, Dialog, Panel } from '@ui';
+import { Button, Dialog, Panel, RadioGroup } from '@ui';
 import { For, Show } from 'solid-js';
 
 const SCOPE_OPTIONS = [
@@ -41,21 +41,25 @@ export function EventRsvpScopeDialog(props: {
               </Dialog.Title>
             </Panel.Header>
             <Panel.Body class="flex flex-col gap-3 p-3">
-              <div class="flex max-w-80 flex-col gap-2 text-sm text-ink-muted">
+              <RadioGroup
+                value={props.scope}
+                onChange={(value) =>
+                  props.onScopeChange(value as CalendarRsvpScope)
+                }
+                aria-label="Response applies to"
+                class="max-w-80 text-sm text-ink-muted"
+              >
                 <For each={SCOPE_OPTIONS}>
                   {(option) => (
-                    <label class="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="rsvp-scope"
-                        checked={props.scope === option.scope}
-                        onChange={() => props.onScopeChange(option.scope)}
-                      />
-                      {option.label}
-                    </label>
+                    <RadioGroup.Item value={option.scope}>
+                      <RadioGroup.ItemControl />
+                      <RadioGroup.ItemLabel>
+                        {option.label}
+                      </RadioGroup.ItemLabel>
+                    </RadioGroup.Item>
                   )}
                 </For>
-              </div>
+              </RadioGroup>
               <div class="flex justify-end gap-1 pt-2">
                 <Button
                   variant="ghost"
@@ -110,7 +114,7 @@ export function EventRsvpScopeDialog(props: {
                 Apply your response to:
               </p>
               <MobileDrawer.Section>
-                <RadioGroup
+                <KobalteRadioGroup
                   value={props.scope}
                   onChange={(value) => {
                     const option = SCOPE_OPTIONS.find(
@@ -123,23 +127,23 @@ export function EventRsvpScopeDialog(props: {
                 >
                   <For each={SCOPE_OPTIONS}>
                     {(option) => (
-                      <RadioGroup.Item
+                      <KobalteRadioGroup.Item
                         value={option.scope}
                         class="relative rounded-[20px] text-ink data-checked:bg-ink/8 focus-within:outline-2 focus-within:outline-accent"
                       >
-                        <RadioGroup.ItemInput />
-                        <RadioGroup.ItemLabel class="flex min-h-12 items-center justify-between gap-3 px-4 py-3 text-base">
+                        <KobalteRadioGroup.ItemInput />
+                        <KobalteRadioGroup.ItemLabel class="flex min-h-12 items-center justify-between gap-3 px-4 py-3 text-base">
                           {option.label}
-                          <RadioGroup.ItemControl class="flex size-5 items-center justify-center">
-                            <RadioGroup.ItemIndicator>
+                          <KobalteRadioGroup.ItemControl class="flex size-5 items-center justify-center">
+                            <KobalteRadioGroup.ItemIndicator>
                               <CheckIcon class="size-5 text-accent" />
-                            </RadioGroup.ItemIndicator>
-                          </RadioGroup.ItemControl>
-                        </RadioGroup.ItemLabel>
-                      </RadioGroup.Item>
+                            </KobalteRadioGroup.ItemIndicator>
+                          </KobalteRadioGroup.ItemControl>
+                        </KobalteRadioGroup.ItemLabel>
+                      </KobalteRadioGroup.Item>
                     )}
                   </For>
-                </RadioGroup>
+                </KobalteRadioGroup>
               </MobileDrawer.Section>
               <div class="flex gap-3 px-6 pt-5 pb-2">
                 <Button

@@ -66,8 +66,6 @@ export function TasksHeader(props: TasksHeaderProps) {
             <div class="hidden items-center @max-[720px]/view-shell:flex">
               <SplitPanel.ControlGroup>
                 <SplitPanel.CloseButton />
-                <SplitPanel.BackButton />
-                <SplitPanel.ForwardButton />
               </SplitPanel.ControlGroup>
             </div>
 

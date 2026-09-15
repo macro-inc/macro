@@ -704,7 +704,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
         >
           <DotsThree />
         </Dropdown.Trigger>
-        <Dropdown.Content class="z-nested-action-menu">
+        <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
           <Dropdown.Group>
             <Show when={props.previewInfo?.showPreview}>
               <Dropdown.Item
@@ -732,7 +732,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
             <Show when={canOpenInChat()}>
               <Dropdown.Item onSelect={handleOpenInChat}>
                 <SparkleIcon class="size-4" />
-                Open Document in AI Chat
+                Ask Macro
               </Dropdown.Item>
             </Show>
             <Dropdown.Item onSelect={handleCopy}>

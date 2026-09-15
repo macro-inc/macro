@@ -31,6 +31,8 @@ import {
 } from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
+  onOpenProject?: (id: string) => void;
+  disableTabHotkeys?: boolean;
   scopeId: string;
   soup: SoupState;
   splitHandle: SplitHandle;
@@ -179,6 +181,11 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       const entity = soup.focus.item();
       if (!entity) return false;
+
+      if (entity.type === 'project' && options.onOpenProject) {
+        options.onOpenProject(entity.id);
+        return true;
+      }
 
       const contentHitData = isSearchEntity(entity)
         ? entity.search.contentHitData
@@ -363,6 +370,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const visibleViewTabs = useVisibleViewTabs();
   const getTabKeys = () => {
+    if (options.disableTabHotkeys) return [];
     const view = currentView();
     if (!view || !isTabbedView(view)) return [];
     return visibleViewTabs(view).map((t) => t.value);

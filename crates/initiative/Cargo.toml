@@ -1,0 +1,42 @@
+[package]
+edition = "2024"
+name = "initiative"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["ports"]
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:utoipa",
+  "entity_access/inbound",
+  "ports",
+]
+outbound = ["ports"]
+ports = ["dep:entity_access", "dep:tracing"]
+postgres = ["dep:sqlx", "outbound"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+model-error-response = { path = "../model-error-response", optional = true }
+models_permissions = { path = "../models_permissions" }
+rootcause = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true, optional = true }
+unicode-segmentation = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true, features = ["serde", "v7"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+mockall = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

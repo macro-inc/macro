@@ -509,6 +509,7 @@ export function PullRequestEntityLink(props: {
 
   return (
     <HoverCard
+      triggerClass="min-w-0 max-w-full"
       trigger={
         <button
           type="button"

@@ -90,10 +90,6 @@ export function EmailSidebar() {
           <SplitPanel.CloseButton />
           <ViewSidebar.Title>Email</ViewSidebar.Title>
         </div>
-        <SplitPanel.ControlGroup>
-          <SplitPanel.BackButton />
-          <SplitPanel.ForwardButton />
-        </SplitPanel.ControlGroup>
       </ViewSidebar.Header>
 
       <ViewSidebar.Content class="flex flex-col gap-6">

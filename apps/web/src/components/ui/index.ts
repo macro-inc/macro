@@ -123,6 +123,8 @@ export { NavRow } from './components/NavRow';
 export { Panel } from './components/Panel';
 export type { PillButtonProps, PillButtonTone } from './components/PillButton';
 export { PillButton } from './components/PillButton';
+export type { RadioGroupProps } from './components/RadioGroup';
+export { RadioGroup } from './components/RadioGroup';
 export { Scroll } from './components/Scroll';
 export { SegmentedControl } from './components/SegmentedControl';
 export type {

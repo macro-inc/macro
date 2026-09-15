@@ -1,4 +1,4 @@
-//! Sanitize agent prompts and compose channel context for every harness.
+//! Compose channel context for every harness.
 
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::AgentContextMessage;
