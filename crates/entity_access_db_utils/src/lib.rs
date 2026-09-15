@@ -145,7 +145,6 @@ pub async fn delete_user_entity_access_rows(
     entity_type: EntityType,
     user_ids: &[MacroUserIdStr<'_>],
 ) -> Result<(), sqlx::Error> {
-    // `= ANY(empty array)` already matches no row, so this only saves a round trip.
     if user_ids.is_empty() {
         return Ok(());
     }
