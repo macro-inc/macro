@@ -112,8 +112,9 @@ const staticChoices = (group: 'read' | 'done') => [
     .map((o) => [o.id]),
 ];
 
+type View = 'email' | 'tasks' | 'files' | 'channels';
 type Case = {
-  view: string;
+  view: View;
   name: string;
   args: EntityFilterCacheArgs;
   expected: FixtureRow[];
@@ -189,7 +190,7 @@ function emailMatch(
   return selection.calendar.length === 0 || row.calendar === true;
 }
 
-function* cases(): Generator<Case> {
+function* cases(view?: View): Generator<Case> {
   // Coverage is exhaustive over the finite fixture domains, not pairwise.
   assert(
     TASK_STATUS_OPTIONS.map((o) => o.id).join() === STATUS.join(),
@@ -227,7 +228,7 @@ function* cases(): Generator<Case> {
       'attachment-pdf,attachment-image,attachment-document',
     'Add new attachment types to matrix fixtures'
   );
-  for (const tab of EMAIL_TABS) {
+  for (const tab of !view || view === 'email' ? EMAIL_TABS : []) {
     for (const selection of combinations({
       read: staticChoices('read'),
       done: staticChoices('done'),
@@ -264,7 +265,7 @@ function* cases(): Generator<Case> {
       };
     }
   }
-  for (const tab of TASK_TABS) {
+  for (const tab of !view || view === 'tasks' ? TASK_TABS : []) {
     for (const selection of combinations({
       status: subsets(STATUS),
       priority: subsets(PRIORITY),
@@ -302,7 +303,9 @@ function* cases(): Generator<Case> {
       };
     }
   }
-  for (const tab of ['owned', 'shared', 'attachments', 'folders', 'all']) {
+  for (const tab of !view || view === 'files'
+    ? ['owned', 'shared', 'attachments', 'folders', 'all']
+    : []) {
     const preset = getViewPreset('documents', tab, {
       userId: USER_ID,
       isTeamAdmin: false,
@@ -357,7 +360,9 @@ function* cases(): Generator<Case> {
       };
     }
   }
-  for (const scope of ['recents', 'channels', 'direct_messages'] as const) {
+  for (const scope of !view || view === 'channels'
+    ? (['recents', 'channels', 'direct_messages'] as const)
+    : []) {
     assert(CHANNELS_QUERY_DEFINITIONS[scope], `Missing channel scope ${scope}`);
     yield {
       view: 'channels',
@@ -381,11 +386,18 @@ const host = (() => {
   assert(host, 'Real Tauri cache host must already be initialized');
   return host;
 })();
-const iterator = cases();
+let iterator: Generator<Case> | undefined;
 const records = new Map<string, MailItemFieldsFragment>();
 let revision: string | undefined;
+const expectedSelectionCounts = {
+  email: 20_160,
+  tasks: 98_304,
+  files: 69_632,
+  channels: 3,
+};
 const progress = {
   evaluated: 0,
+  nativeElapsedMs: 0,
   nativeRequests: 0,
   byView: {} as Record<string, number>,
   failures: [] as {
@@ -397,7 +409,21 @@ const progress = {
   done: false,
 };
 
-export async function runBatch(size = 128) {
+export function describeCases(size: number, view?: View) {
+  const result = [];
+  for (const test of cases(view)) {
+    result.push({
+      name: test.name,
+      args: test.args,
+      expected: test.expected.map(key),
+    });
+    if (result.length === size) break;
+  }
+  return result;
+}
+
+export async function runBatch(size = 128, view?: View) {
+  iterator ??= cases(view);
   if (!revision) {
     revision = await host.currentRevision();
     const selected = await host.readRecordsByKeys({
@@ -429,6 +455,7 @@ export async function runBatch(size = 128) {
   const responses = new Map<string, EntityFilterCacheResult | Error>();
   // Amortize WebKit IPC round trips. The native engine still serializes every
   // evaluation through its real mutex, and no mutations run during this phase.
+  const nativeStart = performance.now();
   for (let offset = 0; offset < requests.length; offset += 8) {
     await Promise.all(
       requests.slice(offset, offset + 8).map(async ([key, args]) => {
@@ -444,6 +471,7 @@ export async function runBatch(size = 128) {
       })
     );
   }
+  progress.nativeElapsedMs += performance.now() - nativeStart;
   for (const test of batch) {
     progress.evaluated++;
     progress.byView[test.view] = (progress.byView[test.view] ?? 0) + 1;
@@ -540,6 +568,15 @@ export async function runBatch(size = 128) {
         name: 'post-batch cache revision',
         error: String(error),
       });
+  }
+  if (progress.done) {
+    for (const [surface, count] of Object.entries(expectedSelectionCounts)) {
+      if (!view || view === surface)
+        assert(
+          progress.byView[surface] === count,
+          `Selection coverage changed for ${surface}: ${progress.byView[surface]} != ${count}`
+        );
+    }
   }
   return progress;
 }

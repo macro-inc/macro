@@ -2536,9 +2536,9 @@ fn compile_predicate_selection(
         .map(|root| format!("SELECT source, document_id FROM {root}"))
         .collect::<Vec<_>>()
         .join(" UNION ");
-    compiler
-        .ctes
-        .push(format!("{matches}(source, document_id) AS ({union})"));
+    compiler.ctes.push(format!(
+        "{matches}(source, document_id) AS MATERIALIZED ({union})"
+    ));
     let effective_sort = compiler.next_name();
     compiler
         .parameters
@@ -2547,7 +2547,7 @@ fn compile_predicate_selection(
         .parameters
         .push(text(descriptor.sort_attribute.as_str()));
     compiler.ctes.push(format!(
-        "{effective_sort}(source, document_id, value) AS (SELECT 0, document_id, value FROM sort_facts WHERE attribute = ? UNION ALL SELECT 1, document_id, value FROM optimistic_sort_facts WHERE attribute = ?)"
+        "{effective_sort}(source, document_id, value) AS MATERIALIZED (SELECT 0, document_id, value FROM sort_facts WHERE attribute = ? UNION ALL SELECT 1, document_id, value FROM optimistic_sort_facts WHERE attribute = ?)"
     ));
     compiler
         .parameters
@@ -2568,6 +2568,10 @@ fn compile_predicate_selection(
     (sql, compiler.parameters)
 }
 
+// Keep every set-algebra CTE materialized. The pinned Turso planner otherwise
+// re-enters compound-query coroutines for joined rows, repeatedly evaluating
+// the same child sets (millions of VM steps even on a small local corpus).
+// This is generic query execution policy; application predicates remain in IR.
 struct SqlPredicateCompiler {
     ctes: Vec<String>,
     parameters: Vec<Value>,
@@ -2586,7 +2590,7 @@ impl SqlPredicateCompiler {
         };
         Self {
             ctes: vec![format!(
-                "effective_documents(source, document_id, record_key, profile, partition) AS (SELECT 0, d.id, d.record_key, d.profile, d.partition FROM index_documents AS d WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) UNION ALL SELECT 1, o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})"
+                "effective_documents(source, document_id, record_key, profile, partition) AS MATERIALIZED (SELECT 0, d.id, d.record_key, d.profile, d.partition FROM index_documents AS d WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) UNION ALL SELECT 1, o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})"
             )],
             parameters: excluded_optimistic
                 .iter()
@@ -2609,7 +2613,7 @@ impl SqlPredicateCompiler {
             PredicateExpr::None => {
                 let name = self.next_name();
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS (SELECT source, document_id FROM effective_documents WHERE 0)"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM effective_documents WHERE 0)"
                 ));
                 name
             }
@@ -2623,7 +2627,7 @@ impl SqlPredicateCompiler {
                         .push(Value::from_blob(value.as_bytes().to_vec()));
                 }
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS (SELECT 0, f.document_id FROM exact_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value = ?)"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value = ?)"
                 ));
                 name
             }
@@ -2635,7 +2639,7 @@ impl SqlPredicateCompiler {
                     self.parameters.push(text(attribute.as_str()));
                 }
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS (SELECT 0, f.document_id FROM exact_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)"
                 ));
                 name
             }
@@ -2668,7 +2672,7 @@ impl SqlPredicateCompiler {
                     }
                 }
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS (SELECT 0, f.document_id FROM integer_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_integer_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM integer_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_integer_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
                 ));
                 name
             }
@@ -2700,7 +2704,7 @@ impl SqlPredicateCompiler {
                         text(key.as_str()),
                     ]);
                 }
-                self.ctes.push(format!("{name}(source, document_id) AS (SELECT 0, f.document_id FROM sort_facts f JOIN effective_documents d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_sort_facts f JOIN effective_documents d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
+                self.ctes.push(format!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM sort_facts f JOIN effective_documents d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_sort_facts f JOIN effective_documents d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
                 name
             }
             PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
@@ -2713,7 +2717,7 @@ impl SqlPredicateCompiler {
                 };
                 let name = self.next_name();
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS (SELECT source, document_id FROM {left} {operator} SELECT source, document_id FROM {right})"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM {left} {operator} SELECT source, document_id FROM {right})"
                 ));
                 name
             }
@@ -2722,7 +2726,7 @@ impl SqlPredicateCompiler {
                 let child = self.compile(expr, profile, partition);
                 let name = self.next_name();
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS (SELECT source, document_id FROM {universe} EXCEPT SELECT source, document_id FROM {child})"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM {universe} EXCEPT SELECT source, document_id FROM {child})"
                 ));
                 name
             }
@@ -2734,7 +2738,7 @@ impl SqlPredicateCompiler {
         self.parameters.push(text(profile.token().as_str()));
         self.parameters.push(text(partition.as_str()));
         self.ctes.push(format!(
-            "{name}(source, document_id) AS (SELECT source, document_id FROM effective_documents WHERE profile = ? AND partition = ?)"
+            "{name}(source, document_id) AS MATERIALIZED (SELECT source, document_id FROM effective_documents WHERE profile = ? AND partition = ?)"
         ));
         name
     }

@@ -20,11 +20,22 @@ assert.equal(
   'Use run.sh: native tests must have network isolation'
 );
 assert(
-  process.argv.slice(2).every((arg) => arg === '--smoke' || arg === '--matrix'),
-  'Usage: native:e2e [--smoke | --matrix]'
+  process.argv
+    .slice(2)
+    .every(
+      (arg) =>
+        arg === '--smoke' ||
+        arg === '--matrix' ||
+        /^--matrix-view=(email|tasks|files|channels)$/.test(arg)
+    ),
+  'Usage: native:e2e [--smoke | --matrix [--matrix-view=email|tasks|files|channels]]'
 );
 const smokeOnly = process.argv.includes('--smoke');
 const matrixMode = process.argv.includes('--matrix');
+const matrixView = process.argv
+  .find((arg) => arg.startsWith('--matrix-view='))
+  ?.split('=')[1];
+assert(!matrixView || matrixMode, '--matrix-view requires --matrix');
 assert(!(smokeOnly && matrixMode), 'Choose smoke or matrix mode');
 const web = resolve(import.meta.dirname, '../..');
 const binaries = resolve(web, 'tauri/target/e2e');
@@ -198,7 +209,7 @@ try {
     'Initial Signal baseline must come from the API'
   );
   console.log(
-    'PASS: real UI, three backfill pages, and all six records in the native cache'
+    `PASS: real UI, ${fixture.expectedMetadataPages} metadata pages, and native control records`
   );
 
   assert.equal(await nativeHttpReachable(browser, fixture.origin), true);
@@ -216,28 +227,45 @@ try {
   await assertNativeRecords(browser);
   if (matrixMode) {
     await browser.setTimeout({ script: 120_000 });
+    const preview = await browser.executeAsync(
+      (view: string | undefined, done: (value: unknown) => void) => {
+        void (async () => {
+          const path = '/tests/native/filter-matrix.ts';
+          const matrix = await import(path);
+          done(matrix.describeCases(1, view));
+        })();
+      },
+      matrixView
+    );
+    await Bun.write(
+      resolve(artifacts, 'matrix-first-case.json'),
+      JSON.stringify(preview, null, 2)
+    );
     let progress: {
       done: boolean;
       evaluated: number;
       nativeRequests: number;
+      nativeElapsedMs: number;
       byView: Record<string, number>;
       failures: { name: string; error: string }[];
     };
     do {
       const response = await browser.executeAsync(
         (
+          view: string | undefined,
           done: (value: { progress?: typeof progress; error?: string }) => void
         ) => {
           void (async () => {
             try {
               const path = '/tests/native/filter-matrix.ts';
               const matrix = await import(path);
-              done({ progress: await matrix.runBatch(256) });
+              done({ progress: await matrix.runBatch(256, view) });
             } catch (error) {
               done({ error: String(error) });
             }
           })();
-        }
+        },
+        matrixView
       );
       assert(
         response.progress,
@@ -245,13 +273,13 @@ try {
       );
       progress = response.progress;
       console.log(
-        `Matrix: ${progress.evaluated} selections, ${progress.nativeRequests} native evaluations`
+        `Matrix: ${progress.evaluated} selections, ${progress.nativeRequests} native evaluations (${Math.round(progress.nativeElapsedMs)}ms)`
       );
       await Bun.write(
         resolve(artifacts, 'filter-matrix.json'),
         JSON.stringify(progress, null, 2)
       );
-      if (progress.failures.length >= 20) break;
+      if (progress.failures.length > 0) break;
     } while (!progress.done);
     assert.deepEqual(
       progress.failures,
