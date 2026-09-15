@@ -1,7 +1,8 @@
 use super::*;
-use crate::domain::models::{NewChannelAttachment, Sender, SimpleMention};
+use crate::domain::models::{NewChannelAttachment, Sender};
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::{PostMessageNotificationPolicy, SimpleMention};
 
 fn sender(id: &str) -> Sender {
     id.to_string().try_into().unwrap()
@@ -61,7 +62,7 @@ async fn channel_posts_use_common_service_with_verified_identity_and_notificatio
         assert_eq!(input.content, "reply");
         assert_eq!(
             input.notification_policy,
-            crate::domain::models::PostMessageNotificationPolicy::MentionsOnly
+            PostMessageNotificationPolicy::MentionsOnly
         );
         assert_eq!(input.nonce.as_deref(), Some("client-nonce"));
         assert_eq!(input.attribution, MessageAttribution::Unprompted);
@@ -78,8 +79,7 @@ async fn channel_posts_use_common_service_with_verified_identity_and_notificatio
                 attachments: vec![],
                 thread_id: Some(Uuid::from_u128(502)),
                 nonce: Some("client-nonce".into()),
-                notification_policy:
-                    crate::domain::models::PostMessageNotificationPolicy::MentionsOnly,
+                notification_policy: PostMessageNotificationPolicy::MentionsOnly,
                 triggered_by: None,
             },
         )

@@ -2,15 +2,15 @@
 use super::{
     events::{ChannelEvent, MessageChangedNotificationContext},
     models::{
-        ChannelMetadata, CountedReaction, MutatedAttachment, MutatedMessage,
-        PatchMessageNotificationPolicy, ReferencedShareItem, Sender, TypingAction,
+        ChannelMetadata, CountedReaction, MutatedAttachment, MutatedMessage, ReferencedShareItem,
+        Sender, TypingAction,
     },
     ports::{ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     delivery::MessageRealtime,
-    models::{Message, MessageAttachment, MessageParent},
+    models::{Message, MessageAttachment, MessageParent, PatchMessageNotificationPolicy},
     ports::{MessageChange, MessageEvent, MessageEventPublisher},
 };
 use uuid::Uuid;

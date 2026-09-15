@@ -908,7 +908,7 @@ async fn human_can_post_canonical_agent_mentions_on_documents_and_channels() {
                     entity_type,
                     entity_id: parent.entity_id(),
                 },
-                permission.clone(),
+                permission,
             )
             .unwrap()
         };

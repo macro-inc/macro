@@ -601,7 +601,7 @@ use utoipa::OpenApi;
             channels::domain::models::TypingAction,
             channels::domain::models::ReactionAction,
             channels::domain::models::NewChannelAttachment,
-            channels::domain::models::SimpleMention,
+            messages::domain::models::SimpleMention,
             channels::domain::models::CreateChannelRequest,
             channels::domain::models::CreateChannelResponse,
             channels::domain::models::GetOrCreateDmRequest,

@@ -18,7 +18,7 @@ use channels::domain::{
         ChannelMessageDeletedMetadata, ChannelMessagePatchedMetadata, ChannelMessagePostedMetadata,
         ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
     },
-    models::{ChannelType, SimpleMention},
+    models::ChannelType,
 };
 use chrono::{DateTime, Utc};
 use documents::domain::events::{
@@ -31,6 +31,7 @@ use entity_access::domain::models::{
     RequiredPermission, TeamRole, UserTeamInfo,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
+use messages::domain::models::SimpleMention;
 use serde_json::Value;
 use std::{
     collections::BTreeMap,

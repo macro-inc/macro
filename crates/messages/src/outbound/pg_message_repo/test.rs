@@ -49,12 +49,12 @@ fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
 async fn shared_reads_preserve_system_and_deleted_bot_profiles(pool: PgPool) {
     setup(&pool).await;
     let deleted_bot = Uuid::new_v4();
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO bots (id, kind, owner_user_id, name, handle, avatar_url, deleted_at) \
          VALUES ($1, 'owned', $2, 'Historical Agent', 'historical-agent', 'https://example.com/agent.png', now())",
+        deleted_bot,
+        USER,
     )
-    .bind(deleted_bot)
-    .bind(USER)
     .execute(&pool)
     .await
     .unwrap();

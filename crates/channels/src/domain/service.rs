@@ -8,11 +8,10 @@ use crate::domain::{
         ChannelPreviewData, ChannelType, CreateEntityMentionOptions, DeleteMessageQuery,
         EntityMention, GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
         GetOrCreatePrivateRequest, MessagePageDirection, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, PatchMessageNotificationPolicy, PatchMessageRequest,
-        PostMessageRequest, PostMessageResponse, PostReactionRequest, PostTypingRequest,
-        ReactionAction, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
-        Sender, SimpleMention, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
-        WithChannelId,
+        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
+        PostReactionRequest, PostTypingRequest, ReactionAction, ReferencedShareItem,
+        RemoveParticipantsRequest, ResolvedChannelMessage, Sender, ThreadInfo, ThreadReply,
+        ThreadReplyRow, TopLevelMessageRow, WithChannelId,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMentionExtractor,
@@ -26,6 +25,7 @@ use bot_id::cowlike::CowLike;
 use channel_sender::ChannelSender;
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::{PatchMessageNotificationPolicy, SimpleMention};
 use models_pagination::{CreatedAt, PaginateOn, Query};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;

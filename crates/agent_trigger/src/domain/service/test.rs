@@ -5,12 +5,13 @@ use agent_session::domain::model::{AgentSession, AgentSessionId, ChannelSession,
 use agent_session::domain::ports::MockAgentSessionRepo;
 use bots::domain::models::{Agent, AgentChannelScope, AgentMcpServers, Bot, BotKind, BotOwner};
 use channel_sender::ChannelSender;
-use channels::domain::models::{ChannelType, SimpleMention};
+use channels::domain::models::ChannelType;
 use chrono::Utc;
 use macro_event_broker::MacroEvent;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use messages::domain::models::SimpleMention;
 
 use crate::domain::broker_events::{
     AgentTriggerTopicEvent, ExistingAgentSessionEvent, NewAgentSessionEvent,
