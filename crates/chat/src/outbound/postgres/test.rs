@@ -10,6 +10,7 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
 };
+use sqlx::postgres::PgRow;
 use sqlx::{Pool, Postgres, Row};
 
 use super::PgChatRepo;
@@ -414,6 +415,197 @@ async fn create_chat_creates_user_item_access(pool: Pool<Postgres>) {
         row.get::<Option<String>, _>("access_level"),
         Some("owner".to_string())
     );
+}
+
+async fn fetch_entity_row(pool: &Pool<Postgres>, chat_id: &str) -> PgRow {
+    sqlx::query(
+        r#"
+        SELECT
+            owner_type::text AS owner_type,
+            owner_id,
+            entity_type,
+            deleted_at
+        FROM entity
+        WHERE id = $1
+        "#,
+    )
+    .bind(macro_uuid::string_to_uuid(chat_id).unwrap())
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn create_chat_registers_entity_row(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
+        .unwrap()
+        .into_owned();
+
+    let chat_id = repo
+        .create(
+            user_id,
+            CreateChatArgs {
+                name: "Entity Chat".to_string(),
+                project_id: None,
+            },
+            default_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    let row = fetch_entity_row(&pool, &chat_id).await;
+    assert_eq!(row.get::<String, _>("owner_type"), "user");
+    assert_eq!(row.get::<String, _>("owner_id"), "macro|test@example.com");
+    assert_eq!(row.get::<String, _>("entity_type"), "chat");
+    assert_eq!(
+        row.get::<Option<chrono::DateTime<Utc>>, _>("deleted_at"),
+        None
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn delete_chat_marks_entity_deleted(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let chat_id = create_test_chat(&repo, "Entity Soft Delete").await;
+
+    repo.delete(&chat_id).await.unwrap();
+
+    let row = fetch_entity_row(&pool, &chat_id).await;
+    assert!(
+        row.get::<Option<chrono::DateTime<Utc>>, _>("deleted_at")
+            .is_some()
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn revert_delete_clears_entity_deleted_at(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let chat_id = create_test_chat(&repo, "Entity Restore").await;
+
+    repo.delete(&chat_id).await.unwrap();
+    repo.revert_delete(&chat_id, None).await.unwrap();
+
+    let row = fetch_entity_row(&pool, &chat_id).await;
+    assert_eq!(
+        row.get::<Option<chrono::DateTime<Utc>>, _>("deleted_at"),
+        None
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn permanently_delete_chat_removes_entity_row(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let chat_id = create_test_chat(&repo, "Entity Perm Delete").await;
+
+    repo.permanently_delete(&chat_id).await.unwrap();
+
+    let count: (i64,) = sqlx::query_as(r#"SELECT COUNT(*) FROM entity WHERE id = $1"#)
+        .bind(macro_uuid::string_to_uuid(&chat_id).unwrap())
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(count.0, 0);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn copy_chat_registers_entity_row_for_source_and_copy(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
+        .unwrap()
+        .into_owned();
+
+    let source_id = repo
+        .create(
+            user_id.clone(),
+            CreateChatArgs {
+                name: "Entity Source".to_string(),
+                project_id: None,
+            },
+            default_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    let copied_id = repo
+        .copy_chat(
+            user_id,
+            &source_id,
+            CopyChatArgs {
+                name: "Entity Copy".to_string(),
+                project_id: None,
+            },
+            default_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert_ne!(source_id, copied_id);
+
+    let source_row = fetch_entity_row(&pool, &source_id).await;
+    let copy_row = fetch_entity_row(&pool, &copied_id).await;
+    assert_eq!(source_row.get::<String, _>("entity_type"), "chat");
+    assert_eq!(copy_row.get::<String, _>("entity_type"), "chat");
+    assert_eq!(source_row.get::<String, _>("owner_type"), "user");
+    assert_eq!(copy_row.get::<String, _>("owner_type"), "user");
+    assert_eq!(
+        source_row.get::<String, _>("owner_id"),
+        "macro|test@example.com"
+    );
+    assert_eq!(
+        copy_row.get::<String, _>("owner_id"),
+        "macro|test@example.com"
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn delete_restore_and_purge_succeed_without_entity_row(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let chat_id = create_test_chat(&repo, "Legacy Chat").await;
+    let chat_uuid = macro_uuid::string_to_uuid(&chat_id).unwrap();
+
+    sqlx::query(r#"DELETE FROM entity WHERE id = $1"#)
+        .bind(chat_uuid)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    repo.delete(&chat_id).await.unwrap();
+    repo.revert_delete(&chat_id, None).await.unwrap();
+    repo.permanently_delete(&chat_id).await.unwrap();
+
+    let chat_count: (i64,) = sqlx::query_as(r#"SELECT COUNT(*) FROM "Chat" WHERE id = $1"#)
+        .bind(&chat_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(chat_count.0, 0);
+
+    let entity_count: (i64,) = sqlx::query_as(r#"SELECT COUNT(*) FROM entity WHERE id = $1"#)
+        .bind(chat_uuid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(entity_count.0, 0);
 }
 
 #[sqlx::test(

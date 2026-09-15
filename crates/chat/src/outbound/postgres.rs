@@ -113,13 +113,25 @@ impl ChatRepo for PgChatRepo {
             .await
             .map_err(to_chat_err)?;
 
+        let chat_uuid = macro_uuid::string_to_uuid(&chat_id).map_err(to_chat_err)?;
         entity_access_db_utils::insert_entity_access_row(
             &mut tx,
-            &macro_uuid::string_to_uuid(&chat_id).unwrap(),
+            &chat_uuid,
             entity_access_db_utils::EntityType::Chat,
             user_id.as_ref(),
             entity_access_db_utils::EntityAccessSourceType::User,
             entity_access_db_utils::AccessLevel::Owner,
+        )
+        .await
+        .map_err(|e| ChatErr::Unknown(e.into()))?;
+
+        entity_registry_db_utils::insert_entity(
+            &mut tx,
+            entity_registry_db_utils::NewEntityRecord::new(
+                chat_uuid,
+                entity_registry_db_utils::RegisteredEntityType::Chat,
+                model_owner::Owner::User(user_id),
+            ),
         )
         .await
         .map_err(|e| ChatErr::Unknown(e.into()))?;
@@ -217,9 +229,10 @@ impl ChatRepo for PgChatRepo {
             .await
             .map_err(to_chat_err)?;
 
+        let chat_uuid = macro_uuid::string_to_uuid(&chat_id).map_err(to_chat_err)?;
         entity_access_db_utils::insert_entity_access_row(
             &mut tx,
-            &macro_uuid::string_to_uuid(&chat_id).unwrap(),
+            &chat_uuid,
             entity_access_db_utils::EntityType::Chat,
             user_id.as_ref(),
             entity_access_db_utils::EntityAccessSourceType::User,
@@ -231,6 +244,17 @@ impl ChatRepo for PgChatRepo {
         queries::copy_messages::copy_messages(&mut tx, source_chat_id, &chat_id)
             .await
             .map_err(to_chat_err)?;
+
+        entity_registry_db_utils::insert_entity(
+            &mut tx,
+            entity_registry_db_utils::NewEntityRecord::new(
+                chat_uuid,
+                entity_registry_db_utils::RegisteredEntityType::Chat,
+                model_owner::Owner::User(user_id),
+            ),
+        )
+        .await
+        .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "copy_chat transaction error");

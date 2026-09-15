@@ -58,7 +58,9 @@ Hover a document reference chip to open its preview without navigating. With
 the preview open, the compact header shows a tinted icon, title, and author/time
 byline. Click the title to open the document; the Reference actions ellipsis menu contains copy
 link, split, embed/collapse, AI, and delete actions when applicable. The preview
-stays open while this menu is active. Images use an inset frame and task chips
+stays open while this menu is active, and moving over other reference chips must
+not open their previews. Click outside or press Escape to dismiss the menu;
+other references can then be hovered again. Images use an inset frame and task chips
 appear below the header. Long titles wrap in place without a full-name tooltip.
 
 With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`

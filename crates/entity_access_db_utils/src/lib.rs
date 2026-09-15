@@ -128,6 +128,50 @@ pub async fn remove_non_owner_user_entity_access(
     Ok(())
 }
 
+/// Deletes the direct user grants named by `user_ids` on the given entity.
+///
+/// Only the rows this entity granted those users directly are removed. An owner
+/// row survives even when its user is named, and a grant inherited from a project
+/// (`granted_from_project_id IS NOT NULL`) survives because the project still
+/// grants it. Team, bot, and channel grants are out of scope. Use this to revoke
+/// one membership. [`remove_non_owner_user_entity_access`] is the wider
+/// public-to-private sweep.
+///
+/// *NOTE*: The transaction does not get committed automatically.
+#[tracing::instrument(skip(transaction), err)]
+pub async fn delete_user_entity_access_rows(
+    transaction: &mut Transaction<'_, Postgres>,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+    user_ids: &[MacroUserIdStr<'_>],
+) -> Result<(), sqlx::Error> {
+    if user_ids.is_empty() {
+        return Ok(());
+    }
+
+    let macro_ids: Vec<String> = user_ids.iter().map(|id| id.to_string()).collect();
+
+    sqlx::query!(
+        r#"
+        DELETE FROM entity_access
+        WHERE entity_id = $1
+        AND entity_type = $2
+        AND source_type = $3
+        AND source_id = ANY($4)
+        AND access_level != 'owner'
+        AND granted_from_project_id IS NULL
+        "#,
+        entity_id,
+        entity_type.as_ref(),
+        EntityAccessSourceType::User as _,
+        macro_ids.as_slice(),
+    )
+    .execute(transaction.as_mut())
+    .await?;
+
+    Ok(())
+}
+
 /// Deletes all entity_access rows for a given (entity_id, entity_type).
 /// *NOTE*: The transaction does not get committed automatically.
 #[tracing::instrument(skip(transaction), err)]

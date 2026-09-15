@@ -43,6 +43,7 @@ vi.mock('@app/features/activity/open-entity-in-split', () => ({
 vi.mock('@app/features/agents-view/views/AgentsView', () => ({}));
 vi.mock('@app/features/block-agent/component/ComposeAgentSession', () => ({}));
 vi.mock('@app/features/channels-view/channels-view', () => ({}));
+vi.mock('@app/features/drive-view/drive-view', () => ({}));
 vi.mock('@app/features/email-compose/email-compose', () => ({}));
 vi.mock('@app/features/email-view/email-view', () => ({}));
 vi.mock('@app/features/getting-started', () => ({}));

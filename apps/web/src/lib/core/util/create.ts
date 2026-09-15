@@ -299,8 +299,10 @@ export async function createCodeFileFromText({
   language,
   title,
   source,
+  projectId,
 }: {
   code: string;
+  projectId?: string;
   title?: string;
   extension?: CodeFileExtension;
   language?: string;
@@ -344,6 +346,7 @@ export async function createCodeFileFromText({
   const mimeType = 'text/plain';
 
   const maybeCode = await storageServiceClient.createDocument({
+    projectId,
     documentName: title ?? 'New Code File',
     fileType: finalExtension,
     sha: sha,

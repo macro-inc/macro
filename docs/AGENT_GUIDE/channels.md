@@ -61,7 +61,9 @@ files` and the `Send message` button. Replies also include a close-reply control
 
 Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
 an existing thread reply, it inserts a one-line reply-target reference into the composer;
-clicking the reference navigates back to that reply. If text in the message is
+clicking the reference navigates back to that reply. References to the current
+channel navigate in place, including inside the preview panel, without opening
+another split. If text in the message is
 browser-selected before `Reply` is clicked, the reference previews only the selected text.
 Clicking `Reply` again for a message already referenced anywhere in the draft keeps
 the existing reference and draft unchanged, even if a different text selection is used.
@@ -202,7 +204,8 @@ a channel cached away from its latest page, and a delta longer than one page use
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
-channels. Channel favorites open in the channel preview.
+channels. Channel favorites open in the channel preview. Shift-clicking a
+favorite, channel, or DM opens that conversation in a new split instead.
 The search action beside the tabs opens a search field below them and replaces
 the active tab contents with matching channels and direct messages from one
 activity-ordered source. Search results use compact rows on `All` and
@@ -214,8 +217,19 @@ artwork and wraps long queries.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
-Rows and section headers act on primary-button mousedown, so the selection
-and highlight change before the click completes; a normal click still works.
+Channels and DMs each have a sort action before their create action. They can be
+sorted by last viewed, last updated, or date created, and each choice persists
+independently as a user preference.
+In slim mode, Favorites remains a separate collapsible section, while Channels
+and DMs render in one continuous list without section headings. The gear action
+in the footer controls whether each group appears and exposes the same
+independently persisted sort choices.
+Compact channel and DM rows in All have the same height. Section headings place
+their caret immediately after the title and reveal it on hover or while the
+section is collapsed; hovering only undims the heading text, while
+keyboard-focusing the heading with Arrow keys or `j` / `k` gives it a background.
+Clicking a section heading toggles it without moving the keyboard highlight;
+keyboard activation still toggles the highlighted section.
 
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances

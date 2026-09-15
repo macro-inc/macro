@@ -82,7 +82,7 @@ email, sparkles for agents, folders for projects, and alarms for reminders.
 There are no title tooltips, and timestamps are
 visible only while hovering the row. An unread
 dot remains visible. Click a row to preview it; `j`/`k` navigate and update the
-preview, and Shift-click opens a split.
+preview; alternate activation and Shift-click open a split.
 
 On desktop, before selecting a row, the main pane shows a centered single-line chat
 composer under “What should we get done in Macro?”. Attachment, text, model, and
@@ -315,6 +315,25 @@ copy, and move-to-folder actions are not offered on agent-session search rows.
 
 Tabs `Owned` / `Shared` / `Attachments` / `Folders` / `All`; `New` menu; rows show title,
 tags, updated time. Clicking a row opens the doc.
+
+With `enable-new-app-views` enabled, Files opens **Drive** using the same
+shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+`Shared with me`, collapsible Favorites, and a searchable folder hierarchy.
+The `Drive` folder row opens the folder overview. Click a folder name to browse
+its contents in the main pane; its separate expand/collapse button reveals child
+folders without navigating. Folder breadcrumbs in the top bar use `/` separators
+and navigate to ancestors. Empty folders show `This folder is empty` and a
+`Back to Drive` action that returns to the folder overview. Folder
+search retains matching descendants' ancestors and reveals their branches.
+
+`Search Drive` searches the current tab or folder. `Filter files` includes all-files
+and email-attachment scopes; `Sort files` offers modified, created, and viewed dates.
+Recent uses the viewer's own interaction order and does not offer a sort override.
+The New menu and drag/drop uploads target the selected folder. File rows retain
+selection and context menus; ordinary folder clicks and Enter browse inside Drive,
+while modified clicks retain existing split navigation. On narrow layouts, use
+`Select Drive view` for tabs, favorites, and folders. Navigation state and expanded
+folders are restored when returning from an opened file.
 
 ## Calendar — `/app/calendar/view`
 

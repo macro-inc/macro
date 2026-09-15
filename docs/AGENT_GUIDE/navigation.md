@@ -27,6 +27,12 @@
 Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
 (`/app/<left>/<right>`). Each pane has its own Close / Go Back / Go Forward buttons.
 
+A block mounted in an inline preview cannot also open in a split. An attempt
+shows `Content already open.` and keeps the preview in place. Select another
+preview item or leave that view before opening the block in a split. Duplicate
+mounts reached through direct layout paths show the same message instead of a
+second block instance.
+
 ## Sidebar (a11y names are load-bearing)
 
 - Top: buttons `Search` and `Create`. Clicking sidebar `Search` opens a menu

@@ -1,7 +1,7 @@
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import type { CalendarUpdateScope } from '@service-email/client';
-import { Button, cn, Layer } from '@ui';
+import { Button, cn, Layer, RadioGroup } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -356,26 +356,22 @@ export function EventForm(props: EventFormProps) {
 
       <div class="flex shrink-0 items-center justify-end gap-3">
         <Show when={props.showRecurringEditNotice}>
-          <div
-            role="radiogroup"
+          <RadioGroup
+            value={editScope()}
+            onChange={(value) => setEditScope(value as CalendarUpdateScope)}
+            disabled={formIsDisabled()}
             aria-label="Apply changes to"
-            class="mr-auto flex items-center gap-3 text-xs text-ink-muted"
+            class="mr-auto flex-row items-center gap-3 text-xs text-ink-muted"
           >
             <For each={RECURRING_EDIT_SCOPE_OPTIONS}>
               {(option) => (
-                <label class="flex items-center gap-1.5">
-                  <input
-                    type="radio"
-                    name="event-edit-scope"
-                    checked={editScope() === option.scope}
-                    onChange={() => setEditScope(option.scope)}
-                    disabled={formIsDisabled()}
-                  />
-                  {option.label}
-                </label>
+                <RadioGroup.Item value={option.scope} class="gap-1.5">
+                  <RadioGroup.ItemControl class="size-3.5" />
+                  <RadioGroup.ItemLabel>{option.label}</RadioGroup.ItemLabel>
+                </RadioGroup.Item>
               )}
             </For>
-          </div>
+          </RadioGroup>
         </Show>
         <Button
           type="button"
