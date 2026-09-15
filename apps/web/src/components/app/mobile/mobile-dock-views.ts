@@ -1,4 +1,7 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { enableCrm } from '@core/constant/featureFlags';
+import CompanyIcon from '@icon/wide-company.svg';
 import BellIcon from '@phosphor/bell.svg';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
@@ -13,17 +16,17 @@ import ChatsFillIcon from '@phosphor-fill/chats-circle-fill.svg';
 import EmailFillIcon from '@phosphor-fill/envelope-fill.svg';
 import FilesFillIcon from '@phosphor-fill/folder-simple-fill.svg';
 import { createMemo } from 'solid-js';
-import type { MobileTouchIconComponent } from './MobileTouchMenu';
+import type { MobileDockIcon } from './MobileDockButton';
 import type { MobileNavViewId } from './mobile-nav-views';
 
 export type MobileDockView = {
   id: Exclude<MobileNavViewId, 'search' | 'settings'>;
   label: string;
   /** Same Phosphor glyph as the desktop sidebar. */
-  icon: MobileTouchIconComponent;
-  iconActive?: MobileTouchIconComponent;
+  icon: MobileDockIcon;
+  iconActive?: MobileDockIcon;
   /** When set, the scope pill renders icon-only with this icon. */
-  pillIcon?: MobileTouchIconComponent;
+  pillIcon?: MobileDockIcon;
 };
 
 /**
@@ -67,13 +70,15 @@ const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
   { id: 'agents', label: 'Agents', icon: AgentsIcon },
   { id: 'tasks', label: 'Tasks', icon: TasksIcon },
   { id: 'calls', label: 'Calls', icon: CallsIcon },
+  { id: 'companies', label: 'CRM', icon: CompanyIcon },
 ];
 
 export function useMobileDockViews() {
   const calendarEnabled = useCalendarUiFlag();
+  const crm = useFeatureFlag(enableCrm);
   return createMemo(() =>
     MOBILE_DOCK_VIEWS.filter(
       (view) => view.id !== 'calendar' || calendarEnabled()
-    )
+    ).filter((view) => view.id !== 'companies' || crm().enabled)
   );
 }

@@ -52,6 +52,8 @@ Hover a message for its action menu. `Reply` on a top-level message opens that t
 an existing thread reply, it inserts a one-line reply-target reference into the composer;
 clicking the reference navigates back to that reply. If text in the message is
 browser-selected before `Reply` is clicked, the reference previews only the selected text.
+Clicking `Reply` again for a message already referenced anywhere in the draft keeps
+the existing reference and draft unchanged, even if a different text selection is used.
 For agent-session messages, the reference previews the resolved answer or current activity
 rather than the internal Magic Chip marker.
 Agent-session announcements use the same ReplyTarget reference for the prompting channel
@@ -82,6 +84,36 @@ whole turn, and a finished turn with nothing said leaves the area empty. The are
 cropped at the chip's height with a fade at its foot; clicking it expands it in place, and
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
+
+Cursor sessions choose a repository from the mentioning user's linked GitHub App
+installations on their first prompt. A session without a repository can still use
+Macro and connected MCP tools, but cannot use the Git proxy. For a PR smoke test,
+link the GitHub account and App installation in the same environment first, then
+name the repository explicitly in a new session's prompt.
+
+PR status in an open Magic Chip updates from connection-gateway events after
+webhook sync. Reconnecting refreshes active PR lookups to recover missed updates.
+A late webhook does not require reloading the page.
+
+Coding agents use `macro_internal.set_pull_request` to register an existing or
+new GitHub PR with their session. Macro Internal MCP is hosted by the harness
+service at `/mcp/internal` on its egress listener, separately from workspace MCP.
+Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
+model supplies only the URL. The tool records the link, not the GitHub PR itself.
+Every harness receives a shared prompt instruction to register PRs. Cursor
+enables automatic PR creation when a repository is selected. Its returned URL
+is also recorded because
+automatic creation can finish after the agent stops. Repeated registration is
+idempotent. The PR URL is stored on the session row, independently of conversation
+history. Registration sends a session-update gateway notification so mounted
+chips reload the current link; reconnecting also refreshes it. Multiple chips
+for the same session share its metadata, and loading it leaves the surrounding
+editor visible.
+
+When Cursor opens a pull request, the chip header shows its GitHub link as soon
+as the run reports it, including after restoring a session. The link remains
+usable while the webhook mapping is loading or absent, then becomes a Macro PR
+entity link once synced.
 
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's
@@ -153,20 +185,31 @@ a channel cached away from its latest page, and a delta longer than one page use
 
 ## Chat navigation rail
 
-On desktop, the Chat rail has `Browse` and `Recents` tabs. Browse contains
-independently paginated `Channels` and `DMs` sections; collapsing a section
-does not discard its loaded pages. Recents has its own pagination cursor.
-Each list is virtualized, so offscreen conversations may not exist in the DOM.
+On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
+optional `Favorites` section above the independently paginated `Channels` and
+`DMs` sections. It appears when the user has channel favorites and only lists
+channels. Channel favorites open in the channel preview.
+The search action beside the tabs opens a search field below them and replaces
+the active tab contents with matching channels and direct messages from one
+activity-ordered source. Search results use compact rows on `All` and
+conversation cards on `Recent`. Switching tabs preserves the active search and
+query, then scrolls the results to the selected channel when present or to the
+start. Closing search restores the active tab and applies the same scroll
+behavior to its lists. An empty result uses the standard search empty state
+artwork and wraps long queries.
+Collapsing a section does not discard its loaded pages. Recent has its own
+pagination cursor. Each list is virtualized, so offscreen conversations may not
+exist in the DOM.
 Rows and section headers act on primary-button mousedown, so the selection
 and highlight change before the click completes; a normal click still works.
 
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances
 into the appended rows. If the section has no next page, navigation proceeds
-to the next section. `[` and `]` jump between the Channels and DMs section
-headers.
+to the next section. `[` and `]` jump between the visible Favorites, Channels,
+and DMs section headers.
 
-On touch layouts, the `Recents`, `Channels`, and `DMs` pill tabs each retain
+On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
 their own loaded pages and load more as their active list approaches the end.
 
 ## Channel tabs

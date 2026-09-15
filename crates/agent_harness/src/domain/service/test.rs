@@ -1761,6 +1761,23 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     );
     let (result, ()) = tokio::join!(prompted, complete_bound_handshake(&runtime));
     result.expect("the first prompt binds the session and reaches the runtime");
+    let requests = runtime.agent().received_requests();
+    let ClientRequest::NewSessionRequest(open) = &requests[1] else {
+        panic!("expected session/new")
+    };
+    assert_eq!(open.mcp_servers.len(), 1);
+    let agent_client_protocol::schema::v1::McpServer::Http(server) = &open.mcp_servers[0] else {
+        panic!("expected HTTP MCP")
+    };
+    assert_eq!(server.name, "macro_internal");
+    assert!(server.url.ends_with("/mcp/internal"));
+    assert!(
+        server
+            .headers
+            .iter()
+            .any(|header| header.name == "Authorization")
+    );
+
     assert_eq!(
         prompts(&runtime.agent()),
         [vec![ContentBlock::from("@claude fix the failing test")]]

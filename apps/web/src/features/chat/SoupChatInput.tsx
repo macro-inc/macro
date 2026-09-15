@@ -1,4 +1,3 @@
-import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
@@ -13,6 +12,7 @@ import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import {
   getSoupInputStoredModel,
+  storeChatStateImmediate,
   storeSoupInputModel,
 } from '@core/component/AI/util/storage';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -22,7 +22,7 @@ import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { createEffect, onMount } from 'solid-js';
+import { createEffect } from 'solid-js';
 
 function SoupChatInputInner() {
   const splitPanelContext = useSplitPanelOrThrow();
@@ -48,12 +48,6 @@ function SoupChatInputInner() {
   });
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
-
-  let containerRef!: HTMLDivElement;
-
-  onMount(() => {
-    attachHotkeys(containerRef);
-  });
 
   // cmd+j - Focus AI chat
   registerHotkey({
@@ -82,6 +76,9 @@ function SoupChatInputInner() {
       return;
     }
     const { id: chatId } = response.value;
+    // Give list/recent icons the sent model before the new chat loads or its
+    // server metadata refreshes, including when sending in the background.
+    storeChatStateImmediate(chatId, { model: request.model });
 
     // Rename via mutation for optimistic cache updates (history, preview, soup)
     const name = deriveChatName(request.content);
@@ -119,27 +116,20 @@ function SoupChatInputInner() {
   };
 
   return (
-    <FloatRegionOrInline region="accessory">
-      <div
-        ref={containerRef}
-        class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none touch:static touch:pb-0 touch:px-(--mobile-chrome-gutter)"
-      >
-        <div class="w-full max-w-3xl">
-          <div class="pointer-events-auto">
-            <ChatInput
-              editor={editor}
-              onSend={handleSend}
-              onEscape={() => {
-                splitPanelContext.panelRef()?.focus();
-                return true;
-              }}
-              isPersistent={true}
-              autoFocusOnMount={false}
-            />
-          </div>
-        </div>
-      </div>
-    </FloatRegionOrInline>
+    <div ref={attachHotkeys}>
+      <ChatInput
+        variant="default"
+        collapseOnBlur
+        editor={editor}
+        onSend={handleSend}
+        onEscape={() => {
+          splitPanelContext.panelRef()?.focus();
+          return true;
+        }}
+        isPersistent={true}
+        autoFocusOnMount={false}
+      />
+    </div>
   );
 }
 

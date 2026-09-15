@@ -452,7 +452,7 @@ pub fn dirty_updates(keys: &[String]) -> Vec<ProjectionMutation> {
         .collect()
 }
 
-/// A browser-engine generation identity, distinct from its reusable revision counter.
+/// A cache-engine generation identity, distinct from its reusable revision counter.
 pub fn new_generation() -> String {
     uuid::Uuid::new_v4().to_string()
 }

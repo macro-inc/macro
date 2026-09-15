@@ -38,7 +38,7 @@ import type {
  * [`DiscussionSource`]. Backend-agnostic: drive it via a `DiscussionProvider`
  * supplying a document/task or CRM source.
  */
-export function Discussion() {
+export function Discussion(props: { hideComposer?: boolean }) {
   const source = useDiscussion();
   const [isExpanded, setIsExpanded] = createSignal(true);
   const [mountedCommentsVersion, setMountedCommentsVersion] = createSignal(0);
@@ -101,8 +101,6 @@ export function Discussion() {
     });
   });
 
-  let newThreadInputHandle: { clear: () => void } | undefined;
-
   const rootMetaById = createMemo(() => {
     const messages = source.threads().flatMap((thread) => {
       const root = thread.comments[0];
@@ -115,13 +113,6 @@ export function Discussion() {
 
     return metaById;
   });
-
-  const handleCreateThread = async (snapshot: InputSnapshot) => {
-    const text = snapshot.value.trim();
-    if (!text) return;
-    await source.createThread(text, snapshot.mentions);
-    newThreadInputHandle?.clear();
-  };
 
   return (
     <section class="mt-3 pb-12">
@@ -163,22 +154,47 @@ export function Discussion() {
               </For>
             </div>
 
-            <Show when={source.canEdit()}>
+            <Show when={!props.hideComposer && source.canEdit()}>
               <div class="mt-4">
-                <DiscussionInput
-                  input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
-                  onSend={handleCreateThread}
-                  onReady={(handle) => {
-                    newThreadInputHandle = handle;
-                  }}
-                  autofocus={false}
-                />
+                <DiscussionComposer />
               </div>
             </Show>
           </div>
         </StaticMarkdownContext>
       </Show>
     </section>
+  );
+}
+
+/** The new-thread composer can be placed independently of the thread list. */
+export function DiscussionComposer(props: {
+  collapsible?: boolean;
+  /** Dismiss the keyboard after submitting from a floating mobile composer. */
+  blurOnSend?: boolean;
+}) {
+  const source = useDiscussion();
+  let inputHandle: { clear: () => void } | undefined;
+
+  const handleCreateThread = async (snapshot: InputSnapshot) => {
+    const text = snapshot.value.trim();
+    if (!text) return;
+    await source.createThread(text, snapshot.mentions);
+    inputHandle?.clear();
+  };
+
+  return (
+    <Show when={source.canEdit()}>
+      <DiscussionInput
+        input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
+        collapsible={props.collapsible}
+        blurOnSend={props.blurOnSend}
+        onSend={handleCreateThread}
+        onReady={(handle) => {
+          inputHandle = handle;
+        }}
+        autofocus={false}
+      />
+    </Show>
   );
 }
 

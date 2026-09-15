@@ -17,8 +17,8 @@ use entity_access::domain::{
 };
 use http_body_util::BodyExt;
 use macro_authorization::{
-    INTERNAL_API_KEY_HEADER, InternalIdentityClaims, MacroAuthorizationError,
-    MacroAuthorizationService, MacroAuthorizationState,
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
+    MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
 use macro_user_id::{
     lowercased::Lowercase,
@@ -38,10 +38,15 @@ use crate::domain::{
     ports::{ForeignEntityListQuery, ForeignEntityService},
 };
 
+/// A recorded by-source lookup: the external identifier and source filter.
+type BySourceLookup = (String, Option<String>);
+
 #[derive(Clone)]
 struct StubForeignEntityService {
     response: StubForeignEntityResponse,
     receipt_entity_ids: Arc<Mutex<Vec<String>>>,
+    by_source_records: Vec<ForeignEntity>,
+    by_source_lookups: Arc<Mutex<Vec<BySourceLookup>>>,
 }
 
 #[derive(Clone)]
@@ -63,7 +68,24 @@ impl StubForeignEntityService {
         Self {
             response,
             receipt_entity_ids: Arc::new(Mutex::new(Vec::new())),
+            by_source_records: Vec::new(),
+            by_source_lookups: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Stub that only answers by-source lookups, with the supplied records.
+    fn by_source(records: Vec<ForeignEntity>) -> Self {
+        Self {
+            by_source_records: records,
+            ..Self::new(StubForeignEntityResponse::NotFound(Uuid::nil()))
+        }
+    }
+
+    fn by_source_lookups(&self) -> Vec<BySourceLookup> {
+        self.by_source_lookups
+            .lock()
+            .expect("stub foreign entity service lookup lock poisoned")
+            .clone()
     }
 
     fn receipt_entity_ids(&self) -> Vec<String> {
@@ -107,10 +129,27 @@ impl ForeignEntityService for StubForeignEntityService {
 
     async fn get_foreign_entities_by_foreign_entity_id(
         &self,
-        _foreign_entity_id: &str,
-        _foreign_entity_source: Option<&str>,
+        foreign_entity_id: &str,
+        foreign_entity_source: Option<&str>,
     ) -> Result<Vec<ForeignEntity>, ForeignEntityError> {
-        unreachable!("router does not list foreign entities by external ID")
+        self.by_source_lookups
+            .lock()
+            .expect("stub foreign entity service lookup lock poisoned")
+            .push((
+                foreign_entity_id.to_string(),
+                foreign_entity_source.map(str::to_string),
+            ));
+
+        Ok(self
+            .by_source_records
+            .iter()
+            .filter(|record| {
+                record.foreign_entity_id == foreign_entity_id
+                    && foreign_entity_source
+                        .is_none_or(|source| record.foreign_entity_source == source)
+            })
+            .cloned()
+            .collect())
     }
 
     async fn get_foreign_entities_for_user(
@@ -143,10 +182,23 @@ impl ForeignEntityService for StubForeignEntityService {
     }
 }
 
-#[derive(Clone)]
-struct NoopEntityAccessService;
+/// Entity access stub that grants view access to an explicit allow list and
+/// answers `Unauthorized` — the way the real service reports "no access" — for
+/// everything else.
+#[derive(Clone, Default)]
+struct StubEntityAccessService {
+    viewable_entity_ids: Vec<String>,
+}
 
-impl EntityAccessService for NoopEntityAccessService {
+impl StubEntityAccessService {
+    fn viewing(entity_ids: Vec<String>) -> Self {
+        Self {
+            viewable_entity_ids: entity_ids,
+        }
+    }
+}
+
+impl EntityAccessService for StubEntityAccessService {
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
         _user_id: &MacroUserId<Lowercase<'_>>,
@@ -198,11 +250,23 @@ impl EntityAccessService for NoopEntityAccessService {
     async fn get_entity_permission(
         &self,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        entity_id: &str,
+        entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        unreachable!("identity-less internal access should bypass real access checks")
+        assert_eq!(entity_type, EntityType::ForeignEntity);
+
+        if self
+            .viewable_entity_ids
+            .iter()
+            .any(|viewable| viewable == entity_id)
+        {
+            return Ok(EntityPermission::AccessLevel {
+                access_level: AccessLevel::View,
+            });
+        }
+
+        Err(AccessError::Unauthorized)
     }
 
     async fn get_crm_entity_permission_with_team(
@@ -273,11 +337,36 @@ impl MacroAuthorizationService for FakeAuthorizationService {
 }
 
 fn test_router(service: Arc<StubForeignEntityService>) -> Router {
+    router_with_access(service, StubEntityAccessService::default())
+}
+
+fn router_with_access(
+    service: Arc<StubForeignEntityService>,
+    access_service: StubEntityAccessService,
+) -> Router {
     foreign_entity_router(ForeignEntityRouterState::new(
         service,
-        Arc::new(NoopEntityAccessService),
+        Arc::new(access_service),
         MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
     ))
+}
+
+fn internal_get_as_user(uri: impl Into<String>, user_id: &str) -> Request<Body> {
+    Request::builder()
+        .method(Method::GET)
+        .uri(uri.into())
+        .header(INTERNAL_API_KEY_HEADER, VALID_INTERNAL_KEY)
+        .header(INTERNAL_MACRO_USER_ID_HEADER, user_id)
+        .body(Body::empty())
+        .expect("test request should be built")
+}
+
+fn anonymous_get(uri: impl Into<String>) -> Request<Body> {
+    Request::builder()
+        .method(Method::GET)
+        .uri(uri.into())
+        .body(Body::empty())
+        .expect("test request should be built")
 }
 
 fn internal_get(uri: impl Into<String>) -> Request<Body> {
@@ -379,4 +468,103 @@ async fn get_foreign_entity_maps_not_found_to_404() {
         format!("foreign entity not found: {id}")
     );
     assert_eq!(service.receipt_entity_ids(), vec![id.to_string()]);
+}
+
+const PULL_REQUEST_SOURCE: &str = "github_pull_request";
+const PULL_REQUEST_KEY: &str = "macro/app/pull/42";
+const TEST_USER_ID: &str = "macro|user@macro.com";
+
+fn pull_request_entity() -> ForeignEntity {
+    ForeignEntity {
+        foreign_entity_id: PULL_REQUEST_KEY.to_string(),
+        foreign_entity_source: PULL_REQUEST_SOURCE.to_string(),
+        ..foreign_entity(Uuid::new_v4())
+    }
+}
+
+fn by_source_uri() -> String {
+    format!("/by_source/{PULL_REQUEST_SOURCE}/{PULL_REQUEST_KEY}")
+}
+
+#[tokio::test]
+async fn get_foreign_entity_by_source_returns_entity_for_internal_caller() {
+    let entity = pull_request_entity();
+    let service = Arc::new(StubForeignEntityService::by_source(vec![entity.clone()]));
+    let response = test_router(service.clone())
+        .oneshot(internal_get(by_source_uri()))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(response).await,
+        expected_foreign_entity_json(&entity)
+    );
+    assert_eq!(
+        service.by_source_lookups(),
+        vec![(
+            PULL_REQUEST_KEY.to_string(),
+            Some(PULL_REQUEST_SOURCE.to_string()),
+        )]
+    );
+}
+
+#[tokio::test]
+async fn get_foreign_entity_by_source_returns_entity_the_user_may_view() {
+    let entity = pull_request_entity();
+    let service = Arc::new(StubForeignEntityService::by_source(vec![entity.clone()]));
+    let response = router_with_access(
+        service.clone(),
+        StubEntityAccessService::viewing(vec![entity.id.to_string()]),
+    )
+    .oneshot(internal_get_as_user(by_source_uri(), TEST_USER_ID))
+    .await
+    .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(response).await,
+        expected_foreign_entity_json(&entity)
+    );
+}
+
+#[tokio::test]
+async fn get_foreign_entity_by_source_hides_entities_the_user_may_not_view() {
+    let entity = pull_request_entity();
+    let service = Arc::new(StubForeignEntityService::by_source(vec![entity]));
+    let response = router_with_access(service.clone(), StubEntityAccessService::default())
+        .oneshot(internal_get_as_user(by_source_uri(), TEST_USER_ID))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        response_json(response).await["message"],
+        format!("foreign entity not found: {PULL_REQUEST_SOURCE}/{PULL_REQUEST_KEY}")
+    );
+}
+
+#[tokio::test]
+async fn get_foreign_entity_by_source_maps_no_match_to_404() {
+    let service = Arc::new(StubForeignEntityService::by_source(Vec::new()));
+    let response = test_router(service.clone())
+        .oneshot(internal_get(by_source_uri()))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn get_foreign_entity_by_source_rejects_anonymous_callers() {
+    let service = Arc::new(StubForeignEntityService::by_source(vec![
+        pull_request_entity(),
+    ]));
+    let response = test_router(service.clone())
+        .oneshot(anonymous_get(by_source_uri()))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(service.by_source_lookups().is_empty());
 }

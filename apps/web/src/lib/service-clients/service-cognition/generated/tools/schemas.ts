@@ -1515,6 +1515,7 @@ export const DisplayResultsResponse = z.object({ message: z.string() });
 export const EditDocument = z.object({
   document_id: z.string(),
   instructions: z.string(),
+  fast: z.boolean().optional(),
 });
 
 export const EditDocumentResponse = z.object({

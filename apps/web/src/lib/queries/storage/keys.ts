@@ -50,6 +50,9 @@ export const pullRequestMentionKeys = createQueryKeys('pullRequestMention', {
   foreignEntity: (id: string) => ({
     queryKey: [id],
   }),
+  byGithubKey: (githubKey: string) => ({
+    queryKey: ['byGithubKey', githubKey],
+  }),
 });
 
 export const attachmentReferencesKeys = createQueryKeys(

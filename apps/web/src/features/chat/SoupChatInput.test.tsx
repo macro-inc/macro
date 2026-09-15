@@ -1,3 +1,4 @@
+import { Model } from '@core/component/AI/constant';
 import {
   cleanup,
   fireEvent,
@@ -12,10 +13,11 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   pending: vi.fn(),
   rename: vi.fn(),
+  storeModel: vi.fn(),
+  sendBackground: vi.fn(),
+  background: false,
 }));
-vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
-  FloatRegionOrInline: (props: { children: unknown }) => props.children,
-}));
+
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
 }));
@@ -23,12 +25,19 @@ vi.mock('@core/component/AI/component/input/buildChatEditor', () => ({
   buildChatEditor: () => ({ withMentions: () => ({}) }),
 }));
 vi.mock('@core/component/AI/component/input/ChatInput', () => ({
-  ChatInput: (props: { onSend: (request: unknown) => void }) => (
+  ChatInput: (props: {
+    onSend: (request: unknown) => void;
+    variant?: string;
+    collapseOnBlur?: boolean;
+  }) => (
     <button
+      data-variant={props.variant}
+      data-collapse-on-blur={props.collapseOnBlur}
       onClick={() =>
         props.onSend({
           content: 'Summarize this document',
-          model: 'claude-sonnet-5',
+          model: Model.gpt56,
+          metaKey: mocks.background,
           attachments: [{ entity_id: 'document-id', entity_type: 'document' }],
         })
       }
@@ -40,7 +49,7 @@ vi.mock('@core/component/AI/component/input/ChatInput', () => ({
 vi.mock('@core/component/AI/context', () => ({
   ChatInputProvider: (props: { children: unknown }) => props.children,
   useChatInputContext: () => ({
-    model: () => 'claude-sonnet-5',
+    model: () => Model.gpt56,
     attachments: {},
   }),
 }));
@@ -56,6 +65,7 @@ vi.mock('@core/component/AI/signal/pendingSend', () => ({
 vi.mock('@core/component/AI/util/storage', () => ({
   getSoupInputStoredModel: () => undefined,
   storeSoupInputModel: vi.fn(),
+  storeChatStateImmediate: mocks.storeModel,
 }));
 vi.mock('@core/constant/PaywallState', () => ({
   PaywallKey: {},
@@ -73,18 +83,29 @@ vi.mock('@entity', () => ({
 }));
 vi.mock('@queries/soup/cache', () => ({ invalidateAllSoup: vi.fn() }));
 vi.mock('@service-cognition/client', () => ({
-  cognitionApiServiceClient: { createChat: mocks.createChat },
+  cognitionApiServiceClient: {
+    createChat: mocks.createChat,
+    sendStreamChatMessage: mocks.sendBackground,
+  },
 }));
 
-import type { CreatableBlock } from '@app/features/command/types';
-import { mobilePageCreateAction } from '@components/app/mobile/mobile-page-create-action';
-import { TOKENS } from '@core/hotkey/tokens';
 import { SoupChatInput } from './SoupChatInput';
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.background = false;
+});
 afterEach(cleanup);
-beforeEach(() => vi.clearAllMocks());
 
-describe('Agents list composer', () => {
+describe('SoupChatInput', () => {
+  it('renders the compact chat input inline without page actions', () => {
+    const { container } = render(() => <SoupChatInput />);
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect(container.contains(send)).toBe(true);
+    expect(send.getAttribute('data-variant')).toBe('default');
+    expect(send.getAttribute('data-collapse-on-blur')).toBe('true');
+    expect(screen.queryByRole('button', { name: /^New/ })).toBeNull();
+  });
   it('creates and opens a chat with the first prompt, selected model, and attachments', async () => {
     mocks.createChat.mockResolvedValue({
       isErr: () => false,
@@ -100,12 +121,36 @@ describe('Agents list composer', () => {
     expect(mocks.createChat).toHaveBeenCalledTimes(1);
     expect(mocks.pending).toHaveBeenCalledWith({
       content: 'Summarize this document',
-      model: 'claude-sonnet-5',
+      model: Model.gpt56,
       attachments: [{ entity_id: 'document-id', entity_type: 'document' }],
     });
     expect(mocks.pending.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.replace.mock.invocationCallOrder[0]
     );
+    expect(mocks.storeModel).toHaveBeenCalledWith('new-chat', {
+      model: Model.gpt56,
+    });
+    expect(mocks.storeModel.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.rename.mock.invocationCallOrder[0]
+    );
+  });
+  it('records the selected provider for a background send without opening the chat', async () => {
+    mocks.background = true;
+    mocks.createChat.mockResolvedValue({
+      isErr: () => false,
+      value: { id: 'background-chat' },
+    });
+    render(() => <SoupChatInput />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(mocks.sendBackground).toHaveBeenCalled());
+    expect(mocks.storeModel).toHaveBeenCalledWith('background-chat', {
+      model: Model.gpt56,
+    });
+    expect(mocks.storeModel.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.sendBackground.mock.invocationCallOrder[0]
+    );
+    expect(mocks.pending).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
   it('does not navigate or queue a message when creation fails', async () => {
     mocks.createChat.mockResolvedValue({ isErr: () => true });
@@ -114,36 +159,6 @@ describe('Agents list composer', () => {
     await waitFor(() => expect(mocks.createChat).toHaveBeenCalledTimes(1));
     expect(mocks.pending).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalled();
-  });
-  it('replaces the Agents floating create button without removing other page actions', () => {
-    const blocks: CreatableBlock[] = [
-      {
-        label: 'Mail draft',
-        description: 'Create email',
-        blockName: 'email',
-        hotkeyToken: TOKENS.create.email,
-        hotkey: 'e',
-        keyDownHandler: vi.fn(() => true),
-      },
-      {
-        label: 'Task',
-        description: 'Create task',
-        blockName: 'task',
-        hotkeyToken: TOKENS.create.task,
-        hotkey: 't',
-        keyDownHandler: vi.fn(() => true),
-      },
-    ];
-
-    expect(mobilePageCreateAction('agents', blocks)).toBeUndefined();
-    expect(mobilePageCreateAction('mail', blocks)).toEqual({
-      label: 'New mail draft',
-      run: blocks[0].keyDownHandler,
-    });
-    expect(mobilePageCreateAction('tasks', blocks)).toEqual({
-      label: 'New task',
-      run: blocks[1].keyDownHandler,
-    });
-    expect(mobilePageCreateAction('mail', [])).toBeUndefined();
+    expect(mocks.storeModel).not.toHaveBeenCalled();
   });
 });

@@ -1,113 +1,30 @@
-import { useCreateMenuBlocks } from '@app/features/command/Launcher';
 import {
   MobileAskAiButton,
   MobileSearchInput,
 } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { useOpenEventComposer } from '@block-calendar/components/use-open-event-composer';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import IconGear from '@phosphor/gear.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
-import CreateIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { FloatRegion } from './float-regions/FloatRegion';
+import { MobileDockButton } from './MobileDockButton';
 import { MobileDockIsland } from './MobileDockIsland';
+import { MobileDrawer } from './MobileDrawer';
 import { MobileBottomEdgeFade } from './MobileEdgeFade';
-import {
-  type MobileTouchIconComponent,
-  MobileTouchMenu,
-} from './MobileTouchMenu';
 import { type MobileDockView, useMobileDockViews } from './mobile-dock-views';
-import { mobilePageCreateAction } from './mobile-page-create-action';
-import { pressPulse } from './pressPulse';
 import {
   type MobileDockNavId,
   useForegroundMobileView,
   useMobileNavNavigate,
 } from './use-mobile-nav';
 
-// Keeps the directive import from being tree-shaken / lint-flagged.
-false && pressPulse;
-
-function MobilePageCreateButton() {
-  const foregroundView = useForegroundMobileView();
-  const createBlocks = useCreateMenuBlocks();
-  const openEventComposer = useOpenEventComposer();
-  const action = () => {
-    if (foregroundView() === 'calendar') {
-      return { label: 'New event', run: () => openEventComposer() };
-    }
-    return mobilePageCreateAction(foregroundView(), createBlocks());
-  };
-
-  return (
-    <FloatRegion
-      region="accessory"
-      priority={-1}
-      active={() =>
-        !!action() && !SearchState.isOpen() && !virtualKeyboardVisible()
-      }
-    >
-      <Show when={action()}>
-        {(create) => (
-          <div class="flex justify-end px-(--mobile-chrome-gutter)">
-            <MobileDockIsland>
-              <MobileDockButton
-                icon={CreateIcon}
-                ariaLabel={create().label}
-                onClick={() => create().run()}
-              />
-            </MobileDockIsland>
-          </div>
-        )}
-      </Show>
-    </FloatRegion>
-  );
-}
-
-type MobileDockButtonProps = {
-  icon: MobileTouchIconComponent;
-  /** Accessible name for the icon-only button. */
-  ariaLabel: string;
-  onClick: () => void;
-  active?: boolean;
-};
-
-/**
- * Renders flat: hosts wrap it in a MobileDockIsland (alone or grouped with
- * other controls) to give it the floating chrome.
- */
-function MobileDockButton(props: MobileDockButtonProps) {
-  return (
-    <button
-      type="button"
-      aria-label={props.ariaLabel}
-      use:pressPulse
-      onPointerDown={() => hapticImpact('light')}
-      // Fires on release; the press pulse holds the on-state while touched.
-      onClick={() => {
-        props.onClick();
-      }}
-      class={cn(
-        'relative flex size-(--mobile-chrome-button-size) shrink-0 items-center justify-center rounded-full',
-        props.active && 'text-accent'
-      )}
-    >
-      <div class="size-(--mobile-chrome-icon-size) shrink-0 [&_svg]:size-(--mobile-chrome-icon-size)">
-        <Dynamic component={props.icon} />
-      </div>
-    </button>
-  );
-}
-
-function MoreViewsMenu(props: {
+function MoreViewsDrawer(props: {
   views: readonly MobileDockView[];
   isActive: (id: MobileDockNavId) => boolean;
   onNavigate: (id: MobileDockNavId) => void;
@@ -115,43 +32,68 @@ function MoreViewsMenu(props: {
   const { settingsOpen, toggleSettings } = useSettingsState();
 
   return (
-    <MobileTouchMenu>
-      <MobileTouchMenu.Trigger
+    <MobileDrawer
+      side="bottom"
+      preventScroll={false}
+      preventScrollbarShift={false}
+      closeOnOutsidePointerStrategy="pointerdown"
+    >
+      <MobileDrawer.Trigger
+        as={MobileDockButton}
         ariaLabel="More views"
         icon={CaretUpIcon}
-        class="size-(--mobile-chrome-button-size) shrink-0"
-        iconClass="size-(--mobile-chrome-icon-size) [&_svg]:size-(--mobile-chrome-icon-size)"
       />
-      <MobileTouchMenu.Content>
-        <MobileTouchMenu.Item
-          id="settings"
-          icon={IconGear}
-          active={settingsOpen()}
-          animateIcon={false}
-          onSelect={toggleSettings}
-        >
-          Settings
-        </MobileTouchMenu.Item>
-        <Show when={props.views.length > 0}>
-          <MobileTouchMenu.Separator />
-        </Show>
-        <For each={props.views.toReversed()}>
-          {(view) => (
-            <MobileTouchMenu.Item
-              id={view.id}
-              icon={view.icon}
-              animateIcon={false}
-              active={props.isActive(view.id)}
-              onSelect={() => props.onNavigate(view.id)}
-            >
-              {view.label}
-            </MobileTouchMenu.Item>
-          )}
-        </For>
-        <MobileTouchMenu.Separator />
-        <MobileTouchMenu.Footer>Views</MobileTouchMenu.Footer>
-      </MobileTouchMenu.Content>
-    </MobileTouchMenu>
+      <MobileDrawer.Portal>
+        <MobileDrawer.Overlay />
+        <MobileDrawer.Content aria-label="More views">
+          <MobileDrawer.Handle />
+          <MobileDrawer.ScrollBody>
+            <div class="mx-3 flex flex-col gap-1 px-1">
+              <MobileDrawer.Close
+                as={MobileDrawer.Item}
+                aria-label="Settings"
+                class={settingsOpen() ? 'text-accent' : undefined}
+                onClick={() => {
+                  hapticImpact('light');
+                  toggleSettings();
+                }}
+              >
+                <IconGear class="size-4 shrink-0" />
+                <span>Settings</span>
+              </MobileDrawer.Close>
+              <Show when={props.views.length > 0}>
+                <div class="-mx-1 h-px shrink-0 bg-edge" />
+              </Show>
+              <For each={props.views.toReversed()}>
+                {(view) => (
+                  <MobileDrawer.Close
+                    as={MobileDrawer.Item}
+                    aria-label={view.label}
+                    class={props.isActive(view.id) ? 'text-accent' : undefined}
+                    aria-current={props.isActive(view.id) ? 'page' : undefined}
+                    onClick={() => {
+                      hapticImpact('light');
+                      props.onNavigate(view.id);
+                    }}
+                  >
+                    <Dynamic component={view.icon} class="size-4 shrink-0" />
+                    <span>{view.label}</span>
+                  </MobileDrawer.Close>
+                )}
+              </For>
+              <div class="-mx-1 h-px shrink-0 bg-edge" />
+              <MobileDrawer.Close
+                aria-label="Views"
+                class="flex h-9 shrink-0 items-center px-3 text-sm font-medium text-ink-muted"
+                onClick={() => hapticImpact('light')}
+              >
+                Views
+              </MobileDrawer.Close>
+            </div>
+          </MobileDrawer.ScrollBody>
+        </MobileDrawer.Content>
+      </MobileDrawer.Portal>
+    </MobileDrawer>
   );
 }
 
@@ -198,7 +140,7 @@ function MobileNavigationDockRow() {
             />
           )}
         </For>
-        <MoreViewsMenu
+        <MoreViewsDrawer
           views={dockViews().slice(visibleCount())}
           isActive={(id) => foregroundView() === id}
           onNavigate={navigate}
@@ -245,7 +187,6 @@ export function MobileDockRow(props: MobileDockRowProps) {
       )}
     >
       <MobileBottomEdgeFade />
-      <MobilePageCreateButton />
       <Show when={SearchState.isOpen()} fallback={<MobileNavigationDockRow />}>
         <MobileSearchInput />
         <MobileAskAiButton />

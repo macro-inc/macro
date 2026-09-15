@@ -10,9 +10,9 @@ import {
 } from './constants';
 import { createChannelsViewPersistence } from './persistence';
 import type {
-  ChannelsGroup,
   ChannelsQueryScope,
   ChannelsRailMode,
+  ChannelsRailSection,
   ChannelsTab,
   ChannelsViewState,
   ChannelsViewStateOptions,
@@ -27,7 +27,7 @@ export type ChannelsViewContext = {
   setTab: (tab: ChannelsTab) => void;
   setMobileTab: (tab: ChannelsQueryScope) => void;
   setSelectedChannelId: (channelId: string | undefined) => void;
-  setGroupOpen: (group: ChannelsGroup, open: boolean) => void;
+  setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
   setAsideWidth: (width: number) => void;
   setRailMode: (mode: Exclude<ChannelsRailMode, 'auto'>) => void;
 };
@@ -47,6 +47,7 @@ export const [ChannelsViewProvider, useChannelsView] =
             (initial.tab === 'recents' ? 'recents' : 'channels'),
           selectedChannelId: initial.selectedChannelId,
           expandedGroups: {
+            favorites: initial.expandedGroups?.favorites ?? true,
             channels: initial.expandedGroups?.channels ?? true,
             direct_messages: initial.expandedGroups?.direct_messages ?? true,
           },

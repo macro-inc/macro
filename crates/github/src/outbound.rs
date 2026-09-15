@@ -12,3 +12,6 @@ pub mod pg_github_repo;
 pub mod pg_github_sync_repo;
 #[cfg(any(feature = "link", feature = "sync"))]
 pub(crate) mod pull_request_metadata;
+
+#[cfg(feature = "sync")]
+pub mod connection_gateway_realtime;

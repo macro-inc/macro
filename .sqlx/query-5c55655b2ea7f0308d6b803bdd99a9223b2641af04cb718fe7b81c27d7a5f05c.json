@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT id AS \"id!\"\n            FROM github_app_installation\n            WHERE (source_type = 'user'::github_app_installation_source_type AND source_id = $1)\n               OR (source_type = 'team'::github_app_installation_source_type\n                   AND source_id = ANY($2::text[]))\n            ORDER BY id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5c55655b2ea7f0308d6b803bdd99a9223b2641af04cb718fe7b81c27d7a5f05c"
+}

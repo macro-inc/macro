@@ -20,6 +20,15 @@ vi.mock('@core/component/LexicalMarkdown/theme', () => ({
   channelTheme: {},
 }));
 
+// The PR link resolves its entity over the network; the view only places it.
+vi.mock('./MagicChipPullRequest', () => ({
+  MagicChipPullRequest: (props: { url: string }) => (
+    <a data-testid="chip-pull-request" href={props.url}>
+      {props.url}
+    </a>
+  ),
+}));
+
 // The chip answers a form with the real `ElicitationForm`; the rest of the
 // block-agent ui barrel reaches the composer, comments, and a socket.
 vi.mock('@app/features/block-agent/ui', async () => ({
@@ -166,6 +175,25 @@ describe('MagicChipView', () => {
     expect(label?.textContent).toContain('Cursor Agent');
     expect(label?.textContent).toContain('Claude Opus 5');
     expect(label?.textContent).toContain('Thinking');
+  });
+
+  it('places the pull request in the header once the session opened one', () => {
+    const { container } = render(() => (
+      <MagicChipView
+        agentSessionId="session-1"
+        presentation={{ kind: 'settled', markdown: 'Opened a PR.' }}
+        header={{
+          agent: 'Cursor Agent',
+          pullRequestUrl: 'https://github.com/macro-inc/macro/pull/6303',
+        }}
+      />
+    ));
+    const link = header(container)?.querySelector(
+      '[data-testid="chip-pull-request"]'
+    );
+    expect(link?.getAttribute('href')).toBe(
+      'https://github.com/macro-inc/macro/pull/6303'
+    );
   });
 
   it('keeps the same answer height once the answer streams in', () => {

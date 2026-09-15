@@ -353,6 +353,54 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_repo_url_replaces_and_clears_the_repository(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    repo.set_repo_url(id, Some("https://github.com/macro-inc/macro".to_owned()))
+        .await
+        .expect("persist repository");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .repo_url
+            .as_deref(),
+        Some("https://github.com/macro-inc/macro")
+    );
+
+    // Clearing is a real answer, not a no-op: a session that chose no
+    // repository must not keep the one it was stamped with at open.
+    repo.set_repo_url(id, None).await.expect("clear repository");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .repo_url,
+        None
+    );
+
+    // Idempotent: restating the same absence changes nothing.
+    let modified_at = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get session")
+        .modified_at;
+    repo.set_repo_url(id, None)
+        .await
+        .expect("restate repository");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .modified_at,
+        modified_at
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_name_updates_only_the_name(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
@@ -658,6 +706,49 @@ async fn find_all_for_thread_returns_every_session_on_the_thread(pool: PgPool) {
         .await
         .expect("list an unrelated thread");
     assert!(empty.is_empty());
+}
+
+/// The recent list is the owner's own, newest first, and stops at `limit` -
+/// a prompt summarizing what someone has been working on must not be handed
+/// somebody else's work, nor an unbounded history.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn recent_for_owner_returns_the_owners_newest_sessions(pool: PgPool) {
+    const OTHER_OWNER: &str = "macro|agent-session-other-owner@example.com";
+
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    insert_user(&pool, OTHER_OWNER).await;
+
+    let oldest = create_session(&repo, new_session(bot_id, None, None)).await;
+    let middle = create_session(&repo, new_session(bot_id, None, None)).await;
+    let newest = create_session(&repo, new_session(bot_id, None, None)).await;
+    let someone_else = create_session(
+        &repo,
+        CreateAgentSessionParams {
+            owner_id: user_id(OTHER_OWNER),
+            ..new_session(bot_id, None, None)
+        },
+    )
+    .await;
+
+    let recent = AgentSessionRepo::recent_for_owner(
+        &repo,
+        &user_id(OWNER),
+        NonZeroUsize::new(2).expect("2 is not zero"),
+    )
+    .await
+    .expect("list the owner's recent sessions");
+
+    assert_eq!(
+        recent.iter().map(|session| session.id).collect::<Vec<_>>(),
+        vec![newest.id, middle.id]
+    );
+    assert!(recent.iter().all(|session| session.id != oldest.id));
+    assert!(recent.iter().all(|session| session.id != someone_else.id));
+    assert_eq!(recent[0].name, DEFAULT_AGENT_SESSION_NAME);
+    assert_eq!(recent[0].harness, newest.harness);
+    assert_eq!(recent[0].repo_url, newest.repo_url);
+    assert_eq!(recent[0].created_at, newest.created_at);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1734,4 +1825,96 @@ async fn participants_are_the_distinct_users_the_log_attributes(pool: PgPool) {
     participants.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
 
     assert_eq!(participants, vec![alice, bob]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
+    use crate::domain::pull_request::SessionPullRequestRepo;
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let url = "https://github.com/org/repo/pull/123";
+    let (first, second) = tokio::join!(
+        repo.record_pull_request(session.id, &session.owner_id, url),
+        repo.record_pull_request(session.id, &session.owner_id, url),
+    );
+    assert_eq!(
+        usize::from(first.unwrap()) + usize::from(second.unwrap()),
+        1
+    );
+    let replica = ReplicaId::mint();
+    let ClaimOutcome::Claimed(claim) = repo.claim(session.id, replica).await.unwrap() else {
+        panic!("claim");
+    };
+    let initialization = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    repo.create_fenced_with_boundary(
+        fenced_log(session.id),
+        &claim,
+        Some(crate::domain::model::HistoryBoundary {
+            initialization_log_id: initialization.id,
+        }),
+    )
+    .await
+    .unwrap();
+    let log = AgentSessionLogRepo::list_by_session(&repo, session.id)
+        .await
+        .unwrap();
+    assert_eq!(log[0].id, initialization.id);
+    assert_eq!(
+        log.len(),
+        2,
+        "registering a PR does not add protocol frames"
+    );
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .unwrap()
+            .pull_request_url
+            .as_deref(),
+        Some(url)
+    );
+    assert!(
+        !repo
+            .record_pull_request(session.id, &session.owner_id, url)
+            .await
+            .unwrap()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rotating_a_session_credential_revokes_the_previous_one(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    repo.set_egress_token_hash(session.id, "first-token-hash")
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.find_by_egress_token_hash("first-token-hash")
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        session.id
+    );
+    repo.set_egress_token_hash(session.id, "second-token-hash")
+        .await
+        .unwrap();
+    assert!(
+        repo.find_by_egress_token_hash("first-token-hash")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        repo.find_by_egress_token_hash("second-token-hash")
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        session.id
+    );
 }

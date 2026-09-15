@@ -390,7 +390,7 @@ export function ConversationCard(props: ConversationCardProps) {
                 </Match>
                 <Match when={true}>
                   <span class="min-w-0 flex-1 text-ink-extra-muted">
-                    No messages yet
+                    Send the first message
                   </span>
                 </Match>
               </Switch>

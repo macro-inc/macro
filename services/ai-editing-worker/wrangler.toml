@@ -76,6 +76,7 @@ name = "ai-editing-worker-playground"
 
 [env.playground.vars]
 ENVIRONMENT = "development"
+OTEL_EXPORTER_OTLP_ENDPOINT = "https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces"
 SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
 DSS_BASE = "https://dev-gateway.macro.com/dss"
 SEARCH_SERVICE_BASE = "https://dev-gateway.macro.com/dss"

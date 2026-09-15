@@ -1,7 +1,7 @@
+import ClaudeIcon from '@icon/wide-claude.svg';
 import GoogleIcon from '@phosphor-fill/google-logo-fill.svg';
 import { type Component, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import AnthropicIcon from '../assets/anthropic.svg';
 import OpenAiIcon from '../assets/openai.svg';
 
 type Provider = 'anthropic' | 'openai' | 'google';
@@ -30,7 +30,7 @@ const icons: Record<
   Provider,
   Component<JSX.SvgSVGAttributes<SVGSVGElement>>
 > = {
-  anthropic: AnthropicIcon,
+  anthropic: ClaudeIcon,
   openai: OpenAiIcon,
   google: GoogleIcon,
 };

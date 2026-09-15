@@ -1,5 +1,5 @@
-import AnthropicIcon from '@core/component/AI/assets/anthropic.svg';
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
+import ClaudeIcon from '@icon/wide-claude.svg';
 
 /**
  * Frontend-owned set of model ids. These are the `provider/model` ids the
@@ -34,9 +34,9 @@ export const MODEL_PRETTYNAME: ExhaustiveMap = {
 } as const;
 
 export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
-  'anthropic/claude-sonnet-5': AnthropicIcon,
-  'anthropic/claude-opus-5': AnthropicIcon,
-  'anthropic/claude-haiku-4-5': AnthropicIcon,
+  'anthropic/claude-sonnet-5': ClaudeIcon,
+  'anthropic/claude-opus-5': ClaudeIcon,
+  'anthropic/claude-haiku-4-5': ClaudeIcon,
   'openai/gpt-5.6': OpenAiIcon,
   'openai/gpt-5.6-mini': OpenAiIcon,
 };

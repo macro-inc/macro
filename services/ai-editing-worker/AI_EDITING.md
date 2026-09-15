@@ -68,6 +68,35 @@ A diagram for the animation abstraction flow
             propagate  →  snapshot  →  mirror  →  Loro  →  sync to everyone
 ```
 
+### Prompts
+
+System prompts are composed in `ai-editing/prompts/index.ts` from
+single-purpose markdown sections: `GROUND_RULES` (the XML view, ids),
+`TEAM` (the supervisor/writer split), `EDITING_RULES` (how `runCode` and
+`editor` are used), `API_COMPLETE`, and one short role file per agent. A rule
+lives in exactly one section; a role file holds only what is specific to that
+role. Add to a shared section when two roles need something, not to both role
+files.
+
+### Fast mode
+
+`mode: "fast"` on `/edit` skips the interpreter, supervisor, and dispatch
+entirely (`ai-editing/agents/fast.ts`). One model (`models.fast`, a fallback
+chain like the other roles) gets the user's request and the ENTIRE document as
+line-numbered XML, and edits it directly through the same `runCode` /
+`readDocument` / `reportBlocked` tools a coder has. Each `runCode` reply is the
+effect report, so it sees what it changed and can correct itself; the step cap
+is `DEFAULT_MAX_FAST_STEPS`. Everything below `runCode` is unchanged: sandbox,
+ops, animation queue, `Doc.apply`, propagation.
+
+It exists for small, well-scoped inline edits where the supervisor's review
+loop costs more latency than it buys. The web inline selection popup sends
+`mode: "fast"` with `propagate: false`, so the ops come back in the response as
+one dump and are applied client-side into the user's undo stack. The whole-doc
+edit bar stays on the supervised pipeline. The backend `EditDocument` tool
+(chat agents, MCP) exposes it as a `fast` boolean for one quick, contained
+edit; its default remains supervised.
+
 ### DocumentEditor and ops
 
 `DocumentEditor` is a ergonomic chainable surface the model calls. It has a

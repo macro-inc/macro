@@ -14,6 +14,7 @@ import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavorit
 import {
   type FavoriteFieldsFragment,
   FavoritesDocument,
+  type FavoritesQueryVariables,
   type GraphqlEntityType,
   ReorderFavoritesDocument,
   type ReorderFavoritesMutation,
@@ -92,13 +93,20 @@ export type SetFavoriteArgs = {
   entityId: string;
 };
 
+export type FavoritesCacheTarget = {
+  variables: FavoritesQueryVariables;
+  updateCachedList: boolean;
+};
+
 /** Submit a durable optimistic GraphQL add/remove favorite mutation. */
 export function executeGraphqlSetFavoriteMutation(
   client: Client,
   args: SetFavoriteArgs,
   favorite: boolean,
   optimisticSortOrder: number,
-  updateCachedList = true
+  cacheTargets: readonly FavoritesCacheTarget[] = [
+    { variables: {}, updateCachedList: true },
+  ]
 ): Promise<OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables>> {
   const entityType = toGraphqlFavoriteEntityType(args.entityType);
   const optimisticFavorite: FavoriteFieldsFragment = {
@@ -117,9 +125,6 @@ export function executeGraphqlSetFavoriteMutation(
     __typename: optimisticFavorite.__typename,
     id: optimisticFavorite.id,
   };
-  const favorites = select(FavoritesDocument, {})
-    .field('user')
-    .field('favorites');
   const optimisticData: SetFavoriteMutation = {
     setFavorite: {
       __typename: 'SetFavoritePayload',
@@ -144,15 +149,20 @@ export function executeGraphqlSetFavoriteMutation(
       // A cold offline cache has no user.favorites field to patch. The
       // optimistic mutation itself can still be durably queued; replay
       // revalidation populates the list once the network is available.
-      updates: updateCachedList
-        ? [
-            update(
-              favorites,
-              favorite ? prependUnique(identity) : remove(identity)
-            ),
-          ]
-        : [],
-      revalidations: [{ document: FavoritesDocument, variables: {} }],
+      updates: cacheTargets
+        .filter((target) => target.updateCachedList)
+        .map((target) =>
+          update(
+            select(FavoritesDocument, target.variables)
+              .field('user')
+              .field('favorites'),
+            favorite ? prependUnique(identity) : remove(identity)
+          )
+        ),
+      revalidations: cacheTargets.map((target) => ({
+        document: FavoritesDocument,
+        variables: target.variables,
+      })),
     }
   ).toPromise();
 }
@@ -193,7 +203,8 @@ export type ReorderFavoritesResult =
 /** Submit a durable optimistic GraphQL favorites reorder. */
 export function executeGraphqlReorderFavoritesMutation(
   client: Client,
-  args: ReorderFavoritesRequest
+  args: ReorderFavoritesRequest,
+  revalidationVariables: readonly FavoritesQueryVariables[] = [{}]
 ): Promise<
   OperationResult<ReorderFavoritesMutation, ReorderFavoritesMutationVariables>
 > {
@@ -234,7 +245,10 @@ export function executeGraphqlReorderFavoritesMutation(
     optimisticData,
     {
       uuid: REORDER_FAVORITES_OPTIMISTIC_UUID,
-      revalidations: [{ document: FavoritesDocument, variables: {} }],
+      revalidations: revalidationVariables.map((variables) => ({
+        document: FavoritesDocument,
+        variables,
+      })),
     }
   ).toPromise();
 }

@@ -11,7 +11,7 @@
 use super::*;
 use crate::domain::event::CursorEvent;
 use crate::domain::model::{CursorModel, CursorRunId, ModelParam, ModelVariant, RunStatus};
-use crate::testing::{CursorCall, FakeCursor, FixedRepos};
+use crate::testing::{CursorCall, FakeCursor, FixedChooser};
 use agent_client_protocol::schema::v1::InitializeResponse;
 use agent_client_protocol::{Channel, RawJsonRpcMessage, TransportFrame};
 use futures::StreamExt as _;
@@ -19,7 +19,7 @@ use futures::channel::mpsc;
 use tokio::io::AsyncBufReadExt as _;
 use tokio::io::AsyncWriteExt as _;
 
-type Service = CursorSessionService<FakeCursor, AcpNotifier, FixedRepos>;
+type Service = CursorSessionService<FakeCursor, AcpNotifier, FixedChooser>;
 
 /// The client's end of a served connection.
 struct TestClient {
@@ -113,7 +113,7 @@ fn serve_over_channel_with_default_model(
         CursorSessionService::new(
             cursor,
             notifier.clone(),
-            FixedRepos(None),
+            FixedChooser(None, false),
             Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
         )
         .with_default_model(default_model.map(str::to_owned)),
@@ -372,7 +372,7 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
     let service = Arc::new(CursorSessionService::new(
         cursor,
         notifier.clone(),
-        FixedRepos(None),
+        FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
     ));
     let serve_task = tokio::spawn(serve(service, notifier, agent_reader, agent_writer));
@@ -428,6 +428,7 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: Some(1),
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -507,6 +508,7 @@ async fn remote_mcp_servers_are_forwarded_to_the_agent() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -516,7 +518,7 @@ async fn remote_mcp_servers_are_forwarded_to_the_agent() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
         panic!("expected one create_agent, got {calls:?}");
     };
     assert_eq!(
@@ -587,6 +589,7 @@ async fn stdio_mcp_servers_are_declined_without_failing_the_session() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -596,7 +599,7 @@ async fn stdio_mcp_servers_are_declined_without_failing_the_session() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
         panic!("expected one create_agent");
     };
     let names: Vec<&str> = servers.iter().map(|server| server.name.as_str()).collect();
@@ -874,6 +877,7 @@ async fn setting_the_model_changes_what_the_next_run_asks_for() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: Some(1),
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -892,7 +896,7 @@ async fn setting_the_model_changes_what_the_next_run_asks_for() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateAgent(_, _, _, model) => Some(model),
+            CursorCall::CreateAgent(_, _, _, _, model) => Some(model),
             _ => None,
         })
         .expect("the turn created an agent");
@@ -987,6 +991,7 @@ async fn a_restored_session_keeps_its_model() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -1048,6 +1053,7 @@ async fn a_restored_deployment_slug_falls_back_to_cursors_default() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -1108,6 +1114,7 @@ async fn session_load_restores_the_clients_mcp_servers() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -1117,7 +1124,7 @@ async fn session_load_restores_the_clients_mcp_servers() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
         panic!("expected one agent creation, got {calls:?}");
     };
     assert_eq!(servers.len(), 1);
@@ -1175,6 +1182,7 @@ async fn a_session_with_no_choice_rests_the_picker_on_auto() {
             status: RunStatus::Finished,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -1186,7 +1194,7 @@ async fn a_session_with_no_choice_rests_the_picker_on_auto() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateAgent(_, _, _, model) => Some(model),
+            CursorCall::CreateAgent(_, _, _, _, model) => Some(model),
             _ => None,
         })
         .expect("the prompt created an agent");

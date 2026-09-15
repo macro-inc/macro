@@ -107,6 +107,7 @@ impl SessionOpener for RecordingOpener {
         request: OpenExternalAgentSession,
     ) -> crate::domain::error::Result<AgentSession> {
         let session = AgentSession {
+            pull_request_url: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: request.owner.clone(),
@@ -140,6 +141,7 @@ impl SessionOpener for RecordingOpener {
             .as_ref()
             .map_or(BotId::TEST_B, |selected| selected.bot_id);
         let session = AgentSession {
+            pull_request_url: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: request.owner.clone(),
@@ -177,11 +179,13 @@ impl SessionOpener for RecordingOpener {
 /// [`OWNER`]. Every other id is unknown.
 struct OneBotDirectory {
     facts: BotFacts,
+    shares_channel_with: Vec<&'static str>,
 }
 
 impl OneBotDirectory {
     fn external_agent() -> Self {
         Self {
+            shares_channel_with: Vec::new(),
             facts: BotFacts {
                 has_agent: true,
                 is_managed: false,
@@ -190,12 +194,14 @@ impl OneBotDirectory {
                 owner_team_id: None,
                 harness_id: Some(harness_id::HarnessId::TEST_A),
                 managed_profile: None,
+                selected_channels: false,
             },
         }
     }
 
     fn managed_agent() -> Self {
         Self {
+            shares_channel_with: Vec::new(),
             facts: BotFacts {
                 has_agent: true,
                 is_managed: true,
@@ -209,12 +215,35 @@ impl OneBotDirectory {
                     instructions: "persona instructions".to_owned(),
                     mcp_servers: Default::default(),
                 }),
+                selected_channels: false,
+            },
+        }
+    }
+
+    fn managed_selected_channel_agent() -> Self {
+        Self {
+            shares_channel_with: vec![STRANGER],
+            facts: BotFacts {
+                has_agent: true,
+                is_managed: true,
+                is_system: false,
+                owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                owner_team_id: None,
+                harness_id: None,
+                managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
+                    model: "persona-model".to_owned(),
+                    harness: "in-memory".to_owned(),
+                    instructions: "persona instructions".to_owned(),
+                    mcp_servers: Default::default(),
+                }),
+                selected_channels: true,
             },
         }
     }
 
     fn plain_bot() -> Self {
         Self {
+            shares_channel_with: Vec::new(),
             facts: BotFacts {
                 has_agent: false,
                 is_managed: false,
@@ -223,6 +252,7 @@ impl OneBotDirectory {
                 owner_team_id: None,
                 harness_id: None,
                 managed_profile: None,
+                selected_channels: false,
             },
         }
     }
@@ -231,6 +261,7 @@ impl OneBotDirectory {
     /// nobody, and with no persisted profile of its own.
     fn system_coder() -> Self {
         Self {
+            shares_channel_with: Vec::new(),
             facts: BotFacts {
                 has_agent: true,
                 is_managed: true,
@@ -239,6 +270,7 @@ impl OneBotDirectory {
                 owner_team_id: None,
                 harness_id: None,
                 managed_profile: None,
+                selected_channels: false,
             },
         }
     }
@@ -255,6 +287,14 @@ impl BotDirectory for OneBotDirectory {
         _team_id: Uuid,
     ) -> crate::domain::error::Result<bool> {
         Ok(false)
+    }
+
+    async fn user_shares_channel_with_bot(
+        &self,
+        user: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+    ) -> crate::domain::error::Result<bool> {
+        Ok(self.shares_channel_with.contains(&user.as_ref()))
     }
 }
 
@@ -684,6 +724,31 @@ async fn a_stranger_cannot_select_someone_elses_managed_persona() {
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert!(opener.managed.lock().unwrap().is_empty());
+}
+
+/// A selected-channel persona is mentionable in the channels it is installed
+/// in. A co-member who could `@` it there can start a managed session as it
+/// from the composer too.
+#[tokio::test]
+async fn a_channel_co_member_can_select_a_shared_managed_persona() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        STRANGER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid() }).to_string(),
+    );
+
+    let response = router_for(
+        opener.clone(),
+        OneBotDirectory::managed_selected_channel_agent(),
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    let selected = managed[0].profile.as_ref().expect("selected persona");
+    assert_eq!(selected.bot_id, BotId::TEST_A);
 }
 
 /// Whitespace-only instructions are absence stated clumsily, and are

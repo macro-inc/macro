@@ -12,18 +12,12 @@ const PAGE_CREATE_TOKENS: Partial<Record<MobileNavViewId, HotkeyToken>> = {
 };
 
 /** Resolve from the available launcher entries so feature gates apply here too. */
-export function mobilePageCreateAction(
+export function mobilePageCreateBlock(
   view: MobileNavViewId | undefined,
   blocks: readonly CreatableBlock[]
 ) {
   const token = view ? PAGE_CREATE_TOKENS[view] : undefined;
   if (!token) return undefined;
 
-  const block = blocks.find((entry) => entry.hotkeyToken === token);
-  if (!block) return undefined;
-
-  return {
-    label: `New ${block.label.toLowerCase()}`,
-    run: block.keyDownHandler,
-  };
+  return blocks.find((entry) => entry.hotkeyToken === token);
 }

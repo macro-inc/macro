@@ -15,9 +15,8 @@
 //! digest also keeps the comparison in the index rather than in a Rust `==`
 //! over secret-derived bytes.
 
-use agent_runtime_protocol::domain::schema::v0::SystemEvent;
-use agent_session::domain::model::SessionStatus;
 use agent_session::domain::ports::AgentSessionRepo;
+use agent_session::domain::{credentials::authenticate_session, error::AgentSessionError};
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{McpServerListing, McpServerSlug, RepoSlug, SessionGrant, SessionToken};
@@ -45,59 +44,33 @@ where
 {
     #[tracing::instrument(skip_all, err)]
     async fn authorize(&self, token: &SessionToken) -> Result<SessionGrant, EgressError> {
-        // A lookup that failed is a refusal too - this decides whether a
-        // credential gets spent, and the safe answer when we cannot tell is no
-        // - but a refusal of a different kind from a token we do not know, and
-        // the sandbox should retry one and not the other.
-        let session = self
-            .sessions
-            .find_by_egress_token_hash(&token.hash())
+        let session = authenticate_session(&self.sessions, &token.hash())
             .await
-            .inspect_err(|error| {
-                tracing::error!(error = ?error, "could not look up a session by its token");
-            })
-            .map_err(|error| {
-                EgressError::Internal(rootcause::report!(
-                    "could not look up a session by its token: {error}"
-                ))
-            })?
-            // No row is the ordinary refusal: a token we never minted, or one
-            // whose session has since been deleted. Both are the same fact
-            // from here, and neither is worth telling the sandbox apart.
-            .ok_or(EgressError::Unauthenticated("unknown session token"))?;
+            .map_err(|error| match error {
+                AgentSessionError::Forbidden => {
+                    EgressError::Unauthenticated("unknown session token")
+                }
+                AgentSessionError::Disconnected(_) => EgressError::SessionClosed,
+                error => EgressError::Internal(rootcause::report!(
+                    "could not authenticate session: {error}"
+                )),
+            })?;
 
-        // `SessionStatus` has no "closed" of its own; a disconnected transport
-        // is what a closed session looks like from the row. Anything else -
-        // including an event name this build does not know - is a running
-        // session, because a session that has not been told to stop is one
-        // whose sandbox may still be mid-tool-call.
-        if matches!(
-            session.status,
-            SessionStatus::Disconnected | SessionStatus::Event(SystemEvent::Disconnected)
-        ) {
-            return Err(EgressError::SessionClosed);
-        }
-
-        // Our own configuration, not sandbox input - but it is interpolated
-        // into a GitHub URL downstream, so it is parsed rather than trusted. A
-        // row that does not name a repository is a session that was created
-        // wrong, which is ours to fix and not something the sandbox can retry
-        // its way out of.
-        //
-        // `repo_url` is nullable because an external session names no
-        // repository, but such a session is never issued an egress token, so
-        // reaching here without one is that same "created wrong" - not a
-        // refusal the sandbox could act on.
+        // A repository is optional for MCP-only sessions. The domain service
+        // requires one only for git requests; a malformed stored URL still
+        // indicates a configuration error.
         let repo = session
             .repo_url
             .as_deref()
-            .and_then(RepoSlug::parse_github_url)
-            .ok_or_else(|| {
-                EgressError::Internal(rootcause::report!(
-                    "session {} has no repo_url naming a github repository",
-                    session.id
-                ))
-            })?;
+            .map(|url| {
+                RepoSlug::parse_github_url(url).ok_or_else(|| {
+                    EgressError::Internal(rootcause::report!(
+                        "session {} has an invalid github repository URL",
+                        session.id
+                    ))
+                })
+            })
+            .transpose()?;
 
         // The agent's own names for the apps it listed, off the row's
         // snapshot, so a refusal can say "Google Sheets" rather than

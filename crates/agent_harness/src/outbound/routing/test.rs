@@ -121,6 +121,7 @@ impl AgentSessionRepo for FixedBotSessions {
 
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
+            pull_request_url: None,
             id,
             owner_id: MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
                 .expect("valid user id"),
@@ -152,6 +153,14 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never routes channel events")
     }
 
+    async fn recent_for_owner(
+        &self,
+        _owner: &MacroUserIdStr<'_>,
+        _limit: std::num::NonZeroUsize,
+    ) -> SessionResult<Vec<agent_session::domain::model::AgentSession>> {
+        unimplemented!("the router never summarizes an owner's recent sessions")
+    }
+
     async fn find_all_for_thread(
         &self,
         _thread_id: macro_uuid::Uuid,
@@ -173,6 +182,18 @@ impl AgentSessionRepo for FixedBotSessions {
 
     async fn set_model(&self, _id: AgentSessionId, _model: &str) -> SessionResult<()> {
         unimplemented!("the router never sets models")
+    }
+
+    async fn set_egress_token_hash(&self, _id: AgentSessionId, _hash: &str) -> SessionResult<()> {
+        unimplemented!("this adapter does not rotate credentials")
+    }
+
+    async fn set_repo_url(
+        &self,
+        _id: AgentSessionId,
+        _repo_url: Option<String>,
+    ) -> SessionResult<()> {
+        unimplemented!("the router never sets repositories")
     }
 
     async fn delete(&self, _id: AgentSessionId) -> SessionResult<()> {

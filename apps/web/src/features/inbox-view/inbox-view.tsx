@@ -10,7 +10,7 @@ import { type EntityData, ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { EmptyStatePanel } from '@ui';
 import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
-import { InboxHeader } from './components/InboxHeader';
+import { InboxListLayout } from './components/InboxHeader';
 import { InboxList } from './components/InboxList';
 import { InboxTabs } from './components/InboxTabs';
 import { InboxViewProvider, useInboxView } from './inbox-view-context';
@@ -37,17 +37,14 @@ function NotificationsListPane(props: {
   onPreviewEntityChange: (entity: EntityData | undefined) => void;
 }) {
   return (
-    <>
-      <InboxHeader>
-        <InboxTabs />
-      </InboxHeader>
+    <InboxListLayout tabs={<InboxTabs />}>
       <Suspense fallback={<InboxFallback />}>
         <InboxList
           previewEntity={props.previewEntity}
           onPreviewEntityChange={props.onPreviewEntityChange}
         />
       </Suspense>
-    </>
+    </InboxListLayout>
   );
 }
 

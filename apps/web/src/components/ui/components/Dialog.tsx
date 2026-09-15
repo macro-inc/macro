@@ -1,6 +1,16 @@
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { isMobile } from '@core/mobile/isMobile';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
-import type { JSX, Ref } from 'solid-js';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import type { Accessor, JSX, Ref, Setter, ValidComponent } from 'solid-js';
+import {
+  createContext,
+  createEffect,
+  createSignal,
+  onCleanup,
+  Show,
+  splitProps,
+  useContext,
+} from 'solid-js';
 import { cn } from '../utils/classname';
 
 const DIALOG_HANDOFF_WINDOW_MS = 180;
@@ -8,11 +18,16 @@ const DIALOG_HANDOFF_WINDOW_MS = 180;
 let openDialogCount = 0;
 let lastAllDialogsClosedAt = Number.NEGATIVE_INFINITY;
 
+const DialogDrawerContext = createContext<{
+  setTitleId: Setter<Accessor<string | undefined> | undefined>;
+  setDescriptionId: Setter<Accessor<string | undefined> | undefined>;
+}>();
+
 export type DialogProps = {
-  onEscapeKeyDown?: (event: KeyboardEvent) => void /* Forwarded to Kobalte */;
-  onCloseAutoFocus?: (event: Event) => void /* Forwarded to Kobalte */;
-  onOpenAutoFocus?: (event: Event) => void /* Forwarded to Kobalte */;
-  onOpenChange?: (open: boolean) => void /* Forwarded to Kobalte */;
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
+  onCloseAutoFocus?: (event: Event) => void;
+  onOpenAutoFocus?: (event: Event) => void;
+  onOpenChange?: (open: boolean) => void;
   contentRef?: Ref<HTMLDivElement> /* content element ref  */;
   position?: 'top' | 'center' /* Vertical position    */;
   /** Edge-to-edge takeover: fills the viewport with no gutter or centering. */
@@ -21,10 +36,68 @@ export type DialogProps = {
   class?: string /* classes for content */;
   open: boolean /* if dialog is open */;
   visibleScrim?: boolean /* if the scrim is visible */;
-  animate?: boolean /* is the menu/dialog animated on open */;
+  /** Desktop opening animation; mobile drawers own their transitions. */
+  animate?: boolean;
 };
 
 export function Dialog(props: DialogProps) {
+  return (
+    <Show
+      when={isMobile() && !props.fullscreen}
+      fallback={
+        <DialogDrawerContext.Provider value={undefined}>
+          <DesktopDialog {...props} />
+        </DialogDrawerContext.Provider>
+      }
+    >
+      <DialogDrawer {...props} />
+    </Show>
+  );
+}
+
+function DialogDrawer(props: DialogProps) {
+  const [titleId, setTitleId] = createSignal<Accessor<string | undefined>>();
+  const [descriptionId, setDescriptionId] =
+    createSignal<Accessor<string | undefined>>();
+  return (
+    <DialogDrawerContext.Provider value={{ setTitleId, setDescriptionId }}>
+      <MobileDrawer
+        labelId={titleId()?.()}
+        descriptionId={descriptionId()?.()}
+        side="bottom"
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+        onEscapeKeyDown={props.onEscapeKeyDown}
+        onInitialFocus={props.onOpenAutoFocus}
+        onFinalFocus={props.onCloseAutoFocus}
+        restoreFocus
+        noOutsidePointerEvents
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay
+            class={cn(props.visibleScrim && 'bg-modal-overlay')}
+          />
+          <MobileDrawer.Content
+            ref={props.contentRef}
+            maxHeight={100}
+            class={cn('mx-auto max-w-[calc(100vw-16px)]', props.class)}
+          >
+            <MobileDrawer.Handle aria-hidden="true" />
+            <MobileDrawer.ScrollBody>
+              {/* Give desktop surfaces their natural height so their size-full
+                  and overflow-clip styles cannot clip the drawer's scroll body. */}
+              <div class="shrink-0 [&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:rounded-none [&>[data-layer]>[data-surface]]:bg-transparent">
+                {props.children}
+              </div>
+            </MobileDrawer.ScrollBody>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </DialogDrawerContext.Provider>
+  );
+}
+
+function DesktopDialog(props: DialogProps) {
   const [animateOnOpen, setAnimateOnOpen] = createSignal(false);
   let countedOpen = false;
 
@@ -100,7 +173,7 @@ export function Dialog(props: DialogProps) {
               // chrome (e.g. cmd+k's toolbar/footer) reads as the same pane.
               props.fullscreen
                 ? 'size-full'
-                : 'w-200 max-w-[calc(100vw-16px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)] [&>[data-surface]]:border-0!',
+                : 'w-200 max-w-[calc(100vw-16px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)] [&>[data-layer]>[data-surface]]:border-0!',
               animateOnOpen() &&
                 (props.fullscreen
                   ? 'dialog-fullscreen-open-animation'
@@ -119,6 +192,30 @@ export function Dialog(props: DialogProps) {
   );
 }
 
-Dialog.CloseButton = KobalteDialog.CloseButton; /* Forwarded to Kobalte */
-Dialog.Description = KobalteDialog.Description; /* Forwarded to Kobalte */
-Dialog.Title = KobalteDialog.Title; /* Forwarded to Kobalte */
+const DialogCloseButton: typeof KobalteDialog.CloseButton = (props) => {
+  if (useContext(DialogDrawerContext)) return null;
+  return <KobalteDialog.CloseButton {...props} />;
+};
+
+const DialogDescription: typeof KobalteDialog.Description = (props) => {
+  const drawer = useContext(DialogDrawerContext);
+  if (!drawer) return <KobalteDialog.Description {...props} />;
+  const [, rest] = splitProps(props, ['id']);
+  // Corvu registers IDs on its root, while Kobalte accepts them on each slot.
+  drawer.setDescriptionId(() => () => props.id);
+  onCleanup(() => drawer.setDescriptionId(undefined));
+  return <MobileDrawer.Description<ValidComponent> {...rest} />;
+};
+
+const DialogTitle: typeof KobalteDialog.Title = (props) => {
+  const drawer = useContext(DialogDrawerContext);
+  if (!drawer) return <KobalteDialog.Title {...props} />;
+  const [, rest] = splitProps(props, ['id']);
+  drawer.setTitleId(() => () => props.id);
+  onCleanup(() => drawer.setTitleId(undefined));
+  return <MobileDrawer.Title<ValidComponent> {...rest} />;
+};
+
+Dialog.CloseButton = DialogCloseButton;
+Dialog.Description = DialogDescription;
+Dialog.Title = DialogTitle;

@@ -1499,6 +1499,113 @@ async fn occurrence_attendee_override_shadows_the_series_response(pool: PgPool) 
     );
 }
 
+/// A single-occurrence edit lands on the exception, never on the master, so
+/// the occurrence carrying it must read the exception's content — on the
+/// entity and on the calendar copy a client shows — while its siblings keep
+/// the series content.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn occurrence_content_override_shadows_the_series_content(pool: PgPool) {
+    let owner_id = "macro|calendar-exception@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool);
+    let provider = provider_ids(&repo, link_id).await;
+    let mut upsert = timed_upsert(
+        owner_id,
+        link_id,
+        provider,
+        "edited@example.com",
+        "Series title",
+        1,
+    );
+    upsert.event.description = Some("Series description".to_string());
+    upsert.event.location = Some("Series room".to_string());
+
+    let edited_start = Utc.with_ymd_and_hms(2026, 7, 25, 14, 0, 0).unwrap();
+    let recurrence_id = edited_start.to_rfc3339();
+    upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
+    upsert.overrides = vec![CalendarEventOverride {
+        recurrence_id: recurrence_id.clone(),
+        original_time: EventStart::Timed(edited_start),
+        time: EventTime::Timed {
+            starts_at: edited_start,
+            ends_at: edited_start + Duration::hours(1),
+            time_zone: Some("UTC".to_string()),
+        },
+        title: Some("Edited title".to_string()),
+        description: Some("Only this occurrence changed".to_string()),
+        location: None,
+        status: Some(EventStatus::Tentative),
+        attendees: None,
+    }];
+    repo.upsert_event_fixture(upsert).await.unwrap();
+
+    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
+    let ends_at = Utc.with_ymd_and_hms(2026, 7, 26, 0, 0, 0).unwrap();
+    let result = repo
+        .list_occurrences(
+            owner_id,
+            OccurrenceRange {
+                starts_at,
+                ends_at,
+                start_date: starts_at.date_naive(),
+                end_date: ends_at.date_naive(),
+            },
+            None,
+            100,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 2);
+    let content_at = |key: &str| {
+        let (event, _) = result
+            .iter()
+            .find(|(_, occurrence)| occurrence.occurrence_key == key)
+            .expect("the occurrence is listed");
+        let copy = event
+            .sources
+            .first()
+            .expect("the listing carries the calendar copy");
+        (
+            event.title.as_str(),
+            event.description.as_deref(),
+            event.location.as_deref(),
+            event.status,
+            copy.title.as_str(),
+            copy.description.as_deref(),
+            copy.location.as_deref(),
+        )
+    };
+    assert_eq!(
+        content_at(&recurrence_id),
+        (
+            "Edited title",
+            Some("Only this occurrence changed"),
+            Some("Series room"),
+            EventStatus::Tentative,
+            "Edited title",
+            Some("Only this occurrence changed"),
+            Some("Series room"),
+        ),
+        "the exception's content replaces the series content on the entity and its copy, \
+         and a field the exception leaves unset inherits the series value"
+    );
+    let series_start = Utc.with_ymd_and_hms(2026, 7, 24, 14, 0, 0).unwrap();
+    assert_eq!(
+        content_at(&series_start.to_rfc3339()),
+        (
+            "Series title",
+            Some("Series description"),
+            Some("Series room"),
+            EventStatus::Confirmed,
+            "Series title",
+            Some("Series description"),
+            Some("Series room"),
+        ),
+        "a sibling occurrence keeps the series content"
+    );
+}
+
 /// An exception that explicitly replaces the attendee list with an empty one
 /// must project no attendees for that occurrence — not fall back to the
 /// series list, which only an exception without an attendee list inherits.
