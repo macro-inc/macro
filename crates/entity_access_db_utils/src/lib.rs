@@ -66,15 +66,7 @@ impl OwnerGrantSource {
 
 /// Inserts or raises `owner`'s direct grant on the entity to `Owner`.
 ///
-/// Does not authorize and does not commit. The grant is atomic with whatever
-/// else the caller does in `transaction`.
-///
-/// A repeat call against an existing direct `Owner` row writes nothing, so
-/// `updated_at` stays frozen. A direct `View`, `Comment`, or `Edit` row is
-/// raised to `Owner`. Rows inherited from a project
-/// (`granted_from_project_id IS NOT NULL`) live on a different unique index
-/// and are neither the conflict target nor touched. Other principals' rows
-/// are left alone.
+/// Does not authorize and does not commit.
 ///
 /// A no-op still holds the conflicting row lock until the caller commits.
 #[tracing::instrument(skip(transaction), err)]
