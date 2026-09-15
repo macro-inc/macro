@@ -224,11 +224,26 @@ try {
       failures: { name: string; error: string }[];
     };
     do {
-      progress = await browser.execute(async () => {
-        const path = '/tests/native/filter-matrix.ts';
-        const matrix = await import(path);
-        return await matrix.runBatch(256);
-      });
+      const response = await browser.executeAsync(
+        (
+          done: (value: { progress?: typeof progress; error?: string }) => void
+        ) => {
+          void (async () => {
+            try {
+              const path = '/tests/native/filter-matrix.ts';
+              const matrix = await import(path);
+              done({ progress: await matrix.runBatch(256) });
+            } catch (error) {
+              done({ error: String(error) });
+            }
+          })();
+        }
+      );
+      assert(
+        response.progress,
+        response.error ?? 'Matrix returned no progress'
+      );
+      progress = response.progress;
       console.log(
         `Matrix: ${progress.evaluated} selections, ${progress.nativeRequests} native evaluations`
       );
