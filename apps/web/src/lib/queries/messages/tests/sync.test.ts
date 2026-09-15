@@ -383,6 +383,41 @@ describe.each(['channel', 'document'] as const)(
         }
       }
     );
+    it('refetches a bottom page that is still loading when a root arrives', async () => {
+      mocks.thread.mockReset();
+      let resolveFetch: (data: MessageTimelineData) => void = () => {};
+      const fetching = testQueryClient.fetchQuery({
+        queryKey: timelineKey(),
+        queryFn: () =>
+          new Promise<MessageTimelineData>((resolve) => {
+            resolveFetch = resolve;
+          }),
+      });
+      const invalidate = vi.spyOn(testQueryClient, 'invalidateQueries');
+      handleMessageEvent({
+        parent,
+        actor: 'macro|b@example.com',
+        nonce: null,
+        change: {
+          type: 'posted',
+          message: message(parent, 'racing-root'),
+          mentions: [],
+          notification_policy: 'Default',
+        },
+      });
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: timelineKey(),
+        exact: true,
+      });
+      expect(mocks.thread).not.toHaveBeenCalled();
+      resolveFetch({
+        pageParams: [null],
+        pages: [
+          { items: [item(parent)], next_cursor: null, previous_cursor: null },
+        ],
+      });
+      await fetching.catch(() => undefined);
+    });
     it('skips the sender nonce and scopes ephemeral typing to the parent and root', () => {
       seed();
       registerNonce(MessageNonceKeys.MESSAGE, 'own-send');

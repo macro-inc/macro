@@ -4,7 +4,7 @@ import { type Accessor, createSignal, For, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DocumentConversation } from './DocumentConversation';
 
-const mocks = vi.hoisted(() => ({ timeline: vi.fn() }));
+const mocks = vi.hoisted(() => ({ timeline: vi.fn(), linkResolved: true }));
 
 vi.mock('@channel/Input', () => ({ ChannelInput: () => null }));
 vi.mock('@channel/Input/message-payload', () => ({}));
@@ -25,7 +25,7 @@ vi.mock('@queries/messages/document-messages', () => ({
       const id = target();
       return id ? `root-of-${id}` : null;
     },
-    resolved: () => true,
+    resolved: () => mocks.linkResolved,
   }),
 }));
 vi.mock('@queries/messages/mutations', () => ({
@@ -45,7 +45,10 @@ vi.mock('./MessageThread', () => ({
   ),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  mocks.linkResolved = true;
+  cleanup();
+});
 
 function thread(
   id: string,
@@ -96,6 +99,15 @@ function discussion(initialPages: MessageListItem[][], targetId?: string) {
 }
 
 describe('DocumentConversation placement', () => {
+  it('shows nothing from the shared latest page while a link is still resolving', () => {
+    mocks.linkResolved = false;
+    const view = discussion([[thread('new discussion', null)]], 'reply');
+    expect(view.queryAllByRole('article')).toEqual([]);
+    expect(view.getByText('Loading comments...')).toBeTruthy();
+    const [, , enabled] = mocks.timeline.mock.calls.at(-1)!;
+    expect(enabled()).toBe(false);
+  });
+
   it('loads a linked view around the linked message root once the link resolved', () => {
     discussion([[thread('new discussion', null)]], 'reply');
     const [, around, enabled] = mocks.timeline.mock.calls.at(-1)!;

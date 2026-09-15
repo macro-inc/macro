@@ -34,8 +34,9 @@ export function DocumentConversation(props: {
   const userId = useUserId();
   const bots = useMessageBotMentionUsers(() => props.parent);
   let input: InputHandle | undefined;
+  // Until the link resolves, the shared latest page would flash before the window jumps.
   const messages = () =>
-    query.isSuccess
+    target.resolved() && query.isSuccess
       ? query.data.pages
           .flatMap((page) => page.items)
           // Only known unanchored roots belong in Discussion. Live roots have
@@ -60,7 +61,7 @@ export function DocumentConversation(props: {
       </button>
       <Show when={expanded() || props.targetId}>
         <StaticMarkdownContext>
-          <Show when={query.isPending}>
+          <Show when={!target.resolved() || query.isPending}>
             <p class="text-xs text-ink-muted">Loading comments...</p>
           </Show>
           <Show when={query.isError}>
