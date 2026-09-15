@@ -18,6 +18,41 @@
  */
 export type AcpMessage = { [key in string]: unknown };
 
+/**
+ *  One file an agent produced outside the conversation.
+ *
+ *  Every field is as the Agent Service resolved it, not as the provider
+ *  reported it: a provider's own download URL expires, so nothing here can be
+ *  a pointer back into the provider.
+ */
+export type Artifact = {
+	/**
+	 *  The provider's own identity for this file, opaque to everything that
+	 *  reads it. Its only job is to say whether two collections name the same
+	 *  file, so a re-collected walkthrough does not duplicate what is already
+	 *  in the log. Nothing interprets its shape.
+	 */
+	key: string,
+	/**
+	 *  A permanent Macro-hosted URL a browser can load directly. Never the
+	 *  provider's URL, which expires.
+	 */
+	uri: string,
+	/**  What to call the file when showing it, usually its file name. */
+	name: string,
+	/**  The file's media type, which is what decides how it renders. */
+	mimeType: string,
+	/**
+	 *  The file's size, for showing alongside a file this client cannot
+	 *  render inline.
+	 *
+	 *  Declared to TypeScript as a plain `number`: specta refuses to export
+	 *  a `u64` at all, and a JSON number is a double, which is exact well
+	 *  past any size this can carry.
+	 */
+	sizeBytes: number,
+};
+
 /**  The result of probing a fresh ACP subprocess. */
 export type ModelProbeResult =
 /**  The raw options returned by `session/new`. */
@@ -53,8 +88,39 @@ export type ToServerMessage =
 /**  A runtime or agent lifecycle event. */
 ({ type: "event";
 /**  The event name. */
-event: string }) & { result?: never } |
+event: string }) & { artifacts?: never; result?: never; turn?: never } |
 /**  An answer to a connection-level model probe. */
 ({ type: "modelProbeResponse";
 /**  Raw options or a safe failure. */
-result: ModelProbeResult }) & { event?: never };
+result: ModelProbeResult }) & { artifacts?: never; event?: never; turn?: never } |
+/**
+ *  Files the runtime's agent produced outside the conversation - a
+ *  walkthrough's screenshots and recordings.
+ *
+ *  Written by the Agent Service after it collects them, not by the
+ *  runtime, which is why it is not ACP: the agent never announces these
+ *  over its ACP stream, so the Service pulls them from the provider once
+ *  a turn has ended and appends them to the log itself. Other
+ *  Service-authored frames go in on the same footing - see
+ *  `SessionMachine`'s reload handling - but this one is the first that
+ *  carries conversation content rather than status, which is why it is a
+ *  message of its own and not a [`SystemEvent`].
+ */
+({ type: "artifacts";
+/**
+ *  The files collected, in the order the provider listed them. An
+ *  empty list is legal and means nothing was produced.
+ */
+artifacts: Artifact[];
+/**
+ *  The turn these files came out of, as the fold numbers turns
+ *  (`agent_fold::TurnId`). The Service learns it from the same
+ *  signal that told it the turn ended, and a reader's own fold of
+ *  this log derives the same ordinals, so naming it here is exact
+ *  where guessing from arrival order is not. `None` when the writer
+ *  does not know, which leaves the reader to guess.
+ *
+ *  The raw ordinal rather than the id type: this crate sits under
+ *  `agent_fold` and must not depend on it.
+ */
+turn: number | null }) & { event?: never; result?: never };

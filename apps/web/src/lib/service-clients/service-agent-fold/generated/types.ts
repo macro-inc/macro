@@ -99,6 +99,32 @@ export type AnsweredValue =
       raw: unknown;
     };
 
+/**
+ *  One file in an [`MessagePart::Artifacts`] part.
+ *
+ *  The protocol's `Artifact` minus its `key`: that key exists so a collector
+ *  can tell whether it has already reported a file, and the fold neither
+ *  dedupes nor has anywhere to put it - a reader renders what the log says
+ *  was collected. Dropping it here keeps it out of the TypeScript too.
+ */
+export type ArtifactItem = {
+  /**  A permanent Macro-hosted URL a browser can load directly. */
+  uri: string;
+  /**  What to call the file when showing it, usually its file name. */
+  name: string;
+  /**  The file's media type, which is what decides how it renders. */
+  mimeType: string;
+  /**
+   *  The file's size, for showing alongside a file the client cannot
+   *  render inline.
+   *
+   *  Declared to TypeScript as a plain `number`: specta refuses to export
+   *  a `u64` at all, and a JSON number is a double, which is exact well
+   *  past any size this can carry.
+   */
+  sizeBytes: number;
+};
+
 /**  Who produced a [`FoldedMessage`]. */
 export type Author =
   /**
@@ -586,6 +612,15 @@ export type MessagePart =
        *  every other kind of question.
        */
       toolOutcome: UserToolOutcome | null;
+    }
+  /**
+   *  Files the agent produced outside the conversation - a walkthrough's
+   *  screenshots and recordings - collected after its turn ended.
+   */
+  | {
+      kind: 'artifacts';
+      /**  The files, in the order they were collected. */
+      items: ArtifactItem[];
     };
 
 /**  One model the runtime offers. */

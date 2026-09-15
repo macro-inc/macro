@@ -274,6 +274,16 @@ fn render_part(part: &MessagePart) -> String {
                     let _ = writeln!(out, "{}", indent(&format!("[{mark}] {}", entry.content)));
                 }
             }
+            MessagePart::Artifacts { items } => {
+                let _ = writeln!(out, "[artifacts]");
+                for item in items {
+                    let _ = writeln!(
+                        out,
+                        "{}",
+                        indent(&format!("{} ({})", item.name, item.mime_type))
+                    );
+                }
+            }
             MessagePart::Elicitation {
                 message: question,
                 request,

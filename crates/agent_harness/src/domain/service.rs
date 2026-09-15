@@ -16,6 +16,7 @@
 #[cfg(test)]
 mod test;
 
+mod artifacts;
 mod deliver;
 mod lifecycle;
 mod lifecycle_events;
@@ -51,9 +52,9 @@ use crate::domain::model::{
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
-    AgentPromptComposer, AgentSessionNotifier, ChannelPromptContext, CommandForwarder,
-    ContainerManager, PromptMentions, RuntimeConnections, SandboxEgressProvisioner,
-    SessionAnnouncer,
+    AgentPromptComposer, AgentSessionNotifier, ArtifactSource, ChannelPromptContext,
+    CommandForwarder, ContainerManager, PromptMentions, RuntimeConnections,
+    SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
@@ -71,6 +72,7 @@ struct AgentHarnessInner<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 > {
     sessions: Sessions,
     containers: Containers,
@@ -103,6 +105,15 @@ struct AgentHarnessInner<
     mentions: Mentions,
     /// Where the notifications a fact warrants go.
     notifier: Notifier,
+    /// Files an external provider holds that the log does not carry yet,
+    /// collected after each turn ends.
+    artifacts: Artifacts,
+    /// Sessions with an artifact collection running. One at a time per
+    /// session: a collection outlives the turn that started it (it retries
+    /// after a delay), and two overlapping ones would ask the provider the
+    /// same question twice. Skipping is safe - the next turn end diffs keys
+    /// afresh and picks up whatever this one missed.
+    collecting: DashMap<AgentSessionId, ()>,
 }
 
 /// One handle on the orchestrator's state, shared by the service's clones
@@ -118,6 +129,7 @@ type SharedInner<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 > = Arc<
     AgentHarnessInner<
         Sessions,
@@ -130,6 +142,7 @@ type SharedInner<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >,
 >;
 
@@ -145,6 +158,7 @@ pub struct AgentHarnessService<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 > {
     inner: SharedInner<
         Sessions,
@@ -157,6 +171,7 @@ pub struct AgentHarnessService<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >,
     workers: Arc<SessionWorkers>,
 }
@@ -176,6 +191,7 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 > Clone
     for AgentHarnessService<
         Sessions,
@@ -188,6 +204,7 @@ impl<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >
 {
     fn clone(&self) -> Self {
@@ -209,6 +226,7 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 >
     AgentHarnessService<
         Sessions,
@@ -221,6 +239,7 @@ impl<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >
 where
     Sessions: AgentSessionService,
@@ -233,6 +252,7 @@ where
     Lifecycle: AgentSessionLifecyclePublisher,
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
+    Artifacts: ArtifactSource,
 {
     /// Build the orchestrator from its ports.
     ///
@@ -253,6 +273,7 @@ where
         pending: PendingCommands,
         mentions: Mentions,
         notifier: Notifier,
+        artifacts: Artifacts,
     ) -> Self {
         Self {
             inner: Arc::new(AgentHarnessInner {
@@ -270,6 +291,8 @@ where
                 lifecycle_publisher,
                 mentions,
                 notifier,
+                artifacts,
+                collecting: DashMap::new(),
             }),
             workers: Arc::new(DashMap::new()),
         }
@@ -376,6 +399,7 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 > ForwardedCommands
     for AgentHarnessService<
         Sessions,
@@ -388,6 +412,7 @@ impl<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >
 where
     Sessions: AgentSessionService,
@@ -400,6 +425,7 @@ where
     Lifecycle: AgentSessionLifecyclePublisher,
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
+    Artifacts: ArtifactSource,
 {
     async fn execute_forwarded(
         &self,

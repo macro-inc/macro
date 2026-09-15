@@ -218,6 +218,14 @@ function partActivity(part: MessagePart): MagicChipActivity {
       label: 'Question answered',
       busy: true,
     }))
+    .with({ kind: 'artifacts' }, ({ items }) => ({
+      label:
+        items.length === 1
+          ? 'Attached a file'
+          : `Attached ${items.length} files`,
+      detail: items.map((item) => item.name).join(', ') || undefined,
+      busy: false,
+    }))
     .with({ kind: 'plan' }, ({ entries }) => {
       const completed = entries.filter(
         (entry) => entry.status === 'completed'

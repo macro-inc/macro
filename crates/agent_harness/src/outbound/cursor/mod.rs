@@ -1,11 +1,13 @@
 //! Cursor cloud agents as a session container provider.
 
+pub mod artifacts;
 pub mod keys;
 pub mod manager;
 pub mod pipe;
 mod pull_request;
 pub mod repository_chooser;
 
+pub use artifacts::CursorArtifacts;
 pub use keys::{CursorApiKeys, PgCursorApiKeys};
 pub use manager::{CURSOR_PROVIDER, CursorContainerManager, PostgresJournal};
 pub use pipe::PipeTransport;

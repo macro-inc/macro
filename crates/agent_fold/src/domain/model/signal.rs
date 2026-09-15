@@ -1,5 +1,7 @@
 //! Turn-level facts derived from the fold, for whoever drives a session.
 
+use std::collections::BTreeSet;
+
 use agent_runtime_protocol::domain::action::AgentActionId;
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +29,13 @@ pub enum TurnSignal {
         /// The last text part of the agent's message, whole. `None` when the
         /// turn ended without prose.
         last_text: Option<String>,
+        /// Every artifact key the log already carried when this turn closed.
+        ///
+        /// A fold fact, travelling with the signal so a collector diffing a
+        /// provider's listing against the log does not have to reach back
+        /// into the fold for it. See
+        /// [`FoldMachineImpl::known_artifact_keys`](crate::domain::fold::FoldMachineImpl::known_artifact_keys).
+        known_artifact_keys: BTreeSet<String>,
     },
     /// The agent is holding a question for the owner.
     ElicitationRaised {

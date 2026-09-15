@@ -71,6 +71,7 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 >
     AgentHarnessService<
         Sessions,
@@ -83,6 +84,7 @@ impl<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >
 where
     Sessions: AgentSessionService,
@@ -95,6 +97,7 @@ where
     Lifecycle: AgentSessionLifecyclePublisher,
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
+    Artifacts: ArtifactSource,
 {
     pub(super) fn enqueue(
         &self,
@@ -168,6 +171,7 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 >
     AgentHarnessInner<
         Sessions,
@@ -180,6 +184,7 @@ impl<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >
 where
     Sessions: AgentSessionService,
@@ -192,6 +197,7 @@ where
     Lifecycle: AgentSessionLifecyclePublisher,
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
+    Artifacts: ArtifactSource,
 {
     /// Execute where the session's live actor is: locally when nobody (or
     /// this replica) manages it, on the managing peer otherwise.
@@ -210,7 +216,7 @@ where
         )
     )]
     pub(super) async fn route_then_execute(
-        &self,
+        self: &Arc<Self>,
         session_id: AgentSessionId,
         command: HarnessCommand,
     ) -> Result<CommandOutcome> {
@@ -275,7 +281,7 @@ where
     }
 
     pub(super) async fn execute(
-        &self,
+        self: &Arc<Self>,
         session_id: AgentSessionId,
         command: HarnessCommand,
     ) -> Result<CommandOutcome> {
@@ -342,10 +348,11 @@ where
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Turn(TurnSignal::TurnEnded {
+                turn: fold_turn,
                 stop,
                 last_text,
                 action_id: fold_action_id,
-                ..
+                known_artifact_keys,
             }) => {
                 let ended = self.busy.take(session_id);
                 // A turn end with no record: this replica restarted mid-turn
@@ -403,6 +410,12 @@ where
                     })
                     .await;
                 }
+                // Last, and off this task: the provider has to be asked over
+                // the network and the answer may need waiting for, neither of
+                // which the queue's next dispatch should sit behind. Every
+                // stop reason collects, cancelled included - a run that was
+                // stopped still wrote whatever it had got to.
+                self.collect_artifacts(session_id, fold_turn, known_artifact_keys);
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::SessionStopped { reason } => {
@@ -719,6 +732,7 @@ pub(super) async fn run_session_worker<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 >(
     session_id: AgentSessionId,
     inner: SharedInner<
@@ -732,6 +746,7 @@ pub(super) async fn run_session_worker<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
@@ -745,6 +760,7 @@ pub(super) async fn run_session_worker<
     Lifecycle: AgentSessionLifecyclePublisher,
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
+    Artifacts: ArtifactSource,
 {
     while let Some(queued) = receiver.recv().await {
         let QueuedCommand {

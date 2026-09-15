@@ -48,14 +48,26 @@ const COMMAND_DELIVERY_TIMEOUT: Duration = Duration::from_secs(60);
 /// before the listing is given up on. Off the actor's own path, so generous.
 const TOOL_LISTING_TIMEOUT: Duration = Duration::from_secs(60);
 
-/// A caller's request to deliver one action, and the wire back to them.
-pub(crate) struct SessionCommand {
-    pub(crate) user_id: Option<MacroUserIdStr<'static>>,
-    pub(crate) action: AgentAction,
-    pub(crate) action_id: AgentActionId,
-    pub(crate) completed: oneshot::Sender<Result<()>>,
-    pub(crate) span: tracing::Span,
-    pub(crate) enqueued_at: Instant,
+/// A caller's request of one session's actor, and the wire back to them.
+pub(crate) enum SessionCommand {
+    /// Deliver one action to the runtime.
+    Act {
+        user_id: Option<MacroUserIdStr<'static>>,
+        action: AgentAction,
+        action_id: AgentActionId,
+        completed: oneshot::Sender<Result<()>>,
+        span: tracing::Span,
+        enqueued_at: Instant,
+    },
+    /// Append a frame the Service authored to the log, as though it had
+    /// arrived from the runtime. Nothing is sent back to the runtime: the
+    /// machine logs every inbound frame before reacting, and reacts to
+    /// nothing here.
+    Record {
+        message: ToServerMessage,
+        completed: oneshot::Sender<Result<()>>,
+        span: tracing::Span,
+    },
 }
 
 pub(crate) struct SessionCompletion {
@@ -106,6 +118,10 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     mcp_servers: Vec<McpServer>,
     /// Whether the listing has been started; it runs once per connection.
     tools_listed: bool,
+    /// The caller waiting on the frame [`SessionCommand::Record`] just handed
+    /// to the machine, held between `next_input` and the `dispatch` that
+    /// runs its effects.
+    recording: Option<SessionCompletion>,
 }
 
 impl<Connector, Logs> SessionActor<Connector, Logs>
@@ -169,6 +185,7 @@ where
             tool_catalog,
             mcp_servers,
             tools_listed: false,
+            recording: None,
         }
     }
 
@@ -202,7 +219,7 @@ where
             let input = tokio::select! {
             () = handshake_timeout => Input::Closed(CloseReason::HandshakeTimedOut),
             command = self.commands.recv() => match command {
-                Some(SessionCommand { user_id, action, action_id, completed, span, enqueued_at }) => {
+                Some(SessionCommand::Act { user_id, action, action_id, completed, span, enqueued_at }) => {
                     span.record(
                         "agent.command.queue_wait_ms",
                         enqueued_at.elapsed().as_millis() as u64,
@@ -217,6 +234,14 @@ where
                         action_id,
                         token: SessionCompletion { completed, span },
                     }
+                },
+                // The frame goes in as an inbound one, and the caller is
+                // answered by the `Complete` effect `dispatch` appends for
+                // this token - so the reply follows the durable append
+                // rather than racing it.
+                Some(SessionCommand::Record { message, completed, span }) => {
+                    self.recording = Some(SessionCompletion { completed, span });
+                    Input::Inbound(message)
                 },
                 // The service dropped every handle; nobody can reach us.
                 None => Input::Closed(CloseReason::Abandoned),
@@ -254,6 +279,17 @@ where
             None => self.machine.handle(input),
         };
         let mut effects = VecDeque::from(produced);
+        // A recorded frame has no runtime round-trip to wait on, so its
+        // caller is answered once this batch's effects have run. Riding the
+        // ordinary `Complete` effect is what makes a failed append answer
+        // with that failure: the log arm hands every remaining completion
+        // its cause.
+        if let Some(token) = self.recording.take() {
+            effects.push_back(Effect::Complete {
+                token,
+                result: Ok(()),
+            });
+        }
         if was_live && matches!(self.machine.status(), RuntimeStatus::Handshaking) {
             self.handshake_deadline = Instant::now() + HANDSHAKE_TIMEOUT;
         }

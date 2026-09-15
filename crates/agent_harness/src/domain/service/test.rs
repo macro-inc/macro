@@ -42,7 +42,7 @@ use crate::domain::model::{
     SpawnContainer,
 };
 use crate::domain::ports::{
-    AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoPeers,
+    AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoArtifacts, NoPeers,
 };
 use crate::outbound::runtime_registry::RuntimeRegistry;
 use crate::testing::helpers::agent::FakeAgent;
@@ -216,6 +216,7 @@ type TestHarness = AgentHarnessService<
     RecordingLifecyclePublisher,
     PromptMentionsMock,
     NotifierMock,
+    NoArtifacts,
 >;
 
 /// Bot-to-harness bindings for tests: every bot maps to the harness sharing
@@ -363,6 +364,7 @@ fn harness_with_mentions(
         crate::domain::pending::PendingCommands::new(),
         mentions,
         notifier.clone(),
+        NoArtifacts,
     );
     let (ended, ended_rx) = mpsc::unbounded_channel();
     turn_observer.bind(SignallingTurnObserver {
@@ -1902,6 +1904,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         crate::domain::pending::PendingCommands::new(),
         crate::domain::ports::NoPromptMentions,
         crate::domain::ports::NoopAgentSessionNotifier,
+        NoArtifacts,
     );
 
     let session = service
@@ -2350,6 +2353,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
         crate::domain::pending::PendingCommands::new(),
         crate::domain::ports::NoPromptMentions,
         crate::domain::ports::NoopAgentSessionNotifier,
+        NoArtifacts,
     );
 
     service
@@ -2401,6 +2405,7 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
         crate::domain::pending::PendingCommands::new(),
         crate::domain::ports::NoPromptMentions,
         crate::domain::ports::NoopAgentSessionNotifier,
+        NoArtifacts,
     );
     let session = service
         .open_external_session(open_external_request("/srv/agent"))
@@ -2846,5 +2851,401 @@ mod lifecycle_events {
             "deleted is the last fact about the session: {events:#?}"
         );
         assert_eq!(events.len(), 5, "nothing follows deleted: {events:#?}");
+    }
+}
+
+/// What a turn end pulls out of the provider that served it.
+mod artifacts {
+    use super::*;
+    use crate::domain::ports::{
+        AgentPromptComposer, AgentSessionNotifier, ArtifactSource, ChannelPromptContext,
+        ContainerManager, PromptMentions, RuntimeConnections, SandboxEgressProvisioner,
+        SessionAnnouncer,
+    };
+    use agent_fold::domain::model::{StopReason as FoldStop, TurnId, TurnSignal};
+    use agent_runtime_protocol::domain::schema::v0::{Artifact, ToServerMessage};
+    use agent_session::domain::model::{ExternalSession, Message};
+    use agent_session::domain::ports::AgentSessionLifecyclePublisher;
+    use agent_session::domain::ports::AgentSessionLogRepo;
+    use agent_session::domain::service::AgentSessionService;
+    use agent_session::testing::RecordingRealtime;
+    use std::collections::{BTreeSet, VecDeque};
+
+    /// One call the harness made on the collector.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Collection {
+        owner: String,
+        external_id: String,
+        known: BTreeSet<String>,
+    }
+
+    /// A collector that answers from a script and says when it was asked.
+    ///
+    /// Cheap to clone; clones share one recording.
+    #[derive(Clone, Default)]
+    struct ArtifactsMock {
+        calls: Arc<Mutex<Vec<Collection>>>,
+        answers: Arc<Mutex<VecDeque<std::result::Result<Vec<Artifact>, String>>>>,
+        entered: Arc<tokio::sync::Notify>,
+        collected: Arc<tokio::sync::Notify>,
+        /// Held open until notified, for tests that need a collection to be
+        /// visibly in flight.
+        gate: Option<Arc<tokio::sync::Notify>>,
+    }
+
+    impl ArtifactsMock {
+        fn answering(answers: impl IntoIterator<Item = Vec<Artifact>>) -> Self {
+            Self {
+                answers: Arc::new(Mutex::new(answers.into_iter().map(Ok).collect())),
+                ..Self::default()
+            }
+        }
+
+        /// Fails the first call, then answers normally.
+        fn failing_once() -> Self {
+            Self {
+                answers: Arc::new(Mutex::new(VecDeque::from([
+                    Err("cursor is unreachable".to_owned()),
+                    Ok(vec![walkthrough()]),
+                ]))),
+                ..Self::default()
+            }
+        }
+
+        fn calls(&self) -> Vec<Collection> {
+            self.calls.lock().unwrap().clone()
+        }
+    }
+
+    impl ArtifactSource for ArtifactsMock {
+        async fn collect(
+            &self,
+            owner: &macro_user_id::user_id::MacroUserIdStr<'_>,
+            external: &agent_session::domain::model::ExternalSession,
+            known: &BTreeSet<String>,
+        ) -> crate::domain::error::Result<Vec<Artifact>> {
+            self.calls.lock().unwrap().push(Collection {
+                owner: owner.as_ref().to_owned(),
+                external_id: external.external_id.clone(),
+                known: known.clone(),
+            });
+            self.entered.notify_one();
+            if let Some(gate) = &self.gate {
+                gate.notified().await;
+            }
+            let answer = self.answers.lock().unwrap().pop_front();
+            self.collected.notify_one();
+            match answer {
+                Some(Ok(artifacts)) => Ok(artifacts),
+                Some(Err(message)) => Err(HarnessError::Artifacts(rootcause::report!("{message}"))),
+                None => Ok(Vec::new()),
+            }
+        }
+    }
+
+    fn walkthrough() -> Artifact {
+        Artifact {
+            key: "walkthrough/one.png@1".to_owned(),
+            uri: "https://macro.com/files/one.png".to_owned(),
+            name: "one.png".to_owned(),
+            mime_type: "image/png".to_owned(),
+            size_bytes: 11,
+        }
+    }
+
+    /// A stored session row, external or sandboxed, with no runtime attached.
+    fn session_row(repo: &InMemoryAgentSessionRepo, external: bool) -> AgentSessionId {
+        let id = AgentSessionId::new();
+        let mut session = agent_session::testing::test_agent_session(id);
+        if external {
+            session.external = Some(ExternalSession {
+                provider: "cursor".to_owned(),
+                external_id: "bc-1".to_owned(),
+                external_name: None,
+                external_url: None,
+                last_run_id: None,
+            });
+        }
+        repo.insert_session(session);
+        id
+    }
+
+    fn turn_ended(known: &[&str]) -> HarnessCommand {
+        HarnessCommand::Turn(TurnSignal::TurnEnded {
+            turn: TurnId(3),
+            action_id: None,
+            stop: FoldStop::EndTurn,
+            last_text: None,
+            known_artifact_keys: known.iter().map(|key| (*key).to_owned()).collect(),
+        })
+    }
+
+    /// Every artifacts frame in the session's log, as the turn it names and
+    /// the keys it carries.
+    async fn logged_artifacts(
+        repo: &InMemoryAgentSessionRepo,
+        id: AgentSessionId,
+    ) -> Vec<(Option<u32>, Vec<String>)> {
+        AgentSessionLogRepo::list_by_session(repo, id)
+            .await
+            .expect("the in-memory log can be read")
+            .into_iter()
+            .filter_map(|entry| match entry.entry.content {
+                Message::ToServer(ToServerMessage::Artifacts { turn, artifacts }) => Some((
+                    turn,
+                    artifacts
+                        .into_iter()
+                        .map(|artifact| artifact.key)
+                        .collect::<Vec<_>>(),
+                )),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// A harness over the collector under test, and the session store and
+    /// realtime stream its frames land in.
+    ///
+    /// Its own builder rather than the shared one: these tests wait on the
+    /// realtime publish that a recorded frame makes, which is the only
+    /// signal that the detached collection has finished its work.
+    fn bench(
+        artifacts: ArtifactsMock,
+    ) -> (
+        impl HarnessUnderTest,
+        InMemoryAgentSessionRepo,
+        RecordingRealtime,
+    ) {
+        let repo = InMemoryAgentSessionRepo::new();
+        let realtime = RecordingRealtime::new();
+        let service = AgentHarnessService::new(
+            AgentSessionServiceImpl::new(
+                repo.clone(),
+                FoldedMessageService::new(repo.clone()),
+                realtime.clone(),
+                NoOpAgentSessionNameGenerator,
+                Arc::new(NoOpTurnObserver),
+                Arc::new(NoopLifecyclePublisher),
+                ReplicaId::mint(),
+            ),
+            MockContainerManager::new(),
+            AnnouncerMock::new(),
+            TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
+            PromptContextMock::default(),
+            PromptComposerMock::default(),
+            EgressProvisionerMock::new(),
+            NoPeers,
+            SessionDefaults {
+                bot_id: BotId::TEST_A,
+                model: "claude".to_owned(),
+                harness: "opencode".to_owned(),
+                repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            },
+            NoopLifecyclePublisher,
+            crate::domain::pending::PendingCommands::new(),
+            crate::domain::ports::NoPromptMentions,
+            crate::domain::ports::NoopAgentSessionNotifier,
+            artifacts,
+        );
+        (service, repo, realtime)
+    }
+
+    /// Only the entry point these tests drive, so the bench's ten other port
+    /// types stay out of every signature.
+    trait HarnessUnderTest {
+        fn execute_here(
+            &self,
+            session_id: AgentSessionId,
+            command: HarnessCommand,
+        ) -> impl Future<Output = crate::domain::error::Result<CommandOutcome>> + Send + 'static;
+    }
+
+    impl<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+        Artifacts,
+    > HarnessUnderTest
+        for AgentHarnessService<
+            Sessions,
+            Containers,
+            Announcer,
+            Runtimes,
+            PromptContext,
+            PromptComposer,
+            Egress,
+            Lifecycle,
+            Mentions,
+            Notifier,
+            Artifacts,
+        >
+    where
+        Sessions: AgentSessionService,
+        Containers: ContainerManager,
+        Announcer: SessionAnnouncer,
+        Runtimes: RuntimeConnections,
+        PromptContext: ChannelPromptContext,
+        PromptComposer: AgentPromptComposer,
+        Egress: SandboxEgressProvisioner,
+        Lifecycle: AgentSessionLifecyclePublisher,
+        Mentions: PromptMentions,
+        Notifier: AgentSessionNotifier,
+        Artifacts: ArtifactSource,
+    {
+        fn execute_here(
+            &self,
+            session_id: AgentSessionId,
+            command: HarnessCommand,
+        ) -> impl Future<Output = crate::domain::error::Result<CommandOutcome>> + Send + 'static
+        {
+            AgentHarnessService::execute_here(self, session_id, command)
+        }
+    }
+
+    #[tokio::test]
+    async fn a_turn_end_logs_what_the_provider_holds_under_the_folds_turn() {
+        let collector = ArtifactsMock::answering([vec![walkthrough()]]);
+        let (service, repo, realtime) = bench(collector.clone());
+        let id = session_row(&repo, true);
+
+        service
+            .execute_here(id, turn_ended(&["walkthrough/old.png@1"]))
+            .await
+            .expect("the turn end is handled");
+        // The recorded frame is streamed as it is written, so this is the
+        // detached collection reaching its end.
+        realtime.wait_for_published(1).await;
+
+        assert_eq!(
+            collector.calls(),
+            vec![Collection {
+                owner: "macro|owner@example.com".to_owned(),
+                external_id: "bc-1".to_owned(),
+                known: BTreeSet::from(["walkthrough/old.png@1".to_owned()]),
+            }]
+        );
+        assert_eq!(
+            logged_artifacts(&repo, id).await,
+            vec![(Some(3), vec![walkthrough().key])]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_sandboxed_session_is_never_asked() {
+        let collector = ArtifactsMock::answering([vec![walkthrough()]]);
+        let (service, repo, ..) = bench(collector.clone());
+        let sandboxed = session_row(&repo, false);
+        let external = session_row(&repo, true);
+
+        service
+            .execute_here(sandboxed, turn_ended(&[]))
+            .await
+            .expect("the turn end is handled");
+        // A second session that *is* external, collected afterwards: its
+        // call arriving is what proves the first one had its chance and
+        // asked nothing.
+        service
+            .execute_here(external, turn_ended(&[]))
+            .await
+            .expect("the turn end is handled");
+        collector.collected.notified().await;
+
+        assert_eq!(
+            collector
+                .calls()
+                .iter()
+                .map(|call| call.external_id.clone())
+                .collect::<Vec<_>>(),
+            vec!["bc-1".to_owned()],
+            "a session with no provider holds nothing to ask for"
+        );
+        assert!(logged_artifacts(&repo, sandboxed).await.is_empty());
+    }
+
+    /// Cursor uploads as the run finishes, so the first listing can be empty.
+    #[tokio::test(start_paused = true)]
+    async fn an_empty_first_collection_is_asked_again() {
+        let collector = ArtifactsMock::answering([Vec::new(), vec![walkthrough()]]);
+        let (service, repo, realtime) = bench(collector.clone());
+        let id = session_row(&repo, true);
+
+        service
+            .execute_here(id, turn_ended(&[]))
+            .await
+            .expect("the turn end is handled");
+        // Paused time auto-advances once every task is idle, so the retry's
+        // sleep passes without wall-clock waiting.
+        realtime.wait_for_published(1).await;
+
+        assert_eq!(collector.calls().len(), 2);
+        assert_eq!(
+            logged_artifacts(&repo, id).await,
+            vec![(Some(3), vec![walkthrough().key])]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_failing_collector_does_not_fail_the_turn() {
+        let collector = ArtifactsMock::failing_once();
+        let (service, repo, realtime) = bench(collector.clone());
+        let failed = session_row(&repo, true);
+        let collected = session_row(&repo, true);
+
+        service
+            .execute_here(failed, turn_ended(&[]))
+            .await
+            .expect("a turn end is handled whatever the provider says");
+        collector.collected.notified().await;
+        // A session collected after the failure, whose frame lands: proof
+        // that the failing one got no further than its one failed call.
+        service
+            .execute_here(collected, turn_ended(&[]))
+            .await
+            .expect("the turn end is handled");
+        realtime.wait_for_published(1).await;
+
+        assert_eq!(collector.calls().len(), 2, "a failure is not retried");
+        assert!(logged_artifacts(&repo, failed).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_second_turn_end_does_not_start_a_second_collection() {
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let collector = ArtifactsMock {
+            gate: Some(Arc::clone(&gate)),
+            ..ArtifactsMock::answering([vec![walkthrough()]])
+        };
+        let (service, repo, realtime) = bench(collector.clone());
+        let id = session_row(&repo, true);
+
+        service
+            .execute_here(id, turn_ended(&[]))
+            .await
+            .expect("the first turn end is handled");
+        collector.entered.notified().await;
+        service
+            .execute_here(id, turn_ended(&[]))
+            .await
+            .expect("the second turn end is handled");
+        assert_eq!(
+            collector.calls().len(),
+            1,
+            "the second end found a collection running"
+        );
+
+        gate.notify_one();
+        realtime.wait_for_published(1).await;
+        assert_eq!(collector.calls().len(), 1);
+        assert_eq!(
+            logged_artifacts(&repo, id).await,
+            vec![(Some(3), vec![walkthrough().key])]
+        );
     }
 }

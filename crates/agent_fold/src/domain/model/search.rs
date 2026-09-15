@@ -91,6 +91,11 @@ impl SearchText {
                     self.push(&entry.content);
                 }
             }
+            MessagePart::Artifacts { items } => {
+                for item in items {
+                    self.push(&item.name);
+                }
+            }
             MessagePart::Elicitation {
                 message,
                 request,

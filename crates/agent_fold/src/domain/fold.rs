@@ -52,11 +52,14 @@
 //! on a comms placeholder row.
 
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 
 use crate::domain::log::{AgentSessionId, AgentSessionLog};
 use crate::domain::model::{FoldEvent, FoldedMessage, SessionMetadata, TurnId};
 use crate::domain::ports::{FoldMachine, FoldSession, LogRepo};
 
+/// Files the agent produced outside the conversation.
+mod artifacts;
 /// Config-option and session-info bookkeeping.
 mod config;
 /// Prose and reasoning chunks, and adding parts to the agent message.
@@ -159,6 +162,26 @@ impl FoldMachineImpl {
     #[must_use]
     pub fn metadata(&self) -> &SessionMetadata {
         &self.state.metadata
+    }
+
+    /// Every artifact key this machine has folded, from every `artifacts`
+    /// frame - including one that named a turn it could not find and was
+    /// dropped.
+    ///
+    /// What a collector diffs against: it lists the provider's files afresh
+    /// after each turn and writes only the keys missing here, so a listing
+    /// that keeps returning an earlier turn's walkthrough does not append it
+    /// to the log a second time. Keys are deliberately not part of a
+    /// [`MessagePart::Artifacts`](crate::domain::model::MessagePart) and
+    /// never reach the client; they are bookkeeping for whoever writes the
+    /// frames.
+    ///
+    /// Only what this machine has folded. A `session/load` that replaces the
+    /// transcript replaces these too, for the same reason: the effective log
+    /// is the window that counts.
+    #[must_use]
+    pub fn known_artifact_keys(&self) -> &BTreeSet<String> {
+        &self.state.known_artifact_keys
     }
 }
 

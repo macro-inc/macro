@@ -1,4 +1,6 @@
 //! What the lifecycle fold signals, and what it stays silent about.
+use std::collections::BTreeSet;
+
 use super::util::{TURN, parse_log};
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::lifecycle::LifecycleFold;
@@ -100,7 +102,7 @@ fn a_complete_turn_signals_one_end_with_its_stop_and_last_text() {
     assert!(
         matches!(
             signals.as_slice(),
-            [TurnSignal::TurnEnded { turn, action_id, stop: StopReason::EndTurn, last_text: Some(text) }]
+            [TurnSignal::TurnEnded { turn, action_id, stop: StopReason::EndTurn, last_text: Some(text), .. }]
                 if *turn == reply.id
                     // The hand-shaped fixture's prompt id is not a uuid this
                     // server minted, so no action id is attributed.
@@ -261,5 +263,42 @@ fn an_unprompted_turn_ends_on_turn_complete_with_no_action_id() {
                 if text == "picking up where we left off"
         ),
         "{signals:#?}"
+    );
+}
+
+/// The signal carries the log's artifact keys as of the moment the turn
+/// closed, so a collector can diff a provider listing against it without
+/// reaching back into the fold.
+#[test]
+fn a_turn_end_carries_the_keys_the_log_already_holds() {
+    let artifacts = parse_log(
+        r#"{"direction":"to_server","content":{"type":"artifacts","artifacts":[{"key":"walkthrough/first.png@1","uri":"https://macro.com/f","name":"first.png","mimeType":"image/png","sizeBytes":11}]}}"#,
+    );
+    let mut log = parse_log(TURN);
+    log.extend(artifacts);
+    log.push(prompt(json!("p9"), "again"));
+    log.push(update("agent_message_chunk", "and done"));
+    log.push(frame(
+        "to_server",
+        json!({"id":"p9","result":{"stopReason":"end_turn"}}),
+    ));
+
+    let (_, signals) = signals_of(&log);
+    let keys: Vec<&BTreeSet<String>> = signals
+        .iter()
+        .filter_map(|signal| match signal {
+            TurnSignal::TurnEnded {
+                known_artifact_keys,
+                ..
+            } => Some(known_artifact_keys),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(keys.len(), 2, "two turns closed: {signals:#?}");
+    assert!(keys[0].is_empty(), "nothing was collected yet");
+    assert_eq!(
+        keys[1].iter().map(String::as_str).collect::<Vec<_>>(),
+        vec!["walkthrough/first.png@1"]
     );
 }

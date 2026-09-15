@@ -22,6 +22,7 @@ import {
   ToolGroup,
   WorkingLine,
 } from '../ui';
+import { ArtifactsPart } from './parts/ArtifactsPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
@@ -62,6 +63,7 @@ function AgentMessagePart(props: {
     .with({ kind: 'plan' }, (part) => <PlanPart part={part} />)
     .with({ kind: 'control' }, (part) => <ControlPart part={part} />)
     .with({ kind: 'elicitation' }, (part) => <ElicitationPart part={part} />)
+    .with({ kind: 'artifacts' }, (part) => <ArtifactsPart part={part} />)
     .exhaustive();
 }
 

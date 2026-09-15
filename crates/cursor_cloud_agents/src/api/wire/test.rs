@@ -145,3 +145,35 @@ fn me_reads_user_and_service_account_shapes() {
     .expect("service-account key");
     assert!(service.user_email.is_none());
 }
+
+/// Artifact fields arrive camel-cased, and an agent that has written none may
+/// answer with a bare object rather than an empty `items` array.
+#[test]
+fn artifact_listings_read_camel_case_and_an_absent_items_key() {
+    let listing: ListArtifactsResponse = serde_json::from_value(serde_json::json!({
+        "items": [{
+            "path": "artifacts/mobile_selection_menu_formatting_walkthrough.mp4",
+            "sizeBytes": 48_500_000_u64,
+            "updatedAt": "2026-04-13T18:45:00.000Z",
+        }],
+    }))
+    .expect("a documented listing");
+    assert_eq!(listing.items[0].size_bytes, 48_500_000);
+    assert_eq!(listing.items[0].updated_at, "2026-04-13T18:45:00.000Z");
+
+    let empty: ListArtifactsResponse =
+        serde_json::from_value(serde_json::json!({})).expect("no artifacts yet");
+    assert!(empty.items.is_empty());
+}
+
+/// The download body is the presigned url plus its expiry, both camel-cased.
+#[test]
+fn an_artifact_download_reads_the_documented_body() {
+    let download: ArtifactDownloadResponse = serde_json::from_value(serde_json::json!({
+        "url": "https://cloud-agent-artifacts.s3.us-east-1.amazonaws.com/a?sig=1",
+        "expiresAt": "2026-04-13T19:00:00.000Z",
+    }))
+    .expect("a documented download");
+    assert!(download.url.contains("cloud-agent-artifacts"));
+    assert_eq!(download.expires_at, "2026-04-13T19:00:00.000Z");
+}

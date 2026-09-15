@@ -140,6 +140,36 @@ pub enum ToRuntimeMessage {
     ModelProbeRequest,
 }
 
+/// One file an agent produced outside the conversation.
+///
+/// Every field is as the Agent Service resolved it, not as the provider
+/// reported it: a provider's own download URL expires, so nothing here can be
+/// a pointer back into the provider.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Artifact {
+    /// The provider's own identity for this file, opaque to everything that
+    /// reads it. Its only job is to say whether two collections name the same
+    /// file, so a re-collected walkthrough does not duplicate what is already
+    /// in the log. Nothing interprets its shape.
+    pub key: String,
+    /// A permanent Macro-hosted URL a browser can load directly. Never the
+    /// provider's URL, which expires.
+    pub uri: String,
+    /// What to call the file when showing it, usually its file name.
+    pub name: String,
+    /// The file's media type, which is what decides how it renders.
+    pub mime_type: String,
+    /// The file's size, for showing alongside a file this client cannot
+    /// render inline.
+    ///
+    /// Declared to TypeScript as a plain `number`: specta refuses to export
+    /// a `u64` at all, and a JSON number is a double, which is exact well
+    /// past any size this can carry.
+    #[specta(type = u32)]
+    pub size_bytes: u64,
+}
+
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -157,5 +187,31 @@ pub enum ToServerMessage {
     ModelProbeResponse {
         /// Raw options or a safe failure.
         result: ModelProbeResult,
+    },
+    /// Files the runtime's agent produced outside the conversation - a
+    /// walkthrough's screenshots and recordings.
+    ///
+    /// Written by the Agent Service after it collects them, not by the
+    /// runtime, which is why it is not ACP: the agent never announces these
+    /// over its ACP stream, so the Service pulls them from the provider once
+    /// a turn has ended and appends them to the log itself. Other
+    /// Service-authored frames go in on the same footing - see
+    /// `SessionMachine`'s reload handling - but this one is the first that
+    /// carries conversation content rather than status, which is why it is a
+    /// message of its own and not a [`SystemEvent`].
+    Artifacts {
+        /// The files collected, in the order the provider listed them. An
+        /// empty list is legal and means nothing was produced.
+        artifacts: Vec<Artifact>,
+        /// The turn these files came out of, as the fold numbers turns
+        /// (`agent_fold::TurnId`). The Service learns it from the same
+        /// signal that told it the turn ended, and a reader's own fold of
+        /// this log derives the same ordinals, so naming it here is exact
+        /// where guessing from arrival order is not. `None` when the writer
+        /// does not know, which leaves the reader to guess.
+        ///
+        /// The raw ordinal rather than the id type: this crate sits under
+        /// `agent_fold` and must not depend on it.
+        turn: Option<u32>,
     },
 }

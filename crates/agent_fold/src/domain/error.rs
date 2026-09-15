@@ -32,6 +32,15 @@ pub(crate) enum FoldError {
     /// A response arrived for a request id the fold was not tracking.
     #[error("response arrived for a request id the fold was not tracking")]
     UncorrelatedResponse,
+    /// Collected files could not be attributed to a turn: they named one this
+    /// fold has never opened, or named none at all and arrived before any turn
+    /// existed. Either way there is no agent message - and no turn id free -
+    /// to attach them to.
+    #[error("artifacts could not be attributed to a turn: {turn:?}")]
+    ArtifactsForUnknownTurn {
+        /// The turn the frame named, or `None` when it named none.
+        turn: Option<u32>,
+    },
     /// A `session/update` this fold does not know what to do with - an
     /// unmodelled variant, or a frame whose params would not deserialize.
     #[error("session/update frame not understood by this fold: {kind}")]

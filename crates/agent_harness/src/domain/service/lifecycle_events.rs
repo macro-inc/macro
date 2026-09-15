@@ -22,6 +22,7 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 >
     AgentHarnessInner<
         Sessions,
@@ -34,6 +35,7 @@ impl<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >
 where
     Sessions: AgentSessionService,
@@ -46,6 +48,7 @@ where
     Lifecycle: AgentSessionLifecyclePublisher,
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
+    Artifacts: ArtifactSource,
 {
     /// The identity block for one session, from its row and its bot.
     pub(super) async fn identity(&self, session_id: AgentSessionId) -> Result<SessionIdentity> {

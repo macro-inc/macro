@@ -77,4 +77,9 @@ pub enum HarnessError {
     /// Who a prompt mentions could not be resolved.
     #[error("failed to resolve prompt mentions: {0}")]
     Mentions(rootcause::Report),
+    /// The files a provider holds for a session could not be listed or
+    /// re-hosted. Its own variant because collecting them is a side errand
+    /// after a turn: it fails without the turn having failed.
+    #[error("failed to collect session artifacts: {0}")]
+    Artifacts(rootcause::Report),
 }

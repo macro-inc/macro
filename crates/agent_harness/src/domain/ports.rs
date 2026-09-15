@@ -1,9 +1,11 @@
 //! Outbound capabilities required by the harness domain.
 
+use std::collections::BTreeSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use agent_runtime_protocol::domain::schema::v0::Artifact;
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
@@ -365,4 +367,71 @@ pub trait ContainerManager: Send + Sync + 'static {
     /// this is the end of the session: nothing will reattach. A session with
     /// no container is already in the state this asks for, so it succeeds.
     fn teardown(&self, session: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+}
+
+/// Files an external provider holds for a session that the log does not yet
+/// carry.
+///
+/// Cursor's walkthrough screenshots and recordings never reach the ACP stream,
+/// so they are pulled rather than pushed: after a turn ends the harness asks
+/// what the provider has, names what it has already logged, and appends the
+/// difference. The provider's listing is cumulative and has no run filter,
+/// which is why the question is "what is new to me" rather than "what did this
+/// run produce".
+pub trait ArtifactSource: Send + Sync + 'static {
+    /// Every artifact for `external` whose key is not in `known`, oldest
+    /// first, each already re-hosted so its `uri` outlives the provider's own
+    /// URL.
+    fn collect(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        external: &agent_session::domain::model::ExternalSession,
+        known: &BTreeSet<String>,
+    ) -> impl Future<Output = Result<Vec<Artifact>>> + Send;
+}
+
+/// An [`ArtifactSource`] that finds nothing: sandboxed sessions, whose files
+/// never leave the container, and deployments with no artifact store wired.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoArtifacts;
+
+impl ArtifactSource for NoArtifacts {
+    async fn collect(
+        &self,
+        _owner: &MacroUserIdStr<'_>,
+        _external: &agent_session::domain::model::ExternalSession,
+        _known: &BTreeSet<String>,
+    ) -> Result<Vec<Artifact>> {
+        Ok(Vec::new())
+    }
+}
+
+/// Durable, browser-loadable storage for a collected file.
+///
+/// A port rather than a static file client held directly because the only
+/// thing the domain has an opinion about is the contract: bytes in, a URL that
+/// still resolves long after the provider's presigned one has expired out.
+pub trait ArtifactStore: Send + Sync + 'static {
+    /// Store one file, answering with where it now permanently lives.
+    fn store(&self, upload: ArtifactUpload) -> impl Future<Output = Result<StoredArtifact>> + Send;
+}
+
+/// One file on its way into an [`ArtifactStore`].
+#[derive(Debug, Clone)]
+pub struct ArtifactUpload {
+    /// What to call the file where it is stored, and what a reader sees.
+    pub file_name: String,
+    /// The media type to serve it back as, which is what decides whether a
+    /// browser renders it inline.
+    pub mime_type: String,
+    /// The whole file. Buffered, so a source is expected to refuse anything
+    /// large enough for that to matter.
+    pub bytes: bytes::Bytes,
+}
+
+/// Where a stored file ended up.
+#[derive(Debug, Clone)]
+pub struct StoredArtifact {
+    /// A permanent URL a browser can load directly.
+    pub uri: String,
 }
