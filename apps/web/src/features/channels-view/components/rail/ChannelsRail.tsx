@@ -39,6 +39,7 @@ import {
   deduplicateChannels,
 } from '../../queries';
 import type {
+  ChannelsGroup,
   ChannelsQueryScope,
   ChannelsRailSection,
   ChannelsTab,
@@ -88,7 +89,11 @@ type ChannelRailItemsByScope = Record<
 export function buildChannelRailRows(
   tab: ChannelsTab,
   expandedGroups: Record<ChannelsRailSection, boolean>,
-  items: ChannelRailItemsByScope
+  items: ChannelRailItemsByScope,
+  options: {
+    mode: 'full' | 'slim';
+    slimGroups: Record<ChannelsGroup, boolean>;
+  }
 ): ChannelRailRow[] {
   if (tab === 'recents') {
     return items.recents.map((channel, localIndex) => ({
@@ -119,6 +124,28 @@ export function buildChannelRailRows(
         )
       );
     }
+  }
+
+  if (options.mode === 'slim') {
+    let virtualIndex = 0;
+    for (const group of BROWSE_QUERY_SCOPES) {
+      if (!options.slimGroups[group]) continue;
+
+      rows.push(
+        ...items[group].map(
+          (channel, localIndex): ChannelRailRow => ({
+            kind: 'conversation',
+            id: `channel:${channel.id}`,
+            group,
+            scope: group,
+            localIndex,
+            virtualIndex: virtualIndex++,
+            channel,
+          })
+        )
+      );
+    }
+    return rows;
   }
 
   rows.push({
@@ -165,8 +192,14 @@ export function buildChannelRailRows(
 }
 
 export function ChannelsRail(props: ChannelsRailProps) {
-  const { state, setGroupOpen, setSelectedChannelId, setSortBy, setTab } =
-    useChannelsView();
+  const {
+    state,
+    setGroupOpen,
+    setSelectedChannelId,
+    setSlimGroupEnabled,
+    setSortBy,
+    setTab,
+  } = useChannelsView();
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const favoritesData = useFavoritesData({ entityType: ['channel'] });
@@ -288,12 +321,20 @@ export function ChannelsRail(props: ChannelsRailProps) {
       );
     }
 
-    return buildChannelRailRows(state.tab, state.expandedGroups, {
-      favorites: favorites(),
-      channels: props.sources.channels.items(),
-      direct_messages: props.sources.direct_messages.items(),
-      recents: props.sources.recents.items(),
-    });
+    return buildChannelRailRows(
+      state.tab,
+      state.expandedGroups,
+      {
+        favorites: favorites(),
+        channels: props.sources.channels.items(),
+        direct_messages: props.sources.direct_messages.items(),
+        recents: props.sources.recents.items(),
+      },
+      {
+        mode: props.mode,
+        slimGroups: state.slimGroups,
+      }
+    );
   });
 
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
@@ -338,7 +379,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       if (row.kind === 'conversation') {
         const virtualizer = virtualizers()[row.scope];
         if (virtualizer) {
-          virtualizer.scrollToIndex(row.localIndex, options);
+          virtualizer.scrollToIndex(
+            row.virtualIndex ?? row.localIndex,
+            options
+          );
           return;
         }
       }
@@ -536,7 +580,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
         },
       },
       disclosure: {
-        getKey: (row) => row.group,
+        getKey: (row) =>
+          props.mode === 'slim' && row.kind === 'conversation'
+            ? undefined
+            : row.group,
         isExpanded: (group) =>
           state.expandedGroups[group as ChannelsRailSection],
         setExpanded: (group, expanded) =>
@@ -570,7 +617,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const sectionHotkeys = createHotkeyGroup();
   const sectionHotkeysEnabled = () =>
-    panel.isPanelActive() && !props.searchOpen && state.tab === 'browse';
+    panel.isPanelActive() &&
+    props.mode === 'full' &&
+    !props.searchOpen &&
+    state.tab === 'browse';
 
   registerHotkey({
     hotkey: ']',
@@ -646,6 +696,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
     sortBy: (group) => state.sortBy[group],
     setSortBy,
+    slimGroupEnabled: (group) => state.slimGroups[group],
+    setSlimGroupEnabled,
     registerRootRef: setListRoot,
     activateRow,
     registerScrollRef: (group, element) => {

@@ -11,6 +11,7 @@ import type { Accessor } from 'solid-js';
 import { z } from 'zod';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
+  CHANNELS_DEFAULT_SLIM_GROUPS,
   CHANNELS_DEFAULT_SORT_BY,
   clampChannelsRailWidth,
 } from './constants';
@@ -89,6 +90,14 @@ const channelsPreferencesSchema = z.object({
         .default(CHANNELS_DEFAULT_SORT_BY.direct_messages),
     })
     .default(CHANNELS_DEFAULT_SORT_BY),
+  slimGroups: z
+    .object({
+      channels: z.boolean().default(CHANNELS_DEFAULT_SLIM_GROUPS.channels),
+      direct_messages: z
+        .boolean()
+        .default(CHANNELS_DEFAULT_SLIM_GROUPS.direct_messages),
+    })
+    .default(CHANNELS_DEFAULT_SLIM_GROUPS),
 });
 
 type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
@@ -98,6 +107,7 @@ const DEFAULT_CHANNELS_PREFERENCES = {
   asideWidth: CHANNELS_DEFAULT_RAIL_WIDTH,
   railMode: 'auto',
   sortBy: CHANNELS_DEFAULT_SORT_BY,
+  slimGroups: CHANNELS_DEFAULT_SLIM_GROUPS,
 } satisfies ChannelsPreferences;
 
 function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
@@ -195,6 +205,7 @@ function createChannelsPreferencesStorage(options: {
       asideWidth: clampChannelsRailWidth(state.asideWidth),
       railMode: state.railMode,
       sortBy: state.sortBy,
+      slimGroups: state.slimGroups,
     } satisfies ChannelsPreferences);
 
   return {
@@ -218,6 +229,7 @@ function createChannelsPreferencesStorage(options: {
           asideWidth: restored.asideWidth,
           railMode: restored.railMode,
           sortBy: restored.sortBy,
+          slimGroups: restored.slimGroups,
         };
       } catch {
         return {
@@ -225,6 +237,7 @@ function createChannelsPreferencesStorage(options: {
           asideWidth: DEFAULT_CHANNELS_PREFERENCES.asideWidth,
           railMode: DEFAULT_CHANNELS_PREFERENCES.railMode,
           sortBy: DEFAULT_CHANNELS_PREFERENCES.sortBy,
+          slimGroups: DEFAULT_CHANNELS_PREFERENCES.slimGroups,
         };
       }
     },

@@ -206,6 +206,10 @@ exist in the DOM.
 Channels and DMs each have a sort action before their create action. They can be
 sorted by last viewed, last updated, or date created, and each choice persists
 independently as a user preference.
+In slim mode, Favorites remains a separate collapsible section, while Channels
+and DMs render in one continuous list without section headings. The gear action
+in the footer controls whether each group appears and exposes the same
+independently persisted sort choices.
 Compact channel and DM rows in All have the same height. Section headings place
 their caret immediately after the title and reveal it on hover or while the
 section is collapsed; hovering only undims the heading text, while

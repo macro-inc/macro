@@ -69,9 +69,11 @@ function ChannelsViewRoot() {
         return scope !== 'search' && state.mobileTab === scope;
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
-      return scope === 'recents'
-        ? state.tab === 'recents'
-        : state.tab === 'browse';
+      if (scope === 'recents') return state.tab === 'recents';
+      return (
+        state.tab === 'browse' &&
+        (railMode() === 'full' || state.slimGroups[scope])
+      );
     },
     (group) => state.sortBy[group]
   );

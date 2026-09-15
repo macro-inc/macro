@@ -11,25 +11,29 @@ import { UserIcon } from '@core/component/UserIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type ChannelEntity, Entity } from '@entity';
 import ChannelIcon from '@icon/wide-channel.svg';
+import { Popover } from '@kobalte/core/popover';
 import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
 import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
+import CheckIcon from '@phosphor/check.svg';
+import GearIcon from '@phosphor/gear.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import StarIcon from '@phosphor/star.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { Button, cn, Dropdown, Tabs, Tooltip } from '@ui';
+import { Button, cn, Dropdown, Layer, Tabs, ToggleSwitch, Tooltip } from '@ui';
 import {
-  type Component,
+  createMemo,
   createSignal,
   For,
+  type JSX,
   Match,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import { Virtualizer } from 'virtua/solid';
-import type { ChannelsGroup } from '../../types';
+import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import type { ChannelListSort, ChannelsGroup } from '../../types';
 import { channelInitials, isDirectMessage } from '../../utils';
 import {
   ChannelCallIndicator,
@@ -54,7 +58,6 @@ import {
   useChannelRailFavoritesState,
   useChannelRailItemState,
   useChannelRailScopeState,
-  useChannelRailSectionState,
   useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
 
@@ -85,20 +88,31 @@ const SLIM_CHANNEL_TABS = [
   { value: 'recents', label: RecentTabLabel },
 ];
 
-type GroupConfig = {
+const SLIM_GROUPS: {
   group: ChannelsGroup;
   label: string;
-  icon: Component;
-};
-
-const GROUPS: GroupConfig[] = [
-  { group: 'channels', label: 'Channels', icon: ChannelIcon },
+  icon: () => JSX.Element;
+}[] = [
+  {
+    group: 'channels',
+    label: 'Channels',
+    icon: () => <ChannelIcon class="size-4" />,
+  },
   {
     group: 'direct_messages',
     label: 'DMs',
-    icon: ChatTeardropIcon,
+    icon: () => <ChatTeardropIcon class="size-4" />,
   },
 ];
+
+const SLIM_SORT_OPTIONS: { value: ChannelListSort; label: string }[] = [
+  { value: 'viewed_at', label: 'Last viewed' },
+  { value: 'updated_at', label: 'Last updated' },
+  { value: 'created_at', label: 'Date created' },
+];
+
+const SLIM_ROW_HEIGHT = 42;
+const LOAD_MORE_THRESHOLD = 300;
 
 function SlimFavoriteAvatar(props: {
   favorite: Favorite;
@@ -358,12 +372,8 @@ function SlimHeader() {
 
   return (
     <div class="flex shrink-0 flex-col items-center gap-3 pt-2">
-      <div class="flex w-full items-center justify-center px-2">
-        <SplitPanel.ControlGroup>
-          <SplitPanel.CloseButton size="icon-sm" />
-        </SplitPanel.ControlGroup>
-      </div>
-      <div class="flex h-8 w-full items-center justify-center px-2">
+      <div class="flex h-8 w-full items-center justify-between px-1">
+        <SplitPanel.CloseButton size="icon-sm" />
         <RailModeButton
           expanded={false}
           onToggle={() => rail.setMode('full')}
@@ -390,106 +400,127 @@ function SlimHeader() {
   );
 }
 
-function SlimGroupSection(props: { config: GroupConfig }) {
+function SlimBrowseConversations() {
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
-  const { state: section } = useChannelRailSectionState(
-    () => props.config.group
-  );
-  const pagination = useChannelRailVirtualizer(() => props.config.group);
-  const registerScrollRef = (element: HTMLDivElement) => {
+  const channels = useChannelRailScopeState(() => 'channels');
+  const directMessages = useChannelRailScopeState(() => 'direct_messages');
+  const channelItems = () =>
+    rail.slimGroupEnabled('channels') ? channels().items : [];
+  const directMessageItems = () =>
+    rail.slimGroupEnabled('direct_messages') ? directMessages().items : [];
+  const items = createMemo(() => [...channelItems(), ...directMessageItems()]);
+  const keepMounted = createMemo(() => {
+    const indexes = rail.slimGroupEnabled('channels')
+      ? [...(channels().keepMounted ?? [])]
+      : [];
+    if (rail.slimGroupEnabled('direct_messages')) {
+      const offset = channelItems().length;
+      indexes.push(
+        ...(directMessages().keepMounted ?? []).map((index) => offset + index)
+      );
+    }
+    return indexes.length > 0 ? [...new Set(indexes)] : undefined;
+  });
+
+  let unregisterVirtualizers: (() => void)[] = [];
+  const registerVirtualizer = (handle?: VirtualizerHandle) => {
+    for (const unregister of unregisterVirtualizers) unregister();
+    unregisterVirtualizers = [];
+    setVirtualizer(handle);
+    if (!handle) return;
+
+    unregisterVirtualizers = SLIM_GROUPS.map(({ group }) =>
+      rail.registerVirtualizer(group, handle)
+    );
+  };
+  onCleanup(() => {
+    for (const unregister of unregisterVirtualizers) unregister();
+  });
+
+  const registerScrollRoot = (element: HTMLDivElement) => {
     setScrollRoot(element);
-    rail.registerScrollRef(props.config.group, element);
+    for (const { group } of SLIM_GROUPS) {
+      rail.registerScrollRef(group, element);
+    }
+  };
+  const visibleGroups = () =>
+    SLIM_GROUPS.filter(({ group }) => rail.slimGroupEnabled(group));
+  const isInitialLoading = () =>
+    items().length === 0 &&
+    visibleGroups().some(({ group }) => rail.sources[group].isLoading());
+  const hasError = () =>
+    visibleGroups().some(({ group }) => rail.sources[group].error());
+  const isLoadingMore = () =>
+    visibleGroups().some(({ group }) => rail.sources[group].isLoadingMore());
+  const retry = async () => {
+    await Promise.all(
+      visibleGroups().map(({ group }) => rail.sources[group].refresh())
+    );
+  };
+  const loadMoreNearEnd = (offset?: number) => {
+    const handle = virtualizer();
+    if (!handle) return;
+
+    const viewportEnd = (offset ?? handle.scrollOffset) + handle.viewportSize;
+    let groupEnd = 0;
+    for (const { group } of visibleGroups()) {
+      const source = rail.sources[group];
+      groupEnd += source.items().length * SLIM_ROW_HEIGHT;
+      if (
+        groupEnd - viewportEnd > LOAD_MORE_THRESHOLD ||
+        source.isLoadingMore() ||
+        !source.hasMore()
+      ) {
+        continue;
+      }
+      void source.loadMore();
+    }
   };
 
   return (
-    <CollapsibleSection.Root
-      open={section().open}
-      fillAvailable={section().fillAvailable}
-      class="items-center"
-    >
-      <CollapsibleSection.Header
-        focused={section().focused}
-        focusWithin={section().containsFocus}
-        class="h-10 justify-center"
-      >
-        <button
-          id={section().domId}
-          type="button"
-          role="treeitem"
-          tabIndex={-1}
-          class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none"
-          aria-expanded={section().open}
-          aria-label={props.config.label}
-          onMouseDown={(event) => {
-            if (!isPrimaryMouseDown(event)) return;
-            event.preventDefault();
-            rail.toggleGroup(props.config.group);
-          }}
+    <Switch>
+      <Match when={forceEmptyState()}>{null}</Match>
+      <Match when={isInitialLoading()}>
+        <RailListLoading />
+      </Match>
+      <Match when={hasError() && items().length === 0}>
+        <SlimListError retry={retry} />
+      </Match>
+      <Match when={items().length > 0}>
+        <div
+          ref={registerScrollRoot}
+          class="scrollbar-hidden size-full min-h-0 overflow-y-auto"
+          aria-busy={isLoadingMore()}
         >
-          <span class="flex items-center justify-center [&_svg]:size-4">
-            <Dynamic component={props.config.icon} />
-          </span>
-          <Show when={section().unreadCount > 0}>
-            <span class="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none text-accent-contrast ring-2 ring-surface">
-              {section().unreadCount}
-            </span>
+          <Virtualizer
+            ref={registerVirtualizer}
+            data={items()}
+            scrollRef={scrollRoot()}
+            itemSize={SLIM_ROW_HEIGHT}
+            bufferSize={240}
+            keepMounted={keepMounted()}
+            onScroll={loadMoreNearEnd}
+          >
+            {(channel) => (
+              <div class="flex justify-center pb-0.5">
+                <SlimChannelItem channel={channel} />
+              </div>
+            )}
+          </Virtualizer>
+          <Show when={isLoadingMore()}>
+            <RailListLoadingMore variant="slim" />
           </Show>
-        </button>
-      </CollapsibleSection.Header>
-      <CollapsibleSection.Content
-        open={section().open}
-        contentRef={registerScrollRef}
-        containerClass="w-full"
-        class="flex min-h-0 w-full flex-col items-center gap-0.5"
-        activityTargetId={section().targetId}
-        activityTooltip
-      >
-        <Switch>
-          <Match when={forceEmptyState()}>{null}</Match>
-          <Match
-            when={section().source.isLoading() && section().items.length === 0}
-          >
-            <RailListLoading />
-          </Match>
-          <Match
-            when={section().source.error() && section().items.length === 0}
-          >
-            <SlimListError retry={section().source.refresh} />
-          </Match>
-          <Match when={section().items.length > 0}>
-            <Virtualizer
-              ref={pagination.registerVirtualizer}
-              data={section().items}
-              scrollRef={scrollRoot()}
-              itemSize={42}
-              bufferSize={240}
-              keepMounted={section().keepMounted}
-              onScroll={pagination.loadMoreNearEnd}
-            >
-              {(channel) => (
-                <div class="flex justify-center pb-0.5">
-                  <SlimChannelItem channel={channel} />
-                </div>
-              )}
-            </Virtualizer>
-            <Show when={section().source.isLoadingMore()}>
-              <RailListLoadingMore variant="slim" />
-            </Show>
-            <Show
-              when={
-                section().source.error() && !section().source.isLoadingMore()
-              }
-            >
-              <SlimListError retry={section().source.refresh} />
-            </Show>
-          </Match>
-        </Switch>
-      </CollapsibleSection.Content>
-    </CollapsibleSection.Root>
+          <Show when={hasError() && !isLoadingMore()}>
+            <SlimListError retry={retry} />
+          </Show>
+        </div>
+      </Match>
+    </Switch>
   );
 }
 
@@ -497,9 +528,9 @@ function SlimBrowse() {
   return (
     <div class="flex h-full min-h-0 flex-col gap-2 px-2">
       <SlimFavoritesSection />
-      <For each={GROUPS}>
-        {(config) => <SlimGroupSection config={config} />}
-      </For>
+      <div class="min-h-0 flex-1">
+        <SlimBrowseConversations />
+      </div>
     </div>
   );
 }
@@ -556,6 +587,97 @@ function SlimRecents() {
   );
 }
 
+function SlimRailSettings() {
+  const rail = useChannelsRail();
+
+  return (
+    <footer class="flex h-12 shrink-0 items-center justify-center border-t border-edge-muted px-2">
+      <Popover placement="right-end" gutter={8}>
+        <Popover.Trigger
+          as={Button}
+          variant="ghost"
+          size="icon-sm"
+          class="rounded-lg"
+          label="Chat rail settings"
+        >
+          <GearIcon class="size-4" />
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Layer depth={3}>
+            <Popover.Content
+              class="portal-scope z-action-menu w-56 rounded-xl border border-edge bg-menu-glass p-2 glass menu-open-animation"
+              onOpenAutoFocus={(event) => event.preventDefault()}
+              onCloseAutoFocus={(event) => event.preventDefault()}
+            >
+              <Popover.Title class="px-2 py-1 text-xs font-medium text-ink">
+                Chat rail
+              </Popover.Title>
+              <div class="flex flex-col gap-1">
+                <For each={SLIM_GROUPS}>
+                  {(config) => (
+                    <section class="rounded-lg border border-edge-muted p-2">
+                      <div class="flex items-center gap-2">
+                        <span class="flex size-4 shrink-0 items-center justify-center text-ink-muted">
+                          {config.icon()}
+                        </span>
+                        <span class="min-w-0 flex-1 truncate text-xs font-medium text-ink">
+                          {config.label}
+                        </span>
+                        <ToggleSwitch
+                          size="xs"
+                          checked={rail.slimGroupEnabled(config.group)}
+                          onChange={(enabled) =>
+                            rail.setSlimGroupEnabled(config.group, enabled)
+                          }
+                          label={`Show ${config.label.toLowerCase()}`}
+                          labelClass="sr-only"
+                        />
+                      </div>
+                      <div
+                        role="radiogroup"
+                        aria-label={`Sort ${config.label.toLowerCase()}`}
+                        class="mt-2 flex flex-col gap-0.5"
+                      >
+                        <For each={SLIM_SORT_OPTIONS}>
+                          {(option) => {
+                            const selected = () =>
+                              rail.sortBy(config.group) === option.value;
+                            return (
+                              <button
+                                type="button"
+                                role="radio"
+                                aria-checked={selected()}
+                                class={cn(
+                                  'flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink',
+                                  selected() && 'bg-active text-ink'
+                                )}
+                                onClick={() =>
+                                  rail.setSortBy(config.group, option.value)
+                                }
+                              >
+                                <span class="min-w-0 flex-1 truncate">
+                                  {option.label}
+                                </span>
+                                <Show when={selected()}>
+                                  <CheckIcon class="size-3 shrink-0 text-accent" />
+                                </Show>
+                              </button>
+                            );
+                          }}
+                        </For>
+                      </div>
+                    </section>
+                  )}
+                </For>
+              </div>
+            </Popover.Content>
+          </Layer>
+        </Popover.Portal>
+      </Popover>
+    </footer>
+  );
+}
+
 export function SlimChannelsRail() {
   const rail = useChannelsRail();
   const activeDescendant = () => {
@@ -584,6 +706,7 @@ export function SlimChannelsRail() {
           </Switch>
         </div>
       </div>
+      <SlimRailSettings />
     </>
   );
 }

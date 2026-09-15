@@ -34,6 +34,7 @@ export type ChannelRailRow =
       group?: ChannelsGroup;
       scope: ChannelsSourceScope;
       localIndex: number;
+      virtualIndex?: number;
       channel: ChannelEntity;
     };
 
@@ -62,6 +63,8 @@ export type ChannelsRailContext = {
   toggleGroup: (group: ChannelsRailSection) => void;
   sortBy: (group: ChannelsGroup) => ChannelListSort;
   setSortBy: (group: ChannelsGroup, sort: ChannelListSort) => void;
+  slimGroupEnabled: (group: ChannelsGroup) => boolean;
+  setSlimGroupEnabled: (group: ChannelsGroup, enabled: boolean) => void;
   registerRootRef: (element: HTMLDivElement) => void;
   activateRow: (rowId: ChannelRailRow['id']) => void;
   registerScrollRef: (

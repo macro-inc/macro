@@ -6,6 +6,7 @@ import type { ContextProviderProps } from '@solid-primitives/context';
 import { createStore, type Store } from 'solid-js/store';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
+  CHANNELS_DEFAULT_SLIM_GROUPS,
   CHANNELS_DEFAULT_SORT_BY,
   clampChannelsRailWidth,
 } from './constants';
@@ -32,6 +33,7 @@ export type ChannelsViewContext = {
   setSelectedChannelId: (channelId: string | undefined) => void;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
   setSortBy: (group: ChannelsGroup, sort: ChannelListSort) => void;
+  setSlimGroupEnabled: (group: ChannelsGroup, enabled: boolean) => void;
   setAsideWidth: (width: number) => void;
   setRailMode: (mode: Exclude<ChannelsRailMode, 'auto'>) => void;
 };
@@ -62,6 +64,14 @@ export const [ChannelsViewProvider, useChannelsView] =
               initial.sortBy?.direct_messages ??
               CHANNELS_DEFAULT_SORT_BY.direct_messages,
           },
+          slimGroups: {
+            channels:
+              initial.slimGroups?.channels ??
+              CHANNELS_DEFAULT_SLIM_GROUPS.channels,
+            direct_messages:
+              initial.slimGroups?.direct_messages ??
+              CHANNELS_DEFAULT_SLIM_GROUPS.direct_messages,
+          },
           asideWidth: clampChannelsRailWidth(
             initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
           ),
@@ -75,7 +85,8 @@ export const [ChannelsViewProvider, useChannelsView] =
           restorePreferences:
             initial.asideWidth === undefined &&
             initial.railMode === undefined &&
-            initial.sortBy === undefined,
+            initial.sortBy === undefined &&
+            initial.slimGroups === undefined,
         })
       );
 
@@ -87,6 +98,8 @@ export const [ChannelsViewProvider, useChannelsView] =
           setState('selectedChannelId', channelId),
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),
         setSortBy: (group, sort) => setState('sortBy', group, sort),
+        setSlimGroupEnabled: (group, enabled) =>
+          setState('slimGroups', group, enabled),
         setAsideWidth: (width) =>
           setState('asideWidth', clampChannelsRailWidth(width)),
         setRailMode: (mode) => setState('railMode', mode),

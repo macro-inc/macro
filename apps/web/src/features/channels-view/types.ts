@@ -16,13 +16,15 @@ export type ChannelsViewState = {
   selectedChannelId?: string;
   expandedGroups: Record<ChannelsRailSection, boolean>;
   sortBy: Record<ChannelsGroup, ChannelListSort>;
+  slimGroups: Record<ChannelsGroup, boolean>;
   asideWidth: number;
   railMode: ChannelsRailMode;
 };
 
 export type ChannelsViewStateOptions = Partial<
-  Omit<ChannelsViewState, 'expandedGroups' | 'sortBy'>
+  Omit<ChannelsViewState, 'expandedGroups' | 'sortBy' | 'slimGroups'>
 > & {
   expandedGroups?: Partial<ChannelsViewState['expandedGroups']>;
   sortBy?: Partial<ChannelsViewState['sortBy']>;
+  slimGroups?: Partial<ChannelsViewState['slimGroups']>;
 };

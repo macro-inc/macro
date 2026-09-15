@@ -10,6 +10,11 @@ export const CHANNELS_DEFAULT_SORT_BY = {
   direct_messages: 'updated_at',
 } satisfies Record<ChannelsGroup, ChannelListSort>;
 
+export const CHANNELS_DEFAULT_SLIM_GROUPS = {
+  channels: true,
+  direct_messages: true,
+} satisfies Record<ChannelsGroup, boolean>;
+
 export function clampChannelsRailWidth(width: number): number {
   if (!Number.isFinite(width)) return CHANNELS_DEFAULT_RAIL_WIDTH;
 
