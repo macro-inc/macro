@@ -335,12 +335,12 @@ pub struct SpawnContainer {
     pub kind: AgentKind,
     /// Compute tier to request from the provider.
     pub size: SandboxSize,
-    /// How the sandbox reaches anything outside itself; absent for provider-managed cloud work.
+    /// How the sandbox reaches anything outside itself.
     ///
     /// Carries the repository implicitly: the sandbox clones from the proxy,
     /// which reads the repository off the session's own grant, so no provider
     /// needs to be told what it is.
-    pub egress: Option<SandboxEgress>,
+    pub egress: SandboxEgress,
 }
 
 /// Everything a sandbox needs to make an authenticated outbound call, and

@@ -233,7 +233,7 @@ fn spawn_for(kind: AgentKind) -> SpawnContainer {
         session_id: AgentSessionId::new(),
         kind,
         size: SandboxSize::Default,
-        egress: Some(test_egress()),
+        egress: test_egress(),
     }
 }
 

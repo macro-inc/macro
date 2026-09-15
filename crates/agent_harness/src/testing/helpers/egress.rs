@@ -18,7 +18,6 @@ pub type RecordedProvisioning = (AgentSessionId, String, String, AgentMcpServers
 #[derive(Clone, Default)]
 pub struct EgressProvisionerMock {
     provisioned: Arc<Mutex<Vec<RecordedProvisioning>>>,
-    forbidden: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl EgressProvisionerMock {
@@ -26,12 +25,6 @@ impl EgressProvisionerMock {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Fail immediately if a provider-only runtime attempts any egress operation.
-    pub fn forbid(&self) {
-        self.forbidden
-            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Every provisioning recorded, as session, owner, repository URL, and
@@ -53,10 +46,6 @@ impl SandboxEgressProvisioner for EgressProvisionerMock {
         repo_url: &str,
         selection: &AgentMcpServers,
     ) -> Result<ProvisionedEgress> {
-        assert!(
-            !self.forbidden.load(std::sync::atomic::Ordering::SeqCst),
-            "Codex must not provision egress"
-        );
         self.provisioned
             .lock()
             .expect("egress mock lock should not be poisoned")
@@ -79,10 +68,6 @@ impl SandboxEgressProvisioner for EgressProvisionerMock {
         session_token: String,
         _selection: &AgentMcpServers,
     ) -> Result<SandboxEgress> {
-        assert!(
-            !self.forbidden.load(std::sync::atomic::Ordering::SeqCst),
-            "Codex must not restore egress"
-        );
         Ok(SandboxEgress {
             session_token,
             ..test_egress()

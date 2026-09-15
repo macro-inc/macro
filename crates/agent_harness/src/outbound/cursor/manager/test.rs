@@ -462,7 +462,7 @@ async fn spawning_and_prompting_records_the_minted_agent() {
             session_id,
             kind: AgentKind::Cursor,
             size: SandboxSize::Default,
-            egress: Some(test_egress()),
+            egress: test_egress(),
         })
         .await
         .expect("spawn");
@@ -542,7 +542,7 @@ async fn spawn_uses_the_owners_default_model() {
             session_id,
             kind: AgentKind::Cursor,
             size: SandboxSize::Default,
-            egress: Some(crate::testing::helpers::egress::test_egress()),
+            egress: crate::testing::helpers::egress::test_egress(),
         })
         .await
         .expect("spawn");
@@ -604,7 +604,7 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
             session_id,
             kind: AgentKind::Cursor,
             size: SandboxSize::Default,
-            egress: Some(test_egress()),
+            egress: test_egress(),
         })
         .await
         .expect("spawn");
@@ -758,7 +758,7 @@ async fn an_idle_pipe_is_shut_down() {
             session_id: AgentSessionId::new(),
             kind: AgentKind::Cursor,
             size: SandboxSize::Default,
-            egress: Some(test_egress()),
+            egress: test_egress(),
         })
         .await
         .expect("spawn");
@@ -843,7 +843,7 @@ async fn spawning_without_a_registered_key_says_so() {
             session_id: AgentSessionId::new(),
             kind: AgentKind::Cursor,
             size: SandboxSize::Default,
-            egress: Some(test_egress()),
+            egress: test_egress(),
         })
         .await
         // `err()` rather than `expect_err`: the success type is a live

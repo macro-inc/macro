@@ -166,17 +166,12 @@ where
         // Same ordering as the trigger path's open: the token has to be minted
         // before the row, because the row is what carries the hash that makes
         // it mean anything.
-        let egress = if kind == AgentKind::CodexCloud {
-            None
-        } else {
-            Some(
-                self.inner
-                    .egress
-                    .provision(session_id, &request.owner, &defaults.repo_url, &mcp_servers)
-                    .await
-                    .map_err(into_session_error)?,
-            )
-        };
+        let egress = self
+            .inner
+            .egress
+            .provision(session_id, &request.owner, &defaults.repo_url, &mcp_servers)
+            .await
+            .map_err(into_session_error)?;
         let session = self
             .inner
             .sessions
@@ -194,17 +189,16 @@ where
                 sandbox_size,
                 instructions,
                 mcp_servers,
-                egress_token_hash: egress
-                    .as_ref()
-                    .map(|egress| egress.session_token_hash.clone()),
+                egress_token_hash: Some(egress.session_token_hash),
             })
             .await?;
         self.inner.publish_opened(&session).await;
 
-        let mcp_servers = egress
-            .as_ref()
-            .map(|egress| egress.sandbox.acp_servers())
-            .unwrap_or_default();
+        let mcp_servers = if kind == AgentKind::CodexCloud {
+            Vec::new()
+        } else {
+            egress.sandbox.acp_servers()
+        };
         let container = match self
             .inner
             .containers
@@ -212,7 +206,7 @@ where
                 session_id: session.id,
                 kind: AgentKind::for_session(session.bot_id, &session.harness),
                 size: sandbox_size,
-                egress: egress.map(|egress| egress.sandbox),
+                egress: egress.sandbox,
             })
             .await
         {
@@ -345,15 +339,10 @@ where
         // Minted here, where the session's owner is in hand, and only here -
         // the token is scoped to this session and spends this person's
         // credentials, so there is nowhere else it could correctly come from.
-        let egress = if runtime.kind == AgentKind::CodexCloud {
-            None
-        } else {
-            Some(
-                self.egress
-                    .provision(session_id, &origin.sender, &repo_url, &runtime.mcp_servers)
-                    .await?,
-            )
-        };
+        let egress = self
+            .egress
+            .provision(session_id, &origin.sender, &repo_url, &runtime.mcp_servers)
+            .await?;
 
         let session = self
             .sessions
@@ -376,25 +365,24 @@ where
                 // Snapshotted so the proxy enforces exactly what this attach
                 // advertised, for as long as the session lives.
                 mcp_servers: runtime.mcp_servers.clone(),
-                egress_token_hash: egress
-                    .as_ref()
-                    .map(|egress| egress.session_token_hash.clone()),
+                egress_token_hash: Some(egress.session_token_hash),
                 // This open came from the trigger pipeline seeing the mention.
             })
             .await?;
         self.publish_opened(&session).await;
 
-        let mcp_servers = egress
-            .as_ref()
-            .map(|egress| egress.sandbox.acp_servers())
-            .unwrap_or_default();
+        let mcp_servers = if runtime.kind == AgentKind::CodexCloud {
+            Vec::new()
+        } else {
+            egress.sandbox.acp_servers()
+        };
         let container = match self
             .containers
             .spawn(SpawnContainer {
                 session_id,
                 kind: runtime.kind,
                 size: sandbox_size,
-                egress: egress.map(|egress| egress.sandbox),
+                egress: egress.sandbox,
             })
             .await
         {

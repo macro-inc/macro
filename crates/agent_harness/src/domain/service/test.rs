@@ -494,7 +494,7 @@ async fn disconnected_session(
             session_id: id,
             kind: AgentKind::SandboxedCoder,
             size: agent_session::domain::model::SandboxSize::Default,
-            egress: Some(test_egress()),
+            egress: test_egress(),
         })
         .await
         .expect("the original sandbox should exist");
@@ -2859,9 +2859,8 @@ mod lifecycle_events {
 }
 
 #[tokio::test]
-async fn codex_named_session_opens_without_mcp_or_sandbox_defaults() {
+async fn codex_named_session_provisions_egress_without_advertising_mcp() {
     let (service, repo, containers, _, _) = harness();
-    service.inner.egress.forbid();
     let open = service.open_managed_session(OpenManagedSession {
         owner: sender(),
         instructions: None,
@@ -2881,6 +2880,15 @@ async fn codex_named_session_opens_without_mcp_or_sandbox_defaults() {
     };
     let (opened, container) = tokio::join!(open, drive);
     let session = opened.unwrap();
+    assert_eq!(service.inner.egress.provisioned().len(), 1);
+    assert_eq!(
+        repo.find_by_egress_token_hash("test-token-hash")
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        session.id
+    );
     assert_eq!(session.harness, "codex-cloud");
     assert!(session.repo_url.is_none());
     assert_eq!(
@@ -2897,9 +2905,8 @@ async fn codex_named_session_opens_without_mcp_or_sandbox_defaults() {
 }
 
 #[tokio::test]
-async fn codex_channel_mention_opens_without_egress_or_mcp() {
+async fn codex_channel_mention_provisions_egress_without_advertising_mcp() {
     let (service, repo, containers, announcer, _) = harness();
-    service.inner.egress.forbid();
     let mut command = open_command();
     command.bot_id = bot_id::CODEX_BOT_ID;
     command.runtime = AgentRuntimeConfig {
@@ -2926,6 +2933,15 @@ async fn codex_channel_mention_opens_without_egress_or_mcp() {
     opened.unwrap();
     let stored = repo.get(id).await.unwrap();
     assert_eq!(stored.bot_id, bot_id::CODEX_BOT_ID);
+    assert_eq!(service.inner.egress.provisioned().len(), 1);
+    assert_eq!(
+        repo.find_by_egress_token_hash("test-token-hash")
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        id
+    );
     assert_eq!(stored.harness, "codex-cloud");
     assert!(stored.repo_url.is_none());
     assert_eq!(announcer.announced()[0].bot_id, bot_id::CODEX_BOT_ID);

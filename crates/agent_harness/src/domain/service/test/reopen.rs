@@ -33,7 +33,7 @@ async fn codex_session(
             session_id: id,
             kind: AgentKind::CodexCloud,
             size: SandboxSize::Default,
-            egress: None,
+            egress: crate::testing::helpers::egress::test_egress(),
         })
         .await
         .unwrap();
