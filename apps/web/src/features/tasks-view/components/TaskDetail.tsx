@@ -1,3 +1,4 @@
+import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { FindAndReplace } from '@block-md/component/FindAndReplace';
 import {
   MarkdownDocument,
@@ -18,7 +19,6 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
-import CaretRightIcon from '@phosphor/caret-right.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button } from '@ui';
 import { createResource, Match, Show, Suspense, Switch } from 'solid-js';
@@ -39,30 +39,16 @@ function TaskDetailBreadcrumb(props: {
     TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
 
   return (
-    <div class="flex min-w-0 items-center gap-0.5 text-sm">
-      <Button
-        variant="ghost"
-        size="sm"
-        depth={2}
-        class="h-7 min-w-0 px-1 text-sm font-normal text-ink-muted"
-        onClick={closeTask}
-      >
+    <ViewBreadcrumbs.Root aria-label="Task location">
+      <ViewBreadcrumbs.Item onClick={closeTask}>
         <span class="truncate">{tabName()}</span>
-      </Button>
-      <CaretRightIcon class="size-3 shrink-0 text-ink-extra-muted" />
-      <Button
-        variant="ghost"
-        size="sm"
-        depth={2}
-        class="h-7 min-w-0 shrink gap-1.5 px-1"
-        onClick={props.onTaskClick}
-      >
+      </ViewBreadcrumbs.Item>
+      <ViewBreadcrumbs.Separator />
+      <ViewBreadcrumbs.Item current class="gap-1.5" onClick={props.onTaskClick}>
         <EntityIcon targetType="task" size="xs" class="shrink-0" />
-        <span class="truncate text-sm font-semibold text-ink">
-          {props.taskName}
-        </span>
-      </Button>
-    </div>
+        <span class="truncate">{props.taskName}</span>
+      </ViewBreadcrumbs.Item>
+    </ViewBreadcrumbs.Root>
   );
 }
 
