@@ -17,5 +17,5 @@ verified live against a local stack (`just run_local`).
 | [observability.md](observability.md) | Correlating a UI action to backend traces/logs with the Grafana MCP |
 
 Local stack conventions used in examples: frontend `http://localhost:<fe>/app`, backend proxy
-`http://localhost:<be>`, Mailpit `http://localhost:<mp>` (ports come from the `--instance`;
+`https://localhost:<be>` (checked-in self-signed cert; trust `infra/local/certs/ca.pem`), Mailpit `http://localhost:<mp>` (ports come from the `--instance`;
 e.g. the `lgtm` instance uses 27910 / 27909 / 27908).

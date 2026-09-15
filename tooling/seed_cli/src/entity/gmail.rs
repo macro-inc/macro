@@ -64,7 +64,7 @@ pub struct ForwardArgs {
     /// The local email-service webhook to deliver notifications to, through
     /// the instance proxy (e.g. http://localhost:50009/email/gmail/webhook
     /// for `--instance 2634`)
-    #[arg(long, default_value = "http://localhost:8090/email/gmail/webhook")]
+    #[arg(long, default_value = "https://localhost:8090/email/gmail/webhook")]
     target: String,
     /// The Pub/Sub pull subscription attached to the Gmail watch topic
     #[arg(

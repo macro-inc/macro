@@ -74,13 +74,21 @@ fn pid_path(instance: &Instance, name: &str) -> PathBuf {
 /// per (instance, name) exists.
 pub fn open(instance: &Instance, name: &str, port: u16) -> Result<QuickTunnel> {
     reap_stale(instance, name);
-    let mut child = Command::new("cloudflared")
-        .args([
-            "tunnel",
-            "--no-autoupdate",
-            "--url",
-            &format!("http://localhost:{port}"),
-        ])
+    let https = name == "app";
+    let origin = if https {
+        format!("https://localhost:{port}")
+    } else {
+        format!("http://localhost:{port}")
+    };
+    let mut cmd = Command::new("cloudflared");
+    cmd.args(["tunnel", "--no-autoupdate"]);
+    if https {
+        // Quick tunnels to the local proxy: the origin cert is the checked-in
+        // self-signed material, which Cloudflare's edge does not trust.
+        cmd.arg("--no-tls-verify");
+    }
+    cmd.args(["--url", &origin]);
+    let mut child = cmd
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()

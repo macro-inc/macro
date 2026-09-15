@@ -17,7 +17,7 @@
 use std::collections::BTreeMap;
 
 use super::instance::{Instance, Port};
-use super::{Mode, identity, resources};
+use super::{Mode, identity, proxy, resources};
 
 /// The full local environment for one instance.
 pub struct LocalEnv {
@@ -26,9 +26,13 @@ pub struct LocalEnv {
     /// Where the browser-facing app lives: the proxy (static bundle at
     /// `/app`) or the bun dev server. `default_redirect_url()` in
     /// authentication_service sends post-login browsers to
-    /// `http://localhost:{FRONTEND_PORT}`, so this must track the serving
-    /// mode or every OAuth signup dead-ends on an unused port.
+    /// `FRONTEND_ORIGIN` (falling back to `http://localhost:{FRONTEND_PORT}`),
+    /// so this must track the serving mode or every OAuth signup dead-ends
+    /// on an unused port.
     frontend_port: u16,
+    /// Browser-facing origin for post-login redirects and Pipedream CORS.
+    /// HTTPS when the proxy serves the app; HTTP when Vite does.
+    frontend_origin: String,
     /// Browser-facing route to document cognition's MCP OAuth callback.
     mcp_public_url: String,
     infra: InfraEnv,
@@ -56,16 +60,22 @@ impl LocalEnv {
         egress_public_url: Option<&str>,
     ) -> Self {
         let name = instance.name();
+        let frontend_port = if static_frontend {
+            instance.port(Port::Proxy)
+        } else {
+            instance.port(Port::Frontend)
+        };
         LocalEnv {
             // Both local flavors run against local infra (`local` env defaults).
             environment: mode.environment_var(),
             project_name: instance.project_name().to_string(),
-            frontend_port: if static_frontend {
-                instance.port(Port::Proxy)
+            frontend_port,
+            frontend_origin: if static_frontend {
+                proxy::url(instance)
             } else {
-                instance.port(Port::Frontend)
+                format!("http://localhost:{frontend_port}")
             },
-            mcp_public_url: format!("http://localhost:{}/cognition", instance.port(Port::Proxy)),
+            mcp_public_url: format!("{}/cognition", proxy::url(instance)),
             infra: InfraEnv::local(),
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
@@ -84,6 +94,7 @@ impl LocalEnv {
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
+        env.insert("FRONTEND_ORIGIN".into(), self.frontend_origin.clone());
         env.insert("MCP_PUBLIC_URL".into(), self.mcp_public_url.clone());
         // Pipedream's hosted Connect UI refuses to be opened from an origin
         // outside this list, and document_cognition's own local default only
@@ -91,7 +102,7 @@ impl LocalEnv {
         // port, so connecting an app there would fail at the consent popup.
         env.insert(
             "PIPEDREAM_ALLOWED_ORIGINS".into(),
-            format!("http://localhost:{}", self.frontend_port),
+            self.frontend_origin.clone(),
         );
         // Calendar ingestion/sync ships dark (both flags default off in
         // deployed envs); local stacks keep it on for development.

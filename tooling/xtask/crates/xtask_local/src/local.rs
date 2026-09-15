@@ -1163,8 +1163,14 @@ fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
 }
 
 fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
+    let ca = proxy::curl_ca_args(url);
+    let ca_flags = ca
+        .iter()
+        .map(|arg| format!("'{arg}'"))
+        .collect::<Vec<_>>()
+        .join(" ");
     let script = format!(
-        "for i in $(seq 1 60); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'not ready: {url}'; exit 1"
+        "for i in $(seq 1 60); do curl -fsS {ca_flags} --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'not ready: {url}'; exit 1"
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);

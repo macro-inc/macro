@@ -152,3 +152,36 @@ fn static_frontend_block_is_opt_in() {
     let headless_dev = caddyfile(Mode::Dev, true);
     assert!(!headless_dev.contains("handle /mailpit/*"));
 }
+
+/// Local Caddy speaks HTTPS with the checked-in cert and stamps wildcard CORS
+/// on every response. Dev still uses TLS (same proxy) but does not overlay
+/// CORS, because it fans out to the shared-dev gateway.
+#[test]
+fn local_proxy_uses_tls_and_wildcard_cors() {
+    let local = caddyfile(Mode::Local, false);
+    assert!(
+        local.contains("tls /etc/caddy/certs/localhost.pem /etc/caddy/certs/localhost-key.pem")
+    );
+    assert!(local.contains("auto_https off"));
+    assert!(local.contains("@cors header Origin *"));
+    assert!(local.contains("@cors_preflight"));
+    assert!(local.contains("Access-Control-Allow-Origin \"{http.request.header.Origin}\""));
+    assert!(local.contains("-Access-Control-Allow-Origin"));
+
+    let dev = caddyfile(Mode::Dev, false);
+    assert!(dev.contains("tls /etc/caddy/certs/localhost.pem /etc/caddy/certs/localhost-key.pem"));
+    assert!(!dev.contains("@cors header Origin *"));
+    assert!(!dev.contains("@cors_preflight"));
+}
+
+#[test]
+fn proxy_origin_is_https() {
+    let instance = crate::local::instance::Instance::derive(None, None).unwrap();
+    assert_eq!(url(&instance), "https://localhost:8090");
+    assert_eq!(ws_url(&instance), "wss://localhost:8090");
+    assert!(
+        ca_pem().is_file(),
+        "checked-in CA is missing at {}",
+        ca_pem().display()
+    );
+}

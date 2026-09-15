@@ -5,7 +5,7 @@ fn derives_host_endpoints_and_test_environment_from_the_instance() {
     let instance = Instance::derive(Some("e2e-test"), Some(31_000)).unwrap();
     let endpoints = Endpoints::for_instance(&instance);
 
-    assert_eq!(endpoints.proxy_url, "http://localhost:31009");
+    assert_eq!(endpoints.proxy_url, "https://localhost:31009");
     assert_eq!(endpoints.frontend_url, "http://localhost:31010/app");
     assert_eq!(
         endpoints.postgres_url,
@@ -15,14 +15,14 @@ fn derives_host_endpoints_and_test_environment_from_the_instance() {
     assert_eq!(endpoints.localstack_url, "http://localhost:31006");
     assert_eq!(
         endpoints.connection_gateway_ws_url,
-        "ws://localhost:31009/connection-gateway"
+        "wss://localhost:31009/connection-gateway"
     );
 
     let env = endpoints.test_env();
     assert_eq!(env["LOCAL_E2E_BACKEND_ORIGIN"], endpoints.proxy_url);
     assert_eq!(
         env["LOCAL_E2E_CONNECTION_GATEWAY_WS_URL"],
-        "ws://localhost:31009/connection-gateway"
+        "wss://localhost:31009/connection-gateway"
     );
     assert_eq!(env["DATABASE_URL"], endpoints.postgres_url);
     assert_eq!(

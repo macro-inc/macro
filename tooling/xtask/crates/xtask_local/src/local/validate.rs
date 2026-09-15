@@ -10,7 +10,7 @@ use serde_json::Value;
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::Port;
 use super::inventory::services_for_mode;
-use super::{Mode, arch, env_layer, gen_compose, instance::Instance, workspace_root};
+use super::{Mode, arch, env_layer, gen_compose, instance::Instance, proxy, workspace_root};
 
 /// Required non-Rust services that must be present in the rendered local
 /// compose.
@@ -244,6 +244,18 @@ fn local_env_flavor(
                 failures.push(format!(
                     "FRONTEND_PORT={:?} does not match the {} port {expected_frontend_port}",
                     env.get("FRONTEND_PORT"),
+                    flavor_label(static_frontend),
+                ));
+            }
+            let expected_frontend_origin = if static_frontend {
+                proxy::url(instance)
+            } else {
+                format!("http://localhost:{expected_frontend_port}")
+            };
+            if env.get("FRONTEND_ORIGIN") != Some(&expected_frontend_origin) {
+                failures.push(format!(
+                    "FRONTEND_ORIGIN={:?} does not match the {} origin {expected_frontend_origin}",
+                    env.get("FRONTEND_ORIGIN"),
                     flavor_label(static_frontend),
                 ));
             }

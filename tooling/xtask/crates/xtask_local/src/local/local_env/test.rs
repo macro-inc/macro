@@ -20,6 +20,8 @@ fn emits_required_keys() {
     for key in [
         "ENVIRONMENT",
         "PORT",
+        "FRONTEND_PORT",
+        "FRONTEND_ORIGIN",
         "BASE_URL",
         "DATABASE_URL",
         "DATABASE_URL_READONLY",
@@ -336,15 +338,30 @@ fn mcp_public_url_uses_the_proxy_cognition_route() {
     let named = Instance::derive(Some("2508"), None).unwrap();
     let default_env = LocalEnv::for_instance(Mode::Local, &default, true, None).to_env();
     let named_env = LocalEnv::for_instance(Mode::Local, &named, true, None).to_env();
-    let named_public_url = format!("http://localhost:{}/cognition", named.port(Port::Proxy));
+    let named_public_url = format!("https://localhost:{}/cognition", named.port(Port::Proxy));
 
     assert_eq!(
         default_env.get("MCP_PUBLIC_URL").map(String::as_str),
-        Some("http://localhost:8090/cognition")
+        Some("https://localhost:8090/cognition")
     );
     assert_eq!(
         named_env.get("MCP_PUBLIC_URL").map(String::as_str),
         Some(named_public_url.as_str())
+    );
+}
+
+#[test]
+fn frontend_origin_tracks_how_the_app_is_served() {
+    let instance = Instance::derive(None, None).unwrap();
+    let static_env = LocalEnv::for_instance(Mode::Local, &instance, true, None).to_env();
+    let attached_env = LocalEnv::for_instance(Mode::Local, &instance, false, None).to_env();
+    assert_eq!(
+        static_env.get("FRONTEND_ORIGIN").map(String::as_str),
+        Some("https://localhost:8090")
+    );
+    assert_eq!(
+        attached_env.get("FRONTEND_ORIGIN").map(String::as_str),
+        Some("http://localhost:3000")
     );
 }
 

@@ -153,8 +153,10 @@ fn dev_env(
 /// Poll the backend (auth health, through the proxy) until ready.
 pub fn wait_backend_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     let url = format!("{}/auth/health", proxy::url(instance));
+    let cacert = proxy::ca_pem();
     let script = format!(
-        "for i in $(seq 1 60); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'backend not ready'; exit 1"
+        "for i in $(seq 1 60); do curl -fsS --cacert '{cacert}' --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'backend not ready'; exit 1",
+        cacert = cacert.display()
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);

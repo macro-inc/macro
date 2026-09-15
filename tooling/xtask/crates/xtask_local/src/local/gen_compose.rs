@@ -60,6 +60,11 @@ pub fn caddyfile_path(instance: &Instance) -> PathBuf {
     instance.artifact_dir().join("proxy/Caddyfile")
 }
 
+/// Checked-in local TLS materials mounted into the proxy container.
+pub fn tls_certs_dir() -> PathBuf {
+    repo_root().join("infra/local/certs")
+}
+
 /// Build the override (typed model), apply the merge tags, and write it.
 /// `static_frontend` mounts the staged app bundle into the proxy (headless
 /// stacks serve the frontend from Caddy instead of a dev server).
@@ -275,10 +280,13 @@ fn add_proxy_service(
     static_frontend: bool,
 ) {
     let proxy_port = instance.port(Port::Proxy);
-    let mut volumes = vec![dct::Volumes::Simple(format!(
-        "{}:/etc/caddy/Caddyfile:ro",
-        caddyfile_path(instance).display()
-    ))];
+    let mut volumes = vec![
+        dct::Volumes::Simple(format!(
+            "{}:/etc/caddy/Caddyfile:ro",
+            caddyfile_path(instance).display()
+        )),
+        dct::Volumes::Simple(format!("{}:/etc/caddy/certs:ro", tls_certs_dir().display())),
+    ];
     if static_frontend {
         volumes.push(dct::Volumes::Simple(format!(
             "{}:/srv/frontend:ro",

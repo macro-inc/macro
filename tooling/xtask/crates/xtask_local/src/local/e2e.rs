@@ -68,10 +68,7 @@ impl Endpoints {
             ),
             fusionauth_url: format!("http://localhost:{}", instance.port(Port::FusionAuth)),
             localstack_url: format!("http://localhost:{}", instance.port(Port::LocalStack)),
-            connection_gateway_ws_url: format!(
-                "ws://localhost:{}/connection-gateway",
-                instance.port(Port::Proxy)
-            ),
+            connection_gateway_ws_url: format!("{}/connection-gateway", proxy::ws_url(instance)),
             generated_env: instance.artifact_dir().join("local.generated.env"),
         }
     }

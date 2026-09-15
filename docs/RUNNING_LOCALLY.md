@@ -113,6 +113,8 @@ This command:
 
 When startup finishes, the command prints the frontend URL and the important service URLs.
 
+The reverse proxy is HTTPS at `https://localhost:8090` (or the instance's proxy port) using the checked-in certificate in `infra/local/certs`. Trust `infra/local/certs/ca.pem` once so the browser accepts it; see that directory's README. Local Caddy also reflects any `Origin` (wildcard CORS) so `https://` and `*.localhost` frontends can call the proxy.
+
 Open the frontend URL in your browser.
 
 The stack does not create accounts in advance. Passwordless login creates a user

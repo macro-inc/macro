@@ -637,11 +637,11 @@ fn str_field(v: &serde_json::Value, key: &str) -> String {
 
 /// One quick `curl` probe (the tooling already leans on curl for readiness).
 fn probe(url: &str) -> bool {
-    Command::new("curl")
-        .args(["-fsS", "-m", "3", "-o", "/dev/null", url])
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    let mut cmd = Command::new("curl");
+    cmd.args(["-fsS", "-m", "3", "-o", "/dev/null"]);
+    cmd.args(super::proxy::curl_ca_args(url));
+    cmd.arg(url);
+    cmd.status().map(|s| s.success()).unwrap_or(false)
 }
 
 fn mode_from_label(label: &str) -> Result<Mode> {
