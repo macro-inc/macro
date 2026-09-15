@@ -8,6 +8,7 @@ import { ConnectedAccounts } from '@app/features/settings/ConnectedAccounts';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ChatInputProvider } from '@core/component/AI/context';
@@ -53,6 +54,7 @@ function LoadingComposer() {
 
 function AgentsWorkspace() {
   const panel = useSplitPanelOrThrow();
+  const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
@@ -90,7 +92,21 @@ function AgentsWorkspace() {
     setPage(next);
   };
 
-  const openConversation = (conversation: AgentConversationTarget) => {
+  const openConversation = (
+    conversation: AgentConversationTarget,
+    event?: MouseEvent
+  ) => {
+    if (event?.shiftKey) {
+      layout.openWithSplit(
+        {
+          type: conversation.type === 'agent_session' ? 'agent' : 'chat',
+          id: conversation.id,
+        },
+        { preferNewSplit: true, referredFrom: 'agents' }
+      );
+      return;
+    }
+
     setPage('new');
     setSelected({
       conversation: { id: conversation.id, type: conversation.type },

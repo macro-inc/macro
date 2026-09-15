@@ -45,6 +45,7 @@ import type {
   ChannelsTab,
 } from '../../types';
 import {
+  type ChannelRailActivationMetadata,
   type ChannelRailRow,
   type ChannelsRailContext,
   ChannelsRailProvider,
@@ -200,22 +201,33 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSortBy,
     setTab,
   } = useChannelsView();
+
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
+
   const favoritesData = useFavoritesData({ entityType: ['channel'] });
+
   const listDomId = createUniqueId();
+
   const [sectionScrollRoots, setSectionScrollRoots] = createSignal<
     Partial<Record<ChannelsRailSection, HTMLDivElement>>
   >({});
+
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
   const [virtualizers, setVirtualizers] = createSignal<
     Partial<Record<ChannelsSourceScope, VirtualizerHandle>>
   >({});
+
   const [searchQuery, setSearchQuery] = createSignal('');
+
   const [restoreListScroll, setRestoreListScroll] = createSignal(false);
+
   const normalizedSearchQuery = () => searchQuery().trim();
+
   const serviceSearchQuery = debouncedDependent(normalizedSearchQuery, 300);
+
   let searchInput: HTMLInputElement | undefined;
+
   const previewAfterNavigation = debounce(setSelectedChannelId, 150);
   onCleanup(() => previewAfterNavigation.clear());
 
@@ -338,7 +350,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   });
 
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
-    createListController<ChannelRailRow>({
+    createListController<ChannelRailRow, ChannelRailActivationMetadata>({
       items: visibleRows,
       getKey: (row) => row.id,
       isSelectable: () => false,
@@ -346,27 +358,39 @@ export function ChannelsRail(props: ChannelsRailProps) {
         state.selectedChannelId === undefined
           ? undefined
           : rowKeyForChannel(state.selectedChannelId),
-      onActivate: ({ item }) => {
+      onActivate: ({ item, metadata }) => {
         previewAfterNavigation.clear();
+        const openInNewSplit =
+          metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
         if (item.kind === 'section') {
           setGroupOpen(item.group, !state.expandedGroups[item.group]);
           return;
         }
 
-        if (item.kind === 'favorite') {
-          if (item.favorite.entityType === 'channel') {
-            setSelectedChannelId(item.favorite.entityId);
-            return;
-          }
-
+        if (
+          item.kind === 'favorite' &&
+          item.favorite.entityType !== 'channel'
+        ) {
           layout.openWithSplit(favoriteSplitContent(item.favorite), {
+            preferNewSplit: openInNewSplit,
             referredFrom: 'channels',
           });
           return;
         }
 
-        setSelectedChannelId(item.channel.id);
+        const channelId =
+          item.kind === 'favorite' ? item.favorite.entityId : item.channel.id;
+
+        if (openInNewSplit) {
+          layout.openWithSplit(
+            { type: 'channel', id: channelId },
+            { preferNewSplit: true, referredFrom: 'channels' }
+          );
+          return;
+        }
+
+        setSelectedChannelId(channelId);
       },
     })
   );
@@ -579,6 +603,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
           }
         },
       },
+      activation: {
+        createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
+        alternateDescription: 'Open in new split',
+      },
       disclosure: {
         getKey: (row) =>
           props.mode === 'slim' && row.kind === 'conversation'
@@ -659,8 +687,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
     )
   );
 
-  const activateRow = (rowId: ChannelRailRow['id']) => {
-    list.activate.key(rowId, { reason: 'pointer' });
+  const activateRow = (rowId: ChannelRailRow['id'], event?: MouseEvent) => {
+    list.activate.key(rowId, {
+      reason: 'pointer',
+      metadata: event ? { event } : undefined,
+    });
   };
 
   const registerVirtualizer = (

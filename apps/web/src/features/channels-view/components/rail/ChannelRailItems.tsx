@@ -38,7 +38,7 @@ export type ChannelRailItemProps = {
   incomingCallId?: string;
   selected: boolean;
   focused: boolean;
-  onActivate: () => void;
+  onActivate: (event: MouseEvent) => void;
 };
 
 export const CHANNEL_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
@@ -303,7 +303,7 @@ export function ConversationCard(props: ConversationCardProps) {
       )}
       aria-current={props.selected ? 'page' : undefined}
       onMouseDown={(event) => {
-        if (isPrimaryMouseDown(event)) props.onActivate();
+        if (isPrimaryMouseDown(event)) props.onActivate(event);
       }}
     >
       <div

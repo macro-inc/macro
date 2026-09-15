@@ -161,7 +161,9 @@ function SlimFavoriteItem(props: { favorite: Favorite }) {
             'hover:bg-hover hover:text-ink'
         )}
         aria-current={item().selected ? 'page' : undefined}
-        onClick={() => rail.activateRow(rowKeyForFavorite(props.favorite))}
+        onClick={(event) =>
+          rail.activateRow(rowKeyForFavorite(props.favorite), event)
+        }
       >
         <span
           aria-hidden="true"
@@ -300,7 +302,7 @@ function SlimChannelItem(props: { channel: ChannelEntity }) {
           aria-current={item().selected ? 'page' : undefined}
           onMouseDown={(event) => {
             if (!isPrimaryMouseDown(event)) return;
-            rail.activateRow(rowKeyForChannel(props.channel.id));
+            rail.activateRow(rowKeyForChannel(props.channel.id), event);
           }}
         >
           <span

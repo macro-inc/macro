@@ -60,7 +60,8 @@ Filter menu. On desktop, selecting a row renders its block in the inline preview
 the notification sidebar. With the `enable-inbox-notified-sort` flag on, both tabs order
 rows and date headers by when you were last notified about the item, so a fresh comment
 on an old task sits under "Today"; with it off they order by content recency. Keyboard:
-`j`/`k` move between rows and update the preview; alternate activation opens a new split.
+`j`/`k` move between rows and update the preview; alternate activation and Shift-click
+open a new split.
 On mobile, the filters float above the full-height scrolling list. On iOS, rows
 fade underneath the filters and status bar using the shared top edge gradient.
 

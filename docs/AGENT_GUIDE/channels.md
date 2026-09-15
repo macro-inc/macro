@@ -191,7 +191,8 @@ a channel cached away from its latest page, and a delta longer than one page use
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
-channels. Channel favorites open in the channel preview.
+channels. Channel favorites open in the channel preview. Shift-clicking a
+favorite, channel, or DM opens that conversation in a new split instead.
 The search action beside the tabs opens a search field below them and replaces
 the active tab contents with matching channels and direct messages from one
 activity-ordered source. Search results use compact rows on `All` and

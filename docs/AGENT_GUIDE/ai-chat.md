@@ -5,7 +5,8 @@
 - List: `Go to Agents` → `/app/component/agents`. With new app views enabled
   on desktop, an Agents sidebar opens New Chat, Routines, configured Agents,
   Connections, and Skills, followed by favorite and recent conversations.
-  Selecting a recent chat or agent session opens it inside the workspace.
+  Selecting a recent chat or agent session opens it inside the workspace;
+  Shift-clicking one opens it in a new split instead.
   Touch devices and users outside the flag retain the Owned / Running / Shared /
   Automations / Skills list.
 - A chat is `/app/chat/<uuid>`. A doc-scoped chat is `/app/md/<doc>/chat/<chat>` (split view).

@@ -186,7 +186,9 @@ function FavoriteOption(props: { favorite: Favorite }) {
           'hover:bg-hover hover:text-ink'
       )}
       aria-current={item().selected ? 'page' : undefined}
-      onClick={() => rail.activateRow(rowKeyForFavorite(props.favorite))}
+      onClick={(event) =>
+        rail.activateRow(rowKeyForFavorite(props.favorite), event)
+      }
     >
       <span class="flex size-6 shrink-0 items-center justify-center">
         <FavoriteIcon favorite={props.favorite} avatarSize="md" />
@@ -226,7 +228,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         aria-current={item().selected ? 'page' : undefined}
         onMouseDown={(event) => {
           if (!isPrimaryMouseDown(event)) return;
-          rail.activateRow(rowKeyForChannel(props.channel.id));
+          rail.activateRow(rowKeyForChannel(props.channel.id), event);
         }}
       >
         <ChannelAvatar channel={props.channel} />
@@ -656,7 +658,9 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
         incomingCallId={item().incomingCallId}
         selected={item().selected}
         focused={item().focused}
-        onActivate={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
+        onActivate={(event) =>
+          rail.activateRow(rowKeyForChannel(props.channel.id), event)
+        }
       />
     </ChannelRailItemContextMenu>
   );
