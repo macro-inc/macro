@@ -4,9 +4,10 @@
 mod test;
 
 use model_owner::Owner;
+use shared_entity_registry::{EntityRegistryResult, RegisteredEntityType};
 use uuid::Uuid;
 
-use super::models::{EntityRecord, EntityRegistryResult, EntityTypeCount, RegisteredEntityType};
+use super::models::{EntityRecord, EntityTypeCount};
 use super::ports::{EntityRegistryRepository, EntityRegistryService};
 
 /// Concrete registry service backed by an [`EntityRegistryRepository`].

@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use model_owner::{Owner, OwnerType};
+use shared_entity_registry::{EntityRegistryError, NewEntityRecord, RegisteredEntityType};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::{EntityRow, PgEntityRegistryRepository};
-use crate::domain::models::{EntityRegistryError, NewEntityRecord, RegisteredEntityType};
 use crate::domain::ports::EntityRegistryRepository;
 
 fn user_owner() -> Owner {

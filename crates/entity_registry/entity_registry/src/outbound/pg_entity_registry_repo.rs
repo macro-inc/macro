@@ -8,12 +8,11 @@ use model_entity::EntityType;
 use model_owner::{Owner, OwnerType};
 use rootcause::Report;
 use rootcause::prelude::*;
+use shared_entity_registry::{EntityRegistryError, EntityRegistryResult, RegisteredEntityType};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domain::models::{
-    EntityRecord, EntityRegistryError, EntityRegistryResult, EntityTypeCount, RegisteredEntityType,
-};
+use crate::domain::models::{EntityRecord, EntityTypeCount};
 use crate::domain::ports::EntityRegistryRepository;
 
 /// Reads `entity` through a pool.

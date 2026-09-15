@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
-use entity_registry::{InsertOutcome, NewEntityRecord, RegisteredEntityType, WriteOutcome};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use model_owner::{Owner, OwnerType};
+use shared_entity_registry::{InsertOutcome, NewEntityRecord, RegisteredEntityType, WriteOutcome};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 

@@ -1,9 +1,10 @@
 //! Read-side ports.
 
 use model_owner::Owner;
+use shared_entity_registry::{EntityRegistryResult, RegisteredEntityType};
 use uuid::Uuid;
 
-use super::models::{EntityRecord, EntityRegistryResult, EntityTypeCount, RegisteredEntityType};
+use super::models::{EntityRecord, EntityTypeCount};
 
 /// Persistence port for the registry.
 pub trait EntityRegistryRepository: Clone + Send + Sync + 'static {

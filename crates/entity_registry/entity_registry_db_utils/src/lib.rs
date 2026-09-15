@@ -3,19 +3,22 @@
 //!
 //! Other crates call these helpers from inside their own resource-row
 //! transactions. The helpers never commit. Reads go through
-//! `entity_registry::EntityRegistryService`.
+//! `entity_registry::EntityRegistryService`. Shared types live in
+//! `shared_entity_registry`; this crate does not depend on the read service.
 
 #[cfg(test)]
 mod test;
 
 use chrono::{DateTime, Utc};
-use entity_registry::{
-    EntityRegistryError, EntityRegistryResult, InsertOutcome, NewEntityRecord, WriteOutcome,
-};
 use model_owner::{Owner, OwnerType};
 use rootcause::prelude::*;
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
+
+pub use shared_entity_registry::{
+    EntityRegistryError, EntityRegistryResult, InsertOutcome, NewEntityRecord,
+    RegisteredEntityType, WriteOutcome,
+};
 
 fn bind_owner(owner: &Owner) -> (OwnerType, String) {
     (owner.owner_type(), owner.principal_id())

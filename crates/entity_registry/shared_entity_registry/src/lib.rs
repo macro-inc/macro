@@ -1,13 +1,30 @@
-//! What the registry records and what its operations report.
+#![deny(missing_docs)]
+//! Types shared by `entity_registry` and `entity_registry_db_utils`.
+//!
+//! Reads go through `entity_registry`. Transactional writes go through
+//! `entity_registry_db_utils`. Neither crate depends on the other.
+//!
+//! ```
+//! use model_entity::EntityType;
+//! use model_owner::OwnerType;
+//! use shared_entity_registry::{NewEntityRecord, Owner, RegisteredEntityType};
+//! use uuid::Uuid;
+//!
+//! let owner = Owner::parse(OwnerType::User, "macro|hutch@macro.com").unwrap();
+//! let record = NewEntityRecord::try_new(Uuid::nil(), EntityType::Chat, owner.clone()).unwrap();
+//! assert_eq!(record.entity_type, RegisteredEntityType::Chat);
+//! assert!(NewEntityRecord::try_new(Uuid::nil(), EntityType::Initiative, owner).is_err());
+//! ```
 
 #[cfg(test)]
 mod test;
 
 use chrono::{DateTime, Utc};
 use model_entity::EntityType;
-use model_owner::Owner;
 use rootcause::Report;
 use uuid::Uuid;
+
+pub use model_owner::Owner;
 
 /// The entity kinds the `entity` table accepts: its CHECK constraint as a type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -79,32 +96,7 @@ impl std::fmt::Display for RegisteredEntityType {
     }
 }
 
-/// One row of the registry: who owns the resource `id`, and its lifecycle stamps.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EntityRecord {
-    /// The resource's id.
-    pub id: Uuid,
-    /// The kind of resource.
-    pub entity_type: RegisteredEntityType,
-    /// The recorded owner.
-    pub owner: Owner,
-    /// When the row was registered (or the resource's own `createdAt` if backfilled).
-    pub created_at: DateTime<Utc>,
-    /// Mirror of the resource's `updatedAt`; written by `touch_updated`.
-    pub updated_at: DateTime<Utc>,
-    /// Set while the resource is soft-deleted; `None` for a live resource.
-    pub deleted_at: Option<DateTime<Utc>>,
-}
-
-impl EntityRecord {
-    /// `true` when `deleted_at` is unset.
-    #[must_use]
-    pub fn is_live(&self) -> bool {
-        self.deleted_at.is_none()
-    }
-}
-
-/// Input to `entity_registry_db_utils::insert_entity`.
+/// Input to register a row.
 ///
 /// `None` timestamps take the database clock. Inside one transaction that
 /// is the same instant the caller's own `DEFAULT now()` columns received,
@@ -160,7 +152,7 @@ impl NewEntityRecord {
     }
 }
 
-/// What `entity_registry_db_utils::insert_entity` did.
+/// What an insert into the registry did.
 ///
 /// `AlreadyRegistered` means a row with this id existed; it does **not**
 /// mean that row matches the input.
@@ -184,27 +176,10 @@ pub enum WriteOutcome {
     NotFound,
 }
 
-/// Row counts for one kind, split by liveness.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct EntityTypeCount {
-    /// Rows with `deleted_at IS NULL`.
-    pub live: u64,
-    /// Rows with `deleted_at IS NOT NULL`.
-    pub deleted: u64,
-}
-
-impl EntityTypeCount {
-    /// `live + deleted`: every registered row of the kind.
-    #[must_use]
-    pub fn total(self) -> u64 {
-        self.live + self.deleted
-    }
-}
-
 /// Failure kinds of the registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum EntityRegistryError {
-    /// A stored row could not be decoded into an [`EntityRecord`].
+    /// A stored row could not be decoded into a registry record.
     /// The attached id says which row.
     #[error("entity row is corrupt")]
     CorruptRow,

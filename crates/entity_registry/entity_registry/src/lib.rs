@@ -4,7 +4,8 @@
 //! Effective access lives in `entity_access`, not here. Reads go through
 //! [`EntityRegistryService`], backed by [`EntityRegistryRepository`].
 //! Transactional writes live in `entity_registry_db_utils` so other crates can
-//! join them to their own resource-row transactions.
+//! join them to their own resource-row transactions. Shared types live in
+//! `shared_entity_registry`; this crate does not depend on the write helpers.
 //!
 //! [`RegisteredEntityType`] is the table CHECK as a type. Use
 //! [`NewEntityRecord::try_new`] when the caller holds a wide
@@ -27,13 +28,13 @@ pub mod domain;
 #[cfg(feature = "postgres")]
 pub mod outbound;
 
-pub use domain::models::{
-    EntityRecord, EntityRegistryError, EntityRegistryResult, EntityTypeCount, InsertOutcome,
-    NewEntityRecord, RegisteredEntityType, UnregisteredEntityType, WriteOutcome,
-};
+pub use domain::models::{EntityRecord, EntityTypeCount};
 pub use domain::ports::{EntityRegistryRepository, EntityRegistryService};
 pub use domain::service::EntityRegistryServiceImpl;
-pub use model_owner::Owner;
+pub use shared_entity_registry::{
+    EntityRegistryError, EntityRegistryResult, InsertOutcome, NewEntityRecord, Owner,
+    RegisteredEntityType, UnregisteredEntityType, WriteOutcome,
+};
 
 #[cfg(feature = "postgres")]
 pub use outbound::pg_entity_registry_repo::PgEntityRegistryRepository;

@@ -1,11 +1,10 @@
 use chrono::{DateTime, Utc};
 use model_owner::{Owner, OwnerType};
+use shared_entity_registry::{EntityRegistryResult, RegisteredEntityType};
 use uuid::Uuid;
 
 use super::EntityRegistryServiceImpl;
-use crate::domain::models::{
-    EntityRecord, EntityRegistryResult, EntityTypeCount, RegisteredEntityType,
-};
+use crate::domain::models::{EntityRecord, EntityTypeCount};
 use crate::domain::ports::{EntityRegistryRepository, EntityRegistryService};
 
 fn user_owner() -> Owner {

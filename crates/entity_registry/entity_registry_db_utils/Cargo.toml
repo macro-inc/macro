@@ -6,14 +6,14 @@ version = "0.1.0"
 
 [dependencies]
 chrono = { workspace = true }
-entity_registry = { path = "../entity_registry" }
-model_owner = { path = "../model_owner", features = ["sqlx"] }
+model_owner = { path = "../../model_owner", features = ["sqlx"] }
 rootcause = { workspace = true }
+shared_entity_registry = { path = "../shared_entity_registry" }
 sqlx = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { path = "../../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

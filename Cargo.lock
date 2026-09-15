@@ -6327,8 +6327,8 @@ dependencies = [
  "model-entity",
  "model_owner",
  "rootcause",
+ "shared_entity_registry",
  "sqlx",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
  "uuid",
@@ -6340,10 +6340,10 @@ name = "entity_registry_db_utils"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "entity_registry",
  "macro_db_migrator",
  "model_owner",
  "rootcause",
+ "shared_entity_registry",
  "sqlx",
  "tokio",
  "tracing",
@@ -15261,6 +15261,19 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
+ "workspace-hack",
+]
+
+[[package]]
+name = "shared_entity_registry"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "model-entity",
+ "model_owner",
+ "rootcause",
+ "thiserror 2.0.18",
+ "uuid",
  "workspace-hack",
 ]
 

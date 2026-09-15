@@ -1,4 +1,6 @@
 use model_entity::EntityType;
+use model_owner::OwnerType;
+use uuid::Uuid;
 
 use super::*;
 
@@ -58,7 +60,7 @@ fn try_from_rejects_every_unregistered_entity_type() {
 
 #[test]
 fn try_new_accepts_chat_and_rejects_initiative() {
-    let owner = Owner::parse(model_owner::OwnerType::User, "macro|hutch@macro.com").unwrap();
+    let owner = Owner::parse(OwnerType::User, "macro|hutch@macro.com").unwrap();
     let id = Uuid::from_u128(1);
 
     let record = NewEntityRecord::try_new(id, EntityType::Chat, owner.clone()).unwrap();
