@@ -4,8 +4,8 @@ use crate::testing::helpers::egress::test_egress;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
-    AgentSession, AgentSessionPreview, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME,
-    SandboxSize, SessionBot, SessionStatus, ThreadSession,
+    AgentSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot,
+    SessionStatus, ThreadSession,
 };
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -117,7 +117,7 @@ impl AgentSessionRepo for FixedBotSessions {
         &self,
         _viewer: &MacroUserIdStr<'static>,
         _ids: &[AgentSessionId],
-    ) -> SessionResult<Vec<AgentSessionPreview>> {
+    ) -> SessionResult<Vec<agent_session::domain::model::SessionPreviewCandidate>> {
         unimplemented!("the router never previews sessions")
     }
 

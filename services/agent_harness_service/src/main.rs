@@ -883,7 +883,10 @@ async fn run() -> anyhow::Result<()> {
             Arc::new(NoOpTurnObserver),
             lifecycle_publisher,
             ReplicaId::mint(),
-        ),
+        )
+        .with_view_access(Arc::new(
+            agent_session::domain::audience::EntityAccessSessionView::new((*entity_access).clone()),
+        )),
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );

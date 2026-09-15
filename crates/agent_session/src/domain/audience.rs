@@ -1,6 +1,9 @@
 //! Select stream recipients using current session access, including document inheritance.
 
-use super::{model::AgentSessionId, ports::AgentSessionRepo};
+use super::{
+    model::AgentSessionId,
+    ports::{AgentSessionRepo, SessionViewAccess},
+};
 use entity_access::domain::{
     models::{AccessError, EntityType, ViewAccessLevel},
     ports::EntityAccessService,
@@ -87,5 +90,48 @@ impl<Repo: AgentSessionRepo, Access: EntityAccessService, Subscriptions: Session
             }
         }
         Ok(viewers)
+    }
+}
+
+/// Answers session view access through the entity access service, so a
+/// preview sees the same inherited document access a read route does.
+#[derive(Clone)]
+pub struct EntityAccessSessionView<Access> {
+    access: Access,
+}
+
+impl<Access> EntityAccessSessionView<Access> {
+    /// Resolve view access with `access`.
+    pub fn new(access: Access) -> Self {
+        Self { access }
+    }
+}
+
+impl<Access: EntityAccessService> SessionViewAccess for EntityAccessSessionView<Access> {
+    fn can_view<'a>(
+        &'a self,
+        viewer: &'a MacroUserIdStr<'static>,
+        session: AgentSessionId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = super::error::Result<bool>> + Send + 'a>> {
+        Box::pin(async move {
+            match self
+                .access
+                .generate_entity_access_receipt::<ViewAccessLevel>(
+                    viewer,
+                    None,
+                    &session.to_string(),
+                    EntityType::AgentSession,
+                )
+                .await
+            {
+                Ok(_) => Ok(true),
+                Err(
+                    AccessError::Unauthorized
+                    | AccessError::NotFound(_)
+                    | AccessError::BadRequest(_),
+                ) => Ok(false),
+                Err(error) => Err(super::error::AgentSessionError::Unknown(error.into())),
+            }
+        })
     }
 }
