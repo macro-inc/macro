@@ -5,6 +5,7 @@ pub mod delete_comment;
 pub mod edit_anchor;
 pub mod edit_comment;
 pub mod get;
+pub mod write_switch;
 
 use std::collections::HashSet;
 
@@ -27,6 +28,12 @@ use notification::domain::models::SendNotificationRequestBuilder;
 use tower::ServiceBuilder;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
+    let write_switch = axum::middleware::from_fn_with_state(
+        write_switch::LegacyCommentWrites {
+            enabled: state.config.legacy_comment_writes_enabled,
+        },
+        write_switch::handler,
+    );
     Router::new()
         .route(
             "/comments/document/{document_id}",
@@ -39,22 +46,27 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route(
             "/comments/document/{document_id}",
-            post(create_comment::create_comment_handler).layer(ServiceBuilder::new().layer(
-                axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    macro_middleware::cloud_storage::document::ensure_document_exists::handler,
+            post(create_comment::create_comment_handler).layer(
+                ServiceBuilder::new().layer(write_switch.clone()).layer(
+                    axum::middleware::from_fn_with_state(
+                        state.clone(),
+                        macro_middleware::cloud_storage::document::ensure_document_exists::handler,
+                    ),
                 ),
-            )),
+            ),
         )
         .route(
             "/comments/comment/{comment_id}",
-            delete(delete_comment::delete_comment_handler),
+            delete(delete_comment::delete_comment_handler).layer(write_switch.clone()),
         )
-        .route("/anchors", delete(delete_anchor::delete_anchor_handler))
+        .route(
+            "/anchors",
+            delete(delete_anchor::delete_anchor_handler).layer(write_switch.clone()),
+        )
         .route("/anchors", patch(edit_anchor::edit_anchor_handler))
         .route(
             "/comments/comment/{comment_id}",
-            patch(edit_comment::edit_comment_handler),
+            patch(edit_comment::edit_comment_handler).layer(write_switch),
         )
         .route(
             "/anchors/document/{document_id}",

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE notification n SET metadata = jsonb_set(\n               jsonb_set(n.metadata, '{commentId}', to_jsonb(cm.message_id::text)),\n               '{threadId}', to_jsonb(tm.root_id::text)\n           )\n           FROM migrated_comment_id cm, migrated_comment_thread_id tm\n           WHERE n.event_item_type = 'document' AND n.event_item_id = ANY($1)\n             AND n.notification_event_type = ANY($2)\n             AND cm.document_id = n.event_item_id AND tm.document_id = n.event_item_id\n             AND n.metadata->>'commentId' = cm.comment_id::text\n             AND n.metadata->>'threadId' = tm.thread_id::text",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "76f3e71eaea836800a3e5857a00621edab609f4eaba0ce9a4da11743cc2b1482"
+}
