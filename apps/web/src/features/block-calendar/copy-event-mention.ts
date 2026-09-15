@@ -1,4 +1,7 @@
-import type { CalendarEvent } from '@app/features/calendar/types';
+import {
+  type CalendarEvent,
+  isRecurringCalendarEvent,
+} from '@app/features/calendar/types';
 import { toast } from '@core/component/Toast/Toast';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { CALENDAR_BLOCK_ID } from './types';
@@ -10,10 +13,6 @@ export type CalendarMentionTarget = {
   /** Pins one instance of a recurring series; absent for a series mention. */
   occurrenceKey?: string;
 };
-
-function isRecurring(event: CalendarEvent): boolean {
-  return event.recurrenceLines.length > 0 || event.recurrenceId !== undefined;
-}
 
 /**
  * The same span shape `DocumentMentionNode.exportDOM` copies, so pasting
@@ -79,6 +78,8 @@ export async function copyCalendarEventMention(event: CalendarEvent) {
   await copyCalendarEventMentionTarget({
     eventId: event.eventId,
     title: event.title,
-    occurrenceKey: isRecurring(event) ? event.occurrenceKey : undefined,
+    occurrenceKey: isRecurringCalendarEvent(event)
+      ? event.occurrenceKey
+      : undefined,
   });
 }

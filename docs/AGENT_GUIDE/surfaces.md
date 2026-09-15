@@ -293,6 +293,18 @@ carries `Copy guest emails` and `Email guests` icon buttons. Copying puts every 
 address on the clipboard, comma-separated. Emailing opens a new email addressed to every
 guest but you — in a split beside the calendar on desktop, as the full-screen composer on
 touch devices — and is hidden when you are the only guest.
+A long description is capped at 200px and scrolls in place, so the popover never grows past
+the viewport. Under the details a `Take meeting notes` row creates a document named
+`Notes on <event title> <date>` whose first line is a mention of the event followed by an
+empty line, and opens it — in a new split beside the calendar on desktop, full screen on
+phones. Clicking a guest opens their CRM contact record (a new split on desktop) when the
+team's CRM knows them; otherwise, and from every guest's `...` button, the person menu opens
+(`Copy email`, `Copy name`, `Open contact`, `DM`, `Assign task`) — as a popover on desktop
+and a stacked bottom sheet on phones. A `Records` section below the guests lists the CRM
+companies the guests belong to (clicking opens the company record) and, under `References`,
+the documents and messages that mention this event, exactly as a task's References do; the
+section is absent when there is neither. Only mentions recorded against your own copy of the
+event appear — a note another guest wrote against their copy does not.
 
 With the `enable-calendar-team-ooo` flag on, teammates' Google Calendar out-of-office events
 overlay the grid as read-only chips titled `<name>: <event title>`. The side panel's

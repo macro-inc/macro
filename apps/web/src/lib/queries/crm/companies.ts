@@ -4,7 +4,12 @@ import type { CrmCompanyEntity } from '@entity';
 import { storageServiceClient } from '@service-storage/client';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
-import { type QueryKey, useMutation, useQuery } from '@tanstack/solid-query';
+import {
+  type QueryKey,
+  queryOptions,
+  useMutation,
+  useQuery,
+} from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { queryClient } from '../client';
 import { soupKeys } from '../soup/keys';
@@ -27,27 +32,12 @@ export type CompanyContact = CrmContactResponse;
  * doomed 404.
  */
 export function useCompanyQuery(companyId: Accessor<string>) {
-  const query = useQuery(() => {
-    const id = companyId();
-    return {
-      queryKey: crmKeys.company(id).queryKey,
-      queryFn: () => {
-        if (!id) {
-          throw new Error('company id is required to fetch company');
-        }
-        return throwOnErr(() =>
-          storageServiceClient.getCompany({ companyId: id })
-        );
-      },
-      staleTime: COMPANY_STALE_TIME,
-      enabled: !!companyId() && companyId() !== NIL_UUID,
-    };
-  });
+  const query = useQuery(() => crmCompanyQueryOptions(companyId()));
 
   const company = createMemo<CrmCompanyEntity | undefined>(() => {
     const data = query.data;
     if (!data) return undefined;
-    return responseToEntity(data);
+    return crmCompanyResponseToEntity(data);
   });
 
   const contacts = createMemo<CompanyContact[]>(
@@ -57,7 +47,29 @@ export function useCompanyQuery(companyId: Accessor<string>) {
   return { query, company, contacts };
 }
 
-function responseToEntity(response: CrmCompanyResponse): CrmCompanyEntity {
+/**
+ * Query options for one company by id, disabled for empty and NIL ids so a
+ * placeholder never fires a doomed request. `useQueries` callers spread
+ * these to load the companies behind several contacts at once.
+ */
+export function crmCompanyQueryOptions(companyId: string) {
+  return queryOptions({
+    queryKey: crmKeys.company(companyId).queryKey,
+    queryFn: () => {
+      if (!companyId) {
+        throw new Error('company id is required to fetch company');
+      }
+      return throwOnErr(() => storageServiceClient.getCompany({ companyId }));
+    },
+    staleTime: COMPANY_STALE_TIME,
+    enabled: !!companyId && companyId !== NIL_UUID,
+  });
+}
+
+/** Maps the wire company (with embedded contacts) to the frontend entity. */
+export function crmCompanyResponseToEntity(
+  response: CrmCompanyResponse
+): CrmCompanyEntity {
   return {
     type: 'crm_company',
     id: response.id,
