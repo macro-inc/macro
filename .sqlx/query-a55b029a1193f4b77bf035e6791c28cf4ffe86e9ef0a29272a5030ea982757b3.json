@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                m.id,\n                m.channel_id,\n                m.sender_id,\n                m.triggered_by_user_id,\n                m.content,\n                m.created_at,\n                m.updated_at,\n                m.edited_at::timestamptz AS \"edited_at?\",\n                m.deleted_at::timestamptz AS \"deleted_at?\"\n            FROM comms_messages m\n            WHERE m.channel_id = $1\n              AND m.thread_id IS NULL\n              AND (m.deleted_at IS NULL OR EXISTS (\n                  SELECT 1 FROM comms_messages r\n                  WHERE r.thread_id = m.id AND r.deleted_at IS NULL\n              ))\n              AND (m.created_at, m.id) < ($2, $3)\n            ORDER BY m.created_at DESC, m.id DESC\n            LIMIT $4\n            ",
+  "query": "\n            SELECT\n                m.id,\n                m.channel_id AS \"channel_id!\",\n                m.sender_id,\n                m.triggered_by_user_id,\n                m.content,\n                m.created_at,\n                m.updated_at,\n                m.edited_at::timestamptz AS \"edited_at?\",\n                m.deleted_at::timestamptz AS \"deleted_at?\"\n            FROM comms_messages m\n            WHERE m.id = COALESCE(\n                (SELECT thread_id FROM comms_messages WHERE id = $1 AND channel_id = $2),\n                $1\n            )\n            AND m.channel_id = $2\n            AND m.thread_id IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "channel_id",
+        "name": "channel_id!",
         "type_info": "Uuid"
       },
       {
@@ -52,14 +52,12 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Timestamptz",
-        "Uuid",
-        "Int8"
+        "Uuid"
       ]
     },
     "nullable": [
       false,
-      false,
+      true,
       false,
       true,
       false,
@@ -69,5 +67,5 @@
       null
     ]
   },
-  "hash": "ec3636e62ff865a5c6808e8f87d65730837b043b9cb69ce7075c431cee32b58b"
+  "hash": "a55b029a1193f4b77bf035e6791c28cf4ffe86e9ef0a29272a5030ea982757b3"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, channel_id, thread_id, created_at\n            FROM comms_messages\n            WHERE id = $1\n              AND channel_id = $2\n            ",
+  "query": "\n            SELECT id, channel_id AS \"channel_id!\", thread_id, created_at\n            FROM comms_messages\n            WHERE id = $1\n              AND channel_id = $2\n            ",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "channel_id",
+        "name": "channel_id!",
         "type_info": "Uuid"
       },
       {
@@ -32,10 +32,10 @@
     },
     "nullable": [
       false,
-      false,
+      true,
       true,
       false
     ]
   },
-  "hash": "e6f63b89995a909f72c7c4012ab340e40f13453f1bec6cf41cb202930c44e84a"
+  "hash": "ad23f7bf93814f78d866ce255cc14a6d7477b66db3ee07f14f4a28f25c6d81d6"
 }
