@@ -19,9 +19,6 @@ export type AgentSessionMentionedMetadata = AgentSessionNotificationRef & {
 };
 
 /**
- * The session an agent-session notification is about, and where its magic
- * chip lives when it was opened from a thread.
- *
  * Flattened into each agent-session kind so the wire keeps these keys at the
  * top level of the metadata, the way [`CommonChannelMetadata`] does.
  */
@@ -42,9 +39,11 @@ export type AgentSessionNotificationRef = {
      */
     botName: string;
     /**
-     * The channel the session was opened from, when it was.
+     * The channel the session was opened from, when it was opened from a
+     * channel thread.
      */
     channelId?: string | null;
+    parent?: null | AgentSessionOriginParent;
     /**
      * The session; what a click opens.
      */
@@ -57,6 +56,25 @@ export type AgentSessionNotificationRef = {
      * The thread the session was opened from, when it was.
      */
     threadId?: string | null;
+};
+
+/**
+ * The session an agent-session notification is about, and where its magic
+ * chip lives when it was opened from a thread.
+ *
+ * The conversation an agent session was opened from: a channel or a
+ * document discussion. Spelled like the message API's parent so a client can
+ * route to either surface.
+ */
+export type AgentSessionOriginParent = {
+    /**
+     * The channel or document id.
+     */
+    id: string;
+    /**
+     * `channel` or `document`.
+     */
+    type: string;
 };
 
 /**

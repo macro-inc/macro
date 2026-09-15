@@ -149,6 +149,31 @@ describe('composeAgentContextPrompt', () => {
     ).toBe('original');
   });
 
+  it('names the conversation parent before any history', () => {
+    expect(
+      composeAgentContextPrompt({
+        promptMarkdown: 'original request',
+        parent: { type: 'document', id: 'doc-1' },
+        messages: [{ sender: 'alice', content: 'earlier message' }],
+      })
+    ).toBe(
+      '<m-agent-context>{"version":1,"text":"Conversation parent: {\\"type\\":\\"document\\",\\"id\\":\\"doc-1\\"}\\n\\nPrior message 1:\\nSender: alice\\nContent: earlier message"}</m-agent-context>\n\noriginal request'
+    );
+  });
+
+  it('names the conversation parent even without history', () => {
+    const composed = composeAgentContextPrompt({
+      promptMarkdown: 'original',
+      parent: { type: 'channel', id: 'channel-1' },
+    });
+    const state = markdownToSerializedEditorStateWithIds(composed);
+
+    expect(state.root.children[0]).toMatchObject({
+      type: 'agent-context',
+      text: 'Conversation parent: {"type":"channel","id":"channel-1"}',
+    });
+  });
+
   it('cannot close the context envelope from message content', () => {
     const composed = composeAgentContextPrompt({
       promptMarkdown: 'original',

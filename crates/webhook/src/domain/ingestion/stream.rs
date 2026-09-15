@@ -75,22 +75,22 @@ pub(crate) fn agent_session_lifecycle_stream_candidate(
             entity_id: normalized.entity_id.clone(),
             entity_type: EntityType::AgentSession,
         },
-        // The session's grants are gone with it; the channel it came from
-        // still knows its audience, and a session without one was its
-        // owner's alone.
+        // The session's grants are gone with it; the channel or document it
+        // came from still knows its audience, and a session without one was
+        // its owner's alone.
         LifecycleAudience::Departed {
             owner,
-            origin_channel_id: Some(channel_id),
+            origin_parent: Some(parent),
         } => {
             drop(owner);
             StreamAudience::Entity {
-                entity_id: channel_id.to_string(),
-                entity_type: EntityType::Channel,
+                entity_id: parent.entity_id(),
+                entity_type: parent.access_entity_type(),
             }
         }
         LifecycleAudience::Departed {
             owner,
-            origin_channel_id: None,
+            origin_parent: None,
         } => StreamAudience::Workspace {
             workspace_id: owner.to_string(),
         },

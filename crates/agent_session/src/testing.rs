@@ -8,9 +8,9 @@ use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
-    AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, ReplicaAddress, ReplicaId, SandboxSize,
-    SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    AgentSessionPreviewData, ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME,
+    LogAppended, ManagerFence, ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim,
+    SessionManager, SessionStatus, StoredAgentSessionLog, ThreadSession,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -135,7 +135,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             owner_id: params.owner_id,
             thread_id: params.thread_id,
             // The in-memory repo has no comms rows to derive a channel from.
-            thread_channel_id: None,
+            thread_parent: None,
             originating_message_id: params.originating_message_id,
             bot_id: params.bot_id,
             model: params.model,
@@ -235,11 +235,11 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(found)
     }
 
-    async fn find_for_channel(
+    async fn find_for_thread(
         &self,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
-    ) -> Result<ChannelSession> {
+    ) -> Result<ThreadSession> {
         let sessions = self
             .sessions
             .lock()
@@ -251,8 +251,8 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
                 && Some(session.bot_id) == bot_id
         });
         Ok(match matched {
-            Some(session) => ChannelSession::CreatedFromThread(session.clone()),
-            None => ChannelSession::None,
+            Some(session) => ThreadSession::CreatedFromThread(session.clone()),
+            None => ThreadSession::None,
         })
     }
 
@@ -696,7 +696,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         owner_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
             .expect("valid macro user id"),
         thread_id: None,
-        thread_channel_id: None,
+        thread_parent: None,
         originating_message_id: None,
         bot_id: BotId::new_from_uuid(Uuid::from_u128(0xb07)),
         model: "claude-sonnet-5".to_string(),

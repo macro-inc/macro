@@ -951,6 +951,9 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(PgTaskMatchRepo::new(db.clone())),
     ));
     let channels_repo = PgChannelsRepo::new(db.clone());
+    // Built-in agents read the same committed-post stream as hosted and
+    // external agents, for channel and document posts alike, so the channel
+    // side effects no longer carry their own trigger queue.
     let (bot_trigger_sender, bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let channel_side_effects = ChannelSideEffectService::new(
@@ -959,7 +962,6 @@ async fn run() -> anyhow::Result<()> {
         NotificationChannelSender::new(notification_ingress_service.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
-    .with_bot_trigger_sender(bot_trigger_sender)
     .with_macro_event_broker(macro_event_broker.clone());
 
     let channels_service = Arc::new(
@@ -1004,7 +1006,7 @@ async fn run() -> anyhow::Result<()> {
             messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
             messages::domain::effects::MessageEffects::new(
                 messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
-                messages::domain::ports::NoMessageEventPublisher,
+                channel_bots::outbound::conversation::LocalBotPublisher::new(bot_trigger_sender),
                 messages::domain::delivery::ParentMessagePublisher::new(
                     channel_delivery,
                     discussion_delivery,
@@ -1098,21 +1100,22 @@ async fn run() -> anyhow::Result<()> {
             message_commands.clone(),
         );
     let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
-    let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
-        channels_service.clone(),
-        message_commands.clone(),
-        Arc::new(
-            channel_bots::outbound::conversation::EntityAccessConversation(
-                entity_access_service.clone(),
-            ),
+    let conversation_access = Arc::new(
+        channel_bots::outbound::conversation::EntityAccessConversation(
+            entity_access_service.clone(),
         ),
+    );
+    let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
+        message_service.clone(),
+        conversation_access.clone(),
         Arc::new(channel_bots::outbound::AgentLoopResponder::new(
             macro_agent_tool_context,
             macro_agent_tools,
         )),
         Arc::new(
             channel_bots::domain::trigger_detector::MentionOrInferredDetector::new(
-                channels_service.clone(),
+                message_service.clone(),
+                conversation_access,
                 Arc::new(channel_bots::outbound::FastModelTriggerClassifier::new(
                     ai_usage::pg_recorder(db.clone()),
                 )),

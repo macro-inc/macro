@@ -2,7 +2,7 @@
 
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentTriggerTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent, NewAgentSessionEvent,
+    AgentTriggerTopicEvent, ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata,
 };
 use bot_id::BotId;
 
@@ -42,7 +42,7 @@ pub fn agent_trigger_bot_id(event: &AgentTriggerTopicEvent) -> Option<BotId> {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
             Some(mentioned.bot_id)
         }
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => {
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(metadata)) => {
             Some(metadata.bot_id)
         }
         _ => None,
@@ -78,7 +78,7 @@ pub fn route_agent_trigger(
                     bot_id: mentioned.bot_id,
                     runtime,
                     origin: MentionOrigin {
-                        channel_id: message.channel_id,
+                        parent: message.parent,
                         // A top-level mention roots its own thread; a mention
                         // inside a thread answers into that thread.
                         thread_id: message.thread_id.unwrap_or(message.message_id),
@@ -89,8 +89,8 @@ pub fn route_agent_trigger(
                 }),
             ))
         }
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
-            ChannelEventMetadata {
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(
+            ThreadEventMetadata {
                 bot_id,
                 session_id,
                 kind: _,
@@ -98,7 +98,7 @@ pub fn route_agent_trigger(
             },
         )) => {
             let origin = AnnounceOrigin {
-                channel_id: message.channel_id,
+                parent: message.parent,
                 thread_id: message.thread_id.unwrap_or(message.message_id),
                 message_id: message.message_id,
             };

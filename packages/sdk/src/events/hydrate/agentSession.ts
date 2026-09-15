@@ -16,15 +16,20 @@ export type AgentSessionEvent = Extract<
   { event_type: `agent_session.${string}` }
 >;
 
-/** The channel thread a session was opened from, when it was. */
+/**
+ * The channel thread a session was opened from, when it was. A session
+ * opened from a document discussion has an origin but no channel handles:
+ * the SDK's message entities are channel-scoped for now.
+ */
 function originHandles(
   client: MacroClient,
   origin: ThreadOrigin | null | undefined,
 ) {
-  return origin
+  const channelId = origin?.channel_id;
+  return origin && channelId
     ? {
-        channel: Channel.byId(client, origin.channel_id),
-        thread: new Thread(client, origin.channel_id, origin.thread_id),
+        channel: Channel.byId(client, channelId),
+        thread: new Thread(client, channelId, origin.thread_id),
       }
     : { channel: undefined, thread: undefined };
 }
@@ -47,8 +52,9 @@ function announcementHandle(
   identity: SessionIdentity,
   announcementMessageId: string | null | undefined,
 ) {
-  return identity.origin && announcementMessageId
-    ? Message.byId(client, identity.origin.channel_id, announcementMessageId)
+  const channelId = identity.origin?.channel_id;
+  return channelId && announcementMessageId
+    ? Message.byId(client, channelId, announcementMessageId)
     : undefined;
 }
 

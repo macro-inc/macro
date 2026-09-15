@@ -1328,19 +1328,17 @@ fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::Agen
     use agent_trigger::domain::broker_events::{
         AgentBotMentionedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
     };
-    use channels::domain::broker_events::ChannelMessagePostedMetadata;
-    use channels::domain::models::ChannelType;
 
     Event::new(AgentTriggerTopicEvent::New(
         NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
             bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
-            message: ChannelMessagePostedMetadata {
-                channel_id: uuid::Uuid::from_u128(1),
+            message: messages::domain::events::MessagePostedMetadata {
+                parent: messages::domain::models::MessageParent::Channel(uuid::Uuid::from_u128(1)),
                 message_id: uuid::Uuid::from_u128(2),
                 thread_id: None,
+                root_id: uuid::Uuid::from_u128(2),
                 sender: sender("macro|asker@example.com"),
                 triggered_by: None,
-                channel_type: ChannelType::Public,
                 content: "fix the flaky test".to_owned(),
                 mentions: vec![],
                 attachments: vec![],
@@ -1353,23 +1351,21 @@ fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::Agen
 fn agent_trigger_existing_event()
 -> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
     use agent_trigger::domain::broker_events::{
-        AgentTriggerTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent,
+        AgentTriggerTopicEvent, ExistingAgentSessionEvent, ThreadEventMetadata,
     };
-    use channels::domain::broker_events::ChannelMessagePostedMetadata;
-    use channels::domain::models::ChannelType;
 
     Event::new(AgentTriggerTopicEvent::Existing(
-        ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
+        ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
             bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
             session_id: agent_session::domain::model::AgentSessionId::TEST_A,
-            kind: agent_trigger::domain::broker_events::ChannelKind::MentionThread,
-            message: ChannelMessagePostedMetadata {
-                channel_id: uuid::Uuid::from_u128(1),
+            kind: agent_trigger::domain::broker_events::ThreadMessageKind::MentionThread,
+            message: messages::domain::events::MessagePostedMetadata {
+                parent: messages::domain::models::MessageParent::Channel(uuid::Uuid::from_u128(1)),
                 message_id: uuid::Uuid::from_u128(2),
                 thread_id: None,
+                root_id: uuid::Uuid::from_u128(2),
                 sender: sender("macro|asker@example.com"),
                 triggered_by: None,
-                channel_type: ChannelType::Public,
                 content: "and now the other one".to_owned(),
                 mentions: vec![],
                 attachments: vec![],
@@ -1379,11 +1375,9 @@ fn agent_trigger_existing_event()
     ))
 }
 
-/// A follow-up on a session that exists asks the session, not the channel:
-/// the session carries its own grants, so whatever channel a later message
-/// landed in is incidental.
+/// An existing session does not grant a webhook access to a new message parent.
 #[tokio::test]
-async fn an_existing_session_trigger_is_gated_by_the_session() {
+async fn an_existing_session_trigger_is_gated_by_its_message_parent() {
     let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
     let repository = MockRepository::new(
         vec![PERSONAL_WORKSPACE_ID.to_string()],
@@ -1398,10 +1392,7 @@ async fn an_existing_session_trigger_is_gated_by_the_session() {
 
     assert_eq!(
         lock(&access.calls).as_slice(),
-        &[(
-            agent_session::domain::model::AgentSessionId::TEST_A.to_string(),
-            EntityType::AgentSession
-        )],
+        &[(uuid::Uuid::from_u128(1).to_string(), EntityType::Channel)],
     );
 }
 
@@ -1474,11 +1465,11 @@ fn agent_session_lifecycle_event(
         owner_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|asker@example.com")
             .expect("valid user id")
             .into_owned(),
-        origin: Some(ThreadOrigin {
-            channel_id: uuid::Uuid::from_u128(1),
-            thread_id: uuid::Uuid::from_u128(2),
-            originating_message_id: uuid::Uuid::from_u128(3),
-        }),
+        origin: Some(ThreadOrigin::new(
+            messages::domain::models::MessageParent::Channel(uuid::Uuid::from_u128(1)),
+            uuid::Uuid::from_u128(2),
+            uuid::Uuid::from_u128(3),
+        )),
         audience: Vec::new(),
     }))
 }
