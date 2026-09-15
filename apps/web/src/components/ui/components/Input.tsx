@@ -12,7 +12,7 @@ export type InputSize = Exclude<ButtonSize, `icon-${string}`>;
 const INPUT_SIZE_VARIANTS: Record<InputSize, string> = {
   xs: 'h-5 px-1 text-xs',
   sm: 'h-6 px-2 text-xs',
-  md: 'h-8 px-2 text-sm',
+  md: 'h-8 px-2 text-base',
   lg: 'h-9 px-3 text-base',
   xl: 'h-12 px-4 text-base',
 };

@@ -133,7 +133,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
               <span class="flex h-8 w-4 shrink-0 items-center justify-center text-accent">
                 <AnimatedStarIcon triggerAnimation={focused()} />
               </span>
-              <div class="min-w-0 grow text-sm text-ink">
+              <div class="min-w-0 grow text-base text-ink">
                 <MarkdownShell
                   config={editor}
                   placeholder="Describe the edit…"

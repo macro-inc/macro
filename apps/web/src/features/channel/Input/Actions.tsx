@@ -23,7 +23,10 @@ function ActionsLeft(props: JSX.HTMLAttributes<HTMLDivElement>) {
 
   return (
     <div
-      class={cn('flex flex-row items-center gap-2', local.class)}
+      class={cn(
+        'flex flex-row items-center gap-2 not-touch:gap-[3.75px]',
+        local.class
+      )}
       data-input-actions-left
       {...rest}
     >
@@ -37,7 +40,10 @@ function ActionsRight(props: JSX.HTMLAttributes<HTMLDivElement>) {
 
   return (
     <div
-      class={cn('flex flex-row items-center gap-2', local.class)}
+      class={cn(
+        'flex flex-row items-center gap-2 not-touch:gap-[3.75px]',
+        local.class
+      )}
       data-input-actions-right
       {...rest}
     >

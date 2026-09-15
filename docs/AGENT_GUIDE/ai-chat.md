@@ -118,7 +118,8 @@ Explicit coding-agent selections still use their configured runtimes.
 Open a doc → side panel `Actions` → `Ask Macro`. Opens a chat pane with the document already
 attached as context (it appears as a link chip in the composer). New-chat pane shows tips:
 `@mention anything` to attach entities, `Ctrl+Enter` to send in the background (you get
-notified when the AI responds).
+notified when the AI responds). Background sends from Home preserve the submitted
+tool selection.
 
 ## Composer anatomy (a11y)
 
@@ -139,16 +140,22 @@ an additional 2px of space below them; mobile dock spacing is unchanged.
 On mobile the production AI, new agent, and channel composers share rounded
 glass chrome, text padding, and a footer toolbar with a circular Send button.
 The production AI composer has an `Attach files` paperclip, `Ask AI…` placeholder,
-and compact model picker. Both AI systems keep model selection in the toolbar
+and compact model picker. On desktop, `Attach files` opens the file picker directly; use `@` to reference existing workspace items. Both AI systems keep model selection in the toolbar
 and expand with longer drafts. The new agent editor supports context via `@`
 mentions; its existing attachment capabilities are unchanged. Stop and queued
 message controls remain available.
 
-User messages in both AI systems appear in right-aligned, filled gray bubbles
-with rounded corners, including on mobile. Long prompts wrap within the bubble;
+User messages in both AI systems appear in right-aligned bubbles with rounded
+corners, including on mobile. In dark mode, their fill and text follow the active
+theme; Macro Dark uses a dark gray fill and white text. Long prompts wrap within the bubble;
 production chat retains its Show more/Show less and editing controls.
 
 ## Waiting for a response
+
+On desktop, email drafts embedded in chat use the same rounded, elevated surface
+as email blocks: an opaque background, subtle border and shadow, and a raised
+rim in dark mode. The recipients, subject, body, and send controls stay inside
+that card. Touch-device styling is unchanged.
 
 The reliable completion signal is the disappearance of the `Stop generating` button — poll
 with `evaluate_script`. Do not wait on response text: the page displays

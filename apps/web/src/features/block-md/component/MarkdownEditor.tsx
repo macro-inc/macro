@@ -979,7 +979,7 @@ export function MarkdownEditor(props: {
       </Show>
       {/* Note: the mt-1.5 here is to preserve markdown node margin tops. which means this div should avoid padding and border. */}
       <div
-        class="relative mt-1.5"
+        class="relative mt-1.5 text-base"
         ref={editorContainerRef}
         use:fileFolderDrop={{
           onDrop: (fileEntries, folderEntries, e) => {

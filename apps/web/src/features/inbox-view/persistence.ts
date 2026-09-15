@@ -19,11 +19,6 @@ const inboxEntryStateSchemaWithDefaults = z.object({
 
 type InboxEntryState = z.infer<typeof inboxEntryStateSchemaWithDefaults>;
 
-const DEFAULT_INBOX_ENTRY_STATE = {
-  version: 1,
-  tab: 'signal',
-} satisfies InboxEntryState;
-
 const inboxListEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
   focusKey: z.string().optional(),
@@ -50,10 +45,10 @@ export const DEFAULT_INBOX_LIST_STATE: InboxListStateSnapshot = {
   scrollOffset: 0,
 };
 
-function selectEntryState(state: InboxViewState): InboxEntryState {
+function selectEntryState(_state: InboxViewState): InboxEntryState {
   return {
     version: 1,
-    tab: state.tab === 'reminders' ? 'signal' : state.tab,
+    tab: 'signal',
   };
 }
 
@@ -64,15 +59,12 @@ function createInboxEntryStorage(options: {
   return createEntryPersistenceStorage({
     handle: options.handle,
     key: INBOX_ENTRY_STATE_KEY,
-    restore: (current, stored) => {
+    restore: (current, _stored) => {
       if (!options.restore) return undefined;
-
-      const result = inboxEntryStateSchemaWithDefaults.safeParse(stored);
-      const restored = result.success ? result.data : DEFAULT_INBOX_ENTRY_STATE;
 
       return {
         ...current,
-        tab: restored.tab,
+        tab: 'signal',
       };
     },
     select: selectEntryState,

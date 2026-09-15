@@ -20,7 +20,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { type JSX, onMount } from 'solid-js';
+import { type JSX, onMount, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatInput } from './ChatInput';
 
@@ -108,6 +108,9 @@ vi.mock('@service-cognition/client', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
+vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
+  createHasLineBreaks: () => () => false,
+}));
 vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => true }));
 vi.mock('@core/component/AI/signal/attachment', () => ({
   useAttachments: () => ({ attached: () => [], setAttached: vi.fn() }),
@@ -175,6 +178,7 @@ vi.mock('@ui', async () => {
 it('preserves a real soup composer selection when creating and opening its first chat', async () => {
   mocks.mobile = true;
   const editor = {
+    buildHandle: () => ({ lexical: {} }),
     withFilePaste: () => editor,
     onEnter: () => editor,
     onEscape: () => editor,
@@ -237,14 +241,18 @@ it('preserves a real soup composer selection when creating and opening its first
   ).toBeTruthy();
 });
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
-  MarkdownShell: () => {
-    onMount(() => mocks.change?.('Test first message'));
-    return (
-      <div contentEditable tabIndex={0} role="textbox" aria-label="Prompt">
-        Test first message
-      </div>
-    );
-  },
+  MarkdownShell: Object.assign(
+    (props: ParentProps) => {
+      onMount(() => mocks.change?.('Test first message'));
+      return (
+        <div contentEditable tabIndex={0} role="textbox" aria-label="Prompt">
+          Test first message
+          {props.children}
+        </div>
+      );
+    },
+    { Editable: () => null, Placeholder: () => null }
+  ),
 }));
 
 let motionStyles: HTMLStyleElement;
@@ -280,6 +288,7 @@ it.each([true, false])(
     mocks.mobile = mobile;
     const onSend = vi.fn();
     const editor = {
+      buildHandle: () => ({ lexical: {} }),
       withFilePaste: () => editor,
       onEnter: () => editor,
       onEscape: () => editor,

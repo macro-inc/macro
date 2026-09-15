@@ -14,6 +14,7 @@ import {
   type Component,
   createEffect,
   createSignal,
+  type JSX,
   on,
   onCleanup,
   Show,
@@ -44,11 +45,20 @@ import {
   createFilesReadyHandler,
   getDragDropPosition,
 } from '../utils/fileUploadUtils';
+import {
+  MarkdownEditable,
+  MarkdownPlaceholder,
+  MarkdownShellContext,
+} from './MarkdownShellParts';
 import type { EditorBuilder, EditorComponentProps } from './types';
 
-export const MarkdownShell: Component<
-  { config: EditorBuilder } & EditorComponentProps
-> = (props) => {
+export type MarkdownShellProps = EditorComponentProps & {
+  config: EditorBuilder;
+  /** Compose one Editable and an optional Placeholder; defaults to both. */
+  children?: JSX.Element;
+};
+
+const MarkdownShellRoot: Component<MarkdownShellProps> = (props) => {
   const handle = props.config.buildHandle();
   const state = handle._internal;
   const {
@@ -196,7 +206,7 @@ export const MarkdownShell: Component<
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
       <div
         class={cn(
-          'relative h-full overflow-y-auto min-h-8 scrollbar-hidden',
+          'relative h-full overflow-y-auto min-h-8 scrollbar-hidden text-base',
           props.class
         )}
         on:keydown={(e) => e.stopPropagation()}
@@ -221,31 +231,33 @@ export const MarkdownShell: Component<
             : undefined
         }
       >
-        {/* Content Editable */}
-        <div
-          ref={(el) => {
-            onElementConnect(el, () => {
-              editor.setRootElement(el);
-              onConnect();
-            });
-            props.refFn?.(el);
+        <MarkdownShellContext.Provider
+          value={{
+            connectRoot: (element) => {
+              onElementConnect(element, () => {
+                editor.setRootElement(element);
+                onConnect();
+              });
+              props.refFn?.(element);
+            },
+            disabled: () => !!props.disabled,
+            showPlaceholder,
+            placeholder: () => props.placeholder ?? '...',
           }}
-          contentEditable={!props.disabled}
-        />
+        >
+          {props.children ?? (
+            <>
+              <MarkdownEditable />
+              <MarkdownPlaceholder />
+            </>
+          )}
+        </MarkdownShellContext.Provider>
 
         <DecoratorRenderer editor={editor} />
 
         {/* Node Accessories (code blocks) */}
         <Show when={state.accessoryStore}>
           {(store) => <NodeAccessoryRenderer editor={editor} store={store()} />}
-        </Show>
-
-        <Show when={showPlaceholder()}>
-          <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            <p class="my-1.5 pointer-events-none">
-              {props.placeholder ?? '...'}
-            </p>
-          </div>
         </Show>
 
         <Show when={state.dragInsertStore}>
@@ -396,3 +408,8 @@ export const MarkdownShell: Component<
     </LexicalWrapperContext.Provider>
   );
 };
+
+export const MarkdownShell = Object.assign(MarkdownShellRoot, {
+  Editable: MarkdownEditable,
+  Placeholder: MarkdownPlaceholder,
+});

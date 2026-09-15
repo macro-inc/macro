@@ -241,6 +241,12 @@ body.tauri-ios {
 }
 
 @theme {
+  /* Reading sizes at a 16px root; rem units preserve accessibility scaling. */
+  --text-base: 0.9375rem;
+  --text-base--line-height: calc(1.5 / 0.9375);
+  --text-sm: 0.875rem;
+  --text-sm--line-height: calc(1.25 / 0.875);
+
   /* Disable default tailwind color palette */
    --color-*: initial;
 
@@ -293,16 +299,19 @@ body.tauri-ios {
   --color-panel: var(--theme-panel, var(--color-surface-1));
   --color-dialog: var(--color-surface-2);
   --color-menu: var(--color-surface-2);
-  /* Menu surface for glassed floating chrome (menus, popovers, cmd+k, the
-     channel input): the menu color with a hint of see-through, mirroring the
-     site hero bar's `--b1 86%`. Pair `bg-menu-glass` with a `glass-*` utility
-     so a backdrop blur sits behind the translucency. */
+  /* Touch surfaces keep their translucent fill; desktop overrides it below
+     while retaining the shared glass rim and shadow. */
   --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
   --color-tooltip: var(--color-surface-2);
   --color-toast: var(--color-surface-2);
   --color-input: transparent;
   --color-input-focus: var(--color-surface-1);
   --color-message: var(--color-surface-1);
+  --color-composer: var(--color-surface-2);
+  --color-composer-ink: var(--color-ink);
+  --color-composer-placeholder: var(--color-ink-placeholder);
+  --color-composer-action: var(--color-ink);
+  --color-composer-action-ink: var(--color-panel);
   --color-code-buffer: color-mix(in srgb, var(--color-surface-0) 60%, var(--color-surface-1));
   --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
   --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
@@ -531,6 +540,10 @@ html[data-touch-device='true'] {
   -webkit-tap-highlight-color: initial;
 }
 
+html:not([data-touch-device="true"]) {
+  --color-menu-glass: var(--color-menu);
+}
+
 @custom-variant mobile {
   &:where(html[data-touch-device="true"] *) {
     @media (max-width: 639px) {
@@ -566,6 +579,7 @@ html[data-theme-light='false'] {
 
 [data-theme-light='true'] {
   --color-avatar-edge: oklch(1 0 0 / 0.4);
+  --color-composer: var(--color-surface-4);
 }
 
 /* Floating "island" chrome shared by the mobile dock buttons, header islands,
@@ -627,6 +641,9 @@ html[data-theme-light='false'] {
      which Chrome ignores: the glass loses its blur in production builds while
      still looking right in dev. */
   --glass-backdrop: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  &:where(html:not([data-touch-device="true"]) *) {
+    --glass-backdrop: none;
+  }
   --glass-shadow:
     inset 0 1px 0 color-mix(in oklch, var(--glass-tint) calc(var(--glass-highlight-base) * var(--glass-scale)), transparent),
     inset 0 -1px 0 color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-shade-base) * var(--glass-scale)), transparent),
@@ -908,7 +925,7 @@ html[data-touch-device='true'] :is(
   }
 
   body {
-    @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
+    @apply overflow-clip overscroll-none relative m-0 p-0 font-sans text-base optical-auto;
     font-feature-settings: "dlig" 1, "calt" 1;
     background-color: var(--color-surface);
     -webkit-font-smoothing: antialiased;
@@ -1235,7 +1252,7 @@ a {
 /* Shared text-field styling so inputs look the same across every settings tab.
    Apply to an <input>; pair with a width utility (e.g. `w-full`) as needed. */
 @utility settings-input {
-  @apply h-9 px-3 rounded-lg border border-edge-muted bg-transparent text-sm text-ink outline-none transition-colors;
+  @apply h-9 px-3 rounded-lg border border-edge-muted bg-transparent text-base text-ink outline-none transition-colors;
   /* Matches the composer/chat placeholder token so hint text reads the same
      faintness everywhere, rather than settings sitting more prominent. */
   &::placeholder {
@@ -1376,17 +1393,6 @@ a {
 
 /** isolate the app-root stacking context from the kobalte dialog and modal stacking context */
 #root { isolation: isolate; }
-
-/* On mobile (width and touch) bump tailwind's font-sizes up 1px. */
-/* Purposefully only changing the "reading" sizes, not the heading sizes. */
-@media (max-width: 639px) {
-  :root:where(html[data-touch-device="true"]) {
-    --text-base: 1.0625rem;
-    --text-xxs: 0.6875rem;
-    --text-xs: 0.8125rem;
-    --text-sm: 0.9375rem;
-  }
-}
 
 @media (min-width: 640px) {
   :root {

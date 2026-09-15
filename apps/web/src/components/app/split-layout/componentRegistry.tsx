@@ -243,7 +243,7 @@ function LegacyInboxView() {
   const preset = getViewPreset('inbox');
   return (
     <SoupView
-      viewName="Notifications"
+      viewName="Home"
       initialFilters={preset?.filters}
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
@@ -322,11 +322,8 @@ function MyActivityViewWrapper() {
   const activityFeedEnabled = useActivityFeedFlag();
   const posthog = usePosthog();
 
-  // Registered even when the flag is off so a bookmarked /activity or a
-  // restored split recovers to the inbox instead of an empty split, and the
-  // data-owning feed view is never mounted. The redirect replaces the split
-  // irreversibly, so it must wait for PostHog to actually answer — on a
-  // fresh reload the flag reads false until flags load.
+  // Wait for flags before replacing a bookmarked or restored activity split.
+  // While disabled, never mount the feed or issue its queries.
   return (
     <Show
       when={activityFeedEnabled()}

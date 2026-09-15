@@ -4,7 +4,7 @@ import {
   type FacetClause,
   type FacetOption,
   NIL_UUID,
-} from '@app/features/soup';
+} from '@app/features/soup/filters';
 import {
   type EntityData,
   isGithubPrEntity,

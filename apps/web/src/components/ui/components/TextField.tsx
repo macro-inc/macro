@@ -56,7 +56,7 @@ function TextFieldTextArea<T extends ValidComponent = 'textarea'>(
     <KobalteTextField.TextArea
       data-slot="text-field-textarea"
       class={cn(
-        'flex min-h-20 w-full resize-none rounded-md border border-edge-muted bg-input px-2.5 py-2 text-sm text-ink caret-current outline-none transition-[border-color,box-shadow]',
+        'flex min-h-20 w-full resize-none rounded-md border border-edge-muted bg-input px-2.5 py-2 text-base text-ink caret-current outline-none transition-[border-color,box-shadow]',
         'placeholder:text-ink-placeholder',
         inputOutlineFocusClasses,
         'aria-invalid:border-failure aria-invalid:ring-2 aria-invalid:ring-failure/20',

@@ -5,6 +5,7 @@ import { cn } from '../utils/classname';
 import { Button, type ButtonProps } from './Button';
 
 export type SendButtonProps = Omit<ButtonProps, 'size' | 'variant'> & {
+  appearance?: 'default' | 'composer';
   /** Show a spinner instead of the arrow (e.g. while a send mutation is in-flight). */
   pending?: boolean;
   /** Fade the button to fully transparent — used to hide on mobile when the input is empty. */
@@ -14,6 +15,7 @@ export type SendButtonProps = Omit<ButtonProps, 'size' | 'variant'> & {
 export function SendButton(props: SendButtonProps) {
   const [local, rest] = splitProps(props, [
     'pending',
+    'appearance',
     'hidden',
     'class',
     'children',
@@ -26,12 +28,15 @@ export function SendButton(props: SendButtonProps) {
     <Button
       depth={4}
       variant="strong"
-      size="icon-sm"
+      size={local.appearance === 'composer' ? 'icon-composer' : 'icon-sm'}
       draggable={false}
       aria-label={local['aria-label'] ?? 'Send'}
       tooltip={local.tooltip ?? 'Send'}
       class={cn(
-        'rounded-full size-7 touch:size-7.5',
+        'rounded-full touch:size-7.5',
+        local.appearance === 'composer'
+          ? 'not-touch:not-disabled:bg-composer-action not-touch:not-disabled:text-composer-action-ink not-touch:light-mode:shadow-none not-touch:light-mode:backdrop-filter-none not-touch:light-mode:after:hidden'
+          : 'size-7',
         '[&_svg]:stroke-[4px]',
         'transition-transform ease-in-out duration-150',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',

@@ -66,7 +66,9 @@ export function ModelSelector(props: ModelSelectorProps) {
             size={props.compact ? 'icon-sm' : 'sm'}
             class={cn(
               'rounded-lg text-sm text-ink-subtle',
-              !props.compact && 'gap-1.5'
+              !props.compact && 'gap-1.5',
+              'not-touch:h-[33.75px] not-touch:rounded-full not-touch:text-base not-touch:gap-[5.625px] not-touch:px-[7.5px] not-touch:[&_svg]:size-[15px] not-touch:light-mode:text-composer-placeholder not-touch:light-mode:font-normal',
+              props.compact && 'not-touch:p-[3.75px]'
             )}
             label={props.compact ? MODEL_PRETTYNAME[model()] : undefined}
           >

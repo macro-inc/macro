@@ -349,7 +349,7 @@ export function InstructionsEditor(props: {
           </EditorSystemMessage>
         )}
       </Show>
-      <div class="relative" ref={editorContainerRef}>
+      <div class="relative text-base" ref={editorContainerRef}>
         <div
           ref={(el) => {
             onElementConnect(el, () => {

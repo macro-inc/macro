@@ -26,6 +26,7 @@ import {
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
+import { stringToItemType } from '@service-storage/itemType';
 import { useNavigate } from '@solidjs/router';
 import { For, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -291,14 +292,15 @@ function RecommendedRow(props: {
   onOpen: () => void;
 }) {
   const status = () => STATUS[props.item.action];
+  const iconType = () => {
+    const type = stringToItemType(props.item.entityType);
+    return type ? getEntityIconType({ type }) : 'default';
+  };
   return (
     <div class="group flex w-full items-stretch overflow-hidden rounded-xl border border-edge-muted bg-active transition-colors hover:border-edge">
       <div class="flex min-w-0 flex-1 items-center gap-3.5 px-4 py-3">
         <div class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface text-ink-muted">
-          <EntityIcon
-            targetType={recommendedIconType(props.item.entityType)}
-            size="xs"
-          />
+          <EntityIcon targetType={iconType()} size="xs" />
         </div>
         <div class="min-w-0 flex-1">
           <div class="truncate text-sm font-medium text-ink">
@@ -332,21 +334,4 @@ function RecommendedRow(props: {
       </div>
     </div>
   );
-}
-
-function recommendedIconType(entityType: RecommendedItem['entityType']) {
-  switch (entityType) {
-    case 'email_thread':
-      return getEntityIconType({ type: 'email' });
-    case 'channel':
-      return getEntityIconType({ type: 'channel' });
-    case 'chat':
-      return getEntityIconType({ type: 'chat' });
-    case 'document':
-      return getEntityIconType({ type: 'document' });
-    case 'project':
-      return getEntityIconType({ type: 'project' });
-    default:
-      return 'default' as const;
-  }
 }

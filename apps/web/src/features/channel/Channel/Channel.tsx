@@ -1,16 +1,14 @@
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { DebugSuspense } from '@channel/DebugSuspense';
-import type { ChannelInputProps } from '@channel/Input/ChannelInput';
-import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import {
-  TaskModeChannelInput,
-  type TaskModeChannelInputProps,
-} from '@channel/Input/TaskModeChannelInput';
+  ChannelInput,
+  type ChannelInputProps,
+} from '@channel/Input/ChannelInput';
+import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
 import {
   makeAttachmentTrackerPersistenceKey,
   makeInputValuePersistenceKey,
-  makeTaskPersistence,
 } from '@channel/Input/utils/persistence';
 import {
   type MessageData,
@@ -348,7 +346,7 @@ export function Channel(props: ChannelProps) {
 
   const channelName = useChannelName(props.channelId);
   const channelType = useChannelType(props.channelId);
-  const { popoverSplit, openWithSplit } = useSplitLayout();
+  const { popoverSplit } = useSplitLayout();
 
   // Placeholder name: channels render as "#name"; a 1:1 DM named "First Last"
   // shortens to the first name, and group DMs like "A, B" keep their full name.
@@ -642,50 +640,6 @@ export function Channel(props: ChannelProps) {
     );
   };
 
-  // Task mode: post the freshly created task into the channel as a message
-  // carrying a task mention.
-  const onSendTask: TaskModeChannelInputProps['onSendTask'] = (task) => {
-    const senderId = userId();
-    if (!senderId) return;
-    sendMessageMutation.mutate(
-      {
-        channelID: props.channelId,
-        senderId,
-        optimisticId: crypto.randomUUID(),
-        message: {
-          content: buildMentionMarkdownString({
-            type: 'document',
-            documentId: task.documentId,
-            documentName: task.title,
-            blockName: 'task',
-          }),
-          mentions: [{ entity_type: 'document', entity_id: task.documentId }],
-          attachments: [],
-        },
-        optimisticAttachments: [],
-      },
-      {
-        // The task itself was created before this send, so don't restore the
-        // composer (retrying there would create a duplicate) — point at the
-        // task instead.
-        onError: () => {
-          toast.failure('Task created, but sharing it to the channel failed', {
-            actions: [
-              {
-                label: 'Open task',
-                onClick: () =>
-                  openWithSplit(
-                    { type: 'task', id: task.documentId },
-                    { referredFrom: null }
-                  ),
-              },
-            ],
-          });
-        },
-      }
-    );
-  };
-
   const onThreadListReady = (navigation: ThreadListNavigation) => {
     setThreadListNavigation(navigation);
     finishLatestNavigation();
@@ -931,7 +885,7 @@ export function Channel(props: ChannelProps) {
                           )}
                         </Match>
                         <Match when={true}>
-                          <TaskModeChannelInput
+                          <ChannelInput
                             autofocus={props.autofocus}
                             collapsible
                             input={{
@@ -956,10 +910,6 @@ export function Channel(props: ChannelProps) {
                               void setChannelInputSnapshot(snapshot)
                             }
                             onSend={onSend}
-                            onSendTask={onSendTask}
-                            taskPersistence={makeTaskPersistence({
-                              channelId: props.channelId,
-                            })}
                             onStartTyping={() =>
                               typingMutation.mutate({
                                 channelId: props.channelId,

@@ -26,11 +26,22 @@ session-specific.
 
 ## Message composer
 
-Desktop composer and conversation body text use 15px type. Mobile keeps its
-existing text sizing.
+Composer and conversation body text use `text-base` (15px at the default root
+size) on desktop and mobile. The shared scale uses 14px for `text-sm` and 12px
+for `text-xs`, with accessibility text scaling preserved.
 
 Desktop message text uses a 16px horizontal inset and a compact gap above the
 toolbar, consistent at narrow and wide composer widths.
+
+The new-message compose screen and channel message/reply inputs use the same
+attachment and send controls on mobile and desktop, with no format toggle.
+iOS uses the native media attachment picker.
+Short drafts place attachment, message text, and send on one row on both mobile
+and desktop. Multiline drafts and attachments expand the composer with its
+actions below the editor.
+When checking this transition, add and remove a line break or attachment and
+confirm the draft and caret position survive. The attachment and send controls
+should remain usable in both layouts, including when editing an existing message.
 
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or
@@ -46,7 +57,7 @@ to update titles and access.
 
 Placeholder `Type @ to share with #<name>`. Click it, `type_text`, press Enter to send.
 The message renders immediately with avatar, email, timestamp. Composer extras: `Attach
-files`, `Format`, a `Task` switch (turns the message into a task), `Send message` button.
+files` and the `Send message` button. Replies also include a close-reply control.
 
 Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
 an existing thread reply, it inserts a one-line reply-target reference into the composer;

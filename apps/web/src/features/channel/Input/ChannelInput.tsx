@@ -1,4 +1,4 @@
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
 import {
@@ -6,6 +6,7 @@ import {
   INSERT_DOCUMENT_MENTION_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
 import {
   clearDragInsertPreview,
   insertDocumentMentionAtDragCoordinates,
@@ -92,51 +93,37 @@ export type ChannelInputProps = InputCallbacks & {
    * Defaults to `false`.
    */
   collapsible?: boolean;
-  /**
-   * Whether focus leaving the input may collapse it. Defaults to `true`.
-   * Composed alternate input faces can disable this while the message face is
-   * hidden so it remains expanded for the return transition.
-   */
-  collapseOnFocusOut?: boolean;
-  /**
-   * Optional composition slot around the message face inside the shared input
-   * surface. Used by alternate input modes that need to preserve the surface
-   * while switching content.
-   */
-  renderContent?: (messageFace: JSX.Element) => JSX.Element;
 };
 
 function WebDefaultActions(props: { input: InputData }) {
   return (
-    <Input.Actions>
-      <Input.Actions.Left>
+    <>
+      <Input.Layout.ActionsLeft>
         <Input.AttachFilesAction />
-        <Input.ToggleFormatAction />
         <Show when={isReplyInput(props.input)}>
           <Input.CloseReplyAction />
         </Show>
-      </Input.Actions.Left>
-      <Input.Actions.Right>
+      </Input.Layout.ActionsLeft>
+      <Input.Layout.ActionsRight>
         <Input.SendAction />
-      </Input.Actions.Right>
-    </Input.Actions>
+      </Input.Layout.ActionsRight>
+    </>
   );
 }
 
 function IosDefaultActions(props: { input: InputData }) {
   return (
-    <Input.Actions>
-      <Input.Actions.Left>
+    <>
+      <Input.Layout.ActionsLeft>
         <Input.AttachNativeMediaAction />
-        <Input.ToggleFormatAction />
         <Show when={isReplyInput(props.input)}>
           <Input.CloseReplyAction />
         </Show>
-      </Input.Actions.Left>
-      <Input.Actions.Right>
+      </Input.Layout.ActionsLeft>
+      <Input.Layout.ActionsRight>
         <Input.SendAction />
-      </Input.Actions.Right>
-    </Input.Actions>
+      </Input.Layout.ActionsRight>
+    </>
   );
 }
 
@@ -339,6 +326,7 @@ export function ChannelInput(props: ChannelInputProps) {
   });
   const markdownHandle = markdownEditor.buildHandle();
   const lexicalEditor = () => markdownHandle.lexical;
+  const hasLineBreaks = createHasLineBreaks(lexicalEditor());
   const [entityDragInsertStore, setEntityDragInsertStore] =
     createDragInsertStore();
 
@@ -447,72 +435,76 @@ export function ChannelInput(props: ChannelInputProps) {
   });
 
   const renderSurfaceContent = () => {
-    const messageFace = (
+    return (
       <Input.DropZone
         onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
         onDragEnd={() => inputState.setIsDraggedOver(false)}
       >
-        <Input.Layout>
+        <Input.Layout
+          oneLineInput={
+            !inputState.view().showFormatRibbon &&
+            !inputState.view().attachments?.length &&
+            !hasLineBreaks()
+          }
+        >
           <Input.DropOverlay />
-          <Input.FormatRibbon>
-            <FormatButtons
-              selectionState={() => markdownEditor.selection}
-              onInlineFormat={(format) =>
-                applyInlineFormat(markdownEditor.lexical, format)
-              }
-              onNodeFormat={(format) =>
-                applyNodeFormat(markdownEditor.lexical, format)
-              }
-            />
-          </Input.FormatRibbon>
-          <Input.EditorShell
-            ref={setScrollContainer}
-            on:click={(event) => {
-              if (!isTouchDevice()) {
-                event.stopPropagation();
-                markdownEditor.controls.focus();
-              }
-            }}
-          >
-            <Input.Editor>
-              <MarkdownShell
-                config={markdownEditor}
-                placeholder={props.input.placeholder}
-                initialValue={inputState.view().value}
-                autofocus={!isTouchDevice() && (props.autofocus ?? true)}
-                class="text-sm"
-                refFn={attach}
-                onConnect={() => {
-                  isEditorConnected = true;
-                  flushPendingRestore();
-                  flushPendingFocus();
-                  queueMicrotask(() => {
-                    acceptTyping = true;
-                  });
-                }}
+          <Input.Layout.Body>
+            <Input.FormatRibbon>
+              <FormatButtons
+                selectionState={() => markdownEditor.selection}
+                onInlineFormat={(format) =>
+                  applyInlineFormat(markdownEditor.lexical, format)
+                }
+                onNodeFormat={(format) =>
+                  applyNodeFormat(markdownEditor.lexical, format)
+                }
               />
-              <DragInsertIndicator
-                editor={lexicalEditor()}
-                state={entityDragInsertStore}
-                active
-              />
-            </Input.Editor>
-          </Input.EditorShell>
-          <Input.Attachments kind="media" />
-          <Input.Attachments kind="document" />
-          <Input.Footer>
-            <Switch>
-              <Match when={props.children}>{props.children}</Match>
-              <Match when>
-                <DefaultActions input={inputState.view()} />
-              </Match>
-            </Switch>
-          </Input.Footer>
+            </Input.FormatRibbon>
+            <Input.Layout.Editor
+              ref={setScrollContainer}
+              on:click={(event) => {
+                if (!isTouchDevice()) {
+                  event.stopPropagation();
+                  markdownEditor.controls.focus();
+                }
+              }}
+            >
+              <Input.Editor>
+                <ComposerEditor
+                  config={markdownEditor}
+                  placeholder={props.input.placeholder}
+                  initialValue={inputState.view().value}
+                  autofocus={!isTouchDevice() && (props.autofocus ?? true)}
+                  class="text-base"
+                  refFn={attach}
+                  onConnect={() => {
+                    isEditorConnected = true;
+                    flushPendingRestore();
+                    flushPendingFocus();
+                    queueMicrotask(() => {
+                      acceptTyping = true;
+                    });
+                  }}
+                />
+                <DragInsertIndicator
+                  editor={lexicalEditor()}
+                  state={entityDragInsertStore}
+                  active
+                />
+              </Input.Editor>
+            </Input.Layout.Editor>
+            <Input.Attachments kind="media" />
+            <Input.Attachments kind="document" />
+          </Input.Layout.Body>
+          <Switch>
+            <Match when={props.children}>{props.children}</Match>
+            <Match when>
+              <DefaultActions input={inputState.view()} />
+            </Match>
+          </Switch>
         </Input.Layout>
       </Input.DropZone>
     );
-
-    return props.renderContent?.(messageFace) ?? messageFace;
   };
 
   return (
@@ -551,11 +543,11 @@ export function ChannelInput(props: ChannelInputProps) {
         />
       </Show>
       <ComposerSurface
+        appearance="chat"
         onFocusOut={(e) => {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;
           if (isInternalRefocus) return;
-          if (props.collapseOnFocusOut === false) return;
           collapsedInput.collapse();
         }}
         class={isCollapsed() ? 'hidden' : undefined}

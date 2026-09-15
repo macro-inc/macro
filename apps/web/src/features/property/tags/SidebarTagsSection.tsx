@@ -85,12 +85,9 @@ export function SidebarTagsSection(props: SidebarTagsSectionProps) {
                     props.onNavigate?.();
                   }}
                 >
-                  <span
-                    aria-hidden="true"
-                    class="flex size-4 shrink-0 items-center justify-center"
-                  >
+                  <ViewSidebar.Icon>
                     <TagDot color={tag.color} />
-                  </span>
+                  </ViewSidebar.Icon>
                   <span class="truncate">{tag.label}</span>
                 </ViewSidebar.Item>
               )}

@@ -7,7 +7,10 @@ import {
   testFacets,
   useSearchContext,
 } from '@app/features/soup';
-import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import {
+  getEntityNotifications,
+  withEntityNotifications,
+} from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
@@ -27,30 +30,35 @@ import {
 import type { NotificationSource } from '@notifications';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { startOfDay, subWeeks } from 'date-fns';
-import { createMemo } from 'solid-js';
+import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   noiseFilter,
   signalFilter,
 } from '../../next-soup/filters/inbox-filters';
-import {
-  notDoneFilter,
-  scheduledRemindersFilter,
-} from '../../next-soup/filters/predicates';
+import { scheduledRemindersFilter } from '../../next-soup/filters/predicates';
 import { INBOX_FACETS, type InboxFacetContext } from '../inbox-facets';
 import type { InboxTab, InboxViewState } from '../types';
+import { getHomePagination } from './home-pagination';
 import { soupItemMatchesInboxTab } from './inbox-item-filter';
 import {
   buildInboxQuery,
   type InboxQueryCapabilities,
   type InboxViewContext,
 } from './inbox-query';
-import { groupInboxEntitiesByDate, inboxSortTimestamp } from './inbox-results';
+import {
+  groupHomeEntitiesByDate,
+  groupInboxEntitiesByDate,
+  inboxSortTimestamp,
+  mergeHomeEntities,
+} from './inbox-results';
 import { buildInboxSearchRequest } from './inbox-search';
 
 export type InboxDataSourceItem = SoupRow<WithNotification<EntityData>>;
 
-export type InboxDataSource = ListDataSource<InboxDataSourceItem>;
+export type InboxDataSource = ListDataSource<InboxDataSourceItem> & {
+  warning: () => string | undefined;
+};
 
 export type InboxDataSourceInput = Pick<
   InboxViewState,
@@ -74,9 +82,15 @@ function matchesTab(
   tab: InboxTab,
   source: NotificationSource
 ): boolean {
+  const notDone = () =>
+    entity.type === 'email'
+      ? !entity.done
+      : getEntityNotifications(entity, source, {
+          scopeChannelThreads: true,
+        }).some((notification) => notification.state !== 'done');
   return match(tab)
     .with('signal', () => {
-      if (!signalFilter(entity) || !notDoneFilter(source)(entity)) return false;
+      if (!signalFilter(entity) || !notDone()) return false;
 
       if (
         entity.type !== 'document' &&
@@ -92,7 +106,7 @@ function matchesTab(
         subWeeks(startOfDay(new Date()), 2).getTime()
       );
     })
-    .with('noise', () => noiseFilter(entity) && notDoneFilter(source)(entity))
+    .with('noise', () => noiseFilter(entity) && notDone())
     .with('reminders', () => scheduledRemindersFilter(entity))
     .exhaustive();
 }
@@ -143,33 +157,83 @@ export function useInboxEntitiesQuery(
     };
   });
 
-  const transformEntities = (entities: EntityData[]) => {
+  const filterEntities = (entities: EntityData[]) => {
     const context = viewContext();
     return entities
       .filter((entity) => matchesCapabilities(entity, context.capabilities))
-      .map((entity) =>
-        withEntityNotifications(entity, notificationSource, {
-          scopeChannelThreads: true,
-        })
-      )
       .filter((entity) => matchesTab(entity, context.tab, notificationSource));
   };
 
-  return { query, viewContext, transformEntities };
+  const attachNotifications = (entity: EntityData) =>
+    withEntityNotifications(entity, notificationSource, {
+      scopeChannelThreads: true,
+    });
+  const transformEntities = (entities: EntityData[]) =>
+    filterEntities(entities).map(attachNotifications);
+
+  return {
+    query,
+    viewContext,
+    filterEntities,
+    attachNotifications,
+    transformEntities,
+    notificationSource,
+  };
 }
 
 export function useInboxDataSource(
   state: InboxDataSourceInput
 ): InboxDataSource {
-  const { query, viewContext, transformEntities } =
-    useInboxEntitiesQuery(state);
+  const {
+    query,
+    viewContext,
+    filterEntities,
+    attachNotifications,
+    transformEntities,
+  } = useInboxEntitiesQuery(state);
+
+  const [now, setNow] = createSignal(new Date());
+  onMount(() => {
+    const timer = setInterval(() => setNow(new Date()), 30_000);
+    onCleanup(() => clearInterval(timer));
+  });
+
+  // Activity's hydrated own-touch projection includes sent mail and chats even
+  // when they have no outstanding notifications. Its endpoint rejects email
+  // and channel filter trees, so Home applies its facets after merging.
+  const recentQuery = useSoupAstItemsQuery(
+    () => ({
+      params: {
+        expand: true,
+        limit: 100,
+        sort_method: 'touched_by_me',
+        sort_direction: 'desc',
+      },
+      body: {},
+    }),
+    () => ({ enabled: state.tab === 'signal' })
+  );
+  const recentEntities = () =>
+    state.tab === 'signal' && !recentQuery.isLoading
+      ? (recentQuery.data?.entities ?? [])
+      : [];
+  const transformHomeEntities = (entities: EntityData[], recents = entities) =>
+    state.tab === 'signal'
+      ? mergeHomeEntities(
+          filterEntities(entities),
+          recents.filter((entity) =>
+            matchesCapabilities(entity, viewContext().capabilities)
+          ),
+          viewContext()
+        ).map(attachNotifications)
+      : transformEntities(entities);
 
   const { entityPool } = useSearchContext();
   const localPool = createMemo(() => {
     if (!state.search.trim()) return [];
     const pool = entityPool();
     const matchingIds = new Set(
-      transformEntities(pool.map((item) => item.data)).map(
+      transformHomeEntities(pool.map((item) => item.data)).map(
         (entity) => entity.id
       )
     );
@@ -184,9 +248,8 @@ export function useInboxDataSource(
 
   const rawEntities = createMemo<EntityData[]>((previous) => {
     if (!search.isSearching()) {
-      if (query.isLoading) return previous;
-
-      return query.data?.entities ?? [];
+      const notifications = query.isLoading ? [] : (query.data?.entities ?? []);
+      return notifications;
     }
 
     const results = search.data();
@@ -200,6 +263,26 @@ export function useInboxDataSource(
     return results;
   }, []);
 
+  const homePagination = createMemo(() => {
+    if (state.tab !== 'signal' || search.isSearching()) return undefined;
+    return getHomePagination(
+      {
+        oldestFetchedTimestamp: query.isLoading
+          ? undefined
+          : query.data?.oldestFetchedTimestamp,
+        hasMore: query.hasNextPage && !query.error,
+        isLoading: query.isLoading,
+      },
+      {
+        oldestFetchedTimestamp: recentQuery.isLoading
+          ? undefined
+          : recentQuery.data?.oldestFetchedTimestamp,
+        hasMore: recentQuery.hasNextPage && !recentQuery.error,
+        isLoading: recentQuery.isLoading,
+      }
+    );
+  });
+
   // Keep rows admitted after they transition from unread to read. Changing the
   // tab or read filter starts a new admission scope.
   const entities = createMemo<{
@@ -209,7 +292,14 @@ export function useInboxDataSource(
   }>(
     (previous) => {
       const context = viewContext();
-      const transformed = transformEntities(rawEntities());
+      const transformed = transformHomeEntities(
+        rawEntities(),
+        search.isSearching() ? rawEntities() : recentEntities()
+      ).filter(
+        (entity) =>
+          new Date(entity.sortTs ?? 0).getTime() >
+          (homePagination()?.cutoff ?? -Infinity)
+      );
       const activeReadFacets = context.facets.read ?? [];
       const readScope = `${context.tab}:${activeReadFacets.join(',')}`;
       const admittedIds =
@@ -253,19 +343,27 @@ export function useInboxDataSource(
 
   const hasMore = () => {
     if (usesServiceSearch()) return search.hasNextPage();
-    return query.hasNextPage;
+    return (
+      (query.hasNextPage && !query.error) ||
+      (state.tab === 'signal' && recentQuery.hasNextPage && !recentQuery.error)
+    );
   };
 
   const isLoadingMore = () => {
     if (usesServiceSearch()) return search.isFetchingNextPage();
-    return query.isFetchingNextPage;
+    return (
+      query.isFetchingNextPage ||
+      (state.tab === 'signal' && recentQuery.isFetchingNextPage)
+    );
   };
 
   const items = createMemo<InboxDataSourceItem[]>(() => {
     let result: InboxDataSourceItem[];
     if (state.groupBy === 'date' && !search.isSearching()) {
       result = buildGroupedSoupRows(
-        groupInboxEntitiesByDate(entities().items, viewContext())
+        state.tab === 'signal'
+          ? groupHomeEntitiesByDate(entities().items, now())
+          : groupInboxEntitiesByDate(entities().items, viewContext())
       );
     } else {
       result = buildFlatSoupRows(entities().items);
@@ -276,7 +374,11 @@ export function useInboxDataSource(
 
   const isLoading = () => {
     if (!search.isSearching()) {
-      return query.isLoading && rawEntities().length === 0;
+      return (
+        (query.isLoading ||
+          (state.tab === 'signal' && recentQuery.isLoading)) &&
+        entities().items.length === 0
+      );
     }
     if (entities().items.length > 0) return false;
     if (usesServiceSearch()) return search.isLoading();
@@ -288,11 +390,27 @@ export function useInboxDataSource(
     isLoading,
     isFetching: () => {
       if (search.isSettling()) return true;
-      return usesServiceSearch() ? search.isFetching() : query.isFetching;
+      return usesServiceSearch()
+        ? search.isFetching()
+        : query.isFetching ||
+            (state.tab === 'signal' && recentQuery.isFetching);
     },
     error: () => {
-      if (!usesServiceSearch()) return query.error ?? undefined;
+      if (!usesServiceSearch())
+        return entities().items.length === 0 && !hasMore()
+          ? (query.error ??
+              (state.tab === 'signal' ? recentQuery.error : undefined) ??
+              undefined)
+          : undefined;
       return search.error();
+    },
+    warning: () => {
+      if (usesServiceSearch() || (entities().items.length === 0 && !hasMore()))
+        return undefined;
+      if (query.error) return 'Notifications could not be refreshed.';
+      if (state.tab === 'signal' && recentQuery.error)
+        return 'Recent activity could not be refreshed.';
+      return undefined;
     },
     hasMore,
     isLoadingMore,
@@ -301,14 +419,30 @@ export function useInboxDataSource(
         await search.fetchNextPage();
         return;
       }
-      await query.fetchNextPage();
+      const pagination = homePagination();
+      await Promise.all([
+        query.hasNextPage &&
+        !query.error &&
+        (pagination?.loadNotifications ?? true)
+          ? query.fetchNextPage()
+          : undefined,
+        state.tab === 'signal' &&
+        recentQuery.hasNextPage &&
+        !recentQuery.error &&
+        (pagination?.loadActivity ?? true)
+          ? recentQuery.fetchNextPage()
+          : undefined,
+      ]);
     },
     refresh: async () => {
       if (usesServiceSearch()) {
         await search.refetch();
         return;
       }
-      await query.refresh();
+      await Promise.all([
+        query.refresh(),
+        state.tab === 'signal' ? recentQuery.refresh() : undefined,
+      ]);
     },
   } satisfies InboxDataSource;
 }

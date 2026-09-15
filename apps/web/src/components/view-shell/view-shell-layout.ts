@@ -16,7 +16,7 @@ export type AsideLayout = {
 };
 
 export const DEFAULT_ASIDE_LAYOUT: AsideLayout = {
-  width: 288,
+  width: 256,
   min: 224,
   max: 360,
 };
