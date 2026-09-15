@@ -83,7 +83,7 @@ export function scopeChannelNotificationsForEntity(
   return notifications;
 }
 
-type EntityWithRawNotifications<T extends EntityData> = T & {
+export type EntityWithRawNotifications<T extends EntityData> = T & {
   notifications?: UnifiedNotification[] | Accessor<UnifiedNotification[]>;
 };
 
