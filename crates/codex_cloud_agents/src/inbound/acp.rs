@@ -10,6 +10,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
 
+mod citations;
+
 struct Sink {
     connection: ConnectionTo<Client>,
     session: SessionId,
@@ -116,7 +118,8 @@ fn project(event: &CloudEvent, text: &mut HashMap<String, String>) -> Vec<Sessio
                 ""
             };
             vec![SessionUpdate::AgentMessageChunk(chunk(&format!(
-                "{separator}{final_text}"
+                "{separator}{}",
+                citations::markdown(final_text)
             )))]
         }
         "item/commandExecution/outputDelta" => {

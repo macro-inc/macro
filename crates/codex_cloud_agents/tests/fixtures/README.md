@@ -22,3 +22,9 @@ Its folded snapshot was also rendered in Chromium using the production
 appear once, with three headings, thirteen list items, inline code, and no
 synthetic correction or final-output wrappers. That browser check uses the
 recorded snapshot, not a new live cloud task.
+
+`reported_gitkeep_message.md` is transcribed from the user's rendered message,
+not a raw provider recording. Its ACP snapshot verifies that the native and
+poll-fallback message paths both turn `【F:.gitkeep†L1】` into Markdown inline
+code, `.gitkeep:1`, without changing the original provider text. The projected
+snapshot is also checked in Chromium with the production message renderer.

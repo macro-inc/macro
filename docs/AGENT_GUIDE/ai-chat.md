@@ -66,7 +66,10 @@ is saved in Settings → Harness. New sessions use the saved environment and
 always start from `main`. The composer hides model overrides for
 Codex because this harness does not expose model selection. Codex assistant
 text appears as complete messages; tool activity and thinking can still update
-while a response is being prepared. A recorded two-turn Codex conversation was
+while a response is being prepared. Codex file citations render as inline code
+with the path and line range, such as `.gitkeep:1` or `src/main.rs:2-12`;
+they do not link to a local file or a guessed remote revision.
+A recorded two-turn Codex conversation was
 verified in Chromium with the production conversation renderer: both replies
 appear once, with headings, lists, and inline code intact. Setup navigation,
 selection, and the create/prompt payloads were verified in Chromium with mocked

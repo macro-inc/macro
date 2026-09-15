@@ -1,5 +1,23 @@
 use super::*;
 use serde_json::json;
+
+#[test]
+fn reported_gitkeep_citation_is_markdown_in_native_and_poll_messages() {
+    // Text transcribed from the user's rendered reply, not a provider recording.
+    let body = include_str!("../../../tests/fixtures/reported_gitkeep_message.md");
+    for id in ["native-message", "poll-message:0"] {
+        let event = CloudEvent {
+            id: "citation-example".into(),
+            method: "item/completed".into(),
+            params: json!({"item":{"id":id,"type":"agentMessage","text":body}}),
+        };
+        let mut state = HashMap::new();
+        let updates = project(&event, &mut state);
+        insta::assert_json_snapshot!("reported_gitkeep_citation", updates);
+        assert!(project(&event, &mut state).is_empty());
+        assert_eq!(event.params["item"]["text"], body, "raw text stays intact");
+    }
+}
 #[test]
 fn completed_messages_ignore_unordered_deltas_and_repeated_completions() {
     let mut state = HashMap::new();
