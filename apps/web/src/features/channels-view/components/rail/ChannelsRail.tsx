@@ -643,6 +643,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     favorites,
     selectedChannelId: () => state.selectedChannelId,
     isGroupOpen: (group) => state.expandedGroups[group],
+    toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
     registerRootRef: setListRoot,
     activateRow,
     registerScrollRef: (group, element) => {

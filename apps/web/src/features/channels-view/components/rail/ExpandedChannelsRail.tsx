@@ -40,7 +40,6 @@ import {
   domIdForRow,
   rowKeyForChannel,
   rowKeyForFavorite,
-  rowKeyForSection,
   useChannelsRail,
 } from './ChannelsRailContext';
 import {
@@ -131,7 +130,11 @@ function FavoriteOption(props: { favorite: Favorite }) {
       onClick={() => rail.activateRow(rowKeyForFavorite(props.favorite))}
     >
       <span class="flex size-6 shrink-0 items-center justify-center">
-        <FavoriteIcon favorite={props.favorite} class="size-4" />
+        <FavoriteIcon
+          favorite={props.favorite}
+          avatarSize="md"
+          class="size-4"
+        />
       </span>
       <span class="min-w-0 flex-1 truncate text-sm font-medium">
         {displayName()}
@@ -211,7 +214,11 @@ function ExpandedFavoritesSection() {
             tabIndex={-1}
             class="relative flex h-full min-w-0 flex-1 items-center gap-1 rounded-xl px-2 text-left outline-none"
             aria-expanded={section().open}
-            onClick={() => rail.activateRow(rowKeyForSection('favorites'))}
+            onMouseDown={(event) => {
+              if (!isPrimaryMouseDown(event)) return;
+              event.preventDefault();
+              rail.toggleGroup('favorites');
+            }}
           >
             <span class="min-w-0 truncate">Favorites</span>
             <CaretDownIcon
@@ -424,7 +431,8 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           aria-expanded={section().open}
           onMouseDown={(event) => {
             if (!isPrimaryMouseDown(event)) return;
-            rail.activateRow(rowKeyForSection(props.config.group));
+            event.preventDefault();
+            rail.toggleGroup(props.config.group);
           }}
         >
           <span class="min-w-0 truncate">{props.config.label}</span>

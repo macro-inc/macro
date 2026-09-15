@@ -58,6 +58,7 @@ export type ChannelsRailContext = {
   favorites: Accessor<readonly Favorite[]>;
   selectedChannelId: Accessor<string | undefined>;
   isGroupOpen: (group: ChannelsRailSection) => boolean;
+  toggleGroup: (group: ChannelsRailSection) => void;
   registerRootRef: (element: HTMLDivElement) => void;
   activateRow: (rowId: ChannelRailRow['id']) => void;
   registerScrollRef: (

@@ -41,7 +41,6 @@ import {
   domIdForRow,
   rowKeyForChannel,
   rowKeyForFavorite,
-  rowKeyForSection,
   useChannelsRail,
 } from './ChannelsRailContext';
 import {
@@ -208,7 +207,11 @@ function SlimFavoritesSection() {
             class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none"
             aria-expanded={section().open}
             aria-label="Favorites"
-            onClick={() => rail.activateRow(rowKeyForSection('favorites'))}
+            onMouseDown={(event) => {
+              if (!isPrimaryMouseDown(event)) return;
+              event.preventDefault();
+              rail.toggleGroup('favorites');
+            }}
           >
             <StarIcon class="size-4" />
           </button>
@@ -423,7 +426,8 @@ function SlimGroupSection(props: { config: GroupConfig }) {
           aria-label={props.config.label}
           onMouseDown={(event) => {
             if (!isPrimaryMouseDown(event)) return;
-            rail.activateRow(rowKeyForSection(props.config.group));
+            event.preventDefault();
+            rail.toggleGroup(props.config.group);
           }}
         >
           <span class="flex items-center justify-center [&_svg]:size-4">
