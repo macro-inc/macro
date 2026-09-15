@@ -150,10 +150,16 @@ publishes every channel post on both topics, so reading both would evaluate each
 channel mention twice. The channel source stays available as a rollback until PR 7
 retires the `channel.message_*` events, at which point it is removed.
 
-Agent-session trigger events on `macro.agent_sessions` moved to schema version 2 with
-the parent-aware post; consumers that still expect version 1 skip the new events.
-Lifecycle events keep their schema: `ThreadOrigin` gains `parent` and its `channel_id`
-becomes optional, and older origins without a parent decode as channel origins.
+Agent-session trigger events on `macro.agent_sessions` stay at schema version 1. A
+channel-parent trigger keeps the shapes every consumer already decodes
+(`top_level_mentioned` and `channel`, embedding the channel-only post with its
+`channel_type`, which the trigger reads from the channel when `message.posted` did not
+carry it). A document-parent trigger travels in the new `mentioned` and `thread`
+variants, which consumers built before message parents drop as undecodable. Old
+replicas and user-run macrod daemons therefore keep serving channel mentions through a
+deploy; only document mentions wait for them to roll. Lifecycle events keep their
+schema too: `ThreadOrigin` gains `parent` and its `channel_id` becomes optional, and
+older origins without a parent decode as channel origins.
 
 ## What each remaining PR adds
 

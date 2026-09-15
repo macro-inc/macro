@@ -6,15 +6,12 @@ use agent_session::domain::ports::MockAgentSessionRepo;
 use bots::domain::models::{Agent, AgentChannelScope, AgentMcpServers, Bot, BotKind, BotOwner};
 use channel_sender::ChannelSender;
 use chrono::Utc;
-use macro_event_broker::MacroEvent;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::models::SimpleMention;
 
-use crate::domain::broker_events::{
-    AgentTriggerTopicEvent, ExistingAgentSessionEvent, NewAgentSessionEvent,
-};
+use crate::domain::broker_events::TriggerDecision;
 
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|trigger-service-test@macro.com")
@@ -245,16 +242,31 @@ fn no_implicit() -> (MockExplicitReplyExtractor, MockImplicitTriggerJudge) {
     )
 }
 
-fn existing_channel_metadata(
-    events: &[AgentSessionMacroEvent],
-) -> &crate::domain::broker_events::ThreadEventMetadata {
+/// The one existing-session decision an evaluation yielded.
+struct ExistingDecision {
+    bot_id: BotId,
+    session_id: AgentSessionId,
+    kind: ThreadMessageKind,
+    message: MessagePostedMetadata,
+}
+
+fn existing_channel_metadata(events: &[TriggerDecision]) -> ExistingDecision {
     assert_eq!(events.len(), 1);
-    let AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(metadata)) =
-        &events[0].event().event
+    let TriggerDecision::Existing {
+        bot_id,
+        session_id,
+        kind,
+        message,
+    } = &events[0]
     else {
-        panic!("expected a channel event");
+        panic!("expected an existing-session decision, got {:?}", events[0]);
     };
-    metadata
+    ExistingDecision {
+        bot_id: *bot_id,
+        session_id: *session_id,
+        kind: *kind,
+        message: message.clone(),
+    }
 }
 
 fn sessions_without_existing() -> MockAgentSessionRepo {
@@ -499,11 +511,9 @@ async fn evaluates_every_mentioned_agent_bot() {
     assert_eq!(events.len(), 2);
     let mut event_bots: Vec<_> = events
         .iter()
-        .map(|event| match &event.event().event {
-            AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
-                mentioned.bot_id
-            }
-            other => panic!("expected a new-session event, got {other:?}"),
+        .map(|event| match event {
+            TriggerDecision::Open { bot_id, .. } => *bot_id,
+            other => panic!("expected a new-session decision, got {other:?}"),
         })
         .collect();
     event_bots.sort_by_key(ToString::to_string);
@@ -532,12 +542,10 @@ async fn evaluates_a_repeated_bot_mention_once() {
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(events.len(), 1);
-    let AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) =
-        &events[0].event().event
-    else {
-        panic!("expected a new-session event");
+    let TriggerDecision::Open { bot_id, .. } = &events[0] else {
+        panic!("expected a new-session decision");
     };
-    assert_eq!(mentioned.bot_id, BotId::TEST_A);
+    assert_eq!(*bot_id, BotId::TEST_A);
 }
 
 #[tokio::test]

@@ -6,10 +6,7 @@ use channel_sender::ChannelSender;
 use messages::domain::events::MessagePostedMetadata;
 use messages::domain::mentions::bot_mention_ids;
 
-use crate::domain::broker_events::{
-    AgentBotMentionedEvent, AgentSessionMacroEvent, NewAgentSessionEvent, ThreadEventMetadata,
-    ThreadMessageKind,
-};
+use crate::domain::broker_events::{ThreadMessageKind, TriggerDecision};
 
 /// Why evaluating a message did not produce an agent-session event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
@@ -57,19 +54,19 @@ pub enum NoEventReason {
 #[derive(Debug)]
 #[allow(
     clippy::large_enum_variant,
-    reason = "the event carries a whole message; boxing would only move the size"
+    reason = "the decision carries a whole message; boxing would only move the size"
 )]
 pub enum AgentSessionEventDecision {
-    /// Publish this event.
-    Event(AgentSessionMacroEvent),
+    /// Publish this decision.
+    Event(TriggerDecision),
     /// Do not publish, for some reason the agent harness was not triggered.
     NoEvent(NoEventReason),
 }
 
 impl AgentSessionEventDecision {
-    /// Returns the event when this decision emits one.
+    /// Returns the decision when this one emits an event.
     #[must_use]
-    pub fn into_event(self) -> Option<AgentSessionMacroEvent> {
+    pub fn into_event(self) -> Option<TriggerDecision> {
         match self {
             Self::Event(event) => Some(event),
             Self::NoEvent(_) => None,
@@ -150,22 +147,18 @@ fn yield_channel_event(
     let mentioned = bot_mention_ids(&posted.mentions).contains(&session_bot);
 
     match (existing, mentioned) {
-        (ThreadSession::CreatedFromThread(session), true) => AgentSessionEventDecision::Event(
-            AgentSessionMacroEvent::thread_event(ThreadEventMetadata {
+        (ThreadSession::CreatedFromThread(session), true) => {
+            AgentSessionEventDecision::Event(TriggerDecision::Existing {
                 bot_id: session_bot,
                 session_id: session.id,
                 kind: ThreadMessageKind::MentionThread,
                 message: posted.clone(),
-            }),
-        ),
-        (ThreadSession::None, true) => {
-            AgentSessionEventDecision::Event(AgentSessionMacroEvent::new_session(
-                NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
-                    bot_id: session_bot,
-                    message: posted.clone(),
-                }),
-            ))
+            })
         }
+        (ThreadSession::None, true) => AgentSessionEventDecision::Event(TriggerDecision::Open {
+            bot_id: session_bot,
+            message: posted.clone(),
+        }),
         (ThreadSession::CreatedFromThread(session), false) => {
             AgentSessionEventDecision::NoEvent(NoEventReason::MentionRequired {
                 bot_id: session_bot,

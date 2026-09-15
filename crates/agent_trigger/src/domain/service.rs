@@ -20,9 +20,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
-use crate::domain::broker_events::{
-    AgentSessionMacroEvent, ThreadEventMetadata, ThreadMessageKind,
-};
+use crate::domain::broker_events::{ThreadMessageKind, TriggerDecision};
 use crate::domain::thread_window::{ThreadMessage, render_transcript, thread_window};
 use crate::domain::yield_event::{
     AgentSessionEventDecision, NoEventReason, PotentialTriggerEvent, yield_event,
@@ -291,10 +289,7 @@ where
         message.scope = tracing::field::Empty,
         agent.mention.bot_count = tracing::field::Empty,
     ))]
-    pub async fn evaluate(
-        &self,
-        posted: &MessagePostedMetadata,
-    ) -> Result<Vec<AgentSessionMacroEvent>> {
+    pub async fn evaluate(&self, posted: &MessagePostedMetadata) -> Result<Vec<TriggerDecision>> {
         let Some(user) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
             return Ok(Vec::new());
         };
@@ -355,7 +350,7 @@ where
         posted: &MessagePostedMetadata,
         mentioned_bot: Option<BotId>,
         seen_sessions: &mut HashSet<AgentSessionId>,
-    ) -> Result<Option<AgentSessionMacroEvent>> {
+    ) -> Result<Option<TriggerDecision>> {
         let existing = self
             .sessions
             .find_for_thread(posted.thread_id, mentioned_bot)
@@ -422,7 +417,7 @@ where
         &self,
         posted: &MessagePostedMetadata,
         invocation: &AuthorizedInvocation,
-    ) -> Result<Option<AgentSessionMacroEvent>> {
+    ) -> Result<Option<TriggerDecision>> {
         let Some(thread_id) = posted.thread_id else {
             return Ok(None);
         };
@@ -592,13 +587,13 @@ fn thread_event(
     session: AgentSession,
     kind: ThreadMessageKind,
     posted: &MessagePostedMetadata,
-) -> AgentSessionMacroEvent {
-    AgentSessionMacroEvent::thread_event(ThreadEventMetadata {
+) -> TriggerDecision {
+    TriggerDecision::Existing {
         bot_id: session.bot_id,
         session_id: session.id,
         kind,
         message: posted.clone(),
-    })
+    }
 }
 
 /// The live session the reply-target names: its bot as addressee, or uniquely

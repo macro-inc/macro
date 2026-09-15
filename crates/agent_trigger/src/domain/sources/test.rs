@@ -1,11 +1,12 @@
 use super::*;
 use channel_sender::ChannelSender;
-use channels::domain::broker_events::ChannelEventAttachment;
+use channels::domain::broker_events::{ChannelEventAttachment, ChannelMessagePostedMetadata};
 use channels::domain::models::ChannelType;
 use chrono::Utc;
 use macro_event_broker::{Event, MacroEvent as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::models::SimpleMention;
+use messages::domain::events::MessagePostedMetadata;
+use messages::domain::models::{MessageParent, SimpleMention};
 
 struct Record {
     topic: &'static str,
@@ -76,6 +77,8 @@ fn a_channel_post_decodes_as_a_channel_parent_rooted_like_the_message_service() 
     assert_eq!(reply.thread_id, Some(Uuid::from_u128(7)));
 }
 
+/// The channel source already knows the channel's type, so the trigger need
+/// not look it up to publish the channel-only wire shape.
 #[test]
 fn the_channel_source_only_triggers_on_posts() {
     let posted = ChannelMacroEvent::from_event(
@@ -85,10 +88,12 @@ fn the_channel_source_only_triggers_on_posts() {
     let decoded = ChannelTriggerEvents::decode(&record(&posted)).unwrap();
     let trigger = decoded.into_trigger();
     assert_eq!(trigger.event_type, "channel.message_posted");
+    let input = trigger.posted.unwrap();
     assert_eq!(
-        trigger.posted.unwrap().parent,
+        input.posted.parent,
         MessageParent::Channel(Uuid::from_u128(1))
     );
+    assert_eq!(input.channel_type, Some(ChannelType::Public));
 
     let deleted = ChannelMacroEvent::from_event(
         "1".to_owned(),
@@ -128,7 +133,13 @@ fn the_message_source_carries_the_persisted_parent_through() {
         .unwrap()
         .into_trigger();
     assert_eq!(trigger.event_type, "message.posted");
-    assert_eq!(trigger.posted, Some(posted));
+    assert_eq!(
+        trigger.posted,
+        Some(TriggerInput {
+            posted,
+            channel_type: None,
+        })
+    );
 
     let patched = MessageMacroEvent::patched(messages::domain::events::MessagePatchedMetadata {
         parent: MessageParent::parse("document", "doc-1").unwrap(),

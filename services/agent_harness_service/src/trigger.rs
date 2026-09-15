@@ -7,9 +7,11 @@ use agent_trigger::domain::sources::{
     ChannelTriggerEvents, MessageTriggerEvents, TriggerEventSource, TriggerEvents,
 };
 use agent_trigger::outbound::{
-    BotRepoAgentLookup, FastModelTriggerJudge, LexicalExplicitReplyExtractor, MessageThreadHistory,
+    BotRepoAgentLookup, ChannelRepoTypeLookup, FastModelTriggerJudge,
+    LexicalExplicitReplyExtractor, MessageThreadHistory,
 };
 use bots::outbound::pg_bots_repo::PgBotsRepo;
+use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_event_broker::{
@@ -45,6 +47,7 @@ type Trigger = AgentTriggerService<
     >,
 >;
 type Publisher = MacroEventBrokerService<KafkaEventPublisher, macro_event_broker::GlobalSpawner>;
+type ChannelTypes = ChannelRepoTypeLookup<PgChannelsRepo>;
 
 type TriggerKafkaAdapter<M> = KafkaConsumerAdapter<AgentTriggerConsumerGroup, M>;
 type TriggerConsumer<M> = MacroEventConsumerService<M, TriggerKafkaAdapter<M>>;
@@ -101,10 +104,11 @@ async fn run(
                 messages::domain::ports::NoMessageEventPublisher,
             )),
             entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(pool),
+                entity_access::outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
     );
+    let channel_types = ChannelRepoTypeLookup::new(PgChannelsRepo::new(pool));
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(&kafka_brokers)?,
         macro_event_broker::GlobalSpawner,
@@ -113,10 +117,10 @@ async fn run(
     let consumer = KafkaConsumerAdapter::<AgentTriggerConsumerGroup, ()>::new(consumer);
     match source {
         TriggerEventSource::Messages => {
-            consume::<MessageTriggerEvents>(consumer, &trigger, &publisher).await
+            consume::<MessageTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
         }
         TriggerEventSource::Channels => {
-            consume::<ChannelTriggerEvents>(consumer, &trigger, &publisher).await
+            consume::<ChannelTriggerEvents>(consumer, &trigger, &publisher, &channel_types).await
         }
     }
 }
@@ -126,6 +130,7 @@ async fn consume<Events: TriggerEvents>(
     consumer: KafkaConsumerAdapter<AgentTriggerConsumerGroup, ()>,
     trigger: &Trigger,
     publisher: &Publisher,
+    channel_types: &ChannelTypes,
 ) -> anyhow::Result<()> {
     let consumer = consumer
         .subscribe::<Events>()
@@ -170,7 +175,7 @@ async fn consume<Events: TriggerEvents>(
             tracing::Span::current().record("macro.event.type", decoded.event_type);
 
             if let Some(posted) = &decoded.posted {
-                process_message_event(trigger, publisher, posted).await?;
+                process_message_event(trigger, publisher, channel_types, posted).await?;
             }
             commit_message(&consumer, kafka_message)?;
             Ok(())

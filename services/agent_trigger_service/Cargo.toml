@@ -14,6 +14,7 @@ agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 ai_usage = { path = "../../crates/ai_usage" }
 anyhow = { workspace = true }
 bots = { path = "../../crates/bots", default-features = false, features = ["outbound", "ports"] }
+channels = { path = "../../crates/channels", default-features = false, features = ["outbound", "ports"] }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
 kafka_util = { path = "../../crates/kafka_util" }

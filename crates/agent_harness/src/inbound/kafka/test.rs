@@ -1,15 +1,18 @@
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentTriggerTopicEvent, ExistingAgentSessionEvent,
-    NewAgentSessionEvent, ThreadEventMetadata, ThreadMessageKind,
+    AgentBotMentionedEvent, AgentMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata,
+    ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata, ThreadMessageKind,
 };
 use bot_id::{BotId, MACRO_CODER_BOT_ID};
 use channel_sender::ChannelSender;
+use channels::domain::broker_events::ChannelMessagePostedMetadata;
+use channels::domain::models::ChannelType;
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::events::MessagePostedMetadata;
+use messages::domain::models::MessageParent;
 
 use super::*;
 use crate::domain::model::{AgentKind, AgentRuntimeConfig, HarnessCommand};
@@ -34,9 +37,30 @@ fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@macro.com").expect("a valid user id")
 }
 
-fn message(sender: ChannelSender<'static>) -> MessagePostedMetadata {
+/// A channel post in the channel-only shape channel triggers travel in.
+fn message(sender: ChannelSender<'static>) -> ChannelMessagePostedMetadata {
+    ChannelMessagePostedMetadata {
+        channel_id: Uuid::from_u128(1),
+        message_id: Uuid::from_u128(2),
+        thread_id: None,
+        sender,
+        triggered_by: None,
+        channel_type: ChannelType::Public,
+        content: "@claude fix the tests".to_owned(),
+        mentions: vec![],
+        attachments: vec![],
+        created_at: Utc::now(),
+    }
+}
+
+fn document() -> MessageParent {
+    MessageParent::parse("document", "doc-1").unwrap()
+}
+
+/// A document discussion post, which only the parent-aware shape carries.
+fn document_message(sender: ChannelSender<'static>) -> MessagePostedMetadata {
     MessagePostedMetadata {
-        parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(1)),
+        parent: document(),
         message_id: Uuid::from_u128(2),
         thread_id: None,
         root_id: Uuid::from_u128(2),
@@ -59,7 +83,7 @@ fn mentioned(bot: BotId, sender: ChannelSender<'static>) -> AgentTriggerTopicEve
 }
 
 fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
-    AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
+    AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
         bot_id: bot,
         session_id: AgentSessionId::TEST_A,
         kind: ThreadMessageKind::MentionThread,
@@ -207,13 +231,14 @@ fn an_external_channel_message_announces_only() {
 
 #[test]
 fn a_bot_authored_external_channel_message_is_skipped() {
-    let event =
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
+    let event = AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
+        ChannelEventMetadata {
             bot_id: BotId::TEST_A,
             session_id: AgentSessionId::TEST_A,
             kind: ThreadMessageKind::MentionThread,
             message: message(ChannelSender::new_from_bot(BotId::TEST_B)),
-        }));
+        },
+    ));
     assert_eq!(
         route_agent_trigger(event, runtime(AgentKind::External)).unwrap_err(),
         Skipped::NotFromUser
@@ -221,12 +246,46 @@ fn a_bot_authored_external_channel_message_is_skipped() {
 }
 
 fn channel_message_from(bot: BotId, sender: ChannelSender<'static>) -> AgentTriggerTopicEvent {
-    AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
+    AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
         bot_id: bot,
         session_id: AgentSessionId::TEST_A,
         kind: ThreadMessageKind::MentionThread,
         message: message(sender),
     }))
+}
+
+/// Document triggers arrive in the parent-aware shape and route on their
+/// document parent, opening and announcing like a channel mention would.
+#[test]
+fn a_document_mention_opens_and_follows_up_on_its_document() {
+    let opened =
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::Mentioned(AgentMentionedEvent {
+            bot_id: BotId::TEST_A,
+            message: document_message(ChannelSender::new_from_user(user())),
+        }));
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
+        route_agent_trigger(opened, runtime(AgentKind::InMemory))
+            .expect("a document mention for our bot should open")
+    else {
+        panic!("a new-session event should open");
+    };
+    assert_eq!(open.origin.parent, document());
+    assert_eq!(open.origin.thread_id, Uuid::from_u128(2));
+
+    let followed =
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
+            bot_id: MACRO_CODER_BOT_ID,
+            session_id: AgentSessionId::TEST_A,
+            kind: ThreadMessageKind::MentionThread,
+            message: document_message(ChannelSender::new_from_user(user())),
+        }));
+    let RoutedTrigger::Announce(session_id, prompt) =
+        route_agent_trigger(followed, None).expect("an external follow-up announces")
+    else {
+        panic!("an external existing-session event should announce");
+    };
+    assert_eq!(session_id, AgentSessionId::TEST_A);
+    assert_eq!(prompt.origin.parent, document());
 }
 
 #[test]
