@@ -48,8 +48,10 @@ function TaskViewBreadcrumbItem() {
     TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
 
   return (
-    <ViewBreadcrumbs.Item id="tasks-view" order={0} onClick={closeTask}>
-      <span class="truncate">{tabName()}</span>
+    <ViewBreadcrumbs.Item id="tasks-view" order={0}>
+      <ViewBreadcrumbs.Button onClick={closeTask}>
+        <span class="truncate">{tabName()}</span>
+      </ViewBreadcrumbs.Button>
     </ViewBreadcrumbs.Item>
   );
 }
@@ -66,30 +68,28 @@ function TaskBreadcrumbItem(props: {
   const focusTask = () => documentState.editor.md.editor?.focus();
 
   return (
-    <ViewBreadcrumbs.Item
-      id={`task:${props.documentId}`}
-      order={1}
-      current
-      class="gap-1.5 motion-safe:animate-[dialog-overlay-open_150ms_ease-out]"
-      onClick={focusTask}
-      suffix={
-        <div class="shrink-0 motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
-          <SplitFileMenu
-            id={props.documentId}
-            itemType="document"
-            name={taskName()}
-            ops={fileOperations}
-            tools={menuTools}
-            blockName="md"
-            blockAlias="task"
-            isOwner={permissions.isOwner()}
-            onDelete={closeTask}
-          />
-        </div>
-      }
-    >
-      <EntityIcon targetType="task" size="xs" class="shrink-0" />
-      <span class="truncate">{taskName()}</span>
+    <ViewBreadcrumbs.Item id={`task:${props.documentId}`} order={1}>
+      <ViewBreadcrumbs.Button
+        current
+        class="gap-1.5 motion-safe:animate-[dialog-overlay-open_150ms_ease-out]"
+        onClick={focusTask}
+      >
+        <EntityIcon targetType="task" size="xs" class="shrink-0" />
+        <span class="truncate">{taskName()}</span>
+      </ViewBreadcrumbs.Button>
+      <div class="shrink-0 motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
+        <SplitFileMenu
+          id={props.documentId}
+          itemType="document"
+          name={taskName()}
+          ops={fileOperations}
+          tools={menuTools}
+          blockName="md"
+          blockAlias="task"
+          isOwner={permissions.isOwner()}
+          onDelete={closeTask}
+        />
+      </div>
     </ViewBreadcrumbs.Item>
   );
 }

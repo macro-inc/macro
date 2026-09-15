@@ -65,11 +65,11 @@ function Root(props: ViewBreadcrumbsRootProps) {
   );
 }
 
-type BreadcrumbButtonProps = ButtonProps & {
+export type ViewBreadcrumbsButtonProps = ButtonProps & {
   current?: boolean;
 };
 
-function BreadcrumbButton(props: BreadcrumbButtonProps) {
+function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
   const [local, rest] = splitProps(props, [
     'children',
     'class',
@@ -113,31 +113,24 @@ function Separator(props: ViewBreadcrumbsSeparatorProps) {
   );
 }
 
-export type ViewBreadcrumbsItemProps = BreadcrumbButtonProps & {
+export type ViewBreadcrumbsItemProps = ParentProps<{
   id: string;
   order?: number;
-  suffix?: JSX.Element;
-};
+}>;
 
 /**
- * Registers one breadcrumb item with the nearest Root and removes it when
- * its owning component unmounts.
+ * Registers an arbitrary breadcrumb segment with the nearest Root and removes
+ * it when its owning component unmounts.
  */
 function Item(props: ViewBreadcrumbsItemProps) {
   const context = useViewBreadcrumbsContext();
-  const [local, itemProps] = splitProps(props, ['id', 'order', 'suffix']);
   let unregister: (() => void) | undefined;
 
   onMount(() => {
     unregister = context.register({
-      id: local.id,
-      order: () => local.order,
-      render: () => (
-        <>
-          <BreadcrumbButton {...itemProps} />
-          {local.suffix}
-        </>
-      ),
+      id: props.id,
+      order: () => props.order,
+      render: () => props.children,
     });
   });
   onCleanup(() => unregister?.());
@@ -183,6 +176,7 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
 
 export const ViewBreadcrumbs = Object.assign(Root, {
   Root,
+  Button: BreadcrumbButton,
   Item,
   Separator,
   Outlet,

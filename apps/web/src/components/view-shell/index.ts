@@ -29,6 +29,7 @@ export {
 } from './use-view-tab-hotkeys';
 export {
   ViewBreadcrumbs,
+  type ViewBreadcrumbsButtonProps,
   type ViewBreadcrumbsItemProps,
   type ViewBreadcrumbsOutletProps,
   type ViewBreadcrumbsRootProps,
