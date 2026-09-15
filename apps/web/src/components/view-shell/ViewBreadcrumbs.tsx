@@ -1,5 +1,5 @@
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import { Button, type ButtonProps, cn } from '@ui';
+import { cn } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -65,37 +65,34 @@ function Root(props: ViewBreadcrumbsRootProps) {
   );
 }
 
-export type ViewBreadcrumbsButtonProps = ButtonProps & {
-  current?: boolean;
-};
+export type ViewBreadcrumbsButtonProps =
+  JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
+    current?: boolean;
+  };
 
 function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
   const [local, rest] = splitProps(props, [
     'children',
     'class',
     'current',
-    'depth',
-    'size',
-    'variant',
+    'type',
   ]);
 
   return (
-    <Button
+    <button
       {...rest}
+      type={local.type ?? 'button'}
       aria-current={local.current ? 'page' : undefined}
-      variant={local.variant ?? 'ghost'}
-      size={local.size ?? 'sm'}
-      depth={local.depth ?? 2}
       class={cn(
-        'h-7 min-w-0 px-1 text-sm',
+        'flex h-7 min-w-0 items-center px-1 font-semibold text-sm tracking-[-0.03em] outline-none transition-colors focus-visible:outline-2 focus-visible:outline-accent motion-reduce:transition-none',
         local.current
-          ? 'shrink font-semibold text-ink'
-          : 'font-normal text-ink-muted',
+          ? 'shrink text-ink'
+          : 'text-ink-muted hover:text-ink focus-visible:text-ink',
         local.class
       )}
     >
       {local.children}
-    </Button>
+    </button>
   );
 }
 
