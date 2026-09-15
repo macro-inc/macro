@@ -339,6 +339,7 @@ export type SplitFileMenuProps = {
   buttonClass?: string;
   entityKind: BlockName | BlockAlias;
   permissions: Permissions;
+  onDuplicate?: (id: string) => void;
   onDelete?: () => void;
 };
 
@@ -571,7 +572,10 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                     id: props.id,
                     name: props.name,
                   });
-                  if (res) {
+                  if (!res) return;
+                  if (props.onDuplicate) {
+                    props.onDuplicate(res);
+                  } else {
                     replaceOrInsertSplit(
                       {
                         id: res,

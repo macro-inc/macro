@@ -69,7 +69,7 @@ function TaskBreadcrumbItem(props: {
   ownerId: string;
   projectId?: string;
 }) {
-  const { closeTask } = useTasksView();
+  const { closeTask, openTask } = useTasksView();
   const panel = useSplitPanelOrThrow();
   const { displayName } = useMarkdownName();
   const { permissions, state: documentState } = useMarkdownDocument();
@@ -89,6 +89,7 @@ function TaskBreadcrumbItem(props: {
   useBlockEntityCommands({
     id: props.documentId,
     scopeId: panel.splitHotkeyScope,
+    onDeleted: closeTask,
     resolveEntity: () =>
       buildEntityData({
         id: props.documentId,
@@ -115,6 +116,7 @@ function TaskBreadcrumbItem(props: {
             tools={menuTools}
             entityKind="task"
             permissions={menuPermissions()}
+            onDuplicate={(id) => openTask({ id, fallbackName: taskName() })}
             onDelete={closeTask}
           />
         </div>

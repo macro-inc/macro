@@ -13,6 +13,7 @@ import type { EntityActionListState } from './entity-action-context';
 
 type MakeDeleteOptions = {
   userId: () => string | undefined;
+  onDeleted?: (entities: EntityData[]) => void;
 };
 
 export const makeDeleteAction = (options: MakeDeleteOptions) => {
@@ -49,6 +50,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
           ? `Deleted ${reminders.length} reminders`
           : 'Reminder deleted'
       );
+      options.onDeleted?.(reminders);
     } catch {
       // createBulkDeleteDssItemsMutation already toasts and restores the rows.
     }
@@ -93,6 +95,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
         toast.success(
           rest.length > 1 ? `Deleted ${rest.length} items` : 'Deleted'
         );
+        options.onDeleted?.(rest);
       },
     });
   };

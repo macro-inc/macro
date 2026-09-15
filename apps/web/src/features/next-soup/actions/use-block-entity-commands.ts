@@ -53,6 +53,7 @@ export type UseBlockEntityCommandsOptions = {
   id?: string;
   scopeId?: string;
   resolveEntity?: () => EntityData | undefined;
+  onDeleted?: () => void;
 };
 
 export const useBlockEntityCommands = (
@@ -77,7 +78,10 @@ export const useBlockEntityCommands = (
     notificationSource: () => notificationSource,
   });
 
-  const deleteAction = makeDeleteAction({ userId: () => userId() });
+  const deleteAction = makeDeleteAction({
+    userId: () => userId(),
+    onDeleted: options.onDeleted,
+  });
   const renameAction = makeRenameAction({ userId: () => userId() });
   const copyAction = makeCopyAction();
   const moveToProjectAction = makeMoveToProjectAction();
