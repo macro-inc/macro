@@ -116,7 +116,7 @@ access to the title and property controls.
 
 Below the editor: `Discussion` section with a `Leave a comment...` contenteditable.
 Desktop uses the same compact 15px composer as channels and AI chat, with an
-`Add to comment` plus menu containing `Attach images` and `Formatting`. Shift+Enter
+an `Attach images` paperclip that opens the image picker directly. Shift+Enter
 expands the editor above the controls. Touch keeps separate `Attach images` and
 `Format` buttons. `Send comment` is disabled until text exists. Click the
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders

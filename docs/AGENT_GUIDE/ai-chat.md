@@ -138,7 +138,7 @@ an additional 2px of space below them; mobile dock spacing is unchanged.
 On mobile the production AI, new agent, and channel composers share rounded
 glass chrome, text padding, and a footer toolbar with a circular Send button.
 The production AI composer has an `Attach files` paperclip, `Ask AI…` placeholder,
-and compact model picker. Both AI systems keep model selection in the toolbar
+and compact model picker. On desktop, `Attach files` opens the file picker directly; use `@` to reference existing workspace items. Both AI systems keep model selection in the toolbar
 and expand with longer drafts. The new agent editor supports context via `@`
 mentions; its existing attachment capabilities are unchanged. Stop and queued
 message controls remain available.

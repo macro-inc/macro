@@ -49,10 +49,18 @@ it('closes the owning split without invoking either create action', () => {
   const view = render(() => (
     <>
       <SplitPanel.Root controller={home} aria-label="Home pane">
-        <SidebarCreateHeader label="New chat" onCreate={createHome} />
+        <SidebarCreateHeader
+          title="Home"
+          label="New chat"
+          onCreate={createHome}
+        />
       </SplitPanel.Root>
       <SplitPanel.Root controller={tasks} aria-label="Tasks pane">
-        <SidebarCreateHeader label="New task" onCreate={createTask} />
+        <SidebarCreateHeader
+          title="Tasks"
+          label="New task"
+          onCreate={createTask}
+        />
       </SplitPanel.Root>
     </>
   ));
@@ -68,7 +76,7 @@ it('updates close visibility when the last remaining split cannot close', () => 
   const [canClose, setCanClose] = createSignal(true);
   const view = render(() => (
     <SplitPanel.Root controller={controller(canClose)}>
-      <SidebarCreateHeader label="New email" onCreate={vi.fn()} />
+      <SidebarCreateHeader title="Email" label="New email" onCreate={vi.fn()} />
     </SplitPanel.Root>
   ));
   expect(view.queryByRole('button', { name: 'Close' })).not.toBeNull();
@@ -81,7 +89,7 @@ it('leaves touch headers without a desktop close control', () => {
   vi.mocked(isTouchDevice).mockReturnValue(true);
   const view = render(() => (
     <SplitPanel.Root controller={controller(() => true)}>
-      <SidebarCreateHeader label="New chat" onCreate={vi.fn()} />
+      <SidebarCreateHeader title="Home" label="New chat" onCreate={vi.fn()} />
     </SplitPanel.Root>
   ));
   expect(view.queryByRole('button', { name: 'Close' })).toBeNull();

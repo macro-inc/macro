@@ -1,5 +1,5 @@
 import { InputActionButton } from '@channel/Input/ActionButton';
-import { useInput, useInputCommands } from '@channel/Input/context';
+import { useInputCommands } from '@channel/Input/context';
 import { createCollapsedInputState } from '@channel/Input/create-collapsed-input-state';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { Input } from '@channel/Input/Input';
@@ -24,10 +24,8 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
 import PaperclipIcon from '@phosphor/paperclip.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import FormatIcon from '@phosphor/text-aa.svg';
 import { isIOS } from '@solid-primitives/platform';
-import { CollapsedInput, ComposerSurface, Dropdown } from '@ui';
+import { CollapsedInput, ComposerSurface } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -53,7 +51,6 @@ export type DiscussionInputProps = InputCallbacks & {
 };
 
 function AttachImagesAction() {
-  const input = useInput();
   const commands = useInputCommands();
   let fileInputRef: HTMLInputElement | undefined;
 
@@ -78,42 +75,12 @@ function AttachImagesAction() {
         accept="image/*"
         onChange={onAttachImages}
       />
-      <Show
-        when={!isTouchDevice()}
-        fallback={
-          <InputActionButton
-            label="Attach images"
-            onClick={() => fileInputRef?.click()}
-          >
-            <PaperclipIcon />
-          </InputActionButton>
-        }
+      <InputActionButton
+        label="Attach images"
+        onClick={() => fileInputRef?.click()}
       >
-        <Dropdown placement="top-start" modal={false}>
-          <Dropdown.Trigger
-            aria-label="Add to comment"
-            variant="ghost"
-            size="icon-sm"
-            class="rounded-full"
-          >
-            <PlusIcon />
-          </Dropdown.Trigger>
-          <Dropdown.Content>
-            <Dropdown.Group>
-              <Dropdown.Item onSelect={() => fileInputRef?.click()}>
-                <PaperclipIcon class="size-4" /> Attach images
-              </Dropdown.Item>
-              <Dropdown.CheckboxItem
-                closeOnSelect
-                checked={!!input().showFormatRibbon}
-                onChange={() => commands.toggleFormatRibbon()}
-              >
-                <FormatIcon class="size-4" /> Formatting
-              </Dropdown.CheckboxItem>
-            </Dropdown.Group>
-          </Dropdown.Content>
-        </Dropdown>
-      </Show>
+        <PaperclipIcon />
+      </InputActionButton>
     </>
   );
 }

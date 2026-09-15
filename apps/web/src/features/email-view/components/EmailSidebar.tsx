@@ -87,7 +87,11 @@ export function EmailSidebar() {
 
   return (
     <ViewSidebar.Root aria-label="Email navigation" class="gap-4">
-      <SidebarCreateHeader label="New email" onCreate={() => composeEmail()} />
+      <SidebarCreateHeader
+        title="Email"
+        label="New email"
+        onCreate={() => composeEmail()}
+      />
 
       <ViewSidebar.CompactContent class="flex flex-col gap-6">
         <EmailInboxList />

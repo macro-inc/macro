@@ -6,6 +6,7 @@ import {
   defaultModelForPlan,
   Model,
   modelsForPlan,
+  SUPPORTED_ATTACHMENT_EXTENSIONS,
 } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { ToolSet } from '@core/component/AI/types';
@@ -24,6 +25,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import { handleFileFolderDrop } from '@core/util/upload';
+import PaperclipIcon from '@phosphor/paperclip.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
@@ -95,6 +97,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   });
 
   let containerRef!: HTMLDivElement;
+  let fileInputRef: HTMLInputElement | undefined;
   useTouchOutsideToDismissKeyboard(() => containerRef);
 
   // The model selector lives inside the input, directly left of the send
@@ -239,9 +242,14 @@ export function ChatInput(props: ChatInputComponentProps) {
       class="text-ink rounded-full size-7 touch:size-6"
       label="Attach files"
       aria-label="Attach files"
-      onClick={() => setShowAttachMenu((prev) => !prev)}
+      onClick={() => {
+        if (isTouchDevice()) setShowAttachMenu((prev) => !prev);
+        else fileInputRef?.click();
+      }}
     >
-      <PlusIcon />
+      <Show when={isTouchDevice()} fallback={<PaperclipIcon />}>
+        <PlusIcon />
+      </Show>
     </Button>
   );
 
@@ -325,6 +333,27 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   return (
     <div class="relative">
+      <Show when={!isTouchDevice()}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          class="hidden"
+          multiple
+          accept={SUPPORTED_ATTACHMENT_EXTENSIONS.map((ext) => `.${ext}`).join(
+            ','
+          )}
+          onChange={(event) => {
+            const files = Array.from(event.currentTarget.files ?? []).filter(
+              (file) =>
+                SUPPORTED_ATTACHMENT_EXTENSIONS.includes(
+                  file.name.split('.').pop()?.toLowerCase() ?? ''
+                )
+            );
+            event.currentTarget.value = '';
+            if (files.length > 0) uploadQueue.upload(files);
+          }}
+        />
+      </Show>
       <ComposerSurface
         appearance="chat"
         class={cn(

@@ -44,7 +44,11 @@ export function InboxListLayout(
       <Show
         when={isTouchDevice()}
         fallback={
-          <SidebarCreateHeader label="New chat" onCreate={props.onNewChat} />
+          <SidebarCreateHeader
+            title="Home"
+            label="New chat"
+            onCreate={props.onNewChat}
+          />
         }
       >
         <NotificationsHeader>{props.tabs}</NotificationsHeader>

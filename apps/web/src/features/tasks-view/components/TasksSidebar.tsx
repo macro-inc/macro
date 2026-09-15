@@ -154,6 +154,7 @@ export function TasksSidebar() {
   return (
     <ViewSidebar.Root aria-label="Tasks navigation" class="gap-4 bg-panel">
       <SidebarCreateHeader
+        title="Tasks"
         label="New task"
         onCreate={() =>
           layout.popoverSplit({ type: 'component', id: 'task-compose' })

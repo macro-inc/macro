@@ -57,8 +57,9 @@ it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove r
 With the new app views enabled, Home is an unfiltered Signal feed merging
 notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
-action. On desktop, there are no Signal/Noise tabs, filter menu, or Home heading. The full-width
-**New chat** plus pill at the top clears the preview and returns to the Home
+action. On desktop, there are no Signal/Noise tabs or filter menu. A **Home** heading
+labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, and
+**Agents** sidebar headings. The full-width **New chat** plus pill below the heading clears the preview and returns to the Home
 starting pane; it does not create a chat. Email and Tasks have matching top pills
 for **New email** and **New task**.
 
@@ -496,4 +497,4 @@ The mobile new-email composer nests the channel-style Send button inside its
 top-right glass toolbar, with an even 5px inset on the top, bottom, and right.
 The toolbar is 46px tall; attachment and schedule controls align with Send.
 
-Desktop channel composers expose attachments, Formatting, and Create task in the plus menu. Task mode returns through Back to message. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
+Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Existing task-mode drafts can still return through Back to message. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.

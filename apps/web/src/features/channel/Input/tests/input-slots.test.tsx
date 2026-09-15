@@ -363,18 +363,15 @@ describe('Input slots', () => {
 
     await user.click(screen.getByRole('button', { name: 'Send message' }));
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
-    await user.click(screen.getByRole('button', { name: 'Add to message' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Attach files' }));
-    await user.click(screen.getByRole('button', { name: 'Add to message' }));
-    await user.click(
-      screen.getByRole('menuitemcheckbox', { name: 'Formatting' })
-    );
+    await user.click(screen.getByRole('button', { name: 'Attach files' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Format' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Delete reply' }));
 
     expect(onSend).toHaveBeenCalledOnce();
     expect(clickSpy).toHaveBeenCalledOnce();
     clickSpy.mockRestore();
-    expect(onToggleFormatRibbon).toHaveBeenCalledOnce();
+    expect(onToggleFormatRibbon).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('reply');
   });
@@ -393,7 +390,7 @@ describe('Input slots', () => {
     ));
 
     expect(screen.getByTestId('custom-actions')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Add to message' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Attach files' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull();
   });
 

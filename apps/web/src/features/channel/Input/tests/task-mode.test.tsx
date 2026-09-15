@@ -275,126 +275,80 @@ describe('Channel input task mode', () => {
     expect(screen.queryByTestId('task-composer')).toBeNull();
   });
 
-  it('keeps task creation inside the plus menu at the normal input width', () => {
+  it('opens attachments directly without a task or formatting menu', async () => {
+    const user = userEvent.setup();
     const { container } = render(() => (
       <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
     ));
-
+    const click = vi.spyOn(HTMLInputElement.prototype, 'click');
+    await user.click(screen.getByRole('button', { name: 'Attach files' }));
+    expect(click).toHaveBeenCalledOnce();
+    click.mockRestore();
     expect(container.firstElementChild?.classList).toContain(
       'macro-message-width'
     );
-    expect(screen.queryByRole('switch', { name: 'Task' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Add to message' })).toBeTruthy();
-    expect(screen.queryByRole('menuitem', { name: 'Create task' })).toBeNull();
-    expect(screen.queryByTestId('task-composer')).toBeNull();
-  });
-
-  it('swaps the input faces when toggling task mode on and off', async () => {
-    const user = userEvent.setup();
-    const { container } = render(() => (
-      <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
-    ));
-
-    await user.click(screen.getByRole('button', { name: 'Add to message' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Create task' }));
-
-    expect(screen.getByTestId('task-composer')).toBeTruthy();
-    const messageFace = container.querySelector('[data-input-face="message"]');
-    const taskFace = container.querySelector('[data-input-face="task"]');
-    expect(messageFace?.classList.contains('hidden')).toBe(true);
-    expect(taskFace?.classList.contains('hidden')).toBe(false);
-
-    // Returning to messages preserves the mounted task draft.
-    await user.click(
-      within(taskFace as HTMLElement).getByRole('button', {
-        name: 'Back to message',
-      })
-    );
-
-    expect(messageFace?.classList.contains('hidden')).toBe(false);
-    expect(taskFace?.classList.contains('hidden')).toBe(true);
-    expect(screen.getByTestId('task-composer')).toBeTruthy();
-  });
-
-  it('opens formatting from the plus menu without switching to task mode', async () => {
-    const user = userEvent.setup();
-    render(() => (
-      <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
-    ));
+    expect(screen.queryByRole('menu')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Format' })).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Add to message' }));
-    await user.click(
-      screen.getByRole('menuitemcheckbox', { name: 'Formatting' })
-    );
     expect(screen.queryByTestId('task-composer')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Add to message' }));
-    expect(
-      screen
-        .getByRole('menuitemcheckbox', { name: 'Formatting' })
-        .getAttribute('aria-checked')
-    ).toBe('true');
   });
 
-  it('restores a persisted task mode on remount', async () => {
+  it('lets an existing persisted task draft return to message mode', async () => {
     const user = userEvent.setup();
     const taskPersistence = {
       draftKey: 'task-composer-draft-channel:c1-persist-v0' as const,
       modeKey: 'input-task-mode-channel:c1-persist-v0' as const,
     };
-    localStorage.removeItem(taskPersistence.modeKey);
-
-    const first = render(() => (
+    localStorage.setItem(taskPersistence.modeKey, 'true');
+    const { container } = render(() => (
       <TaskModeChannelInput
         input={baseInput}
         onSendTask={() => {}}
         taskPersistence={taskPersistence}
       />
     ));
-    await user.click(screen.getByRole('button', { name: 'Add to message' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Create task' }));
-    expect(
-      first.container
-        .querySelector('[data-input-face="task"]')
-        ?.classList.contains('hidden')
-    ).toBe(false);
-    first.unmount();
-
-    const second = render(() => (
-      <TaskModeChannelInput
-        input={baseInput}
-        onSendTask={() => {}}
-        taskPersistence={taskPersistence}
-      />
-    ));
-    const taskFace = second.container.querySelector('[data-input-face="task"]');
-    expect(taskFace).toBeTruthy();
+    const taskFace = container.querySelector('[data-input-face="task"]');
     expect(taskFace?.classList.contains('hidden')).toBe(false);
+    await user.click(
+      within(taskFace as HTMLElement).getByRole('button', {
+        name: 'Back to message',
+      })
+    );
     expect(
-      second.container
+      container
         .querySelector('[data-input-face="message"]')
         ?.classList.contains('hidden')
-    ).toBe(true);
+    ).toBe(false);
+    expect(taskFace?.classList.contains('hidden')).toBe(true);
+    expect(localStorage.getItem(taskPersistence.modeKey)).toBe('false');
     localStorage.removeItem(taskPersistence.modeKey);
   });
 
-  it('forwards the created task and returns to message mode on send', async () => {
+  it('forwards a restored task and returns to message mode on send', async () => {
     const user = userEvent.setup();
+    const taskPersistence = {
+      draftKey: 'task-composer-draft-channel:c1-send-persist-v0' as const,
+      modeKey: 'input-task-mode-channel:c1-send-persist-v0' as const,
+    };
+    localStorage.setItem(taskPersistence.modeKey, 'true');
     const onSendTask = vi.fn();
     const { container } = render(() => (
-      <TaskModeChannelInput input={baseInput} onSendTask={onSendTask} />
+      <TaskModeChannelInput
+        input={baseInput}
+        onSendTask={onSendTask}
+        taskPersistence={taskPersistence}
+      />
     ));
-
-    await user.click(screen.getByRole('button', { name: 'Add to message' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Create task' }));
     await user.click(screen.getByTestId('task-composer-send'));
-
-    expect(onSendTask).toHaveBeenCalledOnce();
-    expect(onSendTask.mock.calls[0]?.[0]).toEqual({
+    expect(onSendTask).toHaveBeenCalledExactlyOnceWith({
       documentId: 'task-1',
       title: 'A task',
       content: '',
     });
-    const messageFace = container.querySelector('[data-input-face="message"]');
-    expect(messageFace?.classList.contains('hidden')).toBe(false);
+    expect(
+      container
+        .querySelector('[data-input-face="message"]')
+        ?.classList.contains('hidden')
+    ).toBe(false);
+    localStorage.removeItem(taskPersistence.modeKey);
   });
 });

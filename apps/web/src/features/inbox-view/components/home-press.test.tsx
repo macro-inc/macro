@@ -26,7 +26,11 @@ describe.each(['recent', 'new chat'] as const)('Home %s press', (kind) => {
     const activate = vi.fn();
     const view = render(() =>
       kind === 'new chat' ? (
-        <SidebarCreateHeader label="New chat" onCreate={activate} />
+        <SidebarCreateHeader
+          title="Home"
+          label="New chat"
+          onCreate={activate}
+        />
       ) : (
         <HomeListEntity
           entity={{

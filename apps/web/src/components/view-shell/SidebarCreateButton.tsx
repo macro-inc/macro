@@ -3,18 +3,25 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PlusIcon from '@phosphor/plus.svg';
 import { pressHandlers } from '@ui';
 import { Show } from 'solid-js';
+import { ViewSidebar } from './ViewSidebar';
 
 export function SidebarCreateHeader(props: {
+  title: string;
   label: string;
   onCreate: () => void;
 }) {
   return (
-    <header class="flex shrink-0 items-center gap-1 px-1.5 pt-4 touch:pt-[calc(var(--safe-top,0px)+1rem)]">
+    <header class="flex shrink-0 flex-col">
       <Show when={!isTouchDevice()}>
-        <SplitPanel.CloseButton class="shrink-0" />
+        <ViewSidebar.Header>
+          <div class="flex min-w-0 items-center gap-1">
+            <SplitPanel.CloseButton class="shrink-0" />
+            <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
+          </div>
+        </ViewSidebar.Header>
       </Show>
-      <div class="min-w-0 flex-1">
-        <SidebarCreateButton {...props} />
+      <div class="min-w-0 px-1.5 pt-4 touch:pt-[calc(var(--safe-top,0px)+1rem)]">
+        <SidebarCreateButton label={props.label} onCreate={props.onCreate} />
       </div>
     </header>
   );

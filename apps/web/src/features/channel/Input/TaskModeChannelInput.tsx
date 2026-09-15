@@ -21,21 +21,14 @@ export type TaskModeChannelInputProps = Omit<
   taskPersistence?: InputTaskPersistence;
 };
 
-function MessageModeActions(props: {
-  canUseTaskMode: boolean;
-  onEnterTaskMode: () => void;
-}) {
+function MessageModeActions() {
   return (
     <Show
       when={isPlatform('ios')}
       fallback={
         <Input.Actions>
           <Input.Actions.Left>
-            <Input.AttachFilesAction
-              onCreateTask={
-                props.canUseTaskMode ? props.onEnterTaskMode : undefined
-              }
-            />
+            <Input.AttachFilesAction />
             <Show when={isTouchDevice()}>
               <Input.ToggleFormatAction />
             </Show>
@@ -184,10 +177,7 @@ export function TaskModeChannelInput(props: TaskModeChannelInputProps) {
         </div>
       )}
     >
-      <MessageModeActions
-        canUseTaskMode={canUseTaskMode()}
-        onEnterTaskMode={() => setTaskMode(true)}
-      />
+      <MessageModeActions />
     </ChannelInput>
   );
 }
