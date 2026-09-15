@@ -6,16 +6,7 @@
  */
 export type AgentsMode = 'chat' | 'code';
 
-export const AGENTS_MODES = [
-  'chat',
-  'code',
-] as const satisfies readonly AgentsMode[];
-
 /** Reads a stored or hinted mode, falling back to Chat for anything unknown. */
 export function parseAgentsMode(value: unknown): AgentsMode {
   return value === 'code' ? 'code' : 'chat';
-}
-
-export function agentsModeLabel(mode: AgentsMode): string {
-  return mode === 'code' ? 'Code' : 'Chat';
 }

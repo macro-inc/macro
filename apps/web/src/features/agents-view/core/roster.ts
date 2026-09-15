@@ -48,7 +48,7 @@ export type RuntimeLike = {
   connected: boolean;
 };
 
-export type RosterShare = 'system' | 'team' | 'private';
+type RosterShare = 'system' | 'team' | 'private';
 
 /** One agent or coder as the composer, carousel, and roster page show it. */
 export type RosterAgent = {

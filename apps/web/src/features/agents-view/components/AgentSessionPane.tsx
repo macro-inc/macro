@@ -1,125 +1,278 @@
 import { ViewSidebarToggle } from '@app/components/view-shell/ViewShell';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
-import { harnessDisplayName } from '@app/features/block-agent/component/compose-agent-session-options';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import {
   AgentSessionProvider,
   useAgentSession,
 } from '@app/features/block-agent/context/AgentSessionContext';
+import { isDisconnected } from '@app/features/block-agent/context/create-session-status-controller';
 import {
   forgetPendingSession,
   pendingSession,
 } from '@app/features/block-agent/context/pending-session';
-import { SessionStatusPill } from '@app/features/block-agent/ui';
+import { makeCopyLinkAction } from '@app/features/next-soup/actions';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { LoadErrorPanel } from '@core/component/EntityLoadGate';
-import { MagicChipPullRequest } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipPullRequest';
-import { openExternalUrl } from '@core/util/url';
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import { Button } from '@ui';
-import { onCleanup, Show } from 'solid-js';
+import { Permissions } from '@core/component/SharePermissions';
+import { toast } from '@core/component/Toast/Toast';
+import {
+  ShareDialogContext,
+  ShareModal,
+} from '@core/component/TopBar/ShareButton';
+import {
+  deleteAgentSession,
+  renameAgentSession,
+} from '@queries/agent-session/entity-mutations';
+import {
+  type FavoritesFilter,
+  useAddFavoriteMutation,
+  useFavoritesData,
+  useRemoveFavoriteMutation,
+} from '@queries/favorites/favorites';
+import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
 import type { AgentsMode } from '../core/mode';
 import { repositoryLabel } from '../core/repository';
+import { type RosterAgent, runtimeLabel } from '../core/roster';
+import { ConfirmDialog, RenameDialog } from './SimpleDialogs';
+import { Topbar } from './Topbar';
 
-function MetaItem(props: { label: string; value: string }) {
-  return (
-    <span class="flex min-w-0 items-baseline gap-1.5">
-      <span class="shrink-0 text-ink-disabled">{props.label}</span>
-      <span class="truncate text-ink-muted">{props.value}</span>
-    </span>
-  );
+const FAVORITES_FILTER: FavoritesFilter = { entityType: ['agent_session'] };
+
+function pullRequestNumber(url: string): string | undefined {
+  return url.match(/\/pull\/(\d+)/)?.[1];
 }
 
-/**
- * Header for a conversation opened in the workspace: the title, the runtime's
- * status, and — for a coder — where it runs and what it opened.
- */
-function AgentSessionHeader(props: { mode: AgentsMode }) {
-  const { loadFailed, metadata, pending, session, status } = useAgentSession();
+function SessionContent(props: {
+  mode: AgentsMode;
+  roster: RosterAgent[];
+  onDeleted: () => void;
+}) {
+  const {
+    blockedOnUser,
+    loadFailed,
+    loadRetryable,
+    metadata,
+    pending,
+    retryLoad,
+    session,
+    sessionId,
+    status,
+    working,
+  } = useAgentSession();
+  const { openWithSplit } = useSplitLayout();
+  const favorites = useFavoritesData(FAVORITES_FILTER);
+  const addFavorite = useAddFavoriteMutation();
+  const removeFavorite = useRemoveFavoriteMutation();
+  const [shareOpen, setShareOpen] = createSignal(false);
+  const [renaming, setRenaming] = createSignal(false);
+  const [deleting, setDeleting] = createSignal(false);
+  const [busy, setBusy] = createSignal(false);
+
   const title = () => metadata()?.title ?? session()?.name ?? 'New chat';
-  const repoUrl = () => session()?.repoUrl ?? undefined;
-  const pullRequestUrl = () => session()?.pullRequestUrl ?? undefined;
-  const showMeta = () => props.mode === 'code' && !!session();
+  const isFavorite = () => {
+    const id = sessionId();
+    return (
+      !!id &&
+      (favorites()?.favorites ?? []).some(
+        (favorite) => favorite.entityId === id
+      )
+    );
+  };
+  const agent = () =>
+    props.roster.find((candidate) => candidate.botId === session()?.botId);
+  const state = () => {
+    if (pending()) return { cls: 'running', label: 'Starting' };
+    if (isDisconnected(status()))
+      return { cls: 'failed', label: 'Disconnected' };
+    if (blockedOnUser()) return { cls: 'waiting', label: 'Needs input' };
+    if (working()) return { cls: 'running', label: 'Running' };
+    return { cls: 'done', label: 'Ready' };
+  };
+
+  const toggleFavorite = () => {
+    const id = sessionId();
+    if (!id) return;
+    const args = { entityId: id, entityType: 'agent_session' as const };
+    if (isFavorite()) removeFavorite.mutate(args);
+    else addFavorite.mutate(args);
+  };
+  const copyLink = () => {
+    const id = sessionId();
+    if (id) void makeCopyLinkAction().executeByBlock(id, 'agent');
+  };
+  const openInSplit = () => {
+    const id = sessionId();
+    if (id) openWithSplit({ type: 'agent', id }, { referredFrom: 'launcher' });
+  };
+  const rename = async (name: string) => {
+    const id = sessionId();
+    if (!id) return;
+    setBusy(true);
+    try {
+      await renameAgentSession(id, name);
+      setRenaming(false);
+    } catch {
+      toast.failure('Could not rename the session');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    const id = sessionId();
+    if (!id) return;
+    setBusy(true);
+    try {
+      await deleteAgentSession(id);
+      setDeleting(false);
+      props.onDeleted();
+    } catch {
+      toast.failure('Could not delete the session');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <header class="flex shrink-0 flex-col border-b border-edge">
-      <div class="flex h-12 items-center gap-3 px-4">
-        <h2 class="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-          {title()}
-        </h2>
-        <Show when={pullRequestUrl()}>
-          {(url) => (
-            <span class="flex min-w-0 max-w-[40%] items-center text-xs">
-              <MagicChipPullRequest url={url()} />
-            </span>
-          )}
-        </Show>
-        <Show when={repoUrl()}>
-          {(url) => (
-            <Button
-              variant="outline"
-              size="sm"
-              class="h-6 max-w-48 gap-1.5 rounded-full px-2 text-xs text-ink-muted"
-              tooltip="Open repository"
-              onClick={() => openExternalUrl(url())}
-            >
-              <GitBranchIcon class="size-3 shrink-0" />
-              <span class="truncate">{repositoryLabel(url())}</span>
-            </Button>
-          )}
-        </Show>
-        <Show when={!pending() && !loadFailed()}>
-          <SessionStatusPill status={status()} />
-        </Show>
+    <ShareDialogContext.Provider
+      value={{
+        isOpen: shareOpen,
+        open: () => setShareOpen(true),
+        close: () => setShareOpen(false),
+      }}
+    >
+      <Topbar
+        title={title()}
+        session={{
+          favorite: isFavorite(),
+          onToggleFavorite: toggleFavorite,
+          onShare: () => setShareOpen(true),
+          onSidePanel: openInSplit,
+          onRename: () => setRenaming(true),
+          onCopyLink: copyLink,
+          onDelete: () => setDeleting(true),
+        }}
+      />
+      <div class="body">
+        <section class="page pane" data-active aria-label="Agent session">
+          <div class="meta mono">
+            <Show when={sessionId()}>
+              {(id) => (
+                <span>
+                  <span class="k">session</span> {id()}
+                </span>
+              )}
+            </Show>
+            <Show when={agent()}>
+              {(current) => (
+                <span>
+                  <span class="k">agent</span> @{current().handle}
+                </span>
+              )}
+            </Show>
+            <Show when={session()?.harness}>
+              {(harness) => (
+                <span>
+                  <span class="k">harness</span>{' '}
+                  {runtimeLabel(harness(), undefined, [])}
+                </span>
+              )}
+            </Show>
+            <Show when={metadata()?.model ?? session()?.model}>
+              {(model) => (
+                <span>
+                  <span class="k">model</span> {model()}
+                </span>
+              )}
+            </Show>
+            <Show when={session()?.repoUrl}>
+              {(url) => (
+                <span>
+                  <span class="k">repo</span> {repositoryLabel(url())}
+                </span>
+              )}
+            </Show>
+            <Show when={session()?.pullRequestUrl}>
+              {(url) => (
+                <span>
+                  <span class="k">pr</span>{' '}
+                  <a href={url()} target="_blank" rel="noreferrer">
+                    {pullRequestNumber(url())
+                      ? `#${pullRequestNumber(url())}`
+                      : 'open'}
+                  </a>
+                </span>
+              )}
+            </Show>
+            <span class={`stdot ${state().cls}`}>{state().label}</span>
+          </div>
+          <Show
+            when={!loadFailed()}
+            fallback={
+              <LoadErrorPanel
+                title="Unable to load this session"
+                onRetry={loadRetryable() ? retryLoad : undefined}
+              />
+            }
+          >
+            <div class="transcript-host">
+              <Transcript />
+            </div>
+            <div class="dock">
+              <div class="composer-anchor">
+                <AgentComposer autofocus />
+              </div>
+            </div>
+          </Show>
+        </section>
       </div>
-      <Show when={showMeta()}>
-        <div class="flex min-w-0 items-center gap-4 overflow-hidden px-4 pb-2 font-mono text-[11px] text-ink-placeholder">
-          <Show when={session()?.harness}>
-            {(harness) => (
-              <MetaItem label="runtime" value={harnessDisplayName(harness())} />
-            )}
-          </Show>
-          <Show when={metadata()?.model ?? session()?.model}>
-            {(model) => <MetaItem label="model" value={model()} />}
-          </Show>
-          <Show when={session()?.id}>
-            {(id) => <MetaItem label="session" value={id()} />}
-          </Show>
-        </div>
+
+      <Show when={sessionId() && session()}>
+        {(_) => (
+          <Suspense>
+            <ShareModal
+              id={sessionId() ?? ''}
+              name={title()}
+              owner={session()?.ownerId ?? ''}
+              itemType="agent_session"
+              blockAlias="agent"
+              userPermissions={Permissions.OWNER}
+              isSharePermOpen={shareOpen()}
+              setIsSharePermOpen={setShareOpen}
+            />
+          </Suspense>
+        )}
       </Show>
-    </header>
+      <Show when={renaming()}>
+        <RenameDialog
+          value={title()}
+          pending={busy()}
+          onRename={(name) => void rename(name)}
+          onClose={() => setRenaming(false)}
+        />
+      </Show>
+      <Show when={deleting()}>
+        <ConfirmDialog
+          title="Delete session?"
+          body="This removes the session and its transcript for everyone it was shared with. This cannot be undone."
+          confirmLabel="Delete session"
+          pendingLabel="Deleting…"
+          danger
+          pending={busy()}
+          onConfirm={() => void remove()}
+          onClose={() => setDeleting(false)}
+        />
+      </Show>
+    </ShareDialogContext.Provider>
   );
 }
 
-function AgentSessionContent(props: { mode: AgentsMode }) {
-  const { loadFailed, loadRetryable, retryLoad } = useAgentSession();
-
-  return (
-    <>
-      <AgentSessionHeader mode={props.mode} />
-      <Show
-        when={!loadFailed()}
-        fallback={
-          <LoadErrorPanel
-            title="Unable to load this session"
-            onRetry={loadRetryable() ? retryLoad : undefined}
-          />
-        }
-      >
-        <div class="flex min-h-0 flex-1 overflow-hidden">
-          <Transcript />
-        </div>
-        <div class="mx-auto w-full max-w-4xl shrink-0 px-4 pb-4">
-          <AgentComposer autofocus />
-        </div>
-      </Show>
-    </>
-  );
-}
-
+/** A conversation opened in the workspace: its title row, transcript, and composer. */
 export function AgentSessionPane(props: {
   id: string;
   mode: AgentsMode;
+  roster: RosterAgent[];
   onSessionId: (sessionId: string) => void;
+  onDeleted: () => void;
 }) {
   const pending = pendingSession(props.id);
   onCleanup(() => {
@@ -130,7 +283,11 @@ export function AgentSessionPane(props: {
 
   return (
     <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
-      <AgentSessionContent mode={props.mode} />
+      <SessionContent
+        mode={props.mode}
+        roster={props.roster}
+        onDeleted={props.onDeleted}
+      />
     </AgentSessionProvider>
   );
 }

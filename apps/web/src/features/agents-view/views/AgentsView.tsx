@@ -2,7 +2,6 @@ import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { HomeChatInput } from '@app/features/home/home-chat-input';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { Agents } from '@app/features/settings/Agents';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
@@ -10,10 +9,27 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { toast } from '@core/component/Toast/Toast';
+import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import {
+  type AgentWithHarnessId,
+  type CreateAgentParams,
+  useAgentsQuery,
+  useCreateAgentMutation,
+  useDeleteAgentMutation,
+  useUpdateAgentMutation,
+} from '@queries/agents/agents';
+import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
+import {
+  useDeleteHarnessMutation,
+  useHarnessesQuery,
+} from '@queries/harnesses/harnesses';
 import { useSoupItemsQuery } from '@queries/soup/items';
+import { useCurrentTeamQuery } from '@queries/team/teams';
+import type { Harness } from '@service-storage/client';
 import {
   createMemo,
   createSignal,
@@ -23,8 +39,12 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import '../agents-view.css';
 import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentsSidebar } from '../components/AgentsSidebar';
+import { ConfirmDialog } from '../components/SimpleDialogs';
+import { Topbar } from '../components/Topbar';
+import { DataModeProvider, dataModeFor } from '../context/data-mode';
 import type { AgentKind } from '../core/agent-kind';
 import type { AgentsMode } from '../core/mode';
 import type { AgentsPage } from '../core/pages';
@@ -34,18 +54,21 @@ import {
   groupConversations,
   selectRecentAgentConversations,
 } from '../core/recent-conversations';
-import { kindForBot } from '../core/roster';
+import { kindForBot, type RosterAgent } from '../core/roster';
 import { createAgentsMode } from '../primitives/agents-mode';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
-import {
-  NewConversationView,
-  type StartConversation,
-} from './NewConversationView';
+import { connectedRuntimes } from '../queries/connected-runtimes';
+import { AgentEditorDialog } from './AgentEditorDialog';
+import { NewChatPage, type StartConversation } from './NewChatPage';
+import { PairRuntimeDialog } from './PairRuntimeDialog';
+import { RosterPage } from './RosterPage';
 
 type SelectedConversation = {
   conversation: AgentConversationTarget;
   activeConversationId: string;
 };
+
+type EditorState = { agent?: AgentWithHarnessId; kind: AgentKind };
 
 function LoadingComposer() {
   return (
@@ -63,16 +86,40 @@ function AgentsWorkspace() {
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
-  // Code mode hands work to coders through the agent-session composer, so
-  // without that flag the workspace is the Chat half only.
+  // Code hands work to coders through the agent-session composer, so without
+  // that flag the workspace is the Chat half only.
   const modeSwitch = () => agentsFlag().enabled;
   const modeState = createAgentsMode(userId());
   const mode = (): AgentsMode => (modeSwitch() ? modeState.mode() : 'chat');
+  const dataMode = () => dataModeFor(mode());
   const [page, setPage] = createSignal<AgentsPage>('new');
   const [rosterKind, setRosterKind] = createSignal<AgentKind>('agent');
   const [selected, setSelected] = createSignal<SelectedConversation>();
   const [search, setSearch] = createSignal('');
+  const [editor, setEditor] = createSignal<EditorState>();
+  const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
+  const [pairing, setPairing] = createSignal(false);
+  const [removingRuntime, setRemovingRuntime] = createSignal<Harness>();
+
   const rosterSource = createAgentRosterSource();
+  const agentsQuery = useAgentsQuery();
+  const harnessesQuery = useHarnessesQuery();
+  const cursorStatus = useCursorApiKeyStatusQuery();
+  const currentTeamQuery = useCurrentTeamQuery();
+  const createAgent = useCreateAgentMutation();
+  const updateAgent = useUpdateAgentMutation();
+  const deleteAgent = useDeleteAgentMutation();
+  const deleteHarness = useDeleteHarnessMutation();
+  const cursorConnected = () =>
+    cursorStatus.isSuccess ? cursorStatus.data.registered : false;
+  const runtimes = () =>
+    connectedRuntimes(
+      cursorConnected(),
+      harnessesQuery.isSuccess ? harnessesQuery.data : []
+    );
+  const currentTeamId = () =>
+    currentTeamQuery.isSuccess ? currentTeamQuery.data?.team.id : undefined;
+
   const query = useSoupItemsQuery(
     () => {
       const ownerId = userId();
@@ -105,6 +152,10 @@ function AgentsWorkspace() {
   const groups = createMemo(() =>
     groupConversations(modeConversations(), mode())
   );
+  const handleForBot = (botId: string | undefined) =>
+    botId
+      ? rosterSource.roster().find((agent) => agent.botId === botId)?.handle
+      : undefined;
 
   onMount(() => panel.handle.setDisplayName('Agents'));
 
@@ -112,18 +163,15 @@ function AgentsWorkspace() {
     setSelected(undefined);
     setPage('new');
   };
-
   const changeMode = (next: AgentsMode) => {
     modeState.setMode(next);
     showComposer();
   };
-
   const openRoster = (kind: AgentKind) => {
     setSelected(undefined);
     setRosterKind(kind);
     setPage('agents');
   };
-
   const openConversation = (conversation: AgentConversationTarget) => {
     setPage('new');
     setSelected({
@@ -131,7 +179,6 @@ function AgentsWorkspace() {
       activeConversationId: conversation.id,
     });
   };
-
   const startConversation = (start: StartConversation) => {
     const id = startPendingSession({
       botId: start.botId,
@@ -141,7 +188,6 @@ function AgentsWorkspace() {
     });
     openConversation({ id, type: 'agent_session' });
   };
-
   const adoptSessionId = (placeholderId: string, sessionId: string) => {
     setSelected((current) => {
       if (
@@ -153,126 +199,260 @@ function AgentsWorkspace() {
       return { ...current, activeConversationId: sessionId };
     });
   };
+  const configure = (agent: RosterAgent) => {
+    const full = (agentsQuery.isSuccess ? agentsQuery.data : []).find(
+      (candidate) => candidate.bot.id === agent.botId
+    );
+    if (full) setEditor({ agent: full, kind: agent.kind });
+  };
+
+  const saveAgent = async (params: CreateAgentParams): Promise<boolean> => {
+    const current = editor();
+    try {
+      if (current?.agent) {
+        await updateAgent.mutateAsync({
+          ...params,
+          agentId: current.agent.bot.id,
+          ...(current.agent.bot.description
+            ? { description: current.agent.bot.description }
+            : {}),
+        });
+        toast.success('Agent updated');
+      } else {
+        await createAgent.mutateAsync(params);
+        toast.success('Agent created');
+      }
+      return true;
+    } catch {
+      toast.failure(
+        current?.agent ? 'Failed to update agent' : 'Failed to create agent'
+      );
+      return false;
+    }
+  };
+  const removeAgent = async () => {
+    const current = deletingAgent();
+    if (!current) return;
+    try {
+      await deleteAgent.mutateAsync({
+        agentId: current.bot.id,
+        channelIds: current.channel_ids,
+      });
+      setDeletingAgent(undefined);
+      setEditor(undefined);
+      toast.success('Agent deleted');
+    } catch {
+      toast.failure('Failed to delete agent');
+    }
+  };
+  const removeRuntime = async () => {
+    const current = removingRuntime();
+    if (!current) return;
+    try {
+      await deleteHarness.mutateAsync({ harnessId: current.id });
+      setRemovingRuntime(undefined);
+      toast.success('Runtime removed');
+    } catch {
+      toast.failure('Failed to remove runtime');
+    }
+  };
 
   const pageTitle = () => {
     if (page() === 'agents') return 'Agents';
-    return mode() === 'code' ? 'New session' : 'New chat';
+    return mode() === 'code' ? 'New Session' : 'New Chat';
   };
 
   return (
     <SplitPanel.Root>
       <SplitPanel.Body>
-        <ViewShell.Root
-          asidePreferenceKey="agents"
-          class="bg-panel"
-          resizable
-          aside={{
-            width: 320,
-            min: 224,
-            max: 380,
-            preserveDuringResize: false,
-          }}
-          breakpoints={{ collapsed: 0 }}
-          layoutBreakpoint="collapsed"
-          main={{ min: 280, preferredWidth: 640 }}
-        >
-          <ViewShell.Aside>
-            <AgentsSidebar
-              mode={mode()}
-              modeSwitch={modeSwitch()}
-              activeConversationId={selected()?.activeConversationId}
-              search={search()}
-              groups={groups()}
-              loading={query.isPending}
-              error={query.isLoadingError}
-              hasNextPage={Boolean(query.hasNextPage)}
-              loadingNextPage={query.isFetchingNextPage}
-              loadMoreError={query.isFetchNextPageError}
-              onModeChange={changeMode}
-              onNewConversation={showComposer}
-              onSearchChange={setSearch}
-              onOpenConversation={openConversation}
-              onRetry={() => void query.refetch()}
-              onLoadMore={() => void query.fetchNextPage()}
-            />
-          </ViewShell.Aside>
+        <DataModeProvider value={dataMode}>
+          <div
+            class="agents-view"
+            data-mode={dataMode()}
+            data-session={selected() ? '1' : undefined}
+          >
+            <ViewShell.Root
+              asidePreferenceKey="agents"
+              resizable
+              aside={{
+                width: 320,
+                min: 224,
+                max: 380,
+                preserveDuringResize: false,
+              }}
+              breakpoints={{ collapsed: 0 }}
+              layoutBreakpoint="collapsed"
+              main={{ min: 280, preferredWidth: 640 }}
+            >
+              <ViewShell.Aside>
+                <AgentsSidebar
+                  mode={mode()}
+                  modeSwitch={modeSwitch()}
+                  activeConversationId={selected()?.activeConversationId}
+                  search={search()}
+                  groups={groups()}
+                  loading={query.isPending}
+                  error={query.isLoadingError}
+                  hasNextPage={Boolean(query.hasNextPage)}
+                  loadingNextPage={query.isFetchingNextPage}
+                  handleForBot={handleForBot}
+                  onModeChange={changeMode}
+                  onNewConversation={showComposer}
+                  onSearchChange={setSearch}
+                  onOpenConversation={openConversation}
+                  onRetry={() => void query.refetch()}
+                  onLoadMore={() => void query.fetchNextPage()}
+                />
+              </ViewShell.Aside>
 
-          <ViewShell.Main class="overflow-hidden">
-            <Show
-              when={selected()?.conversation}
-              keyed
-              fallback={
-                <>
-                  <ViewShell.TopBar>{pageTitle()}</ViewShell.TopBar>
-                  <div class="min-h-0 flex-1">
-                    <Suspense fallback={<LoadingComposer />}>
+              <ViewShell.Main class="overflow-hidden">
+                <main class="main">
+                  <Show
+                    when={selected()?.conversation}
+                    keyed
+                    fallback={
+                      <>
+                        <Topbar title={pageTitle()} />
+                        <div class="body">
+                          <Suspense fallback={<LoadingComposer />}>
+                            <Switch>
+                              <Match when={page() === 'agents'}>
+                                <RosterPage
+                                  kind={rosterKind()}
+                                  onKindChange={setRosterKind}
+                                  onClose={showComposer}
+                                  onCreate={(kind) => setEditor({ kind })}
+                                  onEdit={(agent) =>
+                                    setEditor({
+                                      agent,
+                                      kind:
+                                        agent.harness === 'in-memory'
+                                          ? 'agent'
+                                          : 'coder',
+                                    })
+                                  }
+                                  onDelete={setDeletingAgent}
+                                  onPairRuntime={() => setPairing(true)}
+                                  onRemoveRuntime={setRemovingRuntime}
+                                />
+                              </Match>
+                              <Match when={agentsFlag().loading}>
+                                <LoadingComposer />
+                              </Match>
+                              <Match when={agentsFlag().enabled}>
+                                <NewChatPage
+                                  mode={mode()}
+                                  roster={rosterSource.roster()}
+                                  rosterLoading={rosterSource.loading()}
+                                  conversations={conversations()}
+                                  onStart={startConversation}
+                                  onOpenRoster={openRoster}
+                                  onConfigure={configure}
+                                />
+                              </Match>
+                              <Match when={true}>
+                                <section class="page newchat" data-active>
+                                  <div class="col">
+                                    <ChatInputProvider>
+                                      <HomeChatInput />
+                                    </ChatInputProvider>
+                                  </div>
+                                </section>
+                              </Match>
+                            </Switch>
+                          </Suspense>
+                        </div>
+                      </>
+                    }
+                  >
+                    {(conversation) => (
                       <Switch>
-                        <Match when={page() === 'new'}>
-                          <Switch>
-                            <Match when={agentsFlag().loading}>
-                              <LoadingComposer />
-                            </Match>
-                            <Match when={agentsFlag().enabled}>
-                              <NewConversationView
-                                mode={mode()}
-                                roster={rosterSource.roster()}
-                                rosterLoading={rosterSource.loading()}
-                                rosterError={rosterSource.error()}
-                                conversations={conversations()}
-                                onStart={startConversation}
-                                onOpenRoster={openRoster}
-                              />
-                            </Match>
-                            <Match when={true}>
-                              <div class="flex size-full items-center justify-center px-6 pb-16">
-                                <div class="w-full max-w-2xl">
-                                  <ChatInputProvider>
-                                    <HomeChatInput />
-                                  </ChatInputProvider>
-                                </div>
-                              </div>
-                            </Match>
-                          </Switch>
+                        <Match when={conversation.type === 'agent_session'}>
+                          <Suspense fallback={<LoadingComposer />}>
+                            <AgentSessionPane
+                              id={conversation.id}
+                              mode={mode()}
+                              roster={rosterSource.roster()}
+                              onSessionId={(sessionId) =>
+                                adoptSessionId(conversation.id, sessionId)
+                              }
+                              onDeleted={showComposer}
+                            />
+                          </Suspense>
                         </Match>
-                        <Match when={page() === 'agents'}>
-                          <Agents
-                            initialKind={rosterKind()}
-                            onClose={showComposer}
-                          />
+                        <Match when={true}>
+                          <Topbar title="Chat" />
+                          <div class="body">
+                            <Suspense fallback={<LoadingComposer />}>
+                              <PreviewPanel
+                                selectedEntity={conversation}
+                                orchestrator={orchestrator}
+                                splitPanelContext={panel}
+                              />
+                            </Suspense>
+                          </div>
                         </Match>
                       </Switch>
-                    </Suspense>
-                  </div>
-                </>
-              }
-            >
-              {(conversation) => (
-                <Switch>
-                  <Match when={conversation.type === 'agent_session'}>
-                    <Suspense>
-                      <AgentSessionPane
-                        id={conversation.id}
-                        mode={mode()}
-                        onSessionId={(sessionId) =>
-                          adoptSessionId(conversation.id, sessionId)
-                        }
-                      />
-                    </Suspense>
-                  </Match>
-                  <Match when={true}>
-                    <Suspense>
-                      <PreviewPanel
-                        selectedEntity={conversation}
-                        orchestrator={orchestrator}
-                        splitPanelContext={panel}
-                      />
-                    </Suspense>
-                  </Match>
-                </Switch>
-              )}
-            </Show>
-          </ViewShell.Main>
-        </ViewShell.Root>
+                    )}
+                  </Show>
+                </main>
+              </ViewShell.Main>
+            </ViewShell.Root>
+          </div>
+
+          <Show when={editor()} keyed>
+            {(state) => (
+              <AgentEditorDialog
+                agent={state.agent}
+                initialKind={state.kind}
+                runtimes={runtimes()}
+                currentTeamId={currentTeamId()}
+                canShareWithTeam={currentTeamId() !== undefined}
+                canMakePrivate={
+                  state.agent?.bot.owner?.type !== 'team' ||
+                  state.agent.bot.created_by === userId()
+                }
+                pending={createAgent.isPending || updateAgent.isPending}
+                onClose={() => setEditor(undefined)}
+                onSave={saveAgent}
+                onDelete={
+                  state.agent ? () => setDeletingAgent(state.agent) : undefined
+                }
+              />
+            )}
+          </Show>
+          <Show when={deletingAgent()} keyed>
+            {(agent) => (
+              <ConfirmDialog
+                title={`Delete ${agent.bot.name}?`}
+                body="This removes the agent from every channel and permanently deletes its configuration. This action cannot be undone."
+                confirmLabel="Delete agent"
+                pendingLabel="Deleting…"
+                danger
+                pending={deleteAgent.isPending}
+                onConfirm={() => void removeAgent()}
+                onClose={() => setDeletingAgent(undefined)}
+              />
+            )}
+          </Show>
+          <Show when={pairing()}>
+            <PairRuntimeDialog onClose={() => setPairing(false)} />
+          </Show>
+          <Show when={removingRuntime()} keyed>
+            {(harness) => (
+              <ConfirmDialog
+                title={`Remove ${harness.name}?`}
+                body="Agents using this runtime will stop running until it is reconnected. macrod on that machine will need to pair again."
+                confirmLabel="Remove runtime"
+                pendingLabel="Removing…"
+                danger
+                pending={deleteHarness.isPending}
+                onConfirm={() => void removeRuntime()}
+                onClose={() => setRemovingRuntime(undefined)}
+              />
+            )}
+          </Show>
+        </DataModeProvider>
       </SplitPanel.Body>
     </SplitPanel.Root>
   );

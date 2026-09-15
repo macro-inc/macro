@@ -4,6 +4,14 @@ import { conversationState } from './conversation-state';
 import type { AgentsMode } from './mode';
 
 export type AgentConversationEntity = AgentSessionEntity | ChatEntity;
+
+/** The persona a conversation runs, when the entity says. Chats have none. */
+export function conversationBotId(
+  conversation: AgentConversationEntity
+): string | undefined {
+  if (conversation.type !== 'agent_session') return undefined;
+  return conversation.bot?.id ?? conversation.botId;
+}
 export type AgentConversationTarget = Pick<
   AgentConversationEntity,
   'id' | 'type'
@@ -64,12 +72,12 @@ export function conversationsForMode(
 ): AgentConversationEntity[] {
   return conversations.filter((conversation) => {
     if (conversation.type === 'chat') return mode === 'chat';
-    const kind = kindOf(conversation.bot?.id ?? conversation.botId);
+    const kind = kindOf(conversationBotId(conversation));
     return mode === 'code' ? kind === 'coder' : kind === 'agent';
   });
 }
 
-export type ConversationGroupId = 'recent' | 'active' | 'past';
+type ConversationGroupId = 'recent' | 'active' | 'past';
 
 export type ConversationGroup = {
   id: ConversationGroupId;
@@ -124,8 +132,8 @@ export function botUsage(
 ): Map<string, BotUsage> {
   const usage = new Map<string, BotUsage>();
   for (const conversation of conversations) {
-    if (conversation.type !== 'agent_session') continue;
-    const botId = conversation.bot?.id ?? conversation.botId;
+    const botId = conversationBotId(conversation);
+    if (!botId) continue;
     const current = usage.get(botId) ?? { sessions: 0, lastUsedAt: 0 };
     usage.set(botId, {
       sessions: current.sessions + 1,
