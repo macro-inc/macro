@@ -1,6 +1,5 @@
 ---
 source: crates/codex_cloud_agents/src/inbound/acp/test.rs
-assertion_line: 34
 expression: updates
 ---
 [
@@ -8,14 +7,7 @@ expression: updates
     "sessionUpdate": "agent_message_chunk",
     "content": {
       "type": "text",
-      "text": "hello"
-    }
-  },
-  {
-    "sessionUpdate": "agent_message_chunk",
-    "content": {
-      "type": "text",
-      "text": " world"
+      "text": "hello world"
     }
   },
   {

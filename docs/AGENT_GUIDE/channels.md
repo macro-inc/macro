@@ -90,7 +90,9 @@ Harness. Automatic mode chooses the environment and repository default branch
 from the prompt; an explicit saved environment and branch override automatic
 selection. If selection is uncertain, choose an environment in Harness settings
 and try again. Follow-up mentions continue the same agent session. When
-the provider URL arrives, the session header offers **Open in Codex**. Mention
+the provider URL arrives, the session header offers **Open in Codex**. Codex
+assistant text appears as complete messages while tool activity and thinking
+can continue updating during the turn. Mention
 eligibility is covered by component/query tests; the channel interaction requires
 a configured backend for end-to-end verification.
 

@@ -221,8 +221,13 @@ impl CloudConversation for Provider {
             params: json!({"threadId":"task-test","turnId":id,"item":{"id":format!("{id}-message"),"type":"agentMessage","text":"Hello 🌍"}}),
         };
         if self.0.hold.load(Ordering::SeqCst) {
+            let activity = CloudEvent {
+                id: format!("{id}-tool"),
+                method: "item/started".into(),
+                params: json!({"item":{"id":"running-tool","type":"commandExecution","command":"sleep 60"}}),
+            };
             return Ok(Box::pin(
-                futures::stream::iter(vec![Ok(NativeRecord::from_event(event.clone()))])
+                futures::stream::iter(vec![Ok(NativeRecord::from_event(activity))])
                     .chain(futures::stream::pending()),
             ));
         }

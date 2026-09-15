@@ -1,6 +1,5 @@
 ---
 source: crates/codex_cloud_agents/tests/stdio.rs
-assertion_line: 334
 expression: "normalize(&json!({\"initialize\":init,\"new\":new,\"first\":first,\"followup\":second,\"stop\":stopped}),\n&session)"
 ---
 {
@@ -92,10 +91,15 @@ expression: "normalize(&json!({\"initialize\":init,\"new\":new,\"first\":first,\
       "params": {
         "sessionId": "SESSION",
         "update": {
-          "sessionUpdate": "agent_message_chunk",
-          "content": {
-            "type": "text",
-            "text": "Hello 🌍"
+          "sessionUpdate": "tool_call",
+          "toolCallId": "running-tool",
+          "title": "sleep 60",
+          "kind": "execute",
+          "status": "in_progress",
+          "rawInput": {
+            "id": "running-tool",
+            "type": "commandExecution",
+            "command": "sleep 60"
           }
         }
       }

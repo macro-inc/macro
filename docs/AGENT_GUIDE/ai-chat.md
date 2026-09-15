@@ -65,7 +65,11 @@ Codex shows **Set up Codex** until ChatGPT is connected in Settings → Harness.
 A connected Codex row is selectable immediately. By default, Codex chooses an
 environment and repository default branch from the prompt. If it cannot choose
 confidently, select an environment in Harness settings and try again. The composer hides model overrides for
-Codex because this harness does not expose model selection. Setup navigation,
+Codex because this harness does not expose model selection. Codex assistant
+text appears as complete messages; tool activity and thinking can still update
+while a response is being prepared. A recorded two-turn Codex conversation was
+verified in Chromium with the production conversation renderer: both replies
+appear once, with headings, lists, and inline code intact. Setup navigation,
 selection, and the create/prompt payloads were verified in Chromium with mocked
 app navigation and backend state; no remote session was created by that check.
 Each row shows its `@handle` beneath the name. There are no coding tags;

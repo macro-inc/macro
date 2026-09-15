@@ -197,6 +197,11 @@ impl CloudRuntime for Runtime {
         };
         if self.0.lock().unwrap().holding {
             use futures::StreamExt as _;
+            let event = CloudEvent {
+                id: format!("{turn}-thought"),
+                method: "item/reasoning/summaryTextDelta".into(),
+                params: json!({"delta":"Working"}),
+            };
             return Ok(Box::pin(
                 futures::stream::iter(vec![Ok(NativeRecord::from_event(event))])
                     .chain(futures::stream::pending()),
@@ -219,8 +224,8 @@ impl CloudRuntime for Runtime {
         if self.0.lock().unwrap().late_record {
             records.insert(2, Ok(NativeRecord::from_event(CloudEvent {
                 id: format!("{turn}-late"),
-                method: "item/agentMessage/delta".into(),
-                params: json!({"threadId":"thread-fold","turnId":turn,"itemId":format!("{turn}-late-message"),"delta":"Late historical answer"}),
+                method: "item/completed".into(),
+                params: json!({"threadId":"thread-fold","turnId":turn,"item":{"id":format!("{turn}-late-message"),"type":"agentMessage","text":"Late historical answer"}}),
             })));
         }
         Ok(Box::pin(futures::stream::iter(records)))
@@ -412,6 +417,55 @@ fn assert_turns(messages: &[FoldedMessage], turns: usize) {
 }
 
 #[tokio::test]
+async fn recorded_missing_deltas_replay_restores_both_answers_once() {
+    let runtime = Runtime::default();
+    let journal = Journal::default();
+    let mut client = Client::new(runtime.clone(), journal.clone());
+    let mut log = vec![];
+    client.initialize(&mut log).await;
+    let session = client.session(&mut log).await;
+    let recording: Vec<JournalEntry> =
+        serde_json::from_str(include_str!("fixtures/missing_live_deltas.json")).unwrap();
+    journal
+        .entries
+        .lock()
+        .unwrap()
+        .insert(session.clone(), recording);
+    drop(client);
+
+    let mut client = Client::new(runtime.clone(), journal);
+    client.initialize(&mut log).await;
+    let loaded = client.load(&mut log, &session, 3).await;
+    assert!(loaded.last().unwrap().get("result").is_some());
+    let messages = assert_fold(&log);
+    assert_turns(&messages, 2);
+    insta::assert_json_snapshot!("recorded_missing_deltas_replay", messages);
+    let serialized = serde_json::to_string(&messages).unwrap();
+    assert!(!serialized.contains("Final provider output"));
+    assert!(!serialized.contains("Corrected provider message"));
+    assert_eq!(serialized.matches("My name is **Codex**").count(), 1);
+    assert_eq!(serialized.matches("## Hey! 👋").count(), 1);
+
+    for request_id in [4, 5] {
+        assert!(
+            client
+                .load(&mut log, &session, request_id)
+                .await
+                .last()
+                .unwrap()
+                .get("result")
+                .is_some()
+        );
+        assert_eq!(
+            assert_fold(&log),
+            messages,
+            "reloading must replace the transcript without duplicating text"
+        );
+    }
+    assert_eq!(runtime.0.lock().unwrap().launches, 0);
+}
+
+#[tokio::test]
 async fn load_is_advertised_and_resume_is_not_implemented() {
     let mut client = Client::new(Runtime::default(), Journal::default());
     let mut log = vec![];
@@ -561,7 +615,7 @@ async fn cancelled_live_turn_keeps_one_cancelled_outcome_after_reload() {
             .unwrap();
         let frame: Value = serde_json::from_str(&line).unwrap();
         assert_eq!(frame["method"], "session/update");
-        let assistant = frame["params"]["update"]["sessionUpdate"] == "agent_message_chunk";
+        let assistant = frame["params"]["update"]["sessionUpdate"] == "agent_thought_chunk";
         log.push(entry(false, frame));
         if assistant {
             break;

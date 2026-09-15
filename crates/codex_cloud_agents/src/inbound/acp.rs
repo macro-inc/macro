@@ -95,14 +95,6 @@ fn project(event: &CloudEvent, text: &mut HashMap<String, String>) -> Vec<Sessio
                 p["text"].as_str().unwrap_or(""),
             ))]
         }
-        "item/agentMessage/delta" => {
-            if text.contains_key(&format!("done:{item_id}")) {
-                return Vec::new();
-            }
-            let delta = p["delta"].as_str().unwrap_or("");
-            text.entry(item_id).or_default().push_str(delta);
-            vec![SessionUpdate::AgentMessageChunk(chunk(delta))]
-        }
         "item/reasoning/summaryTextDelta" | "item/reasoning/textDelta" => {
             vec![SessionUpdate::AgentThoughtChunk(chunk(
                 p["delta"].as_str().unwrap_or(""),
@@ -110,21 +102,22 @@ fn project(event: &CloudEvent, text: &mut HashMap<String, String>) -> Vec<Sessio
         }
         "item/completed" if p["item"]["type"].as_str() == Some("agentMessage") => {
             let item = &p["item"];
-            let id = item["id"].as_str().unwrap_or("").to_owned();
+            let id = item["id"].as_str().unwrap_or("");
             let final_text = item["text"].as_str().unwrap_or("");
-            let previous = text.entry(id).or_default();
-            let remaining = match final_text.strip_prefix(previous.as_str()) {
-                Some(suffix) => suffix.to_owned(),
-                None => format!("\n\nCorrected provider message:\n{final_text}"),
+            if final_text.is_empty() || text.insert(format!("done:{id}"), String::new()).is_some() {
+                return Vec::new();
+            }
+            let separator = if text
+                .insert("message-separator".into(), String::new())
+                .is_some()
+            {
+                "\n\n"
+            } else {
+                ""
             };
-            let update = (!remaining.is_empty())
-                .then(|| SessionUpdate::AgentMessageChunk(chunk(&remaining)));
-            *previous = final_text.to_owned();
-            text.insert(
-                format!("done:{}", item["id"].as_str().unwrap_or("")),
-                String::new(),
-            );
-            update.into_iter().collect()
+            vec![SessionUpdate::AgentMessageChunk(chunk(&format!(
+                "{separator}{final_text}"
+            )))]
         }
         "item/commandExecution/outputDelta" => {
             let output = text.entry(format!("output:{item_id}")).or_default();

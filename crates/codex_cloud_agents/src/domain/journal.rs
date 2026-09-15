@@ -63,6 +63,7 @@ pub struct ReplayMachine {
     pending_terminal: Option<String>,
     seen: HashSet<String>,
     events: Vec<CloudEvent>,
+    unclaimed_fallback: String,
     poll: Option<TaskSnapshot>,
     accepted: Vec<(String, String)>,
     pull_requests: std::collections::HashMap<String, Vec<super::cloud::ExternalPullRequest>>,
@@ -144,38 +145,49 @@ impl ReplayMachine {
     fn reconcile_final(&mut self) -> Vec<CloudEvent> {
         let mut output = Vec::new();
         if let Some(snapshot) = &self.poll {
-            let streamed: String = self
-                .events
-                .iter()
-                .filter(|event| event.method == "item/agentMessage/delta")
-                .filter_map(|event| event.params["delta"].as_str())
-                .collect();
-            for text in snapshot
+            // SSE delivery can omit earlier deltas and insert them on replay. Only
+            // completed messages and final poll text are authoritative for display.
+            let mut represented = String::new();
+            for event in &self.events {
+                if event.method == "item/completed"
+                    && event.params["item"]["type"].as_str() == Some("agentMessage")
+                    && let Some(text) = event.params["item"]["text"].as_str()
+                {
+                    represented.push_str(text);
+                }
+            }
+            for (index, text) in snapshot
                 .turns
                 .iter()
                 .filter(|turn| turn.source == "current_assistant_turn")
                 .flat_map(|turn| &turn.messages)
+                .enumerate()
             {
-                let represented = self.events.iter().any(|event| {
-                    event.method == "item/completed"
-                        && event.params["item"]["type"].as_str() == Some("agentMessage")
-                        && event.params["item"]["text"].as_str() == Some(text.as_str())
+                if !text.is_empty()
+                    && let Some(start) = represented.find(text)
+                {
+                    // A native completed item may contain several poll message
+                    // fragments. Consume exact bytes so repeated messages still
+                    // require a separate represented occurrence.
+                    represented.replace_range(start..start + text.len(), "");
+                    continue;
+                }
+                output.push(CloudEvent {
+                    id: String::new(),
+                    method: "item/completed".into(),
+                    params: serde_json::json!({"item":{
+                        "id":format!("poll-message:{index}"),
+                        "type":"agentMessage",
+                        "text":text,
+                    }}),
                 });
-                if !represented && !streamed.contains(text) {
-                    let text = if streamed.is_empty() {
-                        text.clone()
-                    } else {
-                        format!("\n\nFinal provider output:\n{text}")
-                    };
-                    let event = CloudEvent {
-                        id: String::new(),
-                        method: "item/agentMessage/delta".into(),
-                        params: serde_json::json!({"delta":text}),
-                    };
-                    self.events.push(event.clone());
-                    output.push(event);
+            }
+            for event in &output {
+                if let Some(text) = event.params["item"]["text"].as_str() {
+                    self.unclaimed_fallback.push_str(text);
                 }
             }
+            self.events.extend(output.iter().cloned());
             self.poll = None;
         }
         output
@@ -219,6 +231,7 @@ impl ReplayMachine {
                     .collect::<Vec<_>>()
                     .join("\n");
                 self.events.clear();
+                self.unclaimed_fallback.clear();
                 self.terminal = false;
                 self.poll = None;
                 output.push(CloudEvent {
@@ -242,6 +255,23 @@ impl ReplayMachine {
                         )
                     });
                     if key.is_some_and(|key| !self.seen.insert(key)) {
+                        return Ok(output);
+                    }
+                    if event.method == "item/agentMessage/delta" {
+                        // Persisted fragments remain available for diagnosis, but their
+                        // arrival order is not a reliable order for visible text.
+                        return Ok(output);
+                    }
+                    if event.method == "item/completed"
+                        && event.params["item"]["type"].as_str() == Some("agentMessage")
+                        && let Some(text) = event.params["item"]["text"].as_str()
+                        && !text.is_empty()
+                        && let Some(start) = self.unclaimed_fallback.find(text)
+                    {
+                        // Claim each fallback occurrence only once: a distinct
+                        // later message is allowed to repeat the same text.
+                        self.unclaimed_fallback
+                            .replace_range(start..start + text.len(), "");
                         return Ok(output);
                     }
                     self.events.push(event.clone());

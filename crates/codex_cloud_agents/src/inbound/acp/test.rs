@@ -1,13 +1,13 @@
 use super::*;
 use serde_json::json;
 #[test]
-fn completed_messages_do_not_duplicate_deltas() {
+fn completed_messages_ignore_unordered_deltas_and_repeated_completions() {
     let mut state = HashMap::new();
     let mut updates = Vec::new();
     for (method, params) in [
         (
             "item/agentMessage/delta",
-            json!({"itemId":"m","delta":"hello"}),
+            json!({"itemId":"m","delta":" world"}),
         ),
         (
             "item/completed",
@@ -19,11 +19,42 @@ fn completed_messages_do_not_duplicate_deltas() {
         ),
         (
             "item/agentMessage/delta",
-            json!({"itemId":"m","delta":" world"}),
+            json!({"itemId":"m","delta":"hello"}),
         ),
         (
             "item/reasoning/summaryTextDelta",
             json!({"delta":"thinking"}),
+        ),
+    ] {
+        updates.extend(project(
+            &CloudEvent {
+                id: String::new(),
+                method: method.into(),
+                params,
+            },
+            &mut state,
+        ));
+    }
+    insta::assert_json_snapshot!(updates);
+}
+
+#[test]
+fn distinct_complete_messages_have_markdown_boundaries_and_reset_on_new_turn() {
+    let mut state = HashMap::new();
+    let mut updates = Vec::new();
+    for (method, params) in [
+        (
+            "item/completed",
+            json!({"item":{"id":"m1","type":"agentMessage","text":"## Hello"}}),
+        ),
+        (
+            "item/completed",
+            json!({"item":{"id":"m2","type":"agentMessage","text":"- A list"}}),
+        ),
+        ("user/message", json!({"text":"Next question"})),
+        (
+            "item/completed",
+            json!({"item":{"id":"m3","type":"agentMessage","text":"New answer"}}),
         ),
     ] {
         updates.extend(project(
