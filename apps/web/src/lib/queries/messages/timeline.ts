@@ -350,12 +350,14 @@ export function messageTimelineQueryOptions(
 
 export function useMessageTimelineQuery(
   parent: Accessor<MessageParent>,
-  loadAroundMessageId: Accessor<string | null | undefined>
+  loadAroundMessageId: Accessor<string | null | undefined>,
+  enabled: Accessor<boolean> = () => true
 ) {
   useMessageSubscription(parent);
-  return useInfiniteQuery(() =>
-    messageTimelineQueryOptions(parent(), loadAroundMessageId() ?? null)
-  );
+  return useInfiniteQuery(() => ({
+    ...messageTimelineQueryOptions(parent(), loadAroundMessageId() ?? null),
+    enabled: enabled(),
+  }));
 }
 
 export function useMessageTimelineByIdsQuery(

@@ -21,7 +21,11 @@ vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@queries/messages/document-messages', () => ({
   useMessageLink: (_parent: unknown, target: Accessor<string | null>) => ({
     messageId: target,
-    rootId: target,
+    rootId: () => {
+      const id = target();
+      return id ? `root-of-${id}` : null;
+    },
+    resolved: () => true,
   }),
 }));
 vi.mock('@queries/messages/mutations', () => ({
@@ -92,6 +96,13 @@ function discussion(initialPages: MessageListItem[][], targetId?: string) {
 }
 
 describe('DocumentConversation placement', () => {
+  it('loads a linked view around the linked message root once the link resolved', () => {
+    discussion([[thread('new discussion', null)]], 'reply');
+    const [, around, enabled] = mocks.timeline.mock.calls.at(-1)!;
+    expect(around()).toBe('root-of-reply');
+    expect(enabled()).toBe(true);
+  });
+
   it('hides deleted discussions while their state remains available for mark cleanup', () => {
     const deleted = thread('deleted discussion', null);
     deleted.state.deleted_at = '2026-09-09T01:00:00Z';
