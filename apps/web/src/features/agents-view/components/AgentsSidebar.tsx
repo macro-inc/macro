@@ -220,6 +220,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
   const [searchOpen, setSearchOpen] = createSignal(false);
+  const [recentChatsOpen, setRecentChatsOpen] = createSignal(true);
   const [scrollRoot, setScrollRoot] = createSignal<HTMLElement>();
   const [loadMoreSentinel, setLoadMoreSentinel] =
     createSignal<HTMLDivElement>();
@@ -237,6 +238,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   });
 
   const openSearch = () => {
+    setRecentChatsOpen(true);
     setSearchOpen(true);
     queueMicrotask(() => searchInput?.focus());
   };
@@ -319,9 +321,19 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           <AgentFavorites onOpenConversation={props.onOpenConversation} />
         </Show>
 
-        <section class="flex min-h-0 flex-1 flex-col gap-1">
-          <div class="flex h-7 shrink-0 items-center justify-between pr-1 pl-3 text-xs font-medium text-ink-subtle">
-            <h2>Recent chats</h2>
+        <CollapsibleSection.Root
+          open={recentChatsOpen()}
+          onOpenChange={setRecentChatsOpen}
+          class={cn(
+            'flex min-h-0 flex-col gap-1',
+            recentChatsOpen() ? 'flex-1' : 'shrink-0'
+          )}
+        >
+          <div class="flex h-7 shrink-0 items-center gap-1 pr-1">
+            <CollapsibleSection.Trigger class="h-7 min-w-0 flex-1 py-1 text-xs">
+              <span class="min-w-0 truncate">Recent chats</span>
+              <CollapsibleSection.Indicator />
+            </CollapsibleSection.Trigger>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -345,101 +357,109 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               <MagnifyingGlassIcon class="size-3.5" />
             </Button>
           </div>
-          <Show when={searchOpen()}>
-            <SearchBar
-              label="Search agent chats"
-              placeholder="Search chats"
-              ref={(element) => {
-                searchInput = element;
-              }}
-              value={props.search}
-              onValueChange={props.onSearchChange}
-              onEscape={() => {
-                if (!props.search) setSearchOpen(false);
-              }}
-              class="h-9 shrink-0 rounded-xl"
-            />
-          </Show>
-          <div class="relative min-h-0 flex-1">
-            <Scroll scrollRef={setScrollRoot}>
-              <ViewSidebar.Nav aria-label="Recent agent chats">
-                {/* Soup cache updates replace entity objects. Key rows by id so
-                    those updates preserve the list DOM and scroll position. */}
-                <Key each={visibleConversations()} by="id">
-                  {(conversation) => (
-                    <SoupEntityContextMenu
-                      entity={conversation()}
-                      list={actionList}
-                      selectedEntities={() => []}
-                      viewContext={AGENT_ACTION_VIEW_CONTEXT}
-                      class="block w-full"
-                      onOpenChange={(open) => {
-                        if (!open) return;
-                        actionController.focus.set(conversation().id, {
-                          reason: 'pointer',
-                          force: true,
-                        });
-                      }}
-                    >
-                      <ConversationRow
-                        conversation={conversation()}
-                        active={
-                          props.activeConversationId === conversation().id
-                        }
-                        onOpen={() => props.onOpenConversation(conversation())}
-                      />
-                    </SoupEntityContextMenu>
-                  )}
-                </Key>
-                <Show when={!forceEmptyState() && props.loading}>
-                  <p class="px-3 py-2 text-xs text-ink-muted">Loading chats…</p>
-                </Show>
-                <Show when={!forceEmptyState() && props.error}>
-                  <Button variant="ghost" onClick={props.onRetry}>
-                    Retry loading chats
-                  </Button>
-                </Show>
-                <Show
-                  when={
-                    forceEmptyState() ||
-                    (!props.loading &&
-                      !props.error &&
-                      props.conversations.length === 0)
-                  }
-                >
-                  <RecentChatsEmptyState
-                    search={forceEmptyState() ? '' : props.search}
-                    onStartChat={() => props.onNavigate('new')}
-                  />
-                </Show>
-                <Show when={!forceEmptyState() && props.hasNextPage}>
-                  <div
-                    ref={setLoadMoreSentinel}
-                    role={props.loadingNextPage ? 'status' : undefined}
-                    aria-label={
-                      props.loadingNextPage ? 'Loading more chats' : undefined
+          <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col gap-1">
+            <Show when={searchOpen()}>
+              <SearchBar
+                label="Search agent chats"
+                placeholder="Search chats"
+                ref={(element) => {
+                  searchInput = element;
+                }}
+                value={props.search}
+                onValueChange={props.onSearchChange}
+                onEscape={() => {
+                  if (!props.search) setSearchOpen(false);
+                }}
+                class="h-9 shrink-0 rounded-xl"
+              />
+            </Show>
+            <div class="relative min-h-0 flex-1">
+              <Scroll scrollRef={setScrollRoot}>
+                <ViewSidebar.Nav aria-label="Recent agent chats">
+                  {/* Soup cache updates replace entity objects. Key rows by id so
+                      those updates preserve the list DOM and scroll position. */}
+                  <Key each={visibleConversations()} by="id">
+                    {(conversation) => (
+                      <SoupEntityContextMenu
+                        entity={conversation()}
+                        list={actionList}
+                        selectedEntities={() => []}
+                        viewContext={AGENT_ACTION_VIEW_CONTEXT}
+                        class="block w-full"
+                        onOpenChange={(open) => {
+                          if (!open) return;
+                          actionController.focus.set(conversation().id, {
+                            reason: 'pointer',
+                            force: true,
+                          });
+                        }}
+                      >
+                        <ConversationRow
+                          conversation={conversation()}
+                          active={
+                            props.activeConversationId === conversation().id
+                          }
+                          onOpen={() =>
+                            props.onOpenConversation(conversation())
+                          }
+                        />
+                      </SoupEntityContextMenu>
+                    )}
+                  </Key>
+                  <Show when={!forceEmptyState() && props.loading}>
+                    <p class="px-3 py-2 text-xs text-ink-muted">
+                      Loading chats…
+                    </p>
+                  </Show>
+                  <Show when={!forceEmptyState() && props.error}>
+                    <Button variant="ghost" onClick={props.onRetry}>
+                      Retry loading chats
+                    </Button>
+                  </Show>
+                  <Show
+                    when={
+                      forceEmptyState() ||
+                      (!props.loading &&
+                        !props.error &&
+                        props.conversations.length === 0)
                     }
-                    class="grid h-9 shrink-0 place-items-center text-ink-muted"
                   >
-                    <Show when={props.loadMoreError}>
-                      <Button variant="ghost" onClick={props.onLoadMore}>
-                        Retry loading more chats
-                      </Button>
-                    </Show>
-                    <Show when={!props.loadMoreError && props.loadingNextPage}>
-                      <SpinnerIcon class="size-4 animate-spin" />
-                    </Show>
-                  </div>
-                </Show>
-              </ViewSidebar.Nav>
-            </Scroll>
-            <ScrollIndicators
-              scrollRef={scrollRoot}
-              appearance="gradient"
-              gradientColor="panel"
-            />
-          </div>
-        </section>
+                    <RecentChatsEmptyState
+                      search={forceEmptyState() ? '' : props.search}
+                      onStartChat={() => props.onNavigate('new')}
+                    />
+                  </Show>
+                  <Show when={!forceEmptyState() && props.hasNextPage}>
+                    <div
+                      ref={setLoadMoreSentinel}
+                      role={props.loadingNextPage ? 'status' : undefined}
+                      aria-label={
+                        props.loadingNextPage ? 'Loading more chats' : undefined
+                      }
+                      class="grid h-9 shrink-0 place-items-center text-ink-muted"
+                    >
+                      <Show when={props.loadMoreError}>
+                        <Button variant="ghost" onClick={props.onLoadMore}>
+                          Retry loading more chats
+                        </Button>
+                      </Show>
+                      <Show
+                        when={!props.loadMoreError && props.loadingNextPage}
+                      >
+                        <SpinnerIcon class="size-4 animate-spin" />
+                      </Show>
+                    </div>
+                  </Show>
+                </ViewSidebar.Nav>
+              </Scroll>
+              <ScrollIndicators
+                scrollRef={scrollRoot}
+                appearance="gradient"
+                gradientColor="panel"
+              />
+            </div>
+          </CollapsibleSection.Content>
+        </CollapsibleSection.Root>
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );
