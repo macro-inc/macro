@@ -80,6 +80,76 @@ async fn previews_hydrate_bot_identity_only_for_accessible_sessions() {
     );
 }
 
+/// A viewer answers for one document-born session.
+struct GrantingViewAccess(AgentSessionId);
+
+impl crate::domain::ports::SessionViewAccess for GrantingViewAccess {
+    fn can_view<'a>(
+        &'a self,
+        _viewer: &'a macro_user_id::user_id::MacroUserIdStr<'static>,
+        session: AgentSessionId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<bool>> + Send + 'a>> {
+        Box::pin(async move { Ok(session == self.0) })
+    }
+}
+
+#[tokio::test]
+async fn previews_resolve_inherited_document_access_through_the_view_port() {
+    let fx = fixture();
+    let mut document_session = test_agent_session(AgentSessionId::new());
+    document_session.thread_parent =
+        Some(messages::domain::models::MessageParent::parse("document", "doc-1").unwrap());
+    let mut channel_session = test_agent_session(AgentSessionId::new());
+    channel_session.thread_parent = Some(messages::domain::models::MessageParent::Channel(
+        Uuid::from_u128(9),
+    ));
+    fx.repo.insert_session(document_session.clone());
+    fx.repo.insert_session(channel_session.clone());
+    let collaborator =
+        macro_user_id::user_id::MacroUserIdStr::try_from_email("collaborator@example.com").unwrap();
+    let ids = vec![document_session.id, channel_session.id, fx.session];
+
+    // Without a view port, only materialized grants count.
+    let mut previews = fx
+        .service
+        .preview_sessions(&collaborator, ids.clone())
+        .await
+        .unwrap();
+    previews.sort_by_key(|preview| preview.id().as_uuid());
+    assert!(
+        previews
+            .iter()
+            .all(|preview| matches!(preview, AgentSessionPreview::NoAccess(_)))
+    );
+
+    // With one, the document-born session is asked about and the rest are not.
+    let service = fx
+        .service
+        .clone()
+        .with_view_access(Arc::new(GrantingViewAccess(document_session.id)));
+    let previews = service.preview_sessions(&collaborator, ids).await.unwrap();
+    let access: Vec<_> = previews
+        .iter()
+        .filter_map(|preview| match preview {
+            AgentSessionPreview::Access(data) => Some(data.id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(access, vec![document_session.id]);
+    let channel_service = fx
+        .service
+        .clone()
+        .with_view_access(Arc::new(GrantingViewAccess(channel_session.id)));
+    assert_eq!(
+        channel_service
+            .preview_sessions(&collaborator, vec![channel_session.id])
+            .await
+            .unwrap(),
+        vec![AgentSessionPreview::NoAccess(channel_session.id)],
+        "channel grants are rows; the view port is never consulted for them"
+    );
+}
+
 #[tokio::test]
 async fn only_the_first_prompt_is_selected_for_automatic_naming() {
     let repo = InMemoryAgentSessionRepo::new();
@@ -420,7 +490,7 @@ impl AgentSessionRepo for BlockingPromptLogs {
         &self,
         viewer: &MacroUserIdStr<'static>,
         ids: &[AgentSessionId],
-    ) -> Result<Vec<AgentSessionPreview>> {
+    ) -> Result<Vec<crate::domain::model::SessionPreviewCandidate>> {
         self.repo.preview(viewer, ids).await
     }
 

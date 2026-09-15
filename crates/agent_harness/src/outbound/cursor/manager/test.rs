@@ -9,8 +9,8 @@ use agent_runtime_protocol::domain::schema::v0::{
 };
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
-    AgentSession, AgentSessionPreview, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME,
-    SandboxSize, SessionBot, SessionStatus, ThreadSession,
+    AgentSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot,
+    SessionStatus, ThreadSession,
 };
 use bot_id::BotId;
 use cursor_api_key::cipher::CursorApiKey;
@@ -70,7 +70,7 @@ impl AgentSessionRepo for StubSessions {
         &self,
         _viewer: &MacroUserIdStr<'static>,
         _ids: &[AgentSessionId],
-    ) -> SessionResult<Vec<AgentSessionPreview>> {
+    ) -> SessionResult<Vec<agent_session::domain::model::SessionPreviewCandidate>> {
         unimplemented!("the manager never previews sessions")
     }
 

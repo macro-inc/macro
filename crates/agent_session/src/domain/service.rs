@@ -53,13 +53,13 @@ use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview, AgentSessionRenamed,
     AuthorKind, ClaimOutcome, CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS,
     MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId, SandboxSize, SessionClaim, SessionLog,
-    SessionManagement, StoredAgentSessionLog, ThreadSession,
+    SessionManagement, SessionPreviewCandidate, StoredAgentSessionLog, ThreadSession,
 };
 use super::ports::{
     AgentConnector, AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionLogWriter,
     AgentSessionNameGenerator, AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
-    Appended, NoOpAgentSessionNameGenerator, NoOpToolCatalog, SessionOwnership, SessionToolCatalog,
-    SessionTurnObserver,
+    Appended, NoInheritedSessionAccess, NoOpAgentSessionNameGenerator, NoOpToolCatalog,
+    SessionOwnership, SessionToolCatalog, SessionTurnObserver, SessionViewAccess,
 };
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 use super::session::{CloseReason, Input};
@@ -296,6 +296,10 @@ pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGen
     /// Lists a session's MCP tools for its telemetry. Erased like the
     /// observer, for the same reason.
     tool_catalog: Arc<dyn SessionToolCatalog>,
+    /// Answers whether a viewer may see a session when no access row says
+    /// so: a document collaborator's inherited access. Erased like the
+    /// observer, for the same reason.
+    view_access: Arc<dyn SessionViewAccess>,
     /// Where lifecycle facts go - renames, from here; everything else from
     /// the harness. Erased for the same reason as the observer.
     lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
@@ -344,6 +348,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             turn_observer,
             lifecycle_publisher,
             tool_catalog: Arc::new(NoOpToolCatalog),
+            view_access: Arc::new(NoInheritedSessionAccess),
             active: Arc::new(DashMap::new()),
             replica,
             tasks: TaskTracker::new(),
@@ -357,6 +362,16 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
     #[must_use]
     pub fn with_tool_catalog(mut self, tool_catalog: Arc<dyn SessionToolCatalog>) -> Self {
         self.tool_catalog = tool_catalog;
+        self
+    }
+
+    /// Resolve inherited session access when previewing, so a document
+    /// collaborator's chips render like their reads succeed. Only a process
+    /// with an entity-access service can answer, hence a builder rather than
+    /// a constructor argument.
+    #[must_use]
+    pub fn with_view_access(mut self, view_access: Arc<dyn SessionViewAccess>) -> Self {
+        self.view_access = view_access;
         self
     }
 
@@ -675,7 +690,33 @@ where
         if ids.is_empty() {
             return Ok(Vec::new());
         }
-        let mut previews = self.repo.preview(viewer, &ids).await?;
+        let mut candidates: std::collections::HashMap<AgentSessionId, SessionPreviewCandidate> =
+            self.repo
+                .preview(viewer, &ids)
+                .await?
+                .into_iter()
+                .map(|candidate| (candidate.data.id, candidate))
+                .collect();
+        let mut previews = Vec::with_capacity(ids.len());
+        for id in ids {
+            let Some(candidate) = candidates.remove(&id) else {
+                previews.push(AgentSessionPreview::DoesNotExist(id));
+                continue;
+            };
+            // A grant row settles it. Without one, a session opened from a
+            // document discussion may still be visible through the document
+            // itself, which only the access service knows.
+            let visible = candidate.has_grant
+                || (matches!(
+                    candidate.thread_parent,
+                    Some(messages::domain::models::MessageParent::Document(_))
+                ) && self.view_access.can_view(viewer, id).await?);
+            previews.push(if visible {
+                AgentSessionPreview::Access(Box::new(candidate.data))
+            } else {
+                AgentSessionPreview::NoAccess(id)
+            });
+        }
         let mut profiles = std::collections::HashMap::new();
         for preview in &mut previews {
             let AgentSessionPreview::Access(data) = preview else {
@@ -1198,7 +1239,7 @@ where
         &self,
         viewer: &MacroUserIdStr<'static>,
         ids: &[AgentSessionId],
-    ) -> Result<Vec<AgentSessionPreview>> {
+    ) -> Result<Vec<SessionPreviewCandidate>> {
         self.repo.preview(viewer, ids).await
     }
 

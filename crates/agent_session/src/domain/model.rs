@@ -448,6 +448,21 @@ impl AgentSessionPreview {
     }
 }
 
+/// One session found by [`AgentSessionRepo::preview`](super::ports::AgentSessionRepo::preview),
+/// before access policy: what a chip would show, whether an access row grants
+/// the viewer at least view access, and where the session came from, so the
+/// service can resolve inherited access that no row materializes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionPreviewCandidate {
+    /// What a chip renders once access is settled.
+    pub data: AgentSessionPreviewData,
+    /// Whether a materialized grant - the viewer, a channel they are in, or a
+    /// team they belong to - gives them at least view access.
+    pub has_grant: bool,
+    /// Parent of the thread the session was opened from, when it was.
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
+}
+
 /// The subset of an [`AgentSession`] a chip or mention renders.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentSessionPreviewData {

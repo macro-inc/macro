@@ -13,9 +13,9 @@ mod pull_request;
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
-    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
-    AgentSessionPreviewData, ClaimOutcome, CreateAgentSessionParams, ExternalSession, ManagerFence,
-    Message, ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
+    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
+    ClaimOutcome, CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaAddress,
+    ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager, SessionPreviewCandidate,
     SessionStatus, StoredAgentSessionLog, ThreadSession,
 };
 use crate::domain::ports::{
@@ -401,11 +401,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         &self,
         viewer: &MacroUserIdStr<'static>,
         ids: &[AgentSessionId],
-    ) -> Result<Vec<AgentSessionPreview>> {
+    ) -> Result<Vec<SessionPreviewCandidate>> {
         let uuids: Vec<Uuid> = ids.iter().map(AgentSessionId::as_uuid).collect();
         // The viewer's grant sources - themselves, the channels they are still
         // in, their teams - are the same three the Soup leg and the access
         // extractor resolve, so a preview agrees with what a read would do.
+        // Access inherited from an originating document has no row; the
+        // thread parent is returned so the service can ask for it.
         let rows = sqlx::query!(
             r#"
             WITH viewer_source_ids AS (
@@ -431,7 +433,10 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                     WHERE ea.entity_id = s.id
                       AND ea.entity_type = 'agent_session'
                       AND ea.source_id IN (SELECT source_id FROM viewer_source_ids)
-                ) AS "has_access!"
+                ) AS "has_access!",
+                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
+                 FROM comms_messages WHERE id = s.thread_id)
+                    AS "thread_parent?: Json<MessageParent>"
             FROM agent_session s
             WHERE s.id = ANY($1)
             "#,
@@ -442,35 +447,27 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .await
         .context("failed to preview agent sessions")?;
 
-        let mut found = std::collections::HashSet::with_capacity(rows.len());
-        let mut previews = Vec::with_capacity(ids.len());
-        for row in rows {
-            let id = AgentSessionId::new_from_uuid(row.id);
-            found.insert(id);
-            if !row.has_access {
-                previews.push(AgentSessionPreview::NoAccess(id));
-                continue;
-            }
-            previews.push(AgentSessionPreview::Access(Box::new(
-                AgentSessionPreviewData {
-                    bot: None,
-                    id,
-                    name: row.name,
-                    owner_id: MacroUserIdStr::try_from(row.owner_id)
-                        .context("agent session has an unparseable owner")?,
-                    bot_id: BotId::new_from_uuid(row.bot_id),
-                    status: parse_status(&row.status, row.status_event_name)?,
-                    created_at: row.created_at,
-                    modified_at: row.modified_at,
-                },
-            )));
-        }
-        previews.extend(
-            ids.iter()
-                .filter(|id| !found.contains(id))
-                .map(|id| AgentSessionPreview::DoesNotExist(*id)),
-        );
-        Ok(previews)
+        rows.into_iter()
+            .map(|row| {
+                let id = AgentSessionId::new_from_uuid(row.id);
+                Ok(SessionPreviewCandidate {
+                    data: AgentSessionPreviewData {
+                        bot: None,
+                        id,
+                        name: row.name,
+                        owner_id: MacroUserIdStr::try_from(row.owner_id)
+                            .context("agent session has an unparseable owner")?,
+                        bot_id: BotId::new_from_uuid(row.bot_id),
+                        status: parse_status(&row.status, row.status_event_name)?,
+                        created_at: row.created_at,
+                        modified_at: row.modified_at,
+                    },
+                    has_grant: row.has_access,
+                    thread_parent: row.thread_parent.map(|parent| parent.0),
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 
     async fn find_by_egress_token_hash(

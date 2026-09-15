@@ -7,10 +7,10 @@
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
-    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
-    AgentSessionPreviewData, ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME,
-    LogAppended, ManagerFence, ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim,
-    SessionManager, SessionStatus, StoredAgentSessionLog, ThreadSession,
+    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
+    ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence,
+    ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
+    SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, ThreadSession,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -165,28 +165,29 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         &self,
         viewer: &MacroUserIdStr<'static>,
         ids: &[AgentSessionId],
-    ) -> Result<Vec<AgentSessionPreview>> {
+    ) -> Result<Vec<SessionPreviewCandidate>> {
         // No `entity_access` rows to consult here: the owner is the one grant
-        // `create` always writes, so ownership stands in for access.
+        // `create` always writes, so ownership stands in for a grant.
         let sessions = self
             .sessions
             .lock()
             .expect("in-memory session store is not poisoned");
         Ok(ids
             .iter()
-            .map(|id| match sessions.get(id) {
-                None => AgentSessionPreview::DoesNotExist(*id),
-                Some(session) if session.owner_id != *viewer => AgentSessionPreview::NoAccess(*id),
-                Some(session) => AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
+            .filter_map(|id| sessions.get(id))
+            .map(|session| SessionPreviewCandidate {
+                data: AgentSessionPreviewData {
                     bot: None,
-                    id: *id,
+                    id: session.id,
                     name: session.name.clone(),
                     owner_id: session.owner_id.clone(),
                     bot_id: session.bot_id,
                     status: session.status.clone(),
                     created_at: session.created_at,
                     modified_at: session.modified_at,
-                })),
+                },
+                has_grant: session.owner_id == *viewer,
+                thread_parent: session.thread_parent.clone(),
             })
             .collect())
     }
