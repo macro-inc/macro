@@ -391,7 +391,7 @@ const progress = {
   failures: [] as {
     name: string;
     error: string;
-    args: EntityFilterCacheArgs;
+    args?: EntityFilterCacheArgs;
     fixture?: unknown;
   }[],
   done: false,
@@ -527,9 +527,19 @@ export async function runBatch(size = 128) {
         });
     }
   }
-  assert(
-    (await host.currentRevision()) === revision,
-    'Cache changed during the filter-only matrix'
-  );
+  try {
+    assert(
+      (await host.currentRevision()) === revision,
+      'Cache changed during the filter-only matrix'
+    );
+  } catch (error) {
+    // Preserve the earlier failing inputs even if an outstanding native command
+    // also prevents the final revision read from completing.
+    if (progress.failures.length < 20)
+      progress.failures.push({
+        name: 'post-batch cache revision',
+        error: String(error),
+      });
+  }
   return progress;
 }
