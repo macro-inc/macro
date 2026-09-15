@@ -52,6 +52,9 @@ export function createEmailMessageBody(
     const body = prepared();
     const attachments = props.message.attachments;
     const host = document.createElement('div');
+    // Keep the renderer at pane width so wide designed email scrolls within it.
+    host.style.minWidth = '0';
+    host.style.width = '100%';
     const renderer = mountEmailBody(host, body, {
       theme: renderingContext.theme(),
       adaptColors: props.isPersonal || !body.hasTable,
