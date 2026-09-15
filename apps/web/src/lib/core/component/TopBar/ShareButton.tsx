@@ -11,6 +11,8 @@ import {
   useBlockAliasedName,
   useBlockId,
   useBlockName,
+  useMaybeBlockAliasedName,
+  useMaybeBlockId,
 } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { type TabItem, Tabs } from '@core/component/Tabs';
@@ -1360,54 +1362,77 @@ export function ShareModal(props: ShareModalProps) {
   );
 }
 
-export function ShareTrigger(props: { id?: string; copyLink?: () => void }) {
+export function ShareTrigger(props: {
+  id?: string;
+  blockType?: BlockName | BlockAlias;
+  hotkeyScope?: string;
+  copyLink?: () => void;
+}) {
   const shareCtx = useShareDialogContext();
   const isAuthenticated = useIsAuthenticated();
-  const blockType = useBlockAliasedName();
-  const blockId = useBlockId();
+  const inBlock = isInBlock();
+  const contextualBlockType = inBlock
+    ? useBlockAliasedName()
+    : useMaybeBlockAliasedName();
+  const contextualBlockId = inBlock ? useBlockId() : useMaybeBlockId();
   const analytics = useAnalytics();
 
+  const blockType = (): BlockName | BlockAlias => {
+    const type = props.blockType ?? contextualBlockType;
+    if (type) return type;
+    throw new Error('<ShareTrigger> requires an explicit block type');
+  };
+  const blockId = (): string => {
+    const id = props.id ?? contextualBlockId;
+    if (id) return id;
+    throw new Error('<ShareTrigger> requires an explicit block id');
+  };
+
   onMount(() => {
-    const blockScopeId = blockHotkeyScopeSignal.get;
-    registerHotkey({
+    const scopeId =
+      props.hotkeyScope ?? (inBlock ? blockHotkeyScopeSignal.get() : undefined);
+    if (!scopeId) return;
+
+    const registration = registerHotkey({
       keyDownHandler: () => {
         if (!isAuthenticated()) {
           openLoginModal();
         } else {
-          analytics.track('share_menu_open', { blockType });
+          analytics.track('share_menu_open', { blockType: blockType() });
           shareCtx.open();
         }
         return true;
       },
       hotkeyToken: TOKENS.block.share,
       runWithInputFocused: true,
-      scopeId: blockScopeId(),
+      scopeId,
       description: 'Share',
       hotkey: 'cmd+s',
     });
+    onCleanup(() => registration.dispose());
   });
 
   const referralCode = useReferralCode();
 
   const defaultUrl = () => {
+    const id = blockId();
+    const type = blockType();
+
     const params: Record<string, string> = {};
     const code = referralCode();
     if (code) {
       params.referral_code = code;
     }
-    return buildSimpleEntityUrl(
-      { id: props.id ?? blockId, type: blockType },
-      params
-    );
+    return buildSimpleEntityUrl({ id, type }, params);
   };
 
   const copyLink = createCallback(() => {
     if (props.copyLink) return props.copyLink();
     navigator.clipboard.writeText(defaultUrl());
-    analytics.track('copy_share_link', { blockType });
+    analytics.track('copy_share_link', { blockType: blockType() });
     toast.success('Link copied to clipboard.', {
       subtext:
-        blockType === 'agent'
+        blockType() === 'agent'
           ? undefined
           : 'Sending this link in a Macro message will automatically update permissions to include recipients.',
     });
@@ -1422,7 +1447,7 @@ export function ShareTrigger(props: { id?: string; copyLink?: () => void }) {
   }));
 
   const shareStatus = createMemo(() => {
-    if (blockType === 'agent') return;
+    if (blockType() === 'agent' || !inBlock) return;
     const result = permissionsBlockResource[0].latest;
     if (!result || result.isErr()) return;
 
@@ -1438,9 +1463,11 @@ export function ShareTrigger(props: { id?: string; copyLink?: () => void }) {
       <Tooltip
         label={
           shareStatus()?.tooltip ??
-          (blockType === 'agent'
+          (blockType() === 'agent'
             ? 'Share agent session'
-            : 'This item has been shared with you.')
+            : inBlock
+              ? 'This item has been shared with you.'
+              : `Share ${blockType()}`)
         }
       >
         <Button
@@ -1448,7 +1475,7 @@ export function ShareTrigger(props: { id?: string; copyLink?: () => void }) {
             if (!isAuthenticated()) {
               openLoginModal();
             } else {
-              analytics.track('share_menu_open', { blockType });
+              analytics.track('share_menu_open', { blockType: blockType() });
               shareCtx.open();
             }
           }}

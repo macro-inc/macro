@@ -13,7 +13,13 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
-import { type BlockName, useBlockAliasedName, useBlockName } from '@core/block';
+import {
+  type BlockAlias,
+  type BlockName,
+  isInBlock,
+  useMaybeBlockAliasedName,
+  useMaybeBlockName,
+} from '@core/block';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import { enableReminders } from '@core/constant/featureFlags';
@@ -37,7 +43,7 @@ import Rename from '@phosphor/pencil-line.svg';
 import Star from '@phosphor/star.svg';
 import Tag from '@phosphor/tag.svg';
 import Trash from '@phosphor/trash-simple.svg';
-import { blockNameToItemType, type ItemType } from '@service-storage/itemType';
+import type { ItemType } from '@service-storage/itemType';
 import { cn, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
@@ -349,16 +355,28 @@ export function SplitFileMenu(props: {
    */
   entity?: EntityData;
   buttonClass?: string;
+  blockName?: BlockName;
+  blockAlias?: BlockName | BlockAlias;
+  isOwner?: boolean;
+  entityHotkeys?: boolean;
+  onDelete?: () => void;
 }) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
     throw new Error('<SplitFileMenu> must be used in <SplitPanelContext>');
 
-  const isOwner = useIsDocumentOwner();
-  const blockName = useBlockName();
-  const aliasedBlockName = useBlockAliasedName();
-  const itemType = blockNameToItemType(blockName);
-  if (!itemType) throw new Error(`Using bad item type for block: ${blockName}`);
+  const inBlock = isInBlock();
+  const blockName = props.blockName ?? useMaybeBlockName();
+  const aliasedBlockName =
+    props.blockAlias ?? useMaybeBlockAliasedName() ?? blockName;
+  const contextualIsOwner = inBlock ? useIsDocumentOwner() : () => false;
+  const isOwner = () => props.isOwner ?? contextualIsOwner();
+
+  if (!blockName || !aliasedBlockName) {
+    throw new Error(
+      '<SplitFileMenu> requires an enclosing block or explicit block identity'
+    );
+  }
 
   const [open, setOpen] = createSignal(false);
   const itemOperations = useItemOperations();
@@ -386,7 +404,10 @@ export function SplitFileMenu(props: {
   // Blocks outside BLOCKS_WITH_ENTITY_HOTKEYS never register these
   // shortcuts, so badging them there would advertise dead shortcuts.
   const blockHotkeyToken = (token: HotkeyToken): HotkeyToken | undefined =>
-    BLOCKS_WITH_ENTITY_HOTKEYS.has(blockName) ? token : undefined;
+    (props.entityHotkeys ?? inBlock) &&
+    BLOCKS_WITH_ENTITY_HOTKEYS.has(blockName)
+      ? token
+      : undefined;
 
   const { replaceOrInsertSplit } = useSplitLayout();
 
@@ -539,7 +560,11 @@ export function SplitFileMenu(props: {
                     entities: [entity],
                     onFinish: () => {
                       toast.success('Deleted');
-                      returnSplitToRecentListView(ctx.handle);
+                      if (props.onDelete) {
+                        props.onDelete();
+                      } else {
+                        returnSplitToRecentListView(ctx.handle);
+                      }
                     },
                     onError: () => toast.failure('Failed to delete'),
                   });
@@ -598,7 +623,7 @@ export function SplitFileMenu(props: {
               };
             })
             .with('moveToProject', () => {
-              if (!isOwner()) return null;
+              if (!ownsMenuEntity()) return null;
               return {
                 label: 'Move to Folder',
                 action: () => {
