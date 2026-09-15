@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages SET deleted_at = now(), updated_at = now()\n           WHERE (id = ANY($1) OR thread_id = ANY($1)) AND deleted_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a65e5f3ae0b0506fb5204aa83ea49fa70745c460e53ec316be184a309f492754"
+}

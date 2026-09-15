@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id FROM \"Thread\" t\n           LEFT JOIN \"PdfPlaceableCommentAnchor\" p ON p.\"threadId\" = t.id\n           LEFT JOIN \"PdfHighlightAnchor\" h ON h.\"threadId\" = t.id AND h.\"deletedAt\" IS NULL\n           WHERE t.\"deletedAt\" IS NULL\n           GROUP BY t.id HAVING count(DISTINCT p.uuid) + count(DISTINCT h.uuid) > 1\n           ORDER BY t.id LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6bfddfadc9d6f8f8c8db19156aff2a9dde0e7f00dd58622870b2e7b3e49b79f2"
+}
