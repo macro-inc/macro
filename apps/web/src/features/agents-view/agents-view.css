@@ -1,8 +1,7 @@
 /*
- * The Agents workspace, ported from the design's stylesheet. Rules are scoped
- * under the view root or a dialog portal, and the design's tokens are aliased
- * to the app theme so every theme drives the same shapes. Class names match
- * the design so the markup in components/ and views/ reads against it 1:1.
+ * Feature-specific Agents layouts, scoped to the workspace and its portals.
+ * Colors inherit the app theme. Composer and sidebar chrome use the shared
+ * UI components so changes to those surfaces carry through to this view.
  */
 
 @layer components {
@@ -33,15 +32,11 @@
 		--panel: var(--color-panel);
 		--menu: var(--color-menu);
 		--menu-glass: var(--color-menu-glass);
-		--glass-rim: oklch(1 0 0 / 0.08);
 		--hover: var(--color-hover);
 		--active: var(--color-active);
 		--selected: var(--color-selected);
 		--card-edge: color-mix(in oklch, var(--ink) 5%, transparent);
-		--shadow-menu: var(--shadow-menu);
-		--hair: 0.5px;
-		--font-sans: var(--font-sans);
-		--font-mono: var(--font-mono);
+		--hair: var(--app-border-width);
 	}
 
 	.agents-view {
@@ -56,23 +51,10 @@
 		-webkit-font-smoothing: antialiased;
 	}
 
-	html[data-theme-light="true"] :is(.agents-view, .agents-view-portal) {
-		--glass-rim: oklch(0 0 0 / 0.06);
-	}
-
 	:where(.agents-view, .agents-view-portal) *,
 	:where(.agents-view, .agents-view-portal) *::before,
 	:where(.agents-view, .agents-view-portal) *::after {
 		box-sizing: border-box;
-	}
-
-	:where(.agents-view, .agents-view-portal) button {
-		font: inherit;
-		color: inherit;
-		background: none;
-		border: 0;
-		padding: 0;
-		cursor: default;
 	}
 
 	:where(.agents-view, .agents-view-portal) button:focus-visible,
@@ -136,25 +118,7 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 0;
-		border-right: var(--hair) solid var(--edge);
-	}
-
-	:where(.agents-view, .agents-view-portal) .aside header {
-		height: 48px;
-		padding: 0 16px;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		border-bottom: var(--hair) solid var(--edge);
-		flex-shrink: 0;
-	}
-
-	:where(.agents-view, .agents-view-portal) .aside h1 {
-		margin: 0;
-		font-size: 14px;
-		font-weight: 600;
-		letter-spacing: -0.03em;
+		border-right: var(--hair) solid var(--edge-muted);
 	}
 
 	:where(.agents-view, .agents-view-portal) .ctl {
@@ -194,7 +158,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 24px;
-		padding: 16px 16px 20px;
+		padding: 16px 6px 20px;
 		min-height: 0;
 		flex: 1;
 		overflow: hidden;
@@ -266,12 +230,12 @@
 
 	/* recent chat rows: left = PR state or status, title truncates, right = lines changed */
 	:where(.agents-view, .agents-view-portal) .row {
-		min-height: 36px;
+		min-height: 32px;
 		display: grid;
-		grid-template-columns: 16px minmax(0, 1fr) auto;
-		column-gap: 10px;
+		grid-template-columns: 20px minmax(0, 1fr) auto;
+		column-gap: 8px;
 		align-items: center;
-		padding: 8px 12px;
+		padding: 6px 10px;
 		border-radius: 12px;
 		font-size: 14px;
 		color: var(--ink-muted);
@@ -291,7 +255,7 @@
 	}
 
 	:where(.agents-view, .agents-view-portal) .row .lead {
-		width: 16px;
+		width: 20px;
 		height: 16px;
 		display: grid;
 		place-items: center;
@@ -438,13 +402,12 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
-		padding: 0 16px;
+		padding: 0 24px;
 	}
 
 	:where(.agents-view, .agents-view-portal) .topbar h1 {
 		flex: 1;
 		min-width: 0;
-		border-bottom: var(--hair) solid var(--edge);
 	}
 
 	:where(.agents-view, .agents-view-portal) .topbar h1 {
@@ -458,14 +421,13 @@
 		display: inline-flex;
 		padding: 2px;
 		gap: 2px;
-		border-radius: 10px;
-		background: color-mix(in oklch, var(--surface-0) 55%, var(--panel));
-		box-shadow: inset 0 0 0 0.5px var(--edge-muted);
+		border-radius: 999px;
+		background: var(--hover);
 	}
 
 	:where(.agents-view, .agents-view-portal) .seg button {
 		padding: 4px 10px;
-		border-radius: 8px;
+		border-radius: 999px;
 		font-size: 12.5px;
 		font-weight: 500;
 		color: var(--ink-subtle);
@@ -480,9 +442,8 @@
 	}
 
 	:where(.agents-view, .agents-view-portal) .seg button[aria-pressed="true"] {
-		background: var(--surface-3);
+		background: var(--active);
 		color: var(--ink);
-		box-shadow: 0 1px 2px rgb(0 0 0 / 0.22), inset 0 0 0 0.5px var(--edge);
 	}
 
 	:where(.agents-view, .agents-view-portal) .seg button kbd {
@@ -501,21 +462,21 @@
 		grid-auto-columns: 1fr;
 		width: 100%;
 		padding: 3px;
-		border-radius: 12px;
+		border-radius: 999px;
 	}
 
 	:where(.agents-view, .agents-view-portal) .seg.side button {
 		justify-content: center;
 		height: 32px;
-		font-size: 12.5px;
-		border-radius: 9px;
+		font-size: 14px;
+		border-radius: 999px;
 		gap: 6px;
 		padding: 4px 6px;
 		min-width: 0;
 	}
 
 	:where(.agents-view, .agents-view-portal) .aside > .seg.side {
-		margin: 14px 16px 0;
+		margin: 16px 6px 0;
 		width: auto;
 		flex-shrink: 0;
 	}
@@ -565,7 +526,7 @@
 
 	:where(.agents-view, .agents-view-portal) .newchat .col {
 		width: 100%;
-		max-width: 672px;
+		max-width: 768px;
 		display: flex;
 		flex-direction: column;
 		gap: 20px;
@@ -598,7 +559,7 @@
 	}
 
 	:where(.agents-view, .agents-view-portal) .greeting h2 em {
-		font-style: italic;
+		font-style: normal;
 		font-weight: 600;
 		font-synthesis: style;
 	}
@@ -631,9 +592,8 @@
 		border-radius: 10px;
 		display: grid;
 		place-items: center;
-		background: color-mix(in oklch, var(--accent) 14%, transparent);
-		color: var(--accent);
-		box-shadow: inset 0 0 0 0.5px color-mix(in oklch, var(--accent) 35%, transparent);
+		background: var(--hover);
+		color: var(--ink);
 	}
 
 	:where(.agents-view, .agents-view-portal)[data-mode="macro"] .greeting h2 .mark .ph {
@@ -734,8 +694,8 @@
 		flex: 0 0 232px;
 		scroll-snap-align: start;
 		text-align: left;
-		border-radius: 10px;
-		background: var(--surface-0);
+		border-radius: 16px;
+		background: var(--hover);
 		border: var(--hair) solid var(--edge-muted);
 		padding: 12px;
 		display: grid;
@@ -745,12 +705,12 @@
 	}
 
 	:where(.agents-view, .agents-view-portal) .card:hover {
-		background: color-mix(in oklch, var(--surface-0) 70%, var(--surface-2));
+		background: var(--active);
 	}
 
 	:where(.agents-view, .agents-view-portal) .card[aria-checked="true"] {
-		border-color: color-mix(in oklch, var(--accent) 60%, var(--edge));
-		background: var(--selected);
+		border-color: var(--ink-muted);
+		background: var(--active);
 	}
 
 	:where(.agents-view, .agents-view-portal) .card .top {
@@ -767,7 +727,7 @@
 		border-radius: 8px;
 		display: grid;
 		place-items: center;
-		color: var(--accent);
+		color: var(--ink-muted);
 		background: var(--surface-1);
 		box-shadow: 0 0 0 0.5px var(--edge-muted);
 		flex-shrink: 0;
@@ -871,78 +831,28 @@
 		color: var(--ink);
 	}
 
-	/* ---------- Composer (ComposerSurface rounded-[22px] glass) ---------- */
-	:where(.agents-view, .agents-view-portal) .composer {
-		border-radius: 14px;
-		background: var(--menu-glass);
-		backdrop-filter: blur(14px) saturate(1.3);
-		-webkit-backdrop-filter: blur(14px) saturate(1.3);
-		box-shadow: inset 0 0 0 1px var(--glass-rim), 0 1px 2px rgb(0 0 0 / 0.08);
-		display: flex;
-		flex-direction: column;
-	}
-
-	:where(.agents-view, .agents-view-portal)[data-mode="macro"] .composer {
-		border-radius: 20px;
-	}
-
-	:where(.agents-view, .agents-view-portal) .composer:focus-within {
-		box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--accent) 45%, var(--glass-rim)), 0 1px 2px rgb(0 0 0 / 0.08);
-	}
-
-	:where(.agents-view, .agents-view-portal) .composer textarea {
-		resize: none;
-		background: transparent;
-		border: 0;
-		color: var(--ink);
-		font: 14px/1.5 var(--font-sans);
-		padding: 16px 16px 6px;
-		min-height: 104px;
-		outline: none;
-	}
-
-	:where(.agents-view, .agents-view-portal) .composer textarea::placeholder {
-		color: var(--ink-placeholder);
-	}
-
-	:where(.agents-view, .agents-view-portal) .composer .bar {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding: 4px 10px 10px 10px;
-	}
-
 	:where(.agents-view, .agents-view-portal) .pill {
 		height: 36px;
 		display: inline-flex;
 		align-items: center;
 		gap: 8px;
 		padding: 0 10px 0 8px;
-		border-radius: 10px;
+		border-radius: 999px;
 		font-size: 14px;
 		color: var(--ink-muted);
-		max-width: 60vw;
-		background: var(--hover);
+		max-width: min(260px, 60vw);
+		min-width: 0;
+		background: transparent;
 	}
 
 	:where(.agents-view, .agents-view-portal) .pill:hover {
-		background: var(--active);
+		background: var(--hover);
 		color: var(--ink);
 	}
 
 	:where(.agents-view, .agents-view-portal) .pill.empty {
 		background: transparent;
 		color: var(--ink-subtle);
-	}
-
-	:where(.agents-view, .agents-view-portal)[data-mode="macro"] #repoPill,
-	:where(.agents-view, .agents-view-portal)[data-mode="macro"] #repoPill + .menu,
-	:where(.agents-view, .agents-view-portal)[data-mode="macro"] #threadRepoPill {
-		display: none;
-	}
-
-	:where(.agents-view, .agents-view-portal)[data-mode="work"] #agentPillWrap {
-		display: none;
 	}
 
 	:where(.agents-view, .agents-view-portal) .menu .opt .sysb {
@@ -977,7 +887,7 @@
 		border-radius: 50%;
 		display: grid;
 		place-items: center;
-		color: var(--accent);
+		color: var(--ink-muted);
 		background: var(--surface-1);
 		box-shadow: 0 0 0 0.5px var(--edge-muted);
 	}
@@ -989,55 +899,6 @@
 
 	:where(.agents-view, .agents-view-portal) .bar .grow {
 		flex: 1;
-	}
-
-	:where(.agents-view, .agents-view-portal) .send {
-		width: 36px;
-		height: 36px;
-		border-radius: 12px;
-		background: var(--accent);
-		color: var(--accent-contrast);
-		display: grid;
-		place-items: center;
-	}
-
-	:where(.agents-view, .agents-view-portal) .send .ph {
-		width: 16px;
-		height: 16px;
-	}
-
-	:where(.agents-view, .agents-view-portal) .send:disabled {
-		background: var(--active);
-		color: var(--ink-disabled);
-	}
-
-	:where(.agents-view, .agents-view-portal) .sendwrap {
-		display: inline-flex;
-		align-items: center;
-		gap: 8px;
-	}
-
-	:where(.agents-view, .agents-view-portal) .sendwrap .hint {
-		display: inline-flex;
-		align-items: center;
-		gap: 2px;
-		font: 11px var(--font-mono);
-		color: var(--ink-placeholder);
-		opacity: 0;
-		transition: opacity 120ms ease;
-	}
-
-	:where(.agents-view, .agents-view-portal) .sendwrap .hint kbd {
-		font: inherit;
-		border: var(--hair) solid var(--edge);
-		border-radius: 4px;
-		padding: 0 4px;
-		line-height: 16px;
-		background: var(--surface-1);
-	}
-
-	:where(.agents-view, .agents-view-portal) .composer:focus-within .sendwrap:has(.send:not(:disabled)) .hint {
-		opacity: 1;
 	}
 
 	:where(.agents-view, .agents-view-portal) .logo {
@@ -1064,8 +925,8 @@
 		left: 0;
 		width: 272px;
 		background: var(--menu);
-		border: var(--hair) solid var(--edge);
-		border-radius: 12px;
+		border: var(--hair) solid var(--edge-muted);
+		border-radius: 16px;
 		box-shadow: var(--shadow-menu);
 		padding: 6px;
 		z-index: 20;
@@ -1258,9 +1119,9 @@
 		align-items: center;
 		gap: 6px;
 		padding: 0 12px;
-		border-radius: 10px;
-		background: var(--accent);
-		color: var(--accent-contrast);
+		border-radius: 999px;
+		background: var(--ink);
+		color: var(--panel);
 		font-size: 13px;
 		font-weight: 500;
 		white-space: nowrap;
@@ -1285,7 +1146,7 @@
 		height: 28px;
 		padding: 0 10px;
 		font-size: 12.5px;
-		border-radius: 8px;
+		border-radius: 999px;
 	}
 
 	:where(.agents-view, .agents-view-portal) .menu .foot {
@@ -1326,9 +1187,9 @@
 	}
 
 	:where(.agents-view, .agents-view-portal) .scard {
-		border-radius: 12px;
+		border-radius: 16px;
 		border: 1px solid var(--card-edge);
-		background: var(--surface-2);
+		background: var(--hover);
 		overflow: hidden;
 	}
 
@@ -1354,7 +1215,7 @@
 		display: grid;
 		place-items: center;
 		background: var(--surface-1);
-		color: var(--accent);
+		color: var(--ink-muted);
 		box-shadow: 0 0 0 1px var(--edge-muted);
 		flex-shrink: 0;
 	}
@@ -1555,29 +1416,6 @@
 		flex-direction: column;
 		gap: 8px;
 		flex-shrink: 0;
-	}
-
-	:where(.agents-view, .agents-view-portal) .newbtn {
-		height: 36px;
-		width: 100%;
-		display: flex;
-		align-items: center;
-		gap: 9px;
-		padding: 0 12px;
-		border-radius: 12px;
-		background: var(--accent);
-		color: var(--accent-contrast);
-		font-size: 14px;
-		font-weight: 500;
-	}
-
-	:where(.agents-view, .agents-view-portal) .newbtn:hover {
-		filter: brightness(1.04);
-	}
-
-	:where(.agents-view, .agents-view-portal) .newbtn .ph {
-		width: 16px;
-		height: 16px;
 	}
 
 	/* ---------- slash menu: skills from the composer ---------- */
@@ -1846,11 +1684,12 @@
 		max-height: 88vh;
 		display: flex;
 		flex-direction: column;
-		border-radius: 12px;
-		background: var(--surface-2);
+		border-radius: 20px;
+		background: var(--menu);
 		color: var(--ink);
-		border: var(--hair) solid var(--edge);
-		box-shadow: 0 24px 64px -24px rgb(0 0 0 / 0.5), var(--shadow-menu);
+		border: var(--hair) solid var(--edge-muted);
+		box-shadow: var(--shadow-menu);
+		overflow: hidden;
 		animation: dialog-content-open 160ms cubic-bezier(0.16, 1, 0.3, 1);
 	}
 
@@ -2043,7 +1882,7 @@
 		width: 100%;
 		border-radius: 8px;
 		border: var(--hair) solid var(--edge-muted);
-		background: var(--surface-1);
+		background: var(--color-input);
 		color: var(--ink);
 		font: 14px var(--font-sans);
 		padding: 8px 12px;
@@ -2082,7 +1921,7 @@
 		border-radius: 8px;
 		border: var(--hair) solid var(--edge-muted);
 		padding: 0 8px;
-		background: var(--surface-1);
+		background: var(--color-input);
 	}
 
 	:where(.agents-view, .agents-view-portal) .tagin:focus-within {
@@ -2179,7 +2018,7 @@
 		align-items: center;
 		gap: 6px;
 		padding: 0 12px;
-		border-radius: 10px;
+		border-radius: 999px;
 		font-size: 13px;
 		font-weight: 500;
 		color: var(--ink);
@@ -2544,13 +2383,13 @@
 		display: inline-flex;
 		padding: 2px;
 		gap: 2px;
-		border-radius: 8px;
+		border-radius: 999px;
 		background: var(--active);
 	}
 
 	:where(.agents-view, .agents-view-portal) .segc button {
 		padding: 3px 10px;
-		border-radius: 6px;
+		border-radius: 999px;
 		font-size: 12px;
 		font-weight: 500;
 		color: var(--ink-subtle);
@@ -2716,23 +2555,6 @@
 	:where(.agents-view, .agents-view-portal) .pane .dock textarea {
 		min-height: 60px;
 		padding-top: 14px;
-	}
-
-	/* The composer's editing surface stands where the design's textarea was. */
-	:where(.agents-view, .agents-view-portal) .composer .editor {
-		padding: 16px 16px 6px;
-		min-height: 104px;
-		font: 14px/1.5 var(--font-sans);
-		color: var(--ink);
-	}
-
-	:where(.agents-view, .agents-view-portal) .composer .editor [contenteditable] {
-		outline: none;
-		min-height: 60px;
-	}
-
-	:where(.agents-view, .agents-view-portal) .composer .editor [data-lexical-editor] {
-		padding: 0;
 	}
 
 	/* The session transcript keeps its own scroller. */

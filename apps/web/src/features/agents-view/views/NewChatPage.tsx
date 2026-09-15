@@ -4,26 +4,22 @@ import {
   ProviderIcon,
 } from '@core/component/AI/component/ProviderIcon';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
-import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useAuthor, useUserId } from '@core/context/user';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import AtIcon from '@phosphor/at.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CodeIcon from '@phosphor/code.svg';
 import GearIcon from '@phosphor/gear.svg';
 import GithubIcon from '@phosphor/github-logo.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
 import { useCursorModelsQuery } from '@queries/auth/cursor-api-key';
-import { $getSelection, $isRangeSelection } from 'lexical';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { AgentAvatar, AgentIcon } from '../components/AgentGlyph';
+import { ChatComposer } from '../components/ChatComposer';
 import { MenuAnchor, MenuGroup, MenuOption } from '../components/Menu';
+import { type ModelChoice, ModelSelector } from '../components/ModelSelector';
 import type { AgentKind } from '../core/agent-kind';
 import { relativeAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
@@ -38,6 +34,7 @@ import {
   rosterForMode,
 } from '../core/roster';
 import { createRecentRepositories } from '../primitives/recent-repositories';
+import { CodeComposer } from './code-composer';
 
 /** What the composer hands the workspace to start a session with. */
 export type StartConversation = {
@@ -46,15 +43,6 @@ export type StartConversation = {
   botId?: string;
   modelOverride?: string;
   repoUrl?: string;
-};
-
-type ModelChoice = { id: string; name: string; provider: string };
-
-const PROVIDER_NAMES: Record<string, string> = {
-  anthropic: 'Anthropic',
-  google: 'Google',
-  openai: 'OpenAI',
-  other: 'Other',
 };
 
 const IN_MEMORY_MODELS: ModelChoice[] = Object.values(Model).map((id) => ({
@@ -72,8 +60,6 @@ function greetingForHour(hour: number): string {
 function firstName(author: string): string {
   return author.includes('@') ? author.split('@')[0] : author.split(' ')[0];
 }
-
-const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 
 /**
  * The New chat / New session page: who you are talking to, and the composer
@@ -100,13 +86,20 @@ export function NewChatPage(props: {
   const options = createMemo(() => rosterForMode(props.roster, props.mode));
   const [chatAgentId, setChatAgentId] = createSignal(MACRO_PERSONA_ID);
   const [coderId, setCoderId] = createSignal<string>();
-  const [modelOverride, setModelOverride] = createSignal<string>();
+  const [chatModelOverride, setChatModelOverride] = createSignal<string>();
+  const [codeModelOverride, setCodeModelOverride] = createSignal<string>();
+  const modelOverride = () =>
+    props.mode === 'chat' ? chatModelOverride() : codeModelOverride();
+  const setModelOverride = (model: string | undefined) => {
+    if (props.mode === 'chat') setChatModelOverride(model);
+    else setCodeModelOverride(model);
+  };
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>(
     repositories.urls()[0]
   );
-  const [markdown, setMarkdown] = createSignal('');
+  const [chatDraft, setChatDraft] = createSignal('');
+  const [codeDraft, setCodeDraft] = createSignal('');
   const [repoInput, setRepoInput] = createSignal('');
-  const [modelFilter, setModelFilter] = createSignal('');
 
   // Code leads with the coder used most recently that can still be started;
   // Macro's sandboxed coder is the fallback.
@@ -123,7 +116,10 @@ export function NewChatPage(props: {
       props.mode === 'code' ? (coderId() ?? defaultCoderId()) : chatAgentId();
     return options().find((agent) => agent.id === wanted) ?? options()[0];
   });
-  const blocked = () => selected()?.unavailableReason;
+  const blocked = () => {
+    const agent = selected();
+    return agent ? agent.unavailableReason : 'Choose an agent to start';
+  };
 
   const pick = (id: string) => {
     if (props.mode === 'code') setCoderId(id);
@@ -158,19 +154,6 @@ export function NewChatPage(props: {
   const modelName = (id: string | undefined) =>
     id ? (models().find((model) => model.id === id)?.name ?? id) : 'default';
   const currentModelId = () => modelOverride() ?? selected()?.defaultModel;
-  const providers = () =>
-    [...new Set(models().map((model) => model.provider))].toSorted();
-  const filteredModels = (provider: string) =>
-    models().filter((model) => {
-      if (model.provider !== provider) return false;
-      const query = modelFilter().trim().toLowerCase();
-      return (
-        !query ||
-        model.name.toLowerCase().includes(query) ||
-        model.id.toLowerCase().includes(query)
-      );
-    });
-
   const usage = createMemo(() => botUsage(props.conversations));
   const coders = () =>
     options().toSorted((left, right) => {
@@ -179,28 +162,9 @@ export function NewChatPage(props: {
       return used(right) - used(left);
     });
 
-  const editor = buildConfig('chat')
-    .namespace('agents-view-composer')
-    .withMentions({ showOpenTabs: true, block: 'agent' })
-    .withEmojis()
-    .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
-    .withHistory({ timeGap: 400 })
-    .withCode()
-    .withRestoreFocus()
-    .withSkills()
-    .onEnter(() => {
-      send();
-      return true;
-    })
-    .onChange(setMarkdown);
-
-  const canSend = () => markdown().trim().length > 0 && !blocked();
-
-  const send = () => {
+  const send = (prompt: string) => {
     const persona = selected();
-    if (!canSend() || !persona) return;
-    const prompt = markdown().trim();
-    editor.controls.clear();
+    if (!prompt.trim() || !persona || blocked()) return;
     recentAgents.remember(persona.id);
     const repo = props.mode === 'code' ? repoUrl() : undefined;
     if (repo) repositories.remember(repo);
@@ -209,14 +173,6 @@ export function NewChatPage(props: {
       botId: persona.botId,
       modelOverride: modelOverride(),
       repoUrl: repo,
-    });
-  };
-
-  const mention = () => {
-    editor.controls.focus();
-    editor.lexical.update(() => {
-      const selection = $getSelection();
-      if ($isRangeSelection(selection)) selection.insertText('@');
     });
   };
 
@@ -229,10 +185,229 @@ export function NewChatPage(props: {
   };
 
   const greeting = greetingForHour(new Date().getHours());
-  const placeholder = () =>
-    props.mode === 'code'
-      ? `Task for @${selected()?.handle ?? 'coder'} · @mention context, / for skills`
-      : `Message ${selected()?.name ?? 'Macro'} · @mention anything, / for skills`;
+
+  const agentSelector = () => (
+    <MenuAnchor
+      menuLabel="Agent"
+      trigger={(menu) => (
+        <button
+          type="button"
+          class="pill"
+          aria-haspopup="listbox"
+          aria-expanded={menu.open()}
+          title="Agent"
+          onClick={(event) => {
+            event.stopPropagation();
+            menu.toggle();
+          }}
+        >
+          <span class="logo">
+            <Show when={selected()}>
+              {(agent) => <AgentIcon agent={agent()} class="ph" />}
+            </Show>
+          </span>
+          <span class="lbl truncate">{selected()?.name}</span>
+          <CaretDownIcon class="ph caret" />
+        </button>
+      )}
+    >
+      {(close) => (
+        <>
+          <For each={options().filter((agent) => agent.share === 'system')}>
+            {(agent) => (
+              <AgentOption
+                agent={agent}
+                checked={agent.id === selected()?.id}
+                onSelect={() => {
+                  pick(agent.id);
+                  close();
+                }}
+              />
+            )}
+          </For>
+          <Show when={options().some((agent) => agent.share !== 'system')}>
+            <MenuGroup>Your agents</MenuGroup>
+            <For each={options().filter((agent) => agent.share !== 'system')}>
+              {(agent) => (
+                <AgentOption
+                  agent={agent}
+                  checked={agent.id === selected()?.id}
+                  onSelect={() => {
+                    pick(agent.id);
+                    close();
+                  }}
+                />
+              )}
+            </For>
+          </Show>
+          <div class="foot">
+            <span class="cnt">
+              {options().length} {options().length === 1 ? 'agent' : 'agents'}
+            </span>
+            <button
+              type="button"
+              class="cta sm"
+              onClick={() => {
+                close();
+                props.onOpenRoster('agent');
+              }}
+            >
+              <PlusIcon class="ph" />
+              Create agent
+            </button>
+          </div>
+        </>
+      )}
+    </MenuAnchor>
+  );
+
+  const modelSelector = () => (
+    <Show when={selected()}>
+      <ModelSelector
+        model={currentModelId()}
+        selected={modelOverride()}
+        options={models()}
+        searchable={props.mode === 'code'}
+        onSelect={setModelOverride}
+        label={
+          <Show
+            when={modelOverride()}
+            fallback={
+              <Show
+                when={props.mode === 'code'}
+                fallback={
+                  <>
+                    <span class="k">default</span> (
+                    {modelName(selected()?.defaultModel)})
+                  </>
+                }
+              >
+                <span class="k">default</span>&nbsp;
+                <span class="mono">
+                  {selected()?.defaultModel ?? 'default'}
+                </span>
+              </Show>
+            }
+          >
+            {(override) => (
+              <Show
+                when={props.mode === 'code'}
+                fallback={modelName(override())}
+              >
+                <span class="mono">{override()}</span>
+              </Show>
+            )}
+          </Show>
+        }
+      >
+        {(close) => (
+          <MenuOption
+            checked={!modelOverride()}
+            onSelect={() => {
+              setModelOverride(undefined);
+              close();
+            }}
+          >
+            <span class="logo">
+              <ProviderIcon model={selected()?.defaultModel} class="size-4" />
+            </span>
+            <span class="nm">
+              Agent default{' '}
+              <span style={{ color: 'var(--ink-placeholder)' }}>
+                · {modelName(selected()?.defaultModel)}
+              </span>
+            </span>
+            <span class="id mono">{selected()?.defaultModel}</span>
+          </MenuOption>
+        )}
+      </ModelSelector>
+    </Show>
+  );
+
+  const repositorySelector = () => (
+    <MenuAnchor
+      menuLabel="Repository"
+      trigger={(menu) => (
+        <button
+          type="button"
+          class={repoUrl() ? 'pill' : 'pill empty'}
+          aria-haspopup="listbox"
+          aria-expanded={menu.open()}
+          title="Repository (optional)"
+          onClick={(event) => {
+            event.stopPropagation();
+            menu.toggle();
+          }}
+        >
+          <span class="logo">
+            <GithubIcon class="ph" style={{ width: '16px', height: '16px' }} />
+          </span>
+          <span class="lbl truncate">
+            <Show when={repoUrl()} fallback="Add repository">
+              {(url) => (
+                <span class="mono" style={{ 'font-size': '12px' }}>
+                  {repositoryLabel(url())}
+                </span>
+              )}
+            </Show>
+          </span>
+          <CaretDownIcon class="ph caret" />
+        </button>
+      )}
+    >
+      {(close) => (
+        <>
+          <div class="filter">
+            <PlusIcon class="ph" />
+            <input
+              placeholder="Add owner/repo or a URL"
+              aria-label="Add repository"
+              value={repoInput()}
+              onInput={(event) => setRepoInput(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                addRepository();
+                close();
+              }}
+            />
+          </div>
+          <MenuOption
+            checked={!repoUrl()}
+            onSelect={() => {
+              setRepoUrl(undefined);
+              close();
+            }}
+          >
+            <XIcon class="ph" />
+            <span class="nm">No repository</span>
+            <span class="sub">workspace only</span>
+          </MenuOption>
+          <Show when={repositories.urls().length > 0}>
+            <MenuGroup>Recent</MenuGroup>
+            <For each={repositories.urls()}>
+              {(url) => (
+                <MenuOption
+                  checked={repoUrl() === url}
+                  onSelect={() => {
+                    setRepoUrl(url);
+                    close();
+                  }}
+                >
+                  <GithubIcon class="ph" />
+                  <span class="nm">{repositoryLabel(url)}</span>
+                </MenuOption>
+              )}
+            </For>
+          </Show>
+          <div class="foot">
+            <span>Optional · clones into the sandbox</span>
+            <span>{repositories.urls().length} repos</span>
+          </div>
+        </>
+      )}
+    </MenuAnchor>
+  );
 
   return (
     <section class="page newchat" data-active aria-label="New chat">
@@ -388,348 +563,29 @@ export function NewChatPage(props: {
           </div>
         </div>
 
-        <div class="menu-anchor composer-anchor">
-          <div class="composer">
-            <span class="sr">Message the agent</span>
-            <div class="editor">
-              <MarkdownShell
-                config={editor}
-                placeholder={placeholder()}
-                autofocus
-              />
-            </div>
-            <div class="bar">
-              <MenuAnchor
-                id="agentPillWrap"
-                menuLabel="Agent"
-                trigger={(menu) => (
-                  <button
-                    type="button"
-                    class="pill"
-                    aria-haspopup="listbox"
-                    aria-expanded={menu.open()}
-                    title="Agent"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      menu.toggle();
-                    }}
-                  >
-                    <span class="logo">
-                      <Show when={selected()}>
-                        {(agent) => <AgentIcon agent={agent()} class="ph" />}
-                      </Show>
-                    </span>
-                    <span class="lbl truncate">{selected()?.name}</span>
-                    <CaretDownIcon class="ph caret" />
-                  </button>
-                )}
-              >
-                {(close) => (
-                  <>
-                    <For
-                      each={options().filter(
-                        (agent) => agent.share === 'system'
-                      )}
-                    >
-                      {(agent) => (
-                        <AgentOption
-                          agent={agent}
-                          checked={agent.id === selected()?.id}
-                          onSelect={() => {
-                            pick(agent.id);
-                            close();
-                          }}
-                        />
-                      )}
-                    </For>
-                    <Show
-                      when={options().some((agent) => agent.share !== 'system')}
-                    >
-                      <MenuGroup>Your agents</MenuGroup>
-                      <For
-                        each={options().filter(
-                          (agent) => agent.share !== 'system'
-                        )}
-                      >
-                        {(agent) => (
-                          <AgentOption
-                            agent={agent}
-                            checked={agent.id === selected()?.id}
-                            onSelect={() => {
-                              pick(agent.id);
-                              close();
-                            }}
-                          />
-                        )}
-                      </For>
-                    </Show>
-                    <div class="foot">
-                      <span class="cnt">
-                        {options().length}{' '}
-                        {options().length === 1 ? 'agent' : 'agents'}
-                      </span>
-                      <button
-                        type="button"
-                        class="cta sm"
-                        onClick={() => {
-                          close();
-                          props.onOpenRoster('agent');
-                        }}
-                      >
-                        <PlusIcon class="ph" />
-                        Create agent
-                      </button>
-                    </div>
-                  </>
-                )}
-              </MenuAnchor>
-
-              <Show when={selected() && models().length > 0}>
-                <MenuAnchor
-                  menuLabel="Model"
-                  trigger={(menu) => (
-                    <button
-                      type="button"
-                      class="pill"
-                      aria-haspopup="listbox"
-                      aria-expanded={menu.open()}
-                      title="Model"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        menu.toggle();
-                      }}
-                    >
-                      <span class="logo">
-                        <ProviderIcon model={currentModelId()} class="size-4" />
-                      </span>
-                      <span class="lbl truncate">
-                        <Show
-                          when={modelOverride()}
-                          fallback={
-                            <Show
-                              when={props.mode === 'code'}
-                              fallback={
-                                <>
-                                  <span class="k">default</span> (
-                                  {modelName(selected()?.defaultModel)})
-                                </>
-                              }
-                            >
-                              <span class="k">default</span>&nbsp;
-                              <span class="mono">
-                                {selected()?.defaultModel ?? 'default'}
-                              </span>
-                            </Show>
-                          }
-                        >
-                          {(override) => (
-                            <Show
-                              when={props.mode === 'code'}
-                              fallback={modelName(override())}
-                            >
-                              <span class="mono">{override()}</span>
-                            </Show>
-                          )}
-                        </Show>
-                      </span>
-                      <CaretDownIcon class="ph caret" />
-                    </button>
-                  )}
-                >
-                  {(close) => (
-                    <>
-                      <Show when={props.mode === 'code'}>
-                        <div class="filter">
-                          <MagnifyingGlassIcon class="ph" />
-                          <input
-                            placeholder="Filter models"
-                            aria-label="Filter models"
-                            value={modelFilter()}
-                            onInput={(event) =>
-                              setModelFilter(event.currentTarget.value)
-                            }
-                          />
-                        </div>
-                      </Show>
-                      <MenuOption
-                        checked={!modelOverride()}
-                        onSelect={() => {
-                          setModelOverride(undefined);
-                          close();
-                        }}
-                      >
-                        <span class="logo">
-                          <ProviderIcon
-                            model={selected()?.defaultModel}
-                            class="size-4"
-                          />
-                        </span>
-                        <span class="nm">
-                          Agent default{' '}
-                          <span style={{ color: 'var(--ink-placeholder)' }}>
-                            · {modelName(selected()?.defaultModel)}
-                          </span>
-                        </span>
-                        <span class="id mono">{selected()?.defaultModel}</span>
-                      </MenuOption>
-                      <For each={providers()}>
-                        {(provider) => (
-                          <Show when={filteredModels(provider).length > 0}>
-                            <MenuGroup>
-                              {PROVIDER_NAMES[provider] ?? provider}
-                            </MenuGroup>
-                            <For each={filteredModels(provider)}>
-                              {(model) => (
-                                <MenuOption
-                                  checked={modelOverride() === model.id}
-                                  onSelect={() => {
-                                    setModelOverride(model.id);
-                                    close();
-                                  }}
-                                >
-                                  <span class="logo">
-                                    <ProviderIcon
-                                      model={model.id}
-                                      class="size-4"
-                                    />
-                                  </span>
-                                  <span class="nm">{model.name}</span>
-                                  <span class="id mono">{model.id}</span>
-                                </MenuOption>
-                              )}
-                            </For>
-                          </Show>
-                        )}
-                      </For>
-                      <div class="foot">
-                        <span>
-                          Offered by{' '}
-                          <span class="mono">{selected()?.runtime.label}</span>
-                        </span>
-                        <span>{models().length} models</span>
-                      </div>
-                    </>
-                  )}
-                </MenuAnchor>
-              </Show>
-
-              <MenuAnchor
-                menuLabel="Repository"
-                trigger={(menu) => (
-                  <button
-                    type="button"
-                    id="repoPill"
-                    class={repoUrl() ? 'pill' : 'pill empty'}
-                    aria-haspopup="listbox"
-                    aria-expanded={menu.open()}
-                    title="Repository (optional)"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      menu.toggle();
-                    }}
-                  >
-                    <span class="logo">
-                      <GithubIcon
-                        class="ph"
-                        style={{ width: '16px', height: '16px' }}
-                      />
-                    </span>
-                    <span class="lbl truncate">
-                      <Show when={repoUrl()} fallback="Add repository">
-                        {(url) => (
-                          <span class="mono" style={{ 'font-size': '12px' }}>
-                            {repositoryLabel(url())}
-                          </span>
-                        )}
-                      </Show>
-                    </span>
-                    <CaretDownIcon class="ph caret" />
-                  </button>
-                )}
-              >
-                {(close) => (
-                  <>
-                    <div class="filter">
-                      <PlusIcon class="ph" />
-                      <input
-                        placeholder="Add owner/repo or a URL"
-                        aria-label="Add repository"
-                        value={repoInput()}
-                        onInput={(event) =>
-                          setRepoInput(event.currentTarget.value)
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key !== 'Enter') return;
-                          event.preventDefault();
-                          addRepository();
-                          close();
-                        }}
-                      />
-                    </div>
-                    <MenuOption
-                      checked={!repoUrl()}
-                      onSelect={() => {
-                        setRepoUrl(undefined);
-                        close();
-                      }}
-                    >
-                      <XIcon class="ph" />
-                      <span class="nm">No repository</span>
-                      <span class="sub">workspace only</span>
-                    </MenuOption>
-                    <Show when={repositories.urls().length > 0}>
-                      <MenuGroup>Recent</MenuGroup>
-                      <For each={repositories.urls()}>
-                        {(url) => (
-                          <MenuOption
-                            checked={repoUrl() === url}
-                            onSelect={() => {
-                              setRepoUrl(url);
-                              close();
-                            }}
-                          >
-                            <GithubIcon class="ph" />
-                            <span class="nm">{repositoryLabel(url)}</span>
-                          </MenuOption>
-                        )}
-                      </For>
-                    </Show>
-                    <div class="foot">
-                      <span>Optional · clones into the sandbox</span>
-                      <span>{repositories.urls().length} repos</span>
-                    </div>
-                  </>
-                )}
-              </MenuAnchor>
-
-              <div class="grow" />
-              <button
-                type="button"
-                class="icon-btn"
-                aria-label="Mention"
-                onClick={mention}
-              >
-                <AtIcon class="ph" style={{ width: '16px', height: '16px' }} />
-              </button>
-              <span class="sendwrap">
-                <span class="hint" aria-hidden="true">
-                  <kbd>{isMac ? '⌘' : 'Ctrl'}</kbd>
-                  <kbd>↵</kbd>
-                </span>
-                <button
-                  type="button"
-                  class="send"
-                  aria-label="Send"
-                  title={blocked()}
-                  disabled={!canSend()}
-                  onClick={send}
-                >
-                  <ArrowUpIcon class="ph" />
-                </button>
-              </span>
-            </div>
-          </div>
-        </div>
+        <Show
+          when={props.mode === 'chat'}
+          fallback={
+            <CodeComposer
+              draft={codeDraft()}
+              onDraftChange={setCodeDraft}
+              placeholder={`Task for @${selected()?.handle ?? 'coder'}`}
+              blockedReason={blocked()}
+              modelSelector={modelSelector()}
+              repositorySelector={repositorySelector()}
+              onSend={send}
+            />
+          }
+        >
+          <ChatComposer
+            draft={chatDraft()}
+            onDraftChange={setChatDraft}
+            blockedReason={blocked()}
+            agentSelector={agentSelector()}
+            modelSelector={modelSelector()}
+            onSend={send}
+          />
+        </Show>
       </div>
     </section>
   );

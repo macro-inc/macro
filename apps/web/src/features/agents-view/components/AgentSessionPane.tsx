@@ -33,6 +33,8 @@ import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
 import type { AgentsMode } from '../core/mode';
 import { repositoryLabel } from '../core/repository';
 import { type RosterAgent, runtimeLabel } from '../core/roster';
+import { ChatSessionInput } from './ChatComposer';
+import { SessionModelSelector } from './ModelSelector';
 import { ConfirmDialog, RenameDialog } from './SimpleDialogs';
 import { Topbar } from './Topbar';
 
@@ -98,7 +100,11 @@ function SessionContent(props: {
   };
   const copyLink = () => {
     const id = sessionId();
-    if (id) void makeCopyLinkAction().executeByBlock(id, 'agent');
+    if (id)
+      void makeCopyLinkAction().executeByBlock(
+        id,
+        props.mode === 'code' ? 'coders' : 'agents'
+      );
   };
   const openInSplit = () => {
     const id = sessionId();
@@ -219,7 +225,16 @@ function SessionContent(props: {
             </div>
             <div class="dock">
               <div class="composer-anchor">
-                <AgentComposer autofocus />
+                <Show
+                  when={props.mode === 'chat'}
+                  fallback={<AgentComposer autofocus />}
+                >
+                  <AgentComposer
+                    autofocus
+                    input={ChatSessionInput}
+                    modelSelector={SessionModelSelector}
+                  />
+                </Show>
               </div>
             </div>
           </Show>

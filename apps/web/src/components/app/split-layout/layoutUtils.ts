@@ -1,4 +1,5 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { agentsRouteFromSegments } from '@app/features/agents-view/core/route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -25,8 +26,11 @@ export function decodePairs(segments: string[]): SplitContent[] {
     const type = segments[i];
     const id = segments[i + 1];
     if (!type || !id) break;
+    const agentsRoute = agentsRouteFromSegments(type, id);
 
-    if (type === 'settings') {
+    if (agentsRoute) {
+      pairs.push({ type: 'component', id: agentsRoute });
+    } else if (type === 'settings') {
       // `settings/<tab>` is the URL form of the docked settings panel; it maps
       // to the internal `component/settings` content. The active tab is read
       // reactively from the URL by SettingsPanelComponentWrapper, so it isn't

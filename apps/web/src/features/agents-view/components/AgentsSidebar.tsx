@@ -1,9 +1,9 @@
-import { useViewControlHotkeys } from '@app/components/view-shell';
+import { useViewControlHotkeys, ViewSidebar } from '@app/components/view-shell';
+import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import MacroLogo from '@icon/macro-logo.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import RobotIcon from '@phosphor/robot.svg';
 import { Key } from '@solid-primitives/keyed';
 import { createSignal, For, Show } from 'solid-js';
@@ -56,7 +56,10 @@ export type AgentsSidebarProps = {
   onModeChange: (mode: AgentsMode) => void;
   onNewConversation: () => void;
   onSearchChange: (search: string) => void;
-  onOpenConversation: (conversation: AgentConversationTarget) => void;
+  onOpenConversation: (
+    conversation: AgentConversationTarget,
+    event?: MouseEvent
+  ) => void;
   onRetry: () => void;
   onLoadMore: () => void;
 };
@@ -66,7 +69,7 @@ function Row(props: {
   mode: AgentsMode;
   active: boolean;
   handle: string | undefined;
-  onOpen: () => void;
+  onOpen: (event: MouseEvent) => void;
 }) {
   const title = () => props.conversation.name || 'Untitled chat';
   const state = () =>
@@ -84,6 +87,7 @@ function Row(props: {
       type="button"
       class={props.active ? 'row active' : 'row'}
       title={title()}
+      aria-current={props.active ? 'page' : undefined}
       onClick={props.onOpen}
     >
       <span class="lead">
@@ -145,23 +149,12 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
 
   return (
     <aside class="aside" aria-label="Agents navigation">
-      <header>
-        <div
-          style={{
-            display: 'flex',
-            'align-items': 'center',
-            gap: '4px',
-            'min-width': 0,
-          }}
-        >
+      <ViewSidebar.Header>
+        <div class="flex min-w-0 items-center gap-1">
           <SplitPanel.CloseButton />
-          <h1>Agents</h1>
+          <ViewSidebar.Title>Agents</ViewSidebar.Title>
         </div>
-        <div class="ctl">
-          <SplitPanel.BackButton />
-          <SplitPanel.ForwardButton />
-        </div>
-      </header>
+      </ViewSidebar.Header>
 
       <Show when={props.modeSwitch}>
         <div class="seg side" role="tablist" aria-label="Section">
@@ -190,14 +183,10 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
 
       <div class="content" data-view="agents">
         <div class="top-actions">
-          <button
-            type="button"
-            class="newbtn"
-            onClick={props.onNewConversation}
-          >
-            <PlusIcon class="ph" />
-            <span>{copy().newAction}</span>
-          </button>
+          <SidebarCreateButton
+            label={copy().newAction}
+            onCreate={props.onNewConversation}
+          />
         </div>
 
         <section class="recent">
@@ -266,7 +255,9 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                         handle={props.handleForBot(
                           conversationBotId(conversation())
                         )}
-                        onOpen={() => props.onOpenConversation(conversation())}
+                        onOpen={(event) =>
+                          props.onOpenConversation(conversation(), event)
+                        }
                       />
                     )}
                   </Key>

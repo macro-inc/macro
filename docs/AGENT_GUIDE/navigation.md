@@ -14,6 +14,9 @@
 | `/app/component/documents` | Files (documents list) |
 | `/app/component/tasks` | Tasks table |
 | `/app/component/agents` | AI chats / agents list |
+| `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
+| `/app/coders/<uuid>` | Code session with the Agents sidebar |
+| `/app/agent-chats/<uuid>` | Legacy AI chat opened in the Agents workspace |
 | `/app/component/calls` | Calls list |
 | `/app/component/companies` | Customers (CRM; needs a team) |
 | `/app/component/activity` | Activity heatmap + feed |
@@ -84,7 +87,9 @@ stay centered and the preview body fills the remaining height below the divider.
 - Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
   `Settings (Ctrl ;)`, `Log out`.
 
-With the new app views enabled, the outer sidebar is an icon rail. Its tooltips
+With the new app views enabled, the outer sidebar is an icon rail. Start a new AI
+chat from the Agents workspace; the rail has no separate new-chat-in-a-new-split
+button. Its tooltips
 use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
 item. Home uses Signal; Email uses Important across all linked inboxes.

@@ -1,4 +1,5 @@
 import { LIST_VIEW_ID, type ListView } from '@app/constants/list-views';
+import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import type {
   BlockAlias,
   BlockAliasContext,
@@ -114,6 +115,10 @@ function getAliasOrType(content: SplitContent): string {
  * to keep the tab out of the URL.
  */
 function contentUrlSegments(content: SplitContent): string[] {
+  if (content.type === 'component') {
+    const agentsRoute = agentsRouteSegments(content.id);
+    if (agentsRoute) return agentsRoute;
+  }
   if (content.type === 'component' && content.id === 'settings') {
     return ['settings', settingsTabToSlug(activeTabId())];
   }
@@ -491,7 +496,7 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
     referredFrom?: ReferredFrom;
   }) => void;
   /**
-   * Point this split at a new id for the same block *without* remounting it.
+   * Point this split at a new id for the same mounted surface without remounting it.
    *
    * `replace` tears the mount down and builds a new one, which is right when
    * the user navigates somewhere else. This is the other case: the block is
@@ -500,12 +505,16 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
    * session id when the create resolves, with the composer the user is typing
    * into left untouched.
    *
-   * Only the id moves — same block type, same mount, same history entry
+   * Components may also adopt a resolved route id, as the Agents workspace does.
+   * Only the id moves — same content type, same mount, same history entry
    * (rewritten in place, so Back still goes where it did and the URL swaps
-   * without a new entry). A no-op unless the split currently shows a block of
+   * without a new entry). A no-op unless the split currently shows content of
    * `type`.
    */
-  adoptContentId: (options: { type: BlockName; nextId: string }) => void;
+  adoptContentId: (options: {
+    type: BlockName | 'component';
+    nextId: string;
+  }) => void;
   removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
@@ -1031,7 +1040,11 @@ export function createSplitLayout(
    * cause is `replace`, so the URL sync swaps the path in place instead of
    * adding a back step to a placeholder the user can never return to.
    */
-  function adoptContentId(id: SplitId, type: BlockName, nextId: string) {
+  function adoptContentId(
+    id: SplitId,
+    type: BlockName | 'component',
+    nextId: string
+  ) {
     const i = splitIndexById(id);
     if (i < 0) return;
 
@@ -1069,11 +1082,13 @@ export function createSplitLayout(
           lastNavigationCause: 'replace',
         });
       });
-      orchestrator.rekeyBlockInstance(
-        resolveBlockAlias(type),
-        current.id,
-        nextId
-      );
+      if (type !== 'component') {
+        orchestrator.rekeyBlockInstance(
+          resolveBlockAlias(type),
+          current.id,
+          nextId
+        );
+      }
     });
   }
 

@@ -1,16 +1,13 @@
 import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
-import { HomeChatInput } from '@app/features/home/home-chat-input';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import { ChatInputProvider } from '@core/component/AI/context';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
-import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -55,6 +52,7 @@ import {
   selectRecentAgentConversations,
 } from '../core/recent-conversations';
 import { kindForBot, type RosterAgent } from '../core/roster';
+import { type AgentsRoute, agentsRouteId } from '../core/route';
 import { createAgentsMode } from '../primitives/agents-mode';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
 import { connectedRuntimes } from '../queries/connected-runtimes';
@@ -81,20 +79,27 @@ function LoadingComposer() {
   );
 }
 
-function AgentsWorkspace() {
+function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const panel = useSplitPanelOrThrow();
+  const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
-  const agentsFlag = useFeatureFlag(enableChatV3Agents);
-  // Code hands work to coders through the agent-session composer, so without
-  // that flag the workspace is the Chat half only.
-  const modeSwitch = () => agentsFlag().enabled;
+  const modeSwitch = () => true;
   const modeState = createAgentsMode(userId());
-  const mode = (): AgentsMode => (modeSwitch() ? modeState.mode() : 'chat');
+  const mode = (): AgentsMode => props.initialRoute?.mode ?? modeState.mode();
   const dataMode = () => dataModeFor(mode());
   const [page, setPage] = createSignal<AgentsPage>('new');
   const [rosterKind, setRosterKind] = createSignal<AgentKind>('agent');
-  const [selected, setSelected] = createSignal<SelectedConversation>();
+  const [selected, setSelected] = createSignal<
+    SelectedConversation | undefined
+  >(
+    props.initialRoute
+      ? {
+          conversation: props.initialRoute.conversation,
+          activeConversationId: props.initialRoute.conversation.id,
+        }
+      : undefined
+  );
   const [search, setSearch] = createSignal('');
   const [editor, setEditor] = createSignal<EditorState>();
   const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
@@ -160,24 +165,44 @@ function AgentsWorkspace() {
   onMount(() => panel.handle.setDisplayName('Agents'));
 
   const showComposer = () => {
+    if (panel.handle.content().id !== 'agents') {
+      modeState.setMode(mode());
+      panel.handle.replace({ next: { type: 'component', id: 'agents' } });
+      return;
+    }
     setSelected(undefined);
     setPage('new');
   };
   const changeMode = (next: AgentsMode) => {
     modeState.setMode(next);
-    showComposer();
+    if (panel.handle.content().id !== 'agents') {
+      panel.handle.replace({ next: { type: 'component', id: 'agents' } });
+    } else {
+      showComposer();
+    }
   };
   const openRoster = (kind: AgentKind) => {
     setSelected(undefined);
     setRosterKind(kind);
     setPage('agents');
   };
-  const openConversation = (conversation: AgentConversationTarget) => {
-    setPage('new');
-    setSelected({
-      conversation: { id: conversation.id, type: conversation.type },
-      activeConversationId: conversation.id,
-    });
+  const openConversation = (
+    conversation: AgentConversationTarget,
+    event?: MouseEvent
+  ) => {
+    const next = {
+      type: 'component' as const,
+      id: agentsRouteId({ mode: mode(), conversation }),
+    };
+    if (event?.shiftKey) {
+      layout.openWithSplit(next, {
+        preferNewSplit: true,
+        referredFrom: 'agents',
+      });
+      return;
+    }
+    if (panel.handle.content().id === next.id) return;
+    panel.handle.replace({ next, referredFrom: 'agents' });
   };
   const startConversation = (start: StartConversation) => {
     const id = startPendingSession({
@@ -192,10 +217,23 @@ function AgentsWorkspace() {
     setSelected((current) => {
       if (
         current?.conversation.type !== 'agent_session' ||
-        current.conversation.id !== placeholderId
+        current.conversation.id !== placeholderId ||
+        current.activeConversationId === sessionId ||
+        panel.handle.content().id !==
+          agentsRouteId({
+            mode: mode(),
+            conversation: current.conversation,
+          })
       ) {
         return current;
       }
+      panel.handle.adoptContentId({
+        type: 'component',
+        nextId: agentsRouteId({
+          mode: mode(),
+          conversation: { type: 'agent_session', id: sessionId },
+        }),
+      });
       return { ...current, activeConversationId: sessionId };
     });
   };
@@ -275,7 +313,7 @@ function AgentsWorkspace() {
               asidePreferenceKey="agents"
               resizable
               aside={{
-                width: 320,
+                width: 280,
                 min: 224,
                 max: 380,
                 preserveDuringResize: false,
@@ -336,10 +374,7 @@ function AgentsWorkspace() {
                                   onRemoveRuntime={setRemovingRuntime}
                                 />
                               </Match>
-                              <Match when={agentsFlag().loading}>
-                                <LoadingComposer />
-                              </Match>
-                              <Match when={agentsFlag().enabled}>
+                              <Match when={true}>
                                 <NewChatPage
                                   mode={mode()}
                                   roster={rosterSource.roster()}
@@ -349,15 +384,6 @@ function AgentsWorkspace() {
                                   onOpenRoster={openRoster}
                                   onConfigure={configure}
                                 />
-                              </Match>
-                              <Match when={true}>
-                                <section class="page newchat" data-active>
-                                  <div class="col">
-                                    <ChatInputProvider>
-                                      <HomeChatInput />
-                                    </ChatInputProvider>
-                                  </div>
-                                </section>
                               </Match>
                             </Switch>
                           </Suspense>
@@ -459,12 +485,12 @@ function AgentsWorkspace() {
 }
 
 /** Dedicated Agents workspace used by the new app views layout. */
-export function AgentsView() {
+export function AgentsView(props: { initialRoute?: AgentsRoute }) {
   return (
     <ListEntityMetadataQueryProvider>
       <StaticMarkdownContext>
         <Suspense fallback={<LoadingComposer />}>
-          <AgentsWorkspace />
+          <AgentsWorkspace initialRoute={props.initialRoute} />
         </Suspense>
       </StaticMarkdownContext>
     </ListEntityMetadataQueryProvider>
