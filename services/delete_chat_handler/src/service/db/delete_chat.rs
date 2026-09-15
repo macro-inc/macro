@@ -70,3 +70,6 @@ pub async fn delete_chat(db: sqlx::PgPool, chat_id: &str) -> anyhow::Result<()> 
 
     Ok(())
 }
+
+#[cfg(test)]
+mod test;
