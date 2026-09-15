@@ -16,7 +16,7 @@ use crate::domain::{
         GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
         MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
         ParticipantRole, PatchChannelRequest, RecentChannelMessage, ReferencedShareItemType,
-        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
+        ResolvedChannelMessage, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
         TopLevelMessageRow, UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
@@ -32,6 +32,7 @@ use item_filters::ast::{
     channel::{ChannelLiteral, ChannelThreadLiteral},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use messages::domain::models::SimpleMention;
 use models_pagination::{CreatedAt, Query};
 #[cfg(feature = "list")]
 use recursion::CollapsibleExt;
@@ -2127,7 +2128,7 @@ impl ChannelRepo for PgChannelsRepo {
         let rows = sqlx::query_as!(
             ChannelAttachmentRow,
             r#"
-            SELECT a.id, a.channel_id, a.message_id, m.sender_id,
+            SELECT a.id, a.channel_id AS "channel_id!", a.message_id, m.sender_id,
                 a.entity_type, a.entity_id,
                 a.width AS "width?", a.height AS "height?", a.created_at
             FROM comms_attachments a
@@ -2323,7 +2324,7 @@ impl ChannelRepo for PgChannelsRepo {
                 AttachmentChannelReference,
                 r#"
                 SELECT
-                    a.channel_id                     AS "channel_id: uuid::Uuid",
+                    a.channel_id                     AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     a.message_id                     AS "message_id: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",
@@ -3334,7 +3335,7 @@ impl ChannelRepo for PgChannelsRepo {
                     height
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id, message_id, channel_id, entity_type, entity_id, width, height, created_at
+                RETURNING id, message_id, channel_id AS "channel_id!", entity_type, entity_id, width, height, created_at
                 "#,
                 macro_uuid::generate_uuid_v7(),
                 message_id,
@@ -3358,7 +3359,7 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(sqlx::query_as!(
             MutatedAttachmentRow,
             r#"
-                SELECT id, message_id, channel_id, entity_type, entity_id, width, height, created_at
+                SELECT id, message_id, channel_id AS "channel_id!", entity_type, entity_id, width, height, created_at
                 FROM comms_attachments
                 WHERE message_id = $1
                 "#,

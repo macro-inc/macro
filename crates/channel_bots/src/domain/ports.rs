@@ -2,7 +2,9 @@
 
 use async_trait::async_trait;
 use channels::domain::side_effects::ChannelBotTrigger;
+use entity_access::domain::models::EntityAccessReceipt;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::{models::MessageParent, service::MessageWrite};
 
 use super::models::{BotInvocation, TranscriptMessage};
 
@@ -40,4 +42,16 @@ pub trait InferredTriggerClassifier: Send + Sync {
         requesting_user: &MacroUserIdStr<'static>,
         thread: &[TranscriptMessage],
     ) -> anyhow::Result<bool>;
+}
+
+/// Current parent capabilities for built-in agent replies.
+#[async_trait]
+pub trait ConversationAccess: Send + Sync {
+    /// Mint Macro AI's write capability on behalf of the invoking user, immediately
+    /// before a reply is persisted, so a revoked membership stops the reply.
+    async fn bot_write(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        parent: &MessageParent,
+    ) -> Result<EntityAccessReceipt<MessageWrite>, rootcause::Report>;
 }

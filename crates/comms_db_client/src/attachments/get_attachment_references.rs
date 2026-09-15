@@ -72,7 +72,7 @@ pub async fn get_attachment_references(
                 ChannelReference,
                 r#"
                 SELECT 
-                    a.channel_id                     AS "channel_id: uuid::Uuid",
+                    a.channel_id                     AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     a.message_id                     AS "message_id: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",

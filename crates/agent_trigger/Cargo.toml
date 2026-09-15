@@ -41,5 +41,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
+messages = { path = "../messages" }
 mockall = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -9,9 +9,10 @@ use tracing::Instrument as _;
 
 use crate::domain::{
     models::BotEvent,
-    ports::{AgentResponder, TriggerDetector, UserTimeZones},
+    ports::{AgentResponder, ConversationAccess, TriggerDetector, UserTimeZones},
     service::MacroAiHandler,
 };
+use messages::domain::api::MessageCommands;
 
 /// Resolves the bot invocations for a candidate channel message and runs their
 /// handlers.
@@ -47,9 +48,18 @@ where
     Z: UserTimeZones,
 {
     /// Create a router with the built-in system bots registered.
-    pub fn new(channels: Arc<C>, responder: Arc<R>, detector: Arc<D>, time_zones: Arc<Z>) -> Self {
+    pub fn new(
+        channels: Arc<C>,
+        messages: Arc<dyn MessageCommands>,
+        access: Arc<dyn ConversationAccess>,
+        responder: Arc<R>,
+        detector: Arc<D>,
+        time_zones: Arc<Z>,
+    ) -> Self {
         Self {
-            macro_ai: Arc::new(MacroAiHandler::new(channels, responder, time_zones)),
+            macro_ai: Arc::new(MacroAiHandler::new(
+                channels, messages, access, responder, time_zones,
+            )),
             detector,
         }
     }
