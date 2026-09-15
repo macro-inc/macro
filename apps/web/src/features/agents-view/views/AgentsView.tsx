@@ -1,11 +1,11 @@
 import { ViewShell } from '@app/components/view-shell';
+import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { HomeChatInput } from '@app/features/home/home-chat-input';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { Agents } from '@app/features/settings/Agents';
-import { McpConnections } from '@app/features/settings/McpConnections';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ChatInputProvider } from '@core/component/AI/context';
@@ -14,23 +14,33 @@ import { useUserId } from '@core/context/user';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { useSoupItemsQuery } from '@queries/soup/items';
-import { createSignal, Match, onMount, Show, Suspense, Switch } from 'solid-js';
-import { AgentResourceList } from '../components/AgentResourceList';
+import {
+  createMemo,
+  createSignal,
+  Match,
+  onMount,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentsSidebar } from '../components/AgentsSidebar';
+import type { AgentKind } from '../core/agent-kind';
+import type { AgentsMode } from '../core/mode';
 import type { AgentsPage } from '../core/pages';
 import {
   type AgentConversationTarget,
+  conversationsForMode,
+  groupConversations,
   selectRecentAgentConversations,
 } from '../core/recent-conversations';
-
-const PAGE_TITLES: Record<AgentsPage, string> = {
-  new: 'New Chat',
-  routines: 'Routines',
-  agents: 'Agents',
-  connections: 'Connections',
-  skills: 'Skills',
-};
+import { kindForBot } from '../core/roster';
+import { createAgentsMode } from '../primitives/agents-mode';
+import { createAgentRosterSource } from '../queries/agent-roster-source';
+import {
+  NewConversationView,
+  type StartConversation,
+} from './NewConversationView';
 
 type SelectedConversation = {
   conversation: AgentConversationTarget;
@@ -50,15 +60,19 @@ function LoadingComposer() {
 
 function AgentsWorkspace() {
   const panel = useSplitPanelOrThrow();
-  const layout = useSplitLayout();
-
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
-
+  const agentsFlag = useFeatureFlag(enableChatV3Agents);
+  // Code mode hands work to coders through the agent-session composer, so
+  // without that flag the workspace is the Chat half only.
+  const modeSwitch = () => agentsFlag().enabled;
+  const modeState = createAgentsMode(userId());
+  const mode = (): AgentsMode => (modeSwitch() ? modeState.mode() : 'chat');
   const [page, setPage] = createSignal<AgentsPage>('new');
+  const [rosterKind, setRosterKind] = createSignal<AgentKind>('agent');
   const [selected, setSelected] = createSignal<SelectedConversation>();
   const [search, setSearch] = createSignal('');
-
+  const rosterSource = createAgentRosterSource();
   const query = useSoupItemsQuery(
     () => {
       const ownerId = userId();
@@ -76,41 +90,56 @@ function AgentsWorkspace() {
     },
     () => ({ enabled: Boolean(userId()) })
   );
-
-  const conversations = () =>
+  const conversations = createMemo(() =>
     selectRecentAgentConversations(
       query.isSuccess ? query.data : [],
       userId(),
       search()
-    );
+    )
+  );
+  const modeConversations = createMemo(() =>
+    conversationsForMode(conversations(), mode(), (botId) =>
+      kindForBot(botId, rosterSource.roster())
+    )
+  );
+  const groups = createMemo(() =>
+    groupConversations(modeConversations(), mode())
+  );
 
   onMount(() => panel.handle.setDisplayName('Agents'));
 
-  const navigate = (next: AgentsPage) => {
+  const showComposer = () => {
     setSelected(undefined);
-    setPage(next);
+    setPage('new');
   };
 
-  const openConversation = (
-    conversation: AgentConversationTarget,
-    event?: MouseEvent
-  ) => {
-    if (event?.shiftKey) {
-      layout.openWithSplit(
-        {
-          type: conversation.type === 'agent_session' ? 'agent' : 'chat',
-          id: conversation.id,
-        },
-        { preferNewSplit: true, referredFrom: 'agents' }
-      );
-      return;
-    }
+  const changeMode = (next: AgentsMode) => {
+    modeState.setMode(next);
+    showComposer();
+  };
 
+  const openRoster = (kind: AgentKind) => {
+    setSelected(undefined);
+    setRosterKind(kind);
+    setPage('agents');
+  };
+
+  const openConversation = (conversation: AgentConversationTarget) => {
     setPage('new');
     setSelected({
       conversation: { id: conversation.id, type: conversation.type },
       activeConversationId: conversation.id,
     });
+  };
+
+  const startConversation = (start: StartConversation) => {
+    const id = startPendingSession({
+      botId: start.botId,
+      prompt: start.prompt,
+      modelOverride: start.modelOverride,
+      repoUrl: start.repoUrl,
+    });
+    openConversation({ id, type: 'agent_session' });
   };
 
   const adoptSessionId = (placeholderId: string, sessionId: string) => {
@@ -123,6 +152,11 @@ function AgentsWorkspace() {
       }
       return { ...current, activeConversationId: sessionId };
     });
+  };
+
+  const pageTitle = () => {
+    if (page() === 'agents') return 'Agents';
+    return mode() === 'code' ? 'New session' : 'New chat';
   };
 
   return (
@@ -144,16 +178,18 @@ function AgentsWorkspace() {
         >
           <ViewShell.Aside>
             <AgentsSidebar
-              page={page()}
+              mode={mode()}
+              modeSwitch={modeSwitch()}
               activeConversationId={selected()?.activeConversationId}
               search={search()}
-              conversations={conversations()}
+              groups={groups()}
               loading={query.isPending}
               error={query.isLoadingError}
               hasNextPage={Boolean(query.hasNextPage)}
               loadingNextPage={query.isFetchingNextPage}
               loadMoreError={query.isFetchNextPageError}
-              onNavigate={navigate}
+              onModeChange={changeMode}
+              onNewConversation={showComposer}
               onSearchChange={setSearch}
               onOpenConversation={openConversation}
               onRetry={() => void query.refetch()}
@@ -167,40 +203,42 @@ function AgentsWorkspace() {
               keyed
               fallback={
                 <>
-                  <ViewShell.TopBar>
-                    <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-                      {PAGE_TITLES[page()]}
-                    </h1>
-                  </ViewShell.TopBar>
+                  <ViewShell.TopBar>{pageTitle()}</ViewShell.TopBar>
                   <div class="min-h-0 flex-1">
                     <Suspense fallback={<LoadingComposer />}>
                       <Switch>
                         <Match when={page() === 'new'}>
-                          {/* The home composer, at home's width, so the box
-                              matches the chat that opens once you send. */}
-                          <div class="flex size-full items-center justify-center px-4 pb-16">
-                            <div class="w-full max-w-3xl">
-                              <ChatInputProvider>
-                                <HomeChatInput
-                                  openChat={(id) =>
-                                    openConversation({ id, type: 'chat' })
-                                  }
-                                />
-                              </ChatInputProvider>
-                            </div>
-                          </div>
-                        </Match>
-                        <Match when={page() === 'routines'}>
-                          <AgentResourceList page="routines" />
+                          <Switch>
+                            <Match when={agentsFlag().loading}>
+                              <LoadingComposer />
+                            </Match>
+                            <Match when={agentsFlag().enabled}>
+                              <NewConversationView
+                                mode={mode()}
+                                roster={rosterSource.roster()}
+                                rosterLoading={rosterSource.loading()}
+                                rosterError={rosterSource.error()}
+                                conversations={conversations()}
+                                onStart={startConversation}
+                                onOpenRoster={openRoster}
+                              />
+                            </Match>
+                            <Match when={true}>
+                              <div class="flex size-full items-center justify-center px-6 pb-16">
+                                <div class="w-full max-w-2xl">
+                                  <ChatInputProvider>
+                                    <HomeChatInput />
+                                  </ChatInputProvider>
+                                </div>
+                              </div>
+                            </Match>
+                          </Switch>
                         </Match>
                         <Match when={page() === 'agents'}>
-                          <Agents />
-                        </Match>
-                        <Match when={page() === 'connections'}>
-                          <McpConnections />
-                        </Match>
-                        <Match when={page() === 'skills'}>
-                          <AgentResourceList page="skills" />
+                          <Agents
+                            initialKind={rosterKind()}
+                            onClose={showComposer}
+                          />
                         </Match>
                       </Switch>
                     </Suspense>
@@ -214,6 +252,7 @@ function AgentsWorkspace() {
                     <Suspense>
                       <AgentSessionPane
                         id={conversation.id}
+                        mode={mode()}
                         onSessionId={(sessionId) =>
                           adoptSessionId(conversation.id, sessionId)
                         }

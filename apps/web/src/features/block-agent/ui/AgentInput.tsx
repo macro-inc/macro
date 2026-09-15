@@ -43,6 +43,13 @@ export interface AgentInputProps {
    * typing `/` opens a typeahead over them. `/` stays plain text while empty.
    */
   commands?: () => AgentCommandItem[];
+  /**
+   * What `/` opens. `commands` (default) lists the connected agent's slash
+   * commands; `skills` lists skill documents instead — for a composer with no
+   * session yet, where there is no agent to advertise commands. Read once at
+   * mount.
+   */
+  slashMenu?: 'commands' | 'skills';
   /** Receives the composed markdown, including any `<m-document-mention>` tags. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
@@ -108,7 +115,7 @@ export function AgentInput(props: AgentInputProps) {
     props.onStop?.();
   };
 
-  const editor = buildConfig('chat')
+  const builder = buildConfig('chat')
     .namespace('agent-input')
     .withMentions({
       showOpenTabs: true,
@@ -118,7 +125,10 @@ export function AgentInput(props: AgentInputProps) {
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()
-    .withRestoreFocus()
+    .withRestoreFocus();
+  // Both menus share the `/` trigger; the builder lets skills win when set.
+  if (props.slashMenu === 'skills') builder.withSkills();
+  const editor = builder
     .withAgentCommands({ commands: () => props.commands?.() ?? [] })
     .onEnter(() => {
       if (canSend()) send();

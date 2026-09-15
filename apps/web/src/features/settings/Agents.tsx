@@ -1,15 +1,38 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { claudeCloud } from '@core/constant/featureFlags';
+import {
+  type AgentKind,
+  isCoderHarness,
+  kindForHarness,
+} from '@app/features/agents-view/core/agent-kind';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
-import { claudeCloud } from '@core/constant/featureFlags';
+import {
+  CURSOR_BOT_HANDLE,
+  CURSOR_BOT_ID,
+  CURSOR_BOT_NAME,
+} from '@core/constant/cursorAgent';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
+import {
+  MACRO_CODER_BOT_ID,
+  MACRO_CODER_HANDLE,
+  MACRO_CODER_NAME,
+} from '@core/constant/macroCoder';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { usePipedreamMcpFlag } from '@core/pipedream/flag';
+import { ThrownResultError } from '@core/util/result';
 import MacroLogo from '@icon/macro-logo.svg';
+import CursorIcon from '@icon/wide-cursor-ide.svg';
+import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
+import CodeIcon from '@phosphor/code.svg';
+import GearIcon from '@phosphor/gear.svg';
+import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
+import PlugsIcon from '@phosphor/plugs.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import TrashIcon from '@phosphor/trash.svg';
@@ -29,20 +52,37 @@ import {
   useAgentModelsQueries,
 } from '@queries/agents/models';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import {
+  useDeleteHarnessMutation,
+  useHarnessesQuery,
+} from '@queries/harnesses/harnesses';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
+import type { Harness as RegisteredHarness } from '@service-storage/client';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useSearchParams } from '@solidjs/router';
-import { Avatar, Button, Dialog, Panel } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { Avatar, Button, cn, Dialog, Panel, ToggleSwitch } from '@ui';
+import {
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
+import { HarnessPairingDialog } from './HarnessPairingDialog';
+import { HarnessRemoveDialog } from './HarnessRemoveDialog';
+import { BYOA_DOCS_URL, lastConnectedText } from './harness-shared';
+import { StatusDot } from './integration-ui';
 import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
+  IntegrationRow,
   SettingsCard,
   SettingsPage,
   SettingsSection,
@@ -55,15 +95,40 @@ type AgentSummary = {
   id: string;
   name: string;
   tag: string;
+  kind: AgentKind;
   avatarUrl?: string;
   instructions: string;
   harness: string;
   defaultModel: string;
   channelSummary: string;
   share: AgentShare;
+  /** First-party, so it wears a system badge and cannot be edited. */
+  system?: boolean;
   persistedAgent?: AgentWithHarnessId;
   editable?: boolean;
 };
+
+const KIND_COPY = {
+  agent: {
+    title: 'Agents',
+    description:
+      'Create agents with their own identity, instructions, and connections.',
+    create: 'Create agent',
+  },
+  coder: {
+    title: 'Coders',
+    description:
+      'Agents that write code. They take a repository and run on a runtime you configure below.',
+    create: 'Create coder',
+  },
+} as const satisfies Record<AgentKind, Record<string, string>>;
+
+/** The agents that bring your own runtime to Macro through macrod. */
+const BYOA_AGENTS = ['Claude Code', 'Codex', 'OpenCode', 'Hermes', 'OpenClaw'];
+
+function failureMessage(error: unknown, fallback: string): string {
+  return (error instanceof ThrownResultError && error.message) || fallback;
+}
 
 type ConnectedHarness = {
   id: string;
@@ -86,16 +151,59 @@ const MACRO_AGENT: AgentSummary = {
   id: MACRO_AGENT_BOT_ID,
   name: 'Macro',
   tag: 'macro',
+  kind: 'agent',
   instructions: '',
   harness: 'In-memory',
   defaultModel: MODEL_PRETTYNAME[Model.sonnet5],
   channelSummary: 'All channels',
   share: 'Team',
+  system: true,
 };
 
-/** Settings page for viewing and creating persistent agents. */
-export function Agents() {
+const MACRO_CODER: AgentSummary = {
+  id: MACRO_CODER_BOT_ID,
+  name: MACRO_CODER_NAME,
+  tag: MACRO_CODER_HANDLE,
+  kind: 'coder',
+  instructions: '',
+  harness: 'Macro sandbox',
+  defaultModel: 'Default model',
+  channelSummary: 'All channels',
+  share: 'Team',
+  system: true,
+};
+
+function cursorCoder(connected: boolean): AgentSummary {
+  return {
+    id: CURSOR_BOT_ID,
+    name: CURSOR_BOT_NAME,
+    tag: CURSOR_BOT_HANDLE,
+    kind: 'coder',
+    instructions: '',
+    harness: connected ? 'Cursor' : 'Cursor · not connected',
+    defaultModel: 'Cursor default',
+    channelSummary: 'All channels',
+    share: 'Team',
+    system: true,
+  };
+}
+
+/** Settings page for viewing and creating persistent agents and coders. */
+export function Agents(props: {
+  /** Which tab opens first. */
+  initialKind?: AgentKind;
+  /** Offered as a close control when the page is embedded in a workspace. */
+  onClose?: () => void;
+}) {
   const claudeCloudFlag = useFeatureFlag(claudeCloud);
+  const [kind, setKind] = createSignal<AgentKind>(props.initialKind ?? 'agent');
+  const { openSettings } = useSettingsState();
+  const deleteHarnessMutation = useDeleteHarnessMutation();
+  const [pairingDialog, setPairingDialog] = createSignal<{
+    initialCode?: string;
+  }>();
+  const [removingHarness, setRemovingHarness] =
+    createSignal<RegisteredHarness>();
   const [creating, setCreating] = createSignal(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const creatingFromLink = () => searchParams.createAgent === 'true';
@@ -180,13 +288,34 @@ export function Agents() {
         summarizeAgent(agent, connectedHarnesses(), channelOptions())
       )
   );
+  const ofKind = (which: AgentKind, share: AgentShare) =>
+    agents().filter((agent) => agent.kind === which && agent.share === share);
   const teamAgents = createMemo(() => [
     MACRO_AGENT,
-    ...agents().filter((agent) => agent.share === 'Team'),
+    ...ofKind('agent', 'Team'),
   ]);
-  const privateAgents = createMemo(() =>
-    agents().filter((agent) => agent.share === 'Private')
-  );
+  const privateAgents = createMemo(() => ofKind('agent', 'Private'));
+  const teamCoders = createMemo(() => [
+    MACRO_CODER,
+    cursorCoder(cursorConnected()),
+    ...ofKind('coder', 'Team'),
+  ]);
+  const privateCoders = createMemo(() => ofKind('coder', 'Private'));
+  const registeredHarnesses = () =>
+    harnessesQuery.isSuccess ? harnessesQuery.data : [];
+
+  const removeHarness = async () => {
+    const current = removingHarness();
+    if (!current) return;
+
+    try {
+      await deleteHarnessMutation.mutateAsync({ harnessId: current.id });
+      setRemovingHarness(undefined);
+      toast.success('Runtime removed');
+    } catch (error) {
+      toast.failure(failureMessage(error, 'Failed to remove runtime'));
+    }
+  };
 
   const createAgent = async (agent: CreateAgentParams) => {
     try {
@@ -235,90 +364,195 @@ export function Agents() {
     }
   };
 
+  const list = (rows: AgentSummary[], empty: string) => (
+    <AgentList
+      agents={rows}
+      empty={empty}
+      loading={agentsQuery.isPending}
+      error={agentsQuery.isError}
+      canDelete={canDeleteAgent}
+      onEdit={setEditingAgent}
+      onDelete={setDeletingAgent}
+    />
+  );
+
   return (
     <>
       <SettingsPage
-        title="Agents"
-        description="Create agents with their own identity, instructions, and runtime."
+        title={KIND_COPY[kind()].title}
+        description={KIND_COPY[kind()].description}
         actions={
-          <Button variant="cta" size="sm" onClick={() => setCreating(true)}>
-            <PlusIcon />
-            Create agent
-          </Button>
+          <div class="flex items-center gap-1.5">
+            <Button variant="cta" size="sm" onClick={() => setCreating(true)}>
+              <PlusIcon />
+              {KIND_COPY[kind()].create}
+            </Button>
+            <Show when={props.onClose}>
+              {(onClose) => (
+                <Button
+                  variant="ghost"
+                  size="icon-md"
+                  label="Close"
+                  onClick={onClose()}
+                >
+                  <XIcon />
+                </Button>
+              )}
+            </Show>
+          </div>
         }
       >
-        <SettingsSection
-          title="Team agents"
-          description="Agents shared with your team, including Macro."
-        >
-          <SettingsCard>
-            <For each={teamAgents()}>
-              {(agent) => (
-                <AgentRow
-                  agent={agent}
-                  onEdit={
-                    agent.editable && agent.persistedAgent
-                      ? () => setEditingAgent(agent.persistedAgent)
-                      : undefined
-                  }
-                  onDelete={
-                    agent.persistedAgent && canDeleteAgent(agent.persistedAgent)
-                      ? () => setDeletingAgent(agent.persistedAgent)
-                      : undefined
-                  }
-                />
-              )}
-            </For>
-          </SettingsCard>
-        </SettingsSection>
+        <div class="flex flex-col gap-8">
+          <div class="px-6">
+            <KindTabs
+              kind={kind()}
+              onChange={setKind}
+              agents={teamAgents().length + privateAgents().length}
+              coders={teamCoders().length + privateCoders().length}
+            />
+          </div>
 
-        <SettingsSection
-          title="Private agents"
-          description="Agents owned by you rather than your team."
-        >
-          <SettingsCard>
-            <Show
-              when={privateAgents().length > 0}
-              fallback={
-                <p class="px-6 py-4 text-sm text-ink-muted">
-                  {agentsQuery.isPending
-                    ? 'Loading agents…'
-                    : agentsQuery.isError
-                      ? 'Your agents are unavailable.'
-                      : 'No private agents yet.'}
-                </p>
-              }
+          <Show when={kind() === 'agent'}>
+            <SettingsSection
+              title="Team agents"
+              description="Agents shared with your team, including Macro."
             >
-              <For each={privateAgents()}>
-                {(agent) => (
-                  <AgentRow
-                    agent={agent}
-                    onEdit={
-                      agent.editable && agent.persistedAgent
-                        ? () => setEditingAgent(agent.persistedAgent)
-                        : undefined
-                    }
-                    onDelete={
-                      agent.persistedAgent &&
-                      canDeleteAgent(agent.persistedAgent)
-                        ? () => setDeletingAgent(agent.persistedAgent)
-                        : undefined
-                    }
-                  />
+              <SettingsCard>
+                {list(teamAgents(), 'No team agents yet.')}
+              </SettingsCard>
+            </SettingsSection>
+
+            <SettingsSection
+              title="Private agents"
+              description="Agents owned by you rather than your team."
+            >
+              <SettingsCard>
+                {list(privateAgents(), 'No private agents yet.')}
+              </SettingsCard>
+            </SettingsSection>
+          </Show>
+
+          <Show when={kind() === 'coder'}>
+            <SettingsSection
+              title="Team coders"
+              description="Coders shared with your team, including Macro's own."
+            >
+              <SettingsCard>
+                {list(teamCoders(), 'No team coders yet.')}
+              </SettingsCard>
+            </SettingsSection>
+
+            <SettingsSection
+              title="Private coders"
+              description="Coders owned by you rather than your team."
+            >
+              <SettingsCard>
+                {list(
+                  privateCoders(),
+                  'No private coders yet. Create one, or pair a runtime below.'
                 )}
-              </For>
-            </Show>
-            <Show when={agentsQuery.isError}>
-              <p class="px-6 py-4 text-xs text-negative">
-                Could not load your agents. Try refreshing this page.
-              </p>
-            </Show>
-          </SettingsCard>
-        </SettingsSection>
+              </SettingsCard>
+            </SettingsSection>
+
+            <SettingsSection
+              title="Runtimes"
+              description="Where coders run. Built-in runtimes are always available; paired runtimes come and go with your machine."
+            >
+              <SettingsCard>
+                <IntegrationRow
+                  icon={<RuntimeIcon>{<HardDrivesIcon />}</RuntimeIcon>}
+                  title={<RuntimeName name="Macro sandbox" badge="system" />}
+                  description="Built in · a fresh sandbox in Macro's cloud for every session"
+                >
+                  <ConnectionLabel connected label="Available" />
+                </IntegrationRow>
+                <IntegrationRow
+                  icon={<RuntimeIcon>{<CursorIcon />}</RuntimeIcon>}
+                  title={<RuntimeName name="Cursor" badge="system" />}
+                  description={
+                    cursorConnected()
+                      ? 'Cloud agents · connected with your Cursor API key'
+                      : 'Cloud agents · connect with your Cursor API key'
+                  }
+                >
+                  <ConnectionLabel
+                    connected={cursorConnected()}
+                    label={cursorConnected() ? 'Connected' : 'Not connected'}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    label="Configure Cursor"
+                    onClick={() => openSettings('Harness')}
+                  >
+                    <GearIcon />
+                  </Button>
+                </IntegrationRow>
+                <For each={registeredHarnesses()}>
+                  {(harness) => (
+                    <IntegrationRow
+                      icon={<RuntimeIcon>{<PlugsIcon />}</RuntimeIcon>}
+                      title={
+                        <RuntimeName
+                          name={harness.name}
+                          badge={
+                            harness.owner.type === 'team' ? 'team' : 'private'
+                          }
+                        />
+                      }
+                      description={`macrod · ${lastConnectedText(harness)}`}
+                    >
+                      <ConnectionLabel
+                        connected={harness.connected}
+                        label={harness.connected ? 'Connected' : 'Disconnected'}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        class="text-negative"
+                        label={`Remove ${harness.name}`}
+                        onClick={() => setRemovingHarness(harness)}
+                      >
+                        <TrashIcon />
+                      </Button>
+                    </IntegrationRow>
+                  )}
+                </For>
+                <Show when={harnessesQuery.isError}>
+                  <p class="px-6 py-4 text-xs text-negative">
+                    Could not load your paired runtimes. Try refreshing this
+                    page.
+                  </p>
+                </Show>
+                <BringYourOwnAgent onPair={() => setPairingDialog({})} />
+              </SettingsCard>
+            </SettingsSection>
+          </Show>
+        </div>
       </SettingsPage>
+
+      <Show when={pairingDialog()} keyed>
+        {(dialog) => (
+          <HarnessPairingDialog
+            initialCode={dialog.initialCode}
+            onClose={() => setPairingDialog(undefined)}
+          />
+        )}
+      </Show>
+      <Show when={removingHarness()} keyed>
+        {(harness) => (
+          <HarnessRemoveDialog
+            harnessName={harness.name}
+            pending={deleteHarnessMutation.isPending}
+            onClose={() => setRemovingHarness(undefined)}
+            onConfirm={() => void removeHarness()}
+          />
+        )}
+      </Show>
 
       <Show when={creating() || creatingFromLink()}>
         <AgentDialog
+          initialKind={kind()}
           connectedHarnesses={connectedHarnesses()}
           currentTeamId={currentTeamId()}
           canShareWithTeam={canShareWithTeam()}
@@ -377,6 +611,7 @@ function summarizeAgent(
     id: agent.bot.id,
     name: agent.bot.name,
     tag: agent.bot.handle,
+    kind: kindForHarness(agent.harness),
     avatarUrl: agent.bot.avatar_url ?? undefined,
     instructions: agent.instructions,
     harness: harness?.name ?? harnessName(harnessKey),
@@ -398,6 +633,223 @@ function harnessName(id: string): string {
   return 'Disconnected harness';
 }
 
+function AgentList(props: {
+  agents: AgentSummary[];
+  empty: string;
+  loading: boolean;
+  error: boolean;
+  canDelete: (agent: AgentWithHarnessId) => boolean;
+  onEdit: (agent: AgentWithHarnessId) => void;
+  onDelete: (agent: AgentWithHarnessId) => void;
+}) {
+  return (
+    <>
+      <Show
+        when={props.agents.length > 0}
+        fallback={
+          <p class="px-6 py-4 text-sm text-ink-muted">
+            {props.loading
+              ? 'Loading agents…'
+              : props.error
+                ? 'Your agents are unavailable.'
+                : props.empty}
+          </p>
+        }
+      >
+        <For each={props.agents}>
+          {(agent) => (
+            <AgentRow
+              agent={agent}
+              onEdit={
+                agent.editable && agent.persistedAgent
+                  ? () =>
+                      props.onEdit(agent.persistedAgent as AgentWithHarnessId)
+                  : undefined
+              }
+              onDelete={
+                agent.persistedAgent && props.canDelete(agent.persistedAgent)
+                  ? () =>
+                      props.onDelete(agent.persistedAgent as AgentWithHarnessId)
+                  : undefined
+              }
+            />
+          )}
+        </For>
+      </Show>
+      <Show when={props.error}>
+        <p class="px-6 py-4 text-xs text-negative">
+          Could not load your agents. Try refreshing this page.
+        </p>
+      </Show>
+    </>
+  );
+}
+
+function KindTabs(props: {
+  kind: AgentKind;
+  onChange: (kind: AgentKind) => void;
+  agents: number;
+  coders: number;
+}) {
+  const tabs = () =>
+    [
+      { kind: 'agent', label: 'Agents', count: props.agents },
+      { kind: 'coder', label: 'Coders', count: props.coders },
+    ] as const;
+  return (
+    <div
+      role="tablist"
+      aria-label="Agent kind"
+      class="flex gap-1 border-b border-edge"
+    >
+      <For each={tabs()}>
+        {(tab) => {
+          const selected = () => props.kind === tab.kind;
+          return (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={selected()}
+              class={cn(
+                'relative flex h-9 items-center gap-1.5 rounded-t-lg px-2.5 text-[13.5px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                selected()
+                  ? 'text-ink after:absolute after:inset-x-2 after:-bottom-px after:h-0.5 after:rounded-t after:bg-accent'
+                  : 'text-ink-subtle hover:bg-hover hover:text-ink'
+              )}
+              onClick={() => props.onChange(tab.kind)}
+            >
+              <Show
+                when={tab.kind === 'coder'}
+                fallback={<AgentIcon class="size-3.5" />}
+              >
+                <CodeIcon class="size-3.5" />
+              </Show>
+              {tab.label}
+              <span
+                class={cn(
+                  'rounded-full bg-active px-1.5 text-[11px] tabular-nums',
+                  selected() ? 'text-ink-subtle' : 'text-ink-placeholder'
+                )}
+              >
+                {tab.count}
+              </span>
+            </button>
+          );
+        }}
+      </For>
+    </div>
+  );
+}
+
+function RuntimeIcon(props: { children: JSX.Element }) {
+  return (
+    <span class="flex size-8 items-center justify-center rounded-lg bg-surface text-ink-muted ring ring-edge-muted [&_svg]:size-4">
+      {props.children}
+    </span>
+  );
+}
+
+function RuntimeName(props: {
+  name: string;
+  badge: 'system' | 'team' | 'private';
+}) {
+  return (
+    <span class="flex min-w-0 items-center gap-2">
+      <span class="truncate">{props.name}</span>
+      <KindBadge label={props.badge} accent={props.badge === 'system'} />
+    </span>
+  );
+}
+
+function KindBadge(props: { label: string; accent?: boolean }) {
+  return (
+    <span
+      class="shrink-0 rounded-full border px-2 py-0.5 text-xxs font-medium uppercase"
+      classList={{
+        'border-accent/35 bg-accent/8 text-accent': props.accent,
+        'border-edge-muted text-ink-extra-muted': !props.accent,
+      }}
+    >
+      {props.label}
+    </span>
+  );
+}
+
+function ConnectionLabel(props: { connected: boolean; label: string }) {
+  return (
+    <span class="inline-flex items-center gap-1.5 text-xs text-ink-muted">
+      <StatusDot
+        state={props.connected ? 'connected' : 'disconnected'}
+        label={props.label}
+      />
+      {props.label}
+    </span>
+  );
+}
+
+/** Cycles through the coding agents macrod can bring, one name at a time. */
+function RotatingAgentName() {
+  const [index, setIndex] = createSignal(0);
+  onMount(() => {
+    if (
+      typeof matchMedia === 'function' &&
+      matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      return;
+    }
+    const timer = setInterval(
+      () => setIndex((current) => (current + 1) % BYOA_AGENTS.length),
+      2200
+    );
+    onCleanup(() => clearInterval(timer));
+  });
+  return (
+    <span class="text-accent" aria-live="off">
+      {BYOA_AGENTS[index()]}
+    </span>
+  );
+}
+
+function BringYourOwnAgent(props: { onPair: () => void }) {
+  return (
+    <div class="grid grid-cols-[3fr_2fr] items-start gap-5 bg-accent/3 px-6 py-5 mobile:grid-cols-1">
+      <div class="min-w-0">
+        <h3 class="flex items-center gap-2 text-base font-semibold tracking-tight text-ink">
+          <PlugsIcon class="size-4 shrink-0 text-accent" />
+          <span>
+            Bring your <RotatingAgentName /> to Macro
+          </span>
+        </h3>
+        <p class="mt-1.5 max-w-[52ch] text-[13px]/relaxed text-ink-muted">
+          Run it on your own machine and give it a seat in Macro. Pair once with
+          macrod; after that it can be @mentioned in channels like any other
+          agent. Works with any agent that speaks ACP.
+        </p>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <Button
+          variant="cta"
+          size="sm"
+          class="justify-center"
+          onClick={props.onPair}
+        >
+          <PlugsIcon />
+          Pair a runtime
+        </Button>
+        <a
+          href={BYOA_DOCS_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+        >
+          Read the macrod guide
+          <ArrowUpRightIcon class="size-3.5 opacity-70" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
 function AgentRow(props: {
   agent: AgentSummary;
   onEdit?: () => void;
@@ -405,7 +857,17 @@ function AgentRow(props: {
 }) {
   return (
     <div class="flex items-center gap-4 px-6 py-4 mobile:items-start touch:px-4">
-      <AgentAvatar agent={props.agent} />
+      <span class="relative inline-grid shrink-0">
+        <AgentAvatar agent={props.agent} />
+        <Show when={props.agent.kind === 'coder'}>
+          <span
+            aria-hidden="true"
+            class="absolute -right-0.5 -bottom-0.5 grid size-4 place-items-center rounded-[5px] bg-accent text-accent-contrast ring-2 ring-surface"
+          >
+            <CodeIcon class="size-2.5" />
+          </span>
+        </Show>
+      </span>
       <div class="min-w-0 flex-1">
         <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <span class="truncate text-sm font-medium text-ink">
@@ -414,9 +876,10 @@ function AgentRow(props: {
           <span class="truncate text-xs text-ink-extra-muted">
             @{props.agent.tag}
           </span>
-          <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xxs font-medium uppercase text-ink-extra-muted">
-            {props.agent.share}
-          </span>
+          <KindBadge
+            label={props.agent.system ? 'system' : props.agent.share}
+            accent={props.agent.system}
+          />
         </div>
         <p class="mt-0.5 text-xs text-ink-extra-muted">
           {props.agent.harness} · {props.agent.defaultModel} ·{' '}
@@ -464,8 +927,18 @@ function AgentAvatar(props: { agent: AgentSummary }) {
         fallback={
           <Avatar.Fallback>
             <Show
-              when={props.agent.id === MACRO_AGENT_BOT_ID}
-              fallback={<AgentIcon class="size-5" />}
+              when={
+                props.agent.id === MACRO_AGENT_BOT_ID ||
+                props.agent.id === MACRO_CODER_BOT_ID
+              }
+              fallback={
+                <Show
+                  when={props.agent.id === CURSOR_BOT_ID}
+                  fallback={<AgentIcon class="size-5" />}
+                >
+                  <CursorIcon class="size-5" />
+                </Show>
+              }
             >
               <MacroLogo class="size-5" />
             </Show>
@@ -534,6 +1007,8 @@ function AgentDeleteDialog(props: {
 
 function AgentDialog(props: {
   agent?: AgentWithHarnessId;
+  /** What a new agent starts as; an existing one reads it from its harness. */
+  initialKind?: AgentKind;
   connectedHarnesses: readonly ConnectedHarness[];
   currentTeamId?: string;
   canShareWithTeam: boolean;
@@ -551,10 +1026,20 @@ function AgentDialog(props: {
   const [instructions, setSystemPrompt] = createSignal(
     props.agent?.instructions ?? ''
   );
+  // Coders run on coding runtimes; every other agent runs on the built-in
+  // in-memory harness. The kind is not stored: the harness carries it.
+  const coderRuntimes = () =>
+    props.connectedHarnesses.filter((harness) => harness.id !== 'in-memory');
+  const [coder, setCoder] = createSignal(
+    props.agent
+      ? isCoderHarness(props.agent.harness)
+      : props.initialKind === 'coder'
+  );
+  const noun = () => (coder() ? 'coder' : 'agent');
   const [harnessId, setHarnessId] = createSignal(
     props.agent?.harness_id ??
       props.agent?.harness ??
-      props.connectedHarnesses[0]?.id ??
+      (coder() ? coderRuntimes()[0]?.id : 'in-memory') ??
       ''
   );
   const modelQueries = useAgentModelsQueries(() =>
@@ -674,6 +1159,11 @@ function AgentDialog(props: {
     setDefaultModelId(preferredModelId(id));
   };
 
+  const setCoderMode = (on: boolean) => {
+    setCoder(on);
+    handleHarnessChange(on ? (coderRuntimes()[0]?.id ?? '') : 'in-memory');
+  };
+
   const handleAvatarInput = (file: File | undefined) => {
     if (!file) return;
     const reader = new FileReader();
@@ -739,7 +1229,7 @@ function AgentDialog(props: {
       <Panel depth={2} class="max-h-[88vh] rounded-xl text-ink">
         <Panel.Header class="justify-between px-3">
           <Dialog.Title as="span" class="m-0 p-0 text-sm font-medium">
-            {props.agent ? 'Edit agent' : 'Create agent'}
+            {props.agent ? `Edit ${noun()}` : `Create ${noun()}`}
           </Dialog.Title>
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
             <XIcon />
@@ -771,6 +1261,7 @@ function AgentDialog(props: {
                       id: 'draft',
                       name: name() || 'Agent',
                       tag: tag(),
+                      kind: coder() ? 'coder' : 'agent',
                       avatarUrl: avatarUrl(),
                       instructions: '',
                       harness: '',
@@ -840,6 +1331,34 @@ function AgentDialog(props: {
             </AgentFormSection>
 
             <AgentFormSection
+              title="Coder"
+              description="Coders write code: they take a repository, run on a coding runtime, and appear under Coders."
+            >
+              <div class="flex items-center justify-between gap-4">
+                <div class="min-w-0">
+                  <div class="text-sm text-ink">
+                    {coder() ? 'This is a coder' : 'This is a chat agent'}
+                  </div>
+                  <div class="mt-0.5 text-xs text-ink-extra-muted">
+                    {coderRuntimes().length === 0
+                      ? 'Connect Cursor or pair a runtime before making a coder.'
+                      : coder()
+                        ? "Turn off to run it on Macro's built-in harness instead."
+                        : 'Turn on to run it on Cursor or a paired runtime.'}
+                  </div>
+                </div>
+                <ToggleSwitch
+                  label="Coder"
+                  labelClass="sr-only"
+                  size="md"
+                  checked={coder()}
+                  disabled={coderRuntimes().length === 0 && !coder()}
+                  onChange={setCoderMode}
+                />
+              </div>
+            </AgentFormSection>
+
+            <AgentFormSection
               title="Behavior"
               description="Instructions the agent receives at the start of every conversation."
             >
@@ -859,32 +1378,52 @@ function AgentDialog(props: {
 
             <AgentFormSection
               title="Runtime"
-              description="Harnesses and models are limited to those currently connected."
+              description={
+                coder()
+                  ? 'Coders run on Cursor or on a machine paired through macrod. Models are limited to what that runtime offers.'
+                  : "Agents run on Macro's built-in harness. Pick the model they answer with."
+              }
             >
-              <div class="grid grid-cols-2 gap-3 mobile:grid-cols-1">
-                <label class="flex flex-col gap-1.5">
-                  <span class="text-xs font-medium text-ink">Harness</span>
-                  <select
-                    class="settings-input w-full"
-                    value={harnessId()}
-                    onChange={(event) =>
-                      handleHarnessChange(event.currentTarget.value)
+              <Show when={coder()}>
+                <fieldset class="mb-3 flex flex-col gap-2">
+                  <legend class="sr-only">Runtime</legend>
+                  <For
+                    each={coderRuntimes()}
+                    fallback={
+                      <p class="text-xs text-ink-muted">
+                        No coding runtime is connected. Connect Cursor or pair a
+                        runtime, then come back.
+                      </p>
                     }
                   >
-                    <For
-                      each={props.connectedHarnesses.filter(
-                        (harness) =>
-                          harness.id !== 'claude-cloud' ||
-                          modelDataForHarness(harness.id)?.status ===
-                            'available'
-                      )}
-                    >
-                      {(harness) => (
-                        <option value={harness.id}>{harness.name}</option>
-                      )}
-                    </For>
-                  </select>
-                </label>
+                    {(harness) => (
+                      <ChoiceRow
+                        name="agent-runtime"
+                        value={harness.id}
+                        checked={harnessId() === harness.id}
+                        title={harness.name}
+                        description={
+                          harness.id === 'cursor'
+                            ? 'Cloud agents, run with your Cursor account.'
+                            : harness.connected
+                              ? 'Paired through macrod · connected'
+                              : 'Paired through macrod · disconnected'
+                        }
+                        onChange={() => handleHarnessChange(harness.id)}
+                      />
+                    )}
+                  </For>
+                </fieldset>
+              </Show>
+              <div class="grid grid-cols-2 gap-3 mobile:grid-cols-1">
+                <Show when={!coder()}>
+                  <div class="flex flex-col gap-1.5">
+                    <span class="text-xs font-medium text-ink">Harness</span>
+                    <p class="settings-input text-ink-muted">
+                      Macro · built in
+                    </p>
+                  </div>
+                </Show>
                 <label class="flex flex-col gap-1.5">
                   <span class="text-xs font-medium text-ink">
                     Default model
@@ -1130,7 +1669,7 @@ function AgentDialog(props: {
                 : 'Creating…'
               : props.agent
                 ? 'Save changes'
-                : 'Create agent'}
+                : `Create ${noun()}`}
           </Button>
         </Panel.Footer>
       </Panel>

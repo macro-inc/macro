@@ -51,6 +51,11 @@ export type StartPendingSessionOptions = {
   prompt?: string;
   /** Optional model switch applied before the first prompt. */
   modelOverride?: string;
+  /**
+   * Repository the session should work in. Informational for the runtime:
+   * having it cloned there is the runtime operator's job.
+   */
+  repoUrl?: string;
 };
 
 /**
@@ -68,6 +73,7 @@ export function startPendingSession(
   void agentHarnessServiceClient
     .create({
       ...(options.botId ? { botId: options.botId } : {}),
+      ...(options.repoUrl ? { repoUrl: options.repoUrl } : {}),
     } satisfies CreateAgentSessionRequest)
     .then(async (result) => {
       if (result.isErr()) {
