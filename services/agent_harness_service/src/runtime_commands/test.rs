@@ -79,6 +79,7 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
         Arc::clone(&origin_harness),
         origin_ready,
         empty_models(redis.clone()),
+        empty_changes(redis.clone()),
     ));
     let (peer_ready, mut peer_readiness) = tokio::sync::watch::channel(false);
     let peer_consumer = tokio::spawn(consume_runtime_commands(
@@ -88,6 +89,7 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
         Arc::clone(&peer_harness),
         peer_ready,
         empty_models(redis.clone()),
+        empty_changes(redis.clone()),
     ));
     ready(&mut origin_readiness).await;
     ready(&mut peer_readiness).await;
@@ -121,6 +123,7 @@ async fn a_responsible_replicas_error_does_not_fail_the_publish() {
         Arc::clone(&harness),
         ready_tx,
         empty_models(redis.clone()),
+        empty_changes(redis.clone()),
     ));
     ready(&mut readiness).await;
 
@@ -150,6 +153,7 @@ async fn publishing_without_an_owner_still_succeeds() {
         Arc::clone(&harness),
         ready_tx,
         empty_models(redis.clone()),
+        empty_changes(redis.clone()),
     ));
     ready(&mut readiness).await;
 
@@ -182,6 +186,7 @@ async fn overlapping_harness_connections_execute_once() {
         Arc::clone(&first),
         first_ready,
         empty_models(redis.clone()),
+        empty_changes(redis.clone()),
     ));
     let (second_ready, mut second_readiness) = tokio::sync::watch::channel(false);
     let second_consumer = tokio::spawn(consume_runtime_commands(
@@ -191,6 +196,7 @@ async fn overlapping_harness_connections_execute_once() {
         Arc::clone(&second),
         second_ready,
         empty_models(redis.clone()),
+        empty_changes(redis.clone()),
     ));
     ready(&mut first_readiness).await;
     ready(&mut second_readiness).await;
@@ -221,6 +227,14 @@ async fn overlapping_harness_connections_execute_once() {
 
 fn empty_models(redis: redis::Client) -> MacrodModels {
     MacrodModels::new(
+        agent_harness::outbound::runtime_registry::RuntimeRegistry::new(),
+        redis,
+        std::time::Duration::from_secs(2),
+    )
+}
+
+fn empty_changes(redis: redis::Client) -> MacrodChangesBus {
+    MacrodChangesBus::new(
         agent_harness::outbound::runtime_registry::RuntimeRegistry::new(),
         redis,
         std::time::Duration::from_secs(2),

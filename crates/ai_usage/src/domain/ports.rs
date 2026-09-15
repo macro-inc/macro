@@ -64,6 +64,8 @@ pub enum AiFeature {
     AgentSession,
     /// Choosing the repository an agent session's first prompt belongs to.
     AgentRepositoryChoice,
+    /// Drafting the pull request an agent session's changes would open.
+    AgentPullRequestDraft,
 }
 
 /// Resolved price for one completion.

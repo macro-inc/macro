@@ -18,6 +18,90 @@
  */
 export type AcpMessage = { [key in string]: unknown };
 
+/**  One end of the range a runtime diffed, as much of it as it knows. */
+export type ChangesRef = ChangesRef_Serialize | ChangesRef_Deserialize;
+
+/**  One end of the range a runtime diffed, as much of it as it knows. */
+export type ChangesRef_Deserialize = {
+	/**  The branch name, when the runtime is on one. */
+	name?: string | null,
+	/**  The commit, when known. */
+	sha?: string | null,
+};
+
+/**  One end of the range a runtime diffed, as much of it as it knows. */
+export type ChangesRef_Serialize = {
+	/**  The branch name, when the runtime is on one. */
+	name?: string | null,
+	/**  The commit, when known. */
+	sha?: string | null,
+};
+
+/**  The result of asking a runtime for its working tree's changes. */
+export type CollectChangesResult = CollectChangesResult_Serialize | CollectChangesResult_Deserialize;
+
+/**  The result of asking a runtime for its working tree's changes. */
+export type CollectChangesResult_Deserialize =
+/**  The diff between where the work started and the working tree now. */
+({ status: "collected";
+/**  A git-style unified diff, possibly empty when nothing changed. */
+patch: string;
+/**
+ *  The repository's remote, as `https://github.com/owner/name` when
+ *  it is one, else the remote url as configured.
+ */
+repository?: string | null;
+/**
+ *  The side the work started from - the merge base with the
+ *  default branch.
+ */
+base: ChangesRef_Deserialize;
+/**  The working tree's branch and commit. */
+head: ChangesRef_Deserialize;
+/**
+ *  The patch was cut down to the runtime's size budget; files past
+ *  the cut are not in it.
+ */
+truncated?: boolean }) & { message?: never } |
+/**
+ *  A safe, operator-actionable failure description: the workspace is
+ *  not a repository, git is missing, the diff timed out.
+ */
+({ status: "error";
+/**  Failure text safe to return across the runtime connection. */
+message: string }) & { base?: never; head?: never; patch?: never; repository?: never; truncated?: never };
+
+/**  The result of asking a runtime for its working tree's changes. */
+export type CollectChangesResult_Serialize =
+/**  The diff between where the work started and the working tree now. */
+({ status: "collected";
+/**  A git-style unified diff, possibly empty when nothing changed. */
+patch: string;
+/**
+ *  The repository's remote, as `https://github.com/owner/name` when
+ *  it is one, else the remote url as configured.
+ */
+repository?: string | null;
+/**
+ *  The side the work started from - the merge base with the
+ *  default branch.
+ */
+base: ChangesRef_Serialize;
+/**  The working tree's branch and commit. */
+head: ChangesRef_Serialize;
+/**
+ *  The patch was cut down to the runtime's size budget; files past
+ *  the cut are not in it.
+ */
+truncated: boolean }) & { message?: never } |
+/**
+ *  A safe, operator-actionable failure description: the workspace is
+ *  not a repository, git is missing, the diff timed out.
+ */
+({ status: "error";
+/**  Failure text safe to return across the runtime connection. */
+message: string }) & { base?: never; head?: never; patch?: never; repository?: never; truncated?: never };
+
 /**  The result of probing a fresh ACP subprocess. */
 export type ModelProbeResult =
 /**  The raw options returned by `session/new`. */
@@ -42,19 +126,72 @@ export type ToRuntimeMessage =
  *  configured harness what it advertises. Answers are therefore
  *  interchangeable, so nothing correlates a response to a request.
  */
-{ type: "modelProbeRequest" };
+({ type: "modelProbeRequest" }) & { requestId?: never } |
+/**
+ *  Ask the runtime for its workspace's changes against the branch its
+ *  work started from.
+ *
+ *  Correlated, unlike the model probe: two requests can land while a
+ *  slow diff runs and each waiter wants the answer to its own question,
+ *  so the runtime echoes `requestId` on the response.
+ */
+{ type: "collectChangesRequest";
+/**  Echoed on the matching [`ToServerMessage::CollectChangesResponse`]. */
+requestId: string };
 
 /**  Agent Runtime to Agent Service traffic on the logical protocol stream. */
-export type ToServerMessage =
+export type ToServerMessage = ToServerMessage_Serialize | ToServerMessage_Deserialize;
+
+/**  Agent Runtime to Agent Service traffic on the logical protocol stream. */
+export type ToServerMessage_Deserialize =
 /**  An ACP message routed from the hosted agent. */
-{
+({ acp: {
 	type: "acp",
-} & AcpMessage |
+} & AcpMessage }) & { collectChangesResponse?: never; event?: never; modelProbeResponse?: never } |
 /**  A runtime or agent lifecycle event. */
-({ type: "event";
-/**  The event name. */
-event: string }) & { result?: never } |
+({ event: {
+	type: "event",
+	/**  The event name. */
+	event: string,
+} }) & { acp?: never; collectChangesResponse?: never; modelProbeResponse?: never } |
 /**  An answer to a connection-level model probe. */
-({ type: "modelProbeResponse";
-/**  Raw options or a safe failure. */
-result: ModelProbeResult }) & { event?: never };
+({ modelProbeResponse: {
+	type: "modelProbeResponse",
+	/**  Raw options or a safe failure. */
+	result: ModelProbeResult,
+} }) & { acp?: never; collectChangesResponse?: never; event?: never } |
+/**  The answer to a [`ToRuntimeMessage::CollectChangesRequest`]. */
+({ collectChangesResponse: {
+	type: "collectChangesResponse",
+	/**  The request this answers. */
+	requestId: string,
+	/**  The diff, or a safe failure. */
+	result: CollectChangesResult_Deserialize,
+} }) & { acp?: never; event?: never; modelProbeResponse?: never };
+
+/**  Agent Runtime to Agent Service traffic on the logical protocol stream. */
+export type ToServerMessage_Serialize =
+/**  An ACP message routed from the hosted agent. */
+({ acp: {
+	type: "acp",
+} & AcpMessage }) & { collectChangesResponse?: never; event?: never; modelProbeResponse?: never } |
+/**  A runtime or agent lifecycle event. */
+({ event: {
+	type: "event",
+	/**  The event name. */
+	event: string,
+} }) & { acp?: never; collectChangesResponse?: never; modelProbeResponse?: never } |
+/**  An answer to a connection-level model probe. */
+({ modelProbeResponse: {
+	type: "modelProbeResponse",
+	/**  Raw options or a safe failure. */
+	result: ModelProbeResult,
+} }) & { acp?: never; collectChangesResponse?: never; event?: never } |
+/**  The answer to a [`ToRuntimeMessage::CollectChangesRequest`]. */
+({ collectChangesResponse: {
+	type: "collectChangesResponse",
+	/**  The request this answers. */
+	requestId: string,
+	/**  The diff, or a safe failure. */
+	result: CollectChangesResult_Serialize,
+} }) & { acp?: never; event?: never; modelProbeResponse?: never };

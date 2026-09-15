@@ -174,6 +174,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_changes"
+version = "0.1.0"
+dependencies = [
+ "agent",
+ "agent_fold",
+ "agent_session",
+ "ai_usage",
+ "anyhow",
+ "aws-sdk-s3",
+ "axum",
+ "bot_id",
+ "chrono",
+ "dashmap",
+ "entity_access",
+ "github",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
@@ -243,6 +278,7 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "agent-client-protocol",
+ "agent_changes",
  "agent_egress",
  "agent_fold",
  "agent_runtime_protocol",
@@ -309,6 +345,7 @@ name = "agent_harness_service"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "agent_changes",
  "agent_egress",
  "agent_fold",
  "agent_harness",

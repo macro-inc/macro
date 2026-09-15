@@ -16,7 +16,8 @@ use tokio::task::JoinSet;
 
 use crate::domain::channel::Channel;
 use crate::domain::schema::v0::{
-    AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
+    AcpMessage, CollectChangesResult, ModelProbeResult, SystemEvent, ToRuntimeMessage,
+    ToServerMessage,
 };
 
 #[cfg(test)]
@@ -50,6 +51,21 @@ pub trait ModelProbeHandler: Send + Sync + 'static {
 impl ModelProbeHandler for () {
     async fn probe(&self) -> Result<Vec<SessionConfigOption>, String> {
         Err("model probing is not configured on this runtime".to_owned())
+    }
+}
+
+/// Handles connection-level requests for the workspace's changes.
+pub trait ChangesCollector: Send + Sync + 'static {
+    /// Diff the workspace against where its work started, or say safely why
+    /// that cannot be done.
+    fn collect(&self) -> impl Future<Output = CollectChangesResult> + Send;
+}
+
+impl ChangesCollector for () {
+    async fn collect(&self) -> CollectChangesResult {
+        CollectChangesResult::Error {
+            message: "collecting changes is not configured on this runtime".to_owned(),
+        }
     }
 }
 
@@ -121,6 +137,22 @@ impl RuntimeConnection {
     where
         H: ModelProbeHandler,
     {
+        Self::connect_with_handlers(channel, model_probes, ())
+    }
+
+    /// Attach the runtime role with handlers for both connection-level
+    /// requests: model probes and workspace changes. Every request is
+    /// allowed to run concurrently.
+    #[must_use]
+    pub fn connect_with_handlers<H, C>(
+        channel: RuntimeChannel,
+        model_probes: H,
+        changes: C,
+    ) -> (Self, AcpChannel)
+    where
+        H: ModelProbeHandler,
+        C: ChangesCollector,
+    {
         let Channel {
             tx: outbound,
             rx: inbound,
@@ -131,6 +163,7 @@ impl RuntimeConnection {
             outbound.clone(),
             acp_driver,
             Arc::new(model_probes),
+            Arc::new(changes),
         ));
         (Self { outbound, driver }, acp)
     }
@@ -190,6 +223,9 @@ async fn run_server<H>(
                     ToServerMessage::ModelProbeResponse { .. } => {
                         tracing::warn!("dropping a model probe response without a probe waiter");
                     }
+                    ToServerMessage::CollectChangesResponse { .. } => {
+                        tracing::warn!("dropping a changes response without a waiter");
+                    }
                 }
             }
             message = acp.rx.next(), if acp_open => {
@@ -214,13 +250,15 @@ async fn run_server<H>(
     }
 }
 
-async fn run_runtime<H>(
+async fn run_runtime<H, C>(
     mut inbound: tokio::sync::mpsc::UnboundedReceiver<ToRuntimeMessage>,
     outbound: UnboundedSender<ToServerMessage>,
     mut acp: AcpChannel,
     model_probes: Arc<H>,
+    changes: Arc<C>,
 ) where
     H: ModelProbeHandler,
+    C: ChangesCollector,
 {
     // See the matching comment in `run_server`: dropping the ACP channel must
     // not tear down this connection - only an actual transport failure does.
@@ -255,11 +293,22 @@ async fn run_runtime<H>(
                             let _ = outbound.send(ToServerMessage::ModelProbeResponse { result });
                         });
                     }
+                    ToRuntimeMessage::CollectChangesRequest { request_id } => {
+                        let changes = Arc::clone(&changes);
+                        let outbound = outbound.clone();
+                        probes.spawn(async move {
+                            let result = changes.collect().await;
+                            let _ = outbound.send(ToServerMessage::CollectChangesResponse {
+                                request_id,
+                                result,
+                            });
+                        });
+                    }
                 }
             }
             result = probes.join_next(), if !probes.is_empty() => {
                 if let Some(Err(error)) = result {
-                    tracing::warn!(%error, "model probe task failed");
+                    tracing::warn!(%error, "connection-level request task failed");
                 }
             }
             message = acp.rx.next(), if acp_open => {

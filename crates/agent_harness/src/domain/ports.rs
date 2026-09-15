@@ -85,6 +85,39 @@ pub trait HarnessBindings: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
 }
 
+/// Why a registered harness's runtime could not be asked for its changes.
+#[derive(Debug, thiserror::Error)]
+pub enum CollectChangesError {
+    /// No replica holds a live runtime connection for the harness.
+    #[error("the harness's runtime is not connected")]
+    NotConnected,
+    /// The runtime did not answer within the deadline.
+    #[error("the harness's runtime did not answer in time")]
+    TimedOut,
+    /// The bus or the connection failed.
+    #[error("{0}")]
+    Failed(String),
+}
+
+/// Asks a registered harness's runtime - wherever its socket is held - for
+/// its workspace's changes.
+///
+/// A port rather than the registry itself because the socket may be on
+/// another replica: the production implementation relays over the shared
+/// command bus and answers from whichever replica holds the connection.
+pub trait HarnessChanges: Send + Sync + 'static {
+    /// The runtime's answer: a patch with its range, or a safe error.
+    fn collect_changes(
+        &self,
+        harness: HarnessId,
+    ) -> impl Future<
+        Output = Result<
+            agent_runtime_protocol::domain::schema::v0::CollectChangesResult,
+            CollectChangesError,
+        >,
+    > + Send;
+}
+
 /// Durable attach/detach bookkeeping for harness runtime connections.
 ///
 /// The registry itself is in-process liveness; this is what lets the rest of

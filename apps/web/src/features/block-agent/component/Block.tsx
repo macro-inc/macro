@@ -1,3 +1,9 @@
+import {
+  AgentChangesProvider,
+  AgentChangesSplit,
+  ChangesHandoff,
+  ReviewNotesDock,
+} from '@app/features/agent-changes/agent-changes';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitPanelContext } from '@components/app/split-layout/context';
@@ -96,7 +102,9 @@ function AgentBlockContent() {
               session={session()}
               title={metadata()?.title ?? undefined}
             />
-            <div class="size-full min-w-0 flex flex-col">
+            {/* The Changes pane opens beside the transcript; closed, the
+                transcript keeps the whole width. */}
+            <AgentChangesSplit>
               <Transcript searchTarget={searchTarget()} />
               {/* Full-frame mobile: composer + queue float in the bottom
                   accessory region above the dock; desktop stays inline. */}
@@ -104,7 +112,9 @@ function AgentBlockContent() {
                 {/* Home/chat: re-enable pointer events on the accessory
                     contribution — the float host is pointer-transparent. */}
                 <div class="flex w-full justify-center shrink-0 px-4 pb-4.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
-                  <div class="macro-message-width mx-auto">
+                  <div class="macro-message-width mx-auto flex flex-col gap-2">
+                    <ChangesHandoff />
+                    <ReviewNotesDock />
                     <AgentComposer
                       autofocus={
                         canAutofocusSplitContent &&
@@ -115,7 +125,7 @@ function AgentBlockContent() {
                   </div>
                 </div>
               </FloatRegionOrInline>
-            </div>
+            </AgentChangesSplit>
             <Show when={sessionOriginThread(session())}>
               {(origin) => (
                 <LinkedConversationDrawer
@@ -151,7 +161,9 @@ export default function BlockAgent() {
     <Show when={blockId}>
       {(id) => (
         <AgentSessionProvider blockId={id()} onSessionId={adoptSessionId}>
-          <AgentBlockContent />
+          <AgentChangesProvider>
+            <AgentBlockContent />
+          </AgentChangesProvider>
         </AgentSessionProvider>
       )}
     </Show>

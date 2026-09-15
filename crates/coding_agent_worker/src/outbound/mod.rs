@@ -8,6 +8,7 @@
 
 pub(crate) mod acp_probe;
 pub mod agent_session;
+pub mod git_changes;
 pub mod link;
 pub mod pairing;
 pub mod stream;

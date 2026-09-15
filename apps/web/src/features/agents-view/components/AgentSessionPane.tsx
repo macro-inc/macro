@@ -1,3 +1,10 @@
+import {
+  AgentChangesProvider,
+  AgentChangesSplit,
+  ChangesHandoff,
+  ChangesToggle,
+  ReviewNotesDock,
+} from '@app/features/agent-changes/agent-changes';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { agentSessionTitle } from '@app/features/block-agent/component/AgentSplitHeader';
@@ -190,6 +197,7 @@ function SessionContent(props: { onDeleted: () => void }) {
               />
             )}
           </Show>
+          <ChangesToggle />
           <SidePanel.Toggle />
         </Topbar>
         <div class="relative min-h-0 min-w-0 flex-1">
@@ -213,7 +221,9 @@ function SessionContent(props: { onDeleted: () => void }) {
                   <Transcript />
                 </div>
                 <div class="dock">
-                  <div class="composer-anchor">
+                  <div class="composer-anchor flex flex-col gap-2">
+                    <ChangesHandoff />
+                    <ReviewNotesDock />
                     <AgentComposer
                       autofocus
                       input={ChatSessionInput}
@@ -262,7 +272,11 @@ export function AgentSessionPane(props: {
 
   return (
     <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
-      <SessionContent onDeleted={props.onDeleted} />
+      <AgentChangesProvider>
+        <AgentChangesSplit>
+          <SessionContent onDeleted={props.onDeleted} />
+        </AgentChangesSplit>
+      </AgentChangesProvider>
     </AgentSessionProvider>
   );
 }

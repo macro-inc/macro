@@ -691,6 +691,15 @@ pub trait AgentSessionRealtime {
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
         async { Ok(()) }
     }
+
+    /// Tell viewers the session's captured changes moved: a capture started,
+    /// finished, or failed. Viewers refetch the changes summary.
+    fn publish_changes_updated(
+        &self,
+        _session: AgentSessionId,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
 }
 
 /// Publishing a session's lifecycle facts for anyone downstream: webhooks,
@@ -766,6 +775,21 @@ impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> 
 
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
         (**self).session_stopped(id, reason);
+    }
+}
+
+/// Two observers told the same facts, in order. How the composition root
+/// fans one session service's signals out to the harness (which drains its
+/// queue on them) and to anything else that wants to know a turn ended.
+impl<A: SessionTurnObserver, B: SessionTurnObserver> SessionTurnObserver for (A, B) {
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        self.0.signal(id, signal.clone());
+        self.1.signal(id, signal);
+    }
+
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
+        self.0.session_stopped(id, reason.clone());
+        self.1.session_stopped(id, reason);
     }
 }
 

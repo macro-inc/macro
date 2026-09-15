@@ -25,4 +25,5 @@ export const AiFeature = {
   import: 'import',
   agent_session: 'agent_session',
   agent_repository_choice: 'agent_repository_choice',
+  agent_pull_request_draft: 'agent_pull_request_draft',
 } as const;

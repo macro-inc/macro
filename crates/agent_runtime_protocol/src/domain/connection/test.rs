@@ -289,3 +289,66 @@ async fn runtime_closes_when_transport_drops_even_with_an_idle_acp_peer() {
         .expect("transport closure must be observable without ACP traffic");
     runtime.closed().await;
 }
+
+struct PatchCollector;
+
+impl ChangesCollector for PatchCollector {
+    async fn collect(&self) -> crate::domain::schema::v0::CollectChangesResult {
+        crate::domain::schema::v0::CollectChangesResult::Collected {
+            patch: "diff --git a/f b/f\n".to_owned(),
+            repository: None,
+            base: crate::domain::schema::v0::ChangesRef::default(),
+            head: crate::domain::schema::v0::ChangesRef::default(),
+            truncated: false,
+        }
+    }
+}
+
+#[tokio::test]
+async fn runtime_answers_a_changes_request_under_its_request_id() {
+    let (mut service, runtime_channel) = Channel::duplex();
+    let (_runtime, _runtime_acp) =
+        RuntimeConnection::connect_with_handlers(runtime_channel, ProbeHandler, PatchCollector);
+
+    let request_id = macro_uuid::Uuid::from_u128(7);
+    service
+        .tx
+        .send(ToRuntimeMessage::CollectChangesRequest { request_id })
+        .expect("request should send");
+    let response = timeout(Duration::from_secs(1), service.rx.recv())
+        .await
+        .expect("changes response should not hang")
+        .expect("runtime should remain connected");
+
+    assert!(matches!(
+        response,
+        ToServerMessage::CollectChangesResponse {
+            request_id: id,
+            result: crate::domain::schema::v0::CollectChangesResult::Collected { patch, .. },
+        } if id == request_id && patch.starts_with("diff --git")
+    ));
+}
+
+#[tokio::test]
+async fn a_runtime_without_a_collector_says_so_safely() {
+    let (mut service, runtime_channel) = Channel::duplex();
+    let (_runtime, _runtime_acp) =
+        RuntimeConnection::connect_with_model_probe_handler(runtime_channel, ProbeHandler);
+
+    let request_id = macro_uuid::Uuid::from_u128(8);
+    service
+        .tx
+        .send(ToRuntimeMessage::CollectChangesRequest { request_id })
+        .expect("request should send");
+    let response = timeout(Duration::from_secs(1), service.rx.recv())
+        .await
+        .expect("changes response should not hang")
+        .expect("runtime should remain connected");
+    assert!(matches!(
+        response,
+        ToServerMessage::CollectChangesResponse {
+            result: crate::domain::schema::v0::CollectChangesResult::Error { .. },
+            ..
+        }
+    ));
+}

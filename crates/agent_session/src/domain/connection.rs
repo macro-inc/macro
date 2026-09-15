@@ -28,10 +28,11 @@ use agent_runtime_protocol::domain::ports::{
     Transport, TransportError, TransportReceiver, TransportSender,
 };
 use agent_runtime_protocol::domain::schema::v0::{
-    AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
+    AcpMessage, CollectChangesResult, ModelProbeResult, SystemEvent, ToRuntimeMessage,
+    ToServerMessage,
 };
 use dashmap::DashMap;
-use tokio::sync::{Mutex, mpsc, watch};
+use tokio::sync::{Mutex, mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::model::{AgentSessionId, SessionClaim};
@@ -59,6 +60,9 @@ pub(crate) enum Routed {
     Connection,
     /// A connection-level model probe response, never session traffic.
     Probe,
+    /// A connection-level changes response, claimed by the request that
+    /// asked for it.
+    Changes,
     /// Nothing owns it. Kept as its own answer rather than folded into
     /// `Connection` so it can be counted and logged as the anomaly it is.
     Orphan,
@@ -98,6 +102,9 @@ impl Routes {
     pub(crate) fn route(&mut self, message: &ToServerMessage) -> Routed {
         if matches!(message, ToServerMessage::ModelProbeResponse { .. }) {
             return Routed::Probe;
+        }
+        if matches!(message, ToServerMessage::CollectChangesResponse { .. }) {
+            return Routed::Changes;
         }
         let ToServerMessage::Acp(AcpMessage(frame)) = message else {
             return Routed::Connection;
@@ -222,6 +229,9 @@ type Bound = DashMap<AgentSessionId, mpsc::Sender<ToServerMessage>>;
 /// The latest model probe answer, or `None` for "no answer is coming".
 type ProbeAnswers = watch::Sender<Option<ModelProbeResult>>;
 
+/// Who is waiting for which changes response.
+type ChangesWaiters = DashMap<macro_uuid::Uuid, oneshot::Sender<CollectChangesResult>>;
+
 /// One runtime connection and the sessions riding on it.
 ///
 /// Holds the carrier's sending half only: the receiving half belongs to the
@@ -241,6 +251,11 @@ pub struct RuntimeConnection<Sender> {
     /// on this connection asks the same parameterless question, so any answer
     /// serves any waiter.
     probe_answers: ProbeAnswers,
+    /// Changes requests in flight, by request id. Correlated, unlike the
+    /// probes: a slow diff and a fast one can overlap, and each asker wants
+    /// its own answer. Dropped with the connection, which is how a waiter
+    /// learns nothing is coming.
+    changes_waiters: ChangesWaiters,
     routes: Mutex<Routes>,
     router: OnceLock<tokio::task::AbortHandle>,
     /// Cancelled once this connection's transport has ended.
@@ -273,6 +288,7 @@ where
             runtime_ready: AtomicBool::new(false),
             bound: DashMap::new(),
             probe_answers: watch::channel(None).0,
+            changes_waiters: DashMap::new(),
             routes: Mutex::new(Routes::default()),
             router: OnceLock::new(),
             closed: CancellationToken::new(),
@@ -287,6 +303,8 @@ where
         self.bound.clear();
         // Nothing will answer a probe on a connection that is no longer served.
         let _ = self.probe_answers.send(None);
+        // Nor a changes request: dropping the senders wakes every waiter.
+        self.changes_waiters.clear();
         if let Some(router) = self.router.get() {
             router.abort();
         }
@@ -336,6 +354,37 @@ where
             Some(ModelProbeResult::Available { config_options }) => Ok(config_options),
             Some(ModelProbeResult::Error { message }) => Err(ModelProbeError::Runtime(message)),
             None => Err(ModelProbeError::Closed),
+        }
+    }
+
+    /// Ask the runtime for its workspace's changes and await the answer to
+    /// this request in particular.
+    ///
+    /// The caller owns the deadline: how long a diff may take is use-case
+    /// policy, and a request abandoned by its caller is forgotten when the
+    /// answer arrives with nobody waiting.
+    pub async fn collect_changes(&self) -> Result<CollectChangesResult, CollectChangesError> {
+        let request_id = macro_uuid::generate_uuid_v7();
+        let (answer, answered) = oneshot::channel();
+        // Registered before the send: the answer can land the instant the
+        // request does.
+        self.changes_waiters.insert(request_id, answer);
+
+        if let Err(error) = self
+            .outbound
+            .send(ToRuntimeMessage::CollectChangesRequest { request_id })
+            .await
+        {
+            self.changes_waiters.remove(&request_id);
+            return Err(CollectChangesError::Transport(error));
+        }
+
+        tokio::select! {
+            answered = answered => answered.map_err(|_| CollectChangesError::Closed),
+            () = self.closed.cancelled() => {
+                self.changes_waiters.remove(&request_id);
+                Err(CollectChangesError::Closed)
+            }
         }
     }
 
@@ -440,6 +489,7 @@ where
                 Routed::Session(session) => self.deliver(session, message).await,
                 Routed::Connection => self.on_connection_message(message).await,
                 Routed::Probe => self.answer_probes(message),
+                Routed::Changes => self.answer_changes(message),
                 Routed::Orphan => {
                     tracing::warn!(
                         frame = ?message,
@@ -449,6 +499,7 @@ where
             }
         }
         self.bound.clear();
+        self.changes_waiters.clear();
         self.closed.cancel();
     }
 
@@ -459,6 +510,22 @@ where
             unreachable!("only model probe responses receive probe routing")
         };
         let _ = self.probe_answers.send(Some(result));
+    }
+
+    /// Hand a changes answer to the one request that asked for it. An answer
+    /// whose asker gave up is dropped, and logged: it cost the runtime a diff.
+    fn answer_changes(&self, message: ToServerMessage) {
+        let ToServerMessage::CollectChangesResponse { request_id, result } = message else {
+            unreachable!("only changes responses receive changes routing")
+        };
+        match self.changes_waiters.remove(&request_id) {
+            Some((_, waiter)) => {
+                let _ = waiter.send(result);
+            }
+            None => {
+                tracing::info!(%request_id, "dropping a changes response nobody is waiting for")
+            }
+        }
     }
 
     async fn deliver(&self, session: AgentSessionId, message: ToServerMessage) {
@@ -537,6 +604,17 @@ where
             }
         }
     }
+}
+
+/// A connection-level changes request failure.
+#[derive(Debug, thiserror::Error)]
+pub enum CollectChangesError {
+    /// The request could not be sent.
+    #[error("could not send the collect-changes request: {0}")]
+    Transport(TransportError),
+    /// The connection ended before the runtime answered.
+    #[error("runtime connection closed before answering the collect-changes request")]
+    Closed,
 }
 
 /// A connection-level model probe failure.

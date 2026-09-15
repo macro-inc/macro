@@ -125,6 +125,48 @@ pub enum ModelProbeResult {
     },
 }
 
+/// One end of the range a runtime diffed, as much of it as it knows.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangesRef {
+    /// The branch name, when the runtime is on one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The commit, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha: Option<String>,
+}
+
+/// The result of asking a runtime for its working tree's changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum CollectChangesResult {
+    /// The diff between where the work started and the working tree now.
+    Collected {
+        /// A git-style unified diff, possibly empty when nothing changed.
+        patch: String,
+        /// The repository's remote, as `https://github.com/owner/name` when
+        /// it is one, else the remote url as configured.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        repository: Option<String>,
+        /// The side the work started from - the merge base with the
+        /// default branch.
+        base: ChangesRef,
+        /// The working tree's branch and commit.
+        head: ChangesRef,
+        /// The patch was cut down to the runtime's size budget; files past
+        /// the cut are not in it.
+        #[serde(default)]
+        truncated: bool,
+    },
+    /// A safe, operator-actionable failure description: the workspace is
+    /// not a repository, git is missing, the diff timed out.
+    Error {
+        /// Failure text safe to return across the runtime connection.
+        message: String,
+    },
+}
+
 /// Agent Service to Agent Runtime traffic on the logical protocol stream.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -138,6 +180,18 @@ pub enum ToRuntimeMessage {
     /// configured harness what it advertises. Answers are therefore
     /// interchangeable, so nothing correlates a response to a request.
     ModelProbeRequest,
+    /// Ask the runtime for its workspace's changes against the branch its
+    /// work started from.
+    ///
+    /// Correlated, unlike the model probe: two requests can land while a
+    /// slow diff runs and each waiter wants the answer to its own question,
+    /// so the runtime echoes `requestId` on the response.
+    #[serde(rename_all = "camelCase")]
+    CollectChangesRequest {
+        /// Echoed on the matching [`ToServerMessage::CollectChangesResponse`].
+        #[specta(type = String)]
+        request_id: macro_uuid::Uuid,
+    },
 }
 
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.
@@ -157,5 +211,14 @@ pub enum ToServerMessage {
     ModelProbeResponse {
         /// Raw options or a safe failure.
         result: ModelProbeResult,
+    },
+    /// The answer to a [`ToRuntimeMessage::CollectChangesRequest`].
+    #[serde(rename_all = "camelCase")]
+    CollectChangesResponse {
+        /// The request this answers.
+        #[specta(type = String)]
+        request_id: macro_uuid::Uuid,
+        /// The diff, or a safe failure.
+        result: CollectChangesResult,
     },
 }

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT \"createdAt\", \"updatedAt\" FROM \"Pin\" WHERE \"userId\" = $1 AND \"pinnedItemId\" = $2 and \"pinnedItemType\" = $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "createdAt",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 1,
+        "name": "updatedAt",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4d90616f23512f6162c8a89b98b49224dd1e73823c74fe56eddfa4c761154982"
+}

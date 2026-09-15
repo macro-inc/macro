@@ -54,3 +54,12 @@ export function entryOf(event: AgentSessionLogEvent): AgentSessionLogEntryDto {
 /** A persisted session changed; consumers reload its current metadata. */
 export const AGENT_SESSION_UPDATED_EVENT = 'agent_session_updated';
 export type AgentSessionUpdatedEvent = { agentSessionId: string };
+
+/**
+ * A session's captured changes moved: a capture started, landed, or failed.
+ * Carries only the session id; consumers refetch the changes summary.
+ * Mirrors `AGENT_SESSION_CHANGES` in
+ * `crates/agent_session/src/outbound/connection_gateway_realtime.rs`.
+ */
+export const AGENT_SESSION_CHANGES_EVENT = 'agent_session_changes';
+export type AgentSessionChangesEvent = { agentSessionId: string };

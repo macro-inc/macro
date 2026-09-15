@@ -139,3 +139,64 @@ fn model_probe_messages_carry_no_session_id_and_no_correlation() {
         })
     );
 }
+
+#[test]
+fn collect_changes_messages_are_correlated_by_request_id() {
+    let request_id = macro_uuid::Uuid::from_u128(0x42);
+    let request = ToRuntimeMessage::CollectChangesRequest { request_id };
+    let response = ToServerMessage::CollectChangesResponse {
+        request_id,
+        result: crate::domain::schema::v0::CollectChangesResult::Collected {
+            patch: "diff --git a/x b/x\n".to_owned(),
+            repository: Some("https://github.com/o/r".to_owned()),
+            base: crate::domain::schema::v0::ChangesRef {
+                name: Some("main".to_owned()),
+                sha: Some("abc".to_owned()),
+            },
+            head: crate::domain::schema::v0::ChangesRef {
+                name: Some("agent/work".to_owned()),
+                sha: None,
+            },
+            truncated: false,
+        },
+    };
+
+    assert_eq!(
+        serde_json::to_value(&request).unwrap(),
+        json!({
+            "type": "collectChangesRequest",
+            "requestId": "00000000-0000-0000-0000-000000000042",
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(&response).unwrap(),
+        json!({
+            "type": "collectChangesResponse",
+            "requestId": "00000000-0000-0000-0000-000000000042",
+            "result": {
+                "status": "collected",
+                "patch": "diff --git a/x b/x\n",
+                "repository": "https://github.com/o/r",
+                "base": { "name": "main", "sha": "abc" },
+                "head": { "name": "agent/work" },
+                "truncated": false,
+            },
+        })
+    );
+
+    let error = ToServerMessage::CollectChangesResponse {
+        request_id,
+        result: crate::domain::schema::v0::CollectChangesResult::Error {
+            message: "not a git repository".to_owned(),
+        },
+    };
+    let round_trip: ToServerMessage =
+        serde_json::from_value(serde_json::to_value(&error).unwrap()).unwrap();
+    assert!(matches!(
+        round_trip,
+        ToServerMessage::CollectChangesResponse {
+            request_id: id,
+            result: crate::domain::schema::v0::CollectChangesResult::Error { message },
+        } if id == request_id && message == "not a git repository"
+    ));
+}

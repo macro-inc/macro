@@ -4,12 +4,15 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { WebsocketEvent } from '@macro-inc/collaboration/websocket';
+import { handleAgentSessionChanges } from '@queries/agent-session/changes-sync';
 import { handleAgentSessionQueue } from '@queries/agent-session/queue-sync';
 import {
+  AGENT_SESSION_CHANGES_EVENT,
   AGENT_SESSION_LOG_EVENT,
   AGENT_SESSION_QUEUE_EVENT,
   AGENT_SESSION_RENAMED_EVENT,
   AGENT_SESSION_UPDATED_EVENT,
+  type AgentSessionChangesEvent,
   type AgentSessionLogEvent,
   type AgentSessionQueueEvent,
   type AgentSessionRenamedEvent,
@@ -128,6 +131,17 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           data.type,
           data.data,
           handleAgentSessionRenamed
+        );
+      })
+      // A session's captured changes moved (capture started, landed, or
+      // failed). The event carries no body; the changes summary refetches.
+      .with({ type: AGENT_SESSION_CHANGES_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionChangesEvent>(
+          data.type,
+          data.data,
+          (event) => {
+            void handleAgentSessionChanges(event);
+          }
         );
       })
       // A session's whole action queue after a change. Full snapshot every

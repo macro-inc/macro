@@ -64,6 +64,26 @@ where
         self.connections.contains_key(&harness)
     }
 
+    /// Ask a harness's live runtime for its workspace's changes.
+    ///
+    /// Returns `None` when no live connection exists here - the socket may
+    /// be on another replica, or nowhere. The caller owns the deadline.
+    pub async fn collect_changes(
+        &self,
+        harness: HarnessId,
+    ) -> Option<
+        Result<
+            agent_runtime_protocol::domain::schema::v0::CollectChangesResult,
+            agent_session::domain::connection::CollectChangesError,
+        >,
+    > {
+        let connection = self
+            .connections
+            .get(&harness)
+            .map(|entry| Arc::clone(&entry))?;
+        Some(connection.collect_changes().await)
+    }
+
     /// Ask a harness's live runtime to probe a fresh ACP process.
     ///
     /// Returns `None` when no live connection exists. The caller owns the

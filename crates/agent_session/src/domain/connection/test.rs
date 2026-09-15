@@ -484,3 +484,83 @@ async fn pending_model_probe_ends_when_the_connection_closes() {
         Err(ModelProbeError::Closed)
     ));
 }
+
+#[test]
+fn changes_responses_belong_to_the_request_that_asked() {
+    let mut routes = Routes::default();
+    assert_eq!(
+        routes.route(&ToServerMessage::CollectChangesResponse {
+            request_id: macro_uuid::Uuid::from_u128(1),
+            result: CollectChangesResult::Error {
+                message: "no".to_owned(),
+            },
+        }),
+        Routed::Changes
+    );
+}
+
+#[tokio::test]
+async fn a_changes_request_is_answered_by_its_own_response_only() {
+    let connection = RuntimeConnection::connect(SilentSocket);
+
+    let asked = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.collect_changes().await })
+    };
+    // Let the request register its waiter.
+    tokio::task::yield_now().await;
+    let request_id = *connection
+        .changes_waiters
+        .iter()
+        .next()
+        .expect("one request waits")
+        .key();
+
+    // Somebody else's answer changes nothing for this waiter.
+    connection.answer_changes(ToServerMessage::CollectChangesResponse {
+        request_id: macro_uuid::Uuid::from_u128(0xdead),
+        result: CollectChangesResult::Error {
+            message: "wrong one".to_owned(),
+        },
+    });
+    assert!(!asked.is_finished());
+
+    connection.answer_changes(ToServerMessage::CollectChangesResponse {
+        request_id,
+        result: CollectChangesResult::Collected {
+            patch: "diff --git a/f b/f\n".to_owned(),
+            repository: None,
+            base: agent_runtime_protocol::domain::schema::v0::ChangesRef::default(),
+            head: agent_runtime_protocol::domain::schema::v0::ChangesRef::default(),
+            truncated: false,
+        },
+    });
+    let answer = tokio::time::timeout(Duration::from_secs(1), asked)
+        .await
+        .expect("answered")
+        .expect("task ran")
+        .expect("collected");
+    assert!(
+        matches!(answer, CollectChangesResult::Collected { patch, .. } if patch.starts_with("diff"))
+    );
+    assert!(
+        connection.changes_waiters.is_empty(),
+        "the waiter is forgotten once answered"
+    );
+}
+
+#[tokio::test]
+async fn evicting_fails_the_changes_requests_in_flight() {
+    let connection = RuntimeConnection::connect(SilentSocket);
+    let asked = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.collect_changes().await })
+    };
+    tokio::task::yield_now().await;
+    connection.evict();
+    let answer = tokio::time::timeout(Duration::from_secs(1), asked)
+        .await
+        .expect("answered")
+        .expect("task ran");
+    assert!(matches!(answer, Err(CollectChangesError::Closed)));
+}

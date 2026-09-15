@@ -399,6 +399,50 @@ The display choice survives reload and copying; expansion still references the
 same session and does not invoke a bot. Compact mentions do not load transcripts.
 Existing announcement chips remain locked to the turn they announced.
 
+### Reviewing changes and opening a pull request
+
+Coding sessions on Cursor or a self-hosted (`macrod`) runtime capture the
+agent's changes when each turn ends. The session header gains a **Changes**
+toggle (`aria-pressed`) with the changed-file count; it opens a resizable
+**Changes** pane beside the transcript (drag the 1px divider between them).
+The pane header shows a `head → base` branch pill, a **Unified / Split**
+segmented control (`aria-label="Diff layout"`), a re-capture button, the
+**Create pull request** split button, and **Expand changes to the full width**
+(spotlight; **Bring the session back** returns to the split) and **Close the
+changes pane**. Below it a review bar reads `N of M files viewed` with a
+progress bar (`role="progressbar"`, `aria-label="Files viewed"`) and
+**Collapse all / Expand all** and **Mark all viewed / Clear viewed** buttons.
+The body is a file tree (`nav[aria-label="Changed files"]`, directories
+compressed along single-child chains, status letters A/M/D/R and +/− bars)
+next to a stack of file cards. Each card's sticky header has a disclosure
+caret, the path, `+adds −dels`, a **Viewed** toggle (`aria-pressed`; marking a
+file viewed collapses it) and **Copy path**. Diffs render with Pierre; hover a
+line and click the accent **+** in the gutter (drag for a range) to leave a
+review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
+`Escape` cancels). Notes hang under their line as "queued for the agent" and a
+**N review notes queued · Send to agent** chip appears above the composer;
+sending posts one prompt listing every note by file and line and marks them
+"sent to agent". Notes never go to GitHub. Viewed marks and unsent notes
+persist per session in localStorage; a new capture resets viewed marks.
+
+While the pane is closed and a capture has files, a **Changes ready to
+review** card sits above the composer with **Review changes**, **Create pull
+request**, **Edit details…** and a **Dismiss** button. Sessions on runtimes
+that do not report changes (local sandboxes) explain that in the pane; a
+session with nothing captured offers **Capture again**.
+
+**Create pull request** drafts a title and description from the diff (a
+fast model, `POST …/changes/pull-request-draft`) and asks the agent to push
+the branch, open the pull request, and register it with `set_pull_request`.
+The split button's menu offers **Create as draft**, **Edit details first…**
+(a sheet with Title, Description with **Regenerate**, Base branch, Reviewers,
+**Open as a draft**, then **Create pull request** / **Open on GitHub instead**
+/ **Cancel**) and **Open compare on GitHub** (needs the branch pushed). The
+sheet shows **Asking the agent to open the pull request…** until the session's
+`pullRequestUrl` lands, then **Pull request #N opened** with **Open on
+GitHub**; from then on the header and hand-off card show **Pull request #N**
+instead of the create controls.
+
 ### Transcript navigation
 
 Agent sessions reuse the channel's TanStack `ThreadList`. Opening a session lands

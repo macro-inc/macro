@@ -39,6 +39,11 @@ async fn peer() -> Peer {
     let redis = redis::Client::open(url).unwrap();
     let registry = RuntimeRegistry::new();
     let models = MacrodModels::new(Arc::clone(&registry), redis.clone(), Duration::from_secs(2));
+    let changes = crate::changes_bus::MacrodChangesBus::new(
+        Arc::clone(&registry),
+        redis.clone(),
+        Duration::from_secs(2),
+    );
     let (ready, mut readiness) = tokio::sync::watch::channel(false);
     let consumer = tokio::spawn(crate::runtime_commands::consume_runtime_commands(
         redis,
@@ -50,6 +55,7 @@ async fn peer() -> Peer {
         Arc::new(NoCommands),
         ready,
         models.clone(),
+        changes,
     ));
     tokio::time::timeout(Duration::from_secs(2), readiness.wait_for(|ready| *ready))
         .await

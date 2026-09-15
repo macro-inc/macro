@@ -2132,7 +2132,8 @@
           "ai_editing",
           "import",
           "agent_session",
-          "agent_repository_choice"
+          "agent_repository_choice",
+          "agent_pull_request_draft"
         ]
       },
       "AssistantMessagePart": {
