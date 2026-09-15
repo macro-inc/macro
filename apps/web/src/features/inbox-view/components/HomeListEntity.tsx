@@ -1,3 +1,5 @@
+import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Entity, MaybeEntityRow } from '@entity';
 import type { BaseListEntityProps } from '@entity/composed/list-entity/shared';
 import { unreadFilterFn } from '@entity/utils/filter';
@@ -5,13 +7,30 @@ import { cn, pressHandlers } from '@ui';
 import { Show } from 'solid-js';
 import { HomeEntityIcon } from './HomeEntityIcon';
 
+type HomeListEntityProps = BaseListEntityProps & {
+  occurrenceKey: string;
+  channelName?: string;
+};
+
+/** Keep thread context visible instead of rendering replies as channel pills. */
+export function HomeListEntity(props: HomeListEntityProps) {
+  return (
+    <Show
+      when={!isTouchDevice() && props.entity.type === 'channel_thread'}
+      fallback={<CompactHomeListEntity {...props} />}
+    >
+      <InboxListEntity
+        {...props}
+        class="mx-1.5 my-0.5 min-w-0"
+        cardClass="rounded-xl px-2.5 py-2"
+        focusable={false}
+      />
+    </Show>
+  );
+}
+
 /** One compact, single-line Home item; the list owns focus and activation. */
-export function HomeListEntity(
-  props: BaseListEntityProps & {
-    occurrenceKey: string;
-    channelName?: string;
-  }
-) {
+function CompactHomeListEntity(props: HomeListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
 
   return (

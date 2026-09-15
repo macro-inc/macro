@@ -4,6 +4,13 @@ import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HomeListEntity } from './HomeListEntity';
 
+vi.mock(
+  '@app/features/next-soup/soup-view/views/inbox/InboxListEntity',
+  () => ({
+    InboxListEntity: () => null,
+  })
+);
+
 vi.mock('@components/app/split-panel', () => ({
   SplitPanel: { CloseButton: () => null },
 }));

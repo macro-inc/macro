@@ -63,7 +63,11 @@ labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, a
 starting pane; it does not create a chat. Email and Tasks have matching top pills
 for **New email** and **New task**.
 
-The 256px desktop rail uses single-line pills with 16px icons: profile photos for
+Channel thread replies remain separate Home entries from their parent channel,
+with the notification-style sender, message, and reply previews. Selecting a
+thread opens that thread in the channel preview; Shift-click opens it in a split.
+
+Other items in the 256px desktop rail use single-line pills with 16px icons: profile photos for
 DMs, model logos for AI chats (Claude sunburst or ChatGPT knot), and regular
 Phosphor icons for other items. There are no title tooltips, and timestamps are
 visible only while hovering the row. An unread
@@ -71,7 +75,7 @@ dot remains visible. Click a row to preview it; `j`/`k` navigate and update the
 preview, and Shift-click opens a split.
 
 On desktop, before selecting a row, the main pane shows a centered chat composer
-under “What should we get done in Macro?”. Type in “Type @ to reference”, use the plus button for
+under “What should we get done in Macro?”. Type in “Type @ to reference / for skills”, use the paperclip button for
 attachments and the model menu to choose a model, then press Enter or Send to
 create and open an AI chat. The input stays 32px above the vertical center as suggestions load. Up to three cached AI
 suggestions appear below the

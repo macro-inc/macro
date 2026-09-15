@@ -14,7 +14,7 @@ export function HomeChatStart() {
           </h1>
           <HomeChatInput
             variant="home"
-            placeholder="Type @ to reference"
+            placeholder="Type @ to reference / for skills"
             autoFocusOnMount={false}
           />
           <div class="min-h-0 min-w-0 pb-8">

@@ -210,6 +210,53 @@ describe('Home activity and notifications', () => {
     ).toEqual(['email', 'chat']);
   });
 
+  it('keeps multiple reply threads separate from their parent channel and own activity', () => {
+    const channel: WithNotification<EntityData> = {
+      type: 'channel',
+      id: 'channel',
+      name: 'Support',
+      ownerId: 'alice',
+      channelType: 'public',
+      touchedAt: '2026-09-02T16:00:00Z',
+    };
+    const thread: WithNotification<EntityData> = {
+      type: 'channel_thread',
+      id: 'root-1',
+      name: 'Channel thread',
+      ownerId: 'alice',
+      channelId: channel.id,
+      messageId: 'root-1',
+      threadId: 'root-1',
+      senderId: 'alice',
+      sender: { id: 'alice', type: 'user' },
+      content: 'First discussion',
+      attachments: [],
+      reactions: [],
+      thread: { replyCount: 2, preview: [] },
+      notifiedAt: '2026-09-02T18:00:00Z',
+      notifications: () => [],
+    };
+    const secondThread = {
+      ...thread,
+      id: 'root-2',
+      messageId: 'root-2',
+      threadId: 'root-2',
+      notifiedAt: '2026-09-02T17:00:00Z',
+    };
+    const rows = mergeHomeEntities(
+      [thread, secondThread],
+      [channel, { ...thread, touchedAt: '2026-09-02T15:00:00Z' }],
+      signal
+    );
+    expect(rows.map(({ type, id }) => [type, id])).toEqual([
+      ['channel_thread', 'root-1'],
+      ['channel_thread', 'root-2'],
+      ['channel', 'channel'],
+    ]);
+    expect(rows[0].notifications).toBe(thread.notifications);
+    expect(rows[0].sortTs).toBe(thread.notifiedAt);
+  });
+
   it('rejects cache inserts without a recorded own touch', () => {
     expect(mergeHomeEntities([], [freshEmail], signal)).toEqual([]);
   });
