@@ -29,6 +29,7 @@ import {
   createSignal,
   ErrorBoundary,
   Match,
+  type Resource,
   Show,
   Suspense,
   Switch,
@@ -69,10 +70,10 @@ function TaskBreadcrumbItem(props: {
       id={`task:${props.documentId}`}
       order={1}
       current
-      class="gap-1.5"
+      class="gap-1.5 motion-safe:animate-[dialog-overlay-open_150ms_ease-out]"
       onClick={focusTask}
       suffix={
-        <div class="shrink-0">
+        <div class="shrink-0 motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
           <SplitFileMenu
             id={props.documentId}
             itemType="document"
@@ -93,12 +94,19 @@ function TaskBreadcrumbItem(props: {
   );
 }
 
-function TaskDetailTopBar(props: { documentId: string }) {
+function TaskDetailTopBar(props: {
+  documentId: string;
+  document: Resource<TaskDocumentData>;
+}) {
   const panel = useSplitPanelOrThrow();
 
   return (
     <div class="flex h-12 min-w-0 shrink-0 items-center gap-1 border-edge border-b px-3">
-      <ViewBreadcrumbs.Outlet aria-label="Task location" />
+      <ViewBreadcrumbs.Outlet aria-label="Task location">
+        <Suspense fallback={<TaskBreadcrumbSkeleton />}>
+          {props.document.latest && null}
+        </Suspense>
+      </ViewBreadcrumbs.Outlet>
       <div class="ml-auto flex shrink-0 items-center gap-2">
         <ShareTrigger
           id={props.documentId}
@@ -108,6 +116,21 @@ function TaskDetailTopBar(props: { documentId: string }) {
         <SidePanel.Toggle />
       </div>
     </div>
+  );
+}
+
+function TaskBreadcrumbSkeleton() {
+  return (
+    <>
+      <ViewBreadcrumbs.Separator />
+      <div
+        aria-hidden="true"
+        class="flex h-7 min-w-0 items-center gap-1.5 px-1"
+      >
+        <span class="skeleton-shimmer size-4 shrink-0 rounded bg-skeleton" />
+        <span class="skeleton-shimmer h-3 w-24 rounded-full bg-skeleton" />
+      </div>
+    </>
   );
 }
 
@@ -214,7 +237,7 @@ export function TaskDetail(props: { task: TaskDetailTarget }) {
         <TaskViewBreadcrumbItem />
         <SidePanel.Root>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <TaskDetailTopBar documentId={props.task.id} />
+            <TaskDetailTopBar documentId={props.task.id} document={document} />
             <div class="relative min-h-0 min-w-0 flex-1">
               <Suspense fallback={<TaskDetailBodyState />}>
                 <Switch>
