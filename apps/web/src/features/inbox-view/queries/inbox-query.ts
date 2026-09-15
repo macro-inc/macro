@@ -8,7 +8,7 @@ import {
   mergeAst,
   NIL_UUID,
   type TargetExpr,
-} from '@app/features/soup';
+} from '@app/features/soup/filters';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
 import { startOfDay, subWeeks } from 'date-fns';
 import { match } from 'ts-pattern';

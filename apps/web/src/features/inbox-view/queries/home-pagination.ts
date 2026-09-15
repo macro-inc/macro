@@ -39,7 +39,7 @@ export function getHomePagination(
   const notificationBoundary = loadedThrough(notifications, (entity) =>
     inboxTabOrdersByNotification(context)
       ? entity.notifiedAt
-      : (entity.updatedAt ?? entity.createdAt)
+      : (entity.sortTs ?? entity.updatedAt ?? entity.createdAt)
   );
   const activityBoundary = loadedThrough(
     activity,

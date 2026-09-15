@@ -79,6 +79,8 @@ export const HomeChatInput = (props: {
     // Create a new persistent chat
     const response = await cognitionApiServiceClient.createChat({});
     if (response.isErr()) {
+      input.attachments.setAttached(request.attachments);
+      replaceHomeComposerDraft(editor.controls, request.content);
       if (isPaymentError(response)) {
         const { showPaywall } = usePaywallState();
         showPaywall(PaywallKey.CHAT_LIMIT);

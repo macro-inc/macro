@@ -1,6 +1,13 @@
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import { useHasPermission } from '@core/context/user';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import {
   buildRecommendationPrompt,
   pickRecommendations,
@@ -58,21 +65,23 @@ export function createHomeRecommendations(
 
   const [timedOut, setTimedOut] = createSignal(false);
   const [attempt, setAttempt] = createSignal(0);
-  const waiting = () =>
-    enabled() &&
-    items() === undefined &&
-    (fast.isGenerating() || smart.isGenerating());
+  const waiting = createMemo(
+    () =>
+      enabled() &&
+      items() === undefined &&
+      (fast.isGenerating() || smart.isGenerating())
+  );
 
   // Bound the visible loading state even if the server never leaves "loading".
   // Keep accepting a late result; cached items always take precedence.
-  createEffect(() => {
-    attempt();
-    const pending = waiting();
-    setTimedOut(false);
-    if (!pending) return;
-    const timer = setTimeout(() => setTimedOut(true), 45_000);
-    onCleanup(() => clearTimeout(timer));
-  });
+  createEffect(
+    on([waiting, attempt], ([pending]) => {
+      setTimedOut(false);
+      if (!pending) return;
+      const timer = setTimeout(() => setTimedOut(true), 45_000);
+      onCleanup(() => clearTimeout(timer));
+    })
+  );
 
   const retry = async () => {
     if (!enabled()) return;

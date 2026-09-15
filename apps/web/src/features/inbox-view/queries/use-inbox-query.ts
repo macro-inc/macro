@@ -394,7 +394,7 @@ export function useInboxDataSource(
     },
     error: () => {
       if (!usesServiceSearch())
-        return entities().items.length === 0
+        return entities().items.length === 0 && !hasMore()
           ? (query.error ??
               (state.tab === 'signal' ? recentQuery.error : undefined) ??
               undefined)
@@ -402,7 +402,7 @@ export function useInboxDataSource(
       return search.error();
     },
     warning: () => {
-      if (usesServiceSearch() || entities().items.length === 0)
+      if (usesServiceSearch() || (entities().items.length === 0 && !hasMore()))
         return undefined;
       if (query.error) return 'Notifications could not be refreshed.';
       if (state.tab === 'signal' && recentQuery.error)

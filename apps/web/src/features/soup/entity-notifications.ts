@@ -88,8 +88,8 @@ type EntityWithRawNotifications<T extends EntityData> = T & {
 };
 
 /**
- * Normalizes GraphQL notification arrays and the global notification source
- * into the accessor shape expected by reusable list-entity components.
+ * Reads attached GraphQL notifications or the global source with the same
+ * channel-thread scoping for membership checks and rendered rows.
  */
 export function getEntityNotifications<T extends EntityData>(
   entity: EntityWithRawNotifications<T>,
@@ -115,6 +115,7 @@ export function getEntityNotifications<T extends EntityData>(
     : notifications;
 }
 
+/** Attach the reactive accessor expected by reusable list-entity components. */
 export function withEntityNotifications<T extends EntityData>(
   entity: EntityWithRawNotifications<T>,
   source: NotificationSource,

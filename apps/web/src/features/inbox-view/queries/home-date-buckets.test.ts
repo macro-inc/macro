@@ -6,6 +6,15 @@ const todayAt = (hour: number, minute = 0) =>
   new Date(2026, 8, 14, hour, minute);
 
 describe('Home time sections', () => {
+  it('excludes future timestamps from the recent-time sections', () => {
+    expect(homeDateBucket(new Date(evening.getTime() + 1), evening).key).toBe(
+      'this-evening'
+    );
+    expect(homeDateBucket(todayAt(21), evening).key).toBe('this-evening');
+  });
+  it('includes the current time in Last few minutes', () => {
+    expect(homeDateBucket(evening, evening).key).toBe('last-few-minutes');
+  });
   it('uses non-overlapping fine-grained sections throughout the day', () => {
     expect(homeDateBucket(todayAt(19, 58), evening).label).toBe(
       'Last few minutes'

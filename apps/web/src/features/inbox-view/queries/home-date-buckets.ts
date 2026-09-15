@@ -10,9 +10,10 @@ export function homeDateBucket(value: unknown, now = new Date()): DateBucket {
   const date =
     value instanceof Date ? value : new Date(value as string | number);
   const minutesAgo = (now.getTime() - date.getTime()) / 60_000;
-  if (minutesAgo < 5)
+  if (minutesAgo >= 0 && minutesAgo < 5)
     return { key: 'last-few-minutes', label: 'Last few minutes' };
-  if (minutesAgo < 60) return { key: 'last-hour', label: 'Last hour' };
+  if (minutesAgo >= 0 && minutesAgo < 60)
+    return { key: 'last-hour', label: 'Last hour' };
   const hour = date.getHours();
   if (hour >= 18) return { key: 'this-evening', label: 'This evening' };
   if (hour >= 12) return { key: 'this-afternoon', label: 'This afternoon' };

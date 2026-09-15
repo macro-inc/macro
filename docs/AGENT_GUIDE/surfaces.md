@@ -87,7 +87,8 @@ Home uses the shared app font and composer theme tokens; suggestion text and
 hover states use the same semantic colors as other app surfaces.
 Type in “Type @ to reference / for skills”, use the attachment button for
 attachments and the model menu to choose a model, then press Enter or Send to
-create and open an AI chat. The input stays 32px above the vertical center as suggestions load. Up to three cached AI
+create and open an AI chat. If chat creation fails, the submitted text and attachments
+are restored, including before a chat-limit paywall opens. The input stays 32px above the vertical center as suggestions load. Up to three cached AI
 suggestions appear below the
 composer, using the existing fast/smart recommendation projections. Compact rows
 use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
@@ -95,7 +96,9 @@ suggestion fills the input and replaces its context attachments without sending;
 the Open action opens its source item in a new split, preserving the editor type
 for tasks, skills, snippets, and other documents. Suggestion loading/errors
 are isolated from the input. If generation stalls for 45 seconds, the shimmer
-is replaced with a retry action; a late result still appears automatically. Shift+Enter adds a line. Selecting a Home row replaces
+is replaced with a retry action; a late result still appears automatically.
+Generation status updates do not extend that deadline. Retry starts a fresh
+45-second wait. Shift+Enter adds a line. Selecting a Home row replaces
 the composer with its preview. Mobile continues to show the activity list alone.
 
 AI chat, agent, and channel message bodies use 15px text, including thread replies.

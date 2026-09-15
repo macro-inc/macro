@@ -1,9 +1,9 @@
+import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import {
-  dateBucket,
   deduplicateItems,
   groupSoupEntities,
-  type SoupGroup,
-} from '@app/features/soup/collection';
+} from '@app/features/soup/collection/transforms';
+import type { SoupGroup } from '@app/features/soup/collection/types';
 import { compareDateDesc, type DateValue } from '@core/util/date';
 import type { EntityData, WithNotification } from '@entity';
 import { homeDateBucket } from './home-date-buckets';
