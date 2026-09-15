@@ -194,7 +194,7 @@ impl RemoteMcpToolSet {
 }
 
 impl<Context: Send + Sync + 'static> ToolSet<Context> for RemoteMcpToolSet {
-    fn try_tool_call<'a>(
+    fn dispatch_tool_call<'a>(
         &'a self,
         _context: Context,
         _request_context: RequestContext,

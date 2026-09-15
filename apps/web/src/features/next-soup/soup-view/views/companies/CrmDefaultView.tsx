@@ -4,6 +4,7 @@ import {
   usePersonalCrmViews,
   useTeamCrmViews,
 } from '@companies/crm/saved-views';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createEffect } from 'solid-js';
 
 /**
@@ -25,7 +26,9 @@ export function CrmDefaultViewLoader() {
     const config =
       personal.defaultView()?.config ??
       (team.defaultView()?.config as CrmViewConfig | undefined);
-    if (config) applyView(config);
+    if (config) {
+      applyView(isTouchDevice() ? { ...config, viewMode: 'list' } : config);
+    }
   });
 
   return null;

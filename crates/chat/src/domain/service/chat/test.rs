@@ -406,6 +406,7 @@ fn patch_args(share_permission_updated: bool) -> PatchChatArgs {
                 models_permissions::share_permission::LinkShare::Public,
             )),
             link_share_access_level: None,
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     );

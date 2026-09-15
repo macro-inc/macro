@@ -78,7 +78,10 @@ describe('a placeholder', () => {
   });
 
   it('applies a model override before delivering the first prompt', async () => {
-    create.control.mockResolvedValue({ isErr: () => false });
+    create.control.mockResolvedValue({
+      isErr: () => false,
+      value: { actionId: 'action-1', status: 'accepted' },
+    });
     const placeholder = startPendingSession({
       botId: 'persona-1',
       modelOverride: 'model-2',

@@ -19,6 +19,7 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
+use crate::domain::engine::AgentIdentity;
 use crate::outbound::log_frames::LogFrameSource;
 use crate::testing::ScriptedEngine;
 use agent_session::domain::model::ReplicaId;
@@ -102,6 +103,7 @@ fn facts(id: AgentSessionId) -> SessionFacts {
         id,
         owner: owner(),
         model: "test-model".to_owned(),
+        identity: None,
         instructions: None,
         acp_session_id: None,
     }
@@ -111,6 +113,16 @@ fn facts(id: AgentSessionId) -> SessionFacts {
 fn facts_with_instructions(id: AgentSessionId, instructions: &str) -> SessionFacts {
     SessionFacts {
         instructions: Some(instructions.to_owned()),
+        ..facts(id)
+    }
+}
+
+fn facts_with_identity(id: AgentSessionId, name: &str, handle: &str) -> SessionFacts {
+    SessionFacts {
+        identity: Some(AgentIdentity {
+            name: name.to_owned(),
+            handle: handle.to_owned(),
+        }),
         ..facts(id)
     }
 }
@@ -552,6 +564,85 @@ async fn a_session_without_instructions_hands_the_engine_none() {
     await_turns(&engine, "hello").await;
 
     assert_eq!(engine.requests()[0].instructions, None);
+}
+
+/// The session's bot identity reaches every turn, including after a reattach
+/// that replaces the agent task. A named agent with no instructions still
+/// knows who it is.
+#[tokio::test]
+async fn identity_reaches_every_turn_including_after_a_reattach() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let sessions = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+
+    let id = AgentSessionId::new();
+    sessions
+        .create_session(CreateAgentSessionParams {
+            id,
+            owner_id: owner(),
+            bot_id: BotId::TEST_A,
+            thread_id: None,
+            originating_message_id: None,
+            model: "test-model".to_owned(),
+            harness: "macro-inmem".to_owned(),
+            repo_url: None,
+            workspace: "/workspace".to_owned(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            instructions: None,
+            mcp_servers: Default::default(),
+            egress_token_hash: None,
+        })
+        .await
+        .expect("the session row should create");
+
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "i am grunk".to_owned(),
+    )]));
+    let manager = manager(&repo, Arc::clone(&engine));
+
+    for prompt in ["who are you", "say your handle"] {
+        attach_retrying(
+            &sessions,
+            id,
+            &manager,
+            facts_with_identity(id, "Grunk", "grunk"),
+        )
+        .await;
+        sessions
+            .send_action(
+                id,
+                Some(owner()),
+                AgentAction::prompt(prompt),
+                AgentActionId::mint(),
+            )
+            .await
+            .expect("the prompt should send");
+        await_turns(&engine, prompt).await;
+    }
+
+    let identities: Vec<Option<(String, String)>> = engine
+        .requests()
+        .into_iter()
+        .map(|turn| {
+            turn.identity
+                .map(|identity| (identity.name, identity.handle))
+        })
+        .collect();
+    assert_eq!(
+        identities,
+        vec![
+            Some(("Grunk".to_owned(), "grunk".to_owned())),
+            Some(("Grunk".to_owned(), "grunk".to_owned())),
+        ],
+        "both turns run as the named agent"
+    );
 }
 
 /// The egress token has no container environment to live in here, so the

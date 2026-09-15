@@ -93,6 +93,14 @@ impl GithubSyncRepo for FakeRepo {
         unimplemented!("minting a token does not map github logins")
     }
 
+    async fn get_installation_ids_for_sources(
+        &self,
+        _macro_id: &str,
+        _team_ids: &[uuid::Uuid],
+    ) -> Result<Vec<String>, Self::Err> {
+        unimplemented!("minting a token starts from a repository, not from a user")
+    }
+
     async fn get_team_member_ids(
         &self,
         _team_id: uuid::Uuid,

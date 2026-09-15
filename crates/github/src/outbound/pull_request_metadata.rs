@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 
 use crate::domain::models::{
     EnrichedGithubPullRequest, GithubKey, GithubPullRequestCheckRun, GithubPullRequestComment,
-    GithubPullRequestDetails, GithubPullRequestStatus,
+    GithubPullRequestDetails, GithubPullRequestStatus, GithubRepository,
 };
 
 const GITHUB_API_BASE_URL: &str = "https://api.github.com";
@@ -80,7 +80,7 @@ pub(crate) async fn fetch_open_pull_requests_for_installation(
             Err(error) => {
                 tracing::warn!(
                     error=?error,
-                    owner=%repository.owner.login,
+                    owner=%repository.owner,
                     repo=%repository.name,
                     "failed to fetch GitHub open pull requests for repository"
                 );
@@ -91,11 +91,15 @@ pub(crate) async fn fetch_open_pull_requests_for_installation(
     Ok(open_pull_requests)
 }
 
-async fn fetch_installation_repositories(
+/// Fetch every repository an installation access token can reach.
+///
+/// The one pager over `/installation/repositories`; both the open-pull-request
+/// sweep above and the reachable-repositories service come through here.
+pub(crate) async fn fetch_installation_repositories(
     client: &reqwest::Client,
     access_token: &str,
-) -> Result<Vec<GithubInstallationRepositoryResponse>, anyhow::Error> {
-    fetch_paginated_github_items(
+) -> Result<Vec<GithubRepository>, anyhow::Error> {
+    let repositories: Vec<GithubInstallationRepositoryResponse> = fetch_paginated_github_items(
         client,
         access_token,
         |page| {
@@ -106,15 +110,20 @@ async fn fetch_installation_repositories(
         "installation repositories",
         |response: GithubInstallationRepositoriesResponse| response.repositories,
     )
-    .await
+    .await?;
+
+    Ok(repositories
+        .into_iter()
+        .map(GithubInstallationRepositoryResponse::into_repository)
+        .collect())
 }
 
 async fn fetch_open_pull_requests_for_repository(
     client: &reqwest::Client,
     access_token: &str,
-    repository: &GithubInstallationRepositoryResponse,
+    repository: &GithubRepository,
 ) -> Result<Vec<EnrichedGithubPullRequest>, anyhow::Error> {
-    let owner = repository.owner.login.as_str();
+    let owner = repository.owner.as_str();
     let repo = repository.name.as_str();
     let pull_requests = fetch_paginated_github_items(
         client,
@@ -144,6 +153,23 @@ struct GithubInstallationRepositoriesResponse {
 struct GithubInstallationRepositoryResponse {
     name: String,
     owner: GithubRepositoryOwnerResponse,
+    html_url: String,
+    /// Absent on a repository with no commits, so not required of the payload.
+    #[serde(default)]
+    default_branch: Option<String>,
+    private: bool,
+}
+
+impl GithubInstallationRepositoryResponse {
+    fn into_repository(self) -> GithubRepository {
+        GithubRepository {
+            owner: self.owner.login,
+            name: self.name,
+            html_url: self.html_url,
+            default_branch: self.default_branch,
+            private: self.private,
+        }
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]

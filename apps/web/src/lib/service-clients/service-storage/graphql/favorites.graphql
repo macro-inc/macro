@@ -11,10 +11,10 @@ fragment FavoriteFields on GraphqlFavorite {
   channelId
 }
 
-query Favorites {
+query Favorites($filter: FavoritesFilterInput) {
   user {
     id
-    favorites {
+    favorites(filter: $filter) {
       ...FavoriteFields
     }
   }

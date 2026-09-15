@@ -444,7 +444,9 @@ const fn _rankable_entity_types_are_exhaustive(entity_type: EntityType) {
         | EntityType::CrmContact
         | EntityType::Reminder
         | EntityType::Skill
-        | EntityType::AgentSession => {}
+        | EntityType::AgentSession
+        | EntityType::ScheduledAction
+        | EntityType::Initiative => {}
     }
 }
 
@@ -468,6 +470,8 @@ fn rankable_entity_types() -> Vec<String> {
         EntityType::Reminder,
         EntityType::Skill,
         EntityType::AgentSession,
+        EntityType::ScheduledAction,
+        EntityType::Initiative,
     ]
     .into_iter()
     .map(|entity_type| entity_type.as_ref().to_owned())

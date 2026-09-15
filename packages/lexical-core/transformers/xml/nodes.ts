@@ -173,6 +173,8 @@ export type DocumentMentionNode = Id & {
   version: number;
   documentId: string;
   documentName: string;
+  blockName?: string;
+  blockParams?: Record<string, string>;
 };
 
 export type ContactMentionNode = Id & {
@@ -195,6 +197,7 @@ export type AgentSessionMentionNode = Id & {
   version: number;
   id: string;
   label?: string;
+  expanded?: boolean;
 };
 
 export type PullRequestMentionNode = Id & {

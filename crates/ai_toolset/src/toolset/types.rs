@@ -3,6 +3,7 @@ use super::tool_object::{AsyncToolObject, UserTool, UserToolResponse};
 use crate::RequestContext;
 use crate::annotations::ToolAnnotated;
 use crate::schema::ValidationError;
+use crate::telemetry::ToolCallSpan;
 use crate::{AsyncTool, ToolResult};
 use axum::extract::FromRef;
 use schemars::{JsonSchema, Schema};
@@ -10,6 +11,7 @@ use serde::Serialize;
 use serde::de::Deserialize;
 use std::collections::BTreeMap;
 use thiserror::Error;
+use tracing::Instrument as _;
 
 #[cfg(test)]
 mod test;
@@ -200,7 +202,10 @@ where
     /// was added.
     ///
     /// Returns an error if the tool is not found or if deserialization fails.
-    #[tracing::instrument(err, skip(self, context, request_context))]
+    ///
+    /// No span of its own: it runs inside the `execute_tool` span that
+    /// [`ToolSet::try_tool_call`](crate::ToolSet::try_tool_call) opens, which
+    /// records the arguments and result under the content policy.
     pub(crate) async fn try_tool_call_internal(
         &self,
         context: ToolSetContext,
@@ -220,7 +225,9 @@ where
     }
 
     /// this isn't called in the tool loop it's called by the user-facing API
-    #[tracing::instrument(err, skip(self, context, request_context))]
+    ///
+    /// A user-executed tool is still a tool execution, so it gets the same
+    /// `execute_tool` telemetry as a model-initiated call.
     pub async fn try_user_tool_call(
         &self,
         context: ToolSetContext,
@@ -228,22 +235,35 @@ where
         tool_name: &str,
         json: &serde_json::Value,
     ) -> Result<ToolResult<UserToolResponse<serde_json::Value>>, ToolSetError> {
-        let tool = self
-            .user_tools
-            .get(tool_name)
-            .ok_or_else(|| ToolSetError::NotFound(tool_name.to_owned()))
-            .and_then(|tool| {
-                tool.try_deserialize(json)
-                    .map_err(ToolSetError::Deserialization)
-            })?;
-        Ok(tool
-            .call(context, request_context)
-            .await
-            .map(UserToolResponse::UserAction))
+        let telemetry = request_context
+            .genai_telemetry
+            .then(|| ToolCallSpan::begin(tool_name, json));
+        let span = telemetry
+            .as_ref()
+            .map_or_else(tracing::Span::none, |telemetry| telemetry.span().clone());
+        let result: Result<ToolResult<serde_json::Value>, ToolSetError> = async {
+            let tool = self
+                .user_tools
+                .get(tool_name)
+                .ok_or_else(|| ToolSetError::NotFound(tool_name.to_owned()))
+                .and_then(|tool| {
+                    tool.try_deserialize(json)
+                        .map_err(ToolSetError::Deserialization)
+                })?;
+            Ok(tool.call(context, request_context).await)
+        }
+        .instrument(span)
+        .await;
+        // Recorded before the API wrapper goes on, so the span carries the
+        // tool's own output rather than `{"UserAction": ...}`.
+        if let Some(telemetry) = &telemetry {
+            telemetry.finish(&result);
+        }
+        result.map(|result| result.map(UserToolResponse::UserAction))
     }
 
     /// check if json + name matches a known tool in the toolset
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all, fields(tool_name = %tool_name))]
     pub fn is_valid_tool(&self, tool_name: &str, json: &serde_json::Value) -> bool {
         let Some(tool) = self
             .user_tools

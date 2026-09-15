@@ -61,7 +61,9 @@ describe('PropertyPill', () => {
     expect(pill.classList).toContain('border-transparent');
     expect(pill.classList).toContain('bg-transparent');
     expect(pill.classList).toContain('rounded-full');
-    expect(pill.classList).toContain('not-disabled:hover:overlay-hover');
+    expect(pill.classList).toContain(
+      'not-touch:not-disabled:hover:overlay-hover'
+    );
 
     await fireEvent.click(pill);
     expect(onEdit).toHaveBeenCalledOnce();
@@ -75,7 +77,9 @@ describe('PropertyPill', () => {
     ));
 
     const pill = screen.getByRole('button', { name: 'Status' });
-    expect(pill.classList).not.toContain('not-disabled:hover:overlay-hover');
+    expect(pill.classList).not.toContain(
+      'not-touch:not-disabled:hover:overlay-hover'
+    );
     expect(pill.getAttribute('aria-disabled')).toBe('true');
     expect(pill.dataset.readonly).toBe('');
   });

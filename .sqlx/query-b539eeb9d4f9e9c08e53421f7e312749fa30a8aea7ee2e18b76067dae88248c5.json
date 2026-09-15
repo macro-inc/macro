@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity (id, entity_type, owner_type, owner_id, created_at, updated_at)\n        VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, now()), COALESCE($6::timestamptz, now()))\n        ON CONFLICT (id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "entity_owner_type",
+            "kind": {
+              "Enum": [
+                "user",
+                "bot",
+                "team"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b539eeb9d4f9e9c08e53421f7e312749fa30a8aea7ee2e18b76067dae88248c5"
+}

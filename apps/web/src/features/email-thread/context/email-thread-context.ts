@@ -18,6 +18,9 @@ export interface ArchiveThreadOptions {
   silent?: boolean;
   onUndoHandle?: (handle: ThreadUndoHandle) => void;
   nextEntityId?: string;
+  /** Disable automatic list navigation when the host handles it. */
+  navigate?: boolean;
+  navigateBack?: () => void;
 }
 
 /** Domain snapshots and request progress; query keys and cursors stay in the adapter. */
@@ -59,8 +62,17 @@ export interface EmailThreadContext {
   ): EmailThreadCommands;
 }
 
+export interface EmailThreadListNavigation {
+  canPrevious: Accessor<boolean>;
+  canNext: Accessor<boolean>;
+  previous(): void;
+  next(): void;
+  markDone(archiveThread: EmailThreadCommands['archiveThread']): void;
+}
+
 /** Host behavior is optional. A thread can render without a block or router. */
 export interface EmailThreadHost {
+  listNavigation?: EmailThreadListNavigation;
   isActive?: Accessor<boolean>;
   registerKeyboard?: (handlers: EmailThreadKeyboardHandlers) => void;
   targetMessageId?: Accessor<string | undefined>;

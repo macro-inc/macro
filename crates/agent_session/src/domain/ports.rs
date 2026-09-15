@@ -4,7 +4,7 @@ use super::error::{AgentSessionError, Result};
 use super::model::*;
 use super::session::StopReason;
 use crate::domain::events::AgentSessionLifecycleEvent;
-use agent_client_protocol::schema::v1::SessionId;
+use agent_client_protocol::schema::v1::{McpServer, SessionId};
 use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::ports::Transport;
@@ -12,6 +12,7 @@ use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessa
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use std::num::NonZeroUsize;
 
 /// A bidirectional connection to an agent runtime.
 pub trait AgentConnector:
@@ -45,6 +46,9 @@ pub struct BotFacts {
     /// Runtime profile for a persisted agent. Fixed system bots have no
     /// persisted profile and use deployment defaults instead.
     pub managed_profile: Option<ManagedAgentProfile>,
+    /// Whether the persona is limited to selected channels. Channel co-members
+    /// may start a session as it, matching `@` mentions in those channels.
+    pub selected_channels: bool,
 }
 
 /// Runtime settings snapshotted when a managed persona opens a session.
@@ -81,6 +85,13 @@ pub trait BotDirectory: Send + Sync + 'static {
         user: MacroUserIdStr<'static>,
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Whether the user and bot share at least one active channel.
+    fn user_shares_channel_with_bot(
+        &self,
+        user: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Why a user cannot select a bot as a managed session persona.
@@ -101,9 +112,10 @@ pub enum ManagedPersonaError {
 /// Resolve and authorize a managed persona for a user.
 ///
 /// Ownership policy lives in the domain: private personas belong to their
-/// owner, team personas are available to team members, and managed system
-/// bots (the deployment's own coders) are available to everyone, exactly as
-/// they are when mentioned in a channel.
+/// owner, team personas are available to team members, selected-channel
+/// personas are available to anyone who can `@` them in a shared channel,
+/// and managed system bots (the deployment's own coders) are available to
+/// everyone, exactly as they are when mentioned in a channel.
 pub async fn managed_persona_for_user<Bots: BotDirectory>(
     bots: &Bots,
     bot_id: BotId,
@@ -126,12 +138,22 @@ pub async fn managed_persona_for_user<Bots: BotDirectory>(
             profile: None,
         });
     }
-    let authorized = if let Some(owner) = facts.owner_user_id {
+    let authorized = if let Some(owner) = &facts.owner_user_id {
         owner.as_ref() == user.as_ref()
+            || (facts.selected_channels
+                && bots
+                    .user_shares_channel_with_bot(user.clone(), bot_id)
+                    .await
+                    .map_err(ManagedPersonaError::Lookup)?)
     } else if let Some(team_id) = facts.owner_team_id {
         bots.user_has_team(user.clone(), team_id)
             .await
             .map_err(ManagedPersonaError::Lookup)?
+            || (facts.selected_channels
+                && bots
+                    .user_shares_channel_with_bot(user.clone(), bot_id)
+                    .await
+                    .map_err(ManagedPersonaError::Lookup)?)
     } else {
         false
     };
@@ -271,6 +293,13 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         ids: &[AgentSessionId],
     ) -> impl Future<Output = Result<Vec<AgentSessionPreview>>> + Send;
 
+    /// Replace the session credential when attaching an external runtime.
+    fn set_egress_token_hash(
+        &self,
+        id: AgentSessionId,
+        hash: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// The session a sandbox's egress token stands for, if any still does.
     ///
     /// `egress_token_hash` is the SHA-256 hex of the token as presented, never
@@ -311,6 +340,13 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
 
+    /// The owner's newest sessions, newest first, at most `limit`.
+    fn recent_for_owner<'owner>(
+        &self,
+        owner: &MacroUserIdStr<'owner>,
+        limit: NonZeroUsize,
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
+
     /// The agent behind a session, for rendering the messages it sent.
     ///
     /// A bot that has been deleted still has messages in the channel, so this
@@ -323,6 +359,20 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         &self,
         id: AgentSessionId,
         acp_session_id: SessionId,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist the repository the session works on, or clear it. Idempotent.
+    ///
+    /// Written after the session is open, because for some runtimes the
+    /// repository is not known at creation: a Cursor session's repository
+    /// follows from what its first prompt asks for. The row is authoritative
+    /// once written - the egress proxy pins the sandbox's git traffic to it -
+    /// so `None` is a real answer meaning "this session works on no
+    /// repository", not "leave whatever is there".
+    fn set_repo_url(
+        &self,
+        id: AgentSessionId,
+        repo_url: Option<String>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Persist the model the session is running on. Idempotent.
@@ -509,6 +559,57 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send;
 }
 
+/// One tool a session's agent may call, as the MCP server offering it
+/// describes it - the same name, description and parameter schema the agent
+/// itself is shown.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionToolDefinition {
+    /// The name the agent calls the tool by, exactly as the server registers
+    /// it for this session (an MCP tool arrives as `mcp__<server>__<tool>`).
+    pub name: String,
+    /// The description the agent chooses the tool on.
+    pub description: String,
+    /// The JSON schema of the tool's arguments.
+    pub parameters: serde_json::Value,
+}
+
+/// Lists the tools a session's MCP servers advertise, so the session's
+/// telemetry can say what the agent had to choose from
+/// (`gen_ai.tool.definitions`).
+///
+/// Best-effort by contract: a listing that fails, or takes too long, costs
+/// a span its tool definitions and nothing else. The one production
+/// implementation dials the same egress-proxy URLs the agent is handed, in
+/// process, so what it lists is what the agent sees - Macro's own tools and
+/// the owner's connected apps alike. A harness's built-in tools (its shell,
+/// its file editor) are not on any server and are not listed; the
+/// convention does not require them.
+///
+/// Object-safe on purpose: the session service stores it erased so wiring it
+/// is not another type parameter.
+pub trait SessionToolCatalog: Send + Sync + 'static {
+    /// Every tool the given servers offer. Empty when none do, or when the
+    /// listing failed.
+    fn tool_definitions(
+        &self,
+        servers: Vec<McpServer>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Vec<SessionToolDefinition>> + Send + '_>>;
+}
+
+/// A [`SessionToolCatalog`] that lists nothing: tests, offline tooling, and
+/// deployments with no in-process MCP client.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoOpToolCatalog;
+
+impl SessionToolCatalog for NoOpToolCatalog {
+    fn tool_definitions(
+        &self,
+        _servers: Vec<McpServer>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Vec<SessionToolDefinition>> + Send + '_>> {
+        Box::pin(async { Vec::new() })
+    }
+}
+
 /// One frame appended: its durable identity, and what the fold made of it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Appended {
@@ -563,6 +664,14 @@ pub trait AgentSessionRealtime {
         &self,
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
+    /// Tell viewers to refetch changed session metadata.
+    fn publish_updated(
+        &self,
+        _session: AgentSessionId,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
 
     /// Publish a user-facing name change to the session's viewers.
     fn publish_renamed(
@@ -866,3 +975,6 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         id: AgentSessionId,
     ) -> impl Future<Output = Result<Option<harness_id::HarnessId>>> + Send;
 }
+
+#[cfg(test)]
+mod test;

@@ -98,6 +98,18 @@ impl RepoUrl {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// `owner/name` for a github.com url, the form a person recognizes.
+    ///
+    /// `None` for anything else — a self-hosted host, or a github.com url
+    /// with more or fewer path segments than a repository has — so callers
+    /// fall back to printing the whole url rather than a guessed slug.
+    #[must_use]
+    pub fn github_owner_and_name(&self) -> Option<&str> {
+        let path = self.0.strip_prefix("https://github.com/")?;
+        let (owner, name) = path.split_once('/')?;
+        (!owner.is_empty() && !name.is_empty() && !name.contains('/')).then_some(path)
+    }
 }
 
 impl std::fmt::Display for RepoUrl {

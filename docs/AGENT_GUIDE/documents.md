@@ -21,6 +21,10 @@ Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote)
 text and inline mention chips (tasks, docs, channels, skills, …) by the title
 shown on the chip.
 
+On touch devices, the text-selection menu (Copy, Cut, Comment, Share, and other
+available actions) appears above the floating header, comment input, and bottom
+dock. It stays anchored to the selection while the document scrolls.
+
 On a touch device, swipe a list item right to indent one level (Apple Notes
 style) or left to outdent. Nested children move with the parent. The first
 item can indent too, even in a single-item list. Vertical scrolling and taps
@@ -51,11 +55,49 @@ unavailable label. Mounted references refresh every 30 seconds while the tab is
 active to update titles and check access.
 
 Hover a document reference chip to open its preview without navigating. With
-`ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
+the preview open, the compact header shows a tinted icon, title, and author/time
+byline. Click the title to open the document; the Reference actions ellipsis menu contains copy
+link, split, embed/collapse, AI, and delete actions when applicable. The preview
+stays open while this menu is active. Images use an inset frame and task chips
+appear below the header. Long titles wrap in place without a full-name tooltip.
+
+With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemPreviews`
 batch, including task properties and viewer permission, without another fetch.
 Explicit refreshes may revalidate that batch, but requests must settle while the
 pointer stays over the same reference; cache updates must not cause a continuous
 fetch cascade.
+
+## Embedded document cards
+
+Document cards use a compact icon/title row and an actions menu. Full previews
+sit inside an inset surface; the author's display name and update time appear
+under the title as a byline. The plain 1rem icon sits in a column to the left
+of the title, aligned with its first line. Wrapped title lines, the byline,
+and task chips share the title's left edge. Full previews use the card's full
+content width with equal left and right insets. Title and byline share a text
+stack with a consistent 4px gap and 20px title leading, including when the title wraps.
+Titles and bylines use text-sm, differentiated by semibold and regular weight;
+smaller details use text-xs.
+Item.Icon provides the plain first-line-aligned icon slot. The small ellipsis button
+sits at the top right. Full embeds have a 320px minimum
+card height and a smaller rounded inset frame.
+The document-preview overlay uses the same plain icon, title/byline stack,
+small actions button, and task status control; image previews keep equal side insets.
+Metadata-only references omit the preview. Tasks replace the type icon with an
+icon-only status control; click it to change status when you have edit access.
+Priority and assignee chips remain below, without a duplicate status chip.
+Status and detail slots share one TaskPropertiesPreviewProvider per card:
+GraphQL preview data is reused, and REST fallback property/access queries are
+owned once, not separately by each slot. Non-task cards do not load task properties.
+Use the title to open the referenced document and the
+actions menu to copy its link, convert it to an inline mention, or delete the card.
+Title navigation preserves the reference's block parameters, including message,
+thread, annotation, and document locations.
+Click the card frame to select its editor node; controls and embedded content
+handle their own clicks. Full embeds remain vertically resizable and scroll
+inside the inset preview. When verifying, check a canvas embed, a metadata-only
+reference, and an editable task, including resize, menu actions, and keyboard
+access to the title and property controls.
 
 ## AI edit
 
@@ -64,17 +106,39 @@ fetch cascade.
    press Enter (or click `Send`).
 3. While running, the button row shows an author chip (e.g. `Wolf (AI)`) and a `Stop` button
    (a11y text `Stop AI edit`). Edits stream directly into the document — there is no
-   accept/reject step.
+   accept/reject step. The editor can insert the same `@` mention chips a person can:
+   dates/times, people, documents, channels, agent sessions (including the expanded
+   Magic Chip card), and the other chip types.
 4. Completion signal: the `Stop` button disappears. Poll for that with `evaluate_script`;
    do not rely on `wait_for` text.
 
 ## Comments (Discussion)
 
-Below the editor: `Discussion` section with a `Leave a comment...` contenteditable, buttons
+On desktop, below the editor: `Discussion` section with a `Leave a comment...` contenteditable, buttons
 `Attach images`, `Format`, and `Send comment` (disabled until text exists). Click the
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
-user.
+user. On mobile, the new-comment composer is docked above the navigation bar,
+replacing Ask AI and New when commenting is available in documents and tasks.
+When the comment composer is unavailable, the default Ask AI row appears instead.
+Tap `Leave a comment...`
+to expand the channel-style input; use Send comment to submit (Enter inserts a
+newline on mobile). Submitting clears and unfocuses the mobile input, returning
+it to its compact state and dismissing the keyboard. The compact input's plus
+opens the native photo library in the iOS app, with a file-picker fallback when
+unavailable; browsers use the file picker. Cancelling adds no images.
+While the main document editor is focused with the virtual keyboard
+open, the floating comment input is hidden; dismissing the keyboard or leaving
+the document editor restores it with any unsent draft intact. Comments remain in the
+Discussion section, and collapsing that section does not hide the docked composer.
+On touch devices, the Discussion section is hidden until it contains a comment;
+the floating **Leave a comment...** input remains available. If the discussion
+becomes empty again, the section disappears. Desktop keeps the empty section
+and inline input.
+
+Comments anchored to selected text open in a floating margin card on desktop and
+a `Comments` drawer on touch devices. New comments, replies, and edits use the
+composer surface on desktop; touch inputs use the drawer's background directly.
 
 ## Side panel
 
@@ -91,7 +155,9 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   oldest fetched entry (usually `created this`) pinned last; the toggle flips to `Show less`
   once expanded.
 - Header: `Share`, `Copy Share Link`, overflow menu — use `Share` to inspect or change the
-  doc's visibility/permissions.
+  doc's visibility/permissions. Documents also have a `Team access` dropdown (None / View /
+  Comment / Edit) for sharing directly with the owner's team. That is independent of the
+  team-scoped link control.
 
 ## Known failure: "expected instance of LoroDoc"
 

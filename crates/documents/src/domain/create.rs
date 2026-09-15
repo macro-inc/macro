@@ -5,6 +5,9 @@
 //! call sites should choose the lifecycle they need (`create_markdown_text` or
 //! `create_text_file`).
 
+#[cfg(test)]
+mod test;
+
 use activity::Attribution;
 use anyhow::Context;
 use base64::Engine;
@@ -20,6 +23,7 @@ use crate::domain::ports::create::{
     DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService,
 };
 use crate::domain::ports::markdown::MarkdownInitializationPort;
+use crate::domain::ports::mentions::DocumentMentionTrackingPort;
 use crate::domain::response::CreateDocumentResponseData;
 
 /// Common metadata for a document that has not been created yet.
@@ -66,6 +70,7 @@ impl NewDocumentMetadata {
             file_type: kind.file_type,
             project_id: self.project_id,
             team_id: kind.team_id,
+            share_with_team: kind.share_with_team,
             created_at: self.created_at,
             sub_type: kind.subtype.sub_type(),
             skip_history: self.skip_history,
@@ -122,6 +127,7 @@ struct RepoDocumentKind {
     sha: String,
     subtype: RepoDocumentSubtype,
     team_id: Option<uuid::Uuid>,
+    share_with_team: bool,
 }
 
 enum RepoDocumentSubtype {
@@ -154,7 +160,8 @@ pub enum MarkdownSubtype {
     Task {
         /// Optional property values to assign. Defaults are used when omitted.
         property_values: Option<Vec<PropertyInput>>,
-        /// Whether to share the task with the user's team.
+        /// Consent to share the task with the creator's team. The persisted owner's
+        /// membership, not `team_id`, decides which team receives access.
         share_with_team: bool,
         /// Team to assign the task number within. If omitted, it is inferred only
         /// when the creator belongs to exactly one team.
@@ -169,12 +176,14 @@ pub enum MarkdownSubtype {
 }
 
 impl MarkdownSubtype {
-    /// Convert a simple task flag into the default markdown subtype.
+    /// Convert a simple task flag into the default markdown subtype. A task is
+    /// shared with the team only when the caller resolved one; teamless creators
+    /// get a private task instead of a failed create.
     pub fn from_task_flag(is_task: bool, team_id: Option<uuid::Uuid>) -> Self {
         if is_task {
             Self::Task {
                 property_values: None,
-                share_with_team: true,
+                share_with_team: team_id.is_some(),
                 team_id,
             }
         } else {
@@ -460,32 +469,39 @@ impl CreatedDocument {
 
 /// Service for creating backend-owned document content.
 #[derive(Clone)]
-pub struct DocumentCreator<Svc, MarkdownInit, BytesUpload> {
+pub struct DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker> {
     document_service: Svc,
     markdown_initializer: MarkdownInit,
     bytes_uploader: BytesUpload,
+    mention_tracker: MentionTracker,
 }
 
-impl<Svc, MarkdownInit, BytesUpload> DocumentCreator<Svc, MarkdownInit, BytesUpload> {
+impl<Svc, MarkdownInit, BytesUpload, MentionTracker>
+    DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>
+{
     /// Construct a document creator.
     pub fn new(
         document_service: Svc,
         markdown_initializer: MarkdownInit,
         bytes_uploader: BytesUpload,
+        mention_tracker: MentionTracker,
     ) -> Self {
         Self {
             document_service,
             markdown_initializer,
             bytes_uploader,
+            mention_tracker,
         }
     }
 }
 
-impl<Svc, MarkdownInit, BytesUpload> DocumentCreator<Svc, MarkdownInit, BytesUpload>
+impl<Svc, MarkdownInit, BytesUpload, MentionTracker>
+    DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>
 where
     Svc: DocumentCreationService,
     MarkdownInit: MarkdownInitializationPort,
     BytesUpload: DocumentBytesUploadPort,
+    MentionTracker: DocumentMentionTrackingPort,
 {
     /// Create a plaintext document using the lifecycle implied by its file type.
     #[tracing::instrument(skip(self, document), err)]
@@ -567,9 +583,11 @@ where
                     MarkdownSubtype::Skill => RepoDocumentSubtype::MarkdownSkill,
                 },
                 team_id,
+                share_with_team: task.as_ref().is_some_and(|(_, share, _)| *share),
             },
         );
         let attribution = args.resolved_attribution();
+        let mention_user_id = user_id.clone();
 
         let mut response = self
             .document_service
@@ -626,6 +644,14 @@ where
             }
         };
 
+        if let Err(error) = self
+            .mention_tracker
+            .track_document_mentions(&document_id, &mention_user_id, &markdown)
+            .await
+        {
+            tracing::error!(error=?error, document_id=%document_id, "unable to track document mentions");
+        }
+
         response.document_response.document_metadata.content =
             DocumentContent::ready(DocumentContentLocation::SyncService);
 
@@ -654,6 +680,7 @@ where
                 sha: hashes.hex,
                 subtype: RepoDocumentSubtype::Regular,
                 team_id: None,
+                share_with_team: false,
             },
         );
 
@@ -756,6 +783,7 @@ mod tests {
             sha: "sha".to_string(),
             subtype: RepoDocumentSubtype::Regular,
             team_id: None,
+            share_with_team: false,
         }
     }
 
@@ -819,6 +847,28 @@ mod tests {
             .task_flag(true, None)
             .build()
             .unwrap();
+    }
+
+    #[test]
+    fn task_flag_shares_only_when_a_team_was_resolved() {
+        let team_id = uuid::Uuid::from_u128(7);
+        for (resolved_team, expected_share) in [(None, false), (Some(team_id), true)] {
+            let MarkdownSubtype::Task {
+                share_with_team,
+                team_id: numbering_team,
+                property_values,
+            } = MarkdownSubtype::from_task_flag(true, resolved_team)
+            else {
+                panic!("a task flag builds a task subtype");
+            };
+            assert_eq!(share_with_team, expected_share);
+            assert_eq!(numbering_team, resolved_team);
+            assert!(property_values.is_none());
+        }
+        assert!(matches!(
+            MarkdownSubtype::from_task_flag(false, Some(team_id)),
+            MarkdownSubtype::Note
+        ));
     }
 
     #[test]

@@ -37,6 +37,7 @@ export {
   CalendarMonthMenu,
   formatCalendarMonth,
 } from './components/Calendar';
+export { Card, type CardProps } from './components/Card';
 export type { ChatInputProps, ChatInputRows } from './components/ChatInput';
 export type { CheckboxProps } from './components/Checkbox';
 export {
@@ -56,6 +57,7 @@ export {
   CommandMenuShell,
   createCommandListController,
 } from './components/CommandMenuPrimitives';
+export { ComposerSurface } from './components/ComposerSurface';
 export type {
   ConfirmDialogDisplayProps,
   ConfirmDialogProps,
@@ -113,6 +115,7 @@ export type {
   InputGroupVariantProps,
 } from './components/InputGroup';
 export { InputGroup, inputGroupVariants } from './components/InputGroup';
+export { Item, type ItemProps } from './components/Item';
 export { Layer } from './components/Layer';
 export { LogoProgress } from './components/LogoProgress';
 export type { NavRowProps } from './components/NavRow';
@@ -120,6 +123,8 @@ export { NavRow } from './components/NavRow';
 export { Panel } from './components/Panel';
 export type { PillButtonProps, PillButtonTone } from './components/PillButton';
 export { PillButton } from './components/PillButton';
+export type { RadioGroupProps } from './components/RadioGroup';
+export { RadioGroup } from './components/RadioGroup';
 export { Scroll } from './components/Scroll';
 export { SegmentedControl } from './components/SegmentedControl';
 export type {
@@ -162,6 +167,7 @@ export type {
 export { Toolbar } from './components/Toolbar';
 export type { TooltipClassOptions } from './components/Tooltip';
 export { Tooltip, tooltipClasses } from './components/Tooltip';
+export { UserMessageBubble } from './components/UserMessageBubble';
 export { cn } from './utils/classname';
 export type { CtrlJKMenuNavigationOptions } from './utils/menuKeyboardNavigation';
 export {

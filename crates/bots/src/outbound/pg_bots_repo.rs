@@ -603,6 +603,19 @@ impl BotRepo for PgBotsRepo {
                 OR b.team_id IN (
                     SELECT team_id FROM team_user WHERE user_id = $1
                 )
+                OR (
+                    a.channel_scope = 'selected'
+                    AND EXISTS (
+                        SELECT 1
+                        FROM comms_channel_participants bot_p
+                        INNER JOIN comms_channel_participants user_p
+                          ON user_p.channel_id = bot_p.channel_id
+                         AND user_p.user_id = $1
+                         AND user_p.left_at IS NULL
+                        WHERE bot_p.user_id = 'bot|' || b.id::text
+                          AND bot_p.left_at IS NULL
+                    )
+                )
               )
             ORDER BY b.created_at ASC, b.id ASC
             "#,
@@ -1042,6 +1055,34 @@ impl BotRepo for PgBotsRepo {
         .context("failed to check bot channel membership")?;
 
         Ok(is_active)
+    }
+
+    async fn user_shares_channel_with_bot(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> Result<bool, Self::Err> {
+        let shares = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM comms_channel_participants bot_p
+                INNER JOIN comms_channel_participants user_p
+                  ON user_p.channel_id = bot_p.channel_id
+                 AND user_p.user_id = $2
+                 AND user_p.left_at IS NULL
+                WHERE bot_p.user_id = $1
+                  AND bot_p.left_at IS NULL
+            ) AS "shares!"
+            "#,
+            principal_id(bot_id),
+            caller.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to check whether the user shares a channel with the bot")?;
+
+        Ok(shares)
     }
 
     async fn user_can_administer_team(

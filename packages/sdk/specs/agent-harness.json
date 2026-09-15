@@ -1330,6 +1330,10 @@
             "type": "string",
             "description": "The user who created and owns the session."
           },
+          "pullRequestUrl": {
+            "type": ["string", "null"],
+            "description": "The session's linked pull request."
+          },
           "repoUrl": {
             "type": ["string", "null"],
             "description": "The repository the session works with, when one was stated."
@@ -1408,7 +1412,7 @@
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns or may use through team membership;\nomitting it uses the deployment's default coding persona. On an\nexternal request, bot callers may omit it (their own identity is used)\nand must not name another bot; user callers must supply a bot they own."
+            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona. On an external request, bot callers may omit it\n(their own identity is used) and must not name another bot; user callers\nmust supply a bot they own."
           },
           "instructions": {
             "type": ["string", "null"],
@@ -1753,11 +1757,15 @@
       "SessionBot": {
         "type": "object",
         "description": "The agent behind a session, as much of it as rendering a message needs.",
-        "required": ["id", "name"],
+        "required": ["id", "name", "handle"],
         "properties": {
           "avatarUrl": {
             "type": ["string", "null"],
             "description": "Avatar, when it has one."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable `@` handle, without a leading `@`."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",

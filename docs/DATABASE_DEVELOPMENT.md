@@ -35,6 +35,21 @@ On **Cursor Cloud**, installation already prepares the database and test envs.
 Start the infrastructure with `bash .cursor/infra.sh`; see [Cursor Cloud](CURSOR_CLOUD.md).
 Apply any new migrations before testing.
 
+## Safe database schema changes
+
+**Database migrations deploy before service changes.** Every migration must remain
+compatible with the service code currently deployed, not just the code in its PR.
+
+- **Never drop a column in the same PR that removes its usage.** First remove all
+  reads/writes in a service-only PR and keep the column in the schema. After that
+  change is fully deployed to all consumers, drop the column in a separate PR.
+  Merging the first PR is not enough; confirm deployment before removal.
+- Apply the same staged approach to table removals, column renames, and other
+  incompatible changes: add compatible schema, migrate service usage, then remove
+  obsolete schema in a later PR after deployment.
+- New columns and constraints must also support currently deployed code (for
+  example, allow omitted values via nullability or defaults until writers migrate).
+
 ## Change queries or schema
 
 1. **If the schema changes, generate a migration with SQLx**, never by hand.

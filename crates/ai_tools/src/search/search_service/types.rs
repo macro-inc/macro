@@ -172,6 +172,7 @@ fn item_properties(item: &UnifiedSearchResponseItem) -> Option<&Vec<SoupProperty
         UnifiedSearchResponseItem::CalendarEvent(i) => i.properties.as_ref(),
         UnifiedSearchResponseItem::Channel(_)
         | UnifiedSearchResponseItem::ChannelMessage(_)
+        | UnifiedSearchResponseItem::AgentSession(_)
         | UnifiedSearchResponseItem::Company(_) => None,
     }
 }
@@ -186,6 +187,7 @@ fn item_properties_mut(item: &mut UnifiedSearchResponseItem) -> Option<&mut Vec<
         UnifiedSearchResponseItem::CalendarEvent(i) => i.properties.as_mut(),
         UnifiedSearchResponseItem::Channel(_)
         | UnifiedSearchResponseItem::ChannelMessage(_)
+        | UnifiedSearchResponseItem::AgentSession(_)
         | UnifiedSearchResponseItem::Company(_) => None,
     }
 }

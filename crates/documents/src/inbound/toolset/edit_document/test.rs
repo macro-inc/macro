@@ -10,7 +10,7 @@ use crate::domain::models::{
     ImportEmailAttachmentRepoArgs, LocationQueryParams, TaskBranchName,
 };
 use crate::domain::permission_token::decode_permission_token;
-use crate::domain::ports::editing::{EditResult, EditingWorkerService};
+use crate::domain::ports::editing::{EditMode, EditResult, EditingWorkerService};
 use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
 };
@@ -394,6 +394,7 @@ impl EntityAccessService for FakeEntityAccessService {
 #[derive(Clone, Default)]
 struct FakeEditingWorker {
     edit_calls: Arc<Mutex<Vec<String>>>,
+    modes: Arc<Mutex<Vec<EditMode>>>,
     tokens: Arc<Mutex<Vec<DocumentPermissionToken>>>,
 }
 
@@ -403,11 +404,16 @@ impl EditingWorkerService for FakeEditingWorker {
         document_id: &str,
         document_token: &DocumentPermissionToken,
         _instructions: &str,
+        mode: EditMode,
     ) -> anyhow::Result<EditResult> {
         self.edit_calls
             .lock()
             .expect("edit calls lock poisoned")
             .push(document_id.to_string());
+        self.modes
+            .lock()
+            .expect("edit modes lock poisoned")
+            .push(mode);
         self.tokens
             .lock()
             .expect("edit tokens lock poisoned")
@@ -464,10 +470,19 @@ async fn call_edit_document_as(
     file_type: &str,
     actor: Option<BotId>,
 ) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
+    call_edit_document_with(file_type, actor, false).await
+}
+
+async fn call_edit_document_with(
+    file_type: &str,
+    actor: Option<BotId>,
+    fast: bool,
+) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
     let editing = FakeEditingWorker::default();
     let tool = EditDocument {
         document_id: TEST_DOCUMENT_ID.to_string(),
         instructions: "tidy up the imports".to_string(),
+        fast,
     };
 
     let mut context = tool_context(FakeDocumentService::new(file_type), editing.clone());
@@ -522,6 +537,32 @@ async fn rejects_non_markdown_document_without_calling_the_worker() {
 /// consulted the content location. Markdown uploaded to S3 is only initialized
 /// into sync-service when its upload finalizes, and a location check during
 /// that window would reject an edit the sync handshake is designed to serve.
+#[tokio::test]
+async fn fast_flag_selects_the_fast_pipeline() {
+    let (_, editing) = call_edit_document_with("md", None, true).await;
+    assert_eq!(
+        *editing.modes.lock().expect("edit modes lock poisoned"),
+        vec![EditMode::Fast]
+    );
+
+    let (_, editing) = call_edit_document("md").await;
+    assert_eq!(
+        *editing.modes.lock().expect("edit modes lock poisoned"),
+        vec![EditMode::Supervised]
+    );
+}
+
+/// `fast` is optional on the wire so existing callers keep working.
+#[test]
+fn fast_defaults_to_false() {
+    let tool: EditDocument = serde_json::from_value(serde_json::json!({
+        "document_id": TEST_DOCUMENT_ID,
+        "instructions": "x",
+    }))
+    .expect("fast should be optional");
+    assert!(!tool.fast);
+}
+
 #[tokio::test]
 async fn allows_markdown_document() {
     let (result, editing) = call_edit_document("md").await;

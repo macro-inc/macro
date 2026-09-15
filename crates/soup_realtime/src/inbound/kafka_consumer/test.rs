@@ -8,7 +8,10 @@ use channels::domain::{
     },
     models::{ChannelSender, ChannelType, SimpleMention},
 };
-use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdatedMetadata};
+use chat::domain::events::{
+    ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
+    ChatUpdatedMetadata,
+};
 use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
@@ -294,6 +297,25 @@ fn deleted_chat_messages_do_not_change_soup() {
     });
 
     assert!(patches_from_chat_event(&event).is_empty());
+}
+
+#[test]
+fn sent_chat_messages_refresh_the_soup_model() {
+    for role in [ChatMessageRole::User, ChatMessageRole::Assistant] {
+        let event = ChatTopicEvent::MessageSent(ChatMessageSentMetadata {
+            chat_id: DOCUMENT_ID.to_string(),
+            message_id: Uuid::now_v7().to_string(),
+            role,
+            model: "openai/gpt-5.6".to_string(),
+            actor_user_id: None,
+            attachment_count: 0,
+        });
+        let patches = patches_from_chat_event(&event);
+        assert_eq!(patches.len(), 1);
+        assert!(matches!(patches[0].patch, Patch::Updated(_)));
+        assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Chat);
+        assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
+    }
 }
 
 #[test]

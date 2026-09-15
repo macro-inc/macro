@@ -55,6 +55,7 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match, P } from 'ts-pattern';
+import { mapAgentSessionSearchResult } from './agent-session-search';
 
 type InnerSearchResult =
   | DocumentSearchResult
@@ -315,6 +316,8 @@ export const useSearchResponseItemMapper = () => {
     searchQuery: string
   ): (WithSearch<EntityData> | undefined)[] => {
     switch (result.type) {
+      case 'agentSession':
+        return [mapAgentSessionSearchResult(result)];
       case 'company': {
         const primaryDomain = result.domains[0]?.domain;
         const nameHighlight = result.nameHighlighted

@@ -7,10 +7,12 @@
 import type { UpdateSharePermissionRequestV2ChannelSharePermissions } from './updateSharePermissionRequestV2ChannelSharePermissions';
 import type { UpdateSharePermissionRequestV2LinkShare } from './updateSharePermissionRequestV2LinkShare';
 import type { UpdateSharePermissionRequestV2LinkShareAccessLevel } from './updateSharePermissionRequestV2LinkShareAccessLevel';
+import type { UpdateSharePermissionRequestV2TeamShareAccessLevel } from './updateSharePermissionRequestV2TeamShareAccessLevel';
 
 export interface UpdateSharePermissionRequestV2 {
   /** Any channel share permissions to be created/updated/removed */
   channelSharePermissions?: UpdateSharePermissionRequestV2ChannelSharePermissions;
   linkShare?: UpdateSharePermissionRequestV2LinkShare;
   linkShareAccessLevel?: UpdateSharePermissionRequestV2LinkShareAccessLevel;
+  teamShareAccessLevel?: UpdateSharePermissionRequestV2TeamShareAccessLevel;
 }

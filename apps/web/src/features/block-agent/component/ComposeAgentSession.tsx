@@ -1,6 +1,10 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useCanAutofocusSplitContent,
+  useSplitPanelOrThrow,
+} from '@components/app/split-layout/layoutUtils';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
+import { toast } from '@core/component/Toast/Toast';
 import {
   CURSOR_BOT_HANDLE,
   CURSOR_BOT_ID,
@@ -13,6 +17,7 @@ import {
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { idToDisplayName } from '@core/user/util';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
@@ -30,14 +35,7 @@ import {
   useCursorModelsQuery,
 } from '@queries/auth/cursor-api-key';
 import { useNavigate } from '@solidjs/router';
-import {
-  Button,
-  badgeTriggerClasses,
-  cn,
-  Dropdown,
-  SendButton,
-  Surface,
-} from '@ui';
+import { Button, badgeTriggerClasses, cn, Dropdown, Surface } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -58,6 +56,8 @@ import {
   personaDefaultLabel,
   shortlistModelOptions,
 } from './compose-agent-session-options';
+import { createSessionStartMode } from './create-session-start-mode';
+import { SessionStartToggle } from './SessionStartToggle';
 
 /**
  * Macro's own agent: the deployment's managed default. Sent without a
@@ -115,16 +115,25 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   const controlMutation = useAgentSessionControlMutation();
   const userId = useUserId();
   const recentAgents = createRecentAgentSelections(userId());
+  const startMode = createSessionStartMode(userId());
   const [prompt, setPrompt] = createSignal('');
   const [personaId, setPersonaId] = createSignal(MACRO_PERSONA_ID);
   const [modelOverride, setModelOverride] = createSignal('');
   const [submitting, setSubmitting] = createSignal(false);
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
+  const [submitMode, setSubmitMode] = createSignal<
+    'live' | 'background' | undefined
+  >();
   let appliedModel: string | undefined;
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
+  let promptRef: HTMLTextAreaElement | undefined;
+  const canAutofocusSplitContent = useCanAutofocusSplitContent();
+  const shouldAutofocusPrompt = () =>
+    canAutofocusSplitContent && !isTouchDevice();
 
-  // The two first-party agents lead, then the user's own personas.
+  // First-party agents lead, then saved personas the caller can start —
+  // their own, team-shared, and selected-channel personas they can `@`.
   const personas = createMemo<PersonaOption[]>(() => [
     {
       id: MACRO_PERSONA_ID,
@@ -244,6 +253,8 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   const createSession = async () => {
     const persona = selectedPersona();
     if (submitting() || !persona || persona.unavailableReason) return;
+    const background = startMode.effective() === 'background';
+    setSubmitMode(background ? 'background' : 'live');
     setSubmitting(true);
     setError(undefined);
     const model = modelOverride();
@@ -285,6 +296,27 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
       return;
     } finally {
       setSubmitting(false);
+      setSubmitMode(undefined);
+    }
+    if (background) {
+      close();
+      toast.success('Session started in background', {
+        duration: 8000,
+        actions: [
+          {
+            label: 'Open session',
+            onClick: () =>
+              openWithSplit(
+                { type: 'agent', id },
+                {
+                  referredFrom: 'launcher',
+                  preferNewSplit: props.preferNewSplit,
+                }
+              ),
+          },
+        ],
+      });
+      return;
     }
     openSession(id);
   };
@@ -294,11 +326,18 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
     true
   );
   onMount(() => {
+    splitPanel.handle.setDisplayName('New agent session');
     const container = containerRef();
     if (container) attachHotkeys(container);
+    if (!shouldAutofocusPrompt()) return;
+    const focusPrompt = () => promptRef?.focus({ preventScroll: true });
+    focusPrompt();
+    // Dialog focus-on-open can run after this mount; reclaim the prompt.
+    queueMicrotask(focusPrompt);
+    requestAnimationFrame(focusPrompt);
   });
   registerHotkey({
-    hotkey: 'cmd+enter',
+    hotkey: ['enter', 'cmd+enter'],
     scopeId: hotkeyScope,
     description: 'Create agent session',
     keyDownHandler: () => {
@@ -367,8 +406,12 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
         solid
       >
         <textarea
+          ref={(el) => {
+            promptRef = el;
+          }}
           rows={3}
           aria-label="Task for the agent"
+          autofocus={shouldAutofocusPrompt()}
           class="ph-no-capture min-h-20 w-full flex-1 resize-none bg-transparent px-4 pt-4 pb-2 text-sm/6 text-ink outline-none placeholder:text-ink-placeholder touch:text-base"
           placeholder={`What would you like ${selectedPersona()?.name ?? MACRO_AGENT_NAME} to work on?`}
           value={prompt()}
@@ -421,16 +464,14 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
             </Suspense>
           </div>
 
-          <SendButton
-            type="button"
-            aria-label={
-              submitting() ? 'Starting…' : error() ? 'Retry' : 'Start session'
-            }
-            tooltip={error() ? 'Retry' : 'Start session'}
-            shortcut="cmd+enter"
+          <SessionStartToggle
+            mode={submitMode() ?? startMode.effective()}
+            committed={startMode.committed()}
             pending={submitting()}
+            error={!!error()}
             disabled={submitting() || !!selectedPersona()?.unavailableReason}
-            onClick={() => void createSession()}
+            onModeChange={startMode.setCommitted}
+            onStart={() => void createSession()}
           />
         </div>
       </Surface>

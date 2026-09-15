@@ -536,9 +536,10 @@ The crate is currently shaped for one process, one key, stdio. Four changes:
    Needs an observer port, e.g. `AgentCreated { agent_id, name, url }`, that the
    manager implements by writing the `external_agent_session` row.
 
-4. **Key and repo from arguments, not env.** The bin reads `CURSOR_API_KEY`,
-   `CURSOR_REPO`, `CURSOR_REF`, `CURSOR_MODEL` via `env_var!`. Server-side these
-   are per-session, so they must be constructor arguments.
+4. **Configuration from arguments.** The bin reads `CURSOR_API_KEY`,
+   `CURSOR_REF`, and `CURSOR_MODEL` from environment configuration and leaves
+   the repository unset. Hosted sessions supply configuration and repository
+   selection through constructor arguments.
 
 None of these change the domain or the fixtures. They are adapter-shaped.
 

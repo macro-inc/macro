@@ -101,6 +101,7 @@ fn soup_chat(id: Uuid) -> SoupItem<()> {
     SoupItem::Chat(SoupChat {
         id,
         name: format!("Chat {id}"),
+        model: Some("openai/gpt-5.6".to_string()),
         owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
         project_id: None,
         is_persistent: true,
@@ -1404,6 +1405,20 @@ async fn soup_input_rejects_initial_and_continuation_together() {
     assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.team_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn soup_returns_the_saved_chat_model() {
+    let harness = harness();
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_chat(Uuid::from_u128(91))]);
+    let response = harness.execute(
+        "{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupChat { model } } } } }"
+    ).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["user"]["soup"]["items"][0]["model"], "openai/gpt-5.6");
 }
 
 #[tokio::test]

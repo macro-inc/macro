@@ -1,8 +1,6 @@
 import { generateText, hasToolCall, type LanguageModel, stepCountIs } from 'ai';
 import type { LexicalSession } from '../ai-toolkit';
-import API_COMPLETE from '../prompts/API_COMPLETE.md';
-import CODER from '../prompts/CODER.md';
-import SHARED from '../prompts/SHARED.md';
+import { CODER_SYSTEM } from '../prompts';
 import {
   createImBlockedTool,
   createReadDocumentTool,
@@ -13,8 +11,6 @@ import { cachedPrompt, EDIT_PROVIDER_OPTIONS } from './model-options';
 import type { RunTaskDeps } from './types';
 
 export type { RunTaskDeps } from './types';
-
-export const CHILD_SYSTEM = `${SHARED}\n${CODER}\n${API_COMPLETE}`;
 
 /**
  * Default per-coder step cap.
@@ -42,7 +38,7 @@ export async function coder(
       stepCountIs(deps.maxSteps ?? DEFAULT_MAX_CODER_STEPS),
       hasToolCall('reportBlocked'),
     ],
-    system: CHILD_SYSTEM,
+    system: CODER_SYSTEM,
     // System, tools, and task/context are fixed for this coder's whole run;
     // one cache breakpoint on the opening message covers all of them.
     messages: cachedPrompt(buildPrompt(task, deps.context, deps.request)),

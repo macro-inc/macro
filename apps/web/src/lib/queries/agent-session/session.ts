@@ -14,6 +14,7 @@ import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import { agentSessionKeys } from './keys';
 
 /**
  * How often, and how many times, to re-read a Cursor session's snapshot
@@ -58,4 +59,27 @@ export function useAgentSessionExternalUrlQuery(
       gcTime: 0,
     };
   });
+}
+
+const STATUS_POLL_INTERVAL_MS = 5_000;
+const MAX_STATUS_POLLS = 120;
+
+/** Shared session metadata, polling only while the session is starting. */
+export function useAgentSessionQuery(id: Accessor<string>) {
+  return useQuery(() => ({
+    queryKey: agentSessionKeys.detail(id()).queryKey,
+    queryFn: () => throwOnErr(() => agentHarnessServiceClient.get(id())),
+    staleTime: 0,
+    retry: false,
+    refetchInterval: (query) => {
+      const attempts =
+        query.state.dataUpdateCount + query.state.errorUpdateCount;
+      if (attempts >= MAX_STATUS_POLLS) return false;
+      const status = query.state.data?.status;
+      const phase = status?.kind === 'event' ? status.event : status?.kind;
+      if (!phase || phase === 'no_messages' || phase === 'booting')
+        return STATUS_POLL_INTERVAL_MS;
+      return false;
+    },
+  }));
 }

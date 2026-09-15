@@ -44,6 +44,10 @@ experimental-features = nix-command flakes
 
 The default shell does not include the Tauri platform dependencies. They are large, so they live in their own shells. For Linux desktop development, use `nix develop .#tauri-linux`. For Android development on x86_64 Linux, use `nix develop .#tauri-android`.
 
+For automated Linux desktop offline tests, use `nix develop .#tauri-e2e` and the
+[native E2E guide](../apps/web/tests/native/README.md). It runs the real Tauri
+webview/native cache with deterministic API fixtures, without the local stack.
+
 ## Run the frontend against hosted services
 
 The web app talks to hosted `*-dev` services when you run `bun run dev` from the web app.
@@ -183,6 +187,17 @@ across instances) debugging containers:
 
 See `.claude/skills/live-debug/SKILL.md` for query recipes (Tempo/Loki HTTP
 APIs) and the browser-debugging workflow.
+
+For agent turns, use Tempo's TraceQL query
+`{span.gen_ai.operation.name="invoke_agent"}`. The session actor records the
+ACP prompt, output and tool activity on that trace and sends its context in
+`params._meta["macro.dev/trace-context"]`. Macro's in-process runtime restores
+that context so its model calls and backend work appear in the same trace.
+Other runtimes must explicitly consume this metadata to correlate their
+internal spans; their ACP activity is still traced by the session actor.
+
+GenAI content is bounded by `genai_telemetry`; check
+`macro.genai.content_truncated` before using a span for evaluations.
 
 ## Control the Running Stack
 

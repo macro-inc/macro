@@ -68,6 +68,10 @@ pub enum EntityType {
     /// The entity is an AI coding agent session (see the `agent_session`
     /// crate)
     AgentSession,
+    /// The entity is a scheduled action (see the `scheduled_action` service)
+    ScheduledAction,
+    /// The entity is an initiative (a named grouping of tasks)
+    Initiative,
 }
 
 impl EntityType {
@@ -105,6 +109,13 @@ impl EntityType {
             // owner, the channel the bot was mentioned in as editor - but
             // are not something you file into a project.
             EntityType::AgentSession => false,
+            // Scheduled actions are owner-scoped and are not something you
+            // file into a project. Access currently resolves from the owner
+            // column, not from a row in the `entity_access` table.
+            EntityType::ScheduledAction => false,
+            // Initiatives hold `entity_access` rows but are not something
+            // you file into a project.
+            EntityType::Initiative => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

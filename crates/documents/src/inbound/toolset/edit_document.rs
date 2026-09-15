@@ -2,7 +2,9 @@
 
 use crate::domain::permission_token::encode_permission_token;
 use crate::domain::ports::{
-    DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
+    DocumentService,
+    create::DocumentCreationService,
+    editing::{EditMode, EditingWorkerService},
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
@@ -24,7 +26,7 @@ mod test;
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "EditDocument",
-    description = "Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Uploaded files -- PDFs, DOCX, spreadsheets, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert mention(s), include each person's userId and email. To insert document-card(s), include each document's documentId and documentName."
+    description = "Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Uploaded files -- PDFs, DOCX, spreadsheets, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips, include each referenced item's ids and details in `instructions`: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and automations; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips. To insert document-card(s), include each document's documentId and documentName."
 )]
 pub struct EditDocument {
     #[schemars(
@@ -32,9 +34,14 @@ pub struct EditDocument {
     )]
     pub document_id: String,
     #[schemars(
-        description = "Natural language instructions. For mention(s), include userId and email per person. For document-card(s), include documentId and documentName per document. You may need to look these up."
+        description = "Natural language instructions. For @-mention chips, include each item's ids and details: userId/email for people; documentId/documentName/blockName for documents and similar items; session id for agent sessions; ISO datetime and displayFormat for time chips. For document-card(s), include documentId and documentName per document. You may need to look these up."
     )]
     pub instructions: String,
+    #[serde(default)]
+    #[schemars(
+        description = "Set true for one quick, contained edit -- rewrite this paragraph, translate the selected list, fix a heading, bold a phrase. A single model applies it directly in a few seconds. Leave false (the default) for anything with several parts or that restructures the document; the default pipeline plans, dispatches, and reviews its own work, which takes longer but is what multi-step edits need."
+    )]
+    pub fast: bool,
 }
 
 /// The editing worker opens a sync-service session and blocks on the initial
@@ -74,6 +81,16 @@ pub struct EditDocumentResponse {
 
 impl ToolAnnotated for EditDocument {
     const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Edit document");
+}
+
+impl EditDocument {
+    fn mode(&self) -> EditMode {
+        if self.fast {
+            EditMode::Fast
+        } else {
+            EditMode::Supervised
+        }
+    }
 }
 
 #[async_trait]
@@ -138,7 +155,7 @@ where
                     internal_error: anyhow::anyhow!("edit cancelled by user. document might be left in a partially edited state."),
                 });
             }
-            r = ctx.editing.edit(&self.document_id, &document_token, &self.instructions) => r,
+            r = ctx.editing.edit(&self.document_id, &document_token, &self.instructions, self.mode()) => r,
         }
         .map_err(|e| ToolCallError {
             description: e.to_string(),

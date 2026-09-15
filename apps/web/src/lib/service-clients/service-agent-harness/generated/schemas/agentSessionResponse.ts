@@ -8,6 +8,7 @@ import type { AgentSessionResponseAcpSessionId } from './agentSessionResponseAcp
 import type { AgentSessionResponseExternal } from './agentSessionResponseExternal';
 import type { AgentSessionResponseInstructions } from './agentSessionResponseInstructions';
 import type { AgentSessionResponseOriginatingMessageId } from './agentSessionResponseOriginatingMessageId';
+import type { AgentSessionResponsePullRequestUrl } from './agentSessionResponsePullRequestUrl';
 import type { AgentSessionResponseRepoUrl } from './agentSessionResponseRepoUrl';
 import type { AgentSessionResponseThreadChannelId } from './agentSessionResponseThreadChannelId';
 import type { AgentSessionResponseThreadId } from './agentSessionResponseThreadId';
@@ -48,6 +49,8 @@ at creation. Absent otherwise, so existing payloads are unchanged. */
   originatingMessageId?: AgentSessionResponseOriginatingMessageId;
   /** The user who created and owns the session. */
   ownerId: string;
+  /** The session's linked pull request. */
+  pullRequestUrl?: AgentSessionResponsePullRequestUrl;
   /** The repository the session works with, when one was stated. */
   repoUrl?: AgentSessionResponseRepoUrl;
   /** Compute tier of the managed sandbox. */

@@ -5,10 +5,12 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { type EntityData, ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import { EmptyStatePanel } from '@ui';
 import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
-import { InboxHeader } from './components/InboxHeader';
+import { InboxListLayout } from './components/InboxHeader';
 import { InboxList } from './components/InboxList';
 import { InboxTabs } from './components/InboxTabs';
 import { InboxViewProvider, useInboxView } from './inbox-view-context';
@@ -35,17 +37,14 @@ function NotificationsListPane(props: {
   onPreviewEntityChange: (entity: EntityData | undefined) => void;
 }) {
   return (
-    <>
-      <InboxHeader>
-        <InboxTabs />
-      </InboxHeader>
+    <InboxListLayout tabs={<InboxTabs />}>
       <Suspense fallback={<InboxFallback />}>
         <InboxList
           previewEntity={props.previewEntity}
           onPreviewEntityChange={props.onPreviewEntityChange}
         />
       </Suspense>
-    </>
+    </InboxListLayout>
   );
 }
 
@@ -93,7 +92,7 @@ function InboxViewRoot() {
                     main={{ min: 224, preferredWidth: 640 }}
                     resizable
                   >
-                    <ViewShell.Aside class="flex flex-col border-r border-edge bg-panel">
+                    <ViewShell.Aside class="flex flex-col bg-panel">
                       <NotificationsListPane
                         previewEntity={previewEntity()}
                         onPreviewEntityChange={setPreviewEntity}
@@ -103,17 +102,12 @@ function InboxViewRoot() {
                       <Show
                         when={previewEntity()}
                         fallback={
-                          <div class="flex size-full items-center justify-center px-6 text-center">
-                            <div class="flex max-w-sm flex-col gap-2">
-                              <h2 class="text-base font-semibold text-ink">
-                                Select a notification
-                              </h2>
-                              <p class="text-sm leading-5 text-ink-muted">
-                                Choose an item from the sidebar to preview it
-                                here.
-                              </p>
-                            </div>
-                          </div>
+                          <EmptyStatePanel
+                            graphic={EmptyStatePreviewIcon}
+                            title="No content selected"
+                            description="Select an item from the connected list to preview it here"
+                            centered
+                          />
                         }
                       >
                         {(entity) => (

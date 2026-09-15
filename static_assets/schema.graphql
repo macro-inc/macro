@@ -76,7 +76,7 @@ type CompleteMutationRoot {
 	"""
 	moveEntities(inputs: [MoveEntityInput!]!): EntityMutationPayload!
 	"""
-	Update link and channel share policies across supported entity kinds.
+	Update link, explicit team, and channel share policies across supported entity kinds.
 	"""
 	updateEntitySharePolicies(inputs: [UpdateEntitySharePolicyInput!]!): EntityMutationPayload!
 	"""
@@ -210,7 +210,7 @@ input EntityRefInput {
 }
 
 """
-Shared link/channel share-policy update.
+Shared link, explicit team, and channel share-policy update.
 """
 input EntitySharePolicyInput {
 	"""
@@ -222,6 +222,12 @@ input EntitySharePolicyInput {
 	when a link share exists.
 	"""
 	linkShareAccessLevel: GraphqlEntityAccessLevel
+	"""
+	Explicit team access level. Omit to leave unchanged or pass null to disable team sharing,
+	independently of link sharing. Only the actual owner may change this setting;
+	enabling it requires the owner to belong to a team. OWNER is not an allowed level.
+	"""
+	teamShareAccessLevel: GraphqlEntityAccessLevel
 	"""
 	Channel access entries to add, remove, or replace.
 	"""
@@ -2213,6 +2219,14 @@ enum GraphqlEntityType {
 	AI coding agent session entity.
 	"""
 	AGENT_SESSION
+	"""
+	Scheduled action entity.
+	"""
+	SCHEDULED_ACTION
+	"""
+	Initiative entity.
+	"""
+	INITIATIVE
 }
 
 """
@@ -4446,6 +4460,10 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	name: String!
 	"""
+	The last model selected for a sent message (`provider/model` id).
+	"""
+	model: String
+	"""
 	The identifier of the owner.
 	"""
 	ownerId: String!
@@ -6113,7 +6131,7 @@ input UpdateEntitySharePolicyInput {
 	"""
 	entity: EntityRefInput!
 	"""
-	New link/channel policy values.
+	New link, explicit team, and channel policy values.
 	"""
 	policy: EntitySharePolicyInput!
 }

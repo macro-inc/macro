@@ -332,7 +332,7 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
               variant="ghost"
               size="icon-md"
               depth={4}
-              class="rounded-lg bg-surface shadow-menu ring ring-edge-muted"
+              class="rounded-lg glass bg-surface"
               onClick={() => openEventComposer()}
             >
               <PlusIcon class="size-4" />

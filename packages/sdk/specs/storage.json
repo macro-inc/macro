@@ -8341,7 +8341,7 @@
       },
       "put": {
         "tags": ["document"],
-        "summary": "Sets the team-share state of a document. Sharing grants the document\nowner's team Edit access; unsharing removes the team's access. Requires\nEdit access on the document.",
+        "summary": "Sets explicit team sharing. Requires a verified acting identity matching\nthe persisted document owner, not merely effective Edit or Owner access.\nInitial enable defaults to Edit; repeated enable preserves the chosen level.\nClear removes only the managed direct grant, not inherited team access.",
         "operationId": "set_document_team_share",
         "parameters": [
           {
@@ -8376,7 +8376,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "Owner has no team",
             "content": {
               "application/json": {
                 "schema": {
@@ -8386,7 +8386,7 @@
             }
           },
           "401": {
-            "description": "",
+            "description": "Acting identity is absent or is not the actual owner",
             "content": {
               "application/json": {
                 "schema": {
@@ -8397,6 +8397,16 @@
           },
           "404": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Sharing facts changed or an untracked grant conflicts",
             "content": {
               "application/json": {
                 "schema": {
@@ -8629,7 +8639,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             },
@@ -8842,7 +8854,9 @@
                 "crm_contact",
                 "reminder",
                 "skill",
-                "agent_session"
+                "agent_session",
+                "scheduled_action",
+                "initiative"
               ]
             }
           },
@@ -8863,6 +8877,86 @@
               "application/json": {
                 "schema": {
                   "default": null
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/foreign_entity/by_source/{source}/{foreign_entity_id}": {
+      "get": {
+        "tags": ["foreign_entity"],
+        "summary": "Get a visible foreign entity by the identifier its source system assigned.",
+        "description": "`foreign_entity_id` is a wildcard path segment: sources store slashes inside\nthe identifier, for example `owner/repo/pull/12`.\n\nAuthorization matches the by-id route. Internal service callers see every\nrecord; an authenticated user sees a record only when they have view access\nto it, and records they cannot view are reported as `404` so the route never\nreveals that a mapping exists. Bot tokens are not accepted here — they use\nthe by-id route, which mints a bot-scoped receipt.",
+        "operationId": "get_foreign_entity_by_source",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "description": "Foreign entity source, e.g. github_pull_request",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "foreign_entity_id",
+            "in": "path",
+            "description": "Identifier assigned by the source system; may contain slashes",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForeignEntity"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -11250,7 +11344,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             },
@@ -12887,7 +12983,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -16953,7 +17051,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -17765,7 +17865,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -19621,7 +19723,7 @@
         "properties": {
           "sharedWithTeam": {
             "type": "boolean",
-            "description": "Whether the document is currently shared with the owner's team."
+            "description": "Whether explicit team sharing is enabled; inherited team access does not count."
           },
           "teamId": {
             "type": ["string", "null"],
@@ -20235,7 +20337,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -20646,7 +20750,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -20694,7 +20800,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -24324,7 +24432,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -25034,6 +25144,17 @@
           "owner": {
             "type": "string",
             "description": "The owner of the item"
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The explicit access level granted to the owner's team, or `null` when disabled."
+              }
+            ]
           }
         }
       },
@@ -25663,6 +25784,10 @@
               "isPersistent": {
                 "type": "boolean",
                 "description": "Whether the chat is persistent or not"
+              },
+              "model": {
+                "type": ["string", "null"],
+                "description": "The last model selected for a sent message (`provider/model` id)."
               },
               "name": {
                 "type": "string",
@@ -26654,7 +26779,9 @@
                   "crm_contact",
                   "reminder",
                   "skill",
-                  "agent_session"
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative"
                 ]
               }
             ],
@@ -27552,6 +27679,17 @@
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The link access level. Omit to leave unchanged or pass `null` to reset it to the default\nlevel when a link share exists."
+              }
+            ]
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The explicit team access level. Omit to leave unchanged or pass `null` to disable team\nsharing. Only the actual owner may change this setting; `owner` is not an allowed level."
               }
             ]
           }

@@ -204,7 +204,9 @@ function DropdownContent(props: DropdownContentProps) {
       >
         <KobalteDropdownMenu.Content
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation shadow-menu bg-menu text-sm',
+            // Paint the same surface as context menus, including custom
+            // contents (calendar month lists) without a Dropdown.Group.
+            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-menu-glass text-sm [--color-surface:var(--color-menu)]',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -213,7 +215,7 @@ function DropdownContent(props: DropdownContentProps) {
           onOpenAutoFocus={handleOpenAutoFocus}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
+          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted/60 size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.Content>
@@ -246,7 +248,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
       >
         <KobalteDropdownMenu.SubContent
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation bg-menu text-sm [--color-surface:var(--color-menu)]',
+            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-menu-glass text-sm [--color-surface:var(--color-menu)]',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -254,7 +256,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
           {...rest}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
+          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted/60 size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.SubContent>

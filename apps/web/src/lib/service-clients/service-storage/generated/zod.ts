@@ -2067,6 +2067,14 @@ export const editCallRecordBody = zod
                 .describe('Ordered from least to most access top -> bottom'),
             ])
             .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
         }),
       ])
       .optional(),
@@ -4101,6 +4109,8 @@ export const getCollabSurfaceResponse = zod
         'reminder',
         'skill',
         'agent_session',
+        'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity.'),
@@ -4151,6 +4161,8 @@ export const ensureCollabSurfaceBody = zod
         'reminder',
         'skill',
         'agent_session',
+        'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity access derives from.'),
@@ -4182,6 +4194,8 @@ export const ensureCollabSurfaceResponse = zod
         'reminder',
         'skill',
         'agent_session',
+        'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity.'),
@@ -7380,6 +7394,14 @@ export const editDocumentBody = zod
                 .describe('Ordered from least to most access top -> bottom'),
             ])
             .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
         }),
       ])
       .optional(),
@@ -8282,7 +8304,7 @@ export const getDocumentTeamShareResponse = zod
     sharedWithTeam: zod
       .boolean()
       .describe(
-        "Whether the document is currently shared with the owner's team."
+        'Whether explicit team sharing is enabled; inherited team access does not count.'
       ),
     teamId: zod
       .uuid()
@@ -8296,9 +8318,10 @@ export const getDocumentTeamShareResponse = zod
   );
 
 /**
- * @summary Sets the team-share state of a document. Sharing grants the document
-owner's team Edit access; unsharing removes the team's access. Requires
-Edit access on the document.
+ * @summary Sets explicit team sharing. Requires a verified acting identity matching
+the persisted document owner, not merely effective Edit or Owner access.
+Initial enable defaults to Edit; repeated enable preserves the chosen level.
+Clear removes only the managed direct grant, not inherited team access.
  */
 export const setDocumentTeamShareParams = zod.object({
   document_id: zod.string().describe('Document ID'),
@@ -8317,7 +8340,7 @@ export const setDocumentTeamShareResponse = zod
     sharedWithTeam: zod
       .boolean()
       .describe(
-        "Whether the document is currently shared with the owner's team."
+        'Whether explicit team sharing is enabled; inherited team access does not count.'
       ),
     teamId: zod
       .uuid()
@@ -8544,6 +8567,8 @@ export const listFavoritesQueryParams = zod.object({
           'reminder',
           'skill',
           'agent_session',
+          'scheduled_action',
+          'initiative',
         ])
         .describe('The type of an entity in Macro')
     )
@@ -8602,6 +8627,8 @@ export const listFavoritesResponse = zod
                 'reminder',
                 'skill',
                 'agent_session',
+                'scheduled_action',
+                'initiative',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -8648,6 +8675,8 @@ export const addFavoriteBody = zod
         'reminder',
         'skill',
         'agent_session',
+        'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the entity to favorite.'),
@@ -8695,6 +8724,8 @@ export const addFavoriteResponse = zod
         'reminder',
         'skill',
         'agent_session',
+        'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the favorited entity.'),
@@ -8739,6 +8770,8 @@ export const reorderFavoritesBody = zod
                 'reminder',
                 'skill',
                 'agent_session',
+                'scheduled_action',
+                'initiative',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -8776,6 +8809,8 @@ export const removeFavoriteByEntityParams = zod.object({
       'reminder',
       'skill',
       'agent_session',
+      'scheduled_action',
+      'initiative',
     ])
     .describe('The type of the favorited entity.'),
   entity_id: zod.string().describe('The id of the favorited entity.'),
@@ -8784,6 +8819,59 @@ export const removeFavoriteByEntityParams = zod.object({
 export const removeFavoriteByEntityResponseDefault = null;
 
 export const removeFavoriteByEntityResponse = zod.unknown();
+
+/**
+ * `foreign_entity_id` is a wildcard path segment: sources store slashes inside
+the identifier, for example `owner/repo/pull/12`.
+
+Authorization matches the by-id route. Internal service callers see every
+record; an authenticated user sees a record only when they have view access
+to it, and records they cannot view are reported as `404` so the route never
+reveals that a mapping exists. Bot tokens are not accepted here — they use
+the by-id route, which mints a bot-scoped receipt.
+ * @summary Get a visible foreign entity by the identifier its source system assigned.
+ */
+export const getForeignEntityBySourceParams = zod.object({
+  source: zod
+    .string()
+    .describe('Foreign entity source, e.g. github_pull_request'),
+  foreign_entity_id: zod
+    .string()
+    .describe('Identifier assigned by the source system; may contain slashes'),
+});
+
+export const getForeignEntityBySourceResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was created.'),
+    foreignEntityId: zod
+      .string()
+      .describe('Identifier assigned by the external system.'),
+    foreignEntitySource: zod
+      .string()
+      .describe('Source system that owns the external identifier.'),
+    id: zod
+      .uuid()
+      .describe('Internal primary key for this foreign entity record.'),
+    metadata: zod
+      .unknown()
+      .describe('Arbitrary metadata stored with the mapping.'),
+    storedForAuthEntity: zod
+      .string()
+      .describe(
+        'Internal auth entity namespace this foreign entity is stored for.'
+      ),
+    storedForId: zod
+      .string()
+      .describe(
+        'Internal entity identifier this foreign entity is stored for.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was last updated.'),
+  })
+  .describe('A persisted mapping to an entity owned by an external system.');
 
 /**
  * @summary Get a visible foreign entity by its internal ID.
@@ -9959,6 +10047,12 @@ export const getItemsSoupResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -12263,6 +12357,8 @@ export const getItemsSoupResponse = zod
                                 'reminder',
                                 'skill',
                                 'agent_session',
+                                'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -13920,6 +14016,12 @@ export const postItemsSoupResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -16224,6 +16326,8 @@ export const postItemsSoupResponse = zod
                                 'reminder',
                                 'skill',
                                 'agent_session',
+                                'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -17322,6 +17426,12 @@ export const postItemsSoupAstResponse = zod
                     isPersistent: zod
                       .boolean()
                       .describe('Whether the chat is persistent or not'),
+                    model: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'The last model selected for a sent message (`provider\/model` id).'
+                      ),
                     name: zod.string().describe('The name of the chat'),
                     ownerId: zod.string().describe('Who the chat belongs to'),
                     projectId: zod
@@ -19628,6 +19738,8 @@ export const postItemsSoupAstResponse = zod
                                 'reminder',
                                 'skill',
                                 'agent_session',
+                                'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -20986,6 +21098,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           isPersistent: zod
                             .boolean()
                             .describe('Whether the chat is persistent or not'),
+                          model: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The last model selected for a sent message (`provider\/model` id).'
+                            ),
                           name: zod.string().describe('The name of the chat'),
                           ownerId: zod
                             .string()
@@ -23388,6 +23506,8 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'reminder',
                                       'skill',
                                       'agent_session',
+                                      'scheduled_action',
+                                      'initiative',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -24386,6 +24506,12 @@ export const postItemsSoupAstGroupedResponse = zod
                           isPersistent: zod
                             .boolean()
                             .describe('Whether the chat is persistent or not'),
+                          model: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'The last model selected for a sent message (`provider\/model` id).'
+                            ),
                           name: zod.string().describe('The name of the chat'),
                           ownerId: zod
                             .string()
@@ -26788,6 +26914,8 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'reminder',
                                       'skill',
                                       'agent_session',
+                                      'scheduled_action',
+                                      'initiative',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -28935,6 +29063,14 @@ export const getProjectPermissionsV2Response = zod.object({
     ])
     .optional(),
   owner: zod.string().describe('The owner of the item'),
+  teamShareAccessLevel: zod
+    .union([
+      zod.null(),
+      zod
+        .enum(['view', 'comment', 'edit', 'owner'])
+        .describe('Ordered from least to most access top -> bottom'),
+    ])
+    .optional(),
 });
 
 /**
@@ -29136,6 +29272,8 @@ export const listRemindersQueryParams = zod.object({
           'reminder',
           'skill',
           'agent_session',
+          'scheduled_action',
+          'initiative',
         ])
         .describe('The type of an entity in Macro')
     )
@@ -29217,6 +29355,8 @@ export const listRemindersResponse = zod
                     'reminder',
                     'skill',
                     'agent_session',
+                    'scheduled_action',
+                    'initiative',
                   ])
                   .describe('The type of an entity in Macro'),
               ])
@@ -29303,6 +29443,8 @@ export const createReminderBody = zod
             'reminder',
             'skill',
             'agent_session',
+            'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -29386,6 +29528,8 @@ export const getReminderResponse = zod
             'reminder',
             'skill',
             'agent_session',
+            'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -29529,6 +29673,8 @@ export const updateReminderResponse = zod
             'reminder',
             'skill',
             'agent_session',
+            'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -29695,6 +29841,14 @@ export const editThreadV2Body = zod.object({
               .describe('Ordered from least to most access top -> bottom'),
           ])
           .optional(),
+        teamShareAccessLevel: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+          ])
+          .optional(),
       }),
     ])
     .optional(),
@@ -29826,6 +29980,14 @@ export const getDocumentPermissionsV2Response = zod.object({
       ])
       .optional(),
     owner: zod.string().describe('The owner of the item'),
+    teamShareAccessLevel: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['view', 'comment', 'edit', 'owner'])
+          .describe('Ordered from least to most access top -> bottom'),
+      ])
+      .optional(),
   }),
 });
 
@@ -29878,6 +30040,14 @@ export const editProjectV2Body = zod.object({
           ])
           .optional(),
         linkShareAccessLevel: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+          ])
+          .optional(),
+        teamShareAccessLevel: zod
           .union([
             zod.null(),
             zod

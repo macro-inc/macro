@@ -864,6 +864,11 @@ where
         &self.0.name
     }
 
+    /// The last model selected for a sent message (`provider/model` id).
+    async fn model(&self) -> Option<&str> {
+        self.0.model.as_deref()
+    }
+
     /// The identifier of the owner.
     async fn owner_id(&self) -> String {
         self.0.owner_id.as_ref().to_owned()

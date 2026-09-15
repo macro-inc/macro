@@ -1,5 +1,6 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createCerebras } from '@ai-sdk/cerebras';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { zValidator } from '@hono/zod-validator';
 import { Telemetry } from '@macro-inc/observability';
@@ -8,18 +9,26 @@ import { createFallback } from 'ai-fallback';
 import { Hono } from 'hono';
 import * as z from 'zod';
 import { type Bindings, getEnv } from '../env';
-import { type Model, type ResolvedModels, runEditSession } from '../run-edit';
+import {
+  type EditMode,
+  type Model,
+  type Provider,
+  type ResolvedModels,
+  runEditSession,
+} from '../run-edit';
 import { runInSandbox } from '../sandbox';
 import { watchPresenceSpeed } from '../service-clients';
 import { createWorkerSyncSource } from '../sources';
 import { renderTraceMarkdown } from '../trace-log';
 import { insertEditTrace } from '../traces-db';
 
-type Provider = 'anthropic' | 'cerebras' | 'openai';
-
 const PROVIDERS = {
   anthropic: { key: 'ANTHROPIC_API_KEY', create: createAnthropic },
   cerebras: { key: 'CEREBRAS_API_KEY', create: createCerebras },
+  google: {
+    key: 'GOOGLE_GENERATIVE_AI_API_KEY',
+    create: createGoogleGenerativeAI,
+  },
   // `.chat()` pins OpenAI to Chat Completions. The default factory uses the
   // Responses API, which references reasoning items across steps by id — and
   // this org has Zero Data Retention, so those ids are never persisted. Every
@@ -45,7 +54,7 @@ const PROVIDERS = {
 >;
 
 const ModelSchema: z.ZodType<Model> = z.object({
-  provider: z.enum(['anthropic', 'cerebras', 'openai']),
+  provider: z.enum(['anthropic', 'cerebras', 'openai', 'google']),
   model: z.string(),
 });
 
@@ -54,38 +63,72 @@ const ModelSchema: z.ZodType<Model> = z.object({
 // rate-limits.
 const ModelListSchema = z.array(ModelSchema).min(1);
 
-const EditBody = z.object({
-  documentToken: z.string(),
-  documentId: z.string(),
-  prompt: z.string(),
-  models: z.object({
-    supervisor: ModelListSchema,
-    interpret: ModelListSchema,
-    coding: ModelListSchema,
-  }),
-  typingAnimations: z.boolean().optional(),
-  /** Animation speed multiplier applied while nobody is watching the doc. */
-  unwatchedSpeed: z.number().min(1).default(2.0),
-  interpret: z.boolean().default(true),
-  debug: z.boolean().default(false),
-  /**
-   * Commit edits to the shared Loro doc (default true). Set false to have the
-   * worker compute ops without committing them. This gives you the flexibility
-   * to apply them on your own.
-   */
-  propagate: z.boolean().default(true),
-});
+const EditBody = z
+  .object({
+    documentToken: z.string(),
+    documentId: z.string(),
+    prompt: z.string(),
+    // Each role is a chain; a request only has to name the roles its mode
+    // runs (see the refinements below), and only those are resolved.
+    models: z.object({
+      supervisor: ModelListSchema.optional(),
+      interpret: ModelListSchema.optional(),
+      coding: ModelListSchema.optional(),
+      /** Single-model chain for `mode: 'fast'`. */
+      fast: ModelListSchema.optional(),
+    }),
+    /**
+     * `supervised` (default): interpreter → supervisor → parallel coders.
+     * `fast`: one model, whole document, direct `runCode` — the hot path for
+     * small inline edits. Requires `models.fast`.
+     */
+    mode: z.enum(['supervised', 'fast']).default('supervised'),
+    typingAnimations: z.boolean().optional(),
+    /** Animation speed multiplier applied while nobody is watching the doc. */
+    unwatchedSpeed: z.number().min(1).default(2.0),
+    interpret: z.boolean().default(true),
+    debug: z.boolean().default(false),
+    /**
+     * Commit edits to the shared Loro doc (default true). Set false to have the
+     * worker compute ops without committing them. This gives you the flexibility
+     * to apply them on your own.
+     */
+    propagate: z.boolean().default(true),
+  })
+  .refine((body) => body.mode !== 'fast' || body.models.fast !== undefined, {
+    message: 'mode "fast" requires models.fast',
+    path: ['models', 'fast'],
+  })
+  .refine(
+    (body) =>
+      body.mode !== 'supervised' ||
+      (body.models.supervisor !== undefined &&
+        body.models.interpret !== undefined &&
+        body.models.coding !== undefined),
+    {
+      message:
+        'mode "supervised" requires models.supervisor, models.interpret, and models.coding',
+      path: ['models'],
+    }
+  );
 
-/** Resolve each role's model list into a live model (single) or a fallback
- *  chain (multiple, advancing on provider errors/rate limits). */
+/** Resolve the mode's model lists into live models (single) or fallback
+ *  chains (multiple, advancing on provider errors/rate limits). Roles the mode
+ *  does not run are left unresolved, so their providers' keys are never
+ *  required. The schema refinements guarantee the mode's roles are present. */
 function buildModels(
   env: ReturnType<typeof getEnv>,
   models: EditModels,
+  mode: EditMode,
   onFallback?: () => void
 ): ResolvedModels {
   const resolveOne = ({ provider, model }: Model) => {
-    const apiKey = env[PROVIDERS[provider].key];
-    return PROVIDERS[provider].create({ apiKey })(model);
+    const { key, create } = PROVIDERS[provider];
+    const apiKey = env[key];
+    if (!apiKey) {
+      throw new Error(`provider "${provider}" requested but ${key} is not set`);
+    }
+    return create({ apiKey })(model);
   };
   const resolveModel = (specs: Model[]): LanguageModel => {
     const resolved = specs.map(resolveOne);
@@ -98,11 +141,18 @@ function buildModels(
       },
     });
   };
+  const required = (role: keyof EditModels): Model[] => {
+    const specs = models[role];
+    if (!specs) throw new Error(`mode "${mode}" requires models.${role}`);
+    return specs;
+  };
+  if (mode === 'fast') return { fast: resolveModel(required('fast')) };
   return {
-    supervisor: resolveModel(models.supervisor),
-    interpret: resolveModel(models.interpret),
-    // Fresh fallback per coder — see ResolvedModels.coding.
-    coding: () => resolveModel(models.coding),
+    supervised: {
+      supervisor: resolveModel(required('supervisor')),
+      interpret: resolveModel(required('interpret')),
+      coding: () => resolveModel(required('coding')),
+    },
   };
 }
 
@@ -117,6 +167,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
     documentId,
     prompt,
     models,
+    mode,
     typingAnimations,
     unwatchedSpeed,
     interpret,
@@ -154,6 +205,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       'edit.session',
       async (span) => {
         span.setAttr('document.id', documentId);
+        span.setAttr('edit.mode', mode);
         span.setAttr('edit.interpret', interpret);
         span.setAttr('edit.propagate', propagate);
         let modelFallbacks = 0;
@@ -162,7 +214,8 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
             source,
             documentId,
             prompt,
-            models: buildModels(env, models, () => modelFallbacks++),
+            models: buildModels(env, models, mode, () => modelFallbacks++),
+            mode,
             typingAnimations,
             sleep,
             interpret,

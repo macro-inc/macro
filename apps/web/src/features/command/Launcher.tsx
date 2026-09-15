@@ -16,7 +16,6 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
-  enableAgentSessionComposer,
   enableChatV3Agents,
   enableReminders,
   enableSnippets,
@@ -93,6 +92,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { MobileCreateSheet } from './mobile/MobileCreateSheet';
 import type { CreatableBlock, CreatableName } from './types';
 
 const LAUNCHER_FRECENCY_STORE = 'launcher-frecency-v1';
@@ -129,6 +129,18 @@ function launcherFrecencyScore(item: CreatableBlock, now = Date.now()) {
   const recency = Math.pow(0.5, ageMs / halfLifeMs);
 
   return entry.count * FRECENCY_COUNT_WEIGHT + recency;
+}
+
+function sortLauncherBlocks(items: CreatableBlock[]) {
+  const now = Date.now();
+  return items
+    .map((item, index) => ({
+      item,
+      index,
+      score: launcherFrecencyScore(item, now),
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(({ item }) => item);
 }
 
 function trackLauncherItemUsage(item: CreatableBlock) {
@@ -419,7 +431,7 @@ export function runCreateAction(
       openStandaloneReminderComposer();
       return;
     case 'agent': {
-      if (isFeatureEnabled(enableAgentSessionComposer)) {
+      if (isFeatureEnabled(enableChatV3Agents)) {
         createComponent({
           componentId: 'agent-session-compose',
           asPopover: true,
@@ -693,7 +705,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
 /**
  * The creatable-block entries a create menu renders, with feature gating
  * applied — the single source of truth shared by the desktop menus and the
- * mobile dock's Create menu, so they cannot drift. Callers with a custom
+ * mobile page create actions, so they cannot drift. Callers with a custom
  * block list (e.g. the onboarding sandbox launcher) pass it as `source` to
  * run it through the same gating.
  */
@@ -803,18 +815,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   const availableBlocks = useCreateMenuBlocks(
     () => props.blocks ?? CREATABLE_BLOCKS
   );
-  const sortedBlocks = createMemo(() => {
-    const now = Date.now();
-
-    return availableBlocks()
-      .map((item, index) => ({
-        item,
-        index,
-        score: launcherFrecencyScore(item, now),
-      }))
-      .sort((a, b) => b.score - a.score || a.index - b.index)
-      .map(({ item }) => item);
-  });
+  const sortedBlocks = createMemo(() => sortLauncherBlocks(availableBlocks()));
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchMode = launcherSearchMode;
   const blocks = createMemo(() => {
@@ -1003,16 +1004,19 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   onCleanup(hkGroup.dispose);
 
   return (
-    <div
-      class="w-200 max-w-[calc(100vw-16px)] rounded-xl"
-      style={{
-        'box-shadow':
-          '0 5px 40px rgba(0, 0, 0, 0.1), 0 5px 50px rgba(0,0,0,0.03)',
-      }}
-    >
+    // The shared shell stopped painting its own pane (cmd+k gets one from the
+    // app Dialog wrapper); this raw-Kobalte dialog carries it here.
+    <div class="create-menu-pane w-200 max-w-[calc(100vw-16px)] rounded-xl touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)] glass bg-menu-glass [--color-dialog:var(--color-menu-glass)]">
+      <div
+        aria-hidden="true"
+        class="hidden touch:flex h-5 shrink-0 items-center justify-center"
+      >
+        <div class="h-1 w-9 rounded-full bg-ink/15" />
+      </div>
       <CommandMenuShell
         depth={2}
-        class="h-auto w-full outline-none"
+        hideBorder
+        class="h-auto w-full max-h-[75vh] outline-none touch:rounded-none"
         ref={ref}
         tabindex={-1}
       >
@@ -1056,12 +1060,12 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             class="ml-auto flex-row-reverse gap-1.5 px-2 py-1"
           />
         </CommandMenuShell.Header>
-        <CommandMenuShell.Body>
+        <CommandMenuShell.Body class="touch:flex touch:flex-col">
           <CommandMenuList
             items={blocks()}
             selectedIndex={focusedIndex()}
             scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
-            class="max-h-[min(60vh,26rem)]"
+            class="max-h-[min(60vh,26rem)] touch:min-h-0"
             itemId={(item) => `create-menu-${launcherItemKey(item)}`}
             onSelect={(item) => runLauncherItem(item)}
             onItemMouseMove={(index) =>
@@ -1077,7 +1081,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             )}
           </CommandMenuList>
         </CommandMenuShell.Body>
-        <CommandMenuShell.Footer>
+        <CommandMenuShell.Footer class="touch:px-6 touch:py-4">
           <style>{`
               @keyframes shift-ripple {
                 0%   { transform: scale(1); opacity: 0.6; }
@@ -1133,29 +1137,48 @@ type LauncherProps = {
   onOpenChange: (open: boolean, shouldReturnFocus?: boolean) => void;
 };
 
-export const Launcher = (props: LauncherProps) => {
+function MobileLauncher(props: LauncherProps) {
+  const availableBlocks = useCreateMenuBlocks();
+  const items = createMemo(() => sortLauncherBlocks(availableBlocks()));
+  return (
+    <MobileCreateSheet
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+      items={items()}
+      onSelect={(item) => {
+        trackLauncherItemUsage(item);
+        item.keyDownHandler();
+        props.onOpenChange(false);
+      }}
+    />
+  );
+}
+
+export const Launcher = (props: LauncherProps) => (
+  <Show when={isMobile()} fallback={<DesktopLauncher {...props} />}>
+    <MobileLauncher {...props} />
+  </Show>
+);
+
+const DesktopLauncher = (props: LauncherProps) => {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal"></Dialog.Overlay>
-        <Dialog.Content class="[--color-surface:var(--color-dialog)]">
-          <div
-            class={cn(
-              'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal w-screen flex justify-center px-2',
-              isMobile() ? 'items-center' : 'items-start pt-[10vh]'
-            )}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                props.onOpenChange(false);
-              }
-            }}
-          >
-            <LauncherInner
-              onClose={(shouldReturnFocus) =>
-                props.onOpenChange(false, shouldReturnFocus)
-              }
-            />
-          </div>
+        <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass dialog-overlay-open-animation" />
+        <Dialog.Content
+          aria-label="Create New"
+          class="fixed inset-x-0 top-0 bottom-(--virtual-keyboard-height,0) z-modal flex items-start justify-center px-2 pt-[10vh] outline-none [--color-surface:var(--color-dialog)]"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              props.onOpenChange(false);
+            }
+          }}
+        >
+          <LauncherInner
+            onClose={(shouldReturnFocus) =>
+              props.onOpenChange(false, shouldReturnFocus)
+            }
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>

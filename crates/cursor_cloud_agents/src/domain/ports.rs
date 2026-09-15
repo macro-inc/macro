@@ -3,8 +3,9 @@
 //! [`CursorAgents`] and [`RunStream`] are implemented by the Cursor API
 //! client ([`crate::api`]); [`SessionNotifier`] by whatever transport the
 //! session's updates travel over (the ACP stdio connection today, anything
-//! that can carry a `session/update` tomorrow); [`RepoResolver`] by the git
-//! adapter in [`crate::outbound`]. Native records and polling bodies cross these
+//! that can carry a `session/update` tomorrow); [`RepositoryChooser`] by
+//! a classifier for hosted Macro sessions or [`NoRepositoryChooser`] standalone.
+//! Native records and polling bodies cross these
 //! contracts for capture before decoding; HTTP I/O, SSE framing, JSON-RPC, and
 //! subprocesses remain outside the service.
 
@@ -13,7 +14,6 @@ use crate::domain::model::{
 };
 use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
-use std::path::Path;
 
 /// Create and control Cursor cloud agents.
 pub trait CursorAgents: Sync {
@@ -37,10 +37,15 @@ pub trait CursorAgents: Sync {
     /// `model` absent means "whatever the user's own Cursor settings resolve
     /// to" — Cursor falls back user default, then team, then system — which is
     /// a better default than any id this crate could pick.
+    ///
+    /// `open_pull_request` asks Cursor to push its work to a generated branch
+    /// and open a pull request against the starting ref. It is a caller's
+    /// decision and has no effect without a repository.
     fn create_agent(
         &self,
         prompt: &str,
         repo: Option<&RepoUrl>,
+        open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
     ) -> impl Future<Output = Result<(CursorAgentId, CursorRunId), rootcause::Report>> + Send;
@@ -109,6 +114,13 @@ pub trait RunStream: Sync {
 
 /// Deliver one translated update to the session's client.
 pub trait SessionNotifier {
+    /// Report the provider's PR to the host's shared session operation.
+    fn set_pull_request(
+        &self,
+        session: &SessionId,
+        url: &str,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
     /// Send a `session/update` for the given session.
     fn notify(
         &self,
@@ -136,13 +148,54 @@ pub trait SessionNotifier {
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 
-/// Resolve the repository a new session should attach to.
+/// What a session's first prompt asks for, decided before the agent is minted.
+///
+/// The two answers travel together because they are one decision: Cursor can
+/// only open a pull request against a repository, so `open_pull_request` is
+/// meaningless without `repository` and the chooser is the only place that
+/// knows both.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SessionIntent {
+    /// The repository the work belongs to, when one clearly does.
+    pub repository: Option<RepoUrl>,
+    /// Whether the work should ship as a pull request.
+    pub open_pull_request: bool,
+}
+
+/// Decide which repository a prompt's work belongs to.
+///
+/// Asked once per session, at the first prompt, because the prompt is the only
+/// evidence there is: a session opened from a chat message names no checkout,
+/// and the repository has to be right before the agent is minted - Cursor fixes
+/// an agent's repository at creation.
 ///
 /// Sessions without a repository still run, but the Cursor dashboard files
 /// sessions under repositories, so a repo-less session never appears in the
 /// user's sessions list. Whether that is acceptable is the service's call;
-/// finding the repository is this port's.
-pub trait RepoResolver {
-    /// The repository for a session opened at `cwd`, if one can be resolved.
-    fn resolve(&self, cwd: &Path) -> Option<RepoUrl>;
+/// deciding is this port's.
+pub trait RepositoryChooser: Send + Sync {
+    /// The repository this prompt's work belongs to, if any, and whether it
+    /// wants a pull request. Hosted adapters choose from the prompt; standalone
+    /// sessions leave the repository unset.
+    ///
+    /// An error is a failed prompt, not a reason to guess: a session pointed at
+    /// the wrong repository is worse than a session that says it could not tell.
+    fn choose(
+        &self,
+        prompt: &str,
+        cwd: &std::path::Path,
+    ) -> impl Future<Output = Result<SessionIntent, rootcause::Report>> + Send;
+}
+
+/// Leaves repository selection to Cursor in standalone sessions.
+pub struct NoRepositoryChooser;
+
+impl RepositoryChooser for NoRepositoryChooser {
+    async fn choose(
+        &self,
+        _prompt: &str,
+        _cwd: &std::path::Path,
+    ) -> Result<SessionIntent, rootcause::Report> {
+        Ok(SessionIntent::default())
+    }
 }

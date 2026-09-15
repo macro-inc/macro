@@ -118,6 +118,18 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                 )
                 .await?)
             }
+            EntityType::Initiative => {
+                let initiative_id = parse_uuid(entity_id, "Invalid initiative ID format")?;
+                let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+                    .await
+                    .map_err(anyhow_access_error)?;
+                Ok(queries::initiative_access::explain_initiative_access(
+                    &self.pool,
+                    &initiative_id,
+                    &source_ids,
+                )
+                .await?)
+            }
             EntityType::Channel => {
                 let channel_id = parse_uuid(entity_id, "Invalid channel ID format")?;
                 Ok(queries::channel_role::explain_channel_access(
@@ -190,7 +202,10 @@ impl ExplainAccessRepository for PgExplainAccessRepository {
                 .await?)
             }
             EntityType::StaticFile => Ok(vec![AccessGrant::StaticFileAlwaysView]),
-            EntityType::User | EntityType::ChannelMessage | EntityType::Skill => Ok(vec![]),
+            EntityType::User
+            | EntityType::ChannelMessage
+            | EntityType::Skill
+            | EntityType::ScheduledAction => Ok(vec![]),
         }
     }
 }

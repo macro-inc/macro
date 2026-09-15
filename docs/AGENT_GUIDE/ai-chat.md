@@ -2,23 +2,50 @@
 
 ## Where chats live
 
-- List: `Go to Agents` → `/app/component/agents`, tabs Owned / Running / Shared /
-  Automations / Skills. Existing chats are listed by auto-generated title.
+- List: `Go to Agents` → `/app/component/agents`. With new app views enabled
+  on desktop, an Agents sidebar opens New Chat, Routines, configured Agents,
+  Connections, and Skills, followed by favorite and recent conversations.
+  Selecting a recent chat or agent session opens it inside the workspace.
+  Touch devices and users outside the flag retain the Owned / Running / Shared /
+  Automations / Skills list.
 - A chat is `/app/chat/<uuid>`. A doc-scoped chat is `/app/md/<doc>/chat/<chat>` (split view).
 
 ## Start a standalone chat
 
+On mobile, every screen has a single-line AI composer directly above the bottom
+dock. A labeled glass button beside it opens the current view's create action:
+**+ Email**, **+ Task**, **+ Document**, **+ Message**, or **+ Event**. Home’s
+**+ New** unfolds Email, Message, Document, Event, Task, and More above the button;
+More opens the full create menu in a glass bottom sheet. Other views show
+**+ New** for that full menu. The AI input narrows to fit the button, ending
+to the left of the navigation pill's right edge below. Agents has no separate
+create button; its AI input fills the row.
+The composer's compact height is 46px, matching the mobile chrome buttons,
+with a plus attachment control and centered text and actions. It expands for
+longer prompts while focused. Leaving the AI composer collapses a long draft to
+a single-line preview in the accessory row; tapping it expands the same editor
+with the full draft intact. Screens with an available composer or reply controls show those
+instead; opening mobile search shows scope pills in their place. When neither
+is available, the AI composer returns with its draft intact, including in
+documents without a comment composer. Type a
+prompt, optionally choose a model or
+attach context, and tap **Send** to create the chat and send its first message.
+On touch devices, the accessory hides whenever an editable field outside its
+Ask AI composer is focused, including email recipients, subject, and body fields.
+It returns with the same draft when focus leaves that field. While typing in
+Ask AI itself, the composer stays above the software keyboard; the list reserves
+space for it so its last row remains reachable. This also follows focus when a
+hardware keyboard is attached.
+The area behind the composer is transparent, without a bottom gradient overlay.
+
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
-press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
-`Create` → `Agent A`, or keyboard `c` then `a`, opens a managed agent session
-directly at `/app/agent/<uuid>` (the runtime starts while the block mounts).
-That create path focuses the agent composer so you can type immediately.
-When the `enable-agent-session-composer` flag is on (default in dev;
-`VITE_ENABLE_AGENT_SESSION_COMPOSER` overrides), the same entry instead opens
-the **Start a session** composer popover. A centered title sits above two rounded
-boxes of equal width: a shallow agent strip and a prompt box about twice its
-height, separated by a small gap. The picker has
+press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively,
+when `enable-chat-v3-agents` is on (default in dev;
+`VITE_ENABLE_CHAT_V3_AGENTS` overrides), `Create` → `Agent`, or keyboard `c`
+then `a`, opens the **Start a session** composer popover. A centered title sits
+above two rounded boxes of equal width: a shallow agent strip and a prompt box
+about twice its height, separated by a small gap. The picker has
 compact choices in a horizontally scrolling `radiogroup` (`aria-label="Agent"`,
 `aria-orientation="horizontal"`, `role="radio"`, `aria-checked`). All agents are
 available by scrolling sideways, with recent successful choices first.
@@ -26,7 +53,9 @@ An accent **Create agent** button stays fixed to the right of the strip.
 It closes the session composer and opens the new-agent form at
 `/app/settings/agents?createAgent=true`; it does not create a session.
 Recents are remembered per user on this device. With no history, **Macro**
-`@macro` (the default) and **Cursor** `@cursor` lead, followed by saved agents.
+`@macro` (the default) and **Cursor** `@cursor` lead, followed by saved agents
+the caller can start: their own, team-shared personas, and selected-channel
+personas they can `@` mention.
 Without a connected Cursor API key, Cursor is a **Connect Cursor** button:
 clicking it closes the composer and opens Settings → Harness without creating
 a session. It is keyboard-accessible; arrow navigation focuses it without
@@ -43,8 +72,8 @@ and arrow send button, with a three-line editing area. It names the
 current selection:
 `What would you like Macro to work on?` becomes
 `What would you like Cursor to work on?` when Cursor is selected. Its aria-label
-is `Task for the agent`. The dialog's default autofocus lands on the selected
-agent row, its first tabbable control.
+is `Task for the agent`. Autofocus lands on that prompt so you can type
+immediately; skip it on touch so the keyboard does not jump up unsolicited.
 The prompt and agent strip share the same surface layer and background.
 A centered caption below the prompt describes the selected runtime: Macro
 shows “Starts quickly and runs in-memory. Great for workspace tasks”; Cursor
@@ -59,10 +88,21 @@ While a default is unknown, the selector reads `default`. Changing agent resets
 the override. Tab order is selected agent row (and any connection action) →
 **Create agent** → prompt → model → **Start session**.
 Escape in the prompt first blurs to the dialog; a second Escape closes it.
-Press the arrow send button (labelled **Start session**) or `Cmd/Ctrl+Enter`;
-the button shows a spinner and is labelled **Starting…**
+The prompt footer’s start control is a **Live / Background** dropdown
+(`aria-label="Session start mode"`) to the left of the circular send button.
+**Live** (default) opens the new session; **Background** closes the composer
+and shows a bottom-right toast **Session started in background** with an
+**Open session** action. The send button starts the selected mode. The
+dropdown lists both options; **Background** shows `Cmd` / `Ctrl`. The choice
+persists per user in localStorage.
+Holding `Cmd`/`Ctrl` previews Background on the dropdown and send button only
+while Live is selected; releasing restores Live. If Background is already
+selected, the modifier does nothing.
+`Enter` starts the selected mode (`Shift+Enter` still inserts a newline).
+`Cmd`/`Ctrl+Enter` starts in the background when Live is selected.
+The send button shows a spinner and is labelled **Starting…**
 while the server creates the session, applies the model override, and accepts the
-first prompt. It then closes
+first prompt. Live mode then closes
 and opens the real `/app/agent/<uuid>` URL. It never navigates to a temporary
 `pending-…` URL. Creation failures keep the prompt in the modal and show **Retry**.
 If model setup or prompt delivery fails after creation, **Retry** reuses that
@@ -81,9 +121,31 @@ notified when the AI responds).
 
 ## Composer anatomy (a11y)
 
+Desktop composer and conversation body text use 15px type. Mobile keeps its
+existing text sizing.
+
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
 - Model picker button showing the current model (e.g. `Haiku 4.5`).
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
+
+On desktop, production AI, new agent, and channel composers use 28px circular
+send/stop buttons with a neutral contrast fill (white in dark themes). The outer
+corner radius is 22px, matching the 14px button radius plus its 8px inset.
+Expanded/multiline desktop AI text gets an extra 8px of left padding; toolbar
+positions and single-line text spacing stay the same. Desktop composers have
+an additional 2px of space below them; mobile dock spacing is unchanged.
+
+On mobile the production AI, new agent, and channel composers share rounded
+glass chrome, text padding, and a footer toolbar with a circular Send button.
+The production AI composer has an `Attach files` paperclip, `Ask AI…` placeholder,
+and compact model picker. Both AI systems keep model selection in the toolbar
+and expand with longer drafts. The new agent editor supports context via `@`
+mentions; its existing attachment capabilities are unchanged. Stop and queued
+message controls remain available.
+
+User messages in both AI systems appear in right-aligned, filled gray bubbles
+with rounded corners, including on mobile. Long prompts wrap within the bubble;
+production chat retains its Show more/Show less and editing controls.
 
 ## Waiting for a response
 
@@ -133,9 +195,14 @@ An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused — on mobile that is the same
 Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `@` to insert the same mention chips
-used in chat and channels; they serialize as `<m-document-mention>` tags in the prompt
-the agent sees. Agent replies that emit those tags render as clickable chips in the
-transcript (and in the originating channel thread).
+used in chat and channels; they serialize as mention-chip tags in the prompt
+the agent sees (`<m-document-mention>` for docs/channels/chats/tasks/emails/calendar
+events/skills, `<m-date-mention>` for a day or time, `<m-agent-session-mention>`
+for an agent session, `<m-user-mention>` for a person, and the other chip tags).
+Agent replies that emit those tags render as clickable chips in the
+transcript (and in the originating channel thread). An agent-session chip with
+`"expanded":true` renders as the Magic Chip card that follows the session's
+latest turn.
 `@mention` a person in a prompt and, if you can edit the session, they are granted edit
 access and get an `agent_session_mentioned` notification that opens the session; a viewer's
 mention only notifies people who could already open it.
@@ -185,6 +252,12 @@ Agent sessions reuse the channel's TanStack `ThreadList`. Opening a session land
 at the latest message, including when history arrives after the empty view. Short
 transcripts sit at the bottom, above the composer. Only the visible rows and an
 overscan buffer are mounted: scroll to older turns before searching their DOM text.
+
+Search links add `agent_message_turn=<zero-based turn>&agent_message_author=user|agent`.
+They wait for history to load, then scroll to and highlight the matching folded
+message instead of staying at latest. Clicking another hit (including in an already
+open session) repeats the jump. Manual navigation or **Scroll to bottom** clears the
+message highlight; incoming output does not repeat the search jump.
 
 - New messages and growing streamed replies follow while within 50px of the end.
   Scroll up to read history without being pulled back by subsequent output.
@@ -243,3 +316,46 @@ must stay hidden; subsequent live messages must still appear.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
   entries, then stop.
+
+Locally sent user messages in both AI implementations enter with a short upward
+slide and fade. History and remounted messages stay
+still; reduced-motion preferences disable the transition.
+
+On phones, the chat model control appears as a provider icon while the software
+keyboard is open. Its accessible name is `Choose model, <model name>`. It opens
+a `Select model` sheet with descriptions, a checkmark for the current choice,
+and a **Done** button. Selecting an available model updates the selection;
+locked models open the upgrade flow. The sheet stays open when the keyboard closes.
+
+The compact model menus use the standard menu text size and a 240px width
+(capped to the viewport), consistently in production chat and the agent input.
+
+Chat title icons follow the selected model's provider, including the agent
+system's live model. Soup rows use the model included in the list data, with a
+saved local draft selection taking precedence. Icons do not query chat transcripts.
+Rows without model data show the standard chat icon. Claude models use the Claude sunburst logo; OpenAI and Google use their
+provider logos; unknown providers in chat titles reserve the icon space.
+
+For a Macro agent session, changing the model must settle on the selected model
+and update the title's provider logo. Check this with an OpenAI override when
+starting a session and when changing an existing session before its first prompt.
+Reopening or resuming the session must retain that selection and logo.
+
+Both AI composers display their model trigger label at the input text size
+(15px), using the softer secondary text color. This includes the agent model
+catalog trigger and mobile model sheet trigger.
+
+Soup and recent-chat icons recognize the provider in the saved model ID even
+when that model is no longer selectable. For example, `openai/gpt-5.5` retains
+the OpenAI logo; an unknown provider shows the standard chat icon instead of
+defaulting to Claude. A recognized per-chat selection takes precedence over the
+server model. New sends record that selection before navigation or a background
+send, so list icons can update immediately. Restoring a draft without a valid
+model lets the composer use the chat's saved model before applying its default.
+
+Agent header PR chips resolve their GitHub URL once and receive saved PR metadata
+through connection gateway. A newly opened PR can remain unresolved until its
+webhook sync completes; its chip should then appear without a page refresh.
+Verify status changes (open/merged/closed) while the chip stays mounted, and
+verify that reconnecting the gateway catches up changes missed while disconnected.
+There is no periodic PR lookup polling.

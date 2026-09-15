@@ -52,16 +52,15 @@ export function SidebarTagsSection(props: SidebarTagsSectionProps) {
     >
       <div class="flex items-center gap-1">
         <CollapsibleSection.Trigger class="min-w-0 flex-1 text-xs">
-          <CollapsibleSection.Indicator class="ml-0" />
-          <span class="truncate">Tags</span>
+          <span class="min-w-0 truncate">Tags</span>
+          <CollapsibleSection.Indicator />
         </CollapsibleSection.Trigger>
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
           label="New tag"
-          // Right edge inset so the plus centres on the trailing caret of other sections.
-          class="mr-2 shrink-0 rounded-lg"
+          class="ml-auto mr-2 shrink-0 rounded-lg"
           onClick={() => setCreating(true)}
         >
           <PlusIcon class="size-3.5" />

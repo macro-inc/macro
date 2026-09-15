@@ -25,13 +25,14 @@ export function SendButton(props: SendButtonProps) {
   return (
     <Button
       depth={4}
-      variant="cta"
+      variant="strong"
       size="icon-sm"
       draggable={false}
       aria-label={local['aria-label'] ?? 'Send'}
       tooltip={local.tooltip ?? 'Send'}
       class={cn(
-        'rounded-[11px] size-7.5 [&_svg]:stroke-[4px]',
+        'rounded-full size-7 touch:size-7.5',
+        '[&_svg]:stroke-[4px]',
         'transition-transform ease-in-out duration-150',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',
         'active:not-disabled:scale-95',

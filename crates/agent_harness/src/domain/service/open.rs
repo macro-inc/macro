@@ -71,8 +71,8 @@ where
                 instructions: request.instructions,
                 // No egress, so no MCP servers of ours to select from.
                 mcp_servers: AgentMcpServers::OwnerConnections,
-                // No sandbox: the runtime dials in and reaches the network on
-                // its operator's own terms, so there is no egress token.
+                // Mint the internal-tool credential when an authenticated
+                // runtime binds, and rotate it on each subsequent binding.
                 egress_token_hash: None,
                 // The thread linkage is the caller's claim, not an observed
                 // mention; it must not grant the channel anything.

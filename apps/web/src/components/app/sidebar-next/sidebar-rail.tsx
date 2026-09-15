@@ -73,7 +73,7 @@ export const SidebarRail = (props: SidebarRailProps) => {
     <div
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
-      class={`relative flex h-full ${RAIL_WIDTH} shrink-0 flex-col items-center gap-2 overflow-hidden bg-surface px-3 pb-3 pt-3`}
+      class={`relative flex h-full ${RAIL_WIDTH} shrink-0 flex-col items-center gap-2 overflow-hidden border-r border-thread-rail bg-surface px-3 pb-3 pt-3`}
     >
       <SidebarRailCreateButton />
       <SearchRailButton />

@@ -2,8 +2,11 @@
 //! repositories, the fold's log source, and the audience a streamed frame is
 //! addressed to.
 
+pub mod search;
 #[cfg(test)]
 mod test;
+
+mod pull_request;
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
@@ -31,6 +34,7 @@ use entity_access_db_utils::{
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use sqlx::PgPool;
+use std::num::NonZeroUsize;
 
 /// Postgres implementation of [`AgentSessionRepo`] and [`AgentSessionLogRepo`].
 #[derive(Debug, Clone)]
@@ -160,6 +164,7 @@ struct AgentSessionRow {
     model: String,
     harness: String,
     repo_url: Option<String>,
+    pull_request_url: Option<String>,
     workspace: String,
     sandbox_size: String,
     instructions: Option<String>,
@@ -194,6 +199,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
             model: row.model,
             harness: row.harness,
             repo_url: row.repo_url,
+            pull_request_url: row.pull_request_url,
             workspace: row.workspace,
             sandbox_size: parse_sandbox_size(&row.sandbox_size)?,
             instructions: row.instructions,
@@ -262,7 +268,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             RETURNING
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
@@ -364,7 +370,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
@@ -474,7 +480,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
@@ -514,7 +520,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
@@ -547,7 +553,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
@@ -572,6 +578,43 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             .collect::<anyhow::Result<Vec<_>>>()?)
     }
 
+    async fn recent_for_owner(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        limit: NonZeroUsize,
+    ) -> Result<Vec<AgentSession>> {
+        let rows = sqlx::query_as!(
+            AgentSessionRow,
+            r#"
+            SELECT
+                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                mcp_scope, mcp_servers, acp_session_id, status,
+                status_event_name, agent_session.created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?",
+                ext.provider AS "external_provider?", ext.external_id AS "external_id?",
+                ext.external_name AS "external_name?", ext.external_url AS "external_url?",
+                ext.last_run_id AS "external_last_run_id?"
+            FROM agent_session
+            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
+            WHERE owner_id = $1
+            ORDER BY agent_session.created_at DESC, id DESC
+            LIMIT $2
+            "#,
+            owner.as_ref(),
+            i64::try_from(limit.get()).unwrap_or(i64::MAX),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list the owner's recent agent sessions")?;
+
+        Ok(rows
+            .into_iter()
+            .map(AgentSession::try_from)
+            .collect::<anyhow::Result<Vec<_>>>()?)
+    }
+
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
         // Delegated to the bots hex rather than a bespoke query: this is
         // exactly bot id -> bot, and `get_bot` already excludes deleted bots -
@@ -589,11 +632,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             Some(bot) => SessionBot {
                 id,
                 name: bot.name,
+                handle: bot.handle,
                 avatar_url: bot.avatar_url,
             },
             None => SessionBot {
                 id,
                 name: "Agent".to_owned(),
+                handle: "agent".to_owned(),
                 avatar_url: None,
             },
         })
@@ -622,6 +667,37 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         if result.rows_affected() == 0 {
             return Err(anyhow::anyhow!("agent session not found").into());
         }
+        Ok(())
+    }
+
+    async fn set_egress_token_hash(&self, id: AgentSessionId, hash: &str) -> Result<()> {
+        sqlx::query!(
+            "UPDATE agent_session SET egress_token_hash = $2 WHERE id = $1",
+            id.as_uuid(),
+            hash
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to rotate session credential")?;
+        Ok(())
+    }
+
+    async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET repo_url = $2,
+                modified_at = NOW()
+            WHERE id = $1
+              AND repo_url IS DISTINCT FROM $2
+            "#,
+            id.as_uuid(),
+            repo_url,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist agent session repository")?;
+        tracing::debug!(%id, changed = result.rows_affected() > 0, "agent session repository set");
         Ok(())
     }
 

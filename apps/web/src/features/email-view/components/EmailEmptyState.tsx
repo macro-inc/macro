@@ -12,11 +12,6 @@ import type { EmailTab } from '../types';
 
 const EMAIL_DOCS_URL = `${DOCS_BASE}/product/email`;
 
-// EmptyStatePanel only insets `centered` panels below the floating mobile
-// chrome, and the list wrapper leaves the inset to the panels so the centered
-// ones are not padded twice. Left-aligned panels add it themselves.
-const MOBILE_TOP_INSET_CLASS = 'touch:pt-(--mobile-content-inset-top)';
-
 function tabCopy(tab: EmailTab): { title: string; description: string } {
   return match(tab)
     .with('important', () => ({
@@ -73,7 +68,6 @@ export function EmailEmptyState() {
             onClick: () => void startAddInbox(),
           }}
           documentationUrl={EMAIL_DOCS_URL}
-          class={MOBILE_TOP_INSET_CLASS}
         />
       </Match>
 
@@ -123,7 +117,6 @@ export function EmailEmptyState() {
             title={copy().title}
             description={copy().description}
             documentationUrl={EMAIL_DOCS_URL}
-            class={MOBILE_TOP_INSET_CLASS}
           />
         )}
       </Match>

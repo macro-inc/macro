@@ -36,7 +36,7 @@ import { useSearchParams } from '@solidjs/router';
 import { Avatar, Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
-import { canDeleteBot } from '../channel/Bots/botPermissions';
+import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
 import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
@@ -159,9 +159,13 @@ export function Agents() {
   const canDeleteAgent = (agent: AgentWithHarnessId) =>
     canDeleteBot(agent.bot, currentUserId(), currentTeamId(), isTeamOwner());
   const agents = createMemo(() =>
-    (agentsQuery.isSuccess ? agentsQuery.data : []).map((agent) =>
-      summarizeAgent(agent, connectedHarnesses(), channelOptions())
-    )
+    (agentsQuery.isSuccess ? agentsQuery.data : [])
+      .filter((agent) =>
+        canManageAgent(agent.bot, currentUserId(), currentTeamId())
+      )
+      .map((agent) =>
+        summarizeAgent(agent, connectedHarnesses(), channelOptions())
+      )
   );
   const teamAgents = createMemo(() => [
     MACRO_AGENT,

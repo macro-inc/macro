@@ -30,6 +30,8 @@ mod part;
 mod permission;
 /// The agent's plan.
 mod plan;
+/// Plain text derived from renderable messages for search.
+mod search;
 /// Turn-level facts derived from the fold.
 mod signal;
 /// Delegated agents.

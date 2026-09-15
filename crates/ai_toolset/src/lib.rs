@@ -144,12 +144,20 @@
 //!
 //! assert!(parent_toolset.tools.contains_key("SubTool"));
 //! ```
+//!
+//! # Telemetry
+//!
+//! Every dispatch through [`ToolSet::try_tool_call`] runs inside an
+//! OpenTelemetry GenAI `execute_tool` span carrying the tool name, arguments
+//! and result (see [`telemetry`]). Implementors provide
+//! [`ToolSet::dispatch_tool_call`] and never open tool telemetry themselves.
 
 #![deny(missing_docs)]
 
 mod annotations;
 mod context;
 pub mod schema;
+pub mod telemetry;
 mod tool;
 pub mod tool_search;
 mod toolset;
@@ -159,6 +167,6 @@ pub use context::{RequestContext, ServiceContext};
 pub use tool::{AsyncTool, NoContext, ToolCallError, ToolResult};
 pub use tool_search::{SearchableTool, ToolLoader};
 pub use toolset::{
-    AsyncToolCollection, RequestSchema, ToolCollection, ToolInfo, ToolSchema, ToolSet,
-    ToolSetCreationError, ToolSetError, tool_object,
+    AsyncToolCollection, RequestSchema, ToolCallFuture, ToolCollection, ToolInfo, ToolSchema,
+    ToolSet, ToolSetCreationError, ToolSetError, tool_object,
 };

@@ -935,7 +935,9 @@ function notificationEntityTypeToSoupTag(
         'crm_company',
         'crm_contact',
         'skill',
-        'agent_session'
+        'agent_session',
+        'scheduled_action',
+        'initiative'
       ),
       () => null
     )

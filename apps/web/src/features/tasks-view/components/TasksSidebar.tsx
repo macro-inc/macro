@@ -3,6 +3,7 @@ import {
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import {
   favoriteSplitContent,
@@ -60,21 +61,23 @@ export function TasksNavigation(props: { onNavigate?: () => void }) {
 
 function FavoriteRow(props: {
   favorite: Favorite;
-  onOpen: (favorite: Favorite) => void;
+  onOpen: (favorite: Favorite, event: MouseEvent) => void;
 }) {
   const name = useFavoriteDisplayName(props.favorite);
 
   return (
-    <ViewSidebar.Item
-      class="font-normal"
-      title={name()}
-      onClick={() => props.onOpen(props.favorite)}
-    >
-      <span class="flex size-4 shrink-0 items-center justify-center">
-        <FavoriteIcon favorite={props.favorite} class="size-4" />
-      </span>
-      <span class="truncate">{name()}</span>
-    </ViewSidebar.Item>
+    <FavoriteContextMenu favorite={props.favorite} triggerClass="block">
+      <ViewSidebar.Item
+        class="font-normal"
+        title={name()}
+        onClick={(event) => props.onOpen(props.favorite, event)}
+      >
+        <span class="flex size-4 shrink-0 items-center justify-center">
+          <FavoriteIcon favorite={props.favorite} class="size-4" />
+        </span>
+        <span class="truncate">{name()}</span>
+      </ViewSidebar.Item>
+    </FavoriteContextMenu>
   );
 }
 
@@ -93,10 +96,10 @@ function TaskFavorites(props: {
       )
       .sort((left, right) => left.sortOrder - right.sortOrder)
   );
-
-  const openFavorite = (favorite: Favorite) => {
+  const openFavorite = (favorite: Favorite, event: MouseEvent) => {
     layout.openWithSplit(favoriteSplitContent(favorite), {
       referredFrom: 'sidebar',
+      preferNewSplit: event.shiftKey,
     });
   };
 
@@ -106,8 +109,8 @@ function TaskFavorites(props: {
       onOpenChange={props.onOpenChange}
     >
       <CollapsibleSection.Trigger class="text-xs">
-        <CollapsibleSection.Indicator class="order-first ml-0" />
-        <span class="truncate">Favorites</span>
+        <span class="min-w-0 truncate">Favorites</span>
+        <CollapsibleSection.Indicator />
       </CollapsibleSection.Trigger>
       <CollapsibleSection.Content>
         <ViewSidebar.Nav aria-label="Favorite tasks">
@@ -153,10 +156,6 @@ export function TasksSidebar() {
           <SplitPanel.CloseButton />
           <ViewSidebar.Title>Tasks</ViewSidebar.Title>
         </div>
-        <SplitPanel.ControlGroup>
-          <SplitPanel.BackButton />
-          <SplitPanel.ForwardButton />
-        </SplitPanel.ControlGroup>
       </ViewSidebar.Header>
 
       <ViewSidebar.Content class="flex flex-col gap-6">
