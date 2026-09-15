@@ -1,9 +1,5 @@
-//! Revert a soft-deleted chat.
-
 use anyhow::Context;
 
-/// Clear `deleted_at`, restore the chat to user history, and detach from a
-/// deleted project if necessary.
 #[tracing::instrument(err, skip(tx))]
 pub(crate) async fn revert_delete_chat(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -23,6 +19,9 @@ pub(crate) async fn revert_delete_chat(
     .fetch_one(&mut **tx)
     .await
     .context("unable to update chat")?;
+
+    let chat_uuid = macro_uuid::string_to_uuid(chat_id)?;
+    entity_registry_db_utils::clear_deleted(tx, chat_uuid).await?;
 
     sqlx::query!(
         r#"

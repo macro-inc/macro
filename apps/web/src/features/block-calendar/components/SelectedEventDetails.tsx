@@ -32,9 +32,10 @@ import {
   DeleteDialog,
   Layer,
   type ManagedDialogProps,
+  RadioGroup,
   useImperativeDialog,
 } from '@ui';
-import { type Accessor, createMemo, createSignal, Show } from 'solid-js';
+import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import { copyCalendarEventMention } from '../copy-event-mention';
 import { copyGuestEmails } from '../copy-guest-emails';
 import { EventRsvpSection } from './EventRsvpSection';
@@ -347,6 +348,15 @@ function useDeleteEventDialog(props: {
   return { open, isOpen: dialog.isOpen };
 }
 
+const DELETE_SCOPE_OPTIONS = [
+  { scope: 'this_event', label: 'This event' },
+  { scope: 'this_and_following', label: 'This and following events' },
+  { scope: 'all', label: 'All events' },
+] as const satisfies readonly {
+  scope: CalendarDeletionScope;
+  label: string;
+}[];
+
 function DeleteEventDialog(
   props: ManagedDialogProps & {
     event: CalendarEvent;
@@ -395,38 +405,25 @@ function DeleteEventDialog(
           </p>
         }
       >
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-3">
           <p>
             Remove “{props.event.title || 'Untitled event'}”? Guests will be
             notified.
           </p>
-          <label class="flex items-center gap-2">
-            <input
-              type="radio"
-              name="delete-scope"
-              checked={scope() === 'this_event'}
-              onChange={() => setScope('this_event')}
-            />
-            This event
-          </label>
-          <label class="flex items-center gap-2">
-            <input
-              type="radio"
-              name="delete-scope"
-              checked={scope() === 'this_and_following'}
-              onChange={() => setScope('this_and_following')}
-            />
-            This and following events
-          </label>
-          <label class="flex items-center gap-2">
-            <input
-              type="radio"
-              name="delete-scope"
-              checked={scope() === 'all'}
-              onChange={() => setScope('all')}
-            />
-            All events
-          </label>
+          <RadioGroup
+            value={scope()}
+            onChange={(value) => setScope(value as CalendarDeletionScope)}
+            aria-label="Delete recurring event"
+          >
+            <For each={DELETE_SCOPE_OPTIONS}>
+              {(option) => (
+                <RadioGroup.Item value={option.scope}>
+                  <RadioGroup.ItemControl />
+                  <RadioGroup.ItemLabel>{option.label}</RadioGroup.ItemLabel>
+                </RadioGroup.Item>
+              )}
+            </For>
+          </RadioGroup>
         </div>
       </Show>
     </DeleteDialog>

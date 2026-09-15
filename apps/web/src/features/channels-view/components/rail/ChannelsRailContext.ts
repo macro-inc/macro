@@ -7,6 +7,7 @@ import type { Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { ChannelsSourceScope, ChannelsSources } from '../../queries';
 import type {
+  ChannelListSort,
   ChannelsGroup,
   ChannelsRailSection,
   ChannelsTab,
@@ -33,6 +34,7 @@ export type ChannelRailRow =
       group?: ChannelsGroup;
       scope: ChannelsSourceScope;
       localIndex: number;
+      virtualIndex?: number;
       channel: ChannelEntity;
     };
 
@@ -48,9 +50,14 @@ export const rowKeyForSection = (group: ChannelsRailSection) =>
 export const domIdForRow = (railId: string, rowId: string) =>
   `${railId}-${rowId}`;
 
+export type ChannelRailActivationMetadata = {
+  event?: MouseEvent;
+  newSplit?: boolean;
+};
+
 export type ChannelsRailContext = {
   railId: string;
-  list: ListController<ChannelRailRow>;
+  list: ListController<ChannelRailRow, ChannelRailActivationMetadata>;
   tab: Accessor<ChannelsTab>;
   selectTab: (tab: ChannelsTab) => void;
   setMode: (mode: 'full' | 'slim') => void;
@@ -58,8 +65,13 @@ export type ChannelsRailContext = {
   favorites: Accessor<readonly Favorite[]>;
   selectedChannelId: Accessor<string | undefined>;
   isGroupOpen: (group: ChannelsRailSection) => boolean;
+  toggleGroup: (group: ChannelsRailSection) => void;
+  sortBy: (group: ChannelsGroup) => ChannelListSort;
+  setSortBy: (group: ChannelsGroup, sort: ChannelListSort) => void;
+  slimGroupEnabled: (group: ChannelsGroup) => boolean;
+  setSlimGroupEnabled: (group: ChannelsGroup, enabled: boolean) => void;
   registerRootRef: (element: HTMLDivElement) => void;
-  activateRow: (rowId: ChannelRailRow['id']) => void;
+  activateRow: (rowId: ChannelRailRow['id'], event?: MouseEvent) => void;
   registerScrollRef: (
     group: ChannelsRailSection,
     element: HTMLDivElement

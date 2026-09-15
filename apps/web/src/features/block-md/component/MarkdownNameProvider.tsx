@@ -1,4 +1,3 @@
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import {
   type Accessor,
   createContext,
@@ -7,6 +6,7 @@ import {
   type FlowComponent,
   useContext,
 } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 type MarkdownNameContextValue = {
   persistedName: Accessor<string | undefined>;
@@ -22,8 +22,7 @@ export const MarkdownNameProvider: FlowComponent = (props) => {
   // title is a real editor value so TitleEditor can stay empty and show its
   // placeholder, but surrounding UI should still display the block fallback
   // such as "New Note" or "New Task".
-  const persistedName = useBlockDocumentName('');
-  const fallbackName = useBlockDocumentName();
+  const { persistedName, fallbackName } = useMarkdownDocument();
   const [optimisticName, setOptimisticName] = createSignal<
     string | undefined
   >();
@@ -46,15 +45,7 @@ export const MarkdownNameProvider: FlowComponent = (props) => {
 export function useMarkdownName() {
   const context = useContext(MarkdownNameContext);
   if (!context) {
-    const persistedName = useBlockDocumentName('');
-    const fallbackName = useBlockDocumentName();
-    const displayName = () => persistedName() || fallbackName();
-    return {
-      persistedName,
-      editorName: persistedName,
-      displayName,
-      setOptimisticName: () => {},
-    };
+    throw new Error('MarkdownNameProvider is required');
   }
 
   return context;
