@@ -16,6 +16,7 @@ export function SearchToolCall(props: {
       status={props.common.status}
       muted={props.common.muted}
       trailing={props.common.trailing}
+      hasContent={Boolean(props.detail.output)}
     >
       <Show when={props.detail.output}>
         {(output) => <FoldedOutput text={output()} />}

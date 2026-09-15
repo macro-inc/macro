@@ -111,6 +111,7 @@ export function SubagentToolCall(props: {
       muted={props.common.muted || props.detail.result?.error != null}
       trailing={trailing()}
       defaultOpen={props.detail.children.length > 0}
+      hasContent={hasBody()}
     >
       <Show when={hasBody()}>
         <div class="flex flex-col gap-2">
