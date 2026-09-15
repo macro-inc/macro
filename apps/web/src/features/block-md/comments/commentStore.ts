@@ -1,4 +1,5 @@
 import { createBlockSignal, createBlockStore } from '@core/block';
+import type { CommentId, ThreadId } from '@core/comments/commentType';
 import type { NodeKey } from 'lexical';
 import type { CommentStore, MarkStore, ThreadStore } from './commentType';
 
@@ -13,8 +14,10 @@ export const markStore = createBlockStore<MarkStore>({});
 
 export const activeMarkIdsSignal = createBlockSignal<string[]>([]);
 
-export const activeCommentThreadSignal = createBlockSignal<number | null>(null);
-export const highlightedCommentIdSignal = createBlockSignal<number | null>(
+export const activeCommentThreadSignal = createBlockSignal<ThreadId | null>(
+  null
+);
+export const highlightedCommentIdSignal = createBlockSignal<CommentId | null>(
   null
 );
 
@@ -24,7 +27,9 @@ export const threadStore = createBlockStore<ThreadStore>({});
 
 export const commentMarksInitializedSignal = createBlockSignal<boolean>(false);
 
-export const highlightedCommentThreadsSignal = createBlockSignal<number[]>([]);
+export const highlightedCommentThreadsSignal = createBlockSignal<ThreadId[]>(
+  []
+);
 
 export const pendingCommentSignal = createBlockSignal<PendingComment[]>([]);
 

@@ -14,6 +14,7 @@ import type {
 } from '@block-pdf/type/comments';
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
 import { createBlockMemo, createBlockSignal } from '@core/block';
+import { type CommentId, commentView } from '@core/comments/commentType';
 import { useUserId } from '@core/context/user';
 import { createCallback } from '@solid-primitives/rootless';
 import { batch } from 'solid-js';
@@ -29,7 +30,6 @@ import {
   selectionStore,
   useAddNewHighlightComments,
 } from '../../store/highlight';
-import { sortComments } from '../commentsResource';
 import { useDeleteNewComments } from './commentOperations';
 import { activeCommentThreadSignal, useGetCommentById } from './commentStore';
 
@@ -59,39 +59,30 @@ const getHighlightThread = (
   const thread = highlight.thread;
   if (!thread) return null;
 
-  const comments = [...thread.comments].sort(sortComments);
+  const comments = thread.comments.map(commentView);
 
   const rootComment = comments[0];
+  if (!rootComment) return null;
 
   const commentBase = {
     type: commentType,
     isNew: false,
-    threadId: rootComment.threadId,
-    rootId: rootComment.commentId,
+    threadId: thread.threadId,
+    rootId: rootComment.id,
     anchorId: highlight.uuid,
   };
 
-  const replies: PdfReply[] = [];
-  for (let i = 1; i < comments.length; i++) {
-    const comment = comments[i];
-    replies.push({
-      ...commentBase,
-      id: comment.commentId,
-      createdAt: comment.createdAt,
-      owner: comment.owner,
-      author: comment.sender || comment.owner,
-      text: comment.text,
-    });
-  }
+  const replies: PdfReply[] = comments.slice(1).map((comment) => ({
+    ...commentBase,
+    ...comment,
+  }));
 
   const root: PdfRoot = {
     ...commentBase,
-    id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
-    owner: rootComment.owner,
-    author: rootComment.sender || rootComment.owner,
-    text: rootComment.text,
+    ...rootComment,
     children: replies.map((r) => r.id),
+    replyCount: thread.replyCount,
+    resolved: thread.isResolved,
   };
 
   return { root, replies };
@@ -157,7 +148,7 @@ export const highlightComments = createBlockMemo(() => {
 
 const useGetHighlightIdFromCommentId = () => {
   const getCommentById = useGetCommentById();
-  return (commentId: number) => {
+  return (commentId: CommentId) => {
     const comment = getCommentById(commentId);
     if (!comment) {
       return;

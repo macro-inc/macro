@@ -1,4 +1,12 @@
+import { useBlockId } from '@core/block';
+import { useUrlParams } from '@core/component/ParamsProvider';
+import {
+  enableUnifiedDocumentDiscussions,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
+import { useMessageLink } from '@queries/messages/document-messages';
 import { createEffect, createMemo } from 'solid-js';
+import { URL_PARAMS } from '../../constants';
 import {
   useDeleteNewComments,
   useScrollToCommentThread,
@@ -48,7 +56,35 @@ const useScrollToActiveThreadEffect = () => {
   });
 };
 
+/** Activate the thread named by a copied comment link once its anchor is loaded. */
+const useCommentLinkEffect = () => {
+  const id = useBlockId();
+  const params = useUrlParams(URL_PARAMS);
+  const target = useMessageLink(
+    () => ({ type: 'document', id }),
+    () => params.commentId()
+  );
+  let navigated: string | null = null;
+  createEffect(() => {
+    const requested = target.messageId();
+    if (!requested) {
+      navigated = null;
+      return;
+    }
+    if (requested === navigated) return;
+    const comment = commentsStore.get.find(
+      (comment) => comment.id === requested || comment.id === target.rootId()
+    );
+    if (!comment) return;
+    activeCommentThreadSignal.set(comment.threadId);
+    navigated = requested;
+  });
+};
+
 export const usePdfCommentEffects = () => {
+  if (isFeatureEnabled(enableUnifiedDocumentDiscussions)) {
+    useCommentLinkEffect();
+  }
   useDeleteNewCommentEffect();
   useScrollToActiveThreadEffect();
 };

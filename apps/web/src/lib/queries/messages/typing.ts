@@ -1,6 +1,8 @@
-import { storageServiceClient } from '@service-storage/client';
+import type { MessageParent } from '@service-storage/messages';
+import { entityMessagesClient } from '@service-storage/messages';
 import { useMutation } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
+import { parentKey } from './keys';
 
 export const TYPING_INDICATOR_TIMEOUT_MS = 8_000;
 
@@ -15,7 +17,7 @@ type TypingTimeoutsByChannel = Map<
  * Websocket payload type for typing events
  */
 type CommsTypingPayload = {
-  channel_id: string;
+  parent: MessageParent;
   user_id: string;
   action: 'start' | 'stop';
   thread_id?: string | null;
@@ -23,7 +25,7 @@ type CommsTypingPayload = {
 
 /**
  * Ephemeral store for typing indicators.
- * Map<channelId, Map<threadId | null, Set<userId>>>
+ * Map<parent, Map<threadId | null, Set<userId>>>
  *
  * Uses null key for main channel, string key for threads.
  */
@@ -35,28 +37,28 @@ const typingTimeouts: TypingTimeoutsByChannel = new Map();
 
 function withAddedTypingUser(
   prev: TypingUsersByChannel,
-  channelId: string,
+  parent: MessageParent,
   userId: string,
   threadId: ThreadId
 ): TypingUsersByChannel {
   const next = new Map(prev);
-  const channelMap = new Map(prev.get(channelId));
+  const channelMap = new Map(prev.get(parentKey(parent)));
   const threadUsers = new Set(channelMap.get(threadId));
 
   threadUsers.add(userId);
   channelMap.set(threadId, threadUsers);
-  next.set(channelId, channelMap);
+  next.set(parentKey(parent), channelMap);
 
   return next;
 }
 
 function withoutTypingUser(
   prev: TypingUsersByChannel,
-  channelId: string,
+  parent: MessageParent,
   userId: string,
   threadId: ThreadId
 ): TypingUsersByChannel {
-  const prevChannelMap = prev.get(channelId);
+  const prevChannelMap = prev.get(parentKey(parent));
   if (!prevChannelMap) return prev;
 
   const prevThreadUsers = prevChannelMap.get(threadId);
@@ -74,9 +76,9 @@ function withoutTypingUser(
   }
 
   if (channelMap.size === 0) {
-    next.delete(channelId);
+    next.delete(parentKey(parent));
   } else {
-    next.set(channelId, channelMap);
+    next.set(parentKey(parent), channelMap);
   }
 
   return next;
@@ -91,11 +93,11 @@ function getOrCreate<K, V>(map: Map<K, V>, key: K, createValue: () => V): V {
 }
 
 function removeTypingTimeout(
-  channelId: string,
+  parent: MessageParent,
   userId: string,
   threadId: ThreadId
 ): void {
-  const channelTimeouts = typingTimeouts.get(channelId);
+  const channelTimeouts = typingTimeouts.get(parentKey(parent));
   const threadTimeouts = channelTimeouts?.get(threadId);
   const timeout = threadTimeouts?.get(userId);
 
@@ -105,30 +107,30 @@ function removeTypingTimeout(
   threadTimeouts.delete(userId);
 
   if (threadTimeouts.size === 0) channelTimeouts.delete(threadId);
-  if (channelTimeouts.size === 0) typingTimeouts.delete(channelId);
+  if (channelTimeouts.size === 0) typingTimeouts.delete(parentKey(parent));
 }
 
 function setTypingTimeout(
-  channelId: string,
+  parent: MessageParent,
   userId: string,
   threadId: ThreadId
 ): void {
-  removeTypingTimeout(channelId, userId, threadId);
+  removeTypingTimeout(parent, userId, threadId);
 
   const timeout = setTimeout(() => {
     const currentTimeout = typingTimeouts
-      .get(channelId)
+      .get(parentKey(parent))
       ?.get(threadId)
       ?.get(userId);
     if (currentTimeout !== timeout) return;
 
-    removeTypingTimeout(channelId, userId, threadId);
-    removeTypingUser(channelId, userId, threadId);
+    removeTypingTimeout(parent, userId, threadId);
+    removeTypingUser(parent, userId, threadId);
   }, TYPING_INDICATOR_TIMEOUT_MS);
 
   const channelTimeouts = getOrCreate(
     typingTimeouts,
-    channelId,
+    parentKey(parent),
     () => new Map<ThreadId, Map<string, ReturnType<typeof setTimeout>>>()
   );
   const threadTimeouts = getOrCreate(
@@ -154,35 +156,33 @@ export function clearTypingIndicators(): void {
 }
 
 function addTypingUser(
-  channelId: string,
+  parent: MessageParent,
   userId: string,
   threadId: ThreadId = null
 ) {
-  setTypingUsers((prev) =>
-    withAddedTypingUser(prev, channelId, userId, threadId)
-  );
-  setTypingTimeout(channelId, userId, threadId);
+  setTypingUsers((prev) => withAddedTypingUser(prev, parent, userId, threadId));
+  setTypingTimeout(parent, userId, threadId);
 }
 
 function removeTypingUser(
-  channelId: string,
+  parent: MessageParent,
   userId: string,
   threadId: ThreadId = null
 ) {
-  removeTypingTimeout(channelId, userId, threadId);
+  removeTypingTimeout(parent, userId, threadId);
   setTypingUsers((prev) => {
-    return withoutTypingUser(prev, channelId, userId, threadId);
+    return withoutTypingUser(prev, parent, userId, threadId);
   });
 }
 
 /**
  * Get the set of user IDs currently typing in a channel/thread.
  */
-export function getTypingUsersForChannel(
-  channelId: string,
+export function getTypingUsers(
+  parent: MessageParent,
   threadId: ThreadId = null
 ): Set<string> {
-  return typingUsers().get(channelId)?.get(threadId) ?? new Set();
+  return typingUsers().get(parentKey(parent))?.get(threadId) ?? new Set();
 }
 
 /**
@@ -197,14 +197,10 @@ export function handleCommsTyping(
   if (payload.user_id === currentUserId) return;
 
   if (payload.action === 'start') {
-    addTypingUser(
-      payload.channel_id,
-      payload.user_id,
-      payload.thread_id ?? null
-    );
+    addTypingUser(payload.parent, payload.user_id, payload.thread_id ?? null);
   } else {
     removeTypingUser(
-      payload.channel_id,
+      payload.parent,
       payload.user_id,
       payload.thread_id ?? null
     );
@@ -212,7 +208,7 @@ export function handleCommsTyping(
 }
 
 type PostTypingUpdateVars = {
-  channelId: string;
+  parent: MessageParent;
   action: 'start' | 'stop';
   threadId?: string;
 };
@@ -221,11 +217,11 @@ export function usePostTypingUpdateMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: PostTypingUpdateVars) => {
-      await storageServiceClient.postTypingUpdate({
-        channel_id: vars.channelId,
-        action: vars.action,
-        thread_id: vars.threadId,
-      });
+      await entityMessagesClient.typing(
+        vars.parent,
+        vars.threadId ?? null,
+        vars.action === 'start'
+      );
     },
     onError: (error: Error) => {
       console.error('failed to post typing update', error);

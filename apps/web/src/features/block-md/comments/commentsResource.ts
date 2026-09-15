@@ -4,6 +4,10 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
+import {
+  enableUnifiedDocumentDiscussions,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { compareDateAsc } from '@core/util/date';
 
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
@@ -21,9 +25,13 @@ import type { EditCommentResponse } from '@service-storage/generated/schemas/edi
 import { batch } from 'solid-js';
 import type { MarkId, ThreadMetadata } from './commentType';
 
-const isMdBlock = createBlockMemo(() => useBlockName() === 'md');
+const usesLegacyComments = createBlockMemo(
+  () =>
+    useBlockName() === 'md' &&
+    !isFeatureEnabled(enableUnifiedDocumentDiscussions)
+);
 export const commentThreadsResource = createBlockResource(
-  isMdBlock,
+  usesLegacyComments,
   fetchComments
 );
 
@@ -252,6 +260,7 @@ createConnectionBlockWebsocketEffect((msg) => {
   const handleDeleteComment = useHandleDeleteComment();
 
   if (blockName !== 'md') return;
+  if (isFeatureEnabled(enableUnifiedDocumentDiscussions)) return;
 
   if (msg.type === 'comment') {
     let incrementalUpdate: AnnotationIncrementalUpdate;

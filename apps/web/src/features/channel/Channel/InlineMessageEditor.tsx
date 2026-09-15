@@ -1,6 +1,7 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { IUser } from '@core/user/types';
+import type { MessageParent } from '@service-storage/messages';
 import { cn } from '@ui';
 import type { Accessor } from 'solid-js';
 import {
@@ -10,11 +11,11 @@ import {
   type InputHandle,
 } from '../Input';
 import type { MessageData } from '../Message';
-import { useChannelBotMentionUsers } from '../use-channel-bot-mention-users';
+import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import type { MessageEditor } from './create-message-editor';
 
 type MessageEditorContentProps = {
-  channelId: string;
+  parent: MessageParent;
   message: MessageData;
   messageEditor: MessageEditor;
   participants?: Accessor<IUser[]>;
@@ -32,9 +33,7 @@ type MessageEditorContentProps = {
  */
 export function MessageEditorContent(props: MessageEditorContentProps) {
   const snapshot = () => props.messageEditor.state()?.snapshot;
-  const channelBotMentionUsers = useChannelBotMentionUsers(
-    () => props.channelId
-  );
+  const channelBotMentionUsers = useMessageBotMentionUsers(() => props.parent);
   const attachmentTracker = createInputAttachmentTracker({
     initialAttachments: snapshot()?.attachments,
   });
@@ -56,6 +55,7 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
   return (
     <div ref={attachHotkeys} class={cn('w-full min-w-0', props.class)}>
       <ChannelInput
+        parent={props.parent}
         input={{
           mode: 'channel',
           id: `edit-message-input-${props.message.id}`,
@@ -68,7 +68,7 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
         attachmentTracker={attachmentTracker}
         participants={props.participants}
         bots={channelBotMentionUsers}
-        markdownNamespace={`edit-message-${props.channelId}-${props.message.id}`}
+        markdownNamespace={`edit-message-${props.parent.type}:${props.parent.id}-${props.message.id}`}
         onReady={props.onReady}
         onChange={(nextSnapshot) =>
           props.messageEditor.update(props.message, nextSnapshot)

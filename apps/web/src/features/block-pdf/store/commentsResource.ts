@@ -6,8 +6,13 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
+import {
+  enableUnifiedDocumentDiscussions,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { compareDateAsc } from '@core/util/date';
+import { invalidateMessageTimeline } from '@queries/messages/timeline';
 
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
@@ -31,8 +36,11 @@ import type { EditCommentResponse } from '@service-storage/generated/schemas/edi
 import { batch } from 'solid-js';
 
 const isPdfBlock = createBlockMemo(() => useBlockName() === 'pdf');
+const usesLegacyComments = createBlockMemo(
+  () => isPdfBlock() && !isFeatureEnabled(enableUnifiedDocumentDiscussions)
+);
 export const commentThreadsResource = createBlockResource(
-  isPdfBlock,
+  usesLegacyComments,
   fetchComments
 );
 export const anchorsResource = createBlockResource(isPdfBlock, fetchAnchors);
@@ -98,9 +106,14 @@ function useCreateUnthreadedAnchor() {
 function useHandleDeleteUnthreadedAnchor() {
   const [, { mutate: mutateAnchors }] = anchorsResource;
   const [, { mutate: mutateCommentThreads }] = commentThreadsResource;
+  const documentId = useBlockId();
 
   return async (response: DeleteUnthreadedAnchorResponse) => {
     mutateAnchors((prev) => prev.filter((a) => a.uuid !== response.uuid));
+    if (isFeatureEnabled(enableUnifiedDocumentDiscussions)) {
+      void invalidateMessageTimeline({ type: 'document', id: documentId });
+      return;
+    }
     if (response.threadId != null) {
       mutateCommentThreads((prev) =>
         prev.filter((t) => t.thread.threadId !== response.threadId)
@@ -545,6 +558,29 @@ createConnectionBlockWebsocketEffect((msg) => {
 
   if (blockName !== 'pdf') return;
 
+  // Message-backed discussions create and delete PDF anchors on the server.
+  if (msg.type === 'message_update') {
+    if (!isFeatureEnabled(enableUnifiedDocumentDiscussions)) return;
+    let event: {
+      parent?: { type?: string; id?: string };
+      change?: { type?: string };
+    };
+    try {
+      event = typeof msg.data === 'string' ? JSON.parse(msg.data) : msg.data;
+    } catch {
+      return;
+    }
+    if (
+      event?.parent?.type === 'document' &&
+      event.parent.id === currentDocumentId &&
+      event.change?.type !== 'typing'
+    ) {
+      const [, { refetch }] = anchorsResource;
+      void refetch();
+    }
+    return;
+  }
+
   if (msg.type === 'comment') {
     let incrementalUpdate: AnnotationIncrementalUpdate;
     try {
@@ -560,21 +596,25 @@ createConnectionBlockWebsocketEffect((msg) => {
       return;
     }
 
+    const legacyComments = !isFeatureEnabled(enableUnifiedDocumentDiscussions);
     switch (incrementalUpdate.updateType) {
       case 'create-comment':
-        handleCommentUpdate(incrementalUpdate.payload.response);
+        if (legacyComments)
+          handleCommentUpdate(incrementalUpdate.payload.response);
         break;
       case 'create-anchor':
         handleCreateUnthreadedAnchor(incrementalUpdate.payload.response);
         break;
       case 'edit-comment':
-        handleEditComment(incrementalUpdate.payload.response);
+        if (legacyComments)
+          handleEditComment(incrementalUpdate.payload.response);
         break;
       case 'edit-anchor':
         handleEditAnchor(incrementalUpdate.payload.response);
         break;
       case 'delete-comment':
-        handleDeleteComment(incrementalUpdate.payload.response);
+        if (legacyComments)
+          handleDeleteComment(incrementalUpdate.payload.response);
         break;
       case 'delete-anchor':
         handleDeleteUnthreadedAnchor(incrementalUpdate.payload.response);

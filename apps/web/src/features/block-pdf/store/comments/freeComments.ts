@@ -17,12 +17,10 @@ import {
   isThreadPlaceable,
 } from '@block-pdf/type/placeables';
 import { createBlockMemo } from '@core/block';
+import { commentView } from '@core/comments/commentType';
 import { useUserId } from '@core/context/user';
-import {
-  anchorsResource,
-  commentThreadsResource,
-  sortComments,
-} from '../commentsResource';
+import { anchorsResource } from '../commentsResource';
+import { findAnchorThread, pdfCommentThreads } from '../commentThreads';
 
 export { isThreadPlaceable };
 
@@ -39,39 +37,30 @@ const getFreeCommentThread = (
   const thread = commentPlaceable.payload;
   if (!thread) return null;
 
-  const comments = [...thread.comments].sort(sortComments);
+  const comments = thread.comments.map(commentView);
 
   const rootComment = comments[0];
+  if (!rootComment) return null;
 
   const commentBase = {
     type: commentType,
     isNew: false,
-    threadId: rootComment.threadId,
-    rootId: rootComment.commentId,
+    threadId: thread.threadId,
+    rootId: rootComment.id,
     anchorId: commentPlaceable.internalId,
   };
 
-  const replies: PdfReply[] = [];
-  for (let i = 1; i < comments.length; i++) {
-    const comment = comments[i];
-    replies.push({
-      ...commentBase,
-      id: comment.commentId,
-      createdAt: comment.createdAt,
-      owner: comment.owner,
-      author: comment.sender || comment.owner,
-      text: comment.text,
-    });
-  }
+  const replies: PdfReply[] = comments.slice(1).map((comment) => ({
+    ...commentBase,
+    ...comment,
+  }));
 
   const root: PdfRoot = {
     ...commentBase,
-    id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
-    owner: rootComment.owner,
-    author: rootComment.sender || rootComment.owner,
-    text: rootComment.text,
+    ...rootComment,
     children: replies.map((r) => r.id),
+    replyCount: thread.replyCount,
+    resolved: thread.isResolved,
   };
 
   return { root, replies };
@@ -82,8 +71,7 @@ const serverCommentPlaceables = createBlockMemo<IThreadPlaceable[]>(() => {
   const anchors = anchorsData();
   if (!anchors || anchors.length === 0) return [];
 
-  const [commentThreadsData] = commentThreadsResource;
-  const commentThreads = commentThreadsData();
+  const commentThreads = pdfCommentThreads();
   if (!commentThreads || commentThreads.length === 0) return [];
 
   const freeCommentAnchors = anchors.filter(
@@ -91,9 +79,7 @@ const serverCommentPlaceables = createBlockMemo<IThreadPlaceable[]>(() => {
   );
 
   const mappedAnchors = freeCommentAnchors.flatMap((a) => {
-    const commentThread = commentThreads.find(
-      (ct) => ct.thread.threadId === a.threadId
-    );
+    const commentThread = findAnchorThread(commentThreads, a);
     if (!commentThread) {
       console.error('Comment thread not found for free comment anchor', a);
       return [];
@@ -113,12 +99,13 @@ const serverCommentPlaceables = createBlockMemo<IThreadPlaceable[]>(() => {
         rotation: 0,
       },
       payload: {
-        threadId: commentThread.thread.threadId,
-        rootId: commentThread.comments[0].commentId,
+        threadId: commentThread.threadId,
+        rootId: commentThread.rootId,
         anchorId: a.uuid,
         page: a.page,
         comments: commentThread.comments,
-        isResolved: commentThread.thread.resolved,
+        replyCount: commentThread.replyCount,
+        isResolved: commentThread.isResolved,
       },
       allowableEdits: a.allowableEdits as any,
       wasEdited: a.wasEdited,

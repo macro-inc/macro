@@ -19,13 +19,20 @@ import {
   useGetCommentById,
   useIsActiveThreadSelector,
 } from '@block-pdf/store/comments/commentStore';
+import { useCreateMessageComment } from '@block-pdf/store/comments/messageCommentOperations';
 import { useBlockId, useIsNestedBlock } from '@core/block';
+import type { ThreadId } from '@core/comments/commentType';
 import {
   baseCommentTheme,
   CommentsContext,
   type CommentsContextType,
+  noopCommentOperations,
   Thread,
 } from '@core/comments/Thread';
+import {
+  enableUnifiedDocumentDiscussions,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
 import { createMemo, createSelector, For } from 'solid-js';
 
@@ -56,15 +63,32 @@ export function RightMarginLayout(props: { pageNumber: number }) {
   );
 }
 
+function useCommentOperations(): Pick<
+  CommentsContextType,
+  'commentOperations' | 'messageOperations'
+> {
+  if (isFeatureEnabled(enableUnifiedDocumentDiscussions)) {
+    return {
+      commentOperations: noopCommentOperations,
+      messageOperations: { createComment: useCreateMessageComment() },
+    };
+  }
+  return {
+    commentOperations: {
+      createComment: useCreateComment(),
+      deleteComment: useDeleteComment(),
+      updateComment: useUpdateComment(),
+    },
+  };
+}
+
 const useCommentsContext = (): CommentsContextType => {
   const isNestedBlock = useIsNestedBlock();
 
   const setActiveThread = activeCommentThreadSignal.set;
   const setThreadHeight = threadHeightStore.set;
 
-  const createComment = useCreateComment();
-  const updateComment = useUpdateComment();
-  const deleteComment = useDeleteComment();
+  const operations = useCommentOperations();
 
   const ownedCommentSelector = useOwnedCommentSelector();
 
@@ -86,11 +110,7 @@ const useCommentsContext = (): CommentsContextType => {
     getCommentById,
     documentId,
     ownedComment: ownedCommentSelector,
-    commentOperations: {
-      createComment,
-      deleteComment,
-      updateComment,
-    },
+    ...operations,
     inComment: true,
     highlightedCommentId: () => null,
   };
@@ -109,7 +129,7 @@ function CommentsAndSuggestions(props: { pageNumber: number }) {
   const [selectedThreadId, setSelectedThreadId] = selectingCommentThreadSignal;
   const isSelectingThreadSelector = createSelector(selectedThreadId);
 
-  const commentTheme = (threadId: number | null) => {
+  const commentTheme = (threadId: ThreadId | null) => {
     const isSelecting = isSelectingThreadSelector(threadId);
     let theme = {
       ...baseCommentTheme,
@@ -121,7 +141,7 @@ function CommentsAndSuggestions(props: { pageNumber: number }) {
     return theme;
   };
 
-  const handleThreadMouseDown = (threadId: number) => (e: MouseEvent) => {
+  const handleThreadMouseDown = (threadId: ThreadId) => (e: MouseEvent) => {
     e.stopPropagation();
     setSelectedThreadId(threadId);
 

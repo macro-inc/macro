@@ -15,7 +15,7 @@ const chipMarkdown =
   '<m-magic-chip>{"agentSessionId":"session-1","channelId":"channel-1","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>';
 
 const replyTarget = {
-  channelId: 'channel-1',
+  parent: { type: 'channel' as const, id: 'channel-1' },
   targetMessageId: 'message-1',
   targetThreadId: 'thread-1',
   displayText: '@claude fix the failing test it broke on main',
@@ -106,7 +106,7 @@ describe('composeAgentSessionAnnouncement', () => {
         chip: channelLessChip,
       })
     ).toBe(
-      '<m-reply-target>{"channelId":"channel-1","targetMessageId":"message-1","targetThreadId":"thread-1","displayText":"please look at this","senderId":"macro|user@example.com"}</m-reply-target>\n\n<m-magic-chip>{"agentSessionId":"session-2","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>'
+      '<m-reply-target>{"parent":{"type":"channel","id":"channel-1"},"targetMessageId":"message-1","targetThreadId":"thread-1","displayText":"please look at this","senderId":"macro|user@example.com"}</m-reply-target>\n\n<m-magic-chip>{"agentSessionId":"session-2","promptedMessage":{"turn":0,"author":"user"},"status":"booting"}</m-magic-chip>'
     );
   });
 

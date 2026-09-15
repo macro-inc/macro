@@ -7,7 +7,7 @@ import {
   createBlockSignal,
   createBlockStore,
 } from '@core/block';
-import type { ThreadId } from '@core/comments/commentType';
+import type { CommentId, ThreadId } from '@core/comments/commentType';
 import { createMemo, createSelector } from 'solid-js';
 import { reconcile } from 'solid-js/store';
 
@@ -30,7 +30,7 @@ export const useIsActiveThreadSelector = () => {
 
 export const commentsStore = createBlockStore<CommentStore>([]);
 
-type CommentMap = Map<number, PdfComment>;
+type CommentMap = Map<CommentId, PdfComment>;
 export const commentMap = createBlockMemo(() => {
   const commentMap: CommentMap = new Map();
   for (const comment of commentsStore.get ?? []) {
@@ -40,7 +40,7 @@ export const commentMap = createBlockMemo(() => {
 });
 
 export const useGetCommentById = () => {
-  return (id: number) => commentMap()?.get(id);
+  return (id: CommentId) => commentMap()?.get(id);
 };
 
 const combinedComments = createBlockMemo(() => {

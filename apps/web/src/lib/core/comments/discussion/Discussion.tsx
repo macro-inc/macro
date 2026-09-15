@@ -2,7 +2,6 @@ import { buildChannelMessageListMeta } from '@channel/Channel/message-list-meta'
 import type { InputSnapshot } from '@channel/Input/types';
 import type { ChannelMessageListMeta } from '@channel/Message/list-meta';
 import { Message } from '@channel/Message/Message';
-import type { MessageActions } from '@channel/Message/types';
 import { buildThreadReplyListMeta } from '@channel/Thread/reply-list-meta';
 import { Thread } from '@channel/Thread/Thread';
 import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
@@ -10,6 +9,7 @@ import { ThreadReplyRail } from '@channel/Thread/ThreadReplyRail';
 import { channelReplyInputOffsetX } from '@channel/Thread/utils/thread-rail-geometry';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
+import type { MessageActions } from '@core/messages/types';
 import { getDisplayName, tryMacroId } from '@core/user';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';

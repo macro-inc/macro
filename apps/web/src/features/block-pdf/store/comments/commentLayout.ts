@@ -11,7 +11,7 @@ import {
   createBlockRenderEffect,
   createBlockStore,
 } from '@core/block';
-import { isRoot, type Root } from '@core/comments/commentType';
+import { isRoot, type Root, type ThreadId } from '@core/comments/commentType';
 import { reconcile } from 'solid-js/store';
 import { activeCommentThreadSignal, commentsStore } from './commentStore';
 
@@ -19,7 +19,7 @@ import { activeCommentThreadSignal, commentsStore } from './commentStore';
 const CONTAINER_PADDING = 80;
 
 /** Maps thread id to height of its measure container */
-type ThreadHeights = Record<number, number>;
+type ThreadHeights = Record<ThreadId, number>;
 export const threadHeightStore = createBlockStore<Partial<ThreadHeights>>({});
 
 /** Maps page index to comment layout on that page */

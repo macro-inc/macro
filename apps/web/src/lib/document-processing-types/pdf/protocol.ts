@@ -1,4 +1,4 @@
-import type { IComment } from '@core/comments/commentType';
+import type { CommentId, IComment, ThreadId } from '@core/comments/commentType';
 import { z } from 'zod';
 
 const numberSetSchema = z
@@ -22,11 +22,12 @@ export enum PdfShapeType {
 }
 
 export type PdfThreadPayload = {
-  threadId: number;
-  rootId: number;
+  threadId: ThreadId;
+  rootId: CommentId;
   anchorId: string;
   page: number;
   comments: IComment[];
+  replyCount?: number;
   isResolved: boolean;
 };
 

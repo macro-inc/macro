@@ -38,6 +38,10 @@ import {
   createBlockMemo,
   createBlockSignal,
 } from '@core/block';
+import {
+  enableUnifiedDocumentDiscussions,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { createCallback } from '@solid-primitives/rootless';
 import type { PageViewport } from 'pdfjs-dist';
@@ -46,6 +50,7 @@ import { v7 as uuid7 } from 'uuid';
 import { activeCommentThreadSignal } from './comments/commentStore';
 import { commentPlaceables, isThreadPlaceable } from './comments/freeComments';
 import { useEditPdfFreeCommentAnchor } from './commentsResource';
+import { useDeleteMessageThreadResource } from './messageCommentsResource';
 
 interface AppearancePayload {
   bold: boolean;
@@ -797,6 +802,7 @@ export function useDeletePlaceable() {
   const setActivePlaceable = activePlaceableIdSignal.set;
   const doEdit = useDoEdit();
   const deleteComment = useDeleteComment();
+  const deleteMessageThread = useDeleteMessageThreadResource();
 
   const arrayDelete = (index: number) => {
     if (index < 0 || index >= pdfModificationDataValue.placeables.length)
@@ -823,6 +829,10 @@ export function useDeletePlaceable() {
       let rootId = placeable.payload?.rootId;
       if (!rootId) {
         deleteComment({ commentId: -1 });
+        return;
+      }
+      if (isFeatureEnabled(enableUnifiedDocumentDiscussions)) {
+        void deleteMessageThread(String(rootId));
         return;
       }
       deleteComment({ commentId: rootId });

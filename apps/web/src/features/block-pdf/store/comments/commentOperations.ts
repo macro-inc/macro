@@ -3,7 +3,12 @@ import { useGetRootViewer } from '@block-pdf/signal/pdfViewer';
 import { commentsStore } from '@block-pdf/store/comments/commentStore';
 import type { PdfRootLayout } from '@block-pdf/type/comments';
 import { useBlockId } from '@core/block';
-import { type DeleteCommentInfo, isRoot } from '@core/comments/commentType';
+import {
+  type CommentId,
+  type DeleteCommentInfo,
+  isRoot,
+  type ThreadId,
+} from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import { blockElementSignal } from '@core/signal/blockElement';
 import type {
@@ -34,7 +39,9 @@ export function useCreateComment() {
   const createThreadReply = useCreateThreadReplyResource();
 
   return createCallback(
-    async (info: CreateCommentRequest & { threadId: number }) => {
+    async (
+      info: Omit<CreateCommentRequest, 'threadId'> & { threadId: ThreadId }
+    ) => {
       analytics.track('comment_create', { blockType: 'pdf' });
       const { threadId, text, mentions } = info;
 
@@ -97,7 +104,8 @@ export function useCreateComment() {
         return response;
       }
 
-      return await createThreadReply(info);
+      if (typeof threadId !== 'number') return null;
+      return await createThreadReply({ ...info, threadId });
     }
   );
 }
@@ -107,10 +115,17 @@ export function useUpdateComment() {
 
   const editComment = useEditCommentResource();
 
-  return createCallback((commentId: number, info: EditCommentRequest) => {
-    analytics.track('comment_update', { blockType: 'pdf' });
-    return editComment(commentId, info);
-  });
+  return createCallback(
+    (
+      commentId: CommentId,
+      info: Omit<EditCommentRequest, 'threadId'> & { threadId: ThreadId }
+    ) => {
+      analytics.track('comment_update', { blockType: 'pdf' });
+      if (typeof commentId !== 'number' || typeof info.threadId !== 'number')
+        return Promise.resolve(false);
+      return editComment(commentId, { ...info, threadId: info.threadId });
+    }
+  );
 }
 
 export function useDeleteComment() {
@@ -126,6 +141,7 @@ export function useDeleteComment() {
       deleteNewComments();
       return false;
     }
+    if (typeof commentId !== 'number') return false;
 
     const success = await deleteComment(commentId, {
       removeAnchorThreadOnly: info.removeAnchorThreadOnly,
@@ -162,7 +178,7 @@ export function useScrollToCommentThread() {
     });
   };
 
-  return async (threadId: number) => {
+  return async (threadId: ThreadId) => {
     const measureContainerId = threadMeasureContainerId(documentId, threadId);
     let measureContainer = document.getElementById(measureContainerId);
     const blockEl = blockElement();

@@ -29,6 +29,7 @@ import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
 import { useIsAuthenticated } from '@core/auth';
 import { createBlockSignal, useBlockId, useIsNestedBlock } from '@core/block';
 import type { Completion } from '@core/client/completion';
+import type { ThreadId } from '@core/comments/commentType';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
@@ -93,7 +94,7 @@ export interface IHighlightObj {
   width: number;
   height: number;
   color: IColor;
-  threadId: number | null;
+  threadId: ThreadId | null;
   highlightId: string; // uuid of the highlight that contains this rect
   rectId: string; // unique identifier of this rect
   text?: string;
@@ -136,6 +137,11 @@ export function PageOverlay(props: IPageOverlayProps) {
   const termDataStore = keyedTermDataStore();
 
   const onClick = (e: MouseEvent) => {
+    if (
+      e.target instanceof Element &&
+      e.target.closest('[data-comment-thread]')
+    )
+      return;
     if (disablePageViewClick()) return;
 
     if (mode() !== PayloadMode.NoMode) {
@@ -299,7 +305,12 @@ export function PageOverlay(props: IPageOverlayProps) {
 
   const blockElement = blockElementSignal.get;
   onMount(() => {
-    const resetMode = (_e: MouseEvent) => {
+    const resetMode = (event: MouseEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[data-comment-thread]')
+      )
+        return;
       setActiveThreadId(null);
       setMode(PayloadMode.NoMode);
     };

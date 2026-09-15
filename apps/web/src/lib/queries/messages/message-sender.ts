@@ -1,31 +1,35 @@
-import type {
-  ApiChannelMessage,
-  ApiThreadReply,
-  ChannelMessagesPage,
-} from '@service-storage/client';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 import type { Bot } from '@service-storage/generated/schemas/bot';
+import type {
+  Message as EntityMessage,
+  MessageListItem,
+  MessageTimelinePage,
+} from '@service-storage/messages';
 import { firstPartyBotName } from '../bots/first-party-bot-name';
 
 export { firstPartyBotName } from '../bots/first-party-bot-name';
 
 type WithMaybeSender<
-  T extends { sender_id: string; sender: ApiMessageSender },
+  T extends {
+    sender_id: string;
+    sender?: ApiMessageSender;
+    bot_profile?: { name: string; avatar_url?: string | null } | null;
+    triggered_by?: string | null;
+  },
 > = Omit<T, 'sender'> & { sender?: ApiMessageSender };
 
-export type ThreadReplyWithMaybeSender = WithMaybeSender<ApiThreadReply>;
+export type ThreadReplyWithMaybeSender = WithMaybeSender<EntityMessage>;
 
 export type ChannelMessageWithMaybeSender = Omit<
-  WithMaybeSender<ApiChannelMessage>,
+  WithMaybeSender<MessageListItem>,
   'thread'
 > & {
-  thread: Omit<ApiChannelMessage['thread'], 'preview'> & {
+  thread: Omit<MessageListItem['thread'], 'preview'> & {
     preview: ThreadReplyWithMaybeSender[];
   };
 };
 
-// Temporary compatibility for API nodes that only return sender_id.
-// Remove once all deployed channel message responses include sender.
+/** Derive presentation identity from the canonical stored principal. */
 export function senderFromStorageId(senderId: string): ApiMessageSender {
   if (senderId.startsWith('bot|')) {
     return { type: 'bot', id: senderId.slice('bot|'.length) };
@@ -59,22 +63,34 @@ export function isBotSenderId(senderId: string): boolean {
 }
 
 export function normalizeMessageSender<
-  T extends { sender_id: string; sender?: ApiMessageSender },
+  T extends {
+    sender_id: string;
+    sender?: ApiMessageSender;
+    bot_profile?: { name: string; avatar_url?: string | null } | null;
+    triggered_by?: string | null;
+  },
 >(message: T): T & { sender: ApiMessageSender } {
   return message.sender
     ? (message as T & { sender: ApiMessageSender })
-    : { ...message, sender: senderFromStorageId(message.sender_id) };
+    : {
+        ...message,
+        sender: {
+          ...senderFromStorageId(message.sender_id),
+          ...message.bot_profile,
+          triggered_by: message.triggered_by,
+        },
+      };
 }
 
 export function normalizeThreadReplySender(
   reply: ThreadReplyWithMaybeSender
-): ApiThreadReply {
+): EntityMessage {
   return normalizeMessageSender(reply);
 }
 
 export function normalizeChannelMessageSender(
   message: ChannelMessageWithMaybeSender
-): ApiChannelMessage {
+): MessageListItem {
   const normalized = normalizeMessageSender(message);
 
   return {
@@ -86,11 +102,11 @@ export function normalizeChannelMessageSender(
   };
 }
 
-export function normalizeChannelMessagesPageSenders(
-  page: Omit<ChannelMessagesPage, 'items'> & {
+export function normalizeMessageTimelinePageSenders(
+  page: Omit<MessageTimelinePage, 'items'> & {
     items: ChannelMessageWithMaybeSender[];
   }
-): ChannelMessagesPage {
+): MessageTimelinePage {
   return {
     ...page,
     items: page.items.map(normalizeChannelMessageSender),

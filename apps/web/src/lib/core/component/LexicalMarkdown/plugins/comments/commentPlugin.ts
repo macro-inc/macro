@@ -19,6 +19,7 @@ import {
   $getSelection,
   $isRangeSelection,
   $isTextNode,
+  $nodesOfType,
   COMMAND_PRIORITY_EDITOR,
   createCommand,
   type LexicalEditor,
@@ -37,7 +38,12 @@ interface CommentOperations {
     isDraft: boolean,
     isLocal: boolean
   ) => void;
-  remove: (markId: string, markNodeKey: string) => void;
+  /** `lastRangeRemoved` is true when no remaining node in the tree carries the mark id. */
+  remove: (
+    markId: string,
+    markNodeKey: string,
+    lastRangeRemoved: boolean
+  ) => void;
   setActiveIds: (markIds: string[]) => void;
   init: () => void;
 }
@@ -103,6 +109,11 @@ export const SET_COMMENT_THREAD_ID_COMMAND = createCommand<{
   markId: string;
   threadId: number;
 }>('SET_COMMENT_THREAD_ID_COMMAND');
+
+/** Persist a draft mark whose thread is identified by the mark id alone. */
+export const COMMIT_COMMENT_MARK_COMMAND = createCommand<{
+  markId: string;
+}>('COMMIT_COMMENT_MARK_COMMAND');
 
 const CLEANUP_COMMENTS_COMMAND = createCommand<string[]>(
   'CLEANUP_COMMENTS_COMMAND'
@@ -208,71 +219,6 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
       ops.init();
     }),
 
-    editor.registerMutationListener(
-      CommentNode,
-      (mutations) => {
-        editor.getEditorState().read(() => {
-          for (const [key, mutation] of mutations) {
-            const node: null | CommentNode = $getNodeByKey(key);
-            let ids: NodeKey[] = [];
-
-            if (mutation === 'destroyed') {
-              ids = markNodeKeysToIDs.get(key) || [];
-            } else if ($isMarkNode(node)) {
-              ids = node.getIDs();
-            }
-
-            for (let i = 0; i < ids.length; i++) {
-              const id = ids[i];
-              let markNodeKeys = markNodeMap.get(id);
-              markNodeKeysToIDs.set(key, ids);
-
-              if (mutation === 'destroyed') {
-                ops.remove(id, key);
-
-                if (markNodeKeys !== undefined) {
-                  markNodeKeys.delete(key);
-                  if (markNodeKeys.size === 0) {
-                    markNodeMap.delete(id);
-                  }
-                }
-              } else {
-                const markElement = editor.getElementByKey(key);
-                if (!markElement || !node) {
-                  console.error('unable to find html element for mark node');
-                } else {
-                  const threadId = node?.getThreadId();
-                  const hasServerThread = threadId != null && threadId >= 0;
-                  const isDraft = node.getIsDraft();
-                  const nodePeerId = $getPeerId(node);
-                  const isLocal = Boolean(
-                    nodePeerId && nodePeerId === peerId()
-                  );
-                  ops.add(
-                    id,
-                    node,
-                    markElement,
-                    hasServerThread,
-                    isDraft,
-                    isLocal
-                  );
-                }
-
-                if (markNodeKeys === undefined) {
-                  markNodeKeys = new Set();
-                  markNodeMap.set(id, markNodeKeys);
-                }
-                if (!markNodeKeys.has(key)) {
-                  markNodeKeys.add(key);
-                }
-              }
-            }
-          }
-        });
-      },
-      { skipInitialization: false }
-    ),
-
     editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
         const selection = $getSelection();
@@ -372,7 +318,8 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
           if (!node) continue;
 
           if (forceDelete) {
-            $unwrapMarkNode(node);
+            if (node.getIDs().length > 1) node.deleteID(markId);
+            else $unwrapMarkNode(node);
             continue;
           }
 
@@ -416,6 +363,22 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     ),
 
     editor.registerCommand(
+      COMMIT_COMMENT_MARK_COMMAND,
+      ({ markId }) => {
+        const markNodeKeys = markNodeMap.get(markId);
+        if (!markNodeKeys) return false;
+        for (const key of markNodeKeys) {
+          const node: null | CommentNode = $getNodeByKey(key);
+          if (!node) continue;
+          node.setIsDraft(false);
+        }
+        draftMarkId = null;
+        return true;
+      },
+      COMMAND_PRIORITY_EDITOR
+    ),
+
+    editor.registerCommand(
       MARK_SELECTED_COMMENT_COMMAND,
       (markIds) => {
         markSelected(markIds);
@@ -438,6 +401,61 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
         return true;
       },
       COMMAND_PRIORITY_EDITOR
+    ),
+
+    // Publish mounted marks after their commands and lookup entries are ready.
+    editor.registerMutationListener(
+      CommentNode,
+      (mutations) => {
+        editor.getEditorState().read(() => {
+          // Node replacements and merges can destroy one mark node while another
+          // keeps the same ID. Only the complete new tree proves a range is gone.
+          // In read mode `$nodesOfType` also lists detached leftovers of the
+          // edit, so attachment decides whether a range still exists.
+          const remainingIds = new Set(
+            $nodesOfType(CommentNode)
+              .filter((node) => node.isAttached())
+              .flatMap((node) => node.getIDs())
+          );
+          for (const [key, mutation] of mutations) {
+            const node: null | CommentNode = $getNodeByKey(key);
+            const ids = $isMarkNode(node) ? node.getIDs() : [];
+            for (const id of markNodeKeysToIDs.get(key) ?? []) {
+              if (ids.includes(id)) continue;
+              ops.remove(id, key, !remainingIds.has(id));
+              const keys = markNodeMap.get(id);
+              keys?.delete(key);
+              if (keys?.size === 0) markNodeMap.delete(id);
+            }
+            if (mutation === 'destroyed') {
+              markNodeKeysToIDs.delete(key);
+              continue;
+            }
+            markNodeKeysToIDs.set(key, ids);
+            for (const id of ids) {
+              setMarkNodeMapEntry(id, key);
+              const markElement = editor.getElementByKey(key);
+              if (!markElement || !node) {
+                console.error('unable to find html element for mark node');
+              } else {
+                const isDraft = node.getIsDraft();
+                const hasServerThread = !isDraft;
+                const nodePeerId = $getPeerId(node);
+                const isLocal = Boolean(nodePeerId && nodePeerId === peerId());
+                ops.add(
+                  id,
+                  node,
+                  markElement,
+                  hasServerThread,
+                  isDraft,
+                  isLocal
+                );
+              }
+            }
+          }
+        });
+      },
+      { skipInitialization: false }
     )
   );
 }
@@ -476,6 +494,9 @@ function $disposeExternalDraftComments(validPeerIds: string[]) {
 function $removeOrphanedCommentMarks(validMarkIds: ReadonlySet<string>) {
   $traverseNodes($getRoot(), (node) => {
     if (!$isCommentNode(node) || node.getIsDraft()) return;
+    // Marks without a stored thread id belong to message-backed discussions,
+    // which this legacy reconciliation knows nothing about.
+    if (node.getThreadId() == null) return;
 
     const invalidIds = node.getIDs().filter((id) => !validMarkIds.has(id));
     if (invalidIds.length === 0) return;
