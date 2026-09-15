@@ -224,41 +224,46 @@ fn is_retryable(error: &sqlx::Error) -> bool {
 
 /// One transaction per batch: mapping allocation and the rows those mappings
 /// point at commit together, so the mapping foreign keys hold at every boundary.
+/// Counts join the run summary only once the batch has committed, so a retried
+/// batch is counted once.
 async fn import_batch(
     connection: &mut PgConnection,
     documents: &[String],
     summary: &mut Summary,
 ) -> Result<(), sqlx::Error> {
     let mut tx = connection.begin().await?;
+    let mut batch = Summary::default();
     lock_legacy_tables(&mut tx).await?;
-    summary.comment_mappings_allocated += allocate_comment_mappings(&mut tx, documents).await?;
+    batch.comment_mappings_allocated = allocate_comment_mappings(&mut tx, documents).await?;
     let new_roots = allocate_thread_mappings(&mut tx, documents).await?;
-    summary.thread_mappings_allocated += new_roots.len() as u64;
+    batch.thread_mappings_allocated = new_roots.len() as u64;
 
     let (inserted, updated) = upsert_messages(&mut tx, documents).await?;
-    summary.messages_inserted += inserted;
-    summary.messages_updated += updated;
+    batch.messages_inserted += inserted;
+    batch.messages_updated += updated;
     let (inserted, updated) = upsert_structural_roots(&mut tx, documents).await?;
-    summary.messages_inserted += inserted;
-    summary.messages_updated += updated;
-    summary.messages_tombstoned += tombstone_orphan_messages(&mut tx, documents).await?;
+    batch.messages_inserted += inserted;
+    batch.messages_updated += updated;
+    batch.messages_tombstoned += tombstone_orphan_messages(&mut tx, documents).await?;
 
-    summary.threads_written += upsert_thread_state(&mut tx, documents, &new_roots).await?;
+    batch.threads_written = upsert_thread_state(&mut tx, documents, &new_roots).await?;
     let (threads, messages) = tombstone_orphan_threads(&mut tx, documents).await?;
-    summary.threads_tombstoned += threads;
-    summary.messages_tombstoned += messages;
+    batch.threads_tombstoned = threads;
+    batch.messages_tombstoned += messages;
 
-    summary.anchors_linked += link_anchors(&mut tx, documents).await?;
+    batch.anchors_linked = link_anchors(&mut tx, documents).await?;
     let (remapped, unmapped) = remap_notifications(&mut tx, documents).await?;
-    summary.notifications_remapped += remapped;
-    summary.warnings.unmapped_notifications += unmapped;
+    batch.notifications_remapped = remapped;
+    batch.warnings.unmapped_notifications = unmapped;
     let (remapped, unmapped) = remap_pdf_payloads(&mut tx, documents).await?;
-    summary.pdf_payloads_remapped += remapped;
-    summary.warnings.unmapped_pdf_comment_ids += unmapped;
+    batch.pdf_payloads_remapped = remapped;
+    batch.warnings.unmapped_pdf_comment_ids = unmapped;
 
-    summary.warnings.invalid_mark_ids += count_invalid_mark_ids(&mut tx, documents).await?;
-    summary.warnings.root_order_drift += count_root_order_drift(&mut tx, documents).await?;
-    tx.commit().await
+    batch.warnings.invalid_mark_ids = count_invalid_mark_ids(&mut tx, documents).await?;
+    batch.warnings.root_order_drift = count_root_order_drift(&mut tx, documents).await?;
+    tx.commit().await?;
+    summary.absorb(batch);
+    Ok(())
 }
 
 #[expect(
