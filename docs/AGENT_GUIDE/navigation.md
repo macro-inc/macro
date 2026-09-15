@@ -6,7 +6,7 @@
 | --- | --- |
 | `/app` | Redirects to inbox |
 | `/app/welcome` | Login page (when unauthenticated) |
-| `/app/component/inbox` | Unified inbox |
+| `/app/component/inbox` | Home (notifications + recent activity) |
 | `/app/component/mail` | Email client |
 | `/app/component/channels` | Channels list |
 | `/app/component/documents` | Files (documents list) |
@@ -15,7 +15,7 @@
 | `/app/component/calls` | Calls list |
 | `/app/component/companies` | Customers (CRM; needs a team) |
 | `/app/component/activity` | Activity heatmap + feed |
-| `/app/component/home` | Home (AI-first landing) |
+| `/app/component/home` | Assistant (AI-first landing) |
 | `/app/calendar/view` | Calendar |
 | `/app/md/<uuid>` | A document |
 | `/app/chat/<uuid>` | A standalone AI chat |
@@ -36,20 +36,32 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
   new split, including when Search is already active. This left-click menu shares
   its surface and item styling with the sidebar right-click menus, in both the
   compact rail and expanded sidebar.
-- Nav: `Go to Home`, `Go to Getting Started`, `Go to Notifications`, `Go to Recent`, `Go to Activity`.
+- Nav: `Go to Assistant`, `Go to Getting Started`, `Go to Home`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
   `Go to Calendar`, `Go to Agents`, `Go to Customers`.
 - Then `Favorites` (pinned items) and `Latest` (recent channels/DMs with an `Unread` switch).
 - Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
   `Settings (Ctrl ;)`, `Log out`.
 
-With the new app views enabled, the outer sidebar is an icon rail. Notifications,
+With the new app views enabled, the outer sidebar is an icon rail. Its tooltips
+appear after two seconds of hover, including when moving between rail items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
-item. Notifications uses Signal; Email uses Important across all linked inboxes.
+item. Home uses Signal; Email uses Important across all linked inboxes.
 Noise does not light either dot. These are presence indicators, not counts; they
 do not fetch additional pages to find every unread item. Opening a view alone does
 not clear its dot — reading or completing the represented items does. The button's
 accessible description is `Unread items` while its dot is active.
+
+Home's inner rail starts with a full-width **New chat** plus button that returns
+to Home's starting pane without creating a chat. Email and Tasks use the same
+pill styling and top placement for **New email** and **New task**, replacing
+the sidebar title bars. When multiple desktop splits are open, a **Close** (X)
+button appears beside each sidebar's New button and closes that split. The last
+logical split has no close button; mobile chrome is unchanged.
+These buttons and Home items activate on primary-button
+press; keyboard activation remains supported. Home, Chat, Email,
+Tasks, and other views using the shared inner
+sidebar layout default to 256px; manually resized Chat widths remain saved.
 
 ## Favorites
 
@@ -67,7 +79,7 @@ changes roll back rather than becoming committed local favorites.
 
 ## Create menu
 
-On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
+On mobile, the bottom dock fits fixed-width buttons in this order: Home,
 Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
 dock and search scope pills only when the calendar UI flag is enabled.
 Resizing the screen moves views between the dock

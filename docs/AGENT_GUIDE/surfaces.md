@@ -52,16 +52,56 @@ that entity's last operation in the batch. Emitted `SoupUpdated` items are non-n
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
 
-## Notifications — `/app/component/inbox`
+## Home — `/app/component/inbox`
 
-Unified triage list (emails, channel messages, task assignments, doc mentions, agent
-results). Tabs are `Signal` (default, AI-filtered "needs attention") and `Noise`, with a
-Filter menu. On desktop, selecting a row renders its block in the inline preview beside
-the notification sidebar. With the `enable-inbox-notified-sort` flag on, both tabs order
-rows and date headers by when you were last notified about the item, so a fresh comment
-on an old task sits under "Today"; with it off they order by content recency. Keyboard:
-`j`/`k` move between rows and update the preview; alternate activation opens a new split.
-On mobile, the filters float above the full-height scrolling list. On iOS, rows
+With the new app views enabled, Home is an unfiltered Signal feed merging
+notifications with Activity's `touched_by_me` recents, including sent emails and
+AI chats. Each entity appears once, ordered by its latest notification or own
+action. On desktop, there are no Signal/Noise tabs, filter menu, or Home heading. The full-width
+**New chat** plus pill at the top clears the preview and returns to the Home
+starting pane; it does not create a chat. Email and Tasks have matching top pills
+for **New email** and **New task**.
+
+The 256px desktop rail uses single-line pills with 16px icons: profile photos for
+DMs, model logos for AI chats (Claude sunburst or ChatGPT knot), and regular
+Phosphor icons for other items. There are no title tooltips, and timestamps are
+visible only while hovering the row. An unread
+dot remains visible. Click a row to preview it; `j`/`k` navigate and update the
+preview, and Shift-click opens a split.
+
+On desktop, before selecting a row, the main pane shows a centered chat composer
+under “What should we get done in Macro?”. Type in “Type @ to reference”, use the plus button for
+attachments and the model menu to choose a model, then press Enter or Send to
+create and open an AI chat. The input stays 32px above the vertical center as suggestions load. Up to three cached AI
+suggestions appear below the
+composer, using the existing fast/smart recommendation projections. Compact rows
+use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
+suggestion fills the input and replaces its context attachments without sending;
+the Open action opens its source item in a new split. Suggestion loading/errors
+are isolated from the input. If generation stalls for 45 seconds, the shimmer
+is replaced with a retry action; a late result still appears automatically. Shift+Enter adds a line. Selecting a Home row replaces
+the composer with its preview. Mobile continues to show the activity list alone.
+
+AI chat, agent, and channel message bodies use 15px text, including thread replies.
+Desktop AI chats, agents, and channel composers share Home's rounded composer
+surface: a muted dark fill or a white light-mode surface with a soft shadow,
+15px input text, and circular controls. Composer geometry is scaled to 15/16
+of the original design (48.75px single-line height); the Home composer is at most
+720px wide. In narrower desktop splits, the Home heading wraps and the composer
+shrinks to the available pane width; suggestion text truncates while Open stays
+visible. Plain channel messages use a compact row;
+multiline messages, formatting, and attachments retain a full-width editor and
+footer. Mobile composer styling and send behavior are unchanged.
+
+Sections are Last few minutes (under five minutes), Last hour, This evening
+(6pm onward), This afternoon (noon–6pm), This morning (6am–noon), Earlier today,
+Yesterday, and the existing older-date groups. These use local time and refresh
+every 30 seconds without a new action. Load more reaches older items. A failed
+source shows a retry notice while the other source stays usable. Document typing
+alone is not yet attributed by Activity; Home reflects the actions the existing
+Activity system records.
+
+On mobile, Signal/Noise tabs and filters float above the full-height scrolling list. On iOS, rows
 fade underneath the filters and status bar using the shared top edge gradient.
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
@@ -90,6 +130,9 @@ Task navigation uses `My Tasks`, `All Tasks`, and `Created by me`. The desktop
 sidebar has a full-width `New task` action, a collapsible list of task favorites,
 and a collapsible list of tags. Selecting a tag filters the current task view;
 selecting it again clears that tag filter. Favorite rows open their tasks.
+The desktop `Create` → `Task` modal uses the rounded composer surface, circular
+icon controls, and a pill-shaped `Create Task` button inset 7.5px from the edges.
+The mobile task drawer retains its existing layout.
 
 ## Email — `/app/component/mail`
 
@@ -163,8 +206,15 @@ conversation. A link with `?email_message_id=<message-id>` reveals that message.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
-keeps the framed cards.
+keeps rounded cards matching the chat composer: soft shadows in light mode,
+the same subtle 3D rim in dark mode, and a faint hover tint. Desktop selection
+does not add an accent-colored ring; keyboard focus has a neutral outline.
 Replies appear inline on desktop and in a composer drawer on touch devices.
+Desktop draft bodies and app-controlled message text use 15px, matching channels.
+HTML messages with preserved sender typography retain their explicit sizes.
+Desktop reply actions sit together at the bottom right: discard, attach, schedule,
+then Send, with circular hover backgrounds and a 7.5px inset. Standalone compose
+groups its controls there too, including Formatting. Touch layouts are unchanged.
 `R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
 or the latest message when none is selected. `F` opens a forward and focuses To.
 While an editable field is focused, Escape is handled by that field before the
@@ -444,3 +494,5 @@ spinner while sending.
 The mobile new-email composer nests the channel-style Send button inside its
 top-right glass toolbar, with an even 5px inset on the top, bottom, and right.
 The toolbar is 46px tall; attachment and schedule controls align with Send.
+
+Desktop channel composers expose attachments, Formatting, and Create task in the plus menu. Task mode returns through Back to message. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
