@@ -51,8 +51,35 @@ impl StaticFileServiceClient {
         file_bytes: Bytes,
         content_type: String,
     ) -> Result<PutFileResponse> {
+        self.upload_bytes(file_url, file_bytes, &content_type).await
+    }
+
+    /// Store `file_bytes` under a display name of the caller's choosing.
+    ///
+    /// [`Self::put_file_with_bytes`] names the stored file after the url it
+    /// was pulled from, which is what a viewer then sees. A caller that
+    /// already knows what the file should be called — an agent artifact, whose
+    /// source url is a presigned blob reference — wants the name and the
+    /// source to be different things.
+    pub async fn put_named_bytes(
+        &self,
+        file_name: &str,
+        file_bytes: Bytes,
+        content_type: &str,
+    ) -> Result<PutFileResponse> {
+        self.upload_bytes(file_name, file_bytes, content_type).await
+    }
+
+    /// Reserve a storage slot named `file_name` and push `file_bytes` into the
+    /// presigned url it answers with.
+    async fn upload_bytes(
+        &self,
+        file_name: &str,
+        file_bytes: Bytes,
+        content_type: &str,
+    ) -> Result<PutFileResponse> {
         let body = PutFileRequest {
-            file_name: file_url.to_string(),
+            file_name: file_name.to_string(),
             content_type: Some(content_type.to_string()),
             extension_data: None,
         };
@@ -81,7 +108,7 @@ impl StaticFileServiceClient {
         let upload_response = self
             .client
             .put(&presigned_url)
-            .header(CONTENT_TYPE, &content_type)
+            .header(CONTENT_TYPE, content_type)
             .body(file_bytes.to_vec())
             .send()
             .await?;
