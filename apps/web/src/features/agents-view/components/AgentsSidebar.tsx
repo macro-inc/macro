@@ -20,7 +20,7 @@ import { SplitPanel } from '@components/app/split-panel';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import EmptyStateAiGraphic from '@design/empty-state-ai.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
-import { EntityRowIcon } from '@entity';
+import { Entity, EntityRowIcon } from '@entity';
 import BookOpenIcon from '@phosphor/book-open.svg';
 import ClockIcon from '@phosphor/clock-clockwise.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
@@ -145,17 +145,32 @@ function ConversationRow(props: {
   active: boolean;
   onOpen: () => void;
 }) {
+  const timestamp = () =>
+    props.conversation.updatedAt ?? props.conversation.createdAt;
+
   return (
     <ViewSidebar.Item
       active={props.active}
-      class="font-normal"
+      class="group/recent-chat relative font-normal"
       title={props.conversation.name || 'Untitled chat'}
       onClick={props.onOpen}
     >
       <span class="flex size-4 shrink-0 items-center justify-center">
         <EntityRowIcon entity={props.conversation} class="size-4" />
       </span>
-      <span class="truncate">{props.conversation.name || 'Untitled chat'}</span>
+      <span class="min-w-0 flex-1 truncate text-left group-hover/recent-chat:pr-12">
+        {props.conversation.name || 'Untitled chat'}
+      </span>
+      <Show when={timestamp()}>
+        {(value) => (
+          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-light text-ink-extra-muted opacity-0 transition-opacity group-hover/recent-chat:opacity-100 touch:hidden">
+            <Entity.Timestamp
+              entity={props.conversation}
+              overrideTimeStamp={value()}
+            />
+          </span>
+        )}
+      </Show>
     </ViewSidebar.Item>
   );
 }

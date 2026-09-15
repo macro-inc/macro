@@ -8,14 +8,22 @@ import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
-import type { ChannelEntity } from '@entity';
+import { type ChannelEntity, Entity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import FunnelIcon from '@phosphor/funnel-simple.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import XIcon from '@phosphor/x.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { Button, cn, Dropdown, EmptyStatePanel, Hotkey, Tabs } from '@ui';
+import {
+  Button,
+  cn,
+  Dropdown,
+  EmptyStatePanel,
+  Hotkey,
+  Tabs,
+  Tooltip,
+} from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -26,7 +34,7 @@ import {
 } from 'solid-js';
 import { Virtualizer } from 'virtua/solid';
 import type { ChannelListSort, ChannelsGroup } from '../../types';
-import { channelMentionsUser } from '../../utils';
+import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import {
   ChannelAvatar,
@@ -193,6 +201,8 @@ function FavoriteOption(props: { favorite: Favorite }) {
 function ChannelOption(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
   const item = useChannelRailItemState(() => props.channel.id);
+  const timestamp = () =>
+    props.channel.latestRootMessage?.createdAt ?? props.channel.updatedAt;
 
   return (
     <ChannelRailItemContextMenu channel={props.channel} class="block w-full">
@@ -201,7 +211,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         role="treeitem"
         tabIndex={-1}
         class={cn(
-          'relative flex h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none',
+          'group/channel-option relative flex h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none',
           item().selected && !isTouchDevice() && 'bg-active text-ink',
           (!item().selected || isTouchDevice()) && 'text-ink-muted',
           !item().selected &&
@@ -223,20 +233,49 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         <span class="min-w-0 flex-1 truncate text-sm font-medium">
           {props.channel.name}
         </span>
-        <ChannelMutedIndicator muted={item().muted} />
-        <ChannelCallIndicator
-          status={item().incomingCallId ? undefined : item().callStatus}
-        />
+        <span class="flex shrink-0 items-center gap-2">
+          <ChannelMutedIndicator muted={item().muted} />
+          <ChannelCallIndicator
+            status={item().incomingCallId ? undefined : item().callStatus}
+          />
+          <Show when={item().unread}>
+            <span
+              aria-label="Unread"
+              class="size-2 shrink-0 rounded-full bg-accent"
+            />
+          </Show>
+          <Show when={!item().incomingCallId && timestamp()}>
+            {(value) => (
+              <span class="relative hidden shrink-0 group-hover/channel-option:block touch:hidden">
+                <span
+                  aria-hidden="true"
+                  class="invisible whitespace-nowrap text-xs font-light"
+                >
+                  <Entity.Timestamp
+                    entity={props.channel}
+                    overrideTimeStamp={value()}
+                  />
+                </span>
+                <Tooltip
+                  label={formatDetailedTimestamp(value())}
+                  placement="top"
+                  class="absolute inset-0 flex items-center"
+                >
+                  <span class="whitespace-nowrap text-xs font-light text-ink-extra-muted">
+                    <Entity.Timestamp
+                      entity={props.channel}
+                      overrideTimeStamp={value()}
+                    />
+                  </span>
+                </Tooltip>
+              </span>
+            )}
+          </Show>
+        </span>
         <IncomingCallActions
           callId={item().incomingCallId}
           channelId={props.channel.id}
         />
-        <Show when={item().unread}>
-          <span
-            aria-label="Unread"
-            class="size-2 shrink-0 rounded-full bg-accent"
-          />
-        </Show>
       </div>
     </ChannelRailItemContextMenu>
   );

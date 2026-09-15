@@ -125,7 +125,7 @@ export function ChannelMutedIndicator(props: {
       <Tooltip
         as="span"
         label="Notifications are muted"
-        placement="right"
+        placement="top"
         class={cn(
           'size-4 shrink-0 justify-center text-ink-extra-muted',
           props.class
