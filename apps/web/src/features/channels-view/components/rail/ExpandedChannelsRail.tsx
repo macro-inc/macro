@@ -11,8 +11,8 @@ import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.
 import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
+import FunnelIcon from '@phosphor/funnel-simple.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import SortAscendingIcon from '@phosphor/sort-ascending.svg';
 import XIcon from '@phosphor/x.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Button, cn, Dropdown, EmptyStatePanel, Hotkey, Tabs } from '@ui';
@@ -128,7 +128,7 @@ function ChannelSortDropdown(props: { group: ChannelsGroup; label: string }) {
         class="size-7 rounded-lg"
         label={`Sort ${props.label.toLowerCase()}`}
       >
-        <SortAscendingIcon class="size-3.5" />
+        <FunnelIcon class="size-3.5" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-40">
         <Dropdown.Group>
@@ -270,7 +270,7 @@ function ExpandedFavoritesSection() {
             <span class="min-w-0 truncate">Favorites</span>
             <CaretDownIcon
               class={cn(
-                'size-3 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
+                'size-2.5 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
                 section().focused && 'opacity-100',
                 !section().open && '-rotate-90 opacity-100'
               )}
@@ -485,7 +485,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           <span class="min-w-0 truncate">{props.config.label}</span>
           <CaretDownIcon
             class={cn(
-              'size-3 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
+              'size-2.5 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
               section().focused && 'opacity-100',
               !section().open && '-rotate-90 opacity-100'
             )}

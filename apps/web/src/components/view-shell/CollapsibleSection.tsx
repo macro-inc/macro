@@ -43,7 +43,7 @@ function Indicator(props: JSX.HTMLAttributes<HTMLSpanElement>) {
     >
       <Show
         when={local.children}
-        fallback={<CaretDownIcon class="size-3 -rotate-90" />}
+        fallback={<CaretDownIcon class="size-2.5 -rotate-90" />}
       >
         {local.children}
       </Show>
