@@ -130,11 +130,7 @@ function FavoriteOption(props: { favorite: Favorite }) {
       onClick={() => rail.activateRow(rowKeyForFavorite(props.favorite))}
     >
       <span class="flex size-6 shrink-0 items-center justify-center">
-        <FavoriteIcon
-          favorite={props.favorite}
-          avatarSize="md"
-          class="size-4"
-        />
+        <FavoriteIcon favorite={props.favorite} avatarSize="md" />
       </span>
       <span class="min-w-0 flex-1 truncate text-sm font-medium">
         {displayName()}
