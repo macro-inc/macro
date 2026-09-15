@@ -204,11 +204,11 @@ Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
 Compact channel and DM rows in All have the same height. Section headings place
-their caret immediately after the title and reveal it on hover; hovering only
-undims the heading text, while keyboard-focusing the heading with Arrow keys or
-`j` / `k` gives it a background. Clicking a section heading toggles it without
-moving the keyboard highlight; keyboard activation still toggles the highlighted
-section.
+their caret immediately after the title and reveal it on hover or while the
+section is collapsed; hovering only undims the heading text, while
+keyboard-focusing the heading with Arrow keys or `j` / `k` gives it a background.
+Clicking a section heading toggles it without moving the keyboard highlight;
+keyboard activation still toggles the highlighted section.
 
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances

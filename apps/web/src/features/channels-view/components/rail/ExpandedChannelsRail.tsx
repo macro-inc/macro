@@ -221,7 +221,7 @@ function ExpandedFavoritesSection() {
               class={cn(
                 'size-3 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
                 section().focused && 'opacity-100',
-                !section().open && '-rotate-90'
+                !section().open && '-rotate-90 opacity-100'
               )}
             />
           </button>
@@ -436,7 +436,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
             class={cn(
               'size-3 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
               section().focused && 'opacity-100',
-              !section().open && '-rotate-90'
+              !section().open && '-rotate-90 opacity-100'
             )}
           />
           <Show when={section().unreadCount > 0}>
@@ -529,7 +529,7 @@ function ExpandedBrowse() {
         <ChannelsEmptyState scope="channels" topAligned />
       </Match>
       <Match when={true}>
-        <div class="flex h-full min-h-0 flex-col gap-3 px-4">
+        <div class="flex h-full min-h-0 flex-col gap-2 px-4">
           <ExpandedFavoritesSection />
           <For each={GROUPS}>
             {(config) => <ExpandedGroupSection config={config} />}

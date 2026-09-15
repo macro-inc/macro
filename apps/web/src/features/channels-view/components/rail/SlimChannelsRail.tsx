@@ -495,7 +495,7 @@ function SlimGroupSection(props: { config: GroupConfig }) {
 
 function SlimBrowse() {
   return (
-    <div class="flex h-full min-h-0 flex-col gap-3 px-2">
+    <div class="flex h-full min-h-0 flex-col gap-2 px-2">
       <SlimFavoritesSection />
       <For each={GROUPS}>
         {(config) => <SlimGroupSection config={config} />}
