@@ -103,3 +103,23 @@ async fn domain_errors_have_distinct_http_status_and_only_safe_message() {
         );
     }
 }
+
+#[test]
+fn automatic_configuration_and_repository_metadata_wire_contract() {
+    let request: CodexConfigRequest =
+        serde_json::from_value(serde_json::json!({"environmentId":null,"branch":"main"})).unwrap();
+    assert!(request.environment_id.is_none());
+    let environment = CodexEnvironment {
+        id: "env-a".into(),
+        label: None,
+        repositories: vec![CodexEnvironmentRepository {
+            full_name: "owner/repo".into(),
+            clone_url: "https://github.com/owner/repo.git".into(),
+            default_branch: "trunk".into(),
+        }],
+    };
+    assert_eq!(
+        serde_json::to_value(environment).unwrap(),
+        serde_json::json!({"id":"env-a","label":null,"repositories":[{"fullName":"owner/repo","cloneUrl":"https://github.com/owner/repo.git","defaultBranch":"trunk"}]})
+    );
+}

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CodexEnvironmentLabel } from './codexEnvironmentLabel';
+import type { CodexEnvironmentRepository } from './codexEnvironmentRepository';
 
 /**
  * A cloud environment visible to the connected provider account.
@@ -14,4 +15,6 @@ export interface CodexEnvironment {
   id: string;
   /** Human-readable provider label. */
   label?: CodexEnvironmentLabel;
+  /** Ordered safe repository identities from Codex. */
+  repositories: CodexEnvironmentRepository[];
 }

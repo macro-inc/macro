@@ -47,18 +47,37 @@ pub struct Launch {
 impl Launch {
     /// Reject empty/oversized input before credential use or provider writes.
     pub fn validate(&self) -> Result<(), rootcause::Report> {
-        if self.branch.trim().is_empty()
-            || self.branch.len() > 1024
-            || self.branch.chars().any(char::is_control)
-            || self.prompt.trim().is_empty()
-            || self.prompt.len() > 64 * 1024
-        {
+        validate_branch(&self.branch)?;
+        if self.prompt.trim().is_empty() || self.prompt.len() > 64 * 1024 {
             return Err(rootcause::report!(
                 "provide a branch and nonempty prompt (maximum 64 KiB)"
             ));
         }
         Ok(())
     }
+}
+
+/// Validate a branch or full Git ref before selecting a remote execution target.
+pub fn validate_branch(branch: &str) -> Result<(), rootcause::Report> {
+    if branch.is_empty()
+        || branch.len() > 1024
+        || branch.starts_with('-')
+        || branch == "@"
+        || branch.contains("..")
+        || branch.contains("@{")
+        || branch
+            .chars()
+            .any(|c| c.is_control() || c.is_whitespace() || "~^:?*[\\".contains(c))
+        || branch.split('/').any(|part| {
+            part.is_empty()
+                || part.starts_with('.')
+                || part.ends_with('.')
+                || part.ends_with(".lock")
+        })
+    {
+        return Err(rootcause::report!("invalid cloud Git branch"));
+    }
+    Ok(())
 }
 
 /// Task creation receipt; losing this response must never trigger an automatic retry.

@@ -1,6 +1,9 @@
 //! Direct HTTP implementation of the device flow observed in Codex and OpenCode.
 
-use crate::domain::{Credentials, DeviceLogin, Environment, LoginPoll, OAuth, Secret, unix_now};
+use crate::domain::{
+    Credentials, DeviceLogin, Environment, EnvironmentRepository, LoginPoll, OAuth, Secret,
+    unix_now,
+};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use reqwest::{Client, Response, StatusCode};
 use serde::{Deserialize, de::DeserializeOwned};
@@ -9,6 +12,7 @@ use std::time::Duration;
 #[cfg(test)]
 mod test;
 
+mod environments;
 mod tasks;
 
 const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -140,7 +144,12 @@ impl OAuth for OpenAi {
             .send()
             .await
             .map_err(|_| rootcause::report!("environment request failed (network/timeout)"))?;
-        decode(response, "list cloud environments").await
+        let environments: Vec<environments::ProviderEnvironment> =
+            decode(response, "list cloud environments").await?;
+        environments
+            .into_iter()
+            .map(environments::ProviderEnvironment::project)
+            .collect()
     }
 }
 

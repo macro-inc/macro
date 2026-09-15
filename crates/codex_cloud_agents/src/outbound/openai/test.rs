@@ -154,6 +154,7 @@ async fn numeric_interval_and_safe_environment_projection() {
     assert_eq!(
         environments,
         vec![Environment {
+            repositories: vec![],
             id: "env-1".to_owned(),
             label: Some("Test".to_owned())
         }]

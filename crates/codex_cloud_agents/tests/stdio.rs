@@ -140,6 +140,7 @@ impl OAuth for Provider {
         Ok(vec![Environment {
             id: "env-test".into(),
             label: None,
+            repositories: vec![],
         }])
     }
 }
@@ -290,8 +291,11 @@ fn harness(provider: Provider, journal: Journal) -> Client {
     let service = Arc::new(SessionService::new(
         Arc::new(Probe::new(provider, Auth)),
         journal,
-        CloudId::new("env-test".into()).unwrap(),
-        "main".into(),
+        Some(codex_cloud_agents::domain::runtime::CloudTarget {
+            environment: CloudId::new("env-test".into()).unwrap(),
+            branch: "main".into(),
+            repository_url: None,
+        }),
     ));
     let (client, agent) = tokio::io::duplex(128 * 1024);
     let (read, write) = tokio::io::split(client);

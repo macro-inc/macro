@@ -106,6 +106,7 @@ impl OAuth for Provider {
         Ok(vec![Environment {
             id: "env_test".into(),
             label: None,
+            repositories: vec![],
         }])
     }
 }
@@ -212,8 +213,11 @@ fn service(state: Arc<State>, journal: Journal) -> SessionService<Probe<Provider
     SessionService::new(
         Arc::new(Probe::new(Provider(state), Auth)),
         journal,
-        CloudId::new("env_test".into()).unwrap(),
-        "main".into(),
+        Some(crate::domain::runtime::CloudTarget {
+            environment: CloudId::new("env_test".into()).unwrap(),
+            branch: "main".into(),
+            repository_url: None,
+        }),
     )
 }
 #[tokio::test]
@@ -265,8 +269,11 @@ async fn stale_parent_refuses_provider_follow_up() {
             &StoredSession {
                 account_id: "test-account".into(),
                 connection_id: "test-account".into(),
-                environment: "env_test".into(),
-                branch: "main".into(),
+                target: Some(crate::domain::runtime::CloudTarget {
+                    environment: CloudId::new("env_test".into()).unwrap(),
+                    branch: "main".into(),
+                    repository_url: None,
+                }),
                 task: Some("task_test".into()),
                 turn: Some("turn_old".into()),
                 ..Default::default()
@@ -324,8 +331,11 @@ async fn receipt_persistence_failure_keeps_session_uncertain_in_memory_and_on_di
     let service = SessionService::new(
         Arc::new(Probe::new(Provider(state.clone()), Auth)),
         FailingReceiptJournal(journal.clone()),
-        CloudId::new("env_test".into()).unwrap(),
-        "main".into(),
+        Some(crate::domain::runtime::CloudTarget {
+            environment: CloudId::new("env_test".into()).unwrap(),
+            branch: "main".into(),
+            repository_url: None,
+        }),
     );
     let id = service.new_session().await.unwrap();
     let sink = Sink::default();
@@ -343,8 +353,11 @@ async fn loading_session_from_another_account_rejects_replay_before_emitting_con
             &id,
             &StoredSession {
                 account_id: "another-account".into(),
-                environment: "env_test".into(),
-                branch: "main".into(),
+                target: Some(crate::domain::runtime::CloudTarget {
+                    environment: CloudId::new("env_test".into()).unwrap(),
+                    branch: "main".into(),
+                    repository_url: None,
+                }),
                 ..Default::default()
             },
         )
@@ -402,6 +415,11 @@ async fn restarted_running_turn_observes_and_cancels_without_creation() {
     let original = service(provider.clone(), journal.clone());
     let id = original.new_session().await.unwrap();
     let mut stored = journal.load(&id).await.unwrap().unwrap();
+    stored.target = Some(CloudTarget {
+        environment: CloudId::new("env_test".into()).unwrap(),
+        branch: "main".into(),
+        repository_url: None,
+    });
     stored.task = Some("task_test".into());
     stored.turn = Some("turn_new".into());
     journal.save(&id, &stored).await.unwrap();
@@ -516,8 +534,11 @@ async fn prompt_waiting_for_recovery_revalidates_fence_before_provider_work() {
             inner: Journal::default(),
             fenced: fenced.clone(),
         },
-        CloudId::new("env_test".into()).unwrap(),
-        "main".into(),
+        Some(crate::domain::runtime::CloudTarget {
+            environment: CloudId::new("env_test".into()).unwrap(),
+            branch: "main".into(),
+            repository_url: None,
+        }),
     ));
     let id = service.new_session().await.unwrap();
     let recovery = service
@@ -607,8 +628,11 @@ async fn failed_native_append_never_delivers_unpersisted_provider_output() {
     let service = SessionService::new(
         Arc::new(Probe::new(Provider(provider.clone()), Auth)),
         FailingNativeJournal(journal.clone()),
-        CloudId::new("env_test".into()).unwrap(),
-        "main".into(),
+        Some(crate::domain::runtime::CloudTarget {
+            environment: CloudId::new("env_test".into()).unwrap(),
+            branch: "main".into(),
+            repository_url: None,
+        }),
     );
     let id = service.new_session().await.unwrap();
     let sink = Sink::default();
@@ -646,6 +670,11 @@ async fn recovered_history_requires_successful_replacement_before_followup_dispa
     let initial = service(provider.clone(), journal.clone());
     let id = initial.new_session().await.unwrap();
     let mut stored = journal.load(&id).await.unwrap().unwrap();
+    stored.target = Some(CloudTarget {
+        environment: CloudId::new("env_test".into()).unwrap(),
+        branch: "main".into(),
+        repository_url: None,
+    });
     stored.task = Some("task_test".into());
     stored.turn = Some("turn_new".into());
     journal.save(&id, &stored).await.unwrap();
@@ -687,4 +716,38 @@ async fn recovered_history_requires_successful_replacement_before_followup_dispa
     ));
     assert_eq!(provider.followups.load(Ordering::SeqCst), 1);
     assert_eq!(provider.creates.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn old_session_target_layout_is_rejected() {
+    let old = serde_json::json!({"account_id":"account","connection_id":"connection","environment":"old","branch":"main","task":null,"turn":null,"uncertain_write":false});
+    assert!(serde_json::from_value::<StoredSession>(old).is_err());
+    assert!(
+        serde_json::from_value::<StoredSession>(
+            serde_json::to_value(StoredSession::default()).unwrap()
+        )
+        .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn saved_task_without_target_is_rejected_instead_of_selecting_a_new_one() {
+    let journal = Journal::default();
+    let provider = Arc::new(State::default());
+    let first = service(provider.clone(), journal.clone());
+    let id = first.new_session().await.unwrap();
+    let mut stored = journal.load(&id).await.unwrap().unwrap();
+    stored.task = Some("task_test".into());
+    stored.turn = Some("turn_new".into());
+    journal.save(&id, &stored).await.unwrap();
+    drop(first);
+    let restarted = service(provider.clone(), journal);
+    let error = restarted
+        .prompt(&id, text("continue"), &Sink::default())
+        .await
+        .err()
+        .unwrap();
+    assert!(error.to_string().contains("no pinned target"));
+    assert_eq!(provider.creates.load(Ordering::SeqCst), 0);
+    assert_eq!(provider.followups.load(Ordering::SeqCst), 0);
 }

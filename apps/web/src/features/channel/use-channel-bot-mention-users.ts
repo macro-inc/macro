@@ -61,9 +61,7 @@ export function useChannelBotMentionUsers(
       channelBots.isSuccess ? channelBots.data : [],
       agents.isSuccess ? agents.data : [],
       cursorStatus.isSuccess ? cursorStatus.data.registered : false,
-      codexStatus.isSuccess &&
-        codexStatus.data.connected &&
-        !!codexStatus.data.environmentId
+      codexStatus.isSuccess && codexStatus.data.connected
     )
   );
 }

@@ -36,7 +36,7 @@ function agent(
 }
 
 describe('availableBotMentionUsers', () => {
-  it('only offers Codex agents when ChatGPT and an environment are configured', () => {
+  it('only offers Codex agents when ChatGPT is connected, including automatic mode', () => {
     const codex = agent('codex-agent', 'Codex', 'all', 'codex-cloud');
     expect(availableBotMentionUsers([], [codex], false, false)).toEqual([]);
     expect(availableBotMentionUsers([], [codex], false, true)).toHaveLength(1);

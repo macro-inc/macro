@@ -4,7 +4,7 @@ use crate::domain::{
     codex::{CODEX_PROVIDER, CodexRuntime},
     error::{HarnessError, Result},
     model::SpawnContainer,
-    ports::ContainerManager,
+    ports::{ContainerManager, RepositoryDecision},
     sandbox::SandboxResizeEffect,
 };
 use agent_session::domain::{
@@ -26,6 +26,7 @@ pub struct CodexContainerManager<P, S, J> {
     provider: Arc<P>,
     connections: Option<Arc<dyn ConnectionService>>,
     sessions: S,
+    decision: Arc<dyn RepositoryDecision>,
     journal: Arc<dyn Fn(AgentSessionId) -> (J, AttachmentActivation) + Send + Sync>,
 }
 impl<P, S: Clone, J> Clone for CodexContainerManager<P, S, J> {
@@ -34,6 +35,7 @@ impl<P, S: Clone, J> Clone for CodexContainerManager<P, S, J> {
             provider: self.provider.clone(),
             connections: self.connections.clone(),
             sessions: self.sessions.clone(),
+            decision: self.decision.clone(),
             journal: self.journal.clone(),
         }
     }
@@ -49,12 +51,14 @@ impl<
         provider: Arc<P>,
         connections: Option<Arc<dyn ConnectionService>>,
         sessions: S,
+        decision: Arc<dyn RepositoryDecision>,
         journal: Arc<dyn Fn(AgentSessionId) -> (J, AttachmentActivation) + Send + Sync>,
     ) -> Self {
         Self {
             provider,
             connections,
             sessions,
+            decision,
             journal,
         }
     }
@@ -79,12 +83,12 @@ impl<
             },
             session: id,
             sessions: self.sessions.clone(),
+            history: self.sessions.clone(),
+            decision: self.decision.clone(),
         });
         let (journal, activate) = (self.journal)(id);
         let service = Arc::new(
-            SessionService::new(runtime, journal, resolved.environment_id, resolved.branch)
-                .with_session_id(id.as_uuid().to_string())
-                .with_persisted_target(),
+            SessionService::new(runtime, journal, None).with_session_id(id.as_uuid().to_string()),
         );
         let (ours, theirs) = tokio::io::duplex(64 * 1024);
         let (reader, writer) = tokio::io::split(theirs);

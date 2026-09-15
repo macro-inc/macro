@@ -145,6 +145,13 @@ impl CloudRuntime for Runtime {
             account_id: "account-fold".into(),
         })
     }
+    async fn resolve_target(
+        &self,
+        _: &str,
+        requested: Option<&codex_cloud_agents::domain::runtime::CloudTarget>,
+    ) -> Result<codex_cloud_agents::domain::runtime::CloudTarget> {
+        Ok(requested.unwrap().clone())
+    }
     async fn launch(&self, request: &Launch) -> Result<CreatedTask> {
         {
             let mut calls = self.0.lock().unwrap();
@@ -235,8 +242,11 @@ impl Client {
         let service = Arc::new(SessionService::new(
             Arc::new(runtime),
             journal,
-            CloudId::new("environment-fold".into()).unwrap(),
-            "main".into(),
+            Some(codex_cloud_agents::domain::runtime::CloudTarget {
+                environment: CloudId::new("environment-fold".into()).unwrap(),
+                branch: "main".into(),
+                repository_url: None,
+            }),
         ));
         let (client, agent) = tokio::io::duplex(128 * 1024);
         let (read, write) = tokio::io::split(client);

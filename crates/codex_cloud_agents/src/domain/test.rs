@@ -94,6 +94,7 @@ impl OAuth for Provider {
         self.reads.fetch_add(1, Ordering::SeqCst);
         Ok(if self.environment_visible {
             vec![Environment {
+                repositories: vec![],
                 id: "env-test".to_owned(),
                 label: None,
             }]
@@ -262,4 +263,25 @@ async fn concurrent_credential_reads_rotate_refresh_token_once() {
     second.unwrap();
     assert_eq!(probe.provider.refresh_count.load(Ordering::SeqCst), 1);
     assert_eq!(probe.provider.reads.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn validates_remote_branch_before_launch() {
+    for branch in [
+        "",
+        "bad ref",
+        "main..other",
+        "main@{1}",
+        "-main",
+        "a.lock",
+        "a/.hidden",
+        "a/",
+        "a\\b",
+        "a?b",
+    ] {
+        assert!(cloud::validate_branch(branch).is_err(), "{branch}");
+    }
+    for branch in ["main", "feature/work", "refs/heads/main", "release-1.2"] {
+        assert!(cloud::validate_branch(branch).is_ok(), "{branch}");
+    }
 }

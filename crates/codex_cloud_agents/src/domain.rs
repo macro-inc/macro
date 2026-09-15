@@ -124,12 +124,25 @@ pub trait OAuth: Send + Sync {
 }
 
 /// Safe subset of a cloud environment; never prints setup scripts or secrets.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Environment {
     /// Provider identifier.
     pub id: String,
     /// Human-readable label, if present.
     pub label: Option<String>,
+    /// Ordered, validated repositories; empty when complete metadata is unavailable.
+    pub repositories: Vec<EnvironmentRepository>,
+}
+
+/// Repository identity projected from provider metadata, never from an environment label.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EnvironmentRepository {
+    /// Provider owner/repository name.
+    pub full_name: String,
+    /// HTTPS clone URL without credentials, query, or fragment.
+    pub clone_url: String,
+    /// Provider default branch.
+    pub default_branch: String,
 }
 
 /// Local persistence, exclusively locked by its composition root for a command.

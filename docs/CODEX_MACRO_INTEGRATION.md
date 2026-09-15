@@ -9,8 +9,9 @@ is required before it is available in a shared environment.
 1. Open **Settings → Harness → Codex** and choose **Connect with ChatGPT**.
 2. Open the official verification page and enter the displayed device code.
    Macro polls the owner-bound attempt until it completes, expires or is cancelled.
-3. Select a cloud environment and branch and save the configuration. Repositories
-   must already be configured in Codex on the web.
+3. Leave **Cloud environment** on **Automatic (from your prompt)**, or select an
+   environment and branch and save the configuration. Repositories must already
+   be configured in Codex on the web.
 4. Choose Codex in the agent composer or mention `@codex` in a channel. The first
    prompt creates a remote task; later messages continue the same task. Macro
    displays streamed assistant text, command activity and a link to the cloud task.
@@ -79,7 +80,7 @@ per-user PostgreSQL connection and journal, never those local credentials.
 
 | Surface | Behavior |
 | --- | --- |
-| Launch | Creates a Codex cloud task from the selected environment and branch. |
+| Launch | Chooses an environment from the first prompt or uses an explicit setting, then creates a cloud task. |
 | Follow-up | Continues the existing task using its latest assistant turn. |
 | Streaming | Uses the source-backed per-turn SSE route and reconciles final turn state. |
 | Stop | Requests remote cancellation; terminal state comes from provider evidence. |
@@ -95,27 +96,33 @@ Cloud execution happens in OpenAI's sandbox. See
 These endpoints were discovered from client source and verified experimentally;
 they are not a documented third-party Codex cloud API contract.
 
-## Repository selection follow-up
+## Repository selection
 
-The current implementation uses the environment and branch saved in Harness
-settings. To add automatic selection, extract the decision logic from
-`agent_harness::outbound::cursor::HaikuRepositoryChooser` and supply candidates
-from the owner's Codex environments instead of Macro's GitHub installations.
-Reuse prompt and recent-session context; keep provider-specific resolution small.
+Cursor and Codex share the metered Haiku repository decision: it reads the first
+prompt, the candidate repository URLs and the owner's five recent sessions.
+Cursor continues to supply repositories available through Macro's GitHub App.
+Codex supplies repositories from the owner's connected Codex environments; the
+two services may have different repository access.
 
-The desktop's environment response includes `repos` and `repo_map`, with
-`repository_full_name`, `clone_url`, and `default_branch` for each repository.
-The current transport intentionally exposes only environment ID and label; add
-that safe repository subset before enabling automatic selection. Do not infer
-repository identity from a display label. The cloned CLI's
-`cloud-tasks/src/env_detect.rs` also lists environments by repository and returns
-a list, so a repository is not a unique environment key.
+The transport projects only environment ID, label and safe repository metadata
+from the provider's `repos` and `repo_map` fields. Repository names, clone URLs
+and default branches are available to the picker. Setup scripts, environment
+variables and other provider fields are omitted. Display labels are never used
+to infer repository identity.
 
-Keep environment IDs as launch targets. An explicit selection wins; an ambiguous
-model choice or multiple environments for one repository needs a picker or an
-explicit saved default. Codex needs a configured environment, so Cursor's
-no-repository fallback cannot be copied. Preserve the chosen target throughout
-the session. Automatic selection is a follow-up, not part of this implementation.
+An explicit environment and branch in Harness settings bypass automatic choice.
+Automatic selection uses the first repository in each environment, matching the
+desktop's branch selection behavior. The model chooses only from the candidate
+repository URLs; the runtime maps that answer to exactly one environment. If
+multiple environments use that repository, or no repository clearly fits, the
+prompt reports that the user should select an environment in Harness settings
+and retry. It does not create a cloud task for an ambiguous choice.
+
+Selection happens on the first prompt, before a cloud submission is recorded as
+pending. The selected environment, branch and repository are pinned for that
+session. Follow-ups and replacement loads retain them even if settings change.
+A new connection begins in automatic mode; the existing explicit demo binary
+continues to use its private fixed target.
 
 ## Configuration and rollout
 
@@ -159,19 +166,32 @@ release check. Keep real credentials out of fixtures and snapshots.
 
 ### Results for this implementation
 
-- Connection lifecycle: 9 tests, including PostgreSQL concurrency and owner isolation.
-- Cloud/ACP: 51 library, 17 private CLI and 4 stdio tests, including recorded snapshots,
+- Connection lifecycle: 10 tests, including automatic configuration, PostgreSQL
+  concurrency and owner isolation.
+- Cloud/ACP: 56 library, 17 private CLI and 4 stdio tests, including recorded snapshots,
   restart without relaunch, immediate follow-up after load, and ownership takeover.
   Six served ACP-to-fold tests cover replacement, cancellation, incomplete loads,
   and late historical records remaining in the original turn.
-- Harness: 204 package tests plus service suites and named/channel-triggered Codex
-  startup tests that forbid sandbox provisioning and MCP injection.
-- Authentication: 102 existing service tests and 4 new HTTP/DTO tests.
-- Frontend: 42 tests; mocked Chromium settings, composer and account-switch flows.
+- Harness: 211 package tests and 32 service tests, including named/channel-triggered
+  startup without sandbox provisioning, selection from owner repositories, ambiguous
+  selection, manual retry in the same session, target pinning after restart, and
+  immediate Stop while the model is still selecting.
+- Authentication: 102 existing service tests and 5 Codex HTTP/DTO tests.
+- Frontend: 33 focused automatic-selection tests; mocked Chromium settings,
+  composer and account-switch flows passed without JavaScript errors. The settings
+  checks covered automatic save, primary-repository default branch and custom branch.
 - Local runner: 95 tests. Infrastructure type check, root `just check`, workspace
   SQLx preparation with tests, and Codex crate clippy with warnings denied passed.
 
 The full web TypeScript check still reports two existing scroll-deferral errors
-outside the changed files. The default local database had an unrelated missing
+outside the changed files. Strict harness clippy is blocked by the existing unused
+`channels::domain::reference_sharing::grant_level` function; normal harness clippy
+reports that dependency warning, while the Codex crates pass with warnings denied.
+The default local database had an unrelated missing
 migration in its recorded history; schema and SQLx tests used a separate local
 database migrated from the complete repository history.
+
+The repository metadata was also checked against the authenticated test account
+without launching a task. No database queries changed for automatic selection;
+the prepared workspace SQLx cache remains current. The full application login
+and cloud launch through a deployed backend remains a release check.

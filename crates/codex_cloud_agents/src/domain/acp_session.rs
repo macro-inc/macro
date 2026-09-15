@@ -1,7 +1,7 @@
 //! Serial cloud conversations, durable launch receipts, and provider-grounded completion.
 use super::cloud::{CloudEvent, CloudId, Launch, NativeRecord, TurnId};
 use super::journal::{JournalEntry, JournalInput, ReplayMachine};
-use super::runtime::CloudRuntime;
+use super::runtime::{CloudRuntime, CloudTarget};
 use futures::StreamExt as _;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -14,15 +14,14 @@ use tokio::sync::Mutex;
 
 /// Durable conversation state. Pending writes are never retried automatically.
 #[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct StoredSession {
     /// Account binding prevents replay after switching OAuth accounts.
     pub account_id: String,
     /// Connection generation pinned for hosted account reconnects.
     pub connection_id: String,
-    /// Explicit remote environment binding.
-    pub environment: String,
-    /// Explicit remote branch binding.
-    pub branch: String,
+    /// Destination pinned before the first cloud submission; absent until selection succeeds.
+    pub target: Option<CloudTarget>,
     /// The single remote task backing this conversation.
     pub task: Option<String>,
     /// Latest assistant turn used as the parent for continuation.
@@ -112,33 +111,25 @@ impl Drop for Recovery {
 pub struct SessionService<R, J> {
     probe: Arc<R>,
     fixed_session: Option<String>,
-    persisted_target: bool,
+
     journal: J,
-    environment: CloudId,
-    branch: String,
+    explicit_target: Option<CloudTarget>,
     sessions: Mutex<HashMap<String, Arc<Session>>>,
 }
 impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
     /// Compose cloud and persistence ports with an explicit remote target.
-    pub fn new(probe: Arc<R>, journal: J, environment: CloudId, branch: String) -> Self {
+    pub fn new(probe: Arc<R>, journal: J, explicit_target: Option<CloudTarget>) -> Self {
         Self {
             probe,
             fixed_session: None,
-            persisted_target: false,
             journal,
-            environment,
-            branch,
+            explicit_target,
             sessions: Mutex::new(HashMap::new()),
         }
     }
     /// Pin ACP identity to the host session so a lost new-session response cannot orphan a launch.
     pub fn with_session_id(mut self, id: String) -> Self {
         self.fixed_session = Some(id);
-        self
-    }
-    /// Preserve the environment and branch recorded at creation when owner defaults change.
-    pub fn with_persisted_target(mut self) -> Self {
-        self.persisted_target = true;
         self
     }
     /// Create a local session without starting cloud execution.
@@ -158,8 +149,6 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
                 &StoredSession {
                     account_id: auth.account_id,
                     connection_id: auth.connection_id,
-                    environment: self.environment.as_str().into(),
-                    branch: self.branch.clone(),
                     ..StoredSession::default()
                 },
             )
@@ -190,12 +179,11 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
             .load(id)
             .await?
             .ok_or_else(|| rootcause::report!("unknown session"))?;
+        if (state.task.is_some() || state.turn.is_some()) && state.target.is_none() {
+            return Err(rootcause::report!("saved cloud task has no pinned target"));
+        }
         let auth = self.probe.identity().await?;
-        if state.account_id != auth.account_id
-            || state.connection_id != auth.connection_id
-            || (!self.persisted_target
-                && (state.environment != self.environment.as_str() || state.branch != self.branch))
-        {
+        if state.account_id != auth.account_id || state.connection_id != auth.connection_id {
             return Err(rootcause::report!(
                 "saved session belongs to a different account or remote target"
             ));
@@ -310,6 +298,7 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
         self.record(id, &session, JournalInput::CancellationRequested, &Discard)
             .await?;
         session.cancel.store(true, Ordering::SeqCst);
+        session.changed.notify_waiters();
         let task = session.state.lock().await.task.clone();
         if let Some(task) = task {
             self.probe.cancel(&CloudId::new(task)?).await?;
@@ -334,12 +323,11 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
             .collect::<Result<Vec<_>, _>>()?
             .join("\n");
         self.journal.validate().await?;
-        let mut request = Launch {
-            environment: self.environment.clone(),
-            branch: self.branch.clone(),
-            prompt,
-        };
-        request.validate()?;
+        if prompt.trim().is_empty() || prompt.len() > 64 * 1024 {
+            return Err(rootcause::report!(
+                "provide a nonempty prompt (maximum 64 KiB)"
+            ));
+        }
         let session = self.session(id).await?;
         let _guard = loop {
             let changed = session.changed.notified();
@@ -376,10 +364,6 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
         self.journal.validate().await?;
         session.cancel.store(false, Ordering::SeqCst);
         let previous = session.state.lock().await.clone();
-        if self.persisted_target {
-            request.environment = CloudId::new(previous.environment.clone())?;
-            request.branch = previous.branch.clone();
-        }
         if previous.uncertain_write {
             return Err(rootcause::report!(
                 "previous submission has an uncertain outcome; inspect cloud tasks before starting another session"
@@ -415,6 +399,49 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
                 ));
             }
         }
+        let target = match previous.target {
+            Some(target) => target,
+            None => {
+                let selecting = self
+                    .probe
+                    .resolve_target(&prompt, self.explicit_target.as_ref());
+                tokio::pin!(selecting);
+                let target = loop {
+                    let changed = session.changed.notified();
+                    tokio::pin!(changed);
+                    changed.as_mut().enable();
+                    if session.cancel.load(Ordering::SeqCst) {
+                        return Ok(Outcome::Cancelled);
+                    }
+                    tokio::select! {
+                        result = &mut selecting => {
+                            if session.cancel.load(Ordering::SeqCst) { return Ok(Outcome::Cancelled); }
+                            break result?;
+                        }
+                        _ = changed => {}
+                    }
+                };
+                target.validate()?;
+                self.journal.validate().await?;
+                if session.cancel.load(Ordering::SeqCst) {
+                    return Ok(Outcome::Cancelled);
+                }
+                let mut state = session.state.lock().await;
+                let mut updated = state.clone();
+                updated.target = Some(target.clone());
+                self.journal.save(id, &updated).await?;
+                *state = updated;
+                target
+            }
+        };
+        if session.cancel.load(Ordering::SeqCst) {
+            return Ok(Outcome::Cancelled);
+        }
+        let request = Launch {
+            environment: target.environment,
+            branch: target.branch,
+            prompt,
+        };
         self.record(id, &session, JournalInput::Prompt(blocks), sink)
             .await?;
         {

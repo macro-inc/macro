@@ -46,6 +46,52 @@ describe('Codex connection', () => {
     expect(screen.getByRole('link', { name: 'Open Codex' })).toBeTruthy();
   });
 
+  it('saves automatic retaining the stored branch and remains available when environment loading fails', () => {
+    const props = base();
+    render(() => (
+      <CodexConnection
+        {...props}
+        connection={{
+          connected: true,
+          environmentId: 'env-old',
+          branch: 'release',
+        }}
+        environmentsError
+      />
+    ));
+    fireEvent.change(screen.getByLabelText('Cloud environment'), {
+      target: { value: '' },
+    });
+    expect(screen.queryByLabelText('Branch')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Could not load environments.'
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save Codex settings' })
+    );
+    expect(props.onSave).toHaveBeenCalledWith({
+      environmentId: null,
+      branch: 'release',
+    });
+  });
+
+  it('shows connection and environment loading without exposing a branch in automatic mode', () => {
+    render(() => (
+      <CodexConnection
+        {...base()}
+        connection={{ connected: true, environmentId: null, branch: '' }}
+        environmentsLoading
+      />
+    ));
+    expect(screen.getByRole('status').textContent).toBe(
+      'Loading environments…'
+    );
+    expect(screen.queryByLabelText('Branch')).toBeNull();
+    expect(
+      screen.getByRole('option', { name: 'Automatic (from your prompt)' })
+    ).toBeTruthy();
+  });
+
   it('starts device sign-in without requesting a token', () => {
     const props = base();
     render(() => <CodexConnection {...props} />);
@@ -94,17 +140,33 @@ describe('Codex connection', () => {
           environmentId: null,
           branch: 'main',
         }}
-        environments={[{ id: 'env-1', label: 'Example repo' }]}
+        environments={[
+          {
+            id: 'env-1',
+            label: 'Example repo',
+            repositories: [
+              {
+                fullName: 'example/repo',
+                cloneUrl: 'https://github.com/example/repo.git',
+                defaultBranch: 'develop',
+              },
+            ],
+          },
+        ]}
       />
     ));
     expect(
       screen
         .getByRole('button', { name: 'Save Codex settings' })
         .hasAttribute('disabled')
-    ).toBe(true);
+    ).toBe(false);
+    expect(screen.queryByLabelText('Branch')).toBeNull();
     fireEvent.change(screen.getByLabelText('Cloud environment'), {
       target: { value: 'env-1' },
     });
+    expect((screen.getByLabelText('Branch') as HTMLInputElement).value).toBe(
+      'develop'
+    );
     fireEvent.input(screen.getByLabelText('Branch'), {
       target: { value: ' feature/test ' },
     });

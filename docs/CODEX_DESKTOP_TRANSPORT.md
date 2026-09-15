@@ -167,3 +167,29 @@ journal event IDs and reconcile with turn/task reads after disconnect.
 
 These routes remain unpublished. Pin sanitized fixtures by package version,
 fail visibly on unknown shapes, and retain polling/final-snapshot fallback.
+
+## Environment repository metadata
+
+The desktop's `GET /wham/environments` response includes `repos` (ordered
+repository IDs) and `repo_map` (metadata keyed by those IDs). Each repository
+provides `repository_full_name`, `clone_url`, and `default_branch`. Settings
+renders all repository entries; the task composer uses the first repository's
+default branch. A repository can have multiple environments: the CLI's
+`GET /wham/environments/by-repo/github/{owner}/{repo}` returns a list.
+
+Source locations in the extracted 26.908.70816 package:
+
+- `webview/assets/app-initial-cf777d5420b1.js`: `SAi` lists environments;
+  `TNa`/`ENa` resolve the first repository; `ALa` reads its default branch.
+- `webview/assets/cloud-environments-settings-page-1af730ab5175.js`: `ft` and
+  the list render each repository via `repo_map`; `Lt` creates a singleton
+  `repos:[repositoryId]` environment.
+- Cloned CLI: `codex/codex-rs/cloud-tasks/src/env_detect.rs` lists environments
+  by GitHub repository.
+
+A read-only authenticated check on 2026-09-15 confirmed these fields for both
+existing test-account environments. Repository IDs were strings; clone URLs
+were HTTPS GitHub URLs ending in `.git`; both default branches were `main`.
+Only environment identity and this repository subset were inspected. No task
+was created. The model/UI projection must omit setup scripts, environment
+variables, credentials, and arbitrary fields from the provider response.

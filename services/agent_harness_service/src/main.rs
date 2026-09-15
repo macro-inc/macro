@@ -498,6 +498,11 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(codex_provider),
         codex_connections,
         session_repo.clone(),
+        Arc::new(
+            agent_harness::outbound::repository_choice::HaikuRepositoryDecision::new(
+                ai_usage::pg_recorder(pool.clone()),
+            ),
+        ),
         Arc::new(move |id| {
             let journal = Arc::new(
                 codex_cloud_agents::outbound::postgres_journal::PgCodexJournal::new(

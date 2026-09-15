@@ -87,6 +87,7 @@ impl OAuth for Provider {
     }
     async fn environments(&self, _: &Credentials) -> Result<Vec<Environment>, rootcause::Report> {
         Ok(vec![Environment {
+            repositories: vec![],
             id: "env-test".into(),
             label: Some("Test".into()),
         }])
@@ -177,15 +178,22 @@ async fn configuration_requires_visible_environment_and_refresh_is_serialized() 
     let login = service.start_login(OWNER).await.unwrap();
     ready(&repo, OWNER).await;
     service.poll_login(OWNER, login.attempt_id).await.unwrap();
+    assert!(
+        service
+            .resolve(OWNER)
+            .await
+            .unwrap()
+            .environment_id
+            .is_none()
+    );
     assert!(matches!(
-        service.resolve(OWNER).await,
-        Err(ConnectionError::NotConfigured)
-    ));
-    assert!(matches!(
-        service.configure(OWNER, "invisible", "main").await,
+        service.configure(OWNER, Some("invisible"), "main").await,
         Err(ConnectionError::InvalidInput)
     ));
-    service.configure(OWNER, "env-test", "main").await.unwrap();
+    service
+        .configure(OWNER, Some("env-test"), "main")
+        .await
+        .unwrap();
     repo.owner(OWNER)
         .lock()
         .await
@@ -233,5 +241,59 @@ async fn refresh_cannot_rebind_provider_account() {
             .credentials
             .account_id,
         "account-a"
+    );
+}
+
+#[tokio::test]
+async fn automatic_selection_can_replace_explicit_configuration() {
+    let (service, repo, _) = service();
+    let login = service.start_login(OWNER).await.unwrap();
+    ready(&repo, OWNER).await;
+    service.poll_login(OWNER, login.attempt_id).await.unwrap();
+    assert!(
+        service
+            .resolve(OWNER)
+            .await
+            .unwrap()
+            .environment_id
+            .is_none()
+    );
+    for (environment, branch) in [
+        (Some("env-test"), ""),
+        (Some("env-test"), "bad\nref"),
+        (Some("env-test"), "bad ref"),
+        (Some("env-test"), "main..other"),
+        (Some("env-test"), "refs/heads/.hidden"),
+        (Some("unknown"), "main"),
+    ] {
+        assert!(matches!(
+            service.configure(OWNER, environment, branch).await,
+            Err(ConnectionError::InvalidInput)
+        ));
+    }
+    service
+        .configure(OWNER, Some("env-test"), "feature/work")
+        .await
+        .unwrap();
+    assert_eq!(
+        service
+            .resolve(OWNER)
+            .await
+            .unwrap()
+            .environment_id
+            .unwrap()
+            .as_str(),
+        "env-test"
+    );
+    let status = service.configure(OWNER, None, "main").await.unwrap();
+    assert!(status.connected);
+    assert!(status.environment_id.is_none());
+    assert!(
+        service
+            .resolve(OWNER)
+            .await
+            .unwrap()
+            .environment_id
+            .is_none()
     );
 }

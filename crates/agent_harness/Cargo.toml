@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+async-trait = { workspace = true }
 codex_cloud_agents = { path = "../codex_cloud_agents", features = ["postgres"] }
 codex_connection = { path = "../codex_connection" }
 agent = { path = "../agent" }
@@ -75,7 +76,6 @@ utoipa = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-async-trait = { workspace = true }
 uuid = { workspace = true }
 agent_fold = { path = "../agent_fold", features = ["test-utils"] }
 agent_session = { path = "../agent_session", features = ["test-utils"] }

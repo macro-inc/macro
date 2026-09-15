@@ -43,6 +43,19 @@ pub trait ReachableRepositories: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<String>>> + Send;
 }
 
+/// Shared model decision over an explicit caller-owned repository candidate set.
+#[async_trait::async_trait]
+pub trait RepositoryDecision: Send + Sync {
+    /// Choose one exact candidate or decline when the prompt does not identify one.
+    async fn choose(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        prompt: &str,
+        candidates: &[String],
+        recent: &[agent_session::domain::model::AgentSession],
+    ) -> std::result::Result<Option<String>, rootcause::Report>;
+}
+
 /// Forwards commands to the replica currently responsible for execution.
 pub trait CommandForwarder: Send + Sync + 'static {
     /// Run `command` at `target`.

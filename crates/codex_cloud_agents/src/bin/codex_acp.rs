@@ -36,8 +36,11 @@ async fn run() -> Result<(), rootcause::Report> {
     let service = Arc::new(SessionService::new(
         probe,
         JsonSessionStore::open(root)?,
-        CloudId::new(DEFAULT_ENVIRONMENT.into())?,
-        DEFAULT_BRANCH.into(),
+        Some(codex_cloud_agents::domain::runtime::CloudTarget {
+            environment: CloudId::new(DEFAULT_ENVIRONMENT.into())?,
+            branch: DEFAULT_BRANCH.into(),
+            repository_url: None,
+        }),
     ));
     codex_cloud_agents::inbound::acp::serve(service, tokio::io::stdin(), tokio::io::stdout(), None)
         .await

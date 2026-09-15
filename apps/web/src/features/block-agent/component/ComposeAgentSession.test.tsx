@@ -292,19 +292,24 @@ describe('agent session creation', () => {
     expect(agentHarnessServiceClient.create).not.toHaveBeenCalled();
   });
 
-  it('starts the connected Codex bot without an unsupported model override', async () => {
-    codexConnection.connected = true;
-    codexConnection.environmentId = 'environment-1';
-    mount();
-    fireEvent.click(screen.getByRole('radio', { name: /^Codex @codex$/ }));
-    expect(screen.queryByRole('button', { name: 'Model override' })).toBeNull();
-    hotkeys.enter();
-    await waitFor(() =>
-      expect(agentHarnessServiceClient.create).toHaveBeenCalledWith({
-        botId: CODEX_BOT_ID,
-      })
-    );
-  });
+  it.each([null, 'environment-1'])(
+    'starts connected Codex with environment %s without a model override',
+    async (environmentId) => {
+      codexConnection.connected = true;
+      codexConnection.environmentId = environmentId;
+      mount();
+      fireEvent.click(screen.getByRole('radio', { name: /^Codex @codex$/ }));
+      expect(
+        screen.queryByRole('button', { name: 'Model override' })
+      ).toBeNull();
+      hotkeys.enter();
+      await waitFor(() =>
+        expect(agentHarnessServiceClient.create).toHaveBeenCalledWith({
+          botId: CODEX_BOT_ID,
+        })
+      );
+    }
+  );
   it('autofocuses the prompt when the composer opens', async () => {
     mount();
     const prompt = screen.getByRole('textbox', { name: 'Task for the agent' });

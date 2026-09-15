@@ -24,3 +24,6 @@ pub mod sidecar;
 pub mod acp_pipe;
 /// Per-owner Codex cloud runtime.
 pub mod codex;
+
+/// Shared metered repository decision for hosted cloud runtimes.
+pub mod repository_choice;

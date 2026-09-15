@@ -83,13 +83,26 @@ pub struct CodexEnvironment {
     pub id: String,
     /// Human-readable provider label.
     pub label: Option<String>,
+    /// Ordered safe repository identities from Codex.
+    pub repositories: Vec<CodexEnvironmentRepository>,
+}
+/// Safe repository metadata available to the connected Codex account.
+#[derive(Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexEnvironmentRepository {
+    /// Owner/repository identity.
+    pub full_name: String,
+    /// Credential-free HTTPS clone URL.
+    pub clone_url: String,
+    /// Provider default branch.
+    pub default_branch: String,
 }
 /// Explicit remote target for future Codex sessions.
 #[derive(Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexConfigRequest {
-    /// An environment currently visible to this account.
-    pub environment_id: String,
+    /// An environment currently visible to this account, or null for automatic selection.
+    pub environment_id: Option<String>,
     /// Git base ref in that environment.
     pub branch: String,
 }
@@ -121,7 +134,6 @@ impl IntoResponse for ApiError {
             ConnectionError::InvalidInput => StatusCode::BAD_REQUEST,
             ConnectionError::NotFound => StatusCode::NOT_FOUND,
             ConnectionError::NotConnected
-            | ConnectionError::NotConfigured
             | ConnectionError::AlreadyConnected
             | ConnectionError::AccountChanged => StatusCode::CONFLICT,
             ConnectionError::Provider => StatusCode::BAD_GATEWAY,
@@ -239,6 +251,15 @@ pub async fn environments(
             .map(|environment| CodexEnvironment {
                 id: environment.id,
                 label: environment.label,
+                repositories: environment
+                    .repositories
+                    .into_iter()
+                    .map(|repository| CodexEnvironmentRepository {
+                        full_name: repository.full_name,
+                        clone_url: repository.clone_url,
+                        default_branch: repository.default_branch,
+                    })
+                    .collect(),
             })
             .collect(),
     ))
@@ -255,7 +276,7 @@ pub async fn configure(
             .ok_or(ApiError::Unavailable)?
             .configure(
                 user.authorization.macro_user_id.as_ref(),
-                &request.environment_id,
+                request.environment_id.as_deref(),
                 &request.branch,
             )
             .await?

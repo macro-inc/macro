@@ -5,7 +5,15 @@ import type { CodexConnectionDisplay, CodexLoginDisplay } from '../core/types';
 export function CodexConnection(props: {
   connection: CodexConnectionDisplay | undefined;
   login: CodexLoginDisplay | undefined;
-  environments: { id: string; label?: string | null }[];
+  environments: {
+    id: string;
+    label?: string | null;
+    repositories: {
+      fullName: string;
+      cloneUrl: string;
+      defaultBranch: string;
+    }[];
+  }[];
   environmentsLoading: boolean;
   environmentsError: boolean;
   loading: boolean;
@@ -15,7 +23,7 @@ export function CodexConnection(props: {
   onCancel: () => void;
   onDisconnect: () => void;
   onRetryEnvironments: () => void;
-  onSave: (config: { environmentId: string; branch: string }) => void;
+  onSave: (config: { environmentId: string | null; branch: string }) => void;
 }) {
   const [environment, setEnvironment] = createSignal<string>();
   const [branch, setBranch] = createSignal<string>();
@@ -128,14 +136,17 @@ export function CodexConnection(props: {
                   class="settings-input w-full max-w-sm"
                   value={selectedEnvironment()}
                   disabled={props.environmentsLoading || props.pending}
-                  onChange={(event) =>
-                    setEnvironment(event.currentTarget.value)
-                  }
+                  onChange={(event) => {
+                    const id = event.currentTarget.value;
+                    setEnvironment(id);
+                    setBranch(
+                      props.environments.find((item) => item.id === id)
+                        ?.repositories[0]?.defaultBranch ?? ''
+                    );
+                  }}
                 >
                   <option value="" selected={!selectedEnvironment()}>
-                    {props.environmentsLoading
-                      ? 'Loading environments…'
-                      : 'Choose an environment'}
+                    Automatic (from your prompt)
                   </option>
                   <For each={props.environments}>
                     {(item) => (
@@ -144,11 +155,24 @@ export function CodexConnection(props: {
                         selected={selectedEnvironment() === item.id}
                       >
                         {item.label ?? item.id}
+                        {item.repositories.length
+                          ? ` — ${item.repositories.map((repo) => repo.fullName).join(', ')}`
+                          : ''}
                       </option>
                     )}
                   </For>
                 </select>
               </label>
+              <p class="text-xs text-ink-muted">
+                Automatic chooses a repository and its default branch from your
+                prompt. If Codex cannot confidently choose, select an
+                environment here and try again.
+              </p>
+              <Show when={props.environmentsLoading}>
+                <p role="status" class="text-xs text-ink-muted">
+                  Loading environments…
+                </p>
+              </Show>
               <Show when={props.environmentsError}>
                 <div class="flex items-center gap-2">
                   <p role="alert" class="text-sm text-negative">
@@ -197,36 +221,39 @@ export function CodexConnection(props: {
                   Retry environments
                 </Button>
               </Show>
-              <label
-                class="flex flex-col gap-1.5 text-xs text-ink"
-                for="codex-branch"
-              >
-                Branch
-                <input
-                  id="codex-branch"
-                  class="settings-input w-full max-w-sm"
-                  value={selectedBranch()}
-                  onInput={(event) => setBranch(event.currentTarget.value)}
-                  disabled={props.pending}
-                  placeholder="Branch or git ref"
-                />
-              </label>
-              <p class="text-xs text-ink-muted">
-                New @codex sessions use this environment and branch.
-              </p>
+              <Show when={selectedEnvironment()}>
+                <label
+                  class="flex flex-col gap-1.5 text-xs text-ink"
+                  for="codex-branch"
+                >
+                  Branch
+                  <input
+                    id="codex-branch"
+                    class="settings-input w-full max-w-sm"
+                    value={selectedBranch()}
+                    onInput={(event) => setBranch(event.currentTarget.value)}
+                    disabled={props.pending}
+                    placeholder="Branch or git ref"
+                  />
+                </label>
+                <p class="text-xs text-ink-muted">
+                  New @codex sessions use this environment and branch.
+                </p>
+              </Show>
               <div class="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={
                     props.pending ||
-                    !selectedEnvironment() ||
-                    !selectedBranch().trim()
+                    (!!selectedEnvironment() && !selectedBranch().trim())
                   }
                   onClick={() =>
                     props.onSave({
-                      environmentId: selectedEnvironment(),
-                      branch: selectedBranch().trim(),
+                      environmentId: selectedEnvironment() || null,
+                      branch: selectedEnvironment()
+                        ? selectedBranch().trim()
+                        : props.connection?.branch.trim() || 'main',
                     })
                   }
                 >

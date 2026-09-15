@@ -59,7 +59,10 @@ function CodexHarnessContent() {
       setError('Could not disconnect ChatGPT. Please try again.');
     }
   };
-  const save = async (config: { environmentId: string; branch: string }) => {
+  const save = async (config: {
+    environmentId: string | null;
+    branch: string;
+  }) => {
     setError(undefined);
     try {
       await configure.mutateAsync(config);

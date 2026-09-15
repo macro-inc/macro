@@ -178,3 +178,12 @@ reader and no advertised `session/resume` method.
 See [the Macro integration](CODEX_MACRO_INTEGRATION.md) for connection settings,
 hosted storage, configuration, and rollout. These later regression tests do not
 replace the live provider observations recorded above.
+
+The automatic-selection follow-up rebuilt and installed both demo binaries at
+`/home/wolf/.local/bin` on the development server and `framework`. The framework
+probe's help command and ACP startup with closed stdin exited successfully;
+neither command launched cloud work. Binaries were replaced atomically so an
+already running process could continue. No credentials were recopied. The new
+journal layout has no compatibility reader; use a new demo session for the new
+binary. The standalone demo still uses its explicit test-repository target;
+automatic selection belongs to the hosted Macro runtime.

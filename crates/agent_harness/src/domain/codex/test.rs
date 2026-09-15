@@ -6,13 +6,35 @@ use codex_connection::domain::{
 };
 use std::{collections::HashMap, sync::Mutex};
 
+struct NoDecision;
+#[async_trait::async_trait]
+impl RepositoryDecision for NoDecision {
+    async fn choose(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+        _: &[String],
+        _: &[agent_session::domain::model::AgentSession],
+    ) -> Result<Option<String>, rootcause::Report> {
+        panic!("explicit target must not use model");
+    }
+}
 #[derive(Default)]
-struct Connections(Mutex<HashMap<String, (String, String)>>);
+struct Connections(
+    Mutex<HashMap<String, (String, String)>>,
+    Mutex<Option<(Option<String>, String)>>,
+);
 #[async_trait::async_trait]
 impl ConnectionService for Connections {
     async fn resolve(&self, owner: &str) -> Result<ResolvedConnection, ConnectionError> {
         let rows = self.0.lock().unwrap();
         let (connection, account) = rows.get(owner).ok_or(ConnectionError::NotConnected)?;
+        let (environment, branch) = self
+            .1
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or((Some("env_owner".into()), "main".into()));
         Ok(ResolvedConnection {
             connection_id: connection.parse().unwrap(),
             credentials: Credentials {
@@ -22,8 +44,8 @@ impl ConnectionService for Connections {
                 expires_at: u64::MAX,
                 account_id: account.clone(),
             },
-            environment_id: CloudId::new("env_owner".into()).unwrap(),
-            branch: "main".into(),
+            environment_id: environment.map(|id| CloudId::new(id).unwrap()),
+            branch,
         })
     }
     async fn status(&self, _: &str) -> Result<ConnectionStatus, ConnectionError> {
@@ -48,7 +70,7 @@ impl ConnectionService for Connections {
     async fn configure(
         &self,
         _: &str,
-        _: &str,
+        _: Option<&str>,
         _: &str,
     ) -> Result<ConnectionStatus, ConnectionError> {
         unimplemented!()
@@ -77,7 +99,11 @@ impl ExternalSessionRepo for Sessions {
     }
 }
 #[derive(Default)]
-struct Provider(Mutex<Vec<String>>);
+struct Provider(
+    Mutex<Vec<String>>,
+    Mutex<Option<Vec<Environment>>>,
+    Mutex<Vec<(String, String, String)>>,
+);
 impl OAuth for Provider {
     async fn begin(&self) -> Result<DeviceLogin, rootcause::Report> {
         unimplemented!()
@@ -89,9 +115,13 @@ impl OAuth for Provider {
         unimplemented!()
     }
     async fn environments(&self, _: &Credentials) -> Result<Vec<Environment>, rootcause::Report> {
+        if let Some(environments) = self.1.lock().unwrap().clone() {
+            return Ok(environments);
+        }
         Ok(vec![Environment {
             id: "env_owner".into(),
             label: None,
+            repositories: vec![],
         }])
     }
 }
@@ -99,8 +129,13 @@ impl CloudTasks for Provider {
     async fn create(
         &self,
         auth: &Credentials,
-        _: &Launch,
+        request: &Launch,
     ) -> Result<CreatedTask, rootcause::Report> {
+        self.2.lock().unwrap().push((
+            request.environment.as_str().into(),
+            request.branch.clone(),
+            request.prompt.clone(),
+        ));
         self.0.lock().unwrap().push(auth.account_id.clone());
         Ok(CreatedTask {
             task_id: CloudId::new("task_owner".into())?,
@@ -168,7 +203,7 @@ fn runtime(
     owner: &str,
     connections: Arc<Connections>,
     provider: Arc<Provider>,
-) -> CodexRuntime<Provider, Sessions> {
+) -> CodexRuntime<Provider, Sessions, agent_session::testing::InMemoryAgentSessionRepo> {
     let connection = uuid::Uuid::now_v7().to_string();
     connections
         .0
@@ -185,6 +220,8 @@ fn runtime(
         },
         session: AgentSessionId::new(),
         sessions: Sessions::default(),
+        history: agent_session::testing::InMemoryAgentSessionRepo::default(),
+        decision: Arc::new(NoDecision),
     }
 }
 fn launch() -> Launch {
@@ -236,3 +273,5 @@ async fn launch_rechecks_environment_visibility() {
     assert!(runtime.launch(&request).await.is_err());
     assert!(provider.0.lock().unwrap().is_empty());
 }
+
+mod selection;

@@ -16,9 +16,6 @@ pub enum ConnectionError {
     /// An operation requires an existing connection.
     #[error("connect Codex first")]
     NotConnected,
-    /// A cloud environment must be explicitly selected before a session can start.
-    #[error("select a Codex environment in settings first")]
-    NotConfigured,
     /// Input cannot be accepted safely.
     #[error("invalid Codex connection input")]
     InvalidInput,
@@ -89,7 +86,7 @@ pub struct ResolvedConnection {
     /// Current OAuth credentials; the caller must not retain them across operations.
     pub credentials: Credentials,
     /// Validated remote environment identity.
-    pub environment_id: CloudId,
+    pub environment_id: Option<CloudId>,
     /// Explicit remote git ref.
     pub branch: String,
 }
@@ -109,14 +106,14 @@ pub trait ConnectionService: Send + Sync {
     async fn disconnect(&self, owner: &str) -> Result<(), ConnectionError>;
     /// List environments using freshly rotated credentials.
     async fn environments(&self, owner: &str) -> Result<Vec<Environment>, ConnectionError>;
-    /// Select a visible environment and explicit branch for subsequent sessions.
+    /// Select a visible environment, or automatic selection when absent.
     async fn configure(
         &self,
         owner: &str,
-        environment: &str,
+        environment: Option<&str>,
         branch: &str,
     ) -> Result<ConnectionStatus, ConnectionError>;
-    /// Resolve a configured connection, serializing refresh across service replicas.
+    /// Resolve an authenticated connection, serializing refresh across service replicas.
     async fn resolve(&self, owner: &str) -> Result<ResolvedConnection, ConnectionError>;
 }
 

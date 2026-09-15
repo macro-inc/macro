@@ -4,6 +4,27 @@ use super::cloud::{
 };
 use super::{CredentialStore, OAuth, Probe, unix_now};
 
+/// Immutable cloud destination selected before the first provider submission.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct CloudTarget {
+    /// Existing cloud environment owned by this connection.
+    pub environment: CloudId,
+    /// Explicit or repository-default branch selected for this session.
+    pub branch: String,
+    /// Actual selected repository, when supplied by environment metadata.
+    pub repository_url: Option<String>,
+}
+impl CloudTarget {
+    /// Check the selected destination without submitting a provider request.
+    pub fn validate(&self) -> Result<(), rootcause::Report> {
+        Launch {
+            environment: self.environment.clone(),
+            branch: self.branch.clone(),
+            prompt: "validate target".into(),
+        }
+        .validate()
+    }
+}
 /// An account binding validated before serving a conversation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeIdentity {
@@ -16,6 +37,12 @@ pub struct RuntimeIdentity {
 pub trait CloudRuntime: Send + Sync {
     /// Return the current binding or reject disconnected authorization.
     fn identity(&self) -> impl Future<Output = Result<RuntimeIdentity, rootcause::Report>> + Send;
+    /// Resolve a first-prompt target, including owner configuration and any automatic choice.
+    fn resolve_target(
+        &self,
+        prompt: &str,
+        requested: Option<&CloudTarget>,
+    ) -> impl Future<Output = Result<CloudTarget, rootcause::Report>> + Send;
     /// Submit one launch, without write retries.
     fn launch(
         &self,
@@ -57,6 +84,17 @@ impl<P: OAuth + CloudConversation, S: CredentialStore + Send + Sync> CloudRuntim
             connection_id: auth.account_id.clone(),
             account_id: auth.account_id,
         })
+    }
+    async fn resolve_target(
+        &self,
+        _: &str,
+        requested: Option<&CloudTarget>,
+    ) -> Result<CloudTarget, rootcause::Report> {
+        let target = requested.cloned().ok_or_else(|| {
+            rootcause::report!("select an explicit environment for the standalone ACP demo")
+        })?;
+        target.validate()?;
+        Ok(target)
     }
     async fn launch(&self, request: &Launch) -> Result<CreatedTask, rootcause::Report> {
         self.launch(request, unix_now()?).await

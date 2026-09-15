@@ -235,21 +235,24 @@ impl<P: OAuth + 'static> ConnectionService for ConnectionServiceImpl<P> {
     async fn configure(
         &self,
         owner: &str,
-        environment: &str,
+        environment: Option<&str>,
         branch: &str,
     ) -> Result<ConnectionStatus, ConnectionError> {
-        CloudId::new(environment.to_owned()).map_err(|_| ConnectionError::InvalidInput)?;
-        if branch.trim().is_empty() || branch.len() > 1024 || branch.chars().any(char::is_control) {
-            return Err(ConnectionError::InvalidInput);
+        if let Some(environment) = environment {
+            CloudId::new(environment.to_owned()).map_err(|_| ConnectionError::InvalidInput)?;
         }
+        codex_cloud_agents::domain::cloud::validate_branch(branch)
+            .map_err(|_| ConnectionError::InvalidInput)?;
         let resolved = self.fresh(owner).await?;
-        let environments = self
-            .provider
-            .environments(&resolved.credentials)
-            .await
-            .map_err(|_| ConnectionError::Provider)?;
-        if !environments.iter().any(|item| item.id == environment) {
-            return Err(ConnectionError::InvalidInput);
+        if let Some(environment) = environment {
+            let environments = self
+                .provider
+                .environments(&resolved.credentials)
+                .await
+                .map_err(|_| ConnectionError::Provider)?;
+            if !environments.iter().any(|item| item.id == environment) {
+                return Err(ConnectionError::InvalidInput);
+            }
         }
         let mut transaction = self.lock(owner).await?;
         let connection = transaction
@@ -260,7 +263,7 @@ impl<P: OAuth + 'static> ConnectionService for ConnectionServiceImpl<P> {
         if connection.id != resolved.id {
             return Err(ConnectionError::AccountChanged);
         }
-        connection.environment_id = Some(environment.into());
+        connection.environment_id = environment.map(str::to_owned);
         connection.branch = branch.into();
         let result = status(transaction.state());
         transaction.commit().await?;
@@ -268,13 +271,14 @@ impl<P: OAuth + 'static> ConnectionService for ConnectionServiceImpl<P> {
     }
     async fn resolve(&self, owner: &str) -> Result<ResolvedConnection, ConnectionError> {
         let connection = self.fresh(owner).await?;
-        let environment = connection
-            .environment_id
-            .ok_or(ConnectionError::NotConfigured)?;
         Ok(ResolvedConnection {
             connection_id: connection.id,
             credentials: connection.credentials,
-            environment_id: CloudId::new(environment).map_err(|_| ConnectionError::Encryption)?,
+            environment_id: connection
+                .environment_id
+                .map(CloudId::new)
+                .transpose()
+                .map_err(|_| ConnectionError::Encryption)?,
             branch: connection.branch,
         })
     }

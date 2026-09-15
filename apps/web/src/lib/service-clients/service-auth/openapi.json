@@ -3978,15 +3978,15 @@
       "CodexConfigRequest": {
         "type": "object",
         "description": "Explicit remote target for future Codex sessions.",
-        "required": ["environmentId", "branch"],
+        "required": ["branch"],
         "properties": {
           "branch": {
             "type": "string",
             "description": "Git base ref in that environment."
           },
           "environmentId": {
-            "type": "string",
-            "description": "An environment currently visible to this account."
+            "type": ["string", "null"],
+            "description": "An environment currently visible to this account, or null for automatic selection."
           }
         }
       },
@@ -4020,7 +4020,7 @@
       "CodexEnvironment": {
         "type": "object",
         "description": "A cloud environment visible to the connected provider account.",
-        "required": ["id"],
+        "required": ["id", "repositories"],
         "properties": {
           "id": {
             "type": "string",
@@ -4029,6 +4029,32 @@
           "label": {
             "type": ["string", "null"],
             "description": "Human-readable provider label."
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CodexEnvironmentRepository"
+            },
+            "description": "Ordered safe repository identities from Codex."
+          }
+        }
+      },
+      "CodexEnvironmentRepository": {
+        "type": "object",
+        "description": "Safe repository metadata available to the connected Codex account.",
+        "required": ["fullName", "cloneUrl", "defaultBranch"],
+        "properties": {
+          "cloneUrl": {
+            "type": "string",
+            "description": "Credential-free HTTPS clone URL."
+          },
+          "defaultBranch": {
+            "type": "string",
+            "description": "Provider default branch."
+          },
+          "fullName": {
+            "type": "string",
+            "description": "Owner/repository identity."
           }
         }
       },
