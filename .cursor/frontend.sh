@@ -19,7 +19,7 @@ if ! in_pinned_nix_shell; then
 fi
 
 FRONTEND_PORT=3000
-PROXY_ORIGIN='http://localhost:8090'
+PROXY_ORIGIN='https://localhost:8090'
 DEV_URL="http://localhost:${FRONTEND_PORT}/app"
 PID_FILE="${LOG_DIR}/frontend-dev.pid"
 DEV_LOG="${LOG_DIR}/frontend-dev.log"
@@ -41,7 +41,7 @@ if curl -fsS --max-time 2 "${DEV_URL}" >/dev/null 2>&1; then
   exit 0
 fi
 
-if ! curl -fsS --max-time 3 "${PROXY_ORIGIN}/auth/health" >/dev/null 2>&1; then
+if ! curl -fsS --cacert "${WORKSPACE_ROOT}/infra/local/certs/ca.pem" --max-time 3 "${PROXY_ORIGIN}/auth/health" >/dev/null 2>&1; then
   echo "cursor-cloud frontend: stack is not running — run: bash .cursor/stack.sh" >&2
   exit 1
 fi
