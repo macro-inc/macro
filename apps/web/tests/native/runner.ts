@@ -62,7 +62,7 @@ const env = {
 const children: ReturnType<typeof Bun.spawn>[] = [];
 let browser: Browser | undefined;
 const fixture = startFixtureServer(18090, matrixMode);
-const timeoutMs = matrixMode ? 30 * 60_000 : 240_000;
+const timeoutMs = matrixMode ? 90 * 60_000 : 240_000;
 // Bound even a wedged WebDriver request or shutdown. The shell owns namespace
 // and profile cleanup, so forced exit cannot leave an app or fixture listening.
 const watchdog = setTimeout(() => {

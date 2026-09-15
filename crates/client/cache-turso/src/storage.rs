@@ -2539,15 +2539,17 @@ fn compile_predicate_selection(
     compiler.ctes.push(format!(
         "{matches}(source, document_id) AS MATERIALIZED ({union})"
     ));
-    let effective_sort = compiler.next_name();
+    let hits = compiler.next_name();
     compiler
         .parameters
         .push(text(descriptor.sort_attribute.as_str()));
     compiler
         .parameters
         .push(text(descriptor.sort_attribute.as_str()));
+    // Look up identity and sort facts by their real primary keys. Joining three
+    // materialized sets loses those indexes and makes even small queries quadratic.
     compiler.ctes.push(format!(
-        "{effective_sort}(source, document_id, value) AS MATERIALIZED (SELECT 0, document_id, value FROM sort_facts WHERE attribute = ? UNION ALL SELECT 1, document_id, value FROM optimistic_sort_facts WHERE attribute = ?)"
+        "{hits}(record_key, value) AS MATERIALIZED (SELECT d.record_key, s.value FROM {matches} AS m JOIN index_documents AS d ON m.source = 0 AND d.id = m.document_id JOIN sort_facts AS s ON s.document_id = m.document_id AND s.attribute = ? UNION ALL SELECT d.record_key, s.value FROM {matches} AS m JOIN optimistic_index_documents AS d ON m.source = 1 AND d.id = m.document_id JOIN optimistic_sort_facts AS s ON s.document_id = m.document_id AND s.attribute = ?)"
     ));
     compiler
         .parameters
@@ -2560,9 +2562,9 @@ fn compile_predicate_selection(
         SortDirection::Asc => "ASC",
         SortDirection::Desc => "DESC",
     };
-    let sort_selection = if include_sort { ", s.value" } else { "" };
+    let sort_selection = if include_sort { ", value" } else { "" };
     let sql = format!(
-        "WITH {} SELECT d.record_key{sort_selection} FROM {matches} AS m JOIN effective_documents AS d ON d.source = m.source AND d.document_id = m.document_id JOIN {effective_sort} AS s ON s.source = m.source AND s.document_id = m.document_id ORDER BY s.value {sort_direction}, d.record_key {tie_direction} LIMIT ?",
+        "WITH {} SELECT record_key{sort_selection} FROM {hits} ORDER BY value {sort_direction}, record_key {tie_direction} LIMIT ?",
         compiler.ctes.join(", ")
     );
     (sql, compiler.parameters)
@@ -2589,9 +2591,11 @@ impl SqlPredicateCompiler {
             )
         };
         Self {
-            ctes: vec![format!(
-                "effective_documents(source, document_id, record_key, profile, partition) AS MATERIALIZED (SELECT 0, d.id, d.record_key, d.profile, d.partition FROM index_documents AS d WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) UNION ALL SELECT 1, o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})"
-            )],
+            ctes: vec![
+                "authoritative_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT d.id, d.record_key, d.profile, d.partition FROM index_documents AS d WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key))".to_owned(),
+                format!("optimistic_documents(document_id, record_key, profile, partition) AS MATERIALIZED (SELECT o.id, o.record_key, o.profile, o.partition FROM optimistic_index_documents AS o WHERE o.state = 0{exclusion})"),
+                "effective_documents(source, document_id, record_key, profile, partition) AS MATERIALIZED (SELECT 0, document_id, record_key, profile, partition FROM authoritative_documents UNION ALL SELECT 1, document_id, record_key, profile, partition FROM optimistic_documents)".to_owned(),
+            ],
             parameters: excluded_optimistic
                 .iter()
                 .copied()
@@ -2608,6 +2612,11 @@ impl SqlPredicateCompiler {
     }
 
     fn compile(&mut self, expr: &PredicateExpr, profile: &Profile, partition: &Token) -> String {
+        if matches!(expr, PredicateExpr::Or(_, _))
+            && let Some((attribute, values)) = alternatives::exact_alternatives(expr)
+        {
+            return self.exact(attribute, &values, profile, partition);
+        }
         match expr {
             PredicateExpr::All => self.universe(profile, partition),
             PredicateExpr::None => {
@@ -2618,18 +2627,7 @@ impl SqlPredicateCompiler {
                 name
             }
             PredicateExpr::Exact { attribute, value } => {
-                let name = self.next_name();
-                for _ in 0..2 {
-                    self.parameters.push(text(profile.token().as_str()));
-                    self.parameters.push(text(partition.as_str()));
-                    self.parameters.push(text(attribute.as_str()));
-                    self.parameters
-                        .push(Value::from_blob(value.as_bytes().to_vec()));
-                }
-                self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value = ?)"
-                ));
-                name
+                self.exact(attribute, &[value], profile, partition)
             }
             PredicateExpr::ExactExists { attribute } => {
                 let name = self.next_name();
@@ -2639,7 +2637,7 @@ impl SqlPredicateCompiler {
                     self.parameters.push(text(attribute.as_str()));
                 }
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)"
                 ));
                 name
             }
@@ -2672,7 +2670,7 @@ impl SqlPredicateCompiler {
                     }
                 }
                 self.ctes.push(format!(
-                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM integer_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_integer_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
+                    "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM integer_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_integer_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
                 ));
                 name
             }
@@ -2704,7 +2702,7 @@ impl SqlPredicateCompiler {
                         text(key.as_str()),
                     ]);
                 }
-                self.ctes.push(format!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM sort_facts f JOIN effective_documents d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_sort_facts f JOIN effective_documents d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
+                self.ctes.push(format!("{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM sort_facts f JOIN index_documents d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_sort_facts f JOIN optimistic_documents d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
                 name
             }
             PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {
@@ -2731,6 +2729,35 @@ impl SqlPredicateCompiler {
                 name
             }
         }
+    }
+
+    fn exact(
+        &mut self,
+        attribute: &Token,
+        values: &[&predicate_index::ExactValue],
+        profile: &Profile,
+        partition: &Token,
+    ) -> String {
+        let name = self.next_name();
+        let condition = if values.len() == 1 {
+            "= ?".to_owned()
+        } else {
+            format!("IN ({})", vec!["?"; values.len()].join(", "))
+        };
+        for _ in 0..2 {
+            self.parameters.push(text(profile.token().as_str()));
+            self.parameters.push(text(partition.as_str()));
+            self.parameters.push(text(attribute.as_str()));
+            self.parameters.extend(
+                values
+                    .iter()
+                    .map(|value| Value::from_blob(value.as_bytes().to_vec())),
+            );
+        }
+        self.ctes.push(format!(
+            "{name}(source, document_id) AS MATERIALIZED (SELECT 0, f.document_id FROM exact_facts AS f JOIN index_documents AS d ON d.id = f.document_id WHERE d.state = 0 AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key) AND d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition} UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN optimistic_documents AS d ON d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND f.value {condition})"
+        ));
+        name
     }
 
     fn universe(&mut self, profile: &Profile, partition: &Token) -> String {
@@ -4763,6 +4790,8 @@ impl TursoStorage {
         *self.fault.lock().unwrap_or_else(|error| error.into_inner()) = Some(fault);
     }
 }
+
+mod alternatives;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

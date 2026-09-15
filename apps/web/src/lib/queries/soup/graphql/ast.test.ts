@@ -370,6 +370,19 @@ describe('makeGraphqlSoupInput', () => {
     ).toThrow('Unsupported GraphQL Soup AST');
   });
 
+  it('translates skill inclusion and markdown skill exclusions without falling back', () => {
+    expect(makeInput({ include: { subType: ['skill'] } })).toMatchObject({
+      initial: {
+        filters: { documentFilter: { literal: { subType: 'SKILL' } } },
+      },
+    });
+    expect(makeInput({ exclude: { subType: ['skill'] } })).toMatchObject({
+      initial: {
+        filters: { documentFilter: { not: { literal: { subType: 'SKILL' } } } },
+      },
+    });
+  });
+
   it('expands file associations into native-evaluatable GraphQL file types', () => {
     expect(makeInput({ include: { fileAssoc: ['assoc:pdf'] } })).toMatchObject({
       initial: {

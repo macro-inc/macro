@@ -201,10 +201,11 @@ function mapString(value: unknown, field: string): string {
   return value;
 }
 
-function mapDocumentSubType(value: unknown): 'TASK' | 'SNIPPET' {
+function mapDocumentSubType(value: unknown): 'TASK' | 'SNIPPET' | 'SKILL' {
   const subType = mapString(value, 'subType');
   if (subType === 'task') return 'TASK';
   if (subType === 'snippet') return 'SNIPPET';
+  if (subType === 'skill') return 'SKILL';
   unsupported(`unsupported document subType ${subType}`);
 }
 
