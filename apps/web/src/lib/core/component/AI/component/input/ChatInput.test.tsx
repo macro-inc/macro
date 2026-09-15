@@ -1,6 +1,6 @@
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type JSX, onCleanup, onMount } from 'solid-js';
+import { type JSX, onCleanup, onMount, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChatInput } from './ChatInput';
 
@@ -87,24 +87,28 @@ vi.mock('@ui', async () => {
   };
 });
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
-  MarkdownShell: (props: { initialValue?: string }) => {
-    mocks.mount();
-    onCleanup(mocks.unmount);
-    onMount(() => mocks.emitChange?.(props.initialValue ?? ''));
-    return (
-      <div
-        contentEditable
-        tabIndex={0}
-        role="textbox"
-        aria-label="Prompt"
-        ref={(element) => {
-          mocks.root = element;
-        }}
-      >
-        {props.initialValue}
-      </div>
-    );
-  },
+  MarkdownShell: Object.assign(
+    (props: ParentProps<{ initialValue?: string }>) => {
+      mocks.mount();
+      onCleanup(mocks.unmount);
+      onMount(() => mocks.emitChange?.(props.initialValue ?? ''));
+      return (
+        <div
+          contentEditable
+          tabIndex={0}
+          role="textbox"
+          aria-label="Prompt"
+          ref={(element) => {
+            mocks.root = element;
+          }}
+        >
+          {props.initialValue}
+          {props.children}
+        </div>
+      );
+    },
+    { Editable: () => null, Placeholder: () => null }
+  ),
 }));
 
 afterEach(() => {

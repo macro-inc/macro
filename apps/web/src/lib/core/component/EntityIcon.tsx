@@ -11,6 +11,7 @@ import type {
   DocumentEntity,
   EmailEntity,
   EntityData,
+  ForeignEntity,
   NamedSubType,
   ReminderEntity,
 } from '@entity';
@@ -32,6 +33,7 @@ import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
 import FileCode from '@phosphor/code.svg';
 import Email from '@phosphor/envelope.svg';
+import EmailRead from '@phosphor/envelope-open.svg';
 import File from '@phosphor/file.svg';
 import FileArchive from '@phosphor/file-archive.svg';
 import FileHtml from '@phosphor/file-html.svg';
@@ -39,6 +41,7 @@ import FilePdf from '@phosphor/file-pdf.svg';
 import FileVideo from '@phosphor/file-video.svg';
 import Files from '@phosphor/files.svg';
 import Folder from '@phosphor/folder-simple.svg';
+import GitMergeIcon from '@phosphor/git-merge.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
 import HashIcon from '@phosphor/hash.svg';
 import FileImage from '@phosphor/image.svg';
@@ -75,6 +78,9 @@ export type EntityWithValidIcon =
   | 'emailRead'
   | 'emailInvite'
   | 'githubPullRequest'
+  | 'githubPullRequestOpen'
+  | 'githubPullRequestMerged'
+  | 'githubPullRequestClosed'
   | 'archive'
   | 'files'
   | 'crm_company'
@@ -251,7 +257,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'File',
   },
   emailRead: {
-    icon: Email,
+    icon: EmailRead,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Read Email',
@@ -267,6 +273,24 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'GitHub Pull Request',
+  },
+  githubPullRequestOpen: {
+    icon: GitPullRequestIcon,
+    foreground: 'text-success',
+    background: 'bg-success/20',
+    prettyName: 'Open Pull Request',
+  },
+  githubPullRequestMerged: {
+    icon: GitMergeIcon,
+    foreground: 'text-note',
+    background: 'bg-note/20',
+    prettyName: 'Merged Pull Request',
+  },
+  githubPullRequestClosed: {
+    icon: GitPullRequestIcon,
+    foreground: 'text-failure',
+    background: 'bg-failure/20',
+    prettyName: 'Closed Pull Request',
   },
   pr: {
     icon: GitPullRequestIcon,
@@ -488,6 +512,9 @@ type EntityIconData = Pick<EntityData, 'type'> & {
   fileType?: DocumentEntity['fileType'] | null;
   subType?: DocumentEntity['subType'];
   isRead?: EmailEntity['isRead'];
+  hasIcsAttachment?: EmailEntity['hasIcsAttachment'];
+  foreignSource?: ForeignEntity['foreignSource'];
+  metadata?: ForeignEntity['metadata'];
   /** Reference metadata carried by reminder entities. */
   referencedEntity?: ReminderEntity['referencedEntity'];
 };
@@ -495,16 +522,21 @@ type EntityIconData = Pick<EntityData, 'type'> & {
 /** The shared entity-to-icon mapping used by lists, previews, and drag images. */
 export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
   return match<EntityIconData, EntityWithValidIcon>(entity)
-    .with({ type: 'document' }, (e) =>
-      e.subType?.type === 'task' ? 'task' : 'document'
-    )
+    .with({ type: 'document' }, (e) => {
+      if (e.subType?.type === 'task') return 'task';
+      if (e.fileType && isArchiveType(e.fileType)) return 'archive';
+      const blockName = itemToBlockName(e, true);
+      return blockName === 'unknown' ? 'document' : blockName;
+    })
     .with(
       { type: 'channel' },
       { type: 'channel_message' },
       { type: 'channel_thread' },
       (e) => (e.channelType === 'direct_message' ? 'direct_message' : 'channel')
     )
-    .with({ type: 'email' }, () => 'email')
+    .with({ type: 'email' }, (e) =>
+      e.hasIcsAttachment ? 'emailInvite' : e.isRead ? 'emailRead' : 'email'
+    )
     .with({ type: 'chat' }, () => 'chat')
     .with({ type: 'agent_session' }, () => 'agent')
     .with({ type: 'project' }, () => 'project')
@@ -512,7 +544,14 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'reminder' }, () => 'reminder')
     .with({ type: 'call' }, () => 'call')
     .with({ type: 'automation' }, () => 'automation')
-    .with({ type: 'foreign' }, () => 'githubPullRequest')
+    .with({ type: 'foreign' }, (e) => {
+      if (e.foreignSource !== 'github_pull_request') return 'default';
+      return match<unknown, EntityWithValidIcon>(e.metadata?.status)
+        .with('open', () => 'githubPullRequestOpen')
+        .with('merged', () => 'githubPullRequestMerged')
+        .with('closed', () => 'githubPullRequestClosed')
+        .otherwise(() => 'githubPullRequest');
+    })
     .with({ type: 'crm_company' }, () => 'crm_company')
     .with({ type: 'crm_contact' }, () => 'contact')
     .exhaustive();

@@ -74,7 +74,7 @@ const request: ChatSendInput = {
     { entity_id: 'document-1', entity_type: 'document' },
     { entity_id: 'project-1', entity_type: 'project' },
   ],
-  toolset: { type: 'all' },
+  toolset: { type: 'none' },
 };
 
 beforeEach(() => {
@@ -158,6 +158,7 @@ describe('Home chat creation', () => {
             content: request.content,
             attachments: request.attachments,
             model: request.model,
+            toolset: request.toolset,
           })
         );
         expect(mocks.invalidateSoup).toHaveBeenCalledOnce();

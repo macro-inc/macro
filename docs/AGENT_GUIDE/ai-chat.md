@@ -118,7 +118,8 @@ Explicit coding-agent selections still use their configured runtimes.
 Open a doc → side panel `Actions` → `Ask Macro`. Opens a chat pane with the document already
 attached as context (it appears as a link chip in the composer). New-chat pane shows tips:
 `@mention anything` to attach entities, `Ctrl+Enter` to send in the background (you get
-notified when the AI responds).
+notified when the AI responds). Background sends from Home preserve the submitted
+tool selection.
 
 ## Composer anatomy (a11y)
 

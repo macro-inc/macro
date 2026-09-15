@@ -1,5 +1,5 @@
 import { EntityIcon } from '@entity/extractors/entity-icon';
-import type { EntityData } from '@entity/types/entity';
+import { type EntityData, isGithubPrEntity } from '@entity/types/entity';
 
 /** Shared entity icons sized for compact Home rows. */
 export function HomeEntityIcon(props: { entity: EntityData }) {
@@ -18,7 +18,7 @@ export function HomeEntityIcon(props: { entity: EntityData }) {
       >
         <EntityIcon
           entity={props.entity}
-          class="text-current"
+          class={isGithubPrEntity(props.entity) ? undefined : 'text-current'}
           suppressClick
           showTooltip={false}
         />

@@ -63,6 +63,7 @@ vi.mock('./ast', () => ({
 }));
 
 vi.mock('../transform-utils', () => ({
+  mapApiSoupItemToEntity: vi.fn((item) => item),
   mapSoupPageToEntityList: mapSoupPageToEntityListMock,
 }));
 
@@ -146,10 +147,96 @@ function makeFakeClient(): {
 describe('createGraphqlSoupAstItemsQuery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mapSoupPageToEntityListMock.mockImplementation((page) => page.items);
     getGraphqlSoupCacheHostMock.mockReturnValue(undefined);
     makeGraphqlSoupInputMock.mockReturnValue({
       initial: { limit: 50, sortMethod: 'UPDATED_AT' },
     });
+  });
+
+  it.each([
+    { sort: 'touched_by_me', field: 'touchedAt' },
+    { sort: 'notified_at', field: 'notifiedAt' },
+    { sort: 'updated_at', field: 'updatedAt' },
+  ] as const)(
+    'preserves fetched coverage through display filtering ($sort)',
+    async ({ sort, field }) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      mapSoupPageToEntityListMock.mockImplementation((page) =>
+        page.items.filter((item: { id: string }) => item.id === 'visible')
+      );
+      const { query, dispose } = createRoot((dispose) => ({
+        dispose,
+        query: createGraphqlSoupAstItemsQuery(
+          () => ({ params: { sort_method: sort }, body: {} }),
+          () => ({ enabled: true })
+        ),
+      }));
+      try {
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: [
+              { id: 'visible', [field]: '2026-09-10T00:00:00Z' },
+              { id: 'hidden', [field]: '2026-09-08T00:00:00Z' },
+            ],
+            next_cursor: 'next-page',
+          })
+        );
+        expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+          'visible',
+        ]);
+        expect(query.data()?.oldestFetchedTimestamp).toBe(
+          Date.parse('2026-09-08T00:00:00Z')
+        );
+
+        const nextPage = query.fetchNextPage();
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
+        fake.executions[1].next(
+          graphqlSoupPage({
+            items: [{ id: 'older-hidden', [field]: '2026-09-01T00:00:00Z' }],
+            next_cursor: null,
+          })
+        );
+        await nextPage;
+        expect(query.data()?.entities.map((entity) => entity.id)).toEqual([
+          'visible',
+        ]);
+        expect(query.data()?.oldestFetchedTimestamp).toBe(
+          Date.parse('2026-09-01T00:00:00Z')
+        );
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it('retains fetched coverage when display filtering hides every row', () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    mapSoupPageToEntityListMock.mockReturnValue([]);
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'notified_at' }, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ id: 'hidden', notifiedAt: '2026-09-08T00:00:00Z' }],
+          next_cursor: 'next-page',
+        })
+      );
+      expect(query.data()?.entities).toEqual([]);
+      expect(query.data()?.oldestFetchedTimestamp).toBe(
+        Date.parse('2026-09-08T00:00:00Z')
+      );
+      expect(query.hasNextPage()).toBe(true);
+    } finally {
+      dispose();
+    }
   });
 
   it('keeps fetched timestamp coverage separate from older local cache candidates', async () => {

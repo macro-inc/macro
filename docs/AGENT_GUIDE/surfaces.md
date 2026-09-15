@@ -75,10 +75,12 @@ then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
 
 Items in the 256px desktop rail use single-line pills with 16px icons: profile photos for
-DMs, model logos for AI chats (Claude sunburst or ChatGPT knot), and regular
-Phosphor icons for other items, using the same glyphs as entity rows elsewhere:
-articles for documents, checklists for tasks, hashes for channels, envelopes for
-email, sparkles for agents, folders for projects, and alarms for reminders.
+DMs and model logos for AI chats (Claude sunburst or ChatGPT knot). Other items
+use the same glyphs as entity rows elsewhere: document file-type and
+task/snippet/skill variants, hashes for channels, read/unread envelopes or
+calendar invites for email, sparkles for agents, folders for projects, and alarms
+for reminders. Pull requests retain open, merged, and closed status glyphs and
+colors; unknown foreign sources use the generic file icon.
 There are no title tooltips, and timestamps are
 visible only while hovering the row. An unread
 dot remains visible. Click a row to preview it; `j`/`k` navigate and update the
@@ -123,7 +125,8 @@ Yesterday, and the existing older-date groups. These use local time and refresh
 every 30 seconds without a new action. Scrolling near the bottom automatically
 loads older items. Home buffers older rows until both notification and own-activity
 pages have loaded through their timestamp, then advances the shallower feed first.
-Older cache-only rows do not advance this boundary.
+Fetched rows still advance this boundary when display filters hide them;
+older cache-only rows do not.
 Rows tied at a page boundary appear together, so loading another page does not
 insert older history above already displayed rows. Live actions and refreshes
 can still reorder rows. Short or fully filtered pages continue loading until the list

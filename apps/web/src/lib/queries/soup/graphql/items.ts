@@ -47,7 +47,10 @@ import {
 } from 'solid-js';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { soupPageTimestamp } from '../page-timestamp';
-import { mapSoupPageToEntityList } from '../transform-utils';
+import {
+  mapApiSoupItemToEntity,
+  mapSoupPageToEntityList,
+} from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
 import { isCachedMailView, materializeMailView } from './mail-view';
 import {
@@ -479,8 +482,13 @@ export function createGraphqlSoupAstItemsQuery(
         finishStaleFallback('network');
       },
       select: ({ pages }) => {
-        const entities = pages.flatMap((page) =>
-          mapSoupPageToEntityList(mapGraphqlSoupPage(page), {
+        const mappedPages = pages.map(mapGraphqlSoupPage);
+        const oldestFetchedTimestamp = soupPageTimestamp(
+          mappedPages.flatMap((page) => page.items.map(mapApiSoupItemToEntity)),
+          sortMethod
+        );
+        const entities = mappedPages.flatMap((page) =>
+          mapSoupPageToEntityList(page, {
             instructionsIdQuery,
             showSupportedForeignEntities,
           })
@@ -490,7 +498,7 @@ export function createGraphqlSoupAstItemsQuery(
           data: {
             entities,
             groups: undefined,
-            oldestFetchedTimestamp: soupPageTimestamp(entities, sortMethod),
+            oldestFetchedTimestamp,
           },
         };
       },

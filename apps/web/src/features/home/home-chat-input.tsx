@@ -106,7 +106,7 @@ export const HomeChatInput = (props: {
         chat_id: chatId,
         attachments:
           request.attachments.length > 0 ? request.attachments : undefined,
-        toolset: { type: 'all' },
+        toolset: request.toolset,
       });
       invalidateAllSoup();
     } else {
