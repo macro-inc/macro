@@ -15,3 +15,6 @@ pub mod schema;
 
 /// Agent-neutral reconstructed turn lifecycle.
 pub mod turn;
+
+/// Keyed replacement of streamed agent prose.
+pub mod text_replace;

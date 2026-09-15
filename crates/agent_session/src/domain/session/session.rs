@@ -15,6 +15,7 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
+use agent_runtime_protocol::domain::text_replace::TEXT_REPLACE_META_KEY;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::PROTOCOL_VERSION;
@@ -558,11 +559,17 @@ impl<Token> SessionMachine<Token> {
         // will only ask once this says they may - so this line must never
         // ship ahead of `hold_or_refuse_elicitation`, or every agent that
         // asks hangs on a request nothing answers.
-        let capabilities = ClientCapabilities::new().elicitation(
-            ElicitationCapabilities::new()
-                .form(ElicitationFormCapabilities::new())
-                .url(ElicitationUrlCapabilities::new()),
-        );
+        let capabilities = ClientCapabilities::new()
+            .elicitation(
+                ElicitationCapabilities::new()
+                    .form(ElicitationFormCapabilities::new())
+                    .url(ElicitationUrlCapabilities::new()),
+            )
+            // The shared fold replaces keyed text in both live and replayed turns.
+            .meta(serde_json::Map::from_iter([(
+                TEXT_REPLACE_META_KEY.to_owned(),
+                serde_json::Value::Bool(true),
+            )]));
         let (method, params) = InitializeRequest::new(PROTOCOL_VERSION)
             .client_capabilities(capabilities)
             .to_untyped_message()?

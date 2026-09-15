@@ -223,6 +223,24 @@ fn acp_ready_logs_then_sends_initialize() {
 }
 
 #[test]
+fn initialize_advertises_text_replacement_on_the_wire() {
+    let effects = machine().handle(acp_ready());
+    let Effect::Send {
+        message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
+        ..
+    } = &effects[1]
+    else {
+        panic!("initialize is sent");
+    };
+    assert_eq!(request.method.as_ref(), "initialize");
+    let params = serde_json::to_value(&request.params).unwrap();
+    assert_eq!(
+        params["clientCapabilities"]["_meta"],
+        serde_json::json!({ "macro.textReplace": true })
+    );
+}
+
+#[test]
 fn recovery_while_a_load_reply_is_queued_loads_again_before_dispatch() {
     let mut machine = machine();
     begin_opening(&mut machine);

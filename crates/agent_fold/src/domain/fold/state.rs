@@ -167,6 +167,8 @@ pub(super) struct Turn {
     /// Where this turn's plan sits in the agent message's parts, so later
     /// plan updates can replace it.
     pub(super) plan_position: Option<usize>,
+    /// Stable positions of keyed prose snapshots within this turn.
+    pub(super) text_positions: HashMap<String, usize>,
     /// Whether closing this turn needs an agent message to record its stop
     /// reason on, minting one if the agent never produced a part.
     ///
@@ -422,11 +424,16 @@ impl FoldState {
         };
 
         match update {
-            // Prose from the agent. Chunks are appended to the open text part
-            // rather than each becoming a part of its own.
-            SessionUpdate::AgentMessageChunk(chunk) => StepChange::message(
-                content_block_text(chunk.content).and_then(|text| self.append_text(text)),
-            ),
+            SessionUpdate::AgentMessageChunk(chunk) => {
+                let key = agent_runtime_protocol::domain::text_replace::text_replace_id(&chunk)
+                    .map(str::to_owned);
+                StepChange::message(
+                    content_block_text(chunk.content).and_then(|text| match key {
+                        Some(key) => self.replace_text(key, text),
+                        None => self.append_text(text),
+                    }),
+                )
+            }
             // Reasoning, kept separate so a reader can collapse it.
             SessionUpdate::AgentThoughtChunk(chunk) => StepChange::message(
                 content_block_text(chunk.content).and_then(|text| self.append_thought(text)),

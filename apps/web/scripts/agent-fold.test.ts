@@ -96,3 +96,55 @@ it('preserves replacement events and later updates within one durable batch', ()
     raw.free();
   }
 });
+
+it('replaces streamed text in place and replays the same final Markdown', () => {
+  const session = '00000000-0000-0000-0000-00000000000a';
+  const text = (id: string, text: string, index: number) => ({
+    id: `00000000-0000-0000-0000-${index.toString(16).padStart(12, '0')}`,
+    createdAt: '2026-09-15T00:00:00Z',
+    direction: 'to_server' as const,
+    content: {
+      type: 'acp',
+      jsonrpc: '2.0',
+      method: 'session/update',
+      params: {
+        sessionId: 'runtime',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          content: { type: 'text', text },
+          _meta: { 'macro.textReplace': { id } },
+        },
+      },
+    },
+  });
+  const final = '**Corrected answer.** [Source](https://example.com/source)';
+  const rows = [
+    text('answer', '**Unfinished', 1),
+    text('following', 'A later paragraph.', 2),
+    text('answer', final, 3),
+    text('answer', final, 4),
+  ];
+  const live = new Stream(session);
+  const replay = new Stream(session);
+  try {
+    live.snapshot(rows.slice(0, 1));
+    const original = live.messages()[0];
+    expect(original.parts).toEqual([{ kind: 'text', text: '**Unfinished' }]);
+    live.push_rows(rows.slice(1, 2));
+    expect(live.push_rows(rows.slice(2, 3))).toHaveLength(1);
+    const corrected = live.messages()[0];
+    expect(corrected.turn).toBe(original.turn);
+    expect(corrected.author).toEqual(original.author);
+    expect(corrected.parts).toEqual([
+      { kind: 'text', text: final },
+      { kind: 'text', text: 'A later paragraph.' },
+    ]);
+    expect(live.push_rows(rows.slice(3))).toEqual([]);
+    expect(live.push_rows(rows)).toEqual([]);
+    expect(replay.snapshot(rows)).toEqual(live.messages());
+    expect(live.messages()).toHaveLength(1);
+  } finally {
+    live.free();
+    replay.free();
+  }
+});
